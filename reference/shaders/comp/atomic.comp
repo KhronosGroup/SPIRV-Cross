@@ -1,0 +1,47 @@
+#version 310 es
+#extension GL_OES_shader_image_atomic : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 2, std430) buffer SSBO
+{
+    uint u32;
+    int i32;
+} ssbo;
+
+layout(binding = 0, r32ui) uniform highp uimage2D uImage;
+layout(binding = 1, r32i) uniform highp iimage2D iImage;
+
+void main()
+{
+    uint _19 = imageAtomicAdd(uImage, ivec2(1, 5), 1u);
+    uint _21 = imageAtomicOr(uImage, ivec2(1, 5), 1u);
+    uint _23 = imageAtomicXor(uImage, ivec2(1, 5), 1u);
+    uint _25 = imageAtomicAnd(uImage, ivec2(1, 5), 1u);
+    uint _27 = imageAtomicMin(uImage, ivec2(1, 5), 1u);
+    uint _29 = imageAtomicMax(uImage, ivec2(1, 5), 1u);
+    uint _33 = imageAtomicCompSwap(uImage, ivec2(1, 5), 10u, 2u);
+    int _41 = imageAtomicAdd(iImage, ivec2(1, 6), 1);
+    int _43 = imageAtomicOr(iImage, ivec2(1, 6), 1);
+    int _45 = imageAtomicXor(iImage, ivec2(1, 6), 1);
+    int _47 = imageAtomicAnd(iImage, ivec2(1, 6), 1);
+    int _49 = imageAtomicMin(iImage, ivec2(1, 6), 1);
+    int _51 = imageAtomicMax(iImage, ivec2(1, 6), 1);
+    int _55 = imageAtomicCompSwap(iImage, ivec2(1, 5), 10, 2);
+    uint _62 = atomicAdd(ssbo.u32, 1u);
+    uint _64 = atomicOr(ssbo.u32, 1u);
+    uint _66 = atomicXor(ssbo.u32, 1u);
+    uint _68 = atomicAnd(ssbo.u32, 1u);
+    uint _70 = atomicMin(ssbo.u32, 1u);
+    uint _72 = atomicMax(ssbo.u32, 1u);
+    uint _74 = atomicExchange(ssbo.u32, 1u);
+    uint _76 = atomicCompSwap(ssbo.u32, 10u, 2u);
+    int _79 = atomicAdd(ssbo.i32, 1);
+    int _81 = atomicOr(ssbo.i32, 1);
+    int _83 = atomicXor(ssbo.i32, 1);
+    int _85 = atomicAnd(ssbo.i32, 1);
+    int _87 = atomicMin(ssbo.i32, 1);
+    int _89 = atomicMax(ssbo.i32, 1);
+    int _91 = atomicExchange(ssbo.i32, 1);
+    int _93 = atomicCompSwap(ssbo.i32, 10, 2);
+}
+

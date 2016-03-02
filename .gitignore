@@ -1,0 +1,13 @@
+*.o
+*.d
+*.txt
+/test
+/spir2cross
+*.spv
+/obj
+/msvc/x64
+/msvc/Debug
+/msvc/Release
+*.suo
+*.sdf
+*.opensdf

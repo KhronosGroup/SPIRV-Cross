@@ -1,0 +1,36 @@
+#version 310 es
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(binding = 1, std430) buffer SSBO2
+{
+    vec4 out_data[];
+} _27;
+
+void main()
+{
+    uint ident = gl_GlobalInvocationID.x;
+    int i;
+    if ((ident == 2u))
+    {
+        _27.out_data[ident] = vec4(20.000000);
+    }
+    else
+    {
+        if ((ident == 4u))
+        {
+            _27.out_data[ident] = vec4(10.000000);
+            return;
+        }
+    }
+    i = 0;
+    for (; (i < 20); i = (i + 1))
+    {
+        if ((i == 10))
+        {
+            break;
+        }
+        return;
+    }
+    _27.out_data[ident] = vec4(10.000000);
+}
+
