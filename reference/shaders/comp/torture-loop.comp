@@ -26,7 +26,7 @@ void main()
         k = _40;
         if ((_40 < 10))
         {
-            idat = (idat * 2.000000);
+            idat = (idat * 2.0);
             int _47 = k;
             k = (_47 + 1);
             continue;

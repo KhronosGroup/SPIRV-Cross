@@ -22,7 +22,7 @@ void main()
     int l;
     while ((k < 10))
     {
-        idat = (idat * 2.000000);
+        idat = (idat * 2.0);
         k = (k + 1);
     }
     i = 0u;
@@ -63,7 +63,7 @@ void main()
             l = (l + 1);
             continue;
         }
-        idat = (idat + vec4(1.000000));
+        idat = (idat + vec4(1.0));
         l = (l + 1);
         continue;
     }

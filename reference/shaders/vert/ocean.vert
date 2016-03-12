@@ -52,7 +52,7 @@ layout(location = 1) out vec4 TexCoord;
 vec2 warp_position()
 {
     float vlod = dot(LODWeights, _284.Patches[gl_InstanceID].LODs);
-    vlod = mix(vlod, _284.Patches[gl_InstanceID].Position.w, all(equal(LODWeights, vec4(0.000000))));
+    vlod = mix(vlod, _284.Patches[gl_InstanceID].Position.w, all(equal(LODWeights, vec4(0.0))));
     float floor_lod = floor(vlod);
     float fract_lod = (vlod - floor_lod);
     uint ufloor_lod = uint(floor_lod);
@@ -106,7 +106,7 @@ vec2 warp_position()
 
 vec2 lod_factor(vec2 uv)
 {
-    float level = (textureLod(TexLOD, uv, 0.000000).x * 7.968750);
+    float level = (textureLod(TexLOD, uv, 0.0).x * 7.96875);
     float floor_level = floor(level);
     float fract_level = (level - floor_level);
     return vec2(floor_level, fract_level);
@@ -122,12 +122,12 @@ void main()
     vec2 param = NormalizedPos;
     vec2 lod = lod_factor(param);
     vec2 Offset = ((_405.InvOceanSize_PatchScale.xy * exp2(lod.x)) * _405.NormalTexCoordScale.zw);
-    vec3 Displacement = mix(textureLod(TexDisplacement, (NormalizedTex + (Offset * 0.500000)), lod.x).yxz, textureLod(TexDisplacement, (NormalizedTex + (Offset * 1.000000)), (lod.x + 1.000000)).yxz, vec3(lod.y));
-    vec3 WorldPos = (vec3(NormalizedPos.x, 0.000000, NormalizedPos.y) + Displacement);
+    vec3 Displacement = mix(textureLod(TexDisplacement, (NormalizedTex + (Offset * 0.5)), lod.x).yxz, textureLod(TexDisplacement, (NormalizedTex + (Offset * 1.0)), (lod.x + 1.0)).yxz, vec3(lod.y));
+    vec3 WorldPos = (vec3(NormalizedPos.x, 0.0, NormalizedPos.y) + Displacement);
     WorldPos = (WorldPos * _405.OceanScale.xyz);
     WorldPos = (WorldPos + _405.OceanPosition.xyz);
     EyeVec = (WorldPos - _58.g_CamPos.xyz);
-    TexCoord = (vec4(NormalizedTex, (NormalizedTex * _405.NormalTexCoordScale.xy)) + ((_405.InvOceanSize_PatchScale.xyxy * 0.500000) * _405.NormalTexCoordScale.zwzw));
+    TexCoord = (vec4(NormalizedTex, (NormalizedTex * _405.NormalTexCoordScale.xy)) + ((_405.InvOceanSize_PatchScale.xyxy * 0.5) * _405.NormalTexCoordScale.zwzw));
     gl_Position = ((((_58.g_ViewProj_Row0 * WorldPos.x) + (_58.g_ViewProj_Row1 * WorldPos.y)) + (_58.g_ViewProj_Row2 * WorldPos.z)) + _58.g_ViewProj_Row3);
 }
 

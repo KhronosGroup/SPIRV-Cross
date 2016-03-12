@@ -42,7 +42,7 @@ uvec2 workaround_mix(uvec2 a, uvec2 b, bvec2 sel)
 
 vec2 alias(vec2 i, vec2 N)
 {
-    return mix(i, (i - N), greaterThan(i, (N * 0.500000)));
+    return mix(i, (i - N), greaterThan(i, (N * 0.5)));
 }
 
 vec2 cmul(vec2 a, vec2 b)
@@ -74,7 +74,7 @@ void generate_heightmap()
     vec2 param_4 = vec2(N);
     vec2 k = (_218.uModTime.xy * alias(param_3, param_4));
     float k_len = length(k);
-    float w = (sqrt((9.810000 * k_len)) * _218.uModTime.z);
+    float w = (sqrt((9.81000041961669921875 * k_len)) * _218.uModTime.z);
     float cw = cos(w);
     float sw = sin(w);
     vec2 param_5 = a;

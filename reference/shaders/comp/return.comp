@@ -12,13 +12,13 @@ void main()
     int i;
     if ((ident == 2u))
     {
-        _27.out_data[ident] = vec4(20.000000);
+        _27.out_data[ident] = vec4(20.0);
     }
     else
     {
         if ((ident == 4u))
         {
-            _27.out_data[ident] = vec4(10.000000);
+            _27.out_data[ident] = vec4(10.0);
             return;
         }
     }
@@ -31,6 +31,6 @@ void main()
         }
         return;
     }
-    _27.out_data[ident] = vec4(10.000000);
+    _27.out_data[ident] = vec4(10.0);
 }
 

@@ -11,7 +11,7 @@ layout(location = 0) out vec4 FragColor;
 
 void foo2(out Structy f)
 {
-    f.c = vec4(10.000000);
+    f.c = vec4(10.0);
 }
 
 Structy foo()

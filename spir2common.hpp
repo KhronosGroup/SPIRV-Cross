@@ -19,6 +19,7 @@
 
 #include <sstream>
 #include <stdio.h>
+#include <string.h>
 
 namespace spir2cross
 {
@@ -77,6 +78,9 @@ namespace spir2cross
         // Fallback to something more sane.
         char buf[64];
         sprintf(buf, "%.32g", t);
+        // Ensure that the literal is float.
+        if (!strchr(buf, '.') && !strchr(buf, 'e'))
+            strcat(buf, ".0");
         return buf;
     }
 
@@ -86,6 +90,9 @@ namespace spir2cross
         // Fallback to something more sane.
         char buf[64];
         sprintf(buf, "%.32g", t);
+        // Ensure that the literal is float.
+        if (!strchr(buf, '.') && !strchr(buf, 'e'))
+            strcat(buf, ".0");
         return buf;
     }
 

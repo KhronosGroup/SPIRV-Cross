@@ -35,10 +35,10 @@ void baz(out Foo foo)
 
 void meow(inout Foo foo)
 {
-    foo.a = (foo.a + vec4(10.000000));
-    foo.b = (foo.b + vec4(20.000000));
-    foo.c = (foo.c + vec4(30.000000));
-    foo.d = (foo.d + vec4(40.000000));
+    foo.a = (foo.a + vec4(10.0));
+    foo.b = (foo.b + vec4(20.0));
+    foo.c = (foo.c + vec4(30.0));
+    foo.d = (foo.d + vec4(40.0));
 }
 
 vec4 bar(Foo foo)

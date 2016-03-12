@@ -9,11 +9,11 @@ layout(binding = 0, std430) buffer SSBO
 void main()
 {
     vec4 v;
-    v.x = 10.000000;
-    v.y = 30.000000;
-    v.z = 70.000000;
-    v.w = 90.000000;
+    v.x = 10.0;
+    v.y = 30.0;
+    v.z = 70.0;
+    v.w = 90.0;
     _27.out_data[gl_GlobalInvocationID.x] = v;
-    _27.out_data[gl_GlobalInvocationID.x].y = 20.000000;
+    _27.out_data[gl_GlobalInvocationID.x].y = 20.0;
 }
 

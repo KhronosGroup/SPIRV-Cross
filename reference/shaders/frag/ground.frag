@@ -23,40 +23,40 @@ layout(location = 1) in vec3 EyeVec;
 
 float saturate(float x)
 {
-    return clamp(x, 0.000000, 1.000000);
+    return clamp(x, 0.0, 1.0);
 }
 
 void Resolve(vec3 Albedo, vec3 Normal, float Roughness, float Metallic)
 {
-    LightingOut = vec4(0.000000);
-    NormalOut = vec4(((Normal * 0.500000) + vec3(0.500000)), 0.000000);
-    SpecularOut = vec4(Roughness, Metallic, 0.000000, 0.000000);
-    AlbedoOut = vec4(Albedo, 1.000000);
+    LightingOut = vec4(0.0);
+    NormalOut = vec4(((Normal * 0.5) + vec3(0.5)), 0.0);
+    SpecularOut = vec4(Roughness, Metallic, 0.0, 0.0);
+    AlbedoOut = vec4(Albedo, 1.0);
 }
 
 void main()
 {
-    vec3 Normal = ((texture(TexNormalmap, TexCoord).xyz * 2.000000) - vec3(1.000000));
+    vec3 Normal = ((texture(TexNormalmap, TexCoord).xyz * 2.0) - vec3(1.0));
     Normal = normalize(Normal);
-    highp float param = (length(EyeVec) / 1000.000000);
+    highp float param = (length(EyeVec) / 1000.0);
     vec2 scatter_uv;
     scatter_uv.x = saturate(param);
     vec3 nEye = normalize(EyeVec);
-    scatter_uv.y = 0.000000;
-    vec3 Color = vec3(0.100000, 0.300000, 0.100000);
-    vec3 grass = vec3(0.100000, 0.300000, 0.100000);
-    vec3 dirt = vec3(0.100000);
-    vec3 snow = vec3(0.800000);
-    float grass_snow = smoothstep(0.000000, 0.150000, ((_56.g_CamPos.y + EyeVec.y) / 200.000000));
+    scatter_uv.y = 0.0;
+    vec3 Color = vec3(0.100000001490116119384765625, 0.300000011920928955078125, 0.100000001490116119384765625);
+    vec3 grass = vec3(0.100000001490116119384765625, 0.300000011920928955078125, 0.100000001490116119384765625);
+    vec3 dirt = vec3(0.100000001490116119384765625);
+    vec3 snow = vec3(0.800000011920928955078125);
+    float grass_snow = smoothstep(0.0, 0.1500000059604644775390625, ((_56.g_CamPos.y + EyeVec.y) / 200.0));
     vec3 base = mix(grass, snow, vec3(grass_snow));
-    float edge = smoothstep(0.700000, 0.750000, Normal.y);
+    float edge = smoothstep(0.699999988079071044921875, 0.75, Normal.y);
     Color = mix(dirt, base, vec3(edge));
     Color = (Color * Color);
-    float Roughness = (1.000000 - (edge * grass_snow));
+    float Roughness = (1.0 - (edge * grass_snow));
     highp vec3 param_1 = Color;
     highp vec3 param_2 = Normal;
     highp float param_3 = Roughness;
-    highp float param_4 = 0.000000;
+    highp float param_4 = 0.0;
     Resolve(param_1, param_2, param_3, param_4);
 }
 

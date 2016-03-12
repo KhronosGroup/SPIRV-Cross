@@ -13,9 +13,9 @@ in vec4 PLSIn3;
 
 void main()
 {
-    PLSOut0 = (PLSIn0 * 2.000000);
-    PLSOut1 = (PLSIn1 * 6.000000);
-    PLSOut2 = (PLSIn2 * 7.000000);
-    PLSOut3 = (PLSIn3 * 4.000000);
+    PLSOut0 = (PLSIn0 * 2.0);
+    PLSOut1 = (PLSIn1 * 6.0);
+    PLSOut2 = (PLSIn2 * 7.0);
+    PLSOut3 = (PLSIn3 * 4.0);
 }
 

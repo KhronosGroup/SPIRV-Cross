@@ -10,11 +10,11 @@ layout(location = 1) in vec3 vNormal;
 
 void main()
 {
-    FragColor = vec4(texture(samp, vUV).xyz, 1.000000);
-    FragColor = vec4(texture(samp, vUV).xz, 1.000000, 4.000000);
-    FragColor = vec4(texture(samp, vUV).xx, texture(samp, (vUV + vec2(0.100000))).yy);
-    FragColor = vec4(vNormal, 1.000000);
-    FragColor = vec4((vNormal + vec3(1.800000)), 1.000000);
-    FragColor = vec4(vUV, (vUV + vec2(1.800000)));
+    FragColor = vec4(texture(samp, vUV).xyz, 1.0);
+    FragColor = vec4(texture(samp, vUV).xz, 1.0, 4.0);
+    FragColor = vec4(texture(samp, vUV).xx, texture(samp, (vUV + vec2(0.100000001490116119384765625))).yy);
+    FragColor = vec4(vNormal, 1.0);
+    FragColor = vec4((vNormal + vec3(1.7999999523162841796875)), 1.0);
+    FragColor = vec4(vUV, (vUV + vec2(1.7999999523162841796875)));
 }
 

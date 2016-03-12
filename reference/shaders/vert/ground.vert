@@ -51,7 +51,7 @@ layout(location = 0) out vec2 TexCoord;
 vec2 warp_position()
 {
     float vlod = dot(LODWeights, _284.Patches[gl_InstanceID].LODs);
-    vlod = mix(vlod, _284.Patches[gl_InstanceID].Position.w, all(equal(LODWeights, vec4(0.000000))));
+    vlod = mix(vlod, _284.Patches[gl_InstanceID].Position.w, all(equal(LODWeights, vec4(0.0))));
     float floor_lod = floor(vlod);
     float fract_lod = (vlod - floor_lod);
     uint ufloor_lod = uint(floor_lod);
@@ -85,7 +85,7 @@ vec2 warp_position()
 
 vec2 lod_factor(vec2 uv)
 {
-    float level = (textureLod(TexLOD, uv, 0.000000).x * 7.968750);
+    float level = (textureLod(TexLOD, uv, 0.0).x * 7.96875);
     float floor_level = floor(level);
     float fract_level = (level - floor_level);
     return vec2(floor_level, fract_level);
@@ -100,12 +100,12 @@ void main()
     vec2 param = NormalizedPos;
     vec2 lod = lod_factor(param);
     vec2 Offset = (_381.InvGroundSize_PatchScale.xy * exp2(lod.x));
-    float Elevation = mix(textureLod(TexHeightmap, (NormalizedPos + (Offset * 0.500000)), lod.x).x, textureLod(TexHeightmap, (NormalizedPos + (Offset * 1.000000)), (lod.x + 1.000000)).x, lod.y);
+    float Elevation = mix(textureLod(TexHeightmap, (NormalizedPos + (Offset * 0.5)), lod.x).x, textureLod(TexHeightmap, (NormalizedPos + (Offset * 1.0)), (lod.x + 1.0)).x, lod.y);
     vec3 WorldPos = vec3(NormalizedPos.x, Elevation, NormalizedPos.y);
     WorldPos = (WorldPos * _381.GroundScale.xyz);
     WorldPos = (WorldPos + _381.GroundPosition.xyz);
     EyeVec = (WorldPos - _58.g_CamPos.xyz);
-    TexCoord = (NormalizedPos + (_381.InvGroundSize_PatchScale.xy * 0.500000));
+    TexCoord = (NormalizedPos + (_381.InvGroundSize_PatchScale.xy * 0.5));
     gl_Position = ((((_58.g_ViewProj_Row0 * WorldPos.x) + (_58.g_ViewProj_Row1 * WorldPos.y)) + (_58.g_ViewProj_Row2 * WorldPos.z)) + _58.g_ViewProj_Row3);
 }
 
