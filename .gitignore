@@ -11,3 +11,5 @@
 *.suo
 *.sdf
 *.opensdf
+
+!CMakeLists.txt
