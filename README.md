@@ -72,6 +72,8 @@ In shaders/ a collection of shaders are maintained for purposes of regression te
 The current reference output is contained in reference/.
 `./test_shaders.py shaders` can be run to perform regression testing.
 
+See `./test_shaders.py --help` for more.
+
 ### Updating regression tests
 
 When legitimate changes are found, use `--update` flag to update regression files.
