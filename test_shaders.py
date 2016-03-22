@@ -8,6 +8,7 @@ import re
 import itertools
 import hashlib
 import shutil
+import argparse
 
 def parse_stats(stats):
     m = re.search('([0-9]+) work registers', stats)
@@ -59,6 +60,9 @@ def get_shader_stats(shader):
     returned = stdout.decode('utf-8')
     return parse_stats(returned)
 
+def validate_shader(shader):
+    subprocess.check_call(['glslangValidator', shader])
+
 def cross_compile(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
@@ -67,6 +71,7 @@ def cross_compile(shader):
 
     subprocess.check_call(['glslangValidator', '-G', '-o', spirv_path, shader])
     subprocess.check_call(['./spir2cross', '--output', glsl_path, spirv_path])
+    validate_shader(glsl_path)
     return (spirv_path, glsl_path)
 
 def md5_for_file(path):
@@ -81,15 +86,22 @@ def make_reference_dir(path):
     if not os.path.exists(base):
         os.makedirs(base)
 
-def regression_check(shader, glsl):
+def regression_check(shader, glsl, update):
     reference = os.path.join('./reference', shader)
     if os.path.exists(reference):
         if md5_for_file(glsl) != md5_for_file(reference):
             print('Generated GLSL has changed for {}!'.format(reference))
-            if os.path.exists(reference):
-                os.remove(reference)
-            make_reference_dir(reference)
-            shutil.move(glsl, reference)
+
+            if update:
+                # If we expect changes, update the reference file.
+                if os.path.exists(reference):
+                    os.remove(reference)
+                make_reference_dir(reference)
+                shutil.move(glsl, reference)
+            else:
+                # Otherwise, fail the test.
+                os.remove(glsl)
+                sys.exit(1)
         else:
             os.remove(glsl)
     else:
@@ -97,31 +109,60 @@ def regression_check(shader, glsl):
         make_reference_dir(reference)
         shutil.move(glsl, reference)
 
-def test_shader(stats, shader):
+def test_shader(stats, shader, update):
     print('Testing shader:', shader)
-    pristine_stats = get_shader_stats(shader)
     spirv, glsl = cross_compile(shader)
-    cross_stats = get_shader_stats(glsl)
 
-    regression_check(shader, glsl)
+    if stats:
+        cross_stats = get_shader_stats(glsl)
+
+    regression_check(shader, glsl, update)
     os.remove(spirv)
 
-    a = []
-    a.append(shader)
-    for i in pristine_stats:
-        a.append(str(i))
-    for i in cross_stats:
-        a.append(str(i))
-    print(','.join(a), file = stats)
+    if stats:
+        pristine_stats = get_shader_stats(shader)
 
-def test_shaders(shader_dir):
-    with open('stats.csv', 'w') as stats:
-        print('Shader,OrigRegs,OrigUniRegs,OrigALUShort,OrigLSShort,OrigTEXShort,OrigALULong,OrigLSLong,OrigTEXLong,CrossRegs,CrossUniRegs,CrossALUShort,CrossLSShort,CrossTEXShort,CrossALULong,CrossLSLong,CrossTEXLong', file = stats)
+        a = []
+        a.append(shader)
+        for i in pristine_stats:
+            a.append(str(i))
+        for i in cross_stats:
+            a.append(str(i))
+        print(','.join(a), file = stats)
+
+def test_shaders(shader_dir, update, malisc):
+    if malisc:
+        with open('stats.csv', 'w') as stats:
+            print('Shader,OrigRegs,OrigUniRegs,OrigALUShort,OrigLSShort,OrigTEXShort,OrigALULong,OrigLSLong,OrigTEXLong,CrossRegs,CrossUniRegs,CrossALUShort,CrossLSShort,CrossTEXShort,CrossALULong,CrossLSLong,CrossTEXLong', file = stats)
+            for f in os.walk(os.path.join(shader_dir)):
+                for i in f[2]:
+                    shader = os.path.join(f[0], i)
+                    test_shader(stats, shader, update)
+    else:
         for f in os.walk(os.path.join(shader_dir)):
             for i in f[2]:
                 shader = os.path.join(f[0], i)
-                test_shader(stats, shader)
+                test_shader(None, shader, update)
+
+def main():
+    parser = argparse.ArgumentParser(description = 'Script for regression testing.')
+    parser.add_argument('folder',
+            help = 'Folder containing shader files to test.')
+    parser.add_argument('--update',
+            action = 'store_true',
+            help = 'Updates reference files if there is a mismatch. Use when legitimate changes in output is found.')
+    parser.add_argument('--malisc',
+            action = 'store_true',
+            help = 'Use malisc offline compiler to determine static cycle counts before and after spir2cross.')
+    args = parser.parse_args()
+
+    if not args.folder:
+        sys.stderr.write('Need shader folder.\n')
+        sys.exit(1)
+
+    test_shaders(args.folder, args.update, args.malisc)
+    if args.malisc:
+        print('Stats in stats.csv!')
 
 if __name__ == '__main__':
-    test_shaders(sys.argv[1])
-    print('Stats in stats.csv!')
+    main()

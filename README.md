@@ -71,5 +71,14 @@ SPIR-V files created from older headers could have ABI issues.
 In shaders/ a collection of shaders are maintained for purposes of regression testing.
 The current reference output is contained in reference/.
 `./test_shaders.py shaders` can be run to perform regression testing.
-Currently, the Mali Offline Compiler `malisc` is used to verify the outputs from SPIR2CROSS.
+
+### Updating regression tests
+
+When legitimate changes are found, use `--update` flag to update regression files.
+Otherwise, `./test_shaders.py` will fail with error code.
+
+### Mali Offline Compiler cycle counts
+
+To obtain a CSV of static shader cycle counts before and after going through spir2cross, add
+`--malisc` flag to `./test_shaders`. This requires the Mali Offline Compiler to be installed in PATH.
 
