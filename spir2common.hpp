@@ -451,7 +451,7 @@ namespace spir2cross
         inline uint32_t vector_size() const { return m.c[0].vecsize; }
         inline uint32_t columns() const { return m.columns; }
 
-		SPIRConstant(uint32_t constant_type, const uint32_t *elements, uint32_t num_elements) :
+        SPIRConstant(uint32_t constant_type, const uint32_t *elements, uint32_t num_elements) :
             constant_type(constant_type)
         {
             subconstants.insert(end(subconstants), elements, elements + num_elements);
@@ -539,8 +539,8 @@ namespace spir2cross
         ConstantMatrix m;
         bool specialization = false; // If the constant is a specialization constant.
 
-		// For composites which are constant arrays, etc.
-		std::vector<uint32_t> subconstants;
+        // For composites which are constant arrays, etc.
+        std::vector<uint32_t> subconstants;
     };
 
     class Variant

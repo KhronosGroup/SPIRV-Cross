@@ -1438,7 +1438,12 @@ void Compiler::parse(const Instruction &i)
 
             loop_block.insert(block->self);
             loop_merge_target.insert(block->merge_block);
-            continue_block.insert(block->continue_block);
+
+            // Don't add loop headers to continue blocks,
+            // which would make it impossible branch into the loop header since
+            // they are treated as continues.
+            if (block->continue_block != block->self)
+               continue_block.insert(block->continue_block);
             break;
         }
 
@@ -1606,11 +1611,16 @@ bool Compiler::execution_is_branchless(const SPIRBlock &from, const SPIRBlock &t
 
 SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &continue_block) const
 {
-    auto &dominator = get<SPIRBlock>(continue_block.loop_dominator);
-
     // The block was deemed too complex during code emit, pick conservative fallback paths.
     if (continue_block.complex_continue)
         return SPIRBlock::ComplexLoop;
+
+    // In older glslang output continue block can be equal to the loop header.
+    // In this case, execution is clearly branchless, so just assume a while loop header here.
+    if (continue_block.merge == SPIRBlock::MergeLoop)
+        return SPIRBlock::WhileLoop;
+
+    auto &dominator = get<SPIRBlock>(continue_block.loop_dominator);
 
     if (execution_is_noop(continue_block, dominator))
         return SPIRBlock::WhileLoop;
