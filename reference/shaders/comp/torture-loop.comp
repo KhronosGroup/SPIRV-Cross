@@ -21,14 +21,12 @@ void main()
     uint j;
     for (;;)
     {
-        int _39 = k;
-        int _40 = _39 + 1;
+        int _40 = k + 1;
         k = _40;
         if ((_40 < 10))
         {
             idat = (idat * 2.0);
-            int _47 = k;
-            k = (_47 + 1);
+            k = (k + 1);
             continue;
         }
         else
@@ -37,8 +35,7 @@ void main()
         }
     }
     i = 0u;
-    int _76;
-    for (; (i < 16u); i = (i + uint(1)), _76 = k, k = (_76 + 1))
+    for (; (i < 16u); i = (i + uint(1)), k = (k + 1))
     {
         j = 0u;
         for (; (j < 30u); j = (j + uint(1)))
@@ -46,21 +43,10 @@ void main()
             idat = (_24.mvp * idat);
         }
     }
-    int _84;
-    for (;;)
+    do
     {
-        int _82 = k;
-        k = (_82 + 1);
-        int _84 = k;
-        if ((_84 > 10))
-        {
-            continue;
-        }
-        else
-        {
-            break;
-        }
-    }
+        k = (k + 1);
+    } while ((k > 10));
     _89.out_data[ident] = idat;
 }
 

@@ -181,11 +181,12 @@ void Compiler::register_read(uint32_t expr, uint32_t chain, bool forwarded)
     {
         e.loaded_from = var->self;
 
-        if (forwarded)
+        // If the backing variable is immutable, we do not need to depend on the variable.
+        if (forwarded && !is_immutable(var->self))
             var->dependees.push_back(e.self);
 
         // If we load from a parameter, make sure we create "inout" if we also write to the parameter.
-        // The default is "in" however, so we never invalidate our complication by reading.
+        // The default is "in" however, so we never invalidate our compilation by reading.
         if (var && var->parameter)
             var->parameter->read_count++;
     }
@@ -297,7 +298,10 @@ bool Compiler::is_immutable(uint32_t id) const
     if (ids[id].get_type() == TypeVariable)
     {
         auto &var = get<SPIRVariable>(id);
-        return var.phi_variable || var.forwardable || !expression_is_lvalue(id);
+
+        // Anything we load from the UniformConstant address space is guaranteed to be immutable.
+        bool pointer_to_const = var.storage == StorageClassUniformConstant;
+        return pointer_to_const || var.phi_variable || var.forwardable || !expression_is_lvalue(id);
     }
     else if (ids[id].get_type() == TypeExpression)
         return get<SPIRExpression>(id).immutable;

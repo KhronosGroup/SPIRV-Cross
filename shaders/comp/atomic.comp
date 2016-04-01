@@ -13,6 +13,11 @@ layout(binding = 2, std430) buffer SSBO
 void main()
 {
     imageAtomicAdd(uImage, ivec2(1, 5), 1u);
+
+    // Test that we do not invalidate OpImage variables which are loaded from UniformConstant
+    // address space.
+    imageStore(iImage, ivec2(1, 6), ivec4(imageAtomicAdd(uImage, ivec2(1, 5), 1u)));
+
     imageAtomicOr(uImage, ivec2(1, 5), 1u);
     imageAtomicXor(uImage, ivec2(1, 5), 1u);
     imageAtomicAnd(uImage, ivec2(1, 5), 1u);
