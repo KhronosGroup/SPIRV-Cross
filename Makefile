@@ -1,4 +1,4 @@
-TARGET := spir2cross
+TARGET := spirv-cross
 SOURCES := $(wildcard *.cpp)
 OBJECTS := $(SOURCES:.cpp=.o)
 DEPS := $(OBJECTS:.o=.d)
@@ -22,6 +22,6 @@ $(TARGET): $(OBJECTS)
 	$(CXX) -c -o $@ $< $(CXXFLAGS) -MMD
 
 clean:
-	rm -f $(TARGET) $(OBJECTS)
+	rm -f $(TARGET) $(OBJECTS) $(DEPS)
 
 .PHONY: clean

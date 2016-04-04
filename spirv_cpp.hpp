@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2CPP
-#define SPIR2CPP
+#ifndef SPIRV_CPP_HPP
+#define SPIRV_CPP_HPP
 
-#include "spir2glsl.hpp"
+#include "spirv_glsl.hpp"
 #include <vector>
 
-namespace spir2cross
+namespace spirv_cross
 {
     class CompilerCPP : public CompilerGLSL
     {

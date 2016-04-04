@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2COMMON_HPP
-#define SPIR2COMMON_HPP
+#ifndef SPIRV_COMMON_HPP
+#define SPIRV_COMMON_HPP
 
 #include <sstream>
 #include <stdio.h>
 #include <string.h>
 
-namespace spir2cross
+namespace spirv_cross
 {
     class CompilerError : public std::runtime_error
     {

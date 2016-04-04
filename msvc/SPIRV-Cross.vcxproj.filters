@@ -13,50 +13,38 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Source Files\cpp">
-      <UniqueIdentifier>{61390b44-2b95-4b9a-8910-9ea1bc3a4920}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\spir2cross.cpp">
+    <ClCompile Include="..\spirv_cross.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\spir2glsl.cpp">
+    <ClCompile Include="..\spirv_glsl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\spir2cpp.cpp">
+    <ClCompile Include="..\spirv_cpp.cpp">
       <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cpp\compute.cpp">
-      <Filter>Source Files\cpp</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cpp\culling.cpp">
-      <Filter>Source Files\cpp</Filter>
-    </ClCompile>
-    <ClCompile Include="..\cpp\shadertoy.cpp">
-      <Filter>Source Files\cpp</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\GLSL.std.450.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\spir2cross.hpp">
+    <ClInclude Include="..\spirv_cross.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\spir2glsl.hpp">
+    <ClInclude Include="..\spirv_glsl.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\spirv.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\spir2common.hpp">
+    <ClInclude Include="..\spirv_common.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\spir2cpp.hpp">
+    <ClInclude Include="..\spirv_cpp.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "spir2cross.hpp"
+#include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
 #include <cstring>
 #include <algorithm>
@@ -22,7 +22,7 @@
 
 using namespace std;
 using namespace spv;
-using namespace spir2cross;
+using namespace spirv_cross;
 
 #define log(...) fprintf(stderr, __VA_ARGS__)
 
@@ -458,7 +458,7 @@ void Compiler::parse()
 
     if (s[1] != Version)
     {
-        fprintf(stderr, "SPIR2CROSS was compiled against SPIR-V version %d, but SPIR-V uses version %u. Buggy behavior due to ABI incompatibility might occur.\n",
+        fprintf(stderr, "SPIRV-Cross was compiled against SPIR-V version %d, but SPIR-V uses version %u. Buggy behavior due to ABI incompatibility might occur.\n",
             Version, s[1]);
     }
 

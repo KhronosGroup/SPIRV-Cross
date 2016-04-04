@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2CROSS_HPP
-#define SPIR2CROSS_HPP
+#ifndef SPIRV_CROSS_HPP
+#define SPIRV_CROSS_HPP
 
 #include "spirv.hpp"
 #include <vector>
@@ -26,9 +26,9 @@
 #include <unordered_set>
 #include <unordered_map>
 
-#include "spir2common.hpp"
+#include "spirv_common.hpp"
 
-namespace spir2cross
+namespace spirv_cross
 {
     struct Resource
     {

@@ -2,7 +2,7 @@
 *.d
 *.txt
 /test
-/spir2cross
+/spirv-cross
 *.spv
 /obj
 /msvc/x64

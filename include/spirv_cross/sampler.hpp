@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2CROSS_SAMPLER_HPP
-#define SPIR2CROSS_SAMPLER_HPP
+#ifndef SPIRV_CROSS_SAMPLER_HPP
+#define SPIRV_CROSS_SAMPLER_HPP
 
 #include <vector>
 
-namespace spir2cross
+namespace spirv_cross
 {
-    struct spir2cross_sampler_2d
+    struct spirv_cross_sampler_2d
     {
-        inline virtual ~spir2cross_sampler_2d() {}
+        inline virtual ~spirv_cross_sampler_2d() {}
     };
 
     template<typename T>
-    struct sampler2DBase : spir2cross_sampler_2d
+    struct sampler2DBase : spirv_cross_sampler_2d
     {
-        sampler2DBase(const spir2cross_sampler_info *info)
+        sampler2DBase(const spirv_cross_sampler_info *info)
         {
             mips.insert(mips.end(), info->mipmaps, info->mipmaps + info->num_mipmaps);
             format = info->format;
@@ -47,7 +47,7 @@ namespace spir2cross
 
         inline virtual T sampleLod(glm::vec2 uv, float lod)
         {
-            if (mag_filter == SPIR2CROSS_FILTER_NEAREST)
+            if (mag_filter == SPIRV_CROSS_FILTER_NEAREST)
             {
                 uv.x = wrap(uv.x, wrap_s, mips[0].width);
                 uv.y = wrap(uv.y, wrap_t, mips[0].height);
@@ -63,13 +63,13 @@ namespace spir2cross
             }
         }
 
-        inline float wrap(float v, spir2cross_wrap wrap, unsigned size)
+        inline float wrap(float v, spirv_cross_wrap wrap, unsigned size)
         {
             switch (wrap)
             {
-                case SPIR2CROSS_WRAP_REPEAT:
+                case SPIRV_CROSS_WRAP_REPEAT:
                     return v - glm::floor(v);
-                case SPIR2CROSS_WRAP_CLAMP_TO_EDGE:
+                case SPIRV_CROSS_WRAP_CLAMP_TO_EDGE:
                 {
                     float half = 0.5f / size;
                     return glm::clamp(v, half, 1.0f - half);
@@ -80,13 +80,13 @@ namespace spir2cross
             }
         }
 
-        std::vector<spir2cross_miplevel> mips;
-        spir2cross_format format;
-        spir2cross_wrap wrap_s;
-        spir2cross_format wrap_t;
-        spir2cross_filter min_filter;
-        spir2cross_filter mag_filter;
-        spir2cross_mipfilter mip_filter;
+        std::vector<spirv_cross_miplevel> mips;
+        spirv_cross_format format;
+        spirv_cross_wrap wrap_s;
+        spirv_cross_format wrap_t;
+        spirv_cross_filter min_filter;
+        spirv_cross_filter mag_filter;
+        spirv_cross_mipfilter mip_filter;
     };
 
     typedef sampler2DBase<glm::vec4> sampler2D;

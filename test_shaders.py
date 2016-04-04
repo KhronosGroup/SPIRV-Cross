@@ -70,7 +70,7 @@ def cross_compile(shader):
     os.close(glsl_f)
 
     subprocess.check_call(['glslangValidator', '-G', '-o', spirv_path, shader])
-    subprocess.check_call(['./spir2cross', '--output', glsl_path, spirv_path])
+    subprocess.check_call(['./spirv-cross', '--output', glsl_path, spirv_path])
     validate_shader(glsl_path)
     return (spirv_path, glsl_path)
 
@@ -157,7 +157,7 @@ def main():
             help = 'Leave failed GLSL shaders on disk if they fail regression. Useful for debugging.')
     parser.add_argument('--malisc',
             action = 'store_true',
-            help = 'Use malisc offline compiler to determine static cycle counts before and after spir2cross.')
+            help = 'Use malisc offline compiler to determine static cycle counts before and after spirv-cross.')
     args = parser.parse_args()
 
     if not args.folder:

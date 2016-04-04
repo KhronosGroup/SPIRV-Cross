@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2CROSS_BARRIER_HPP
-#define SPIR2CROSS_BARRIER_HPP
+#ifndef SPIRV_CROSS_BARRIER_HPP
+#define SPIRV_CROSS_BARRIER_HPP
 
 #include <thread>
 #include <atomic>
 
-namespace spir2cross
+namespace spirv_cross
 {
     class Barrier
     {

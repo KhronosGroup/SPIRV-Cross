@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2GLSL
-#define SPIR2GLSL
+#ifndef SPIRV_GLSL_HPP
+#define SPIRV_GLSL_HPP
 
-#include "spir2cross.hpp"
+#include "spirv_cross.hpp"
 #include <sstream>
 #include <unordered_set>
 #include <unordered_map>
 #include <utility>
 
-namespace spir2cross
+namespace spirv_cross
 {
     enum PlsFormat
     {

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "spir2cpp.hpp"
+#include "spirv_cpp.hpp"
 #include <cstdio>
 #include <stdexcept>
 #include <functional>
@@ -25,7 +25,7 @@
 #include <unordered_set>
 
 using namespace spv;
-using namespace spir2cross;
+using namespace spirv_cross;
 using namespace std;
 
 struct CLIParser;
@@ -268,7 +268,7 @@ struct CLIArguments
 
 static void print_help()
 {
-    fprintf(stderr, "Usage: spir2cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [-cpp] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
+    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [-cpp] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
 }
 
 static vector<PlsRemap> remap_pls(const vector<PLSArg> &pls_variables, const vector<Resource> &resources, const vector<Resource> *secondary_resources)

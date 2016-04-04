@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2CROSS_IMAGE_HPP
-#define SPIR2CROSS_IMAGE_HPP
+#ifndef SPIRV_CROSS_IMAGE_HPP
+#define SPIRV_CROSS_IMAGE_HPP
 
 #ifndef GLM_SWIZZLE
 #define GLM_SWIZZLE
@@ -27,7 +27,7 @@
 
 #include <glm/glm.hpp>
 
-namespace spir2cross
+namespace spirv_cross
 {
     template<typename T>
     struct image2DBase

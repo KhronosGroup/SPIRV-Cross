@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#ifndef SPIR2CROSS_THREAD_GROUP_HPP
-#define SPIR2CROSS_THREAD_GROUP_HPP
+#ifndef SPIRV_CROSS_THREAD_GROUP_HPP
+#define SPIRV_CROSS_THREAD_GROUP_HPP
 
 #include <thread>
 #include <condition_variable>
 #include <mutex>
 
-namespace spir2cross
+namespace spirv_cross
 {
     template<typename T, unsigned Size>
     class ThreadGroup

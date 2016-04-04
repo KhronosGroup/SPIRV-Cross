@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "spir2glsl.hpp"
+#include "spirv_glsl.hpp"
 #include "GLSL.std.450.h"
 #include <algorithm>
 #include <assert.h>
 
 using namespace spv;
-using namespace spir2cross;
+using namespace spirv_cross;
 using namespace std;
 
 static const char* to_pls_layout(PlsFormat format)
@@ -959,7 +959,7 @@ void CompilerGLSL::emit_resources()
                 // supply this uniform.
                 if (meta[var.self].decoration.builtin_type == BuiltInInstanceIndex)
                 {
-                    statement("uniform int SPIR2CROSS_BaseInstance;");
+                    statement("uniform int SPIRV_Cross_BaseInstance;");
                     emitted = true;
                 }
             }
@@ -1875,7 +1875,7 @@ const char* CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
         case BuiltInVertexId: return "gl_VertexID";
         case BuiltInInstanceId: return "gl_InstanceID";
         case BuiltInVertexIndex: return "gl_VertexID"; // gl_VertexID already has the base offset applied.
-        case BuiltInInstanceIndex: return "(gl_InstanceID + SPIR2CROSS_BaseInstance)"; // ... but not gl_InstanceID.
+        case BuiltInInstanceIndex: return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
         case BuiltInPrimitiveId: return "gl_PrimitiveID";
         case BuiltInInvocationId: return "gl_InvocationID";
         case BuiltInLayer: return "gl_Layer";

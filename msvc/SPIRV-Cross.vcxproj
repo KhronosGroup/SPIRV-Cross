@@ -20,7 +20,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{977E3701-1A21-4425-B7E5-6BDF5EA062CD}</ProjectGuid>
-    <RootNamespace>spir2cross</RootNamespace>
+    <RootNamespace>SPIRV-Cross</RootNamespace>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -123,35 +123,17 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\cpp\compute.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="..\cpp\culling.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </ClCompile>
-    <ClCompile Include="..\cpp\shadertoy.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
-    </ClCompile>
     <ClCompile Include="..\main.cpp" />
-    <ClCompile Include="..\spir2cpp.cpp" />
-    <ClCompile Include="..\spir2cross.cpp" />
-    <ClCompile Include="..\spir2glsl.cpp" />
+    <ClCompile Include="..\spirv_cpp.cpp" />
+    <ClCompile Include="..\spirv_cross.cpp" />
+    <ClCompile Include="..\spirv_glsl.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\GLSL.std.450.h" />
-    <ClInclude Include="..\spir2common.hpp" />
-    <ClInclude Include="..\spir2cpp.hpp" />
-    <ClInclude Include="..\spir2cross.hpp" />
-    <ClInclude Include="..\spir2glsl.hpp" />
+    <ClInclude Include="..\spirv_common.hpp" />
+    <ClInclude Include="..\spirv_cpp.hpp" />
+    <ClInclude Include="..\spirv_cross.hpp" />
+    <ClInclude Include="..\spirv_glsl.hpp" />
     <ClInclude Include="..\spirv.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
