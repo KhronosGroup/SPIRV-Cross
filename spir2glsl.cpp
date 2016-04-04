@@ -3701,7 +3701,9 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
     flush_phi(from, to);
     flush_all_active_variables();
 
-    if (loop_block.find(to) != end(loop_block))
+    // This is only a continue if we branch to our loop dominator.
+    if (loop_block.find(to) != end(loop_block) &&
+        get<SPIRBlock>(from).loop_dominator == to)
     {
         // This can happen if we had a complex continue block which was emitted.
         // Once the continue block tries to branch to the loop header, just emit continue;
@@ -3813,20 +3815,23 @@ void CompilerGLSL::propagate_loop_dominators(const SPIRBlock &block)
                 block.loop_dominator = dominator;
         };
 
+        // After merging a loop, we inherit the loop dominator always.
+        if (block.merge_block)
+            set_dominator(block.merge_block, block.loop_dominator);
+
         if (block.true_block)
             set_dominator(block.true_block, dominator);
         if (block.false_block)
             set_dominator(block.false_block, dominator);
         if (block.next_block)
             set_dominator(block.next_block, dominator);
-        if (block.continue_block)
-            set_dominator(block.continue_block, dominator);
+
         for (auto &c : block.cases)
             set_dominator(c.block, dominator);
 
-        // After merging a loop, we inherit the loop dominator always.
-        if (block.merge_block)
-            set_dominator(block.merge_block, block.loop_dominator);
+        // In older glslang output continue_block can be == loop header.
+        if (block.continue_block && block.continue_block != block.self)
+            set_dominator(block.continue_block, dominator);
     }
 }
 

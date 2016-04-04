@@ -10,23 +10,61 @@ layout(binding = 0, std430) buffer SSBO
 layout(binding = 1, std430) buffer SSBO2
 {
     vec4 out_data[];
-} _125;
+} _177;
 
 void main()
 {
     uint ident = gl_GlobalInvocationID.x;
     vec4 idat = _24.in_data[ident];
     int k = 0;
-    uint i;
+    uint i = 0u;
+    uint i_1;
     uint j;
     int l;
+    if ((idat.y == 20.0))
+    {
+        do
+        {
+            k = (k * 2);
+            i = (i + uint(1));
+        } while ((i < ident));
+    }
+    switch (k)
+    {
+        case 10:
+        {
+            for (;;)
+            {
+                i = (i + uint(1));
+                if ((i > 10u))
+                {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+        default:
+        {
+            for (;;)
+            {
+                i = (i + 2u);
+                if ((i > 20u))
+                {
+                    break;
+                }
+                continue;
+            }
+            break;
+        }
+    }
     while ((k < 10))
     {
         idat = (idat * 2.0);
         k = (k + 1);
     }
-    i = 0u;
-    for (; (i < 16u); i = (i + uint(1)), k = (k + 1))
+    i_1 = 0u;
+    for (; (i_1 < 16u); i_1 = (i_1 + uint(1)), k = (k + 1))
     {
         j = 0u;
         for (; (j < 30u); j = (j + uint(1)))
@@ -67,6 +105,6 @@ void main()
         l = (l + 1);
         continue;
     }
-    _125.out_data[ident] = idat;
+    _177.out_data[ident] = idat;
 }
 
