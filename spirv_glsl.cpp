@@ -1866,7 +1866,7 @@ string CompilerGLSL::bitcast_glsl(uint32_t result_type, uint32_t argument)
         return join(op, "(", to_expression(argument), ")");
 }
 
-const char* CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
+string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 {
     switch (builtin)
     {

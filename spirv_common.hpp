@@ -72,12 +72,17 @@ namespace spirv_cross
         return std::to_string(std::forward<T>(t));
     }
 
+	// Allow implementations to set a convenient standard precision
+#ifndef SPVX_FLT_FMT
+#	define SPVX_FLT_FMT		"%.32g"
+#endif
+
     inline std::string convert_to_string(float t)
     {
         // std::to_string for floating point values is broken.
         // Fallback to something more sane.
         char buf[64];
-        sprintf(buf, "%.32g", t);
+        sprintf(buf, SPVX_FLT_FMT, t);
         // Ensure that the literal is float.
         if (!strchr(buf, '.') && !strchr(buf, 'e'))
             strcat(buf, ".0");
@@ -89,7 +94,7 @@ namespace spirv_cross
         // std::to_string for floating point values is broken.
         // Fallback to something more sane.
         char buf[64];
-        sprintf(buf, "%.32g", t);
+        sprintf(buf, SPVX_FLT_FMT, t);
         // Ensure that the literal is float.
         if (!strchr(buf, '.') && !strchr(buf, 'e'))
             strcat(buf, ".0");
@@ -144,6 +149,7 @@ namespace spirv_cross
             Unknown,
             Void,
             Bool,
+			Char,
             Int,
             UInt,
             AtomicCounter,
@@ -168,6 +174,8 @@ namespace spirv_cross
         spv::StorageClass storage = spv::StorageClassGeneric;
 
         std::vector<uint32_t> member_types;
+
+		bool is_packed = false;		// Tightly packed in memory (no alignment padding)
 
         struct Image
         {
@@ -631,6 +639,7 @@ namespace spirv_cross
             uint32_t offset = 0;
             uint32_t array_stride = 0;
             bool builtin = false;
+			bool per_instance = false;
         };
 
         Decoration decoration;
