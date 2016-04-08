@@ -110,14 +110,14 @@ namespace spirv_cross
             // Virtualize methods which need to be overridden by subclass targets like C++ and such.
             virtual void emit_function_prototype(SPIRFunction &func, uint64_t return_flags);
             virtual void emit_header();
-			virtual void emit_texture_op(const Instruction &i);
-			virtual std::string type_to_glsl(const SPIRType &type);
-			virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
-			virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member);
-			virtual std::string image_type_glsl(const SPIRType &type);
-			virtual std::string constant_expression(const SPIRConstant &c);
-			virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
-			virtual void emit_fixup();
+            virtual void emit_texture_op(const Instruction &i);
+            virtual std::string type_to_glsl(const SPIRType &type);
+            virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
+            virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member);
+            virtual std::string image_type_glsl(const SPIRType &type);
+            virtual std::string constant_expression(const SPIRConstant &c);
+            virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
+            virtual void emit_fixup();
 
             std::unique_ptr<std::ostringstream> buffer;
 
