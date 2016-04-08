@@ -22,35 +22,85 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-CompilerMSL::CompilerMSL(std::vector<uint32_t> spirv,
-						 MSLOptions* p_msl_options,
-						 vector<MSLVertexAttr>* p_vtx_attrs,
-						 std::vector<MSLResourceBinding>* p_res_bindings) : CompilerGLSL(move(spirv)) {
+CompilerMSL::CompilerMSL(vector<uint32_t> spirv) : CompilerGLSL(move(spirv)) {
 	options.vertex.fixup_clipspace = false;
-
-	if (p_msl_options)
-		msl_options = *p_msl_options;
-
-	if (p_vtx_attrs)
-		for (auto& va : *p_vtx_attrs)
-			vtx_attrs_by_location[va.location] = va;
-
-	if (p_res_bindings)
-		resource_bindings = *p_res_bindings;
-
-	post_parse();
 }
 
-// Perform additional configuration after parsing
-void CompilerMSL::post_parse()
+string CompilerMSL::compile(MSLOptions& msl_opts,
+							vector<MSLVertexAttr>* p_vtx_attrs,
+							std::vector<MSLResourceBinding>* p_res_bindings)
 {
+	next_metal_resource_index.msl_buffer = 0;
+	next_metal_resource_index.msl_texture = 0;
+	next_metal_resource_index.msl_sampler = 0;
+
+	pad_type_ids_by_pad_len.clear();
+
+	msl_options = msl_opts;
+
+	vtx_attrs_by_location.clear();
+	if (p_vtx_attrs)
+		for (auto& va : *p_vtx_attrs) {
+			va.used_by_shader = false;
+			vtx_attrs_by_location[va.location] = &va;
+		}
+
+	resource_bindings.clear();
+	if (p_res_bindings) {
+		resource_bindings.reserve(p_vtx_attrs->size());
+		for (auto& rb : *p_res_bindings) {
+			rb.used_by_shader = false;
+			resource_bindings.push_back(&rb);
+		}
+	}
+
 	extract_builtins();
 	add_interface_structs();
+
+
+	// Do not deal with ES-isms like precision, older extensions and such.
+	options.es = false;
+	options.version = 1;
+	backend.float_literal_suffix = false;
+	backend.uint32_t_literal_suffix = true;
+	backend.basic_int_type = "int";
+	backend.basic_uint_type = "uint";
+	backend.swizzle_is_function = false;
+	backend.shared_is_implied = false;
+
+	uint32_t pass_count = 0;
+	do
+	{
+		if (pass_count >= 2)
+			throw CompilerError("Over 2 compilation loops detected. Must be a bug!");
+
+		reset();
+
+		// Move constructor for this type is broken on GCC 4.9 ...
+		buffer = unique_ptr<ostringstream>(new ostringstream());
+
+		emit_header();
+		emit_resources();
+		emit_function_declarations();
+		emit_function(get<SPIRFunction>(execution.entry_point), 0);
+
+		pass_count++;
+	} while (force_recompile);
+
+	return buffer->str();
+}
+
+string CompilerMSL::compile()
+{
+	MSLOptions default_msl_opts;
+	compile(default_msl_opts, nullptr, nullptr);
 }
 
 // Adds any builtins used by this shader to the builtin_vars collection
 void CompilerMSL::extract_builtins()
 {
+	builtin_vars.clear();
+
 	for (auto& id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -67,6 +117,9 @@ void CompilerMSL::extract_builtins()
 // Adds any interface structure variables needed by this shader
 void CompilerMSL::add_interface_structs()
 {
+	stage_in_var_ids.clear();
+	qual_pos_var_name = "";
+	
 	uint32_t var_id;
 	if (execution.model == ExecutionModelVertex)
 	{
@@ -89,8 +142,9 @@ void CompilerMSL::add_interface_structs()
 	stage_out_var_id = add_interface_struct(StorageClassOutput);
 }
 
-// Iterate through the variables and populate each input vertex attribute variable to
-// the binding info provided in the MSL context. Matching occurs by location.
+// Iterate through the variables and populates each input vertex attribute variable
+// from the binding info provided during compiler construction, matching by location.
+// The MSL Each matched binding
 void CompilerMSL::bind_vertex_attributes(std::set<uint32_t>& bindings)
 {
 	if (execution.model == ExecutionModelVertex)
@@ -108,13 +162,17 @@ void CompilerMSL::bind_vertex_attributes(std::set<uint32_t>& bindings)
 					type.pointer)
 				{
 					auto& dec = meta[var.self].decoration;
-					MSLVertexAttr& va = vtx_attrs_by_location[dec.location];
-					dec.binding = va.buffer;
-					dec.offset = va.offset;
-					dec.array_stride = va.stride;
-					dec.per_instance = va.per_instance;
+					MSLVertexAttr* p_va = vtx_attrs_by_location[dec.location];
+					if (p_va) {
+						dec.binding = p_va->msl_buffer;
+						dec.offset = p_va->msl_offset;
+						dec.array_stride = p_va->msl_stride;
+						dec.per_instance = p_va->per_instance;
 
-					bindings.insert(va.buffer);
+						// Mark the vertex attributes that were used.
+						p_va->used_by_shader = true;
+						bindings.insert(p_va->msl_buffer);
+					}
 				}
 			}
 		}
@@ -299,40 +357,6 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 	}
 	
 	return ib_var_id;
-}
-
-string CompilerMSL::compile()
-{
-	// Do not deal with ES-isms like precision, older extensions and such.
-	options.es = false;
-	options.version = 1;
-	backend.float_literal_suffix = false;
-	backend.uint32_t_literal_suffix = true;
-	backend.basic_int_type = "int";
-	backend.basic_uint_type = "uint";
-	backend.swizzle_is_function = false;
-	backend.shared_is_implied = false;
-
-	uint32_t pass_count = 0;
-	do
-	{
-		if (pass_count >= 2)
-			throw CompilerError("Over 2 compilation loops detected. Must be a bug!");
-
-		reset();
-
-		// Move constructor for this type is broken on GCC 4.9 ...
-		buffer = unique_ptr<ostringstream>(new ostringstream());
-
-		emit_header();
-		emit_resources();
-		emit_function_declarations();
-		emit_function(get<SPIRFunction>(execution.entry_point), 0);
-
-		pass_count++;
-	} while (force_recompile);
-
-	return buffer->str();
 }
 
 // Emits the file header info
@@ -1082,26 +1106,30 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable& var, SPIRType::Base
 	uint32_t var_binding = (var.storage == StorageClassPushConstant) ? kPushConstBinding : var_dec.binding;
 
 	// If a matching binding has been specified, find and use it
-	for (auto& res_bind : resource_bindings)
+	for (auto p_res_bind : resource_bindings)
 	{
-		if (res_bind.stage == execution.model &&
-			res_bind.desc_set == var_desc_set &&
-			res_bind.binding == var_binding) {
+		if (p_res_bind->stage == execution.model &&
+			p_res_bind->desc_set == var_desc_set &&
+			p_res_bind->binding == var_binding)
+		{
 
-			switch (basetype) {
-				case SPIRType::Struct:		return res_bind.buffer;
-				case SPIRType::Image:		return res_bind.texture;
-				case SPIRType::Sampler:		return res_bind.sampler;
+			p_res_bind->used_by_shader = true;
+			switch (basetype)
+			{
+				case SPIRType::Struct:		return p_res_bind->msl_buffer;
+				case SPIRType::Image:		return p_res_bind->msl_texture;
+				case SPIRType::Sampler:		return p_res_bind->msl_sampler;
 				default:					return 0;
 			}
 		}
 	}
 
 	// If a binding has not been specified, revert to incrementing resource indices
-	switch (basetype) {
-		case SPIRType::Struct:		return next_metal_resource_index.buffer++;
-		case SPIRType::Image:		return next_metal_resource_index.texture++;
-		case SPIRType::Sampler:		return next_metal_resource_index.sampler++;
+	switch (basetype)
+	{
+		case SPIRType::Struct:		return next_metal_resource_index.msl_buffer++;
+		case SPIRType::Image:		return next_metal_resource_index.msl_texture++;
+		case SPIRType::Sampler:		return next_metal_resource_index.msl_sampler++;
 		default:					return 0;
 	}
 }

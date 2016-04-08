@@ -45,29 +45,35 @@ namespace spirv_cross {
 		bool is_rendering_points = false;
 	};
 
-	// Defines characteristics of vertex attributes at a particular location
+	// Defines MSL characteristics of a vertex attribute at a particular location.
+	// The used_by_shader flag is set to true during compilation of SPIR-V to MSL
+	// if the shader makes use of this vertex attribute.
 	struct MSLVertexAttr
 	{
 		uint32_t location = 0;
-		uint32_t buffer = 0;
-		uint32_t offset = 0;
-		uint32_t stride = 0;
+		uint32_t msl_buffer = 0;
+		uint32_t msl_offset = 0;
+		uint32_t msl_stride = 0;
 		bool per_instance = false;
+		bool used_by_shader = false;
 	};
 
-	// Specifies the binding index of a Metal resource for a binding within a descriptor set.
+	// Matches the binding index of a MSL resource for a binding within a descriptor set.
 	// Taken together, the stage, desc_set and binding combine to form a reference to a resource
 	// descriptor used in a particular shading stage. Generally, only one of the buffer, texture,
-	// or sampler elements will be populated.
+	// or sampler elements will be populated. The used_by_shader flag is set to true during
+	// compilation of SPIR-V to MSL if the shader makes use of this vertex attribute.
 	struct MSLResourceBinding
 	{
 		spv::ExecutionModel stage;
 		uint32_t desc_set = 0;
 		uint32_t binding = 0;
 
-		uint32_t buffer = 0;
-		uint32_t texture = 0;
-		uint32_t sampler = 0;
+		uint32_t msl_buffer = 0;
+		uint32_t msl_texture = 0;
+		uint32_t msl_sampler = 0;
+
+		bool used_by_shader = false;
 	};
 
 	// Special constant used in a MSLResourceBinding desc_set
@@ -84,12 +90,25 @@ namespace spirv_cross {
 	{
         public:
 
-		CompilerMSL(std::vector<uint32_t> spirv,
-					MSLOptions* p_msl_options = nullptr,
-					std::vector<MSLVertexAttr>* p_vtx_attrs = nullptr,
-					std::vector<MSLResourceBinding>* p_res_bindings = nullptr);
+		// Constructs an instance to compile the SPIR-V code into Metal Shading Language.
+		CompilerMSL(std::vector<uint32_t> spirv);
 
-            std::string compile() override;
+		// Compiles the SPIR-V code into Metal Shading Language using the specified configuration parameters.
+		//  - msl_opts indicates some general options for directing the compilation.
+		//  - p_vtx_attrs is an optional list of vertex attribute bindings used to match
+		//    vertex content locations to MSL attributes. If vertex attributes are provided,
+		//    the compiler will set the used_by_shader flag to true in any vertex attribute
+		//    actually used by the MSL code.
+		//  - p_res_bindings is a list of resource bindings to indicate the MSL buffer,
+		//    texture or sampler index to use for a particular SPIR-V description set
+		//    and binding. If resource bindings are provided, the compiler will set the
+		//    used_by_shader flag to true in any resource binding actually used by the MSL code.
+		std::string compile(MSLOptions& msl_opts,
+							std::vector<MSLVertexAttr>* p_vtx_attrs = nullptr,
+							std::vector<MSLResourceBinding>* p_res_bindings = nullptr);
+
+		// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
+		std::string compile() override;
 
         protected:
             void emit_header() override;
@@ -130,18 +149,17 @@ namespace spirv_cross {
 			size_t get_declared_type_size(const SPIRType& type, uint64_t dec_mask) const;
 
 			MSLOptions msl_options;
-			std::unordered_map<uint32_t, MSLVertexAttr> vtx_attrs_by_location;
-			std::vector<MSLResourceBinding> resource_bindings;
+			std::unordered_map<uint32_t, MSLVertexAttr*> vtx_attrs_by_location;
+			std::vector<MSLResourceBinding*> resource_bindings;
 			std::unordered_map<spv::BuiltIn, uint32_t> builtin_vars;
 			MSLResourceBinding next_metal_resource_index;
 			std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
-
-			std::string stage_in_var_name = "in";
 			std::vector<uint32_t> stage_in_var_ids;
-			std::string stage_out_var_name = "out";
 			uint32_t stage_out_var_id = 0;
-			std::string sampler_name_suffix = "Smplr";
 			std::string qual_pos_var_name;
+			std::string stage_in_var_name = "in";
+			std::string stage_out_var_name = "out";
+			std::string sampler_name_suffix = "Smplr";
     };
 
 	// Sorts the members of a SPIRType and associated Meta info based on the location
