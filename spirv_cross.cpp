@@ -60,7 +60,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 {
     for (auto &i : block.ops)
     {
-        auto ops = stream(i.offset);
+        auto ops = stream(i);
         auto op = static_cast<Op>(i.op);
 
         switch (op)
@@ -119,7 +119,7 @@ void Compiler::register_global_read_dependencies(const SPIRBlock &block, uint32_
 {
     for (auto &i : block.ops)
     {
-        auto ops = stream(i.offset);
+        auto ops = stream(i);
         auto op = static_cast<Op>(i.op);
 
         switch (op)
@@ -458,10 +458,10 @@ static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
 void Compiler::parse()
 {
     auto len = spirv.size();
-    auto s = stream(0);
-
     if (len < 5)
         throw CompilerError("SPIRV file too small.");
+
+    auto s = spirv.data();
 
     // Endian-swap if we need to.
     if (s[0] == swap_endian(MagicNumber))
@@ -793,7 +793,7 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 void Compiler::parse(const Instruction &i)
 {
-    auto ops = stream(i.offset);
+    auto ops = stream(i);
     auto op = static_cast<Op>(i.op);
     uint32_t length = i.length;
 
@@ -1666,7 +1666,7 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
     // inside dead blocks ...
     for (auto &i : block.ops)
     {
-        auto ops = stream(i.offset);
+        auto ops = stream(i);
         auto op = static_cast<Op>(i.op);
 
         if (!handler.handle(op, ops, i.length))
