@@ -119,9 +119,9 @@ void CompilerMSL::add_interface_structs()
 {
     stage_in_var_ids.clear();
     qual_pos_var_name = "";
-    
+
     uint32_t var_id;
-    if (execution.model == ExecutionModelVertex)
+    if (execution.model == ExecutionModelVertex && !vtx_attrs_by_location.empty())
     {
         std::set<uint32_t> vtx_bindings;
         bind_vertex_attributes(vtx_bindings);
@@ -144,7 +144,6 @@ void CompilerMSL::add_interface_structs()
 
 // Iterate through the variables and populates each input vertex attribute variable
 // from the binding info provided during compiler construction, matching by location.
-// The MSL Each matched binding
 void CompilerMSL::bind_vertex_attributes(std::set<uint32_t>& bindings)
 {
     if (execution.model == ExecutionModelVertex)
@@ -1107,9 +1106,9 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable& var, SPIRType::Base
             p_res_bind->used_by_shader = true;
             switch (basetype)
             {
-                case SPIRType::Struct:        return p_res_bind->msl_buffer;
-                case SPIRType::Image:        return p_res_bind->msl_texture;
-                case SPIRType::Sampler:        return p_res_bind->msl_sampler;
+                case SPIRType::Struct:      return p_res_bind->msl_buffer;
+                case SPIRType::Image:       return p_res_bind->msl_texture;
+                case SPIRType::Sampler:     return p_res_bind->msl_sampler;
                 default:                    return 0;
             }
         }
@@ -1118,9 +1117,9 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable& var, SPIRType::Base
     // If a binding has not been specified, revert to incrementing resource indices
     switch (basetype)
     {
-        case SPIRType::Struct:        return next_metal_resource_index.msl_buffer++;
-        case SPIRType::Image:        return next_metal_resource_index.msl_texture++;
-        case SPIRType::Sampler:        return next_metal_resource_index.msl_sampler++;
+        case SPIRType::Struct:      return next_metal_resource_index.msl_buffer++;
+        case SPIRType::Image:       return next_metal_resource_index.msl_texture++;
+        case SPIRType::Sampler:     return next_metal_resource_index.msl_sampler++;
         default:                    return 0;
     }
 }
