@@ -1353,7 +1353,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id,
 
 void CompilerGLSL::emit_texture_op(const Instruction &i)
 {
-    auto ops = stream(i.offset);
+    auto ops = stream(i);
     auto op = static_cast<Op>(i.op);
     uint32_t length = i.length;
 
@@ -2274,7 +2274,7 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 
 void CompilerGLSL::emit_instruction(const Instruction &i)
 {
-    auto ops = stream(i.offset);
+    auto ops = stream(i);
     auto op = static_cast<Op>(i.op);
     uint32_t length = i.length;
 
@@ -3615,7 +3615,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
         auto &b = get<SPIRBlock>(block);
         for (auto &i : b.ops)
         {
-            auto ops = stream(i.offset);
+            auto ops = stream(i);
             auto op = static_cast<Op>(i.op);
 
             if (op == OpFunctionCall)

@@ -168,11 +168,17 @@ namespace spirv_cross
             ShaderResources get_shader_resources() const;
 
         protected:
-            const uint32_t* stream(uint32_t offset) const
+            const uint32_t* stream(const Instruction &instr) const
             {
-                if (offset > spirv.size())
+                // If we're not going to use any arguments, just return nullptr.
+                // We want to avoid case where we return an out of range pointer
+                // that trips debug assertions on some platforms.
+                if (!instr.length)
+                    return nullptr;
+
+                if (instr.offset + instr.length > spirv.size())
                     throw CompilerError("Compiler::stream() out of range.");
-                return &spirv[offset];
+                return &spirv[instr.offset];
             }
             std::vector<uint32_t> spirv;
 
