@@ -529,7 +529,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 // Emit a texture operation
 void CompilerMSL::emit_texture_op(const Instruction &i)
 {
-    auto ops = stream(i.offset);
+    auto ops = stream(i);
     auto op = static_cast<Op>(i.op);
     uint32_t length = i.length;
 
