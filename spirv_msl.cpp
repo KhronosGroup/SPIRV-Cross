@@ -413,39 +413,7 @@ void CompilerMSL::emit_resources() {
 
     emit_interface_block(stage_out_var_id);
 
-
-    //    // Global variables.
-    //    bool emitted = false;
-    //    for (auto global : global_variables)
-    //    {
-    //        auto &var = get<SPIRVariable>(global);
-    //        if (var.storage == StorageClassWorkgroup)
-    //        {
-    //            emit_shared(var);
-    //            emitted = true;
-    //        }
-    //    }
-    //
-    //    if (emitted)
-    //        statement("");
-    //
-    //    // Emit regular globals which are allocated per invocation.
-    //    emitted = false;
-    //    for (auto global : global_variables)
-    //    {
-    //        auto &var = get<SPIRVariable>(global);
-    //        if (var.storage == StorageClassPrivate)
-    //        {
-    //            if (var.storage == StorageClassWorkgroup)
-    //                emit_shared(var);
-    //            else
-    //                statement(variable_decl(var), ";");
-    //            emitted = true;
-    //        }
-    //    }
-    //
-    //    if (emitted)
-    //        statement("");
+    // TODO: Consolidate and output loose uniforms into an input struct
 }
 
 // Emit a structure declaration for the specified interface variable.
