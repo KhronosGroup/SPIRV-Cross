@@ -157,7 +157,7 @@ namespace spirv_cross {
     {
         void sort();
         bool operator() (uint32_t mbr_idx1,uint32_t mbr_idx2);
-        MemberSorterByLocation(SPIRType& type, Meta& meta) : type(type), meta(meta) {}
+        MemberSorterByLocation(SPIRType& t, Meta& m) : type(t), meta(m) {}
         SPIRType& type;
         Meta& meta;
     };

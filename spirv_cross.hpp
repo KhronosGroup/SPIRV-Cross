@@ -80,6 +80,8 @@ namespace spirv_cross
             // The constructor takes a buffer of SPIR-V words and parses it.
             Compiler(std::vector<uint32_t> ir);
 
+            virtual ~Compiler() = default;
+
             // After parsing, API users can modify the SPIR-V via reflection and call this
             // to disassemble the SPIR-V into the desired langauage.
             // Sub-classes actually implement this.

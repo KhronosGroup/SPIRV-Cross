@@ -93,7 +93,7 @@ string CompilerMSL::compile(MSLConfiguration& msl_cfg,
 string CompilerMSL::compile()
 {
     MSLConfiguration default_msl_cfg;
-    compile(default_msl_cfg, nullptr, nullptr);
+    return compile(default_msl_cfg, nullptr, nullptr);
 }
 
 // Adds any builtins used by this shader to the builtin_vars collection
@@ -256,7 +256,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
     set_name(ib_type_id, get_entry_point_name() + "_" + ib_var_ref);
     set_name(ib_var_id, ib_var_ref);
 
-    uint32_t struct_size = 0;
+    size_t struct_size = 0;
     bool first_elem = true;
     for (auto p_var : vars)
     {
@@ -283,17 +283,17 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
             {
                 // If needed, add a padding member to the struct to align to the next member's offset.
                 uint32_t mbr_offset = get_member_decoration(type.self, i, DecorationOffset);
-                struct_size = pad_to_offset(ib_type, (var_dec.offset + mbr_offset), struct_size);
+                struct_size = pad_to_offset(ib_type, (var_dec.offset + mbr_offset), (uint32_t)struct_size);
 
                 // Add a reference to the member to the interface struct.
                 auto& membertype = get<SPIRType>(member);
-                uint32_t ib_mbr_idx = ib_type.member_types.size();
+                uint32_t ib_mbr_idx = (uint32_t)ib_type.member_types.size();
                 ib_type.member_types.push_back(membertype.self);
 
                 // Give the member a name, and assign it an offset within the struct.
                 string mbr_name = to_member_name(type, i);
                 set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-                set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, struct_size);
+                set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, (uint32_t)struct_size);
                 struct_size = get_declared_struct_size(ib_type);
 
                 // Update the original variable reference to include the structure reference
@@ -319,16 +319,16 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
         else
         {
             // If needed, add a padding member to the struct to align to the next member's offset.
-            struct_size = pad_to_offset(ib_type, var_dec.offset, struct_size);
+            struct_size = pad_to_offset(ib_type, var_dec.offset, (uint32_t)struct_size);
 
             // Add a reference to the variable type to the interface struct.
-            uint32_t ib_mbr_idx = ib_type.member_types.size();
+            uint32_t ib_mbr_idx = (uint32_t)ib_type.member_types.size();
             ib_type.member_types.push_back(type.self);
 
             // Give the member a name, and assign it an offset within the struct.
             string mbr_name = to_name(p_var->self);
             set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-            set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, struct_size);
+            set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, (uint32_t)struct_size);
             struct_size = get_declared_struct_size(ib_type);
 
             // Update the original variable reference to include the structure reference
@@ -505,9 +505,9 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
         // cleared after each compilation pass.
         if (stage_out_var_id)
         {
-            auto& var = get<SPIRVariable>(stage_out_var_id);
-            auto& type = get<SPIRType>(var.basetype);
-            set<SPIRExpression>(var.initializer, "{}", type.self, true);
+            auto& so_var = get<SPIRVariable>(stage_out_var_id);
+            auto& so_type = get<SPIRType>(so_var.basetype);
+            set<SPIRExpression>(so_var.initializer, "{}", so_type.self, true);
         }
     }
 
@@ -543,31 +543,25 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
     uint32_t id = ops[1];
     uint32_t img = ops[2];
     uint32_t coord = ops[3];
-    uint32_t dref = 0;
     uint32_t comp = 0;
     bool gather = false;
-    bool proj = false;
     const uint32_t *opt = nullptr;
 
     switch (op)
     {
         case OpImageSampleDrefImplicitLod:
         case OpImageSampleDrefExplicitLod:
-            dref = ops[4];
             opt = &ops[5];
             length -= 5;
             break;
 
         case OpImageSampleProjDrefImplicitLod:
         case OpImageSampleProjDrefExplicitLod:
-            dref = ops[4];
-            proj = true;
             opt = &ops[5];
             length -= 5;
             break;
 
         case OpImageDrefGather:
-            dref = ops[4];
             opt = &ops[5];
             gather = true;
             length -= 5;
@@ -584,7 +578,6 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
         case OpImageSampleProjExplicitLod:
             opt = &ops[4];
             length -= 4;
-            proj = true;
             break;
 
         case OpImageSampleImplicitLod:
@@ -990,9 +983,9 @@ string CompilerMSL::func_type_decl(SPIRType& type)
     // If an outgoing interface block has been defined, override the entry point return type
     if (stage_out_var_id)
     {
-        auto& var = get<SPIRVariable>(stage_out_var_id);
-        auto& type = get<SPIRType>(var.basetype);
-        return_type = type_to_glsl(type);
+        auto& so_var = get<SPIRVariable>(stage_out_var_id);
+        auto& so_type = get<SPIRType>(so_var.basetype);
+        return_type = type_to_glsl(so_type);
     }
 
     // Prepend a entry type, based on the execution model
@@ -1171,7 +1164,7 @@ uint32_t CompilerMSL::pad_to_offset(SPIRType& struct_type, uint32_t offset, uint
         return struct_size;
 
     auto& pad_type = get_pad_type(offset - struct_size);
-    uint32_t mbr_idx = struct_type.member_types.size();
+    uint32_t mbr_idx = (uint32_t)struct_type.member_types.size();
     struct_type.member_types.push_back(pad_type.self);
     set_member_name(struct_type.self, mbr_idx, ("pad" + convert_to_string(mbr_idx)));
     set_member_decoration(struct_type.self, mbr_idx, DecorationOffset, struct_size);
@@ -1486,7 +1479,7 @@ void MemberSorterByLocation::sort()
 {
     // Create a temporary array of consecutive member indices and sort it base on
     // how the members should be reordered, based on builtin and location meta info.
-    uint32_t mbr_cnt = type.member_types.size();
+    size_t mbr_cnt = type.member_types.size();
     vector<uint32_t> mbr_idxs(mbr_cnt);
     iota(mbr_idxs.begin(), mbr_idxs.end(), 0);              // Fill with consecutive indices
     std::sort(mbr_idxs.begin(), mbr_idxs.end(), *this);     // Sort member indices based on member locations

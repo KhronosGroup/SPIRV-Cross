@@ -1833,7 +1833,7 @@ std::vector<BufferRange> Compiler::get_active_buffer_ranges(unsigned id) const
 // Returns the value of the first ID available for use in the expanded bound.
 uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
 {
-    uint32_t curr_bound = ids.size();
+    uint32_t curr_bound = (uint32_t)ids.size();
     uint32_t new_bound = curr_bound + incr_amount;
     ids.resize(new_bound);
     meta.resize(new_bound);
