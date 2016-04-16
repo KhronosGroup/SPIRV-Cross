@@ -253,8 +253,8 @@ string CompilerCPP::compile()
     uint32_t pass_count = 0;
     do
     {
-        if (pass_count >= 2)
-            throw CompilerError("Over 2 compilation loops detected. Must be a bug!");
+        if (pass_count >= 3)
+            throw CompilerError("Over 3 compilation loops detected. Must be a bug!");
 
         resource_registrations.clear();
         reset();
