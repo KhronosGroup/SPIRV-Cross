@@ -3045,6 +3045,14 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
             break;
         }
 
+        case OpSampledImage:
+        {
+            uint32_t result_type = ops[0];
+            uint32_t id = ops[1];
+            emit_binary_func_op(result_type, id, ops[2], ops[3], type_to_glsl(get<SPIRType>(result_type)).c_str());
+            break;
+        }
+
         case OpImageQuerySizeLod:
             BFOP(textureSize);
             break;
@@ -3247,12 +3255,13 @@ const char* CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 {
     if (options.es)
     {
-        // Structs to not have precision qualifiers.
+        // Structs do not have precision qualifiers.
         if (type.basetype != SPIRType::Float &&
                 type.basetype != SPIRType::Int &&
                 type.basetype != SPIRType::UInt &&
                 type.basetype != SPIRType::Image &&
-                type.basetype != SPIRType::SampledImage)
+                type.basetype != SPIRType::SampledImage &&
+                type.basetype != SPIRType::Sampler)
             return "";
 
         if (flags & (1ull << DecorationRelaxedPrecision))
@@ -3315,7 +3324,7 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
         res += "invariant ";
 
     auto &type = expression_type(id);
-    if (type.image.dim != DimSubpassData)
+    if (type.image.dim != DimSubpassData && type.image.sampled == 2)
     {
         if (flags & (1ull << DecorationNonWritable))
             res += "readonly ";
@@ -3402,8 +3411,10 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 
     // If we're emulating subpassInput with samplers, force sampler2D
     // so we don't have to specify format.
-    res += type.basetype == SPIRType::Image && type.image.dim != DimSubpassData ?
-        "image" : "sampler";
+    if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+        res += type.image.sampled == 2 ? "image" : "texture";
+    else
+        res += "sampler";
 
     switch (type.image.dim)
     {

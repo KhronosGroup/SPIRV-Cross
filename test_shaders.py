@@ -60,18 +60,21 @@ def get_shader_stats(shader):
     returned = stdout.decode('utf-8')
     return parse_stats(returned)
 
-def validate_shader(shader):
-    subprocess.check_call(['glslangValidator', shader])
+def validate_shader(shader, vulkan):
+    if vulkan:
+        subprocess.check_call(['glslangValidator', '-V', shader])
+    else:
+        subprocess.check_call(['glslangValidator', shader])
 
-def cross_compile(shader):
+def cross_compile(shader, vulkan):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
     os.close(glsl_f)
 
-    subprocess.check_call(['glslangValidator', '-G', '-o', spirv_path, shader])
+    subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
     subprocess.check_call(['./spirv-cross', '--output', glsl_path, spirv_path])
-    validate_shader(glsl_path)
+    validate_shader(glsl_path, vulkan)
     return (spirv_path, glsl_path)
 
 def md5_for_file(path):
@@ -110,9 +113,9 @@ def regression_check(shader, glsl, update, keep):
         make_reference_dir(reference)
         shutil.move(glsl, reference)
 
-def test_shader(stats, shader, update, keep):
+def test_shader(stats, shader, update, keep, vulkan):
     print('Testing shader:', shader)
-    spirv, glsl = cross_compile(shader)
+    spirv, glsl = cross_compile(shader, vulkan)
 
     if stats:
         cross_stats = get_shader_stats(glsl)
@@ -131,19 +134,19 @@ def test_shader(stats, shader, update, keep):
             a.append(str(i))
         print(','.join(a), file = stats)
 
-def test_shaders(shader_dir, update, malisc, keep):
+def test_shaders(shader_dir, update, malisc, keep, vulkan):
     if malisc:
         with open('stats.csv', 'w') as stats:
             print('Shader,OrigRegs,OrigUniRegs,OrigALUShort,OrigLSShort,OrigTEXShort,OrigALULong,OrigLSLong,OrigTEXLong,CrossRegs,CrossUniRegs,CrossALUShort,CrossLSShort,CrossTEXShort,CrossALULong,CrossLSLong,CrossTEXLong', file = stats)
             for f in os.walk(os.path.join(shader_dir)):
                 for i in f[2]:
                     shader = os.path.join(f[0], i)
-                    test_shader(stats, shader, update, keep)
+                    test_shader(stats, shader, update, keep, vulkan)
     else:
         for f in os.walk(os.path.join(shader_dir)):
             for i in f[2]:
                 shader = os.path.join(f[0], i)
-                test_shader(None, shader, update, keep)
+                test_shader(None, shader, update, keep, vulkan)
 
 def main():
     parser = argparse.ArgumentParser(description = 'Script for regression testing.')
@@ -158,13 +161,16 @@ def main():
     parser.add_argument('--malisc',
             action = 'store_true',
             help = 'Use malisc offline compiler to determine static cycle counts before and after spirv-cross.')
+    parser.add_argument('--vulkan',
+            action = 'store_true',
+            help = 'Test shaders using Vulkan semantics instead of OpenGL.')
     args = parser.parse_args()
 
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep)
+    test_shaders(args.folder, args.update, args.malisc, args.keep, args.vulkan)
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')
