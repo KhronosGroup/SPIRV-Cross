@@ -113,6 +113,29 @@ glslangValidator -H -V -o test.spv shaders/comp/basic.comp
 ./spirv-cross --version 310 --es test.spv --output test.comp --force-temporary
 ```
 
+## Contributing
+
+Contributions to SPIRV-Cross are welcome. See Testing and Licensing sections for details.
+
+### Testing
+
+SPIRV-Cross maintains a test suite of shaders with reference output of how the output looks after going through a roundtrip through
+glslangValidator then back through SPIRV-Cross again. The reference files are stored inside the repository in order to be able to track regressions.
+
+All pull requests should ensure that test output does not change unexpectedly. This can be tested with `./test_shaders.py shaders`.
+However, when improving SPIRV-Cross there are of course legitimate cases where reference output should change.
+In these cases, run `./test_shaders.py shaders --update` to update the reference files and include these changes as part of the pull request.
+Always make sure you are running up to date glslangValidator when updating reference files.
+
+In short, the master branch should always be able to run `./test_shaders.py shaders` without failure.
+
+When adding support for new features to SPIRV-Cross, a new shader and reference file should be added which covers usage of the new shader features in question.
+
+### Licensing
+
+Contributors of new files should add a copyright header at the top of every new source code file with their copyright
+along with the Apache 2.0 licensing stub.
+
 ## ABI concerns
 
 ### SPIR-V headers
