@@ -286,6 +286,7 @@ bool Compiler::expression_is_lvalue(uint32_t id) const
     {
         case SPIRType::SampledImage:
         case SPIRType::Image:
+        case SPIRType::Sampler:
             return false;
 
         default:
