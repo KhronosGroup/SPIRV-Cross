@@ -1027,12 +1027,12 @@ string CompilerMSL::entry_point_args(bool append_comma)
                         break;
                     case SPIRType::Image:
                         if ( !ep_args.empty() ) ep_args += ", ";
-                        ep_args += type_to_glsl(type) + "<float> " + to_name(var.self);
+                        ep_args += type_to_glsl(type) + " " + to_name(var.self);
                         ep_args += " [[texture(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
                         break;
                     case SPIRType::SampledImage:
                         if ( !ep_args.empty() ) ep_args += ", ";
-                        ep_args += type_to_glsl(type) + "<float> " + to_name(var.self);
+                        ep_args += type_to_glsl(type) + " " + to_name(var.self);
                         ep_args += " [[texture(" + convert_to_string(get_metal_resource_index(var, SPIRType::Image)) + ")]]";
                         ep_args += ", sampler " + to_name(var.self) + sampler_name_suffix;
                         ep_args += " [[sampler(" + convert_to_string(get_metal_resource_index(var, SPIRType::Sampler)) + ")]]";
@@ -1197,10 +1197,10 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
         {
             case SPIRType::Bool: return "bool";
             case SPIRType::Char: return "char";
-            case SPIRType::Int: return backend.basic_int_type;
-            case SPIRType::UInt: return backend.basic_uint_type;
+            case SPIRType::Int: return (type.width == 16 ? "short" : "int");
+            case SPIRType::UInt: return (type.width == 16 ? "ushort" : "uint");
             case SPIRType::AtomicCounter: return "atomic_uint";
-            case SPIRType::Float: return "float";
+            case SPIRType::Float: return (type.width == 16 ? "half" : "float");
             default: return "unknown_type";
         }
     }
@@ -1210,9 +1210,9 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
         {
             case SPIRType::Bool: return join("bool", type.vecsize);
             case SPIRType::Char: return join("char", type.vecsize);;
-            case SPIRType::Int: return join("int", type.vecsize);
-            case SPIRType::UInt: return join("uint", type.vecsize);
-            case SPIRType::Float: return join("float", type.vecsize);
+            case SPIRType::Int: return join((type.width == 16 ? "short" : "int"), type.vecsize);
+            case SPIRType::UInt: return join((type.width == 16 ? "ushort" : "uint"), type.vecsize);
+            case SPIRType::Float: return join((type.width == 16 ? "half" : "float"), type.vecsize);
             default: return "unknown_type";
         }
     }
@@ -1224,7 +1224,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
             case SPIRType::Int:
             case SPIRType::UInt:
             case SPIRType::Float:
-                return join("float", type.columns, "x", type.vecsize);
+                return join((type.width == 16 ? "half" : "float"), type.columns, "x", type.vecsize);
             default: return "unknown_type";
         }
     }
@@ -1233,16 +1233,20 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 // Returns an MSL string describing  the SPIR-V image type
 string CompilerMSL::image_type_glsl(const SPIRType &type)
 {
+    string img_type_name;
+
     auto& img_type = type.image;
     if (img_type.depth)
     {
         switch (img_type.dim) {
             case spv::Dim2D:
-                return  img_type.ms ? "depth2d_ms" : (img_type.arrayed ? "depth2d_array" : "depth2d");
+                img_type_name += (img_type.ms ? "depth2d_ms" : (img_type.arrayed ? "depth2d_array" : "depth2d"));
+                break;
             case spv::DimCube:
-                return img_type.arrayed ? "depthcube_array" : "depthcube";
+                img_type_name += (img_type.arrayed ? "depthcube_array" : "depthcube");
                 break;
             default:
+                img_type_name += "unknown_depth_texture_type";
                 break;
         }
     }
@@ -1250,23 +1254,28 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
     {
         switch (img_type.dim) {
             case spv::Dim1D:
-                return img_type.arrayed ? "texture1d_array" : "texture1d";
+                img_type_name += (img_type.arrayed ? "texture1d_array" : "texture1d");
                 break;
             case spv::Dim2D:
-                return img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d");
+                img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
                 break;
             case spv::Dim3D:
-                return "texture3D";
+                img_type_name += "texture3D";
                 break;
             case spv::DimCube:
-                return img_type.arrayed ? "texturecube_array" : "texturecube";
+                img_type_name += (img_type.arrayed ? "texturecube_array" : "texturecube");
                 break;
             default:
+                img_type_name += "unknown_texture_type";
                 break;
         }
     }
 
-    return "unknown_texture_type";
+    // Append the pixel type
+    auto& img_pix_type = get<SPIRType>(img_type.type);
+    img_type_name += "<" + type_to_glsl(img_pix_type) + ">";
+
+    return img_type_name;
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin
