@@ -101,6 +101,7 @@ namespace spirv_cross {
         protected:
             void emit_header() override;
             void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
+            void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
             void emit_texture_op(const Instruction &i) override;
             void emit_fixup() override;
             std::string type_to_glsl(const SPIRType &type) override;
@@ -124,6 +125,7 @@ namespace spirv_cross {
             std::string clean_func_name(std::string func_name);
             std::string entry_point_args(bool append_comma);
             std::string get_entry_point_name();
+            std::string to_sampler_expression(uint32_t id);
             std::string builtin_qualifier(spv::BuiltIn builtin);
             std::string builtin_type_decl(spv::BuiltIn builtin);
             std::string member_attribute_qualifier(const SPIRType &type, uint32_t index);

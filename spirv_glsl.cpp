@@ -1351,6 +1351,11 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id,
         emit_trinary_func_op(result_type, id, left, right, lerp, "mix");
 }
 
+void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
+{
+    emit_binary_func_op(result_type, result_id, image_id, samp_id, type_to_glsl(get<SPIRType>(result_type)).c_str());
+}
+
 void CompilerGLSL::emit_texture_op(const Instruction &i)
 {
     auto ops = stream(i);
@@ -3049,7 +3054,7 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
         {
             uint32_t result_type = ops[0];
             uint32_t id = ops[1];
-            emit_binary_func_op(result_type, id, ops[2], ops[3], type_to_glsl(get<SPIRType>(result_type)).c_str());
+            emit_sampled_image_op(result_type, id, ops[2], ops[3]);
             break;
         }
 

@@ -644,6 +644,7 @@ namespace spirv_cross
 
         Decoration decoration;
         std::vector<Decoration> members;
+        uint32_t sampler = 0;
     };
 }
 

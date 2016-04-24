@@ -57,7 +57,6 @@ string CompilerMSL::compile(MSLConfiguration& msl_cfg,
     extract_builtins();
     add_interface_structs();
 
-
     // Do not deal with ES-isms like precision, older extensions and such.
     options.es = false;
     options.version = 1;
@@ -502,7 +501,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
     uint32_t length = i.length;
 
     if (i.offset + length > spirv.size())
-        throw CompilerError("Compiler::parse() opcode out of range.");
+        throw CompilerError("Compiler::compile() opcode out of range.");
 
     uint32_t result_type = ops[0];
     uint32_t id = ops[1];
@@ -593,7 +592,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
     // Texture function and sampler
     string texop = gather ? "gather" : "sample";
-    expr += "." + texop + "(" + to_expression(img) + sampler_name_suffix + ", ";
+    expr += "." + texop + "(" + to_sampler_expression(img) + ", ";
 
     // Add texture coordinates
     bool forward = should_forward(coord);
@@ -777,6 +776,22 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
     emit_op(result_type, id, expr, forward, false);
 
+}
+
+// Establish sampled image as expression object and assign the sampler to it.
+void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
+{
+    set<SPIRExpression>(result_id, to_expression(image_id), result_type, true);
+    meta[result_id].sampler = samp_id;
+}
+
+// If the ID represents a sampled image that has been assigned a sampler already,
+// generate an expression for the sampler, otherwise generate a fake sampler name
+// by appending a suffix to the expression constructed from the ID.
+string CompilerMSL::to_sampler_expression(uint32_t id)
+{
+    uint32_t samp_id = meta[id].sampler;
+    return samp_id ? to_expression(samp_id) : to_expression(id) + sampler_name_suffix;
 }
 
 // Called automatically at the end of the entry point function
@@ -1034,7 +1049,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
                         if ( !ep_args.empty() ) ep_args += ", ";
                         ep_args += type_to_glsl(type) + " " + to_name(var.self);
                         ep_args += " [[texture(" + convert_to_string(get_metal_resource_index(var, SPIRType::Image)) + ")]]";
-                        ep_args += ", sampler " + to_name(var.self) + sampler_name_suffix;
+                        ep_args += ", sampler " + to_sampler_expression(var.self);
                         ep_args += " [[sampler(" + convert_to_string(get_metal_resource_index(var, SPIRType::Sampler)) + ")]]";
                         break;
                     default:
