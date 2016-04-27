@@ -30,9 +30,7 @@ string CompilerMSL::compile(MSLConfiguration& msl_cfg,
                             vector<MSLVertexAttr>* p_vtx_attrs,
                             std::vector<MSLResourceBinding>* p_res_bindings)
 {
-    next_metal_resource_index.msl_buffer = 0;
-    next_metal_resource_index.msl_texture = 0;
-    next_metal_resource_index.msl_sampler = 0;
+    next_metal_resource_index = MSLResourceBinding();   // Start bindings at zero
 
     pad_type_ids_by_pad_len.clear();
 
@@ -55,6 +53,7 @@ string CompilerMSL::compile(MSLConfiguration& msl_cfg,
     }
 
     extract_builtins();
+    localize_global_variables();
     add_interface_structs();
 
     // Do not deal with ES-isms like precision, older extensions and such.
@@ -109,6 +108,24 @@ void CompilerMSL::extract_builtins()
 
             if (dec.builtin)
                 builtin_vars[dec.builtin_type] = var.self;
+        }
+    }
+}
+
+// Move the Private global variables to the entry function.
+// Non-constant variables cannot have global scope in Metal.
+void CompilerMSL::localize_global_variables()
+{
+    auto& entry_func = get<SPIRFunction>(execution.entry_point);
+    auto iter = global_variables.begin();
+    while(iter != global_variables.end()) {
+        uint32_t gv_id = *iter;
+        auto& gbl_var = get<SPIRVariable>(gv_id);
+        if (gbl_var.storage == StorageClassPrivate) {
+            entry_func.add_local_variable(gv_id);
+            iter = global_variables.erase(iter);
+        } else {
+            iter++;
         }
     }
 }
@@ -509,6 +526,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
     uint32_t coord = ops[3];
     uint32_t comp = 0;
     bool gather = false;
+    bool fetch = false;
     const uint32_t *opt = nullptr;
 
     switch (op)
@@ -538,15 +556,16 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
             length -= 5;
             break;
 
-        case OpImageSampleProjImplicitLod:
-        case OpImageSampleProjExplicitLod:
+        case OpImageFetch:
+            fetch = true;
             opt = &ops[4];
             length -= 4;
             break;
-
+            
         case OpImageSampleImplicitLod:
         case OpImageSampleExplicitLod:
-        case OpImageFetch:
+        case OpImageSampleProjImplicitLod:
+        case OpImageSampleProjExplicitLod:
         default:
             opt = &ops[4];
             length -= 4;
@@ -565,7 +584,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
     if (length)
     {
-        flags = opt[0];
+        flags = *opt;
         opt++;
         length--;
     }
@@ -587,12 +606,17 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
     test(coffsets, ImageOperandsConstOffsetsMask);
     test(sample, ImageOperandsSampleMask);
 
+    auto& img_type = expression_type(img).image;
+
     // Texture reference
     string expr = to_expression(img);
 
     // Texture function and sampler
-    string texop = gather ? "gather" : "sample";
-    expr += "." + texop + "(" + to_sampler_expression(img) + ", ";
+    if (fetch) {
+        expr += ".read(";
+    } else {
+        expr += std::string(".") + (gather ? "gather" : "sample") + "(" + to_sampler_expression(img) + ", ";
+    }
 
     // Add texture coordinates
     bool forward = should_forward(coord);
@@ -600,8 +624,9 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
     string tex_coords = coord_expr;
     string array_coord;
 
-    auto& img_type = expression_type(img).image;
     switch (img_type.dim) {
+        case spv::DimBuffer:
+            break;
         case Dim1D:
             if (img_type.arrayed)
             {
@@ -683,7 +708,11 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
     if (lod)
     {
         forward = forward && should_forward(lod);
-        expr += ", level(" + to_expression(lod) + ")";
+        if (fetch) {
+            expr += ", " + to_expression(lod);
+        } else {
+            expr += ", level(" + to_expression(lod) + ")";
+        }
     }
 
     if (grad_x || grad_y)
@@ -1049,8 +1078,10 @@ string CompilerMSL::entry_point_args(bool append_comma)
                         if ( !ep_args.empty() ) ep_args += ", ";
                         ep_args += type_to_glsl(type) + " " + to_name(var.self);
                         ep_args += " [[texture(" + convert_to_string(get_metal_resource_index(var, SPIRType::Image)) + ")]]";
-                        ep_args += ", sampler " + to_sampler_expression(var.self);
-                        ep_args += " [[sampler(" + convert_to_string(get_metal_resource_index(var, SPIRType::Sampler)) + ")]]";
+                        if (type.image.dim != DimBuffer) {
+                            ep_args += ", sampler " + to_sampler_expression(var.self);
+                            ep_args += " [[sampler(" + convert_to_string(get_metal_resource_index(var, SPIRType::Sampler)) + ")]]";
+                        }
                         break;
                     default:
                         break;
@@ -1269,6 +1300,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
     {
         switch (img_type.dim) {
             case spv::Dim1D:
+            case spv::DimBuffer:
                 img_type_name += (img_type.arrayed ? "texture1d_array" : "texture1d");
                 break;
             case spv::Dim2D:

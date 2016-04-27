@@ -111,8 +111,8 @@ namespace spirv_cross {
             std::string constant_expression(const SPIRConstant &c) override;
             size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 
-            void post_parse();
             void extract_builtins();
+            void localize_global_variables();
             void add_interface_structs();
             void bind_vertex_attributes(std::set<uint32_t>& bindings);
             uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);
