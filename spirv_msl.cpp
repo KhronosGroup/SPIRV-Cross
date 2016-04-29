@@ -1300,9 +1300,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
     {
         switch (img_type.dim) {
             case spv::Dim1D:
-            case spv::DimBuffer:
                 img_type_name += (img_type.arrayed ? "texture1d_array" : "texture1d");
                 break;
+            case spv::DimBuffer:
             case spv::Dim2D:
                 img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
                 break;
@@ -1330,28 +1330,28 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin)
 {
     switch (builtin)
     {
-        case BuiltInPosition: return (stage_out_var_name + ".gl_Position");
-        case BuiltInPointSize: return (stage_out_var_name + ".gl_PointSize");
-        case BuiltInVertexId: return "gl_VertexID";
-        case BuiltInInstanceId: return "gl_InstanceID";
-        case BuiltInVertexIndex: return "gl_VertexIndex";
-        case BuiltInInstanceIndex: return "gl_InstanceIndex";
-        case BuiltInPrimitiveId: return "gl_PrimitiveID";
-        case BuiltInInvocationId: return "gl_InvocationID";
-        case BuiltInLayer: return "gl_Layer";
-        case BuiltInTessLevelOuter: return "gl_TessLevelOuter";
-        case BuiltInTessLevelInner: return "gl_TessLevelInner";
-        case BuiltInTessCoord: return "gl_TessCoord";
-        case BuiltInFragCoord: return "gl_FragCoord";
-        case BuiltInPointCoord: return "gl_PointCoord";
-        case BuiltInFrontFacing: return "gl_FrontFacing";
-        case BuiltInFragDepth: return "gl_FragDepth";
-        case BuiltInNumWorkgroups: return "gl_NumWorkGroups";
-        case BuiltInWorkgroupSize: return "gl_WorkGroupSize";
-        case BuiltInWorkgroupId: return "gl_WorkGroupID";
-        case BuiltInLocalInvocationId: return "gl_LocalInvocationID";
-        case BuiltInGlobalInvocationId: return "gl_GlobalInvocationID";
-        case BuiltInLocalInvocationIndex: return "gl_LocalInvocationIndex";
+        case BuiltInPosition:               return (stage_out_var_name + ".gl_Position");
+        case BuiltInPointSize:              return (stage_out_var_name + ".gl_PointSize");
+        case BuiltInVertexId:               return "gl_VertexID";
+        case BuiltInInstanceId:             return "gl_InstanceID";
+        case BuiltInVertexIndex:            return "gl_VertexIndex";
+        case BuiltInInstanceIndex:          return "gl_InstanceIndex";
+        case BuiltInPrimitiveId:            return "gl_PrimitiveID";
+        case BuiltInInvocationId:           return "gl_InvocationID";
+        case BuiltInLayer:                  return "gl_Layer";
+        case BuiltInTessLevelOuter:         return "gl_TessLevelOuter";
+        case BuiltInTessLevelInner:         return "gl_TessLevelInner";
+        case BuiltInTessCoord:              return "gl_TessCoord";
+        case BuiltInFragCoord:              return "gl_FragCoord";
+        case BuiltInPointCoord:             return "gl_PointCoord";
+        case BuiltInFrontFacing:            return "gl_FrontFacing";
+        case BuiltInFragDepth:              return "gl_FragDepth";
+        case BuiltInNumWorkgroups:          return "gl_NumWorkGroups";
+        case BuiltInWorkgroupSize:          return "gl_WorkGroupSize";
+        case BuiltInWorkgroupId:            return "gl_WorkGroupID";
+        case BuiltInLocalInvocationId:      return "gl_LocalInvocationID";
+        case BuiltInGlobalInvocationId:     return "gl_GlobalInvocationID";
+        case BuiltInLocalInvocationIndex:   return "gl_LocalInvocationIndex";
         default: return "gl_???";
     }
 }
@@ -1361,23 +1361,23 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 {
     switch (builtin) {
             // Vertex function in
-        case BuiltInVertexId:        return "vertex_id";
+        case BuiltInVertexId:       return "vertex_id";
         case BuiltInVertexIndex:    return "vertex_id";
-        case BuiltInInstanceId:        return "instance_id";
-        case BuiltInInstanceIndex:    return "instance_id";
+        case BuiltInInstanceId:     return "instance_id";
+        case BuiltInInstanceIndex:  return "instance_id";
 
             // Vertex function out
-        case BuiltInClipDistance:    return "clip_distance";
-        case BuiltInPointSize:        return "point_size";
-        case BuiltInPosition:        return "position";
-        case BuiltInLayer:            return "render_target_array_index";
+        case BuiltInClipDistance:   return "clip_distance";
+        case BuiltInPointSize:      return "point_size";
+        case BuiltInPosition:       return "position";
+        case BuiltInLayer:          return "render_target_array_index";
 
             // Fragment function in
         case BuiltInFrontFacing:    return "front_facing";
-        case BuiltInPointCoord:        return "point_coord";
-        case BuiltInSamplePosition:    return "position";
-        case BuiltInSampleId:        return "sample_id";
-        case BuiltInSampleMask:        return "sample_mask";
+        case BuiltInPointCoord:     return "point_coord";
+        case BuiltInSamplePosition: return "position";
+        case BuiltInSampleId:       return "sample_id";
+        case BuiltInSampleMask:     return "sample_mask";
 
             // Fragment function out
         case BuiltInFragDepth: {
@@ -1400,22 +1400,22 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 {
     switch (builtin) {
             // Vertex function in
-        case BuiltInVertexId:        return "uint";
+        case BuiltInVertexId:       return "uint";
         case BuiltInVertexIndex:    return "uint";
-        case BuiltInInstanceId:        return "uint";
-        case BuiltInInstanceIndex:    return "uint";
+        case BuiltInInstanceId:     return "uint";
+        case BuiltInInstanceIndex:  return "uint";
 
             // Vertex function out
-        case BuiltInClipDistance:    return "float";
-        case BuiltInPointSize:        return "float";
-        case BuiltInPosition:        return "float4";
+        case BuiltInClipDistance:   return "float";
+        case BuiltInPointSize:      return "float";
+        case BuiltInPosition:       return "float4";
 
             // Fragment function in
         case BuiltInFrontFacing:    return "bool";
-        case BuiltInPointCoord:        return "float2";
-        case BuiltInSamplePosition:    return "float4";
-        case BuiltInSampleId:        return "uint";
-        case BuiltInSampleMask:        return "uint";
+        case BuiltInPointCoord:     return "float2";
+        case BuiltInSamplePosition: return "float4";
+        case BuiltInSampleId:       return "uint";
+        case BuiltInSampleMask:     return "uint";
 
         default:                    return "unsupported-built-in-type";
     }
