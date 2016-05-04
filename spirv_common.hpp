@@ -638,6 +638,7 @@ namespace spirv_cross
             uint32_t binding = 0;
             uint32_t offset = 0;
             uint32_t array_stride = 0;
+            uint32_t input_attachment = 0;
             bool builtin = false;
             bool per_instance = false;
         };

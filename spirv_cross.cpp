@@ -723,6 +723,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
             dec.set = argument;
             break;
 
+        case DecorationInputAttachmentIndex:
+            dec.input_attachment = argument;
+            break;
+
         default:
             break;
     }
@@ -757,6 +761,7 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
         case DecorationOffset: return dec.offset;
         case DecorationBinding: return dec.binding;
         case DecorationDescriptorSet: return dec.set;
+        case DecorationInputAttachmentIndex: return dec.input_attachment;
         default: return 0;
     }
 }
