@@ -202,6 +202,8 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
             fprintf(stderr, " (Set : %u)", compiler.get_decoration(res.id, DecorationDescriptorSet));
         if (mask & (1ull << DecorationBinding))
             fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
+        if (mask & (1ull << DecorationInputAttachmentIndex))
+            fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
         fprintf(stderr, "\n");
     }
     fprintf(stderr, "=============\n\n");
