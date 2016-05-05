@@ -80,6 +80,8 @@ namespace spirv_cross
             // The constructor takes a buffer of SPIR-V words and parses it.
             Compiler(std::vector<uint32_t> ir);
 
+            virtual ~Compiler() = default;
+
             // After parsing, API users can modify the SPIR-V via reflection and call this
             // to disassemble the SPIR-V into the desired langauage.
             // Sub-classes actually implement this.
@@ -156,6 +158,9 @@ namespace spirv_cross
 
             // Returns the effective size of a buffer block.
             size_t get_declared_struct_size(const SPIRType &struct_type) const;
+
+            // Returns the effective size of a buffer block struct member.
+            virtual size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const;
 
             // Legacy GLSL compatibility method.
             // Takes a variable with a block interface and flattens it into a T array[N]; array instead.
@@ -265,6 +270,9 @@ namespace spirv_cross
             bool is_builtin_variable(const SPIRVariable &var) const;
             bool is_immutable(uint32_t id) const;
             bool is_member_builtin(const SPIRType &type, uint32_t index, spv::BuiltIn *builtin) const;
+            bool is_scalar(const SPIRType &type) const;
+            bool is_vector(const SPIRType &type) const;
+            bool is_matrix(const SPIRType &type) const;
             const SPIRType& expression_type(uint32_t id) const;
             bool expression_is_lvalue(uint32_t id) const;
             bool variable_storage_is_aliased(const SPIRVariable &var);
@@ -317,6 +325,8 @@ namespace spirv_cross
 
             bool block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const;
 
+            uint32_t increase_bound_by(uint32_t incr_amount);
+
         private:
             void parse();
             void parse(const Instruction &i);
@@ -347,8 +357,6 @@ namespace spirv_cross
 
             bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
             bool traverse_all_reachable_opcodes(const SPIRFunction &block, OpcodeHandler &handler) const;
-
-            size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const;
     };
 }
 

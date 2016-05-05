@@ -15,6 +15,7 @@
  */
 
 #include "spirv_cpp.hpp"
+#include "spirv_msl.hpp"
 #include <cstdio>
 #include <stdexcept>
 #include <functional>
@@ -266,11 +267,12 @@ struct CLIArguments
 
     uint32_t iterations = 1;
     bool cpp = false;
+    bool metal = false;
 };
 
 static void print_help()
 {
-    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [-cpp] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
+    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--metal] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
 }
 
 static vector<PlsRemap> remap_pls(const vector<PLSArg> &pls_variables, const vector<Resource> &resources, const vector<Resource> *secondary_resources)
@@ -344,6 +346,7 @@ int main(int argc, char *argv[])
     cbs.add("--fixup-clipspace", [&args](CLIParser &)       { args.fixup = true; });
     cbs.add("--iterations",      [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
     cbs.add("--cpp",             [&args](CLIParser &)       { args.cpp = true; });
+    cbs.add("--metal",           [&args](CLIParser &)       { args.metal = true; });
 
     cbs.add("--pls-in", [&args](CLIParser &parser) {
         auto fmt = pls_format(parser.next_string());
@@ -380,6 +383,8 @@ int main(int argc, char *argv[])
 
     if (args.cpp)
         compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
+    else if (args.metal)
+        compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
     else
         compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
 

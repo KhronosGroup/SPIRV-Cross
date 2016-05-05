@@ -338,6 +338,21 @@ bool Compiler::is_member_builtin(const SPIRType &type, uint32_t index, BuiltIn *
     return false;
 }
 
+bool Compiler::is_scalar(const SPIRType &type) const
+{
+    return type.vecsize == 1 && type.columns == 1;
+}
+
+bool Compiler::is_vector(const SPIRType &type) const
+{
+    return type.vecsize > 1 && type.columns == 1;
+}
+
+bool Compiler::is_matrix(const SPIRType &type) const
+{
+    return type.vecsize > 1 && type.columns > 1;
+}
+
 ShaderResources Compiler::get_shader_resources() const
 {
     ShaderResources res;
@@ -1819,4 +1834,16 @@ std::vector<BufferRange> Compiler::get_active_buffer_ranges(unsigned id) const
     traverse_all_reachable_opcodes(get<SPIRFunction>(execution.entry_point), handler);
     return ranges;
 }
+
+// Increase the number of IDs by the specified incremental amount.
+// Returns the value of the first ID available for use in the expanded bound.
+uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
+{
+    uint32_t curr_bound = (uint32_t)ids.size();
+    uint32_t new_bound = curr_bound + incr_amount;
+    ids.resize(new_bound);
+    meta.resize(new_bound);
+    return curr_bound;
+}
+
 
