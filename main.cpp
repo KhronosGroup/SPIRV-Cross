@@ -268,11 +268,12 @@ struct CLIArguments
     uint32_t iterations = 1;
     bool cpp = false;
     bool metal = false;
+    bool vulkan_semantics = false;
 };
 
 static void print_help()
 {
-    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--metal] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
+    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
 }
 
 static vector<PlsRemap> remap_pls(const vector<PLSArg> &pls_variables, const vector<Resource> &resources, const vector<Resource> *secondary_resources)
@@ -347,6 +348,7 @@ int main(int argc, char *argv[])
     cbs.add("--iterations",      [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
     cbs.add("--cpp",             [&args](CLIParser &)       { args.cpp = true; });
     cbs.add("--metal",           [&args](CLIParser &)       { args.metal = true; });
+    cbs.add("--vulkan-semantics",[&args](CLIParser &)       { args.vulkan_semantics = true; });
 
     cbs.add("--pls-in", [&args](CLIParser &parser) {
         auto fmt = pls_format(parser.next_string());
@@ -401,6 +403,7 @@ int main(int argc, char *argv[])
     if (args.set_es)
         opts.es = args.es;
     opts.force_temporary = args.force_temporary;
+    opts.vulkan_semantics = args.vulkan_semantics;
     opts.vertex.fixup_clipspace = args.fixup;
     compiler->set_options(opts);
 

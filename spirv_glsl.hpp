@@ -60,6 +60,10 @@ public:
 		bool es = false;
 		bool force_temporary = false;
 
+		// If true, Vulkan GLSL features are used instead of GL-compatible features.
+		// Mostly useful for debugging SPIR-V files.
+		bool vulkan_semantics = false;
+
 		enum Precision
 		{
 			DontCare,
@@ -208,6 +212,8 @@ protected:
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);
 	void emit_push_constant_block(const SPIRVariable &var);
+	void emit_push_constant_block_vulkan(const SPIRVariable &var);
+	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);
 	void emit_block_chain(SPIRBlock &block);
 	std::string emit_continue_block(uint32_t continue_block);

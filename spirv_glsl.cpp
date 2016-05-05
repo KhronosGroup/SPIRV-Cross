@@ -673,10 +673,20 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	auto flags = dec.decoration_flags;
 	auto typeflags = meta[type.self].decoration.decoration_flags;
 
+	if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
+		attr.push_back("push_constant");
+
 	if (flags & (1ull << DecorationRowMajor))
 		attr.push_back("row_major");
 	if (flags & (1ull << DecorationColMajor))
 		attr.push_back("column_major");
+
+	if (options.vulkan_semantics)
+	{
+		if (flags & (1ull << DecorationInputAttachmentIndex))
+			attr.push_back(join("input_attachment_index = ", dec.input_attachment));
+	}
+
 	if (flags & (1ull << DecorationLocation))
 		attr.push_back(join("location = ", dec.location));
 	if ((flags & (1ull << DecorationDescriptorSet)) && dec.set != 0) // set = 0 is the default.
@@ -692,8 +702,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBlock)))
 		attr.push_back("std140");
-
-	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock)))
+	else if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock)))
+		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
+	else if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
 		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
 
 	// For images, the type itself adds a layout qualifer.
@@ -714,6 +725,19 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 }
 
 void CompilerGLSL::emit_push_constant_block(const SPIRVariable &var)
+{
+	if (options.vulkan_semantics)
+		emit_push_constant_block_vulkan(var);
+	else
+		emit_push_constant_block_glsl(var);
+}
+
+void CompilerGLSL::emit_push_constant_block_vulkan(const SPIRVariable &var)
+{
+	emit_buffer_block(var);
+}
+
+void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 {
 	// OpenGL has no concept of push constant blocks, implement it as a uniform struct.
 	auto &type = get<SPIRType>(var.basetype);
@@ -988,7 +1012,7 @@ void CompilerGLSL::emit_resources()
 			{
 				// For gl_InstanceIndex emulation on GLES, the API user needs to
 				// supply this uniform.
-				if (meta[var.self].decoration.builtin_type == BuiltInInstanceIndex)
+				if (meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
 				{
 					statement("uniform int SPIRV_Cross_BaseInstance;");
 					emitted = true;
@@ -1942,13 +1966,25 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 	case BuiltInPointSize:
 		return "gl_PointSize";
 	case BuiltInVertexId:
+		if (options.vulkan_semantics)
+			throw CompilerError(
+			    "Cannot implement gl_VertexID in Vulkan GLSL. This shader was created with GL semantics.");
 		return "gl_VertexID";
 	case BuiltInInstanceId:
+		if (options.vulkan_semantics)
+			throw CompilerError(
+			    "Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
 		return "gl_InstanceID";
 	case BuiltInVertexIndex:
-		return "gl_VertexID"; // gl_VertexID already has the base offset applied.
+		if (options.vulkan_semantics)
+			return "gl_VertexIndex";
+		else
+			return "gl_VertexID"; // gl_VertexID already has the base offset applied.
 	case BuiltInInstanceIndex:
-		return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
+		if (options.vulkan_semantics)
+			return "gl_InstanceIndex";
+		else
+			return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
 	case BuiltInPrimitiveId:
 		return "gl_PrimitiveID";
 	case BuiltInInvocationId:
@@ -3191,9 +3227,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else if (type.image.dim == DimSubpassData)
 		{
-			// Implement subpass loads via texture barrier style sampling.
-			// Fairly ugly, but should essentially work as a fallback for desktop.
-			imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
+			if (options.vulkan_semantics)
+			{
+				// With Vulkan semantics, use the proper Vulkan GLSL construct.
+				imgexpr = join("subpassLoad(", to_expression(ops[2]), ")");
+			}
+			else
+			{
+				// Implement subpass loads via texture barrier style sampling.
+				imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
+			}
 			pure = true;
 		}
 		else
@@ -3503,6 +3546,9 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 	default:
 		break;
 	}
+
+	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && options.vulkan_semantics)
+		return res + "subpassInput";
 
 	// If we're emulating subpassInput with samplers, force sampler2D
 	// so we don't have to specify format.

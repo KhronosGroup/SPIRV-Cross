@@ -72,10 +72,22 @@ def cross_compile(shader, vulkan):
     os.close(spirv_f)
     os.close(glsl_f)
 
+    if vulkan:
+        vulkan_glsl_f, vulkan_glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
+        os.close(vulkan_glsl_f)
+
     subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
+
     subprocess.check_call(['./spirv-cross', '--output', glsl_path, spirv_path])
-    validate_shader(glsl_path, vulkan)
-    return (spirv_path, glsl_path)
+
+    if not ('nocompat' in glsl_path):
+        validate_shader(glsl_path, False)
+
+    if vulkan:
+        subprocess.check_call(['./spirv-cross', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path])
+        validate_shader(vulkan_glsl_path, vulkan)
+
+    return (spirv_path, glsl_path, vulkan_glsl_path if vulkan else None)
 
 def md5_for_file(path):
     md5 = hashlib.md5()
@@ -115,12 +127,14 @@ def regression_check(shader, glsl, update, keep):
 
 def test_shader(stats, shader, update, keep, vulkan):
     print('Testing shader:', shader)
-    spirv, glsl = cross_compile(shader, vulkan)
+    spirv, glsl, vulkan_glsl = cross_compile(shader, vulkan)
 
     if stats:
         cross_stats = get_shader_stats(glsl)
 
     regression_check(shader, glsl, update, keep)
+    if vulkan_glsl:
+        regression_check(shader + '.vk', vulkan_glsl, update, keep)
     os.remove(spirv)
 
     if stats:
