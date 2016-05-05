@@ -2,11 +2,11 @@
 precision mediump float;
 precision highp int;
 
-layout(binding = 1) uniform mediump texture2D uTexture;
-layout(binding = 0) uniform mediump sampler uSampler;
-layout(binding = 4) uniform mediump texture2DArray uTextureArray;
-layout(binding = 3) uniform mediump textureCube uTextureCube;
-layout(binding = 2) uniform mediump texture3D uTexture3D;
+layout(set = 0, binding = 1) uniform mediump texture2D uTexture;
+layout(set = 0, binding = 0) uniform mediump sampler uSampler;
+layout(set = 0, binding = 4) uniform mediump texture2DArray uTextureArray;
+layout(set = 0, binding = 3) uniform mediump textureCube uTextureCube;
+layout(set = 0, binding = 2) uniform mediump texture3D uTexture3D;
 
 layout(location = 0) in vec2 vTex;
 layout(location = 1) in vec3 vTex3;

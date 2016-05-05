@@ -689,8 +689,15 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	if (flags & (1ull << DecorationLocation))
 		attr.push_back(join("location = ", dec.location));
-	if ((flags & (1ull << DecorationDescriptorSet)) && dec.set != 0) // set = 0 is the default.
-		attr.push_back(join("set = ", dec.set));
+
+	// set = 0 is the default. Do not emit set = decoration in regular GLSL output, but
+	// we should preserve it in Vulkan GLSL mode.
+	if (var.storage != StorageClassPushConstant)
+	{
+		if ((flags & (1ull << DecorationDescriptorSet)) && (dec.set != 0 || options.vulkan_semantics))
+			attr.push_back(join("set = ", dec.set));
+	}
+
 	if (flags & (1ull << DecorationBinding))
 		attr.push_back(join("binding = ", dec.binding));
 	if (flags & (1ull << DecorationCoherent))
