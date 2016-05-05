@@ -584,11 +584,23 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 
 	if (type.basetype == SPIRType::Struct)
 	{
+		uint32_t pad_alignment = 1;
+
 		for (uint32_t i = 0; i < type.member_types.size(); i++)
 		{
 			auto member_flags = meta[type.self].members.at(i).decoration_flags;
 			auto &member_type = get<SPIRType>(type.member_types[i]);
-			uint32_t alignment = type_to_std430_alignment(member_type, member_flags);
+
+			uint32_t std430_alignment = type_to_std430_alignment(member_type, member_flags);
+			uint32_t alignment = max(std430_alignment, pad_alignment);
+
+			// The next member following a struct member is aligned to the base alignment of the struct that came before.
+			// GL 4.5 spec, 7.6.2.2.
+			if (member_type.basetype == SPIRType::Struct)
+				pad_alignment = std430_alignment;
+			else
+				pad_alignment = 1;
+
 			size = (size + alignment - 1) & ~(alignment - 1);
 			size += type_to_std430_size(member_type, member_flags);
 		}
@@ -634,6 +646,7 @@ bool CompilerGLSL::ssbo_is_std430_packing(const SPIRType &type)
 	// std430 only removes the vec4 requirement.
 
 	uint32_t offset = 0;
+	uint32_t pad_alignment = 1;
 
 	for (uint32_t i = 0; i < type.member_types.size(); i++)
 	{
@@ -642,7 +655,15 @@ bool CompilerGLSL::ssbo_is_std430_packing(const SPIRType &type)
 
 		// Verify alignment rules.
 		uint32_t std430_alignment = type_to_std430_alignment(memb_type, member_flags);
-		offset = (offset + std430_alignment - 1) & ~(std430_alignment - 1);
+		uint32_t alignment = max(std430_alignment, pad_alignment);
+		offset = (offset + alignment - 1) & ~(alignment - 1);
+
+		// The next member following a struct member is aligned to the base alignment of the struct that came before.
+		// GL 4.5 spec, 7.6.2.2.
+		if (memb_type.basetype == SPIRType::Struct)
+			pad_alignment = std430_alignment;
+		else
+			pad_alignment = 1;
 
 		uint32_t actual_offset = type_struct_member_offset(type, i);
 		if (actual_offset != offset) // This cannot be std430.
