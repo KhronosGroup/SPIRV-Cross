@@ -3104,8 +3104,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
             {
                 // Implement subpass loads via texture barrier style sampling.
                 // Fairly ugly, but should essentially work as a fallback for desktop.
-                imgexpr = join("texture(", to_expression(ops[2]),
-                        ", gl_FragCoord.xy / vec2(textureSize(", to_expression(ops[2]), ", 0).xy))");
+                imgexpr = join("texelFetch(", to_expression(ops[2]),
+                        ", ivec2(gl_FragCoord.xy), 0)");
                 pure = true;
             }
             else
