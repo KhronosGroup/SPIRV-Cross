@@ -47,11 +47,11 @@ namespace spv {
 typedef unsigned int Id;
 
 #define SPV_VERSION 0x10000
-#define SPV_REVISION 3
+#define SPV_REVISION 5
 
 static const unsigned int MagicNumber = 0x07230203;
 static const unsigned int Version = 0x00010000;
-static const unsigned int Revision = 3;
+static const unsigned int Revision = 5;
 static const unsigned int OpCodeMask = 0xffff;
 static const unsigned int WordCountShift = 16;
 
@@ -220,6 +220,7 @@ enum ImageChannelOrder {
     ImageChannelOrdersRGBx = 16,
     ImageChannelOrdersRGBA = 17,
     ImageChannelOrdersBGRA = 18,
+    ImageChannelOrderABGR = 19,
 };
 
 enum ImageChannelDataType {
@@ -877,3 +878,4 @@ inline KernelProfilingInfoMask operator|(KernelProfilingInfoMask a, KernelProfil
 }  // end namespace spv
 
 #endif  // #ifndef spirv_HPP
+
