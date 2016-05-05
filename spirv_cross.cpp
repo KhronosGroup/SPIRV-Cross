@@ -87,6 +87,38 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpImageWrite:
 			return false;
 
+		// Atomics are impure.
+		case OpAtomicLoad:
+		case OpAtomicStore:
+		case OpAtomicExchange:
+		case OpAtomicCompareExchange:
+		case OpAtomicIIncrement:
+		case OpAtomicIDecrement:
+		case OpAtomicIAdd:
+		case OpAtomicISub:
+		case OpAtomicSMin:
+		case OpAtomicUMin:
+		case OpAtomicSMax:
+		case OpAtomicUMax:
+		case OpAtomicAnd:
+		case OpAtomicOr:
+		case OpAtomicXor:
+			return false;
+
+		// Geometry shader builtins modify global state.
+		case OpEndPrimitive:
+		case OpEmitStreamVertex:
+		case OpEndStreamPrimitive:
+		case OpEmitVertex:
+			return false;
+
+		// Barriers disallow any reordering, so we should treat blocks with barrier as writing.
+		case OpControlBarrier:
+		case OpMemoryBarrier:
+			return false;
+
+		// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
+
 		default:
 			break;
 		}
