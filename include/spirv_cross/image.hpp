@@ -29,17 +29,22 @@
 
 namespace spirv_cross
 {
-    template<typename T>
-    struct image2DBase
-    {
-        virtual ~image2DBase() = default;
-        inline virtual T load(glm::ivec2 coord) { return T(0, 0, 0, 1); }
-        inline virtual void store(glm::ivec2 coord, const T &v) {}
-    };
+template <typename T>
+struct image2DBase
+{
+	virtual ~image2DBase() = default;
+	inline virtual T load(glm::ivec2 coord)
+	{
+		return T(0, 0, 0, 1);
+	}
+	inline virtual void store(glm::ivec2 coord, const T &v)
+	{
+	}
+};
 
-    typedef image2DBase<glm::vec4> image2D;
-    typedef image2DBase<glm::ivec4> iimage2D;
-    typedef image2DBase<glm::uvec4> uimage2D;
+typedef image2DBase<glm::vec4> image2D;
+typedef image2DBase<glm::ivec4> iimage2D;
+typedef image2DBase<glm::uvec4> uimage2D;
 }
 
 #endif

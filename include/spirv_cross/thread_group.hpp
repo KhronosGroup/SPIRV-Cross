@@ -23,91 +23,98 @@
 
 namespace spirv_cross
 {
-    template<typename T, unsigned Size>
-    class ThreadGroup
-    {
-        public:
-            ThreadGroup(T *impl)
-            {
-                for (unsigned i = 0; i < Size; i++)
-                    workers[i].start(&impl[i]);
-            }
+template <typename T, unsigned Size>
+class ThreadGroup
+{
+public:
+	ThreadGroup(T *impl)
+	{
+		for (unsigned i = 0; i < Size; i++)
+			workers[i].start(&impl[i]);
+	}
 
-            void run()
-            {
-                for (auto &worker : workers)
-                    worker.run();
-            }
+	void run()
+	{
+		for (auto &worker : workers)
+			worker.run();
+	}
 
-            void wait()
-            {
-                for (auto &worker : workers)
-                    worker.wait();
-            }
+	void wait()
+	{
+		for (auto &worker : workers)
+			worker.wait();
+	}
 
-        private:
-            struct Thread
-            {
-                enum State
-                {
-                    Idle,
-                    Running,
-                    Dying
-                };
-                State state = Idle;
+private:
+	struct Thread
+	{
+		enum State
+		{
+			Idle,
+			Running,
+			Dying
+		};
+		State state = Idle;
 
-                void start(T *impl)
-                {
-                    worker = std::thread([impl, this] {
-                        for (;;)
-                        {
-                            {
-                                std::unique_lock<std::mutex> l{lock};
-                                cond.wait(l, [this] { return state != Idle; });
-                                if (state == Dying)
-                                    break;
-                            }
+		void start(T *impl)
+		{
+			worker = std::thread([impl, this]
+			                     {
+				                     for (;;)
+				                     {
+					                     {
+						                     std::unique_lock<std::mutex> l{ lock };
+						                     cond.wait(l, [this]
+						                               {
+							                               return state != Idle;
+							                           });
+						                     if (state == Dying)
+							                     break;
+					                     }
 
-                            impl->main();
+					                     impl->main();
 
-                            std::lock_guard<std::mutex> l{lock};
-                            state = Idle;
-                            cond.notify_one();
-                        }
-                    });
-                }
+					                     std::lock_guard<std::mutex> l{ lock };
+					                     state = Idle;
+					                     cond.notify_one();
+				                     }
+				                 });
+		}
 
-                void wait()
-                {
-                    std::unique_lock<std::mutex> l{lock};
-                    cond.wait(l, [this] { return state == Idle; });
-                }
+		void wait()
+		{
+			std::unique_lock<std::mutex> l{ lock };
+			cond.wait(l, [this]
+			          {
+				          return state == Idle;
+				      });
+		}
 
-                void run()
-                {
-                    std::lock_guard<std::mutex> l{lock};
-                    state = Running;
-                    cond.notify_one();
-                }
+		void run()
+		{
+			std::lock_guard<std::mutex> l{ lock };
+			state = Running;
+			cond.notify_one();
+		}
 
-                ~Thread()
-                {
-                    if (worker.joinable())
-                    {
-                        {
-                            std::lock_guard<std::mutex> l{lock};
-                            state = Dying;
-                            cond.notify_one();
-                        }
-                        worker.join();
-                    }
-                }
-                std::thread worker;
-                std::condition_variable cond;
-                std::mutex lock;
-            };
-            Thread workers[Size];
-    };
+		~Thread()
+		{
+			if (worker.joinable())
+			{
+				{
+					std::lock_guard<std::mutex> l{ lock };
+					state = Dying;
+					cond.notify_one();
+				}
+				worker.join();
+			}
+		}
+		std::thread worker;
+		std::condition_variable cond;
+		std::mutex lock;
+	};
+	Thread workers[Size];
+};
 }
 
 #endif

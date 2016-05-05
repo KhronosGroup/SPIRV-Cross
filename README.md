@@ -136,6 +136,11 @@ When adding support for new features to SPIRV-Cross, a new shader and reference 
 Contributors of new files should add a copyright header at the top of every new source code file with their copyright
 along with the Apache 2.0 licensing stub.
 
+### Formatting
+
+SPIRV-Cross uses clang-format to automatically format code.
+Please use clang-format with the style sheet found in `.clang-format` to automatically format code before submitting a pull request.
+
 ## ABI concerns
 
 ### SPIR-V headers
