@@ -248,9 +248,9 @@ void Compiler::flush_all_active_variables()
 {
     // Invalidate all temporaries we read from variables in this block since they were forwarded.
     // Invalidate all temporaries we read from globals.
-    for (auto &v : function->local_variables)
+    for (auto &v : current_function->local_variables)
         flush_dependees(get<SPIRVariable>(v));
-    for (auto &arg : function->arguments)
+    for (auto &arg : current_function->arguments)
         flush_dependees(get<SPIRVariable>(arg.id));
     for (auto global : global_variables)
         flush_dependees(get<SPIRVariable>(global));
@@ -489,9 +489,9 @@ void Compiler::parse()
     for (auto &i : inst)
         parse(i);
 
-    if (function)
+    if (current_function)
         throw CompilerError("Function was not terminated.");
-    if (block)
+    if (current_block)
         throw CompilerError("Block was not terminated.");
 }
 
@@ -797,14 +797,11 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
     }
 }
 
-void Compiler::parse(const Instruction &i)
+void Compiler::parse(const Instruction &instruction)
 {
-    auto ops = stream(i);
-    auto op = static_cast<Op>(i.op);
-    uint32_t length = i.length;
-
-    if (i.offset + length > spirv.size())
-        throw CompilerError("Compiler::parse() opcode out of range.");
+    auto ops = stream(instruction);
+    auto op = static_cast<Op>(instruction.op);
+    uint32_t length = instruction.length;
 
     switch (op)
     {
@@ -856,7 +853,7 @@ void Compiler::parse(const Instruction &i)
         case OpExtInstImport:
         {
             uint32_t id = ops[0];
-            auto ext = extract_string(spirv, i.offset + 1);
+            auto ext = extract_string(spirv, instruction.offset + 1);
             if (ext == "GLSL.std.450")
                 set<SPIRExtension>(id, SPIRExtension::GLSL);
             else
@@ -909,7 +906,7 @@ void Compiler::parse(const Instruction &i)
         case OpName:
         {
             uint32_t id = ops[0];
-            set_name(id, extract_string(spirv, i.offset + 1));
+            set_name(id, extract_string(spirv, instruction.offset + 1));
             break;
         }
 
@@ -917,7 +914,7 @@ void Compiler::parse(const Instruction &i)
         {
             uint32_t id = ops[0];
             uint32_t member = ops[1];
-            set_member_name(id, member, extract_string(spirv, i.offset + 2));
+            set_member_name(id, member, extract_string(spirv, instruction.offset + 2));
             break;
         }
 
@@ -1127,9 +1124,9 @@ void Compiler::parse(const Instruction &i)
 
             if (storage == StorageClassFunction)
             {
-                if (!function)
+                if (!current_function)
                     throw CompilerError("No function currently in scope");
-                function->add_local_variable(id);
+                current_function->add_local_variable(id);
             }
             else if (storage == StorageClassPrivate ||
                     storage == StorageClassWorkgroup ||
@@ -1164,9 +1161,9 @@ void Compiler::parse(const Instruction &i)
         // variable to emulate SSA Phi.
         case OpPhi:
         {
-            if (!function)
+            if (!current_function)
                 throw CompilerError("No function currently in scope");
-            if (!block)
+            if (!current_block)
                 throw CompilerError("No block currently in scope");
 
             uint32_t result_type = ops[0];
@@ -1176,10 +1173,10 @@ void Compiler::parse(const Instruction &i)
             auto &var = set<SPIRVariable>(id, result_type, spv::StorageClassFunction);
             var.phi_variable = true;
 
-            function->add_local_variable(id);
+            current_function->add_local_variable(id);
 
             for (uint32_t i = 2; i + 2 <= length; i += 2)
-                block->phi_variables.push_back({ ops[i], ops[i + 1], id });
+                current_block->phi_variables.push_back({ ops[i], ops[i + 1], id });
             break;
         }
 
@@ -1308,10 +1305,10 @@ void Compiler::parse(const Instruction &i)
             // Control
             uint32_t type = ops[3];
 
-            if (function)
+            if (current_function)
                 throw CompilerError("Must end a function before starting a new one!");
 
-            function = &set<SPIRFunction>(id, res, type);
+            current_function = &set<SPIRFunction>(id, res, type);
             break;
         }
 
@@ -1320,17 +1317,17 @@ void Compiler::parse(const Instruction &i)
             uint32_t type = ops[0];
             uint32_t id = ops[1];
 
-            if (!function)
+            if (!current_function)
                 throw CompilerError("Must be in a function!");
 
-            function->add_parameter(type, id);
+            current_function->add_parameter(type, id);
             set<SPIRVariable>(id, type, StorageClassFunction);
             break;
         }
 
         case OpFunctionEnd:
         {
-            function = nullptr;
+            current_function = nullptr;
             break;
         }
 
@@ -1338,147 +1335,147 @@ void Compiler::parse(const Instruction &i)
         case OpLabel:
         {
             // OpLabel always starts a block.
-            if (!function)
+            if (!current_function)
                 throw CompilerError("Blocks cannot exist outside functions!");
 
             uint32_t id = ops[0];
 
-            function->blocks.push_back(id);
-            if (!function->entry_block)
-                function->entry_block = id;
+            current_function->blocks.push_back(id);
+            if (!current_function->entry_block)
+                current_function->entry_block = id;
 
-            if (block)
+            if (current_block)
                 throw CompilerError("Cannot start a block before ending the current block.");
 
-            block = &set<SPIRBlock>(id);
+            current_block = &set<SPIRBlock>(id);
             break;
         }
 
         // Branch instructions end blocks.
         case OpBranch:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
 
             uint32_t target = ops[0];
-            block->terminator = SPIRBlock::Direct;
-            block->next_block = target;
-            block = nullptr;
+            current_block->terminator = SPIRBlock::Direct;
+            current_block->next_block = target;
+            current_block = nullptr;
             break;
         }
 
         case OpBranchConditional:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
 
-            block->condition = ops[0];
-            block->true_block = ops[1];
-            block->false_block = ops[2];
+            current_block->condition = ops[0];
+            current_block->true_block = ops[1];
+            current_block->false_block = ops[2];
 
-            block->terminator = SPIRBlock::Select;
-            block = nullptr;
+            current_block->terminator = SPIRBlock::Select;
+            current_block = nullptr;
             break;
         }
 
         case OpSwitch:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
 
-            if (block->merge == SPIRBlock::MergeNone)
+            if (current_block->merge == SPIRBlock::MergeNone)
                 throw CompilerError("Switch statement is not structured");
 
-            block->terminator = SPIRBlock::MultiSelect;
+            current_block->terminator = SPIRBlock::MultiSelect;
 
-            block->condition = ops[0];
-            block->default_block = ops[1];
+            current_block->condition = ops[0];
+            current_block->default_block = ops[1];
 
             for (uint32_t i = 2; i + 2 <= length; i += 2)
-                block->cases.push_back({ ops[i], ops[i + 1] });
+                current_block->cases.push_back({ ops[i], ops[i + 1] });
 
             // If we jump to next block, make it break instead since we're inside a switch case block at that point.
-            multiselect_merge_target.insert(block->next_block);
+            multiselect_merge_targets.insert(current_block->next_block);
 
-            block = nullptr;
+            current_block = nullptr;
             break;
         }
 
         case OpKill:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
-            block->terminator = SPIRBlock::Kill;
-            block = nullptr;
+            current_block->terminator = SPIRBlock::Kill;
+            current_block = nullptr;
             break;
         }
 
         case OpReturn:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
-            block->terminator = SPIRBlock::Return;
-            block = nullptr;
+            current_block->terminator = SPIRBlock::Return;
+            current_block = nullptr;
             break;
         }
 
         case OpReturnValue:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
-            block->terminator = SPIRBlock::Return;
-            block->return_value = ops[0];
-            block = nullptr;
+            current_block->terminator = SPIRBlock::Return;
+            current_block->return_value = ops[0];
+            current_block = nullptr;
             break;
         }
 
         case OpUnreachable:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to end a non-existing block.");
-            block->terminator = SPIRBlock::Unreachable;
-            block = nullptr;
+            current_block->terminator = SPIRBlock::Unreachable;
+            current_block = nullptr;
             break;
         }
 
         case OpSelectionMerge:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to modify a non-existing block.");
 
-            block->next_block = ops[0];
-            block->merge = SPIRBlock::MergeSelection;
-            selection_merge_target.insert(block->next_block);
+            current_block->next_block = ops[0];
+            current_block->merge = SPIRBlock::MergeSelection;
+            selection_merge_targets.insert(current_block->next_block);
             break;
         }
 
         case OpLoopMerge:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Trying to modify a non-existing block.");
 
-            block->merge_block = ops[0];
-            block->continue_block = ops[1];
-            block->merge = SPIRBlock::MergeLoop;
+            current_block->merge_block = ops[0];
+            current_block->continue_block = ops[1];
+            current_block->merge = SPIRBlock::MergeLoop;
 
-            loop_block.insert(block->self);
-            loop_merge_target.insert(block->merge_block);
+            loop_blocks.insert(current_block->self);
+            loop_merge_targets.insert(current_block->merge_block);
 
             // Don't add loop headers to continue blocks,
             // which would make it impossible branch into the loop header since
             // they are treated as continues.
-            if (block->continue_block != block->self)
-               continue_block.insert(block->continue_block);
+            if (current_block->continue_block != current_block->self)
+               continue_blocks.insert(current_block->continue_block);
             break;
         }
 
         // Actual opcodes.
         default:
         {
-            if (!block)
+            if (!current_block)
                 throw CompilerError("Currently no block to insert opcode.");
 
-            block->ops.push_back(i);
+            current_block->ops.push_back(instruction);
             break;
         }
     }
@@ -1634,29 +1631,29 @@ bool Compiler::execution_is_branchless(const SPIRBlock &from, const SPIRBlock &t
     }
 }
 
-SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &continue_block) const
+SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &block) const
 {
     // The block was deemed too complex during code emit, pick conservative fallback paths.
-    if (continue_block.complex_continue)
+    if (block.complex_continue)
         return SPIRBlock::ComplexLoop;
 
     // In older glslang output continue block can be equal to the loop header.
     // In this case, execution is clearly branchless, so just assume a while loop header here.
-    if (continue_block.merge == SPIRBlock::MergeLoop)
+    if (block.merge == SPIRBlock::MergeLoop)
         return SPIRBlock::WhileLoop;
 
-    auto &dominator = get<SPIRBlock>(continue_block.loop_dominator);
+    auto &dominator = get<SPIRBlock>(block.loop_dominator);
 
-    if (execution_is_noop(continue_block, dominator))
+    if (execution_is_noop(block, dominator))
         return SPIRBlock::WhileLoop;
-    else if (execution_is_branchless(continue_block, dominator))
+    else if (execution_is_branchless(block, dominator))
         return SPIRBlock::ForLoop;
     else
     {
-        if (continue_block.merge == SPIRBlock::MergeNone &&
-            continue_block.terminator == SPIRBlock::Select &&
-            continue_block.true_block == dominator.self &&
-            continue_block.false_block == dominator.merge_block)
+        if (block.merge == SPIRBlock::MergeNone &&
+            block.terminator == SPIRBlock::Select &&
+            block.true_block == dominator.self &&
+            block.false_block == dominator.merge_block)
         {
             return SPIRBlock::DoWhileLoop;
         }

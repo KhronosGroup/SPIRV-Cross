@@ -22,7 +22,7 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-CompilerMSL::CompilerMSL(vector<uint32_t> spirv) : CompilerGLSL(move(spirv)) {
+CompilerMSL::CompilerMSL(vector<uint32_t> spirv_) : CompilerGLSL(move(spirv_)) {
     options.vertex.fixup_clipspace = false;
 }
 

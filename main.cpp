@@ -43,8 +43,8 @@ struct CLICallbacks
 
 struct CLIParser
 {
-    CLIParser(CLICallbacks cbs, int argc, char *argv[])
-        : cbs(move(cbs)), argc(argc), argv(argv)
+    CLIParser(CLICallbacks cbs_, int argc_, char *argv_[])
+        : cbs(move(cbs_)), argc(argc_), argv(argv_)
     {}
 
     bool parse()

@@ -136,7 +136,7 @@ namespace spirv_cross
     struct SPIRUndef : IVariant
     {
         enum { type = TypeUndef };
-        SPIRUndef(uint32_t basetype) : basetype(basetype) {}
+        SPIRUndef(uint32_t basetype_) : basetype(basetype_) {}
         uint32_t basetype;
     };
 
@@ -198,8 +198,8 @@ namespace spirv_cross
             GLSL
         };
 
-        SPIRExtension(Extension ext)
-            : ext(ext) {}
+        SPIRExtension(Extension ext_)
+            : ext(ext_) {}
 
         Extension ext;    
     };
@@ -209,8 +209,8 @@ namespace spirv_cross
         enum { type = TypeExpression };
 
         // Only created by the backend target to avoid creating tons of temporaries.
-        SPIRExpression(std::string expr, uint32_t expression_type, bool immutable)
-            : expression(move(expr)), expression_type(expression_type), immutable(immutable) {}
+        SPIRExpression(std::string expr, uint32_t expression_type_, bool immutable_)
+            : expression(move(expr)), expression_type(expression_type_), immutable(immutable_) {}
 
         // If non-zero, prepend expression with to_expression(base_expression).
         // Used in amortizing multiple calls to to_expression()
@@ -239,8 +239,8 @@ namespace spirv_cross
     {
         enum { type = TypeFunctionPrototype };
 
-        SPIRFunctionPrototype(uint32_t return_type)
-            : return_type(return_type) {}
+        SPIRFunctionPrototype(uint32_t return_type_)
+            : return_type(return_type_) {}
 
         uint32_t return_type;
         std::vector<uint32_t> parameter_types;
@@ -348,8 +348,8 @@ namespace spirv_cross
     {
         enum { type = TypeFunction };
 
-        SPIRFunction(uint32_t return_type, uint32_t function_type)
-            : return_type(return_type), function_type(function_type)
+        SPIRFunction(uint32_t return_type_, uint32_t function_type_)
+            : return_type(return_type_), function_type(function_type_)
         {}
 
         struct Parameter
@@ -372,10 +372,10 @@ namespace spirv_cross
             local_variables.push_back(id);
         }
 
-        void add_parameter(uint32_t type, uint32_t id)
+        void add_parameter(uint32_t parameter_type, uint32_t id)
         {
             // Arguments are read-only until proven otherwise.
-            arguments.push_back({ type, id, 0u, 0u });
+            arguments.push_back({ parameter_type, id, 0u, 0u });
         }
 
         bool active = false;
@@ -387,8 +387,8 @@ namespace spirv_cross
         enum { type = TypeVariable };
 
         SPIRVariable() = default;
-        SPIRVariable(uint32_t basetype, spv::StorageClass storage, uint32_t initializer = 0)
-            : basetype(basetype), storage(storage), initializer(initializer)
+        SPIRVariable(uint32_t basetype_, spv::StorageClass storage_, uint32_t initializer_ = 0)
+            : basetype(basetype_), storage(storage_), initializer(initializer_)
         {}
 
         uint32_t basetype = 0;
@@ -459,22 +459,22 @@ namespace spirv_cross
         inline uint32_t vector_size() const { return m.c[0].vecsize; }
         inline uint32_t columns() const { return m.columns; }
 
-        SPIRConstant(uint32_t constant_type, const uint32_t *elements, uint32_t num_elements) :
-            constant_type(constant_type)
+        SPIRConstant(uint32_t constant_type_, const uint32_t *elements, uint32_t num_elements) :
+            constant_type(constant_type_)
         {
             subconstants.insert(end(subconstants), elements, elements + num_elements);
         }
 
-        SPIRConstant(uint32_t constant_type, uint32_t v0) :
-            constant_type(constant_type)
+        SPIRConstant(uint32_t constant_type_, uint32_t v0) :
+            constant_type(constant_type_)
         {
             m.c[0].r[0].u32 = v0;
             m.c[0].vecsize = 1;
             m.columns = 1;
         }
 
-        SPIRConstant(uint32_t constant_type, uint32_t v0, uint32_t v1) :
-            constant_type(constant_type)
+        SPIRConstant(uint32_t constant_type_, uint32_t v0, uint32_t v1) :
+            constant_type(constant_type_)
         {
             m.c[0].r[0].u32 = v0;
             m.c[0].r[1].u32 = v1;
@@ -482,8 +482,8 @@ namespace spirv_cross
             m.columns = 1;
         }
 
-        SPIRConstant(uint32_t constant_type, uint32_t v0, uint32_t v1, uint32_t v2) :
-            constant_type(constant_type)
+        SPIRConstant(uint32_t constant_type_, uint32_t v0, uint32_t v1, uint32_t v2) :
+            constant_type(constant_type_)
         {
             m.c[0].r[0].u32 = v0;
             m.c[0].r[1].u32 = v1;
@@ -492,8 +492,8 @@ namespace spirv_cross
             m.columns = 1;
         }
 
-        SPIRConstant(uint32_t constant_type, uint32_t v0, uint32_t v1, uint32_t v2, uint32_t v3) :
-            constant_type(constant_type)
+        SPIRConstant(uint32_t constant_type_, uint32_t v0, uint32_t v1, uint32_t v2, uint32_t v3) :
+            constant_type(constant_type_)
         {
             m.c[0].r[0].u32 = v0;
             m.c[0].r[1].u32 = v1;
@@ -503,27 +503,27 @@ namespace spirv_cross
             m.columns = 1;
         }
 
-        SPIRConstant(uint32_t constant_type,
+        SPIRConstant(uint32_t constant_type_,
                 const ConstantVector &vec0) :
-            constant_type(constant_type)
+            constant_type(constant_type_)
         {
             m.columns = 1;
             m.c[0] = vec0;
         }
 
-        SPIRConstant(uint32_t constant_type,
+        SPIRConstant(uint32_t constant_type_,
                 const ConstantVector &vec0, const ConstantVector &vec1) :
-            constant_type(constant_type)
+            constant_type(constant_type_)
         {
             m.columns = 2;
             m.c[0] = vec0;
             m.c[1] = vec1;
         }
 
-        SPIRConstant(uint32_t constant_type,
+        SPIRConstant(uint32_t constant_type_,
                 const ConstantVector &vec0, const ConstantVector &vec1,
                 const ConstantVector &vec2) :
-            constant_type(constant_type)
+            constant_type(constant_type_)
         {
             m.columns = 3;
             m.c[0] = vec0;
@@ -531,10 +531,10 @@ namespace spirv_cross
             m.c[2] = vec2;
         }
 
-        SPIRConstant(uint32_t constant_type,
+        SPIRConstant(uint32_t constant_type_,
                 const ConstantVector &vec0, const ConstantVector &vec1,
                 const ConstantVector &vec2, const ConstantVector &vec3) :
-            constant_type(constant_type)
+            constant_type(constant_type_)
         {
             m.columns = 4;
             m.c[0] = vec0;
@@ -568,12 +568,12 @@ namespace spirv_cross
                 return *this;
             }
 
-            void set(std::unique_ptr<IVariant> val, uint32_t type)
+            void set(std::unique_ptr<IVariant> val, uint32_t new_type)
             {
                 holder = std::move(val);
-                if (this->type != TypeNone && this->type != type)
+                if (type != TypeNone && type != new_type)
                     throw CompilerError("Overwriting a variant with new type.");
-                this->type = type;
+                type = new_type;
             }
 
             template<typename T>

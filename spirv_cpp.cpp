@@ -25,13 +25,13 @@ void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
     auto &type = get<SPIRType>(var.basetype);
     auto instance_name = to_name(var.self);
 
-    uint32_t set = meta[var.self].decoration.set;
+    uint32_t descriptor_set = meta[var.self].decoration.set;
     uint32_t binding = meta[var.self].decoration.binding;
 
     emit_struct(type);
     statement("internal::Resource<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
     statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
-    resource_registrations.push_back(join("s.register_resource(", instance_name, "__", ", ", set, ", ", binding, ");"));
+    resource_registrations.push_back(join("s.register_resource(", instance_name, "__", ", ", descriptor_set, ", ", binding, ");"));
     statement("");
 }
 
@@ -66,7 +66,7 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
     auto &type = get<SPIRType>(var.basetype);
     auto instance_name = to_name(var.self);
 
-    uint32_t set = meta[var.self].decoration.set;
+    uint32_t descriptor_set = meta[var.self].decoration.set;
     uint32_t binding = meta[var.self].decoration.binding;
     uint32_t location = meta[var.self].decoration.location;
 
@@ -74,7 +74,7 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
     {
         statement("internal::Resource<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
         statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
-        resource_registrations.push_back(join("s.register_resource(", instance_name, "__", ", ", set, ", ", binding, ");"));
+        resource_registrations.push_back(join("s.register_resource(", instance_name, "__", ", ", descriptor_set, ", ", binding, ");"));
     }
     else
     {

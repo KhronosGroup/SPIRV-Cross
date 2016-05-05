@@ -90,7 +90,7 @@ namespace spirv_cross
                 remap_pls_variables();
             }
 
-            CompilerGLSL(std::vector<uint32_t> spirv) : Compiler(move(spirv))
+            CompilerGLSL(std::vector<uint32_t> spirv_) : Compiler(move(spirv_))
             {
                 if (source.known)
                 {

@@ -25,7 +25,7 @@ namespace spirv_cross
     class CompilerCPP : public CompilerGLSL
     {
         public:
-            CompilerCPP(std::vector<uint32_t> spirv) : CompilerGLSL(move(spirv)) {}
+            CompilerCPP(std::vector<uint32_t> spirv_) : CompilerGLSL(move(spirv_)) {}
             std::string compile() override;
 
         private:

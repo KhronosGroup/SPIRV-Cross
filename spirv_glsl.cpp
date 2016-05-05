@@ -104,7 +104,7 @@ void CompilerGLSL::reset()
 
     // Clear invalid expression tracking.
     invalid_expressions.clear();
-    function = nullptr;
+    current_function = nullptr;
 
     // Clear temporary usage tracking.
     expression_usage_counts.clear();
@@ -1322,8 +1322,8 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id,
             expr = join(to_expression(lerp), " ? ", to_expression(right), " : ", to_expression(left));
         else
         {
-            auto swiz = [this](uint32_t id, uint32_t i) {
-                return join(to_expression(id), ".", index_to_swizzle(i));
+            auto swiz = [this](uint32_t expression, uint32_t i) {
+                return join(to_expression(expression), ".", index_to_swizzle(i));
             };
 
             expr = type_to_glsl_constructor(restype);
@@ -2277,11 +2277,11 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
     return op;
 }
 
-void CompilerGLSL::emit_instruction(const Instruction &i)
+void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
-    auto ops = stream(i);
-    auto op = static_cast<Op>(i.op);
-    uint32_t length = i.length;
+    auto ops = stream(instruction);
+    auto opcode = static_cast<Op>(instruction.op);
+    uint32_t length = instruction.length;
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
@@ -2290,7 +2290,7 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 
-    switch (op)
+    switch (opcode)
     {
         // Dealing with memory
         case OpLoad:
@@ -2459,13 +2459,13 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
                         splat = false;
             }
 
-            auto op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
+            auto constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
             if (splat)
-                op += to_expression(elems[0]);
+                constructor_op += to_expression(elems[0]);
             else
-                op += build_composite_combiner(elems, length);
-            op += ")";
-            emit_op(result_type, id, op, forward, false);
+                constructor_op += build_composite_combiner(elems, length);
+            constructor_op += ")";
+            emit_op(result_type, id, constructor_op, forward, false);
             break;
         }
 
@@ -3039,7 +3039,7 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
         case OpImageGather:
         case OpImageDrefGather:
             // Gets a bit hairy, so move this to a separate instruction.
-            emit_texture_op(i);
+            emit_texture_op(instruction);
             break;
 
         case OpImage:
@@ -3218,10 +3218,10 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
 
         case OpExtInst:
         {
-            uint32_t set = ops[2];
-            if (get<SPIRExtension>(set).ext != SPIRExtension::GLSL)
+            uint32_t extension_set = ops[2];
+            if (get<SPIRExtension>(extension_set).ext != SPIRExtension::GLSL)
             {
-                statement("// unimplemented ext op ", i.op);
+                statement("// unimplemented ext op ", instruction.op);
                 break;
             }
 
@@ -3230,7 +3230,7 @@ void CompilerGLSL::emit_instruction(const Instruction &i)
         }
 
         default:
-            statement("// unimplemented op ", i.op);
+            statement("// unimplemented op ", instruction.op);
             break;
     }
 }
@@ -3640,8 +3640,8 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
             if (op == OpFunctionCall)
             {
                 // Recursively emit functions which are called.
-                uint32_t func = ops[2];
-                emit_function(get<SPIRFunction>(func), meta[ops[1]].decoration.decoration_flags);
+                uint32_t id = ops[2];
+                emit_function(get<SPIRFunction>(id), meta[ops[1]].decoration.decoration_flags);
             }
         }
     }
@@ -3649,7 +3649,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
     emit_function_prototype(func, return_flags);
     begin_scope();
 
-    function = &func;
+    current_function = &func;
 
     for (auto &v : func.local_variables)
     {
@@ -3721,7 +3721,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
     flush_all_active_variables();
 
     // This is only a continue if we branch to our loop dominator.
-    if (loop_block.find(to) != end(loop_block) &&
+    if (loop_blocks.find(to) != end(loop_blocks) &&
         get<SPIRBlock>(from).loop_dominator == to)
     {
         // This can happen if we had a complex continue block which was emitted.
@@ -3731,14 +3731,14 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
     }
     else if (is_continue(to))
     {
-        auto &continue_block = get<SPIRBlock>(to);
-        if (continue_block.complex_continue)
+        auto &to_block = get<SPIRBlock>(to);
+        if (to_block.complex_continue)
         {
             // Just emit the whole block chain as is.
             auto usage_counts = expression_usage_counts;
             auto invalid = invalid_expressions;
 
-            emit_block_chain(continue_block);
+            emit_block_chain(to_block);
 
             // Expression usage counts and invalid expressions
             // are moot after returning from the continue block.
@@ -3749,12 +3749,12 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
         }
         else
         {
-            auto &block = get<SPIRBlock>(from);
-            auto &dominator = get<SPIRBlock>(block.loop_dominator);
+            auto &from_block = get<SPIRBlock>(from);
+            auto &dominator = get<SPIRBlock>(from_block.loop_dominator);
 
             // For non-complex continue blocks, we implicitly branch to the continue block
             // by having the continue block be part of the loop header in for (; ; continue-block).
-            bool outside_control_flow = block_is_outside_flow_control_from_block(dominator, block);
+            bool outside_control_flow = block_is_outside_flow_control_from_block(dominator, from_block);
 
             // Some simplification for for-loops. We always end up with a useless continue;
             // statement since we branch to a loop block.
@@ -3825,13 +3825,13 @@ void CompilerGLSL::propagate_loop_dominators(const SPIRBlock &block)
         uint32_t dominator = block.merge == SPIRBlock::MergeLoop ?
             block.self : block.loop_dominator;
 
-        auto set_dominator = [this](uint32_t self, uint32_t dominator) {
-            auto &block = this->get<SPIRBlock>(self);
+        auto set_dominator = [this](uint32_t self, uint32_t new_dominator) {
+            auto &dominated_block = this->get<SPIRBlock>(self);
 
             // If we already have a loop dominator, we're trying to break out to merge targets
             // which should not update the loop dominator.
-            if (!block.loop_dominator)
-                block.loop_dominator = dominator;
+            if (!dominated_block.loop_dominator)
+                dominated_block.loop_dominator = new_dominator;
         };
 
         // After merging a loop, we inherit the loop dominator always.
@@ -3872,7 +3872,7 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
     redirect_statement = &statements;
 
     // Stamp out all blocks one after each other.
-    while (loop_block.find(block->self) == end(loop_block))
+    while (loop_blocks.find(block->self) == end(loop_blocks))
     {
         propagate_loop_dominators(*block);
         // Write out all instructions we have in this block.
@@ -3898,10 +3898,10 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
 
     // Somewhat ugly, strip off the last ';' since we use ',' instead.
     // Ideally, we should select this behavior in statement().
-    for (auto &statement : statements)
+    for (auto &s : statements)
     {
-        if (!statement.empty() && statement.back() == ';')
-            statement.pop_back();
+        if (!s.empty() && s.back() == ';')
+            s.pop_back();
     }
 
     current_continue_block = nullptr;
@@ -4003,16 +4003,16 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 void CompilerGLSL::flush_undeclared_variables()
 {
     // Declare undeclared variables.
-    if (function->flush_undeclared)
+    if (current_function->flush_undeclared)
     {
-        for (auto &v : function->local_variables)
+        for (auto &v : current_function->local_variables)
         {
             auto &var = get<SPIRVariable>(v);
             if (var.deferred_declaration)
                 statement(variable_decl(var), ";");
             var.deferred_declaration = false;
         }
-        function->flush_undeclared = false;
+        current_function->flush_undeclared = false;
     }
 }
 
@@ -4170,7 +4170,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
             // we do not need an explicit return which looks out of place. Just end the function here.
             // In the very weird case of for(;;) { return; } executing return is unconditional,
             // but we actually need a return here ...
-            else if (!block_is_outside_flow_control_from_block(get<SPIRBlock>(function->entry_block), block) ||
+            else if (!block_is_outside_flow_control_from_block(get<SPIRBlock>(current_function->entry_block), block) ||
                     block.loop_dominator != SPIRBlock::NoDominator)
                 statement("return;");
             break;

@@ -191,8 +191,8 @@ namespace spirv_cross
             std::vector<Variant> ids;
             std::vector<Meta> meta;
 
-            SPIRFunction *function = nullptr;
-            SPIRBlock *block = nullptr;
+            SPIRFunction *current_function = nullptr;
+            SPIRBlock *current_block = nullptr;
             std::vector<uint32_t> global_variables;
             std::vector<uint32_t> aliased_variables;
 
@@ -260,11 +260,11 @@ namespace spirv_cross
                 Source() = default;
             } source;
 
-            std::unordered_set<uint32_t> loop_block;
-            std::unordered_set<uint32_t> continue_block;
-            std::unordered_set<uint32_t> loop_merge_target;
-            std::unordered_set<uint32_t> selection_merge_target;
-            std::unordered_set<uint32_t> multiselect_merge_target;
+            std::unordered_set<uint32_t> loop_blocks;
+            std::unordered_set<uint32_t> continue_blocks;
+            std::unordered_set<uint32_t> loop_merge_targets;
+            std::unordered_set<uint32_t> selection_merge_targets;
+            std::unordered_set<uint32_t> multiselect_merge_targets;
 
             std::string to_name(uint32_t id);
             bool is_builtin_variable(const SPIRVariable &var) const;
@@ -283,19 +283,19 @@ namespace spirv_cross
 
             inline bool is_continue(uint32_t next) const
             {
-                return continue_block.find(next) != end(continue_block);
+                return continue_blocks.find(next) != end(continue_blocks);
             }
 
             inline bool is_break(uint32_t next) const
             {
-                return loop_merge_target.find(next) != end(loop_merge_target) ||
-                    multiselect_merge_target.find(next) != end(multiselect_merge_target);
+                return loop_merge_targets.find(next) != end(loop_merge_targets) ||
+                    multiselect_merge_targets.find(next) != end(multiselect_merge_targets);
             }
 
             inline bool is_conditional(uint32_t next) const
             {
-                return selection_merge_target.find(next) != end(selection_merge_target) &&
-                    multiselect_merge_target.find(next) == end(multiselect_merge_target);
+                return selection_merge_targets.find(next) != end(selection_merge_targets) &&
+                    multiselect_merge_targets.find(next) == end(multiselect_merge_targets);
             }
 
             // Dependency tracking for temporaries read from variables.
@@ -343,8 +343,8 @@ namespace spirv_cross
 
             struct BufferAccessHandler : OpcodeHandler
             {
-                BufferAccessHandler(const Compiler &compiler, std::vector<BufferRange> &ranges, unsigned id)
-                    : compiler(compiler), ranges(ranges), id(id) {}
+                BufferAccessHandler(const Compiler &compiler_, std::vector<BufferRange> &ranges_, unsigned id_)
+                    : compiler(compiler_), ranges(ranges_), id(id_) {}
 
                 bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 
