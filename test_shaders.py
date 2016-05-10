@@ -66,26 +66,32 @@ def validate_shader(shader, vulkan):
     else:
         subprocess.check_call(['glslangValidator', shader])
 
-def cross_compile(shader, vulkan):
+def cross_compile(shader, vulkan, spirv):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
     os.close(glsl_f)
 
-    if vulkan:
+    if vulkan or spirv:
         vulkan_glsl_f, vulkan_glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
         os.close(vulkan_glsl_f)
 
-    subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
+    if spirv:
+        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+    else:
+        subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
+
+    if spirv:
+        subprocess.check_call(['spirv-val', spirv_path])
 
     spirv_cross_path = './spirv-cross'
     subprocess.check_call([spirv_cross_path, '--output', glsl_path, spirv_path])
 
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
-    if not ('nocompat' in glsl_path):
+    if (not ('nocompat' in glsl_path)) and (not spirv):
         validate_shader(glsl_path, False)
 
-    if vulkan:
+    if vulkan or spirv:
         subprocess.check_call([spirv_cross_path, '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path])
         validate_shader(vulkan_glsl_path, vulkan)
 
@@ -139,15 +145,19 @@ def regression_check(shader, glsl, update, keep):
 def shader_is_vulkan(shader):
     return '.vk.' in shader
 
+def shader_is_spirv(shader):
+    return '.asm.' in shader
+
 def test_shader(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     vulkan = shader_is_vulkan(shader[1])
+    spirv = shader_is_spirv(shader[1])
 
     print('Testing shader:', joined_path)
-    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan)
+    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, spirv)
 
     # Only test GLSL stats if we have a shader following GL semantics.
-    if stats and (not vulkan):
+    if stats and (not vulkan) and (not spirv):
         cross_stats = get_shader_stats(glsl)
 
     regression_check(shader, glsl, update, keep)

@@ -487,6 +487,21 @@ static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
 	throw CompilerError("String was not terminated before EOF");
 }
 
+static bool is_valid_spirv_version(uint32_t version)
+{
+	switch (version)
+	{
+	// Allow v99 since it tends to just work.
+	case 99:
+	case 0x10000: // SPIR-V 1.0
+	case 0x10100: // SPIR-V 1.1
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 void Compiler::parse()
 {
 	auto len = spirv.size();
@@ -502,16 +517,8 @@ void Compiler::parse()
 			          return swap_endian(c);
 			      });
 
-	// Allow v99 since it tends to just work, but warn about this.
-	if (s[0] != MagicNumber || (s[1] != Version && s[1] != 99))
+	if (s[0] != MagicNumber || !is_valid_spirv_version(s[1]))
 		throw CompilerError("Invalid SPIRV format.");
-
-	if (s[1] != Version)
-	{
-		fprintf(stderr, "SPIRV-Cross was compiled against SPIR-V version %d, but SPIR-V uses version %u. Buggy "
-		                "behavior due to ABI incompatibility might occur.\n",
-		        Version, s[1]);
-	}
 
 	uint32_t bound = s[3];
 	ids.resize(bound);
