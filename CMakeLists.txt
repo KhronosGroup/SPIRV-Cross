@@ -55,11 +55,7 @@ find_program(PYTHON3_EXE python3)
 if(${PYTHON3_EXE} MATCHES "NOTFOUND")
   message(WARNING "Testing disabled. Could not find python3")
 else()
-  add_test(NAME spirv-cross-opengl-test
+  add_test(NAME spirv-cross-test
 	   COMMAND ${PYTHON3_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
 		   ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
-  add_test(NAME spirv-cross-vulkan-test
-	   COMMAND ${PYTHON3_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
-		   --vulkan
-		   ${CMAKE_CURRENT_SOURCE_DIR}/shaders-vulkan)
 endif()
