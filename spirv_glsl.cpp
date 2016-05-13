@@ -2969,8 +2969,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpShiftLeftLogical:
-		BOP_CAST(<<, SPIRType::UInt, true);
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(<<, type, true);
 		break;
+	}
 
 	case OpBitwiseOr:
 	{
