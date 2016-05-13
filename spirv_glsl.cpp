@@ -1330,8 +1330,72 @@ void CompilerGLSL::emit_unary_op(uint32_t result_type, uint32_t result_id, uint3
 
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
-	emit_op(result_type, result_id, join(bitcast_glsl(result_type, op0), " ", op, " ", bitcast_glsl(result_type, op1)),
+	emit_op(result_type, result_id, join(to_expression(op0), " ", op, " ", to_expression(op1)),
 	        should_forward(op0) && should_forward(op1), true);
+}
+
+SPIRType CompilerGLSL::binary_op_bitcast_helper(string &cast_op0, string &cast_op1, SPIRType::BaseType &input_type,
+                                                uint32_t op0, uint32_t op1, bool skip_cast_if_equal_type)
+{
+	auto &type0 = expression_type(op0);
+	auto &type1 = expression_type(op1);
+
+	// We have to bitcast if our inputs are of different type, or if our types are not equal to expected inputs.
+	// For some functions like OpIEqual and INotEqual, we don't care if inputs are of different types than expected
+	// since equality test is exactly the same.
+	bool cast = (type0.basetype != type1.basetype) || (!skip_cast_if_equal_type && type0.basetype != input_type);
+
+	// Create a fake type so we can bitcast to it.
+	// We only deal with regular arithmetic types here like int, uints and so on.
+	SPIRType expected_type;
+	expected_type.basetype = input_type;
+	expected_type.vecsize = type0.vecsize;
+	expected_type.columns = type0.columns;
+	expected_type.width = type0.width;
+
+	if (cast)
+	{
+		cast_op0 = bitcast_glsl(expected_type, op0);
+		cast_op1 = bitcast_glsl(expected_type, op1);
+	}
+	else
+	{
+		// If we don't cast, our actual input type is that of the first (or second) argument.
+		cast_op0 = to_expression(op0);
+		cast_op1 = to_expression(op1);
+		input_type = type0.basetype;
+	}
+
+	return expected_type;
+}
+
+void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                       const char *op, SPIRType::BaseType input_type, bool skip_cast_if_equal_type)
+{
+	string cast_op0, cast_op1;
+	auto expected_type = binary_op_bitcast_helper(cast_op0, cast_op1, input_type, op0, op1, skip_cast_if_equal_type);
+	auto &out_type = get<SPIRType>(result_type);
+
+	// We might have casted away from the result type, so bitcast again.
+	// For example, arithmetic right shift with uint inputs.
+	// Special case boolean outputs since relational opcodes output booleans instead of int/uint.
+	bool extra_parens = true;
+	string expr;
+	if (out_type.basetype != input_type && out_type.basetype != SPIRType::Bool)
+	{
+		expected_type.basetype = input_type;
+		expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(cast_op0, " ", op, " ", cast_op1);
+		expr += ')';
+		extra_parens = false;
+	}
+	else
+	{
+		expr += join(cast_op0, " ", op, " ", cast_op1);
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1), extra_parens);
 }
 
 void CompilerGLSL::emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op)
@@ -1344,6 +1408,31 @@ void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id,
 {
 	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ")"),
 	        should_forward(op0) && should_forward(op1), false);
+}
+
+void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                            const char *op, SPIRType::BaseType input_type, bool skip_cast_if_equal_type)
+{
+	string cast_op0, cast_op1;
+	auto expected_type = binary_op_bitcast_helper(cast_op0, cast_op1, input_type, op0, op1, skip_cast_if_equal_type);
+	auto &out_type = get<SPIRType>(result_type);
+
+	// Special case boolean outputs since relational opcodes output booleans instead of int/uint.
+	string expr;
+	if (out_type.basetype != input_type && out_type.basetype != SPIRType::Bool)
+	{
+		expected_type.basetype = input_type;
+		expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(op, "(", cast_op0, ", ", cast_op1, ")");
+		expr += ')';
+	}
+	else
+	{
+		expr += join(op, "(", cast_op0, ", ", cast_op1, ")");
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1), false);
 }
 
 void CompilerGLSL::emit_trinary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
@@ -1955,11 +2044,8 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 }
 
-string CompilerGLSL::bitcast_glsl_op(uint32_t result_type, uint32_t argument)
+string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
-	auto &out_type = get<SPIRType>(result_type);
-	auto &in_type = expression_type(argument);
-
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
 		return type_to_glsl(out_type);
 	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float)
@@ -1976,9 +2062,9 @@ string CompilerGLSL::bitcast_glsl_op(uint32_t result_type, uint32_t argument)
 		return "";
 }
 
-string CompilerGLSL::bitcast_glsl(uint32_t result_type, uint32_t argument)
+string CompilerGLSL::bitcast_glsl(const SPIRType &result_type, uint32_t argument)
 {
-	auto op = bitcast_glsl_op(result_type, argument);
+	auto op = bitcast_glsl_op(result_type, expression_type(argument));
 	if (op.empty())
 		return to_expression(argument);
 	else
@@ -2438,9 +2524,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	uint32_t length = instruction.length;
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define BOP_CAST(op, type, skip_cast) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
 #define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
 #define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
 #define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
+#define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define BFOP_CAST(op, type, skip_cast) emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 
@@ -2809,16 +2898,35 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpIAdd:
+	{
+		// For simple arith ops, prefer the output type if there's a mismatch to avoid extra bitcasts.
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(+, type, true);
+		break;
+	}
+
 	case OpFAdd:
 		BOP(+);
 		break;
 
 	case OpISub:
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(-, type, true);
+		break;
+	}
+
 	case OpFSub:
 		BOP(-);
 		break;
 
 	case OpIMul:
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(*, type, true);
+		break;
+	}
+
 	case OpFMul:
 	case OpMatrixTimesVector:
 	case OpMatrixTimesScalar:
@@ -2841,40 +2949,63 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpSDiv:
+		BOP_CAST(/, SPIRType::Int, false);
+		break;
+
 	case OpUDiv:
+		BOP_CAST(/, SPIRType::UInt, false);
+		break;
+
 	case OpFDiv:
 		BOP(/ );
 		break;
 
-	// Might need workaround if RightLocal can be used on signed types ...
 	case OpShiftRightLogical:
+		BOP_CAST(>>, SPIRType::UInt, false);
+		break;
+
 	case OpShiftRightArithmetic:
-		BOP(>> );
+		BOP_CAST(>>, SPIRType::Int, false);
 		break;
 
 	case OpShiftLeftLogical:
-		BOP(<< );
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(<<, type, true);
 		break;
+	}
 
 	case OpBitwiseOr:
-		BOP(| );
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(|, type, true);
 		break;
+	}
 
 	case OpBitwiseXor:
-		BOP (^);
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST (^, type, true);
 		break;
+	}
 
 	case OpBitwiseAnd:
-		BOP(&);
+	{
+		auto type = get<SPIRType>(ops[0]).basetype;
+		BOP_CAST(&, type, true);
 		break;
+	}
 
 	case OpNot:
 		UOP(~);
 		break;
 
 	case OpUMod:
+		BOP_CAST(%, SPIRType::UInt, false);
+		break;
+
 	case OpSMod:
-		BOP(% );
+		BOP_CAST(%, SPIRType::Int, false);
 		break;
 
 	case OpFMod:
@@ -2906,8 +3037,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		UOP(!);
 		break;
 
-	case OpLogicalEqual:
 	case OpIEqual:
+	{
+		if (expression_type(ops[2]).vecsize > 1)
+			BFOP_CAST(equal, SPIRType::Int, true);
+		else
+			BOP_CAST(==, SPIRType::Int, true);
+		break;
+	}
+
+	case OpLogicalEqual:
 	case OpFOrdEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
@@ -2917,8 +3056,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpLogicalNotEqual:
 	case OpINotEqual:
+	{
+		if (expression_type(ops[2]).vecsize > 1)
+			BFOP_CAST(notEqual, SPIRType::Int, true);
+		else
+			BOP_CAST(!=, SPIRType::Int, true);
+		break;
+	}
+
+	case OpLogicalNotEqual:
 	case OpFOrdNotEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
@@ -2930,6 +3077,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpUGreaterThan:
 	case OpSGreaterThan:
+	{
+		auto type = opcode == OpUGreaterThan ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			BFOP_CAST(greaterThan, type, false);
+		else
+			BOP_CAST(>, type, false);
+		break;
+	}
+
 	case OpFOrdGreaterThan:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
@@ -2941,6 +3097,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpUGreaterThanEqual:
 	case OpSGreaterThanEqual:
+	{
+		auto type = opcode == OpUGreaterThanEqual ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			BFOP_CAST(greaterThanEqual, type, false);
+		else
+			BOP_CAST(>=, type, false);
+		break;
+	}
+
 	case OpFOrdGreaterThanEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
@@ -2952,6 +3117,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpULessThan:
 	case OpSLessThan:
+	{
+		auto type = opcode == OpULessThan ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			BFOP_CAST(lessThan, type, false);
+		else
+			BOP_CAST(<, type, false);
+		break;
+	}
+
 	case OpFOrdLessThan:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
@@ -2963,6 +3137,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpULessThanEqual:
 	case OpSLessThanEqual:
+	{
+		auto type = opcode == OpULessThanEqual ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			BFOP_CAST(lessThanEqual, type, false);
+		else
+			BOP_CAST(<=, type, false);
+		break;
+	}
+
 	case OpFOrdLessThanEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
@@ -2995,7 +3178,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		uint32_t arg = ops[2];
 
-		auto op = bitcast_glsl_op(result_type, arg);
+		auto op = bitcast_glsl_op(get<SPIRType>(result_type), expression_type(arg));
 		emit_unary_func_op(result_type, id, arg, op.c_str());
 		break;
 	}

@@ -17,8 +17,6 @@ The goal is to emit GLSL or MSL that looks like it was written by a human and no
 NOTE: Individual features are expected to be mostly complete, but it is possible that certain obscure GLSL features are not yet supported.
 However, most missing features are expected to be "trivial" improvements at this stage.
 
-Occasionally, missing features is due to glslangValidator's lack of proper support for that feature making testing hard.
-
 ## Building
 
 SPIRV-Cross has been tested on Linux, OSX and Windows.
@@ -125,7 +123,7 @@ glslangValidator then back through SPIRV-Cross again. The reference files are st
 All pull requests should ensure that test output does not change unexpectedly. This can be tested with `./test_shaders.py shaders`.
 However, when improving SPIRV-Cross there are of course legitimate cases where reference output should change.
 In these cases, run `./test_shaders.py shaders --update` to update the reference files and include these changes as part of the pull request.
-Always make sure you are running up to date glslangValidator when updating reference files.
+Always make sure you are running up to date glslangValidator as well as SPIRV-Tools when updating reference files.
 
 In short, the master branch should always be able to run `./test_shaders.py shaders` without failure.
 
