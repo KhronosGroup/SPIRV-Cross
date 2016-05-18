@@ -36,6 +36,64 @@ void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
 	statement("");
 }
 
+string CompilerCPP::type_to_array_cpp(const SPIRType &type)
+{
+	string res;
+	for (auto &size : type.array)
+	{
+		res += "[";
+		if (size)
+			res += convert_to_string(size);
+		else
+			res += "1"; // Flexible array member is prohibited in C++11.
+		res += "]";
+	}
+	return res;
+}
+
+string CompilerCPP::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index)
+{
+	uint64_t memberflags = 0;
+	auto &memb = meta[type.self].members;
+	if (index < memb.size())
+		memberflags = memb[index].decoration_flags;
+
+	return join(layout_for_member(type, index), flags_to_precision_qualifiers_glsl(membertype, memberflags),
+	            type_to_glsl(membertype), " ", to_member_name(type, index), type_to_array_cpp(membertype));
+}
+
+void CompilerCPP::emit_struct(const SPIRType &type)
+{
+	auto name = type_to_glsl(type);
+
+	// Struct types can be stamped out multiple times
+	// with just different offsets, matrix layouts, etc ...
+	// Type-punning with these types is legal, which complicates things
+	// when we are storing struct and array types in an SSBO for example.
+	// For now, detect this duplication via OpName, but ideally we should
+	// find proper aliases by inspecting the actual type.
+	if (global_struct_cache.find(name) != end(global_struct_cache))
+		return;
+	update_name_cache(global_struct_cache, name);
+
+	statement("struct ", name);
+	begin_scope();
+
+	uint32_t i = 0;
+	bool emitted = false;
+	for (auto &member : type.member_types)
+	{
+		auto &membertype = get<SPIRType>(member);
+		statement(member_decl(type, membertype, i), ";");
+		i++;
+		emitted = true;
+	}
+	end_scope_decl();
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);

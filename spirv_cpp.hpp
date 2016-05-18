@@ -31,7 +31,13 @@ public:
 	}
 	std::string compile() override;
 
+protected:
+	void emit_struct(const SPIRType &type);
+
 private:
+	std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member) override;
+	std::string type_to_array_cpp(const SPIRType &type);
+
 	void emit_header() override;
 	void emit_c_linkage();
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
