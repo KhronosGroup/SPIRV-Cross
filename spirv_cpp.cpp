@@ -319,6 +319,39 @@ void CompilerCPP::emit_c_linkage()
 	end_scope();
 }
 
+string CompilerCPP::constant_expression(const SPIRConstant &c)
+{
+	if (!c.subconstants.empty())
+	{
+		// Handles Arrays and structures.
+		string res = "{";
+		for (auto &elem : c.subconstants)
+		{
+			res += constant_expression(get<SPIRConstant>(elem));
+			if (&elem != &c.subconstants.back())
+				res += ", ";
+		}
+		res += "}";
+		return res;
+	}
+	else if (c.columns() == 1)
+	{
+		return constant_expression_vector(c, 0);
+	}
+	else
+	{
+		string res = "{";
+		for (uint32_t col = 0; col < c.columns(); col++)
+		{
+			res += constant_expression_vector(c, col);
+			if (col + 1 < c.columns())
+				res += ", ";
+		}
+		res += "}";
+		return res;
+	}
+}
+
 void CompilerCPP::emit_function_prototype(SPIRFunction &func, uint64_t)
 {
 	local_variables.clear();
