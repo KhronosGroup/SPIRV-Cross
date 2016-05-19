@@ -44,6 +44,7 @@ private:
 	void emit_uniform(const SPIRVariable &var);
 	void emit_shared(const SPIRVariable &var);
 
+	std::string constant_expression(const SPIRConstant &c) override;
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 
 	std::vector<std::string> resource_registrations;
