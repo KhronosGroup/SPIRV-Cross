@@ -203,6 +203,7 @@ protected:
 		const char *basic_uint_type = "uint";
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
+		bool flexible_member_array_supported = true;
 	} backend;
 
 	void emit_struct(const SPIRType &type);

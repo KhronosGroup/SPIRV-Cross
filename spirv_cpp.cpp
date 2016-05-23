@@ -251,6 +251,7 @@ string CompilerCPP::compile()
 	backend.basic_uint_type = "uint32_t";
 	backend.swizzle_is_function = true;
 	backend.shared_is_implied = true;
+	backend.flexible_member_array_supported = false;
 
 	uint32_t pass_count = 0;
 	do

@@ -3735,7 +3735,19 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 	{
 		res += "[";
 		if (size)
+		{
 			res += convert_to_string(size);
+		}
+		else if (!backend.flexible_member_array_supported)
+		{
+			// For runtime-sized arrays, we can work around
+			// lack of standard support for this by simply having
+			// a single element array.
+			//
+			// Runtime length arrays must always be the last element
+			// in an interface block.
+			res += '1';
+		}
 		res += "]";
 	}
 	return res;
