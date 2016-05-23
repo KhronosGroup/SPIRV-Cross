@@ -81,8 +81,9 @@ def cross_compile(shader, vulkan, spirv):
     else:
         subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
 
-    if spirv:
-        subprocess.check_call(['spirv-val', spirv_path])
+    # Workaround Issue #217 in SPIRV-Tools until the issue is resolved.
+    #if spirv:
+    #    subprocess.check_call(['spirv-val', spirv_path])
 
     spirv_cross_path = './spirv-cross'
     subprocess.check_call([spirv_cross_path, '--output', glsl_path, spirv_path])

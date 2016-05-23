@@ -188,8 +188,12 @@ protected:
 	std::string type_to_array_glsl(const SPIRType &type);
 	std::string variable_decl(const SPIRVariable &variable);
 
-	void add_local_variable(uint32_t id);
-	std::unordered_set<std::string> local_variables;
+	void add_local_variable_name(uint32_t id);
+	void add_resource_name(uint32_t id);
+	void add_member_name(SPIRType &type, uint32_t name);
+	std::unordered_set<std::string> local_variable_names;
+	std::unordered_set<std::string> resource_names;
+	std::unordered_set<std::string> interface_block_names;
 
 	bool processing_entry_point = false;
 
@@ -204,12 +208,12 @@ protected:
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
 		bool flexible_member_array_supported = true;
+		bool explicit_struct_type = false;
 	} backend;
 
-	void emit_struct(const SPIRType &type);
+	void emit_struct(SPIRType &type);
 	void emit_instruction(const Instruction &instr);
 
-protected:
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);
 	void emit_push_constant_block(const SPIRVariable &var);
@@ -320,6 +324,8 @@ protected:
 	const char *to_pls_qualifiers_glsl(const SPIRVariable &variable);
 	void emit_pls();
 	void remap_pls_variables();
+
+	void add_variable(std::unordered_set<std::string> &variables, uint32_t id);
 };
 }
 

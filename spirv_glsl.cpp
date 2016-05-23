@@ -123,6 +123,8 @@ void CompilerGLSL::reset()
 	expression_usage_counts.clear();
 	forwarded_temporaries.clear();
 
+	resource_names.clear();
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -350,7 +352,7 @@ void CompilerGLSL::emit_header()
 	statement("");
 }
 
-void CompilerGLSL::emit_struct(const SPIRType &type)
+void CompilerGLSL::emit_struct(SPIRType &type)
 {
 	// Struct types can be stamped out multiple times
 	// with just different offsets, matrix layouts, etc ...
@@ -359,15 +361,20 @@ void CompilerGLSL::emit_struct(const SPIRType &type)
 	if (type.type_alias != 0)
 		return;
 
+	add_resource_name(type.self);
 	auto name = type_to_glsl(type);
 
-	statement("struct ", name);
+	statement(!backend.explicit_struct_type ? "struct " : "", name);
 	begin_scope();
+
+	type.member_name_cache.clear();
 
 	uint32_t i = 0;
 	bool emitted = false;
 	for (auto &member : type.member_types)
 	{
+		add_member_name(type, i);
+
 		auto &membertype = get<SPIRType>(member);
 		statement(member_decl(type, membertype, i), ";");
 		i++;
@@ -792,15 +799,28 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 	auto ssbo = meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock);
 
+	add_resource_name(var.self);
+
 	// Block names should never alias.
 	auto buffer_name = to_name(type.self, false);
+
+	// Shaders never use the block by interface name, so we don't
+	// have to track this other than updating name caches.
+	if (resource_names.find(buffer_name) != end(resource_names))
+		buffer_name = get_fallback_name(type.self);
+	else
+		resource_names.insert(buffer_name);
 
 	statement(layout_for_variable(var) + (ssbo ? "buffer " : "uniform ") + buffer_name);
 	begin_scope();
 
+	type.member_name_cache.clear();
+
 	uint32_t i = 0;
 	for (auto &member : type.member_types)
 	{
+		add_member_name(type, i);
+
 		auto &membertype = get<SPIRType>(member);
 		statement(member_decl(type, membertype, i), ";");
 		i++;
@@ -827,13 +847,28 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 
 	if (block)
 	{
+		add_resource_name(var.self);
+
 		// Block names should never alias.
-		statement(layout_for_variable(var), qual, to_name(type.self, false));
+		auto block_name = to_name(type.self, false);
+
+		// Shaders never use the block by interface name, so we don't
+		// have to track this other than updating name caches.
+		if (resource_names.find(block_name) != end(resource_names))
+			block_name = get_fallback_name(type.self);
+		else
+			resource_names.insert(block_name);
+
+		statement(layout_for_variable(var), qual, block_name);
 		begin_scope();
+
+		type.member_name_cache.clear();
 
 		uint32_t i = 0;
 		for (auto &member : type.member_types)
 		{
+			add_member_name(type, i);
+
 			auto &membertype = get<SPIRType>(member);
 			statement(member_decl(type, membertype, i), ";");
 			i++;
@@ -844,6 +879,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 	}
 	else
 	{
+		add_resource_name(var.self);
 		statement(layout_for_variable(var), qual, variable_decl(var), ";");
 	}
 }
@@ -859,6 +895,7 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 			throw CompilerError("At least ESSL 3.10 required for shader image load store.");
 	}
 
+	add_resource_name(var.self);
 	statement(layout_for_variable(var), "uniform ", variable_decl(var), ";");
 }
 
@@ -1053,6 +1090,7 @@ void CompilerGLSL::emit_resources()
 		auto &var = get<SPIRVariable>(global);
 		if (var.storage != StorageClassOutput)
 		{
+			add_resource_name(var.self);
 			statement(variable_decl(var), ";");
 			emitted = true;
 		}
@@ -3581,6 +3619,26 @@ string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
 		return join("_", index);
 }
 
+void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
+{
+	auto &memb = meta[type.self].members;
+	if (index < memb.size() && !memb[index].alias.empty())
+	{
+		auto &name = memb[index].alias;
+		if (name.empty())
+			return;
+
+		// Reserved for temporaries.
+		if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
+		{
+			name.clear();
+			return;
+		}
+
+		update_name_cache(type.member_name_cache, name);
+	}
+}
+
 string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index)
 {
 	uint64_t memberflags = 0;
@@ -3834,7 +3892,10 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 	{
 	case SPIRType::Struct:
 		// Need OpName lookup here to get a "sensible" name for a struct.
-		return to_name(type.self);
+		if (backend.explicit_struct_type)
+			return join("struct ", to_name(type.self));
+		else
+			return to_name(type.self);
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
@@ -3919,20 +3980,30 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 	}
 }
 
-void CompilerGLSL::add_local_variable(uint32_t id)
+void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
 {
 	auto &name = meta[id].decoration.alias;
 	if (name.empty())
 		return;
 
 	// Reserved for temporaries.
-	if (name[0] == '_')
+	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 	{
 		name.clear();
 		return;
 	}
 
-	update_name_cache(local_variables, name);
+	update_name_cache(variables, name);
+}
+
+void CompilerGLSL::add_local_variable_name(uint32_t id)
+{
+	add_variable(local_variable_names, id);
+}
+
+void CompilerGLSL::add_resource_name(uint32_t id)
+{
+	add_variable(resource_names, id);
 }
 
 void CompilerGLSL::require_extension(const string &ext)
@@ -3971,7 +4042,9 @@ bool CompilerGLSL::check_atomic_image(uint32_t id)
 
 void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
 {
-	local_variables.clear();
+	// Avoid shadow declarations.
+	local_variable_names = resource_names;
+
 	string decl;
 
 	auto &type = get<SPIRType>(func.return_type);
@@ -3994,7 +4067,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
 		// to use same name for variables.
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
-		add_local_variable(arg.id);
+		add_local_variable_name(arg.id);
 
 		decl += argument_decl(arg);
 		if (&arg != &func.arguments.back())
@@ -4045,7 +4118,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 		auto &var = get<SPIRVariable>(v);
 		if (expression_is_lvalue(v))
 		{
-			add_local_variable(var.self);
+			add_local_variable_name(var.self);
 
 			if (var.initializer)
 				statement(variable_decl(var), ";");

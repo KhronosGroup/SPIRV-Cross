@@ -204,6 +204,9 @@ struct SPIRType : IVariant
 	// We want to detect this so that we only emit the struct definition once.
 	// Since we cannot rely on OpName to be equal, we need to figure out aliases.
 	uint32_t type_alias = 0;
+
+	// Used in backends to avoid emitting members with conflicting names.
+	std::unordered_set<std::string> member_name_cache;
 };
 
 struct SPIRExtension : IVariant

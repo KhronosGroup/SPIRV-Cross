@@ -22,6 +22,8 @@ using namespace std;
 
 void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 	auto instance_name = to_name(var.self);
 
@@ -38,6 +40,8 @@ void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
 
 void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 
 	const char *qual = var.storage == StorageClassInput ? "StageInput" : "StageOutput";
@@ -57,6 +61,8 @@ void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 
 void CompilerCPP::emit_shared(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto instance_name = to_name(var.self);
 	statement(variable_decl(var), ";");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name);
@@ -64,6 +70,8 @@ void CompilerCPP::emit_shared(const SPIRVariable &var)
 
 void CompilerCPP::emit_uniform(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 	auto instance_name = to_name(var.self);
 
@@ -93,6 +101,8 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
 
 void CompilerCPP::emit_push_constant_block(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 	auto &flags = meta[var.self].decoration.decoration_flags;
 	if ((flags & (1ull << DecorationBinding)) || (flags & (1ull << DecorationDescriptorSet)))
@@ -252,6 +262,7 @@ string CompilerCPP::compile()
 	backend.swizzle_is_function = true;
 	backend.shared_is_implied = true;
 	backend.flexible_member_array_supported = false;
+	backend.explicit_struct_type = true;
 
 	uint32_t pass_count = 0;
 	do
@@ -355,7 +366,7 @@ string CompilerCPP::constant_expression(const SPIRConstant &c)
 
 void CompilerCPP::emit_function_prototype(SPIRFunction &func, uint64_t)
 {
-	local_variables.clear();
+	local_variable_names = resource_names;
 	string decl;
 
 	auto &type = get<SPIRType>(func.return_type);
@@ -374,7 +385,7 @@ void CompilerCPP::emit_function_prototype(SPIRFunction &func, uint64_t)
 	decl += "(";
 	for (auto &arg : func.arguments)
 	{
-		add_local_variable(arg.id);
+		add_local_variable_name(arg.id);
 
 		decl += argument_decl(arg);
 		if (&arg != &func.arguments.back())

@@ -471,7 +471,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 // If this is the entry point function, Metal-specific return value and function arguments are added.
 void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 {
-	local_variables.clear();
+	local_variable_names = resource_names;
 	string decl;
 
 	processing_entry_point = (func.self == execution.entry_point);
@@ -500,7 +500,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 
 	for (auto &arg : func.arguments)
 	{
-		add_local_variable(arg.id);
+		add_local_variable_name(arg.id);
 
 		decl += "thread " + argument_decl(arg);
 		if (&arg != &func.arguments.back())
