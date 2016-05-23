@@ -17,8 +17,8 @@
 #ifndef SPIRV_CROSS_BARRIER_HPP
 #define SPIRV_CROSS_BARRIER_HPP
 
-#include <thread>
 #include <atomic>
+#include <thread>
 
 namespace spirv_cross
 {

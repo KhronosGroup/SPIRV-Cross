@@ -1312,8 +1312,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 	{
 		auto &header = get<SPIRBlock>(current_continue_block->loop_dominator);
 		if (find_if(begin(header.declare_temporary), end(header.declare_temporary),
-		            [result_type, result_id](const pair<uint32_t, uint32_t> &tmp)
-		            {
+		            [result_type, result_id](const pair<uint32_t, uint32_t> &tmp) {
 			            return tmp.first == result_type && tmp.second == result_id;
 			        }) == end(header.declare_temporary))
 		{
@@ -1546,8 +1545,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 			expr = join(to_expression(lerp), " ? ", to_expression(right), " : ", to_expression(left));
 		else
 		{
-			auto swiz = [this](uint32_t expression, uint32_t i)
-			{
+			auto swiz = [this](uint32_t expression, uint32_t i) {
 				return join(to_expression(expression), ".", index_to_swizzle(i));
 			};
 
@@ -1686,8 +1684,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		length--;
 	}
 
-	auto test = [&](uint32_t &v, uint32_t flag)
-	{
+	auto test = [&](uint32_t &v, uint32_t flag) {
 		if (length && (flags & flag))
 		{
 			v = *opt++;
@@ -1736,8 +1733,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	expr += to_expression(img);
 
 	bool swizz_func = backend.swizzle_is_function;
-	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char *
-	{
+	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
 		if (comps == in_comps)
 			return "";
 
@@ -2993,7 +2989,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFDiv:
-		BOP(/ );
+		BOP(/);
 		break;
 
 	case OpShiftRightLogical:
@@ -3062,7 +3058,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpLogicalOr:
-		BOP(|| );
+		BOP(||);
 		break;
 
 	case OpLogicalAnd:
@@ -3088,7 +3084,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			BFOP(equal);
 		else
-			BOP(== );
+			BOP(==);
 		break;
 	}
 
@@ -3107,7 +3103,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			BFOP(notEqual);
 		else
-			BOP(!= );
+			BOP(!=);
 		break;
 	}
 
@@ -3127,7 +3123,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			BFOP(greaterThan);
 		else
-			BOP(> );
+			BOP(>);
 		break;
 	}
 
@@ -3147,7 +3143,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			BFOP(greaterThanEqual);
 		else
-			BOP(>= );
+			BOP(>=);
 		break;
 	}
 
@@ -3167,7 +3163,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			BFOP(lessThan);
 		else
-			BOP(< );
+			BOP(<);
 		break;
 	}
 
@@ -3187,7 +3183,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			BFOP(lessThanEqual);
 		else
-			BOP(<= );
+			BOP(<=);
 		break;
 	}
 
@@ -3460,10 +3456,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			// PLS input could have different number of components than what the SPIR expects, swizzle to
 			// the appropriate vector size.
-			auto itr = find_if(begin(pls_inputs), end(pls_inputs), [var](const PlsRemap &pls)
-			                   {
-				                   return pls.id == var->self;
-				               });
+			auto itr =
+			    find_if(begin(pls_inputs), end(pls_inputs), [var](const PlsRemap &pls) { return pls.id == var->self; });
 
 			if (itr == end(pls_inputs))
 				throw CompilerError("Found PLS remap for OpImageRead, but ID is not a PLS input ...");
@@ -4285,8 +4279,7 @@ void CompilerGLSL::propagate_loop_dominators(const SPIRBlock &block)
 	{
 		uint32_t dominator = block.merge == SPIRBlock::MergeLoop ? block.self : block.loop_dominator;
 
-		auto set_dominator = [this](uint32_t self, uint32_t new_dominator)
-		{
+		auto set_dominator = [this](uint32_t self, uint32_t new_dominator) {
 			auto &dominated_block = this->get<SPIRBlock>(self);
 
 			// If we already have a loop dominator, we're trying to break out to merge targets

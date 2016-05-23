@@ -16,8 +16,8 @@
 
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
-#include <cstring>
 #include <algorithm>
+#include <cstring>
 #include <utility>
 
 using namespace std;
@@ -523,10 +523,7 @@ void Compiler::parse()
 
 	// Endian-swap if we need to.
 	if (s[0] == swap_endian(MagicNumber))
-		transform(begin(spirv), end(spirv), begin(spirv), [](uint32_t c)
-		          {
-			          return swap_endian(c);
-			      });
+		transform(begin(spirv), end(spirv), begin(spirv), [](uint32_t c) { return swap_endian(c); });
 
 	if (s[0] != MagicNumber || !is_valid_spirv_version(s[1]))
 		throw CompilerError("Invalid SPIRV format.");

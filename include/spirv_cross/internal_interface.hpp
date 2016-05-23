@@ -29,13 +29,13 @@
 
 #include <glm/glm.hpp>
 
+#include "barrier.hpp"
+#include "external_interface.h"
+#include "image.hpp"
+#include "sampler.hpp"
+#include "thread_group.hpp"
 #include <assert.h>
 #include <stdint.h>
-#include "external_interface.h"
-#include "barrier.hpp"
-#include "thread_group.hpp"
-#include "sampler.hpp"
-#include "image.hpp"
 
 namespace internal
 {

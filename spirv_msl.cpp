@@ -595,8 +595,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 		length--;
 	}
 
-	auto test = [&](uint32_t &v, uint32_t flag)
-	{
+	auto test = [&](uint32_t &v, uint32_t flag) {
 		if (length && (flags & flag))
 		{
 			v = *opt++;

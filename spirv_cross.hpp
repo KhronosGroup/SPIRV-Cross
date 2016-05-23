@@ -18,13 +18,13 @@
 #define SPIRV_CROSS_HPP
 
 #include "spirv.hpp"
-#include <vector>
-#include <string>
-#include <stdexcept>
 #include <memory>
-#include <utility>
-#include <unordered_set>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 #include "spirv_common.hpp"
 

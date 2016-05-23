@@ -478,8 +478,7 @@ struct SPIRConstant : IVariant
 		type = TypeConstant
 	};
 
-	union Constant
-	{
+	union Constant {
 		uint32_t u32;
 		int32_t i32;
 		float f32;

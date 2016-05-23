@@ -18,8 +18,8 @@
 #define SPIRV_MSL_HPP
 
 #include "spirv_glsl.hpp"
-#include <vector>
 #include <set>
+#include <vector>
 
 namespace spirv_cross
 {

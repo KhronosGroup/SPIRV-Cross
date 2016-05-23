@@ -19,8 +19,8 @@
 
 #include "spirv_cross.hpp"
 #include <sstream>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace spirv_cross

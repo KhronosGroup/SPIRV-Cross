@@ -17,9 +17,9 @@
 #ifndef SPIRV_CROSS_THREAD_GROUP_HPP
 #define SPIRV_CROSS_THREAD_GROUP_HPP
 
-#include <thread>
 #include <condition_variable>
 #include <mutex>
+#include <thread>
 
 namespace spirv_cross
 {
@@ -58,36 +58,29 @@ private:
 
 		void start(T *impl)
 		{
-			worker = std::thread([impl, this]
-			                     {
-				                     for (;;)
-				                     {
-					                     {
-						                     std::unique_lock<std::mutex> l{ lock };
-						                     cond.wait(l, [this]
-						                               {
-							                               return state != Idle;
-							                           });
-						                     if (state == Dying)
-							                     break;
-					                     }
+			worker = std::thread([impl, this] {
+				for (;;)
+				{
+					{
+						std::unique_lock<std::mutex> l{ lock };
+						cond.wait(l, [this] { return state != Idle; });
+						if (state == Dying)
+							break;
+					}
 
-					                     impl->main();
+					impl->main();
 
-					                     std::lock_guard<std::mutex> l{ lock };
-					                     state = Idle;
-					                     cond.notify_one();
-				                     }
-				                 });
+					std::lock_guard<std::mutex> l{ lock };
+					state = Idle;
+					cond.notify_one();
+				}
+			});
 		}
 
 		void wait()
 		{
 			std::unique_lock<std::mutex> l{ lock };
-			cond.wait(l, [this]
-			          {
-				          return state == Idle;
-				      });
+			cond.wait(l, [this] { return state == Idle; });
 		}
 
 		void run()
