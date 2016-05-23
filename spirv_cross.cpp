@@ -1904,7 +1904,7 @@ bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType 
 	if (a.array.size() != b.array.size())
 		return false;
 
-	unsigned array_count = a.array.size();
+	size_t array_count = a.array.size();
 	if (array_count && memcmp(a.array.data(), b.array.data(), array_count * sizeof(uint32_t)) != 0)
 		return false;
 
@@ -1917,8 +1917,8 @@ bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType 
 	if (a.member_types.size() != b.member_types.size())
 		return false;
 
-	unsigned member_types = a.member_types.size();
-	for (unsigned i = 0; i < member_types; i++)
+	size_t member_types = a.member_types.size();
+	for (size_t i = 0; i < member_types; i++)
 	{
 		if (!types_are_logically_equivalent(get<SPIRType>(a.member_types[i]), get<SPIRType>(b.member_types[i])))
 			return false;
