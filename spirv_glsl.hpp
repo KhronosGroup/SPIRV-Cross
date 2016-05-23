@@ -193,7 +193,6 @@ protected:
 	void add_member_name(SPIRType &type, uint32_t name);
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
-	std::unordered_set<std::string> interface_block_names;
 
 	bool processing_entry_point = false;
 
