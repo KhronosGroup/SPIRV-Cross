@@ -123,9 +123,6 @@ void CompilerGLSL::reset()
 	expression_usage_counts.clear();
 	forwarded_temporaries.clear();
 
-	// Clear identifier caches
-	global_struct_cache.clear();
-
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -355,17 +352,14 @@ void CompilerGLSL::emit_header()
 
 void CompilerGLSL::emit_struct(const SPIRType &type)
 {
-	auto name = type_to_glsl(type);
-
 	// Struct types can be stamped out multiple times
 	// with just different offsets, matrix layouts, etc ...
 	// Type-punning with these types is legal, which complicates things
 	// when we are storing struct and array types in an SSBO for example.
-	// For now, detect this duplication via OpName, but ideally we should
-	// find proper aliases by inspecting the actual type.
-	if (global_struct_cache.find(name) != end(global_struct_cache))
+	if (type.type_alias != 0)
 		return;
-	update_name_cache(global_struct_cache, name);
+
+	auto name = type_to_glsl(type);
 
 	statement("struct ", name);
 	begin_scope();
@@ -797,7 +791,10 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 	auto ssbo = meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock);
-	auto buffer_name = to_name(type.self);
+
+	// Block names should never alias.
+	auto buffer_name = to_name(type.self, false);
+
 	statement(layout_for_variable(var) + (ssbo ? "buffer " : "uniform ") + buffer_name);
 	begin_scope();
 
@@ -830,7 +827,8 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 
 	if (block)
 	{
-		statement(layout_for_variable(var), qual, to_name(type.self));
+		// Block names should never alias.
+		statement(layout_for_variable(var), qual, to_name(type.self, false));
 		begin_scope();
 
 		uint32_t i = 0;

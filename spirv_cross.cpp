@@ -127,8 +127,19 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 	return true;
 }
 
-string Compiler::to_name(uint32_t id)
+string Compiler::to_name(uint32_t id, bool allow_alias)
 {
+	if (allow_alias && ids.at(id).get_type() == TypeType)
+	{
+		// If this type is a simple alias, emit the
+		// name of the original type instead.
+		// We don't want to override the meta alias
+		// as that can be overridden by the reflection APIs after parse.
+		auto &type = get<SPIRType>(id);
+		if (type.type_alias)
+			return to_name(type.type_alias);
+	}
+
 	if (meta[id].decoration.alias.empty())
 		return join("_", id);
 	else
@@ -1152,6 +1163,20 @@ void Compiler::parse(const Instruction &instruction)
 		type.basetype = SPIRType::Struct;
 		for (uint32_t i = 1; i < length; i++)
 			type.member_types.push_back(ops[i]);
+
+		// Check if we have seen this struct type before, with just different
+		// decorations.
+		for (auto &other : global_struct_cache)
+		{
+			if (types_are_logically_equivalent(type, get<SPIRType>(other)))
+			{
+				type.type_alias = other;
+				break;
+			}
+		}
+
+		if (type.type_alias == 0)
+			global_struct_cache.push_back(id);
 		break;
 	}
 
@@ -1867,4 +1892,40 @@ uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
 	ids.resize(new_bound);
 	meta.resize(new_bound);
 	return curr_bound;
+}
+
+bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const
+{
+	if (a.basetype != b.basetype)
+		return false;
+	if (a.width != b.width)
+		return false;
+	if (a.vecsize != b.vecsize)
+		return false;
+	if (a.columns != b.columns)
+		return false;
+	if (a.array.size() != b.array.size())
+		return false;
+
+	unsigned array_count = a.array.size();
+	if (array_count && memcmp(a.array.data(), b.array.data(), array_count * sizeof(uint32_t)) != 0)
+		return false;
+
+	if (a.basetype == SPIRType::Image || a.basetype == SPIRType::SampledImage)
+	{
+		if (memcmp(&a.image, &b.image, sizeof(SPIRType::Image)) != 0)
+			return false;
+	}
+
+	if (a.member_types.size() != b.member_types.size())
+		return false;
+
+	unsigned member_types = a.member_types.size();
+	for (unsigned i = 0; i < member_types; i++)
+	{
+		if (!types_are_logically_equivalent(get<SPIRType>(a.member_types[i]), get<SPIRType>(b.member_types[i])))
+			return false;
+	}
+
+	return true;
 }

@@ -265,7 +265,7 @@ protected:
 	std::unordered_set<uint32_t> selection_merge_targets;
 	std::unordered_set<uint32_t> multiselect_merge_targets;
 
-	std::string to_name(uint32_t id);
+	std::string to_name(uint32_t id, bool allow_alias = true);
 	bool is_builtin_variable(const SPIRVariable &var) const;
 	bool is_immutable(uint32_t id) const;
 	bool is_member_builtin(const SPIRType &type, uint32_t index, spv::BuiltIn *builtin) const;
@@ -307,7 +307,6 @@ protected:
 	std::unordered_set<uint32_t> invalid_expressions;
 
 	void update_name_cache(std::unordered_set<std::string> &cache, std::string &name);
-	std::unordered_set<std::string> global_struct_cache;
 
 	bool function_is_pure(const SPIRFunction &func);
 	bool block_is_pure(const SPIRBlock &block);
@@ -325,6 +324,8 @@ protected:
 	bool block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const;
 
 	uint32_t increase_bound_by(uint32_t incr_amount);
+
+	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
 
 private:
 	void parse();
@@ -360,6 +361,8 @@ private:
 
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
 	bool traverse_all_reachable_opcodes(const SPIRFunction &block, OpcodeHandler &handler) const;
+	// This must be an ordered data structure so we always pick the same type aliases.
+	std::vector<uint32_t> global_struct_cache;
 };
 }
 

@@ -199,6 +199,11 @@ struct SPIRType : IVariant
 		uint32_t sampled;
 		spv::ImageFormat format;
 	} image;
+
+	// Structs can be declared multiple times if they are used as part of interface blocks.
+	// We want to detect this so that we only emit the struct definition once.
+	// Since we cannot rely on OpName to be equal, we need to figure out aliases.
+	uint32_t type_alias = 0;
 };
 
 struct SPIRExtension : IVariant
