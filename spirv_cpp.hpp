@@ -43,6 +43,7 @@ private:
 	void emit_block_chain(SPIRBlock &block);
 	void emit_uniform(const SPIRVariable &var);
 	void emit_shared(const SPIRVariable &var);
+	void emit_block_struct(SPIRType &type);
 
 	std::string constant_expression(const SPIRConstant &c) override;
 	std::string argument_decl(const SPIRFunction::Parameter &arg);

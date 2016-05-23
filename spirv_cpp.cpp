@@ -30,8 +30,10 @@ void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
 	uint32_t descriptor_set = meta[var.self].decoration.set;
 	uint32_t binding = meta[var.self].decoration.binding;
 
-	emit_struct(type);
-	statement("internal::Resource<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
+	emit_block_struct(type);
+	auto buffer_name = to_name(type.self);
+
+	statement("internal::Resource<", buffer_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 	resource_registrations.push_back(
 	    join("s.register_resource(", instance_name, "__", ", ", descriptor_set, ", ", binding, ");"));
@@ -51,9 +53,10 @@ void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 
 	auto flags = meta[type.self].decoration.decoration_flags;
 	if (flags & (1ull << DecorationBlock))
-		emit_struct(type);
+		emit_block_struct(type);
+	auto buffer_name = to_name(type.self);
 
-	statement("internal::", qual, "<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
+	statement("internal::", qual, "<", buffer_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 	resource_registrations.push_back(join("s.register_", lowerqual, "(", instance_name, "__", ", ", location, ");"));
 	statement("");
@@ -109,13 +112,26 @@ void CompilerCPP::emit_push_constant_block(const SPIRVariable &var)
 		throw CompilerError("Push constant blocks cannot be compiled to GLSL with Binding or Set syntax. "
 		                    "Remap to location with reflection API first or disable these decorations.");
 
-	emit_struct(type);
+	emit_block_struct(type);
+	auto buffer_name = to_name(type.self);
 	auto instance_name = to_name(var.self);
 
-	statement("internal::PushConstant<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, ";");
+	statement("internal::PushConstant<", buffer_name, type_to_array_glsl(type), "> ", instance_name, ";");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, ".get()");
 	resource_registrations.push_back(join("s.register_push_constant(", instance_name, "__", ");"));
 	statement("");
+}
+
+void CompilerCPP::emit_block_struct(SPIRType &type)
+{
+	// C++ can't do interface blocks, so we fake it by emitting a separate struct.
+	// However, these structs are not allowed to alias anything, so remove it before
+	// emitting the struct.
+	//
+	// The type we have here needs to be resolved to the non-pointer type so we can remove aliases.
+	auto &self = get<SPIRType>(type.self);
+	self.type_alias = 0;
+	emit_struct(self);
 }
 
 void CompilerCPP::emit_resources()
