@@ -11,5 +11,7 @@
 *.suo
 *.sdf
 *.opensdf
+*.shader
+*.a
 
 !CMakeLists.txt
