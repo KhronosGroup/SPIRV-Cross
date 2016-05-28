@@ -3562,8 +3562,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
 			if (mem == MemorySemanticsWorkgroupMemoryMask)
 				statement("memoryBarrierShared();");
-			else if (mem &&
-			         mem != 4062) // Hacky workaround of glslangValidator which emits "all" barrier for barrier() ...
+			else if (mem)
 				statement("memoryBarrier();");
 		}
 		statement("barrier();");
@@ -3580,7 +3579,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (mem == MemorySemanticsWorkgroupMemoryMask)
 			statement("memoryBarrierShared();");
-		else if (mem && mem != 4062) // Hacky workaround of glslangValidator which emits "all" barrier for barrier() ...
+		else if (mem)
 			statement("memoryBarrier();");
 		break;
 	}

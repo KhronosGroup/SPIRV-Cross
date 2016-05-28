@@ -24,7 +24,7 @@ vec4 sample_func_dual(mediump sampler samp, mediump texture2D tex, vec2 uv)
 
 void main()
 {
-    vec2 off = (vec2(1.0) / vec2(textureSize(uTexture, 0)));
+    vec2 off = (vec2(1.0) / vec2(textureSize(sampler2D(uTexture, uSampler), 0)));
     vec2 off2 = (vec2(1.0) / vec2(textureSize(sampler2D(uTexture, uSampler), 1)));
     highp vec2 param = ((vTex + off) + off2);
     vec4 c0 = sample_func(uSampler, param);

@@ -23,7 +23,7 @@ vec4 sample_func_dual(mediump sampler samp, mediump texture2D tex, vec2 uv)
 
 void main()
 {
-    vec2 off = 1.0 / vec2(textureSize(uTexture, 0));
+    vec2 off = 1.0 / vec2(textureSize(sampler2D(uTexture, uSampler), 0));
     vec2 off2 = 1.0 / vec2(textureSize(sampler2D(uTexture, uSampler), 1));
 
     vec4 c0 = sample_func(uSampler, vTex + off + off2);
