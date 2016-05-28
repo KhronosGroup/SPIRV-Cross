@@ -48,7 +48,7 @@ layout(binding = 1, std430) buffer SSBO1
     mat3x2 m3;
     layout(row_major) mat2 m4;
     layout(row_major) mat2 m5[9];
-    layout(row_major) mat2x3 m6[2][4];
+    layout(row_major) mat2x3 m6[4][2];
     layout(row_major) mat3x2 m7;
     float array[];
 } ssbo_430;

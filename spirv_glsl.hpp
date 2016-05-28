@@ -130,6 +130,7 @@ protected:
 	virtual std::string constant_expression(const SPIRConstant &c);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
+	virtual std::string variable_decl(const SPIRType &type, const std::string &name);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -208,6 +209,7 @@ protected:
 		bool shared_is_implied = false;
 		bool flexible_member_array_supported = true;
 		bool explicit_struct_type = false;
+		bool use_initializer_list = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

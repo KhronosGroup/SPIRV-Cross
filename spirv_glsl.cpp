@@ -1175,14 +1175,20 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	if (!c.subconstants.empty())
 	{
 		// Handles Arrays and structures.
-		string res = type_to_glsl_constructor(get<SPIRType>(c.constant_type)) + "(";
+		string res;
+		if (backend.use_initializer_list)
+			res = "{ ";
+		else
+			res = type_to_glsl_constructor(get<SPIRType>(c.constant_type)) + "(";
+
 		for (auto &elem : c.subconstants)
 		{
 			res += constant_expression(get<SPIRConstant>(elem));
 			if (&elem != &c.subconstants.back())
 				res += ", ";
 		}
-		res += ")";
+
+		res += backend.use_initializer_list ? " }" : ")";
 		return res;
 	}
 	else if (c.columns() == 1)
@@ -1325,8 +1331,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 	else
 	{
 		// The result_id has not been made into an expression yet, so use flags interface.
-		return join(flags_to_precision_qualifiers_glsl(type, flags), type_to_glsl(type), " ", to_name(result_id),
-		            type_to_array_glsl(type), " = ");
+		return join(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), " = ");
 	}
 }
 
@@ -2723,7 +2728,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			forward = forward && should_forward(elems[i]);
 
 		auto &in_type = expression_type(elems[0]);
-		bool splat = in_type.vecsize == 1 && in_type.columns == 1;
+		auto &out_type = get<SPIRType>(result_type);
+
+		// Only splat if we have vector constructors.
+		// Arrays and structs must be initialized properly in full.
+		bool composite = !out_type.array.empty() || out_type.basetype == SPIRType::Struct;
+		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite;
 
 		if (splat)
 		{
@@ -2733,12 +2743,28 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					splat = false;
 		}
 
-		auto constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
-		if (splat)
-			constructor_op += to_expression(elems[0]);
+		string constructor_op;
+		if (backend.use_initializer_list && composite)
+		{
+			// Only use this path if we are building composites.
+			// This path cannot be used for arithmetic.
+			constructor_op += "{ ";
+			if (splat)
+				constructor_op += to_expression(elems[0]);
+			else
+				constructor_op += build_composite_combiner(elems, length);
+			constructor_op += " }";
+		}
 		else
-			constructor_op += build_composite_combiner(elems, length);
-		constructor_op += ")";
+		{
+			constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
+			if (splat)
+				constructor_op += to_expression(elems[0]);
+			else
+				constructor_op += build_composite_combiner(elems, length);
+			constructor_op += ")";
+		}
+
 		emit_op(result_type, id, constructor_op, forward, false);
 		break;
 	}
@@ -3632,6 +3658,11 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 	}
 }
 
+string CompilerGLSL::variable_decl(const SPIRType &type, const std::string &name)
+{
+	return join(type_to_glsl(type), " ", name, type_to_array_glsl(type));
+}
+
 string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index)
 {
 	uint64_t memberflags = 0;
@@ -3640,7 +3671,7 @@ string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertyp
 		memberflags = memb[index].decoration_flags;
 
 	return join(layout_for_member(type, index), flags_to_precision_qualifiers_glsl(membertype, memberflags),
-	            type_to_glsl(membertype), " ", to_member_name(type, index), type_to_array_glsl(membertype));
+	            variable_decl(membertype, to_member_name(type, index)));
 }
 
 const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags)
@@ -3741,16 +3772,14 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 			direction = "out ";
 	}
 
-	return join(direction, to_qualifiers_glsl(arg.id), type_to_glsl(type), " ", to_name(arg.id),
-	            type_to_array_glsl(type));
+	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id)));
 }
 
 string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get<SPIRType>(variable.basetype);
-	auto res = join(to_qualifiers_glsl(variable.self), type_to_glsl(type), " ", to_name(variable.self),
-	                type_to_array_glsl(type));
+	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self)));
 	if (variable.initializer)
 		res += join(" = ", to_expression(variable.initializer));
 	return res;
@@ -3779,9 +3808,14 @@ string CompilerGLSL::pls_decl(const PlsRemap &var)
 
 string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 {
+	if (type.array.empty())
+		return "";
+
 	string res;
-	for (auto &size : type.array)
+	for (size_t i = type.array.size(); i; i--)
 	{
+		auto &size = type.array[i - 1];
+
 		res += "[";
 		if (size)
 		{
@@ -4481,8 +4515,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		auto flags = meta[tmp.second].decoration.decoration_flags;
 		auto &type = get<SPIRType>(tmp.first);
-		statement(flags_to_precision_qualifiers_glsl(type, flags), type_to_glsl(type), " ", to_name(tmp.second),
-		          type_to_array_glsl(type), ";");
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
 	}
 
 	SPIRBlock::ContinueBlockType continue_type = SPIRBlock::ContinueNone;
