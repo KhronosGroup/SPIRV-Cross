@@ -488,7 +488,7 @@ struct ComputeResources
 		s.register_builtin(SPIRV_CROSS_BUILTIN_NUM_WORK_GROUPS, gl_NumWorkGroups__);
 	}
 #define gl_WorkGroupID __res->gl_WorkGroupID__.get()
-#define gl_NumWorkGroups __res->gl_NumWorkGroups.get()
+#define gl_NumWorkGroups __res->gl_NumWorkGroups__.get()
 
 	Barrier barrier__;
 #define barrier() __res->barrier__.wait()
