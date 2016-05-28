@@ -1163,9 +1163,14 @@ void Compiler::parse(const Instruction &instruction)
 
 		// Check if we have seen this struct type before, with just different
 		// decorations.
+		//
+		// Add workaround for issue #17 as well by looking at OpName for the struct
+		// types, which we shouldn't normally do.
+		// We should not normally have to consider type aliases like this to begin with
+		// however ... glslang issues #304, #307 cover this.
 		for (auto &other : global_struct_cache)
 		{
-			if (types_are_logically_equivalent(type, get<SPIRType>(other)))
+			if (get_name(type.self) == get_name(other) && types_are_logically_equivalent(type, get<SPIRType>(other)))
 			{
 				type.type_alias = other;
 				break;
