@@ -45,6 +45,18 @@ struct image2DBase
 typedef image2DBase<glm::vec4> image2D;
 typedef image2DBase<glm::ivec4> iimage2D;
 typedef image2DBase<glm::uvec4> uimage2D;
+
+template <typename T>
+inline T imageLoad(const image2DBase<T> &image, glm::ivec2 coord)
+{
+	return image.load(coord);
+}
+
+template <typename T>
+void imageStore(image2DBase<T> &image, glm::ivec2 coord, const T &value)
+{
+	image.store(coord, value);
+}
 }
 
 #endif
