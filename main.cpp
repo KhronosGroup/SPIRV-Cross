@@ -254,6 +254,7 @@ struct CLIArguments
 {
     const char *input = nullptr;
     const char *output = nullptr;
+    const char *cpp_interface_name = nullptr;
     uint32_t version = 0;
     bool es = false;
     bool set_version = false;
@@ -273,7 +274,7 @@ struct CLIArguments
 
 static void print_help()
 {
-    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
+    fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] [--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in format input-name] [--pls-out format output-name]\n");
 }
 
 static vector<PlsRemap> remap_pls(const vector<PLSArg> &pls_variables, const vector<Resource> &resources, const vector<Resource> *secondary_resources)
@@ -336,19 +337,20 @@ int main(int argc, char *argv[])
     CLIArguments args;
     CLICallbacks cbs;
 
-    cbs.add("--help",            [](CLIParser &parser) { print_help(); parser.end(); });
-    cbs.add("--output",          [&args](CLIParser &parser) { args.output = parser.next_string(); });
-    cbs.add("--es",              [&args](CLIParser &)       { args.es = true; args.set_es = true; });
-    cbs.add("--no-es",           [&args](CLIParser &)       { args.es = false; args.set_es = true; });
-    cbs.add("--version",         [&args](CLIParser &parser) { args.version = parser.next_uint(); args.set_version = true; });
-    cbs.add("--dump-resources",  [&args](CLIParser &)       { args.dump_resources = true; });
-    cbs.add("--force-temporary", [&args](CLIParser &)       { args.force_temporary = true; });
-    cbs.add("--flatten-ubo",     [&args](CLIParser &)       { args.flatten_ubo = true; });
-    cbs.add("--fixup-clipspace", [&args](CLIParser &)       { args.fixup = true; });
-    cbs.add("--iterations",      [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
-    cbs.add("--cpp",             [&args](CLIParser &)       { args.cpp = true; });
-    cbs.add("--metal",           [&args](CLIParser &)       { args.metal = true; });
-    cbs.add("--vulkan-semantics",[&args](CLIParser &)       { args.vulkan_semantics = true; });
+    cbs.add("--help",               [](CLIParser &parser) { print_help(); parser.end(); });
+    cbs.add("--output",             [&args](CLIParser &parser) { args.output = parser.next_string(); });
+    cbs.add("--es",                 [&args](CLIParser &)       { args.es = true; args.set_es = true; });
+    cbs.add("--no-es",              [&args](CLIParser &)       { args.es = false; args.set_es = true; });
+    cbs.add("--version",            [&args](CLIParser &parser) { args.version = parser.next_uint(); args.set_version = true; });
+    cbs.add("--dump-resources",     [&args](CLIParser &)       { args.dump_resources = true; });
+    cbs.add("--force-temporary",    [&args](CLIParser &)       { args.force_temporary = true; });
+    cbs.add("--flatten-ubo",        [&args](CLIParser &)       { args.flatten_ubo = true; });
+    cbs.add("--fixup-clipspace",    [&args](CLIParser &)       { args.fixup = true; });
+    cbs.add("--iterations",         [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
+    cbs.add("--cpp",                [&args](CLIParser &)       { args.cpp = true; });
+    cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
+    cbs.add("--metal",              [&args](CLIParser &)       { args.metal = true; });
+    cbs.add("--vulkan-semantics",   [&args](CLIParser &)       { args.vulkan_semantics = true; });
 
     cbs.add("--pls-in", [&args](CLIParser &parser) {
         auto fmt = pls_format(parser.next_string());
@@ -384,7 +386,11 @@ int main(int argc, char *argv[])
     unique_ptr<CompilerGLSL> compiler;
 
     if (args.cpp)
+    {
         compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
+        if (args.cpp_interface_name)
+           static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
+    }
     else if (args.metal)
         compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
     else

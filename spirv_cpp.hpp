@@ -18,6 +18,7 @@
 #define SPIRV_CPP_HPP
 
 #include "spirv_glsl.hpp"
+#include <utility>
 #include <vector>
 
 namespace spirv_cross
@@ -30,6 +31,16 @@ public:
 	{
 	}
 	std::string compile() override;
+
+	// Sets a custom symbol name that can override
+	// spirv_cross_get_interface.
+	//
+	// Useful when several shader interfaces are linked
+	// statically into the same binary.
+	void set_interface_name(std::string name)
+	{
+		interface_name = std::move(name);
+	}
 
 private:
 	void emit_header() override;
@@ -52,6 +63,8 @@ private:
 	std::string impl_type;
 	std::string resource_type;
 	uint32_t shared_counter = 0;
+
+	std::string interface_name;
 };
 }
 

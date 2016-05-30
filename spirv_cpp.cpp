@@ -316,7 +316,7 @@ void CompilerCPP::emit_c_linkage()
 {
 	statement("");
 
-	statement("spirv_cross_shader_t* spirv_cross_construct(void)");
+	statement("spirv_cross_shader_t *spirv_cross_construct(void)");
 	begin_scope();
 	statement("return new ", impl_type, "();");
 	end_scope();
@@ -342,7 +342,8 @@ void CompilerCPP::emit_c_linkage()
 	end_scope_decl();
 
 	statement("");
-	statement("const struct spirv_cross_interface* spirv_cross_get_interface(void)");
+	statement("const struct spirv_cross_interface *",
+	          interface_name.empty() ? string("spirv_cross_get_interface") : interface_name, "(void)");
 	begin_scope();
 	statement("return &vtable;");
 	end_scope();
