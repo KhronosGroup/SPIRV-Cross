@@ -111,6 +111,12 @@ glslangValidator -H -V -o test.spv shaders/comp/basic.comp
 ./spirv-cross --version 310 --es test.spv --output test.comp --force-temporary
 ```
 
+### Using shaders generated from C++ backend
+
+Please see `samples/cpp` where some GLSL shaders are compiled to SPIR-V, decompiled to C++ and run with test data.
+Reading through the samples should explain how to use the C++ interface.
+A simple Makefile is included to build all shaders in the directory.
+
 ## Contributing
 
 Contributions to SPIRV-Cross are welcome. See Testing and Licensing sections for details.
