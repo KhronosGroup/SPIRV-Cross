@@ -38,7 +38,7 @@ int main()
 	// Create an instance of the shader interface.
 	auto *shader = iface->construct();
 
-	// Build some input data for our compute shader.
+// Build some input data for our compute shader.
 #define NUM_WORKGROUPS 4
 	float a[128 * NUM_WORKGROUPS];
 	float b[NUM_WORKGROUPS] = {};

@@ -38,7 +38,7 @@ int main()
 	// Create an instance of the shader interface.
 	auto *shader = iface->construct();
 
-	// Build some input data for our compute shader.
+// Build some input data for our compute shader.
 #define NUM_WORKGROUPS 4
 	vec4 a[64 * NUM_WORKGROUPS];
 	vec4 b[64 * NUM_WORKGROUPS];
@@ -85,9 +85,7 @@ int main()
 	// TODO: Implement a test framework that asserts results computed.
 	for (unsigned i = 0; i < 64 * NUM_WORKGROUPS; i++)
 	{
-		fprintf(stderr, "(%.1f, %.1f, %.1f, %.1f) * (%.1f, %.1f, %.1f, %.1f) => (%.1f, %.1f, %.1f, %.1f)\n",
-			a[i].x, a[i].y, a[i].z, a[i].w,
-			b[i].x, b[i].y, b[i].z, b[i].w,
-			c[i].x, c[i].y, c[i].z, c[i].w);
+		fprintf(stderr, "(%.1f, %.1f, %.1f, %.1f) * (%.1f, %.1f, %.1f, %.1f) => (%.1f, %.1f, %.1f, %.1f)\n", a[i].x,
+		        a[i].y, a[i].z, a[i].w, b[i].x, b[i].y, b[i].z, b[i].w, c[i].x, c[i].y, c[i].z, c[i].w);
 	}
 }
