@@ -3241,6 +3241,45 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpQuantizeToF16:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t arg = ops[2];
+
+		string op;
+		auto &type = get<SPIRType>(result_type);
+
+		switch (type.vecsize)
+		{
+		case 1:
+			op = join("unpackHalf2x16(packHalf2x16(vec2(", to_expression(arg), "))).x");
+			break;
+		case 2:
+			op = join("unpackHalf2x16(packHalf2x16(", to_expression(arg), "))");
+			break;
+		case 3:
+		{
+			auto op0 = join("unpackHalf2x16(packHalf2x16(", to_expression(arg), ".xy))");
+			auto op1 = join("unpackHalf2x16(packHalf2x16(", to_expression(arg), ".zz)).x");
+			op = join("vec3(", op0, ", ", op1, ")");
+			break;
+		}
+		case 4:
+		{
+			auto op0 = join("unpackHalf2x16(packHalf2x16(", to_expression(arg), ".xy))");
+			auto op1 = join("unpackHalf2x16(packHalf2x16(", to_expression(arg), ".zw))");
+			op = join("vec4(", op0, ", ", op1, ")");
+			break;
+		}
+		default:
+			throw CompilerError("Illegal argument to OpQuantizeToF16.");
+		}
+
+		emit_op(result_type, id, op, should_forward(arg), false);
+		break;
+	}
+
 	// Derivatives
 	case OpDPdx:
 		UFOP(dFdx);
