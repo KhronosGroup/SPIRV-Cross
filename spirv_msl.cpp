@@ -101,19 +101,45 @@ string CompilerMSL::compile()
 // Adds any builtins used by this shader to the builtin_vars collection
 void CompilerMSL::extract_builtins()
 {
-	builtin_vars.clear();
+    builtin_vars.clear();
 
-	for (auto &id : ids)
-	{
-		if (id.get_type() == TypeVariable)
-		{
-			auto &var = id.get<SPIRVariable>();
-			auto &dec = meta[var.self].decoration;
+    for (auto &id : ids)
+    {
+        if (id.get_type() == TypeVariable)
+        {
+            auto &var = id.get<SPIRVariable>();
+            auto &dec = meta[var.self].decoration;
 
-			if (dec.builtin)
-				builtin_vars[dec.builtin_type] = var.self;
-		}
-	}
+            if (dec.builtin)
+                builtin_vars[dec.builtin_type] = var.self;
+        }
+    }
+
+    if (execution.model == ExecutionModelVertex) {
+        if ( !(builtin_vars[BuiltInVertexIndex] || builtin_vars[BuiltInVertexId]) )
+            add_builtin(BuiltInVertexIndex);
+
+        if ( !(builtin_vars[BuiltInInstanceIndex] || builtin_vars[BuiltInInstanceId]) )
+            add_builtin(BuiltInInstanceIndex);
+    }
+}
+
+// Adds an appropriate built-in variable for the specified builtin type.
+void CompilerMSL::add_builtin(BuiltIn builtin_type) {
+
+    // Add a new typed variable for this interface structure.
+    uint32_t next_id = increase_bound_by(2);
+    uint32_t ib_type_id = next_id++;
+    auto &ib_type = set<SPIRType>(ib_type_id);
+    ib_type.basetype = SPIRType::UInt;
+    ib_type.storage = StorageClassInput;
+
+    uint32_t ib_var_id = next_id++;
+    set<SPIRVariable>(ib_var_id, ib_type_id, StorageClassInput, 0);
+    set_decoration(ib_var_id, DecorationBuiltIn, builtin_type);
+    set_name(ib_var_id, builtin_to_glsl(builtin_type));
+
+    builtin_vars[builtin_type] = ib_var_id;
 }
 
 // Move the Private global variables to the entry function.
@@ -1024,24 +1050,24 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 
 	// Prepend a entry type, based on the execution model
 	string entry_type;
-	switch (execution.model)
-	{
-	case ExecutionModelVertex:
-		entry_type = "vertex";
-		break;
-	case ExecutionModelFragment:
-		entry_type = (execution.flags & (1ull << ExecutionModeEarlyFragmentTests)) ?
-		                 "fragment [[ early_fragment_tests ]]" :
-		                 "fragment";
-		break;
-	case ExecutionModelGLCompute:
-	case ExecutionModelKernel:
-		entry_type = "kernel";
-		break;
-	default:
-		entry_type = "unknown";
-		break;
-	}
+    switch (execution.model)
+    {
+        case ExecutionModelVertex:
+            entry_type = "vertex";
+            break;
+        case ExecutionModelFragment:
+            entry_type = (execution.flags & (1ull << ExecutionModeEarlyFragmentTests)) ?
+            "fragment [[ early_fragment_tests ]]" :
+            "fragment";
+            break;
+        case ExecutionModelGLCompute:
+        case ExecutionModelKernel:
+            entry_type = "kernel";
+            break;
+        default:
+            entry_type = "unknown";
+            break;
+    }
 
 	return entry_type + " " + return_type;
 }

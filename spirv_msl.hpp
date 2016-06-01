@@ -109,6 +109,7 @@ protected:
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 
 	void extract_builtins();
+    void add_builtin(spv::BuiltIn builtin_type);
 	void localize_global_variables();
 	void add_interface_structs();
 	void bind_vertex_attributes(std::set<uint32_t> &bindings);
