@@ -1287,7 +1287,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return "bool";
 		case SPIRType::Char:
 			return "char";
@@ -1307,7 +1307,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return join("bool", type.vecsize);
 		case SPIRType::Char:
 			return join("char", type.vecsize);
@@ -1326,7 +1326,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 		case SPIRType::Int:
 		case SPIRType::UInt:
 		case SPIRType::Float:

@@ -1016,7 +1016,7 @@ void Compiler::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[0];
 		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Bool;
+		type.basetype = SPIRType::Boolean;
 		type.width = 1;
 		break;
 	}
@@ -1786,7 +1786,7 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 		{
 		case SPIRType::Unknown:
 		case SPIRType::Void:
-		case SPIRType::Bool: // Bools are purely logical, and cannot be used for externally visible types.
+		case SPIRType::Boolean: // Bools are purely logical, and cannot be used for externally visible types.
 		case SPIRType::AtomicCounter:
 		case SPIRType::Image:
 		case SPIRType::SampledImage:

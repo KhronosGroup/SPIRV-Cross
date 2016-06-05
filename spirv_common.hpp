@@ -160,7 +160,7 @@ struct SPIRType : IVariant
 	{
 		Unknown,
 		Void,
-		Bool,
+		Boolean,
 		Char,
 		Int,
 		UInt,

@@ -1283,7 +1283,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		}
 		break;
 
-	case SPIRType::Bool:
+	case SPIRType::Boolean:
 		if (splat)
 			res += c.scalar(vector, 0) ? "true" : "false";
 		else
@@ -1421,7 +1421,7 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 	// Special case boolean outputs since relational opcodes output booleans instead of int/uint.
 	bool extra_parens = true;
 	string expr;
-	if (out_type.basetype != input_type && out_type.basetype != SPIRType::Bool)
+	if (out_type.basetype != input_type && out_type.basetype != SPIRType::Boolean)
 	{
 		expected_type.basetype = input_type;
 		expr = bitcast_glsl_op(out_type, expected_type);
@@ -1459,7 +1459,7 @@ void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t resul
 
 	// Special case boolean outputs since relational opcodes output booleans instead of int/uint.
 	string expr;
-	if (out_type.basetype != input_type && out_type.basetype != SPIRType::Bool)
+	if (out_type.basetype != input_type && out_type.basetype != SPIRType::Boolean)
 	{
 		expected_type.basetype = input_type;
 		expr = bitcast_glsl_op(out_type, expected_type);
@@ -1540,7 +1540,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 
 	// Boolean mix not supported on desktop without extension.
 	// Was added in OpenGL 4.5 with ES 3.1 compat.
-	if (!has_boolean_mix && lerptype.basetype == SPIRType::Bool)
+	if (!has_boolean_mix && lerptype.basetype == SPIRType::Boolean)
 	{
 		// Could use GL_EXT_shader_integer_mix on desktop at least,
 		// but Apple doesn't support it. :(
@@ -3982,7 +3982,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return "bool";
 		case SPIRType::Int:
 			return backend.basic_int_type;
@@ -4000,7 +4000,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return join("bvec", type.vecsize);
 		case SPIRType::Int:
 			return join("ivec", type.vecsize);
@@ -4016,7 +4016,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return join("bmat", type.vecsize);
 		case SPIRType::Int:
 			return join("imat", type.vecsize);
@@ -4032,7 +4032,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return join("bmat", type.columns, "x", type.vecsize);
 		case SPIRType::Int:
 			return join("imat", type.columns, "x", type.vecsize);
