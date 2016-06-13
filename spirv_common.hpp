@@ -160,7 +160,7 @@ struct SPIRType : IVariant
 	{
 		Unknown,
 		Void,
-		Bool,
+		Boolean,
 		Char,
 		Int,
 		UInt,
@@ -199,6 +199,14 @@ struct SPIRType : IVariant
 		uint32_t sampled;
 		spv::ImageFormat format;
 	} image;
+
+	// Structs can be declared multiple times if they are used as part of interface blocks.
+	// We want to detect this so that we only emit the struct definition once.
+	// Since we cannot rely on OpName to be equal, we need to figure out aliases.
+	uint32_t type_alias = 0;
+
+	// Used in backends to avoid emitting members with conflicting names.
+	std::unordered_set<std::string> member_name_cache;
 };
 
 struct SPIRExtension : IVariant
@@ -470,8 +478,7 @@ struct SPIRConstant : IVariant
 		type = TypeConstant
 	};
 
-	union Constant
-	{
+	union Constant {
 		uint32_t u32;
 		int32_t i32;
 		float f32;

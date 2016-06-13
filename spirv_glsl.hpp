@@ -19,8 +19,8 @@
 
 #include "spirv_cross.hpp"
 #include <sstream>
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 namespace spirv_cross
@@ -130,6 +130,7 @@ protected:
 	virtual std::string constant_expression(const SPIRConstant &c);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
+	virtual std::string variable_decl(const SPIRType &type, const std::string &name);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -188,8 +189,11 @@ protected:
 	std::string type_to_array_glsl(const SPIRType &type);
 	std::string variable_decl(const SPIRVariable &variable);
 
-	void add_local_variable(uint32_t id);
-	std::unordered_set<std::string> local_variables;
+	void add_local_variable_name(uint32_t id);
+	void add_resource_name(uint32_t id);
+	void add_member_name(SPIRType &type, uint32_t name);
+	std::unordered_set<std::string> local_variable_names;
+	std::unordered_set<std::string> resource_names;
 
 	bool processing_entry_point = false;
 
@@ -203,12 +207,14 @@ protected:
 		const char *basic_uint_type = "uint";
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
+		bool flexible_member_array_supported = true;
+		bool explicit_struct_type = false;
+		bool use_initializer_list = false;
 	} backend;
 
-	void emit_struct(const SPIRType &type);
+	void emit_struct(SPIRType &type);
 	void emit_instruction(const Instruction &instr);
 
-protected:
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);
 	void emit_push_constant_block(const SPIRVariable &var);
@@ -236,8 +242,16 @@ protected:
 	void emit_trinary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                          const char *op);
 	void emit_binary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
+	                              SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
 	void emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	void emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
+	                         SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
+
+	SPIRType binary_op_bitcast_helper(std::string &cast_op0, std::string &cast_op1, SPIRType::BaseType &input_type,
+	                                  uint32_t op0, uint32_t op1, bool skip_cast_if_equal_type);
+
 	void emit_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	bool expression_is_forwarded(uint32_t id);
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
@@ -265,8 +279,8 @@ protected:
 	uint32_t type_to_std430_array_stride(const SPIRType &type, uint64_t flags);
 	uint32_t type_to_std430_size(const SPIRType &type, uint64_t flags);
 
-	std::string bitcast_glsl(uint32_t result_type, uint32_t arg);
-	std::string bitcast_glsl_op(uint32_t result_type, uint32_t arg);
+	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
+	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
 	std::string build_composite_combiner(const uint32_t *elems, uint32_t length);
 	bool remove_duplicate_swizzle(std::string &op);
 	bool remove_unity_swizzle(uint32_t base, std::string &op);
@@ -311,6 +325,8 @@ protected:
 	const char *to_pls_qualifiers_glsl(const SPIRVariable &variable);
 	void emit_pls();
 	void remap_pls_variables();
+
+	void add_variable(std::unordered_set<std::string> &variables, uint32_t id);
 };
 }
 

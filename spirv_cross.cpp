@@ -16,8 +16,8 @@
 
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
-#include <cstring>
 #include <algorithm>
+#include <cstring>
 #include <utility>
 
 using namespace std;
@@ -127,8 +127,19 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 	return true;
 }
 
-string Compiler::to_name(uint32_t id)
+string Compiler::to_name(uint32_t id, bool allow_alias)
 {
+	if (allow_alias && ids.at(id).get_type() == TypeType)
+	{
+		// If this type is a simple alias, emit the
+		// name of the original type instead.
+		// We don't want to override the meta alias
+		// as that can be overridden by the reflection APIs after parse.
+		auto &type = get<SPIRType>(id);
+		if (type.type_alias)
+			return to_name(type.type_alias);
+	}
+
 	if (meta[id].decoration.alias.empty())
 		return join("_", id);
 	else
@@ -487,6 +498,21 @@ static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
 	throw CompilerError("String was not terminated before EOF");
 }
 
+static bool is_valid_spirv_version(uint32_t version)
+{
+	switch (version)
+	{
+	// Allow v99 since it tends to just work.
+	case 99:
+	case 0x10000: // SPIR-V 1.0
+	case 0x10100: // SPIR-V 1.1
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 void Compiler::parse()
 {
 	auto len = spirv.size();
@@ -497,21 +523,10 @@ void Compiler::parse()
 
 	// Endian-swap if we need to.
 	if (s[0] == swap_endian(MagicNumber))
-		transform(begin(spirv), end(spirv), begin(spirv), [](uint32_t c)
-		          {
-			          return swap_endian(c);
-			      });
+		transform(begin(spirv), end(spirv), begin(spirv), [](uint32_t c) { return swap_endian(c); });
 
-	// Allow v99 since it tends to just work, but warn about this.
-	if (s[0] != MagicNumber || (s[1] != Version && s[1] != 99))
+	if (s[0] != MagicNumber || !is_valid_spirv_version(s[1]))
 		throw CompilerError("Invalid SPIRV format.");
-
-	if (s[1] != Version)
-	{
-		fprintf(stderr, "SPIRV-Cross was compiled against SPIR-V version %d, but SPIR-V uses version %u. Buggy "
-		                "behavior due to ABI incompatibility might occur.\n",
-		        Version, s[1]);
-	}
 
 	uint32_t bound = s[3];
 	ids.resize(bound);
@@ -1001,7 +1016,7 @@ void Compiler::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[0];
 		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Bool;
+		type.basetype = SPIRType::Boolean;
 		type.width = 1;
 		break;
 	}
@@ -1145,6 +1160,25 @@ void Compiler::parse(const Instruction &instruction)
 		type.basetype = SPIRType::Struct;
 		for (uint32_t i = 1; i < length; i++)
 			type.member_types.push_back(ops[i]);
+
+		// Check if we have seen this struct type before, with just different
+		// decorations.
+		//
+		// Add workaround for issue #17 as well by looking at OpName for the struct
+		// types, which we shouldn't normally do.
+		// We should not normally have to consider type aliases like this to begin with
+		// however ... glslang issues #304, #307 cover this.
+		for (auto &other : global_struct_cache)
+		{
+			if (get_name(type.self) == get_name(other) && types_are_logically_equivalent(type, get<SPIRType>(other)))
+			{
+				type.type_alias = other;
+				break;
+			}
+		}
+
+		if (type.type_alias == 0)
+			global_struct_cache.push_back(id);
 		break;
 	}
 
@@ -1752,7 +1786,7 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 		{
 		case SPIRType::Unknown:
 		case SPIRType::Void:
-		case SPIRType::Bool: // Bools are purely logical, and cannot be used for externally visible types.
+		case SPIRType::Boolean: // Bools are purely logical, and cannot be used for externally visible types.
 		case SPIRType::AtomicCounter:
 		case SPIRType::Image:
 		case SPIRType::SampledImage:
@@ -1860,4 +1894,40 @@ uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
 	ids.resize(new_bound);
 	meta.resize(new_bound);
 	return curr_bound;
+}
+
+bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const
+{
+	if (a.basetype != b.basetype)
+		return false;
+	if (a.width != b.width)
+		return false;
+	if (a.vecsize != b.vecsize)
+		return false;
+	if (a.columns != b.columns)
+		return false;
+	if (a.array.size() != b.array.size())
+		return false;
+
+	size_t array_count = a.array.size();
+	if (array_count && memcmp(a.array.data(), b.array.data(), array_count * sizeof(uint32_t)) != 0)
+		return false;
+
+	if (a.basetype == SPIRType::Image || a.basetype == SPIRType::SampledImage)
+	{
+		if (memcmp(&a.image, &b.image, sizeof(SPIRType::Image)) != 0)
+			return false;
+	}
+
+	if (a.member_types.size() != b.member_types.size())
+		return false;
+
+	size_t member_types = a.member_types.size();
+	for (size_t i = 0; i < member_types; i++)
+	{
+		if (!types_are_logically_equivalent(get<SPIRType>(a.member_types[i]), get<SPIRType>(b.member_types[i])))
+			return false;
+	}
+
+	return true;
 }

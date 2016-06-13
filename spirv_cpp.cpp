@@ -22,14 +22,18 @@ using namespace std;
 
 void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 	auto instance_name = to_name(var.self);
 
 	uint32_t descriptor_set = meta[var.self].decoration.set;
 	uint32_t binding = meta[var.self].decoration.binding;
 
-	emit_struct(type);
-	statement("internal::Resource<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
+	emit_block_struct(type);
+	auto buffer_name = to_name(type.self);
+
+	statement("internal::Resource<", buffer_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 	resource_registrations.push_back(
 	    join("s.register_resource(", instance_name, "__", ", ", descriptor_set, ", ", binding, ");"));
@@ -38,6 +42,8 @@ void CompilerCPP::emit_buffer_block(const SPIRVariable &var)
 
 void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 
 	const char *qual = var.storage == StorageClassInput ? "StageInput" : "StageOutput";
@@ -47,9 +53,10 @@ void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 
 	auto flags = meta[type.self].decoration.decoration_flags;
 	if (flags & (1ull << DecorationBlock))
-		emit_struct(type);
+		emit_block_struct(type);
+	auto buffer_name = to_name(type.self);
 
-	statement("internal::", qual, "<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
+	statement("internal::", qual, "<", buffer_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 	resource_registrations.push_back(join("s.register_", lowerqual, "(", instance_name, "__", ", ", location, ");"));
 	statement("");
@@ -57,13 +64,17 @@ void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 
 void CompilerCPP::emit_shared(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto instance_name = to_name(var.self);
-	statement(variable_decl(var), ";");
+	statement(CompilerGLSL::variable_decl(var), ";");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name);
 }
 
 void CompilerCPP::emit_uniform(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 	auto instance_name = to_name(var.self);
 
@@ -93,19 +104,34 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
 
 void CompilerCPP::emit_push_constant_block(const SPIRVariable &var)
 {
+	add_resource_name(var.self);
+
 	auto &type = get<SPIRType>(var.basetype);
 	auto &flags = meta[var.self].decoration.decoration_flags;
 	if ((flags & (1ull << DecorationBinding)) || (flags & (1ull << DecorationDescriptorSet)))
 		throw CompilerError("Push constant blocks cannot be compiled to GLSL with Binding or Set syntax. "
 		                    "Remap to location with reflection API first or disable these decorations.");
 
-	emit_struct(type);
+	emit_block_struct(type);
+	auto buffer_name = to_name(type.self);
 	auto instance_name = to_name(var.self);
 
-	statement("internal::PushConstant<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, ";");
+	statement("internal::PushConstant<", buffer_name, type_to_array_glsl(type), "> ", instance_name, ";");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, ".get()");
 	resource_registrations.push_back(join("s.register_push_constant(", instance_name, "__", ");"));
 	statement("");
+}
+
+void CompilerCPP::emit_block_struct(SPIRType &type)
+{
+	// C++ can't do interface blocks, so we fake it by emitting a separate struct.
+	// However, these structs are not allowed to alias anything, so remove it before
+	// emitting the struct.
+	//
+	// The type we have here needs to be resolved to the non-pointer type so we can remove aliases.
+	auto &self = get<SPIRType>(type.self);
+	self.type_alias = 0;
+	emit_struct(self);
 }
 
 void CompilerCPP::emit_resources()
@@ -231,7 +257,7 @@ void CompilerCPP::emit_resources()
 			if (var.storage == StorageClassWorkgroup)
 				emit_shared(var);
 			else
-				statement(variable_decl(var), ";");
+				statement(CompilerGLSL::variable_decl(var), ";");
 			emitted = true;
 		}
 	}
@@ -251,6 +277,9 @@ string CompilerCPP::compile()
 	backend.basic_uint_type = "uint32_t";
 	backend.swizzle_is_function = true;
 	backend.shared_is_implied = true;
+	backend.flexible_member_array_supported = false;
+	backend.explicit_struct_type = true;
+	backend.use_initializer_list = true;
 
 	uint32_t pass_count = 0;
 	do
@@ -287,7 +316,7 @@ void CompilerCPP::emit_c_linkage()
 {
 	statement("");
 
-	statement("spirv_cross_shader_t* spirv_cross_construct(void)");
+	statement("spirv_cross_shader_t *spirv_cross_construct(void)");
 	begin_scope();
 	statement("return new ", impl_type, "();");
 	end_scope();
@@ -313,7 +342,8 @@ void CompilerCPP::emit_c_linkage()
 	end_scope_decl();
 
 	statement("");
-	statement("const struct spirv_cross_interface* spirv_cross_get_interface(void)");
+	statement("const struct spirv_cross_interface *",
+	          interface_name.empty() ? string("spirv_cross_get_interface") : interface_name, "(void)");
 	begin_scope();
 	statement("return &vtable;");
 	end_scope();
@@ -321,7 +351,7 @@ void CompilerCPP::emit_c_linkage()
 
 void CompilerCPP::emit_function_prototype(SPIRFunction &func, uint64_t)
 {
-	local_variables.clear();
+	local_variable_names = resource_names;
 	string decl;
 
 	auto &type = get<SPIRType>(func.return_type);
@@ -340,7 +370,7 @@ void CompilerCPP::emit_function_prototype(SPIRFunction &func, uint64_t)
 	decl += "(";
 	for (auto &arg : func.arguments)
 	{
-		add_local_variable(arg.id);
+		add_local_variable_name(arg.id);
 
 		decl += argument_decl(arg);
 		if (&arg != &func.arguments.back())
@@ -362,7 +392,31 @@ string CompilerCPP::argument_decl(const SPIRFunction::Parameter &arg)
 	bool constref = !type.pointer || arg.write_count == 0;
 
 	auto &var = get<SPIRVariable>(arg.id);
-	return join(constref ? "const " : "", type_to_glsl(type), "& ", to_name(var.self), type_to_array_glsl(type));
+
+	string base = type_to_glsl(type);
+	for (auto &array : type.array)
+		base = join("std::array<", base, ", ", array, ">");
+
+	return join(constref ? "const " : "", base, " &", to_name(var.self));
+}
+
+string CompilerCPP::variable_decl(const SPIRType &type, const string &name)
+{
+	string base = type_to_glsl(type);
+	bool runtime = false;
+	for (auto &array : type.array)
+	{
+		if (array)
+			base = join("std::array<", base, ", ", array, ">");
+		else
+		{
+			// Avoid using runtime arrays with std::array since this is undefined.
+			// Runtime arrays cannot be passed around as values, so this is fine.
+			runtime = true;
+		}
+	}
+	base += ' ';
+	return base + name + (runtime ? "[1]" : "");
 }
 
 void CompilerCPP::emit_header()
@@ -370,6 +424,8 @@ void CompilerCPP::emit_header()
 	statement("// This C++ shader is autogenerated by spirv-cross.");
 	statement("#include \"spirv_cross/internal_interface.hpp\"");
 	statement("#include \"spirv_cross/external_interface.h\"");
+	// Needed to properly implement GLSL-style arrays.
+	statement("#include <array>");
 	statement("#include <stdint.h>");
 	statement("");
 	statement("using namespace spirv_cross;");

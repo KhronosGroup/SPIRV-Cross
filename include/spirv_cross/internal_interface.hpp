@@ -29,13 +29,13 @@
 
 #include <glm/glm.hpp>
 
+#include "barrier.hpp"
+#include "external_interface.h"
+#include "image.hpp"
+#include "sampler.hpp"
+#include "thread_group.hpp"
 #include <assert.h>
 #include <stdint.h>
-#include "external_interface.h"
-#include "barrier.hpp"
-#include "thread_group.hpp"
-#include "sampler.hpp"
-#include "image.hpp"
 
 namespace internal
 {
@@ -488,7 +488,7 @@ struct ComputeResources
 		s.register_builtin(SPIRV_CROSS_BUILTIN_NUM_WORK_GROUPS, gl_NumWorkGroups__);
 	}
 #define gl_WorkGroupID __res->gl_WorkGroupID__.get()
-#define gl_NumWorkGroups __res->gl_NumWorkGroups.get()
+#define gl_NumWorkGroups __res->gl_NumWorkGroups__.get()
 
 	Barrier barrier__;
 #define barrier() __res->barrier__.wait()

@@ -2,11 +2,11 @@
 precision mediump float;
 precision highp int;
 
-layout(set = 0, binding = 1) uniform mediump texture2D uTexture;
-layout(set = 0, binding = 0) uniform mediump sampler uSampler;
-layout(set = 0, binding = 4) uniform mediump texture2DArray uTextureArray;
-layout(set = 0, binding = 3) uniform mediump textureCube uTextureCube;
-layout(set = 0, binding = 2) uniform mediump texture3D uTexture3D;
+layout(binding = 1) uniform mediump texture2D uTexture;
+layout(binding = 0) uniform mediump sampler uSampler;
+layout(binding = 4) uniform mediump texture2DArray uTextureArray;
+layout(binding = 3) uniform mediump textureCube uTextureCube;
+layout(binding = 2) uniform mediump texture3D uTexture3D;
 
 layout(location = 0) in vec2 vTex;
 layout(location = 1) in vec3 vTex3;
@@ -24,7 +24,7 @@ vec4 sample_func_dual(mediump sampler samp, mediump texture2D tex, vec2 uv)
 
 void main()
 {
-    vec2 off = (vec2(1.0) / vec2(textureSize(uTexture, 0)));
+    vec2 off = (vec2(1.0) / vec2(textureSize(sampler2D(uTexture, uSampler), 0)));
     vec2 off2 = (vec2(1.0) / vec2(textureSize(sampler2D(uTexture, uSampler), 1)));
     highp vec2 param = ((vTex + off) + off2);
     vec4 c0 = sample_func(uSampler, param);

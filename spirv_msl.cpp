@@ -497,7 +497,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 // If this is the entry point function, Metal-specific return value and function arguments are added.
 void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 {
-	local_variables.clear();
+	local_variable_names = resource_names;
 	string decl;
 
 	processing_entry_point = (func.self == execution.entry_point);
@@ -526,7 +526,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 
 	for (auto &arg : func.arguments)
 	{
-		add_local_variable(arg.id);
+		add_local_variable_name(arg.id);
 
 		decl += "thread " + argument_decl(arg);
 		if (&arg != &func.arguments.back())
@@ -621,8 +621,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 		length--;
 	}
 
-	auto test = [&](uint32_t &v, uint32_t flag)
-	{
+	auto test = [&](uint32_t &v, uint32_t flag) {
 		if (length && (flags & flag))
 		{
 			v = *opt++;
@@ -1314,7 +1313,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return "bool";
 		case SPIRType::Char:
 			return "char";
@@ -1334,7 +1333,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 			return join("bool", type.vecsize);
 		case SPIRType::Char:
 			return join("char", type.vecsize);
@@ -1353,7 +1352,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Bool:
+		case SPIRType::Boolean:
 		case SPIRType::Int:
 		case SPIRType::UInt:
 		case SPIRType::Float:

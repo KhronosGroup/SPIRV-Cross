@@ -13,9 +13,9 @@ DEPS := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d)
 CXXFLAGS += -std=c++11 -Wall -Wextra -Wshadow
 
 ifeq ($(DEBUG), 1)
-	CXXFLAGS += -O0
+	CXXFLAGS += -O0 -g
 else
-	CXXFLAGS += -O2
+	CXXFLAGS += -O2 -g
 endif
 
 all: $(TARGET)
