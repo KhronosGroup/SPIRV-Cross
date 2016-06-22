@@ -1838,6 +1838,12 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(comp);
 	}
 
+	if (sample)
+	{
+		expr += ", ";
+		expr += to_expression(sample);
+	}
+
 	expr += ")";
 
 	emit_op(result_type, id, expr, forward, false);
