@@ -2811,8 +2811,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto &type = get<SPIRType>(result_type);
 
+		// We can only split the expression here if our expression is forwarded as a temporary.
+		bool allow_base_expression = forced_temporaries.find(id) == end(forced_temporaries);
+
 		// Only apply this optimization if result is scalar.
-		if (should_forward(ops[2]) && type.vecsize == 1 && type.columns == 1 && length == 1)
+		if (allow_base_expression && should_forward(ops[2]) && type.vecsize == 1 && type.columns == 1 && length == 1)
 		{
 			// We want to split the access chain from the base.
 			// This is so we can later combine different CompositeExtract results
