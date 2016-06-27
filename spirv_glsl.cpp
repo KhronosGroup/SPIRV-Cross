@@ -229,8 +229,13 @@ void CompilerGLSL::emit_header()
 		if (!options.es && options.version < 320)
 			statement("#extension GL_ARB_geometry_shader4 : require");
 		outputs.push_back(join("max_vertices = ", execution.output_vertices));
-		if (execution.flags & (1ull << ExecutionModeInvocations))
+		if ((execution.flags & (1ull << ExecutionModeInvocations)) && execution.invocations != 1)
+		{
+			// Instanced GS is part of 400 core or this extension.
+			if (!options.es && options.version < 400)
+				statement("#extension GL_ARB_gpu_shader5 : require");
 			inputs.push_back(join("invocations = ", execution.invocations));
+		}
 		if (execution.flags & (1ull << ExecutionModeInputPoints))
 			inputs.push_back("points");
 		if (execution.flags & (1ull << ExecutionModeInputLines))
@@ -1838,6 +1843,12 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(comp);
 	}
 
+	if (sample)
+	{
+		expr += ", ";
+		expr += to_expression(sample);
+	}
+
 	expr += ")";
 
 	emit_op(result_type, id, expr, forward, false);
@@ -2805,8 +2816,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto &type = get<SPIRType>(result_type);
 
+		// We can only split the expression here if our expression is forwarded as a temporary.
+		bool allow_base_expression = forced_temporaries.find(id) == end(forced_temporaries);
+
 		// Only apply this optimization if result is scalar.
-		if (should_forward(ops[2]) && type.vecsize == 1 && type.columns == 1 && length == 1)
+		if (allow_base_expression && should_forward(ops[2]) && type.vecsize == 1 && type.columns == 1 && length == 1)
 		{
 			// We want to split the access chain from the base.
 			// This is so we can later combine different CompositeExtract results
