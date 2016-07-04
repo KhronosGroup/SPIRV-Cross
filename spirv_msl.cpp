@@ -952,7 +952,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			{
 			case BuiltInFrontFacing:
 			case BuiltInPointCoord:
-			case BuiltInSamplePosition:
+			case BuiltInFragCoord:
 			case BuiltInSampleId:
 			case BuiltInSampleMask:
 			case BuiltInLayer:
@@ -1498,7 +1498,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		return "front_facing";
 	case BuiltInPointCoord:
 		return "point_coord";
-	case BuiltInSamplePosition:
+	case BuiltInFragCoord:
 		return "position";
 	case BuiltInSampleId:
 		return "sample_id";
@@ -1551,7 +1551,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "bool";
 	case BuiltInPointCoord:
 		return "float2";
-	case BuiltInSamplePosition:
+	case BuiltInFragCoord:
 		return "float4";
 	case BuiltInSampleId:
 		return "uint";
