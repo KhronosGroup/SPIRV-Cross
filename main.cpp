@@ -212,6 +212,69 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 
 static void print_resources(const Compiler &compiler, const ShaderResources &res)
 {
+	uint64_t modes = compiler.get_execution_mode_mask();
+
+	fprintf(stderr, "Execution modes:\n");
+	for (unsigned i = 0; i < 64; i++)
+	{
+		if (!(modes & (1ull << i)))
+			continue;
+
+		auto mode = static_cast<ExecutionMode>(i);
+		uint32_t arg0 = compiler.get_execution_mode_argument(mode, 0);
+		uint32_t arg1 = compiler.get_execution_mode_argument(mode, 1);
+		uint32_t arg2 = compiler.get_execution_mode_argument(mode, 2);
+
+		switch (static_cast<ExecutionMode>(i))
+		{
+			case ExecutionModeInvocations:
+				fprintf(stderr, "  Invocations: %u\n", arg0);
+				break;
+
+			case ExecutionModeLocalSize:
+				fprintf(stderr, "  LocalSize: (%u, %u, %u)\n", arg0, arg1, arg2);
+				break;
+
+			case ExecutionModeOutputVertices:
+				fprintf(stderr, "  OutputVertices: %u\n", arg0);
+				break;
+
+#define CHECK_MODE(m) case ExecutionMode##m: fprintf(stderr, "  %s\n", #m); break
+			    CHECK_MODE(SpacingEqual);
+			    CHECK_MODE(SpacingFractionalEven);
+			    CHECK_MODE(SpacingFractionalOdd);
+			    CHECK_MODE(VertexOrderCw);
+			    CHECK_MODE(VertexOrderCcw);
+			    CHECK_MODE(PixelCenterInteger);
+			    CHECK_MODE(OriginUpperLeft);
+			    CHECK_MODE(OriginLowerLeft);
+			    CHECK_MODE(EarlyFragmentTests);
+			    CHECK_MODE(PointMode);
+			    CHECK_MODE(Xfb);
+			    CHECK_MODE(DepthReplacing);
+			    CHECK_MODE(DepthGreater);
+			    CHECK_MODE(DepthLess);
+			    CHECK_MODE(DepthUnchanged);
+			    CHECK_MODE(LocalSizeHint);
+			    CHECK_MODE(InputPoints);
+			    CHECK_MODE(InputLines);
+			    CHECK_MODE(InputLinesAdjacency);
+			    CHECK_MODE(Triangles);
+			    CHECK_MODE(InputTrianglesAdjacency);
+			    CHECK_MODE(Quads);
+			    CHECK_MODE(Isolines);
+			    CHECK_MODE(OutputPoints);
+			    CHECK_MODE(OutputLineStrip);
+			    CHECK_MODE(OutputTriangleStrip);
+			    CHECK_MODE(VecTypeHint);
+			    CHECK_MODE(ContractionOff);
+
+			default:
+				break;
+		}
+	}
+	fprintf(stderr, "\n");
+
     print_resources(compiler, "subpass inputs", res.subpass_inputs);
     print_resources(compiler, "inputs", res.stage_inputs);
     print_resources(compiler, "outputs", res.stage_outputs);

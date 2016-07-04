@@ -1931,3 +1931,70 @@ bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType 
 
 	return true;
 }
+
+uint64_t Compiler::get_execution_mode_mask() const
+{
+	return execution.flags;
+}
+
+void Compiler::set_execution_mode(ExecutionMode mode, uint32_t arg0, uint32_t arg1, uint32_t arg2)
+{
+	execution.flags |= 1ull << mode;
+	switch (mode)
+	{
+	case ExecutionModeLocalSize:
+		execution.workgroup_size.x = arg0;
+		execution.workgroup_size.y = arg1;
+		execution.workgroup_size.z = arg2;
+		break;
+
+	case ExecutionModeInvocations:
+		execution.invocations = arg0;
+		break;
+
+	case ExecutionModeOutputVertices:
+		execution.output_vertices = arg0;
+		break;
+
+	default:
+		break;
+	}
+}
+
+void Compiler::unset_execution_mode(ExecutionMode mode)
+{
+	execution.flags &= ~(1ull << mode);
+}
+
+uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index) const
+{
+	switch (mode)
+	{
+	case ExecutionModeLocalSize:
+		switch (index)
+		{
+		case 0:
+			return execution.workgroup_size.x;
+		case 1:
+			return execution.workgroup_size.y;
+		case 2:
+			return execution.workgroup_size.z;
+		default:
+			return 0;
+		}
+
+	case ExecutionModeInvocations:
+		return execution.invocations;
+
+	case ExecutionModeOutputVertices:
+		return execution.output_vertices;
+
+	default:
+		return 0;
+	}
+}
+
+ExecutionModel Compiler::get_execution_model() const
+{
+	return execution.model;
+}
