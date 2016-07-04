@@ -171,6 +171,17 @@ public:
 	// Query shader resources, use ids with reflection interface to modify or query binding points, etc.
 	ShaderResources get_shader_resources() const;
 
+	// Query and modify OpExecutionMode.
+	uint64_t get_execution_mode_mask() const;
+	void unset_execution_mode(spv::ExecutionMode mode);
+	void set_execution_mode(spv::ExecutionMode mode, uint32_t arg0 = 0, uint32_t arg1 = 0, uint32_t arg2 = 0);
+
+	// Gets argument for an execution mode (LocalSize, Invocations, OutputVertices).
+	// For LocalSize, the index argument is used to select the dimension (X = 0, Y = 1, Z = 2).
+	// For execution modes which do not have arguments, 0 is returned.
+	uint32_t get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index = 0) const;
+	spv::ExecutionModel get_execution_model() const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
