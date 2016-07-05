@@ -411,7 +411,9 @@ ShaderResources Compiler::get_shader_resources() const
 		auto &var = id.get<SPIRVariable>();
 		auto &type = get<SPIRType>(var.basetype);
 
-		if (!type.pointer || is_builtin_variable(var))
+		// It is possible for uniform storage classes to be passed as function parameters, so detect
+		// that. To detect function parameters, check of StorageClass of variable is function scope.
+		if (var.storage == StorageClassFunction || !type.pointer || is_builtin_variable(var))
 			continue;
 
 		// Input

@@ -163,9 +163,9 @@ void CompilerCPP::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (type.pointer && type.storage == StorageClassUniform && !is_builtin_variable(var) &&
-			    (meta[type.self].decoration.decoration_flags &
-			     ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
+			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_buffer_block(var);
 			}
@@ -179,7 +179,7 @@ void CompilerCPP::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (type.pointer && type.storage == StorageClassPushConstant)
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant)
 				emit_push_constant_block(var);
 		}
 	}
@@ -192,8 +192,8 @@ void CompilerCPP::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput))
+			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
+			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput))
 			{
 				emit_interface_block(var);
 			}
@@ -208,7 +208,8 @@ void CompilerCPP::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
+			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
+			    type.pointer &&
 			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
 			{
 				emit_uniform(var);

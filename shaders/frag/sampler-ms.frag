@@ -2,7 +2,7 @@
 precision mediump float;
 precision highp int;
 
-layout(binding = 0) uniform sampler2DMS uSampler;
+layout(binding = 0) uniform mediump sampler2DMS uSampler;
 layout(location = 0) out vec4 FragColor;
 
 void main()
