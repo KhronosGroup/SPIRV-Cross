@@ -2010,3 +2010,13 @@ bool Compiler::get_remapped_variable_state(uint32_t id) const
 {
 	return get<SPIRVariable>(id).remapped_variable;
 }
+
+void Compiler::set_subpass_input_remapped_components(uint32_t id, uint32_t components)
+{
+	get<SPIRVariable>(id).remapped_components = components;
+}
+
+uint32_t Compiler::get_subpass_input_remapped_components(uint32_t id) const
+{
+	return get<SPIRVariable>(id).remapped_components;
+}

@@ -177,6 +177,12 @@ public:
 	void set_remapped_variable_state(uint32_t id, bool remap_enable);
 	bool get_remapped_variable_state(uint32_t id) const;
 
+	// For subpassInput variables which are remapped to plain variables,
+	// the number of components in the remapped
+	// variable must be specified as the backing type of subpass inputs are opaque.
+	void set_subpass_input_remapped_components(uint32_t id, uint32_t components);
+	uint32_t get_subpass_input_remapped_components(uint32_t id) const;
+
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;
 	void unset_execution_mode(spv::ExecutionMode mode);
