@@ -411,7 +411,9 @@ ShaderResources Compiler::get_shader_resources() const
 		auto &var = id.get<SPIRVariable>();
 		auto &type = get<SPIRType>(var.basetype);
 
-		if (!type.pointer || is_builtin_variable(var))
+		// It is possible for uniform storage classes to be passed as function parameters, so detect
+		// that. To detect function parameters, check of StorageClass of variable is function scope.
+		if (var.storage == StorageClassFunction || !type.pointer || is_builtin_variable(var))
 			continue;
 
 		// Input
@@ -620,7 +622,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 	if (name.empty())
 		return;
 	// Reserved for temporaries.
-	if (name[0] == '_')
+	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
 
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
@@ -1997,4 +1999,24 @@ uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t
 ExecutionModel Compiler::get_execution_model() const
 {
 	return execution.model;
+}
+
+void Compiler::set_remapped_variable_state(uint32_t id, bool remap_enable)
+{
+	get<SPIRVariable>(id).remapped_variable = remap_enable;
+}
+
+bool Compiler::get_remapped_variable_state(uint32_t id) const
+{
+	return get<SPIRVariable>(id).remapped_variable;
+}
+
+void Compiler::set_subpass_input_remapped_components(uint32_t id, uint32_t components)
+{
+	get<SPIRVariable>(id).remapped_components = components;
+}
+
+uint32_t Compiler::get_subpass_input_remapped_components(uint32_t id) const
+{
+	return get<SPIRVariable>(id).remapped_components;
 }

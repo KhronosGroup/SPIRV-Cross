@@ -531,10 +531,13 @@ void CompilerMSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (type.pointer && (var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-			                     var.storage == StorageClassPushConstant) &&
-			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			if (type.pointer &&
+                !is_builtin_variable(var) &&
+                (var.storage == StorageClassUniform ||
+                 var.storage == StorageClassUniformConstant ||
+                 var.storage == StorageClassPushConstant) &&
+                (meta[type.self].decoration.decoration_flags &
+                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_struct(type);
 			}

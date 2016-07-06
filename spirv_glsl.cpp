@@ -204,6 +204,9 @@ void CompilerGLSL::emit_header()
 {
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
+	for (auto &header : header_lines)
+		statement(header);
+
 	// Needed for binding = # on UBOs, etc.
 	if (!options.es && options.version < 420)
 	{
@@ -1018,9 +1021,9 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (type.pointer && type.storage == StorageClassUniform && !is_builtin_variable(var) &&
-			    (meta[type.self].decoration.decoration_flags &
-			     ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
+			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_buffer_block(var);
 			}
@@ -1034,7 +1037,7 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (type.pointer && type.storage == StorageClassPushConstant)
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant)
 				emit_push_constant_block(var);
 		}
 	}
@@ -1049,7 +1052,8 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
+			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
+			    type.pointer &&
 			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
 			{
 				emit_uniform(var);
@@ -1070,8 +1074,8 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput))
+			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
+			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput))
 			{
 				emit_interface_block(var);
 				emitted = true;
@@ -2694,6 +2698,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
         funexpr += static_func_args(callee, length);
 		funexpr += ")";
 
+		// Check for function call constraints.
+		check_function_call_constraints(arg, length);
+
 		if (get<SPIRType>(result_type).basetype != SPIRType::Void)
 		{
 			// If the function actually writes to an out variable,
@@ -3532,18 +3539,26 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		string imgexpr;
 		auto &type = expression_type(ops[2]);
 
-		if (var && var->remapped_variable) // PLS input, just read as-is without any op-code
+		if (var && var->remapped_variable) // Remapped input, just read as-is without any op-code
 		{
-			// PLS input could have different number of components than what the SPIR expects, swizzle to
-			// the appropriate vector size.
 			auto itr =
 			    find_if(begin(pls_inputs), end(pls_inputs), [var](const PlsRemap &pls) { return pls.id == var->self; });
 
 			if (itr == end(pls_inputs))
-				throw CompilerError("Found PLS remap for OpImageRead, but ID is not a PLS input ...");
-
-			uint32_t components = pls_format_to_components(itr->format);
-			imgexpr = remap_swizzle(result_type, components, ops[2]);
+			{
+				// For non-PLS inputs, we rely on subpass type remapping information to get it right
+				// since ImageRead always returns 4-component vectors and the backing type is opaque.
+				if (!var->remapped_components)
+					throw CompilerError("subpassInput was remapped, but remap_components is not set correctly.");
+				imgexpr = remap_swizzle(result_type, var->remapped_components, ops[2]);
+			}
+			else
+			{
+				// PLS input could have different number of components than what the SPIR expects, swizzle to
+				// the appropriate vector size.
+				uint32_t components = pls_format_to_components(itr->format);
+				imgexpr = remap_swizzle(result_type, components, ops[2]);
+			}
 			pure = true;
 		}
 		else if (type.image.dim == DimSubpassData)
@@ -4105,6 +4120,11 @@ void CompilerGLSL::add_local_variable_name(uint32_t id)
 void CompilerGLSL::add_resource_name(uint32_t id)
 {
 	add_variable(resource_names, id);
+}
+
+void CompilerGLSL::add_header_line(const std::string &line)
+{
+	header_lines.push_back(line);
 }
 
 void CompilerGLSL::require_extension(const string &ext)
@@ -4804,4 +4824,27 @@ void CompilerGLSL::end_scope_decl(const string &decl)
 		throw CompilerError("Popping empty indent stack.");
 	indent--;
 	statement("} ", decl, ";");
+}
+
+void CompilerGLSL::check_function_call_constraints(const uint32_t *args, uint32_t length)
+{
+	// If our variable is remapped, and we rely on type-remapping information as
+	// well, then we cannot pass the variable as a function parameter.
+	// Fixing this is non-trivial without stamping out variants of the same function,
+	// so for now warn about this and suggest workarounds instead.
+	for (uint32_t i = 0; i < length; i++)
+	{
+		auto *var = maybe_get<SPIRVariable>(args[i]);
+		if (!var || !var->remapped_variable)
+			continue;
+
+		auto &type = get<SPIRType>(var->basetype);
+		if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+		{
+			throw CompilerError("Tried passing a remapped subpassInput variable to a function. "
+			                    "This will not work correctly because type-remapping information is lost. "
+			                    "To workaround, please consider not passing the subpass input as a function parameter, "
+			                    "or use in/out variables instead which do not need type remapping information.");
+		}
+	}
 }
