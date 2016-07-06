@@ -204,6 +204,9 @@ void CompilerGLSL::emit_header()
 {
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
+	for (auto &header : header_lines)
+		statement(header);
+
 	// Needed for binding = # on UBOs, etc.
 	if (!options.es && options.version < 420)
 	{
@@ -4085,6 +4088,11 @@ void CompilerGLSL::add_local_variable_name(uint32_t id)
 void CompilerGLSL::add_resource_name(uint32_t id)
 {
 	add_variable(resource_names, id);
+}
+
+void CompilerGLSL::add_header_line(const std::string &line)
+{
+	header_lines.push_back(line);
 }
 
 void CompilerGLSL::require_extension(const string &ext)

@@ -2000,3 +2000,13 @@ ExecutionModel Compiler::get_execution_model() const
 {
 	return execution.model;
 }
+
+void Compiler::set_remapped_variable_state(uint32_t id, bool remap_enable)
+{
+	get<SPIRVariable>(id).remapped_variable = remap_enable;
+}
+
+bool Compiler::get_remapped_variable_state(uint32_t id) const
+{
+	return get<SPIRVariable>(id).remapped_variable;
+}

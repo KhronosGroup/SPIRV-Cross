@@ -114,6 +114,22 @@ public:
 	}
 	std::string compile() override;
 
+	// Adds a line to be added right after #version in GLSL backend.
+	// This is useful for enabling custom extensions which are outside the scope of SPIRV-Cross.
+	// This can be combined with variable remapping.
+	// A new-line will be added.
+	//
+	// While add_header_line() is a more generic way of adding arbitrary text to the header
+	// of a GLSL file, require_extension() should be used when adding extensions since it will
+	// avoid creating collisions with SPIRV-Cross generated extensions.
+	//
+	// Code added via add_header_line() is typically backend-specific.
+	void add_header_line(const std::string &str);
+
+	// Adds an extension which is required to run this shader, e.g.
+	// require_extension("GL_KHR_my_extension");
+	void require_extension(const std::string &ext);
+
 protected:
 	void reset();
 	void emit_function(SPIRFunction &func, uint64_t return_flags);
@@ -288,7 +304,6 @@ protected:
 	// Can modify flags to remote readonly/writeonly if image type
 	// and force recompile.
 	bool check_atomic_image(uint32_t id);
-	void require_extension(const std::string &ext);
 
 	void replace_fragment_output(SPIRVariable &var);
 	void replace_fragment_outputs();
@@ -306,6 +321,7 @@ protected:
 	void track_expression_read(uint32_t id);
 
 	std::unordered_set<std::string> forced_extensions;
+	std::vector<std::string> header_lines;
 
 	uint32_t statement_count;
 
