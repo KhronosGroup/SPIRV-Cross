@@ -467,6 +467,7 @@ struct SPIRVariable : IVariant
 	bool deferred_declaration = false;
 	bool phi_variable = false;
 	bool remapped_variable = false;
+	uint32_t remapped_components = 0;
 
 	SPIRFunction::Parameter *parameter = nullptr;
 };

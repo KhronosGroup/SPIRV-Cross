@@ -171,6 +171,18 @@ public:
 	// Query shader resources, use ids with reflection interface to modify or query binding points, etc.
 	ShaderResources get_shader_resources() const;
 
+	// Remapped variables are considered built-in variables and a backend will
+	// not emit a declaration for this variable.
+	// This is mostly useful for making use of builtins which are dependent on extensions.
+	void set_remapped_variable_state(uint32_t id, bool remap_enable);
+	bool get_remapped_variable_state(uint32_t id) const;
+
+	// For subpassInput variables which are remapped to plain variables,
+	// the number of components in the remapped
+	// variable must be specified as the backing type of subpass inputs are opaque.
+	void set_subpass_input_remapped_components(uint32_t id, uint32_t components);
+	uint32_t get_subpass_input_remapped_components(uint32_t id) const;
+
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;
 	void unset_execution_mode(spv::ExecutionMode mode);
