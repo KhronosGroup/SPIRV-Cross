@@ -2691,6 +2691,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (i + 1 < length)
 				funexpr += ", ";
 		}
+        funexpr += static_func_args(callee, length);
 		funexpr += ")";
 
 		if (get<SPIRType>(result_type).basetype != SPIRType::Void)
@@ -3680,6 +3681,26 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("// unimplemented op ", instruction.op);
 		break;
 	}
+}
+
+// Returns a string expression of function arguments beyond the specified index.
+// This is used when a function call uses fewer arguments than the function defines.
+// This situation may occur if the function signature has been dynamically modified
+// to extract static global variables referenced from within the function and convert
+// them to function arguments. This is necessary for shader languages that do not
+// support global access to shader input content from within a function (eg. Metal).
+// Each additional function args uses the name of the global var. Function nesting
+// will modify the functions and calls all the way up the nesting chain.
+string CompilerGLSL::static_func_args(const SPIRFunction &func, uint32_t index)
+{
+    string static_args;
+    auto& args = func.arguments;
+    uint32_t arg_cnt = (uint32_t)args.size();
+    for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++) {
+        if (arg_idx > 0) static_args += ", ";
+        static_args += to_expression(args[arg_idx].id);
+    }
+    return static_args;
 }
 
 string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)

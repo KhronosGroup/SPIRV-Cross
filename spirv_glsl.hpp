@@ -262,6 +262,7 @@ protected:
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);
 	std::string declare_temporary(uint32_t type, uint32_t id);
+    std::string static_func_args(const SPIRFunction &func, uint32_t index);
 	std::string to_expression(uint32_t id);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);

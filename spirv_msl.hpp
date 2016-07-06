@@ -111,6 +111,11 @@ protected:
 	void extract_builtins();
     void add_builtin(spv::BuiltIn builtin_type);
 	void localize_global_variables();
+    void extract_global_variables_from_functions();
+    void extract_global_variables_from_functions(uint32_t func_id,
+                                                 std::set<uint32_t>& added_arg_ids,
+                                                 std::set<uint32_t>& global_var_ids,
+                                                 std::set<uint32_t>& processed_func_ids);
 	void add_interface_structs();
 	void bind_vertex_attributes(std::set<uint32_t> &bindings);
 	uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);

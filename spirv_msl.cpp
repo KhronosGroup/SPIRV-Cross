@@ -162,6 +162,93 @@ void CompilerMSL::localize_global_variables()
 			iter++;
 		}
 	}
+
+    // For any global variable accessed directly by a function,
+    // extract that variable and add it as an argument to that function.
+    extract_global_variables_from_functions();
+}
+
+// For any global variable accessed directly by a function,
+// extract that variable and add it as an argument to that function.
+void CompilerMSL::extract_global_variables_from_functions()
+{
+
+    // Uniforms
+    std::set<uint32_t> global_var_ids;
+    for (auto &id : ids)
+    {
+        if (id.get_type() == TypeVariable)
+        {
+            auto &var = id.get<SPIRVariable>();
+            if (var.storage == StorageClassUniform ||
+                var.storage == StorageClassUniformConstant ||
+                var.storage == StorageClassPushConstant)
+                    global_var_ids.insert(var.self);
+        }
+    }
+
+    std::set<uint32_t> added_arg_ids;
+    std::set<uint32_t> processed_func_ids;
+    extract_global_variables_from_functions(execution.entry_point, added_arg_ids, global_var_ids, processed_func_ids);
+}
+
+// MSL does not support the use of global variables for shader input content.
+// For any global variable accessed directly by the specified function, extract that variable,
+// add it as an argument to that function, and the arg to the added_arg_ids collection.
+void CompilerMSL::extract_global_variables_from_functions(uint32_t func_id,
+                                                          std::set<uint32_t>& added_arg_ids,
+                                                          std::set<uint32_t>& global_var_ids,
+                                                          std::set<uint32_t>& processed_func_ids)
+{
+    // Avoid processing a function more than once
+    if ( processed_func_ids.find(func_id) != processed_func_ids.end() )
+        return;
+
+    processed_func_ids.insert(func_id);
+
+    auto& func = get<SPIRFunction>(func_id);
+
+    // Recursively establish global args added to functions on which we depend.
+    for (auto block : func.blocks)
+    {
+        auto &b = get<SPIRBlock>(block);
+        for (auto &i : b.ops)
+        {
+            auto ops = stream(i);
+            auto op = static_cast<Op>(i.op);
+
+            switch (op) {
+                case OpAccessChain: {
+                    uint32_t base_id = ops[2];
+                    if ( global_var_ids.find(base_id) != global_var_ids.end() )
+                        added_arg_ids.insert(base_id);
+                    break;
+                }
+                case OpFunctionCall: {
+                    uint32_t inner_func_id = ops[2];
+                    std::set<uint32_t> inner_func_args;
+                    extract_global_variables_from_functions(inner_func_id, inner_func_args, global_var_ids, processed_func_ids);
+                    added_arg_ids.insert(inner_func_args.begin(), inner_func_args.end());
+                    break;
+                }
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    // Add the global variables as arguments to the function
+    if (func_id != execution.entry_point) {
+        uint32_t next_id = increase_bound_by((uint32_t)added_arg_ids.size());
+        for (uint32_t arg_id : added_arg_ids) {
+            uint32_t type_id = get<SPIRVariable>(arg_id).basetype;
+            func.add_parameter(type_id, next_id);
+            set<SPIRVariable>(next_id, type_id, StorageClassFunction);
+            set_name(next_id, get_name(arg_id));
+            next_id++;
+        }
+    }
 }
 
 // Adds any interface structure variables needed by this shader
@@ -444,8 +531,8 @@ void CompilerMSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (type.pointer && (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-			                     type.storage == StorageClassPushConstant) &&
+			if (type.pointer && (var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
+			                     var.storage == StorageClassPushConstant) &&
 			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
 			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
@@ -528,15 +615,24 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 	{
 		add_local_variable_name(arg.id);
 
-		decl += "thread " + argument_decl(arg);
-		if (&arg != &func.arguments.back())
-			decl += ", ";
-
-		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
+		bool is_uniform = false;
 		auto *var = maybe_get<SPIRVariable>(arg.id);
-		if (var)
-			var->parameter = &arg;
-	}
+		if (var) {
+			var->parameter = &arg;  // Hold a pointer to the parameter so we can invalidate the readonly field if needed.
+
+			// Check if this arg is one of the synthetic uniform args
+            // created to handle uniform access inside the function
+            auto &var_type = get<SPIRType>(var->basetype);
+            is_uniform = (var_type.storage == StorageClassUniform ||
+                          var_type.storage == StorageClassUniformConstant ||
+                          var_type.storage == StorageClassPushConstant);
+        }
+
+		decl += (is_uniform ? "constant " : "thread ");
+        decl += argument_decl(arg);
+        if (&arg != &func.arguments.back())
+            decl += ", ";
+    }
 
 	decl += ")";
 	statement(decl, (is_decl ? ";" : ""));
