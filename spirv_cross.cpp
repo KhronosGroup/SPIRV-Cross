@@ -622,7 +622,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 	if (name.empty())
 		return;
 	// Reserved for temporaries.
-	if (name[0] == '_')
+	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
 
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
