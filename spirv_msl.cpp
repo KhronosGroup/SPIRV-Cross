@@ -218,6 +218,7 @@ void CompilerMSL::extract_global_variables_from_functions(uint32_t func_id,
             auto op = static_cast<Op>(i.op);
 
             switch (op) {
+                case OpLoad:
                 case OpAccessChain: {
                     uint32_t base_id = ops[2];
                     if ( global_var_ids.find(base_id) != global_var_ids.end() )

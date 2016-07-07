@@ -3721,7 +3721,7 @@ string CompilerGLSL::static_func_args(const SPIRFunction &func, uint32_t index)
     uint32_t arg_cnt = (uint32_t)args.size();
     for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++) {
         if (arg_idx > 0) static_args += ", ";
-        static_args += to_expression(args[arg_idx].id);
+        static_args += to_func_call_arg(args[arg_idx].id);
     }
     return static_args;
 }
