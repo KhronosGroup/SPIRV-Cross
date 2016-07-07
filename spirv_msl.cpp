@@ -618,7 +618,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 	{
 		add_local_variable_name(arg.id);
 
-		bool is_uniform = false;
+		bool is_uniform_struct = false;
 		auto *var = maybe_get<SPIRVariable>(arg.id);
 		if (var) {
 			var->parameter = &arg;  // Hold a pointer to the parameter so we can invalidate the readonly field if needed.
@@ -626,13 +626,20 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 			// Check if this arg is one of the synthetic uniform args
             // created to handle uniform access inside the function
             auto &var_type = get<SPIRType>(var->basetype);
-            is_uniform = (var_type.storage == StorageClassUniform ||
-                          var_type.storage == StorageClassUniformConstant ||
-                          var_type.storage == StorageClassPushConstant);
+            is_uniform_struct = ((var_type.basetype == SPIRType::Struct) &&
+                                 (var_type.storage == StorageClassUniform ||
+                                  var_type.storage == StorageClassUniformConstant ||
+                                  var_type.storage == StorageClassPushConstant));
         }
 
-		decl += (is_uniform ? "constant " : "thread ");
+		decl += (is_uniform_struct ? "constant " : "thread ");
         decl += argument_decl(arg);
+
+        // Manufacture automatic sampler arg for SampledImage texture
+        auto &arg_type = get<SPIRType>(arg.type);
+        if (arg_type.basetype == SPIRType::SampledImage)
+            decl += ", thread const sampler& " + to_sampler_expression(arg.id);
+
         if (&arg != &func.arguments.back())
             decl += ", ";
     }
@@ -953,6 +960,21 @@ void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id
 {
 	set<SPIRExpression>(result_id, to_expression(image_id), result_type, true);
 	meta[result_id].sampler = samp_id;
+}
+
+// Returns a string representation of the ID, usable as a function arg.
+// Manufacture automatic sampler arg for SampledImage texture.
+string CompilerMSL::to_func_call_arg(uint32_t id)
+{
+    string arg_str = CompilerGLSL::to_func_call_arg(id);
+
+    // Manufacture automatic sampler arg for SampledImage texture.
+    auto &var = get<SPIRVariable>(id);
+    auto &type = get<SPIRType>(var.basetype);
+    if (type.basetype == SPIRType::SampledImage)
+        arg_str += ", " + to_sampler_expression(id);
+
+    return arg_str;
 }
 
 // If the ID represents a sampled image that has been assigned a sampler already,

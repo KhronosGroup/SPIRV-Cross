@@ -1109,6 +1109,14 @@ void CompilerGLSL::emit_resources()
 		statement("");
 }
 
+// Returns a string representation of the ID, usable as a function arg.
+// Default is to simply return the expression representation fo the arg ID.
+// Subclasses may override to modify the return value.
+string CompilerGLSL::to_func_call_arg(uint32_t id)
+{
+    return to_expression(id);
+}
+
 string CompilerGLSL::to_expression(uint32_t id)
 {
 	auto itr = invalid_expressions.find(id);
@@ -2691,7 +2699,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		funexpr += to_name(func) + "(";
 		for (uint32_t i = 0; i < length; i++)
 		{
-			funexpr += to_expression(arg[i]);
+			funexpr += to_func_call_arg(arg[i]);
 			if (i + 1 < length)
 				funexpr += ", ";
 		}
