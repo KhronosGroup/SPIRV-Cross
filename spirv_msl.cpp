@@ -58,7 +58,8 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 
 	extract_builtins();
 	localize_global_variables();
-	add_interface_structs();
+    add_interface_structs();
+    extract_global_variables_from_functions();
 
 	// Do not deal with ES-isms like precision, older extensions and such.
 	options.es = false;
@@ -162,10 +163,6 @@ void CompilerMSL::localize_global_variables()
 			iter++;
 		}
 	}
-
-    // For any global variable accessed directly by a function,
-    // extract that variable and add it as an argument to that function.
-    extract_global_variables_from_functions();
 }
 
 // For any global variable accessed directly by a function,
@@ -180,7 +177,8 @@ void CompilerMSL::extract_global_variables_from_functions()
         if (id.get_type() == TypeVariable)
         {
             auto &var = id.get<SPIRVariable>();
-            if (var.storage == StorageClassUniform ||
+            if (var.storage == StorageClassInput ||
+                var.storage == StorageClassUniform ||
                 var.storage == StorageClassUniformConstant ||
                 var.storage == StorageClassPushConstant)
                     global_var_ids.insert(var.self);
@@ -189,16 +187,16 @@ void CompilerMSL::extract_global_variables_from_functions()
 
     std::set<uint32_t> added_arg_ids;
     std::set<uint32_t> processed_func_ids;
-    extract_global_variables_from_functions(execution.entry_point, added_arg_ids, global_var_ids, processed_func_ids);
+    extract_global_variables_from_function(execution.entry_point, added_arg_ids, global_var_ids, processed_func_ids);
 }
 
 // MSL does not support the use of global variables for shader input content.
 // For any global variable accessed directly by the specified function, extract that variable,
 // add it as an argument to that function, and the arg to the added_arg_ids collection.
-void CompilerMSL::extract_global_variables_from_functions(uint32_t func_id,
-                                                          std::set<uint32_t>& added_arg_ids,
-                                                          std::set<uint32_t>& global_var_ids,
-                                                          std::set<uint32_t>& processed_func_ids)
+void CompilerMSL::extract_global_variables_from_function(uint32_t func_id,
+                                                         std::set<uint32_t>& added_arg_ids,
+                                                         std::set<uint32_t>& global_var_ids,
+                                                         std::set<uint32_t>& processed_func_ids)
 {
     // Avoid processing a function more than once
     if ( processed_func_ids.find(func_id) != processed_func_ids.end() )
@@ -228,7 +226,7 @@ void CompilerMSL::extract_global_variables_from_functions(uint32_t func_id,
                 case OpFunctionCall: {
                     uint32_t inner_func_id = ops[2];
                     std::set<uint32_t> inner_func_args;
-                    extract_global_variables_from_functions(inner_func_id, inner_func_args, global_var_ids, processed_func_ids);
+                    extract_global_variables_from_function(inner_func_id, inner_func_args, global_var_ids, processed_func_ids);
                     added_arg_ids.insert(inner_func_args.begin(), inner_func_args.end());
                     break;
                 }
@@ -247,6 +245,7 @@ void CompilerMSL::extract_global_variables_from_functions(uint32_t func_id,
             func.add_parameter(type_id, next_id);
             set<SPIRVariable>(next_id, type_id, StorageClassFunction);
             set_name(next_id, get_name(arg_id));
+            meta[next_id].decoration.qualified_alias = meta[arg_id].decoration.qualified_alias;
             next_id++;
         }
     }
@@ -434,7 +433,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 
 				// Update the original variable reference to include the structure reference
 				string qual_var_name = ib_var_ref + "." + mbr_name;
-				set_member_name(type.self, i, qual_var_name);
+				set_member_qualified_name(type.self, i, qual_var_name);
 
 				// Copy the variable location from the original variable to the member
 				uint32_t locn = get_member_decoration(type.self, i, DecorationLocation);
@@ -469,7 +468,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 
 			// Update the original variable reference to include the structure reference
 			string qual_var_name = ib_var_ref + "." + mbr_name;
-			meta[p_var->self].decoration.alias = qual_var_name;
+			meta[p_var->self].decoration.qualified_alias = qual_var_name;
 
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
@@ -1403,6 +1402,18 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	auto &var = get<SPIRVariable>(arg.id);
 	return join(constref ? "const " : "", type_to_glsl(type), "& ", to_name(var.self), type_to_array_glsl(type));
+}
+
+// If we're currently in the entry point function, and the object
+// has a qualified name, use it, otherwise use the standard name.
+string CompilerMSL::to_name(uint32_t id, bool allow_alias)
+{
+    if (current_function && (current_function->self == execution.entry_point) ) {
+        string qual_name = meta.at(id).decoration.qualified_alias;
+        if ( !qual_name.empty() )
+            return qual_name;
+    }
+    return Compiler::to_name(id, allow_alias);
 }
 
 // Returns an MSL string describing  the SPIR-V type

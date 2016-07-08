@@ -691,6 +691,12 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 	return m.members[index].alias;
 }
 
+void Compiler::set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name)
+{
+    meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
+    meta.at(id).members[index].qualified_alias = name;
+}
+
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
 	auto &dec = meta.at(id).members.at(index);
