@@ -30,6 +30,10 @@ Instruction::Instruction(const vector<uint32_t> &spirv, uint32_t &index)
 {
 	op = spirv[index] & 0xffff;
 	count = (spirv[index] >> 16) & 0xffff;
+
+	if (count == 0)
+		throw CompilerError("SPIR-V instructions cannot consume 0 words. Invalid SPIR-V file.");
+
 	offset = index + 1;
 	length = count - 1;
 
