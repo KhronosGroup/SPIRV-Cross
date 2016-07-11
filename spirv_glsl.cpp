@@ -3560,6 +3560,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (var && var->remapped_variable) // Remapped input, just read as-is without any op-code
 		{
+			if (type.image.ms)
+				throw CompilerError("Trying to remap multisampled image to variable, this is not possible.");
+
 			auto itr =
 			    find_if(begin(pls_inputs), end(pls_inputs), [var](const PlsRemap &pls) { return pls.id == var->self; });
 
@@ -3585,12 +3588,37 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (options.vulkan_semantics)
 			{
 				// With Vulkan semantics, use the proper Vulkan GLSL construct.
-				imgexpr = join("subpassLoad(", to_expression(ops[2]), ")");
+				if (type.image.ms)
+				{
+					uint32_t operands = ops[4];
+					if (operands != ImageOperandsSampleMask || length != 6)
+						throw CompilerError(
+						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+
+					uint32_t samples = ops[5];
+					imgexpr = join("subpassLoad(", to_expression(ops[2]), ", ", to_expression(samples), ")");
+				}
+				else
+					imgexpr = join("subpassLoad(", to_expression(ops[2]), ")");
 			}
 			else
 			{
-				// Implement subpass loads via texture barrier style sampling.
-				imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
+				if (type.image.ms)
+				{
+					uint32_t operands = ops[4];
+					if (operands != ImageOperandsSampleMask || length != 6)
+						throw CompilerError(
+						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+
+					uint32_t samples = ops[5];
+					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), ",
+					               to_expression(samples), ")");
+				}
+				else
+				{
+					// Implement subpass loads via texture barrier style sampling.
+					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
+				}
 			}
 			pure = true;
 		}
@@ -3967,7 +3995,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 	}
 
 	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && options.vulkan_semantics)
-		return res + "subpassInput";
+		return res + "subpassInput" + (type.image.ms ? "MS" : "");
 
 	// If we're emulating subpassInput with samplers, force sampler2D
 	// so we don't have to specify format.
