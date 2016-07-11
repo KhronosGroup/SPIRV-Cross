@@ -3498,7 +3498,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		emit_op(result_type, id, to_expression(ops[2]), true, false);
+		auto &e = emit_op(result_type, id, to_expression(ops[2]), true, false);
+
+		// When using the image, we need to know which variable it is actually loaded from.
+		auto *var = maybe_get_backing_variable(ops[2]);
+		e.loaded_from = var ? var->self : 0;
+		break;
+	}
+
+	case OpImageQuerySamples:
+	{
+		auto *var = maybe_get_backing_variable(ops[2]);
+		if (!var)
+			throw CompilerError(
+			    "Bug. OpImageQuerySamples must have a backing variable so we know if the image is sampled or not.");
+
+		auto &type = get<SPIRType>(var->basetype);
+		bool image = type.image.sampled == 2;
+		if (image)
+			UFOP(imageSamples);
+		else
+			UFOP(textureSamples);
 		break;
 	}
 
@@ -3603,6 +3623,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), ", ", to_expression(ops[3])), result_type, true);
 
+		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
 		e.loaded_from = var ? var->self : 0;
 		break;
@@ -3961,12 +3982,12 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 		throw CompilerError("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
 	}
 
+	if (type.image.ms)
+		res += "MS";
 	if (type.image.arrayed)
 		res += "Array";
 	if (type.image.depth)
 		res += "Shadow";
-	if (type.image.ms)
-		res += "MS";
 
 	return res;
 }
