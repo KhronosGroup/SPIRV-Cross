@@ -3597,7 +3597,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			// Plain image load/store.
-			imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ")");
+			if (type.image.ms)
+			{
+				uint32_t operands = ops[4];
+				if (operands != ImageOperandsSampleMask || length != 6)
+					throw CompilerError(
+					    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+
+				uint32_t samples = ops[5];
+				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ", ",
+				               to_expression(samples), ")");
+			}
+			else
+				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ")");
 			pure = false;
 		}
 
@@ -3645,7 +3657,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 		}
 
-		statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ");");
+		auto &type = expression_type(ops[0]);
+		if (type.image.ms)
+		{
+			uint32_t operands = ops[3];
+			if (operands != ImageOperandsSampleMask || length != 5)
+				throw CompilerError("Multisampled image used in OpImageWrite, but unexpected operand mask was used.");
+			uint32_t samples = ops[4];
+			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(samples),
+			          ", ", to_expression(ops[2]), ");");
+		}
+		else
+			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]),
+			          ");");
 
 		if (var && variable_storage_is_aliased(*var))
 			flush_all_aliased_variables();
