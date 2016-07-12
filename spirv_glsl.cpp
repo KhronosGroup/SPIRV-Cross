@@ -460,7 +460,11 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 {
-	// Only handle GLES 3.1 compliant types for now ...
+	auto check_desktop = [this] {
+		if (options.es)
+			throw CompilerError("Attempting to use image format not supported in ES profile.");
+	};
+
 	switch (format)
 	{
 	case ImageFormatRgba32f:
@@ -504,10 +508,73 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 	case ImageFormatRg16ui:
 		return "rg16ui";
 
+	// Desktop-only formats
+	case ImageFormatR11fG11fB10f:
+		check_desktop();
+		return "r11f_g11f_b10f";
+	case ImageFormatR16f:
+		check_desktop();
+		return "r16f";
+	case ImageFormatRgb10A2:
+		check_desktop();
+		return "rgb10_a2";
+	case ImageFormatR8:
+		check_desktop();
+		return "r8";
+	case ImageFormatRg8:
+		check_desktop();
+		return "rg8";
+	case ImageFormatR16:
+		check_desktop();
+		return "r16";
+	case ImageFormatRg16:
+		check_desktop();
+		return "rg16";
+	case ImageFormatRgba16:
+		check_desktop();
+		return "rgba16";
+	case ImageFormatR16Snorm:
+		check_desktop();
+		return "r16_snorm";
+	case ImageFormatRg16Snorm:
+		check_desktop();
+		return "rg16_snorm";
+	case ImageFormatRgba16Snorm:
+		check_desktop();
+		return "rgba16_snorm";
+	case ImageFormatR8Snorm:
+		check_desktop();
+		return "r8_snorm";
+	case ImageFormatRg8Snorm:
+		check_desktop();
+		return "rg8_snorm";
+
+	case ImageFormatR8ui:
+		check_desktop();
+		return "r8ui";
+	case ImageFormatRg8ui:
+		check_desktop();
+		return "rg8ui";
+	case ImageFormatR16ui:
+		check_desktop();
+		return "r16ui";
+	case ImageFormatRgb10a2ui:
+		check_desktop();
+		return "rgb10_a2ui";
+
+	case ImageFormatR8i:
+		check_desktop();
+		return "r8i";
+	case ImageFormatRg8i:
+		check_desktop();
+		return "rg8i";
+	case ImageFormatR16i:
+		check_desktop();
+		return "r16i";
+
+	default:
 	case ImageFormatUnknown:
 		return nullptr;
-	default:
-		return "UNSUPPORTED"; // TODO: Fill in rest.
 	}
 }
 
