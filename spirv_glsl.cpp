@@ -872,7 +872,8 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
-	auto ssbo = meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock);
+	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
 
 	add_resource_name(var.self);
 
@@ -886,7 +887,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	else
 		resource_names.insert(buffer_name);
 
-	statement(layout_for_variable(var) + (ssbo ? "buffer " : "uniform ") + buffer_name);
+	statement(layout_for_variable(var), restrict ? "restrict " : "", ssbo ? "buffer " : "uniform ", buffer_name);
 	begin_scope();
 
 	type.member_name_cache.clear();
@@ -1176,33 +1177,44 @@ void CompilerGLSL::emit_resources()
 		statement("");
 }
 
+void CompilerGLSL::handle_invalid_expression(uint32_t id)
+{
+	auto &expr = get<SPIRExpression>(id);
+
+	// This expression has been invalidated in the past.
+	// Be careful with this expression next pass ...
+	// Used for OpCompositeInsert forwarding atm.
+	expr.used_while_invalidated = true;
+
+	// We tried to read an invalidated expression.
+	// This means we need another pass at compilation, but next time, force temporary variables so that they cannot be invalidated.
+	forced_temporaries.insert(id);
+	force_recompile = true;
+}
+
 string CompilerGLSL::to_expression(uint32_t id)
 {
 	auto itr = invalid_expressions.find(id);
 	if (itr != end(invalid_expressions))
+		handle_invalid_expression(id);
+
+	if (ids[id].get_type() == TypeExpression)
 	{
+		// We might have a more complex chain of dependencies.
+		// A possible scenario is that we
+		//
+		// %1 = OpLoad
+		// %2 = OpDoSomething %1 %1. here %2 will have a dependency on %1.
+		// %3 = OpDoSomethingAgain %2 %2. Here %3 will lose the link to %1 since we don't propagate the dependencies like that.
+		// OpStore %1 %foo // Here we can invalidate %1, and hence all expressions which depend on %1. Only %2 will know since it's part of invalid_expressions.
+		// %4 = OpDoSomethingAnotherTime %3 %3 // If we forward all expressions we will see %1 expression after store, not before.
+		//
+		// However, we can propagate up a list of depended expressions when we used %2, so we can check if %2 is invalid when reading %3 after the store,
+		// and see that we should not forward reads of the original variable.
 		auto &expr = get<SPIRExpression>(id);
-
-		// This expression has been invalidated in the past.
-		// Be careful with this expression next pass ...
-		// Used for OpCompositeInsert forwarding atm.
-		expr.used_while_invalidated = true;
-
-		// We tried to read an invalidated expression.
-		// This means we need another pass at compilation, but next time, do not try to forward
-		// the variables which caused invalidation to happen in the first place.
-		for (auto var : expr.invalidated_by)
-		{
-			//fprintf(stderr, "Expression %u was invalidated due to variable %u being invalid at read time!\n", id, var);
-			get<SPIRVariable>(var).forwardable = false;
-		}
-
-		if (expr.invalidated_by.empty() && expr.loaded_from)
-		{
-			//fprintf(stderr, "Expression %u was invalidated due to variable %u being invalid at read time!\n", id, expr.loaded_from);
-			get<SPIRVariable>(expr.loaded_from).forwardable = false;
-		}
-		force_recompile = true;
+		for (uint32_t dep : expr.expression_dependencies)
+			if (invalid_expressions.find(dep) != end(invalid_expressions))
+				handle_invalid_expression(dep);
 	}
 
 	track_expression_read(id);
@@ -1441,13 +1453,23 @@ SPIRExpression &CompilerGLSL::emit_op(uint32_t result_type, uint32_t result_id, 
 
 void CompilerGLSL::emit_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op)
 {
-	emit_op(result_type, result_id, join(op, to_expression(op0)), should_forward(op0), true);
+	bool forward = should_forward(op0);
+	emit_op(result_type, result_id, join(op, to_expression(op0)), forward, true);
+
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+		inherit_expression_dependencies(result_id, op0);
 }
 
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
-	emit_op(result_type, result_id, join(to_expression(op0), " ", op, " ", to_expression(op1)),
-	        should_forward(op0) && should_forward(op1), true);
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id, join(to_expression(op0), " ", op, " ", to_expression(op1)), forward, true);
+
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+	{
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
+	}
 }
 
 SPIRType CompilerGLSL::binary_op_bitcast_helper(string &cast_op0, string &cast_op1, SPIRType::BaseType &input_type,
@@ -1516,14 +1538,23 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 
 void CompilerGLSL::emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op)
 {
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ")"), should_forward(op0), false);
+	bool forward = should_forward(op0);
+	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ")"), forward, false);
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+		inherit_expression_dependencies(result_id, op0);
 }
 
 void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op)
 {
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ")"),
-	        should_forward(op0) && should_forward(op1), false);
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ")"), forward, false);
+
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+	{
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
+	}
 }
 
 void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
@@ -1554,17 +1585,33 @@ void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t resul
 void CompilerGLSL::emit_trinary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                         uint32_t op2, const char *op)
 {
+	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2);
 	emit_op(result_type, result_id,
-	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ")"),
-	        should_forward(op0) && should_forward(op1) && should_forward(op2), false);
+	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ")"), forward, false);
+
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+	{
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
+		inherit_expression_dependencies(result_id, op2);
+	}
 }
 
 void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                            uint32_t op2, uint32_t op3, const char *op)
 {
+	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2) && should_forward(op3);
 	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ",
 	                                     to_expression(op2), ", ", to_expression(op3), ")"),
-	        should_forward(op0) && should_forward(op1) && should_forward(op2) && should_forward(op3), false);
+	        forward, false);
+
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+	{
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
+		inherit_expression_dependencies(result_id, op2);
+		inherit_expression_dependencies(result_id, op3);
+	}
 }
 
 string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype)
@@ -2391,7 +2438,11 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 
 bool CompilerGLSL::should_forward(uint32_t id)
 {
-	return is_immutable(id) && !options.force_temporary;
+	// Immutable expression can always be forwarded.
+	// If not immutable, we can speculate about it by forwarding potentially mutable variables.
+	auto *var = maybe_get<SPIRVariable>(id);
+	bool forward = var ? var->forwardable : false;
+	return (is_immutable(id) || forward) && !options.force_temporary;
 }
 
 void CompilerGLSL::track_expression_read(uint32_t id)
@@ -2665,18 +2716,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// If we're loading from memory that cannot be changed by the shader,
 		// just forward the expression directly to avoid needless temporaries.
-		if (should_forward(ptr))
-		{
-			set<SPIRExpression>(id, to_expression(ptr), result_type, true);
-			register_read(id, ptr, true);
-		}
-		else
-		{
-			// If the variable can be modified after this OpLoad, we cannot just forward the expression.
-			// We must read it now and store it in a temporary.
-			emit_op(result_type, id, to_expression(ptr), false, false);
-			register_read(id, ptr, false);
-		}
+		// If an expression is mutable and forwardable, we speculate that it is immutable.
+		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
+
+		// Suppress usage tracking since using same expression multiple times does not imply any extra work.
+		emit_op(result_type, id, to_expression(ptr), forward, false, true);
+		register_read(id, ptr, forward);
 		break;
 	}
 
@@ -2688,8 +2733,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			flush_variable_declaration(var->self);
 
 		// If the base is immutable, the access chain pointer must also be.
+		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		auto e = access_chain(ops[2], &ops[3], length - 3, false);
-		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], is_immutable(ops[2]));
+		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 		expr.loaded_from = ops[2];
 		break;
 	}
@@ -2709,8 +2755,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// For this case, we don't need to invalidate anything and emit any opcode.
 			if (lhs != rhs)
 			{
-				register_write(ops[0]);
 				statement(lhs, " = ", rhs, ";");
+				register_write(ops[0]);
 			}
 		}
 		break;

@@ -60,7 +60,8 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
-	return ssbo || image || counter;
+	bool restrict = (meta[v.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
+	return !restrict && (ssbo || image || counter);
 }
 
 bool Compiler::block_is_pure(const SPIRBlock &block)
@@ -274,10 +275,7 @@ void Compiler::register_write(uint32_t chain)
 void Compiler::flush_dependees(SPIRVariable &var)
 {
 	for (auto expr : var.dependees)
-	{
 		invalid_expressions.insert(expr);
-		get<SPIRExpression>(expr).invalidated_by.push_back(var.self);
-	}
 	var.dependees.clear();
 }
 
@@ -352,7 +350,7 @@ bool Compiler::is_immutable(uint32_t id) const
 
 		// Anything we load from the UniformConstant address space is guaranteed to be immutable.
 		bool pointer_to_const = var.storage == StorageClassUniformConstant;
-		return pointer_to_const || var.phi_variable || var.forwardable || !expression_is_lvalue(id);
+		return pointer_to_const || var.phi_variable || !expression_is_lvalue(id);
 	}
 	else if (ids[id].get_type() == TypeExpression)
 		return get<SPIRExpression>(id).immutable;
@@ -2023,4 +2021,22 @@ void Compiler::set_subpass_input_remapped_components(uint32_t id, uint32_t compo
 uint32_t Compiler::get_subpass_input_remapped_components(uint32_t id) const
 {
 	return get<SPIRVariable>(id).remapped_components;
+}
+
+void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_expression)
+{
+	auto &e = get<SPIRExpression>(dst);
+	auto *s = maybe_get<SPIRExpression>(source_expression);
+	if (!s)
+		return;
+
+	auto &e_deps = e.expression_dependencies;
+	auto &s_deps = s->expression_dependencies;
+
+	// If we depend on a expression, we also depend on all sub-dependencies from source.
+	e_deps.push_back(source_expression);
+	e_deps.insert(end(e_deps), begin(s_deps), end(s_deps));
+
+	// Eliminate duplicated dependencies.
+	e_deps.erase(unique(begin(e_deps), end(e_deps)), end(e_deps));
 }

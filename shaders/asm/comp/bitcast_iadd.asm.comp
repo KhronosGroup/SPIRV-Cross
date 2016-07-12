@@ -18,9 +18,11 @@
                OpDecorate %input_struct BufferBlock
                OpDecorate %inputs DescriptorSet 0
                OpDecorate %inputs Binding 0
+			   OpDecorate %inputs Restrict
                OpDecorate %output_struct BufferBlock
                OpDecorate %outputs DescriptorSet 0
                OpDecorate %outputs Binding 1
+			   OpDecorate %outputs Restrict
 
           %void = OpTypeVoid
           %main_func = OpTypeFunction %void

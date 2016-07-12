@@ -349,6 +349,7 @@ protected:
 	uint32_t increase_bound_by(uint32_t incr_amount);
 
 	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
+	void inherit_expression_dependencies(uint32_t dst, uint32_t source);
 
 private:
 	void parse();
