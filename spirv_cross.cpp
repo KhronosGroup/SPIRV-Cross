@@ -422,56 +422,56 @@ ShaderResources Compiler::get_shader_resources() const
 		if (var.storage == StorageClassInput)
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_inputs.push_back({ var.self, type.self, meta[type.self].decoration.alias });
+				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
 			else
-				res.stage_inputs.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Subpass inputs
 		else if (var.storage == StorageClassUniformConstant && type.image.dim == DimSubpassData)
 		{
-			res.subpass_inputs.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Outputs
 		else if (var.storage == StorageClassOutput)
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_outputs.push_back({ var.self, type.self, meta[type.self].decoration.alias });
+				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
 			else
-				res.stage_outputs.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// UBOs
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)))
 		{
-			res.uniform_buffers.push_back({ var.self, type.self, meta[type.self].decoration.alias });
+			res.uniform_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
 		}
 		// SSBOs
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
 		{
-			res.storage_buffers.push_back({ var.self, type.self, meta[type.self].decoration.alias });
+			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
 		}
 		// Push constant blocks
 		else if (type.storage == StorageClassPushConstant)
 		{
 			// There can only be one push constant block, but keep the vector in case this restriction is lifted
 			// in the future.
-			res.push_constant_buffers.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image)
 		{
-			res.storage_images.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+			res.storage_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Textures
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::SampledImage)
 		{
-			res.sampled_images.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+			res.sampled_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Atomic counters
 		else if (type.storage == StorageClassAtomicCounter)
 		{
-			res.atomic_counters.push_back({ var.self, type.self, meta[var.self].decoration.alias });
+			res.atomic_counters.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 	}
 

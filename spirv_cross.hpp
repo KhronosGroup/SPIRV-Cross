@@ -36,15 +36,23 @@ struct Resource
 	// This is the ID of the OpVariable.
 	uint32_t id;
 
-	// The type of the declared resource.
+	// The type ID of the variable which includes arrays and all type modifications.
+	// This type ID is not suitable for parsing OpMemberDecoration of a struct and other decorations in general
+	// since these modifications typically happen on the base_type_id.
 	uint32_t type_id;
+
+	// The base type of the declared resource.
+	// This type is the base type which ignores pointers and arrays of the type_id.
+	// This is mostly useful to parse decorations of the underlying type.
+	// base_type_id can also be obtained with get_type(get_type(type_id).self).
+	uint32_t base_type_id;
 
 	// The declared name (OpName) of the resource.
 	// For Buffer blocks, the name actually reflects the externally
 	// visible Block name.
 	//
 	// This name can be retrieved again by using either
-	// get_name(id) or get_name(type_id) depending if it's a buffer block or not.
+	// get_name(id) or get_name(base_type_id) depending if it's a buffer block or not.
 	//
 	// This name can be an empty string in which case get_fallback_name(id) can be
 	// used which obtains a suitable fallback identifier for an ID.
@@ -111,7 +119,7 @@ public:
 	void unset_decoration(uint32_t id, spv::Decoration decoration);
 
 	// Gets the SPIR-V associated with ID.
-	// Mostly used with Resource::type_id to parse the underlying type of a resource.
+	// Mostly used with Resource::type_id and Resource::base_type_id to parse the underlying type of a resource.
 	const SPIRType &get_type(uint32_t id) const;
 
 	// Gets the underlying storage class for an OpVariable.
