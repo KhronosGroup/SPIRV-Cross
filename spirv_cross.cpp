@@ -60,8 +60,8 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
-	bool restrict = (meta[v.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
-	return !restrict && (ssbo || image || counter);
+	bool is_restrict = (meta[v.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
+	return !is_restrict && (ssbo || image || counter);
 }
 
 bool Compiler::block_is_pure(const SPIRBlock &block)

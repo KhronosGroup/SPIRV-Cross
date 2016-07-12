@@ -873,7 +873,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
-	bool restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
+	bool is_restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
 
 	add_resource_name(var.self);
 
@@ -887,7 +887,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	else
 		resource_names.insert(buffer_name);
 
-	statement(layout_for_variable(var), restrict ? "restrict " : "", ssbo ? "buffer " : "uniform ", buffer_name);
+	statement(layout_for_variable(var), is_restrict ? "restrict " : "", ssbo ? "buffer " : "uniform ", buffer_name);
 	begin_scope();
 
 	type.member_name_cache.clear();
