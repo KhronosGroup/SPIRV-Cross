@@ -3634,6 +3634,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpImageQueryLevels:
+	{
+		if (!options.es && options.version < 430)
+			require_extension("GL_ARB_texture_query_levels");
+		if (options.es)
+			throw CompilerError("textureQueryLevels not supported in ES profile.");
+		UFOP(textureQueryLevels);
+		break;
+	}
+
 	case OpImageQuerySamples:
 	{
 		auto *var = maybe_get_backing_variable(ops[2]);
