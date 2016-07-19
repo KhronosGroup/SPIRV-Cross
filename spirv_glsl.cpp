@@ -3619,6 +3619,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpImageQueryLod:
+	{
+		if (!options.es && options.version < 400)
+		{
+			require_extension("GL_ARB_texture_query_lod");
+			// For some reason, the ARB spec is all-caps.
+			BFOP(textureQueryLOD);
+		}
+		else if (options.es)
+			throw CompilerError("textureQueryLod not supported in ES profile.");
+		else
+			BFOP(textureQueryLod);
+		break;
+	}
+
 	case OpImageQuerySamples:
 	{
 		auto *var = maybe_get_backing_variable(ops[2]);
