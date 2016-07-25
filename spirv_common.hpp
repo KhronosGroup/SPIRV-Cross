@@ -258,13 +258,15 @@ struct SPIRExpression : IVariant
 
 	// If this expression will never change, we can avoid lots of temporaries
 	// in high level source.
+	// An expression being immutable can be speculative,
+	// it is assumed that this is true almost always.
 	bool immutable = false;
 
 	// If this expression has been used while invalidated.
 	bool used_while_invalidated = false;
 
-	// A list of a variables for which this expression was invalidated by.
-	std::vector<uint32_t> invalidated_by;
+	// A list of expressions which this expression depends on.
+	std::vector<uint32_t> expression_dependencies;
 };
 
 struct SPIRFunctionPrototype : IVariant

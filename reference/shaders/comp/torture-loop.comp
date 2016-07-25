@@ -21,7 +21,8 @@ void main()
     uint j;
     for (;;)
     {
-        int _40 = k + 1;
+        int _39 = k;
+        int _40 = _39 + 1;
         k = _40;
         if ((_40 < 10))
         {

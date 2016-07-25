@@ -146,19 +146,23 @@ def regression_check(shader, glsl, update, keep):
 def shader_is_vulkan(shader):
     return '.vk.' in shader
 
+def shader_is_desktop(shader):
+    return '.desktop.' in shader
+
 def shader_is_spirv(shader):
     return '.asm.' in shader
 
 def test_shader(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     vulkan = shader_is_vulkan(shader[1])
+    desktop = shader_is_desktop(shader[1])
     spirv = shader_is_spirv(shader[1])
 
     print('Testing shader:', joined_path)
     spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, spirv)
 
     # Only test GLSL stats if we have a shader following GL semantics.
-    if stats and (not vulkan) and (not spirv):
+    if stats and (not vulkan) and (not spirv) and (not desktop):
         cross_stats = get_shader_stats(glsl)
 
     regression_check(shader, glsl, update, keep)

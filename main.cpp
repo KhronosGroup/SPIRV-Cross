@@ -196,10 +196,14 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		bool is_push_constant = compiler.get_storage_class(res.id) == StorageClassPushConstant;
 		bool is_block = (compiler.get_decoration_mask(type.self) &
 		                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
-		uint32_t fallback_id = !is_push_constant && is_block ? res.type_id : res.id;
+		uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
 
-		fprintf(stderr, " ID %03u : %s", res.id,
-		        !res.name.empty() ? res.name.c_str() : compiler.get_fallback_name(fallback_id).c_str());
+		string array;
+		for (auto arr : type.array)
+			array = join("[", arr ? convert_to_string(arr) : "", "]") + array;
+
+		fprintf(stderr, " ID %03u : %s%s", res.id,
+		        !res.name.empty() ? res.name.c_str() : compiler.get_fallback_name(fallback_id).c_str(), array.c_str());
 
 		if (mask & (1ull << DecorationLocation))
 			fprintf(stderr, " (Location : %u)", compiler.get_decoration(res.id, DecorationLocation));
@@ -304,7 +308,7 @@ static void print_push_constant_resources(const Compiler &compiler, const vector
 		fprintf(stderr, "==================\n\n");
 		for (auto &range : ranges)
 		{
-			const auto &name = compiler.get_member_name(block.type_id, range.index);
+			const auto &name = compiler.get_member_name(block.base_type_id, range.index);
 
 			fprintf(stderr, "Member #%3u (%s): Offset: %4u, Range: %4u\n", range.index,
 			        !name.empty() ? name.c_str() : compiler.get_fallback_member_name(range.index).c_str(),
