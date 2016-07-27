@@ -218,7 +218,9 @@ protected:
 	struct BackendVariations
 	{
 		bool float_literal_suffix = false;
+		bool double_literal_suffix = true;
 		bool uint32_t_literal_suffix = true;
+		bool long_long_literal_suffix = false;
 		const char *basic_int_type = "int";
 		const char *basic_uint_type = "uint";
 		bool swizzle_is_function = false;
@@ -291,6 +293,7 @@ protected:
 	std::string layout_for_variable(const SPIRVariable &variable);
 
 	bool ssbo_is_std430_packing(const SPIRType &type);
+	uint32_t type_to_std430_base_size(const SPIRType &type);
 	uint32_t type_to_std430_alignment(const SPIRType &type, uint64_t flags);
 	uint32_t type_to_std430_array_stride(const SPIRType &type, uint64_t flags);
 	uint32_t type_to_std430_size(const SPIRType &type, uint64_t flags);
@@ -343,10 +346,9 @@ protected:
 	void remap_pls_variables();
 
 	void add_variable(std::unordered_set<std::string> &variables, uint32_t id);
-
 	void check_function_call_constraints(const uint32_t *args, uint32_t length);
-
 	void handle_invalid_expression(uint32_t id);
+	void find_static_extensions();
 };
 }
 
