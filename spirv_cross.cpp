@@ -1040,7 +1040,8 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t id = ops[0];
 		uint32_t width = ops[1];
 		auto &type = set<SPIRType>(id);
-		type.basetype = ops[2] ? SPIRType::Int : SPIRType::UInt;
+		type.basetype =
+		    ops[2] ? (width > 32 ? SPIRType::Int64 : SPIRType::Int) : (width > 32 ? SPIRType::UInt64 : SPIRType::UInt);
 		type.width = width;
 		break;
 	}
@@ -1268,7 +1269,7 @@ void Compiler::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(ops[0]);
-		if (type.basetype == SPIRType::Double)
+		if (type.width > 32)
 			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32)).specialization = op == OpSpecConstant;
 		else
 			set<SPIRConstant>(id, ops[0], ops[2]).specialization = op == OpSpecConstant;

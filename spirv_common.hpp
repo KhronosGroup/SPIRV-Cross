@@ -164,6 +164,8 @@ struct SPIRType : IVariant
 		Char,
 		Int,
 		UInt,
+		Int64,
+		UInt64,
 		AtomicCounter,
 		Float,
 		Double,

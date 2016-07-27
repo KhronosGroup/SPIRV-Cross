@@ -190,6 +190,14 @@ void CompilerGLSL::find_static_extensions()
 				if (!options.es && options.version < 400)
 					require_extension("GL_ARB_gpu_shader_fp64");
 			}
+
+			if (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64)
+			{
+				if (options.es)
+					throw CompilerError("64-bit integers not supported in ES profile.");
+				if (!options.es)
+					require_extension("GL_ARB_gpu_shader_int64");
+			}
 		}
 	}
 }
@@ -604,6 +612,8 @@ uint32_t CompilerGLSL::type_to_std430_base_size(const SPIRType &type)
 	switch (type.basetype)
 	{
 	case SPIRType::Double:
+	case SPIRType::Int64:
+	case SPIRType::UInt64:
 		return 8;
 	default:
 		return 4;
@@ -1391,6 +1401,54 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				res += convert_to_string(c.scalar_f64(vector, i));
 				if (backend.double_literal_suffix)
 					res += "lf";
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::Int64:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_i64(vector, 0));
+			if (backend.long_long_literal_suffix)
+				res += "ll";
+			else
+				res += "l";
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				res += convert_to_string(c.scalar_i64(vector, i));
+				if (backend.long_long_literal_suffix)
+					res += "ll";
+				else
+					res += "l";
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::UInt64:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_u64(vector, 0));
+			if (backend.long_long_literal_suffix)
+				res += "ull";
+			else
+				res += "ul";
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				res += convert_to_string(c.scalar_u64(vector, i));
+				if (backend.long_long_literal_suffix)
+					res += "ull";
+				else
+					res += "ul";
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2288,9 +2346,13 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
 		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64)
+		return type_to_glsl(out_type);
 	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float)
 		return "floatBitsToUint";
 	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64)
 		return type_to_glsl(out_type);
 	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float)
 		return "floatBitsToInt";
@@ -2298,6 +2360,14 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 		return "uintBitsToFloat";
 	else if (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::Int)
 		return "intBitsToFloat";
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double)
+		return "doubleBitsToInt64";
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double)
+		return "doubleBitsToUint64";
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64)
+		return "int64BitsToDouble";
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
+		return "uint64BitsToDouble";
 	else
 		return "";
 }
@@ -4308,6 +4378,10 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return "float";
 		case SPIRType::Double:
 			return "double";
+		case SPIRType::Int64:
+			return "int64_t";
+		case SPIRType::UInt64:
+			return "uint64_t";
 		default:
 			return "???";
 		}
@@ -4326,6 +4400,10 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("vec", type.vecsize);
 		case SPIRType::Double:
 			return join("dvec", type.vecsize);
+		case SPIRType::Int64:
+			return join("i64vec", type.vecsize);
+		case SPIRType::UInt64:
+			return join("u64vec", type.vecsize);
 		default:
 			return "???";
 		}
@@ -4344,6 +4422,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("mat", type.vecsize);
 		case SPIRType::Double:
 			return join("dmat", type.vecsize);
+		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
 		}
@@ -4362,6 +4441,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("mat", type.columns, "x", type.vecsize);
 		case SPIRType::Double:
 			return join("dmat", type.columns, "x", type.vecsize);
+		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
 		}
