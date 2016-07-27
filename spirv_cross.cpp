@@ -1030,7 +1030,7 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t id = ops[0];
 		uint32_t width = ops[1];
 		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Float;
+		type.basetype = width > 32 ? SPIRType::Double : SPIRType::Float;
 		type.width = width;
 		break;
 	}
@@ -1267,7 +1267,11 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstant:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], ops[2]).specialization = op == OpSpecConstant;
+		auto &type = get<SPIRType>(ops[0]);
+		if (type.basetype == SPIRType::Double)
+			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32)).specialization = op == OpSpecConstant;
+		else
+			set<SPIRConstant>(id, ops[0], ops[2]).specialization = op == OpSpecConstant;
 		break;
 	}
 
@@ -1275,7 +1279,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstantFalse:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], 0).specialization = op == OpSpecConstantFalse;
+		set<SPIRConstant>(id, ops[0], uint32_t(0)).specialization = op == OpSpecConstantFalse;
 		break;
 	}
 
@@ -1283,7 +1287,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstantTrue:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], 1).specialization = op == OpSpecConstantTrue;
+		set<SPIRConstant>(id, ops[0], uint32_t(1)).specialization = op == OpSpecConstantTrue;
 		break;
 	}
 
@@ -1306,6 +1310,7 @@ void Compiler::parse(const Instruction &instruction)
 			break;
 		}
 
+		bool type_64bit = ctype.width > 32;
 		bool matrix = ctype.columns > 1;
 
 		if (matrix)
@@ -1341,23 +1346,53 @@ void Compiler::parse(const Instruction &instruction)
 			switch (length - 2)
 			{
 			case 1:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar());
+				if (type_64bit)
+					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64());
+				else
+					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar());
 				break;
 
 			case 2:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
-				                              get<SPIRConstant>(ops[3]).scalar());
+				if (type_64bit)
+				{
+					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64(),
+					                              get<SPIRConstant>(ops[3]).scalar_u64());
+				}
+				else
+				{
+					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
+					                              get<SPIRConstant>(ops[3]).scalar());
+				}
 				break;
 
 			case 3:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
-				                              get<SPIRConstant>(ops[3]).scalar(), get<SPIRConstant>(ops[4]).scalar());
+				if (type_64bit)
+				{
+					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64(),
+					                              get<SPIRConstant>(ops[3]).scalar_u64(),
+					                              get<SPIRConstant>(ops[4]).scalar_u64());
+				}
+				else
+				{
+					constant =
+					    &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
+					                       get<SPIRConstant>(ops[3]).scalar(), get<SPIRConstant>(ops[4]).scalar());
+				}
 				break;
 
 			case 4:
-				constant =
-				    &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(), get<SPIRConstant>(ops[3]).scalar(),
-				                       get<SPIRConstant>(ops[4]).scalar(), get<SPIRConstant>(ops[5]).scalar());
+				if (type_64bit)
+				{
+					constant = &set<SPIRConstant>(
+					    id, type, get<SPIRConstant>(ops[2]).scalar_u64(), get<SPIRConstant>(ops[3]).scalar_u64(),
+					    get<SPIRConstant>(ops[4]).scalar_u64(), get<SPIRConstant>(ops[5]).scalar_u64());
+				}
+				else
+				{
+					constant = &set<SPIRConstant>(
+					    id, type, get<SPIRConstant>(ops[2]).scalar(), get<SPIRConstant>(ops[3]).scalar(),
+					    get<SPIRConstant>(ops[4]).scalar(), get<SPIRConstant>(ops[5]).scalar());
+				}
 				break;
 
 			default:

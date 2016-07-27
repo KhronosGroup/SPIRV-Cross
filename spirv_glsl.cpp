@@ -176,8 +176,29 @@ void CompilerGLSL::remap_pls_variables()
 	}
 }
 
+void CompilerGLSL::find_static_extensions()
+{
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeType)
+		{
+			auto &type = id.get<SPIRType>();
+			if (type.basetype == SPIRType::Double)
+			{
+				if (options.es)
+					throw CompilerError("FP64 not supported in ES profile.");
+				if (!options.es && options.version < 400)
+					require_extension("GL_ARB_gpu_shader_fp64");
+			}
+		}
+	}
+}
+
 string CompilerGLSL::compile()
 {
+	// Scan the SPIR-V to find trivial uses of extensions.
+	find_static_extensions();
+
 	uint32_t pass_count = 0;
 	do
 	{
@@ -578,10 +599,20 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 	}
 }
 
+uint32_t CompilerGLSL::type_to_std430_base_size(const SPIRType &type)
+{
+	switch (type.basetype)
+	{
+	case SPIRType::Double:
+		return 8;
+	default:
+		return 4;
+	}
+}
+
 uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t flags)
 {
-	// float, int and uint all take 4 bytes.
-	const uint32_t base_alignment = 4;
+	const uint32_t base_alignment = type_to_std430_base_size(type);
 
 	if (type.basetype == SPIRType::Struct)
 	{
@@ -654,8 +685,7 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 	if (!type.array.empty())
 		return type.array.back() * type_to_std430_array_stride(type, flags);
 
-	// float, int and uint all take 4 bytes.
-	const uint32_t base_alignment = 4;
+	const uint32_t base_alignment = type_to_std430_base_size(type);
 	uint32_t size = 0;
 
 	if (type.basetype == SPIRType::Struct)
@@ -1309,10 +1339,20 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	bool splat = c.vector_size() > 1;
 	if (splat)
 	{
-		uint32_t ident = c.scalar(vector, 0);
-		for (uint32_t i = 1; i < c.vector_size(); i++)
-			if (ident != c.scalar(vector, i))
-				splat = false;
+		if (type_to_std430_base_size(type) == 8)
+		{
+			uint64_t ident = c.scalar_u64(vector, 0);
+			for (uint32_t i = 1; i < c.vector_size(); i++)
+				if (ident != c.scalar_u64(vector, i))
+					splat = false;
+		}
+		else
+		{
+			uint32_t ident = c.scalar(vector, 0);
+			for (uint32_t i = 1; i < c.vector_size(); i++)
+				if (ident != c.scalar(vector, i))
+					splat = false;
+		}
 	}
 
 	switch (type.basetype)
@@ -1331,6 +1371,26 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				res += convert_to_string(c.scalar_f32(vector, i));
 				if (backend.float_literal_suffix)
 					res += "f";
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::Double:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_f64(vector, 0));
+			if (backend.double_literal_suffix)
+				res += "lf";
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				res += convert_to_string(c.scalar_f64(vector, i));
+				if (backend.double_literal_suffix)
+					res += "lf";
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -1980,9 +2040,16 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 	// FP fiddling
 	case GLSLstd450Round:
-	case GLSLstd450RoundEven:
 		emit_unary_func_op(result_type, id, args[0], "round");
 		break;
+
+	case GLSLstd450RoundEven:
+		if ((options.es && options.version >= 300) || (!options.es && options.version >= 130))
+			emit_unary_func_op(result_type, id, args[0], "roundEven");
+		else
+			throw CompilerError("roundEven supported only in ESSL 300 and GLSL 130 and up.");
+		break;
+
 	case GLSLstd450Trunc:
 		emit_unary_func_op(result_type, id, args[0], "trunc");
 		break;
@@ -2159,6 +2226,13 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		break;
 	case GLSLstd450UnpackHalf2x16:
 		emit_unary_func_op(result_type, id, args[0], "unpackHalf2x16");
+		break;
+
+	case GLSLstd450PackDouble2x32:
+		emit_unary_func_op(result_type, id, args[0], "packDouble2x32");
+		break;
+	case GLSLstd450UnpackDouble2x32:
+		emit_unary_func_op(result_type, id, args[0], "unpackDouble2x32");
 		break;
 
 	// Vector math
@@ -3129,7 +3203,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpOuterProduct:
-		UFOP(outerProduct);
+		BFOP(outerProduct);
 		break;
 
 	case OpDot:
@@ -3957,7 +4031,7 @@ const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 {
 	if (options.es)
 	{
-		// Structs do not have precision qualifiers.
+		// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
 		if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
 		    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
 		    type.basetype != SPIRType::Sampler)
@@ -4232,6 +4306,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return "atomic_uint";
 		case SPIRType::Float:
 			return "float";
+		case SPIRType::Double:
+			return "double";
 		default:
 			return "???";
 		}
@@ -4248,6 +4324,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("uvec", type.vecsize);
 		case SPIRType::Float:
 			return join("vec", type.vecsize);
+		case SPIRType::Double:
+			return join("dvec", type.vecsize);
 		default:
 			return "???";
 		}
@@ -4264,6 +4342,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("umat", type.vecsize);
 		case SPIRType::Float:
 			return join("mat", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.vecsize);
 		default:
 			return "???";
 		}
@@ -4280,6 +4360,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("umat", type.columns, "x", type.vecsize);
 		case SPIRType::Float:
 			return join("mat", type.columns, "x", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.columns, "x", type.vecsize);
 		default:
 			return "???";
 		}
