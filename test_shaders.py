@@ -86,14 +86,14 @@ def cross_compile(shader, vulkan, spirv):
     #    subprocess.check_call(['spirv-val', spirv_path])
 
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--output', glsl_path, spirv_path])
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path])
 
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if (not ('nocompat' in glsl_path)) and (not spirv):
         validate_shader(glsl_path, False)
 
     if vulkan or spirv:
-        subprocess.check_call([spirv_cross_path, '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path])
+        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path])
         validate_shader(vulkan_glsl_path, vulkan)
 
     return (spirv_path, glsl_path, vulkan_glsl_path if vulkan else None)

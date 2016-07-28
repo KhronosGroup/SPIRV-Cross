@@ -232,6 +232,32 @@ struct SPIRExtension : IVariant
 	Extension ext;
 };
 
+// SPIREntryPoint is not a variant since its IDs are used to decorate OpFunction,
+// so in order to avoid conflicts, we can't stick them in the ids array.
+struct SPIREntryPoint
+{
+	SPIREntryPoint(uint32_t self_, spv::ExecutionModel execution_model, std::string entry_name)
+	    : self(self_)
+	    , name(std::move(entry_name))
+	    , model(execution_model)
+	{
+	}
+	SPIREntryPoint() = default;
+
+	uint32_t self = 0;
+	std::string name;
+	std::vector<uint32_t> interface_variables;
+
+	uint64_t flags = 0;
+	struct
+	{
+		uint32_t x = 0, y = 0, z = 0;
+	} workgroup_size;
+	uint32_t invocations = 0;
+	uint32_t output_vertices = 0;
+	spv::ExecutionModel model = {};
+};
+
 struct SPIRExpression : IVariant
 {
 	enum

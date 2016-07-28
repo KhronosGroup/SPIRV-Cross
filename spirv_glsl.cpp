@@ -221,7 +221,7 @@ string CompilerGLSL::compile()
 		emit_header();
 		emit_resources();
 
-		emit_function(get<SPIRFunction>(execution.entry_point), 0);
+		emit_function(get<SPIRFunction>(entry_point), 0);
 
 		pass_count++;
 	} while (force_recompile);
@@ -231,6 +231,7 @@ string CompilerGLSL::compile()
 
 void CompilerGLSL::emit_header()
 {
+	auto &execution = get_entry_point();
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
 	for (auto &header : header_lines)
@@ -948,6 +949,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
+	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
 
 	// Either make it plain in/out or in/out blocks depending on what shader is doing ...
@@ -1064,6 +1066,7 @@ string CompilerGLSL::remap_swizzle(uint32_t result_type, uint32_t input_componen
 
 void CompilerGLSL::emit_pls()
 {
+	auto &execution = get_entry_point();
 	if (execution.model != ExecutionModelFragment)
 		throw CompilerError("Pixel local storage only supported in fragment shaders.");
 
@@ -1096,6 +1099,8 @@ void CompilerGLSL::emit_pls()
 
 void CompilerGLSL::emit_resources()
 {
+	auto &execution = get_entry_point();
+
 	// Legacy GL uses gl_FragData[], redeclare all fragment outputs
 	// with builtins.
 	if (execution.model == ExecutionModelFragment && is_legacy())
@@ -1183,7 +1188,8 @@ void CompilerGLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput))
+			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block(var);
 				emitted = true;
@@ -4006,7 +4012,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpControlBarrier:
 	{
 		// Ignore execution and memory scope.
-		if (execution.model == ExecutionModelGLCompute)
+		if (get_entry_point().model == ExecutionModelGLCompute)
 		{
 			uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
 			if (mem == MemorySemanticsWorkgroupMemoryMask)
@@ -4101,6 +4107,8 @@ const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 {
 	if (options.es)
 	{
+		auto &execution = get_entry_point();
+
 		// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
 		if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
 		    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
@@ -4525,7 +4533,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 	decl += type_to_glsl(type);
 	decl += " ";
 
-	if (func.self == execution.entry_point)
+	if (func.self == entry_point)
 	{
 		decl += "main";
 		processing_entry_point = true;
@@ -4625,6 +4633,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 
 void CompilerGLSL::emit_fixup()
 {
+	auto &execution = get_entry_point();
 	if (execution.model == ExecutionModelVertex && options.vertex.fixup_clipspace)
 	{
 		const char *suffix = backend.float_literal_suffix ? "f" : "";
