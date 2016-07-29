@@ -218,9 +218,36 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 	fprintf(stderr, "=============\n\n");
 }
 
+static const char *execution_model_to_str(spv::ExecutionModel model)
+{
+	switch (model)
+	{
+	case spv::ExecutionModelVertex:
+		return "vertex";
+	case spv::ExecutionModelTessellationControl:
+		return "tessellation control";
+	case ExecutionModelTessellationEvaluation:
+		return "tessellation evaluation";
+	case ExecutionModelGeometry:
+		return "geometry";
+	case ExecutionModelFragment:
+		return "fragment";
+	case ExecutionModelGLCompute:
+		return "compute";
+	default:
+		return "???";
+	}
+}
+
 static void print_resources(const Compiler &compiler, const ShaderResources &res)
 {
 	uint64_t modes = compiler.get_execution_mode_mask();
+
+	fprintf(stderr, "Entry points:\n");
+	auto entry_points = compiler.get_entry_points();
+	for (auto &e : entry_points)
+		fprintf(stderr, "  %s (%s)\n", e.c_str(), execution_model_to_str(compiler.get_entry_point(e).model));
+	fprintf(stderr, "\n");
 
 	fprintf(stderr, "Execution modes:\n");
 	for (unsigned i = 0; i < 64; i++)
@@ -348,6 +375,7 @@ struct CLIArguments
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
 	vector<string> extensions;
+	string entry;
 
 	uint32_t iterations = 1;
 	bool cpp = false;
@@ -361,7 +389,7 @@ static void print_help()
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
 	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
 	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext]\n");
+	                "[--extension ext] [--entry name]\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -480,6 +508,7 @@ int main(int argc, char *argv[])
 	cbs.add("--metal", [&args](CLIParser &) { args.metal = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
+	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
 	cbs.add("--remap", [&args](CLIParser &parser) {
 		string src = parser.next_string();
 		string dst = parser.next_string();
@@ -530,6 +559,9 @@ int main(int argc, char *argv[])
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
 	else
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
+
+	if (!args.entry.empty())
+		compiler->set_entry_point(args.entry);
 
 	if (!args.set_version && !compiler->get_options().version)
 	{

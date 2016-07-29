@@ -419,7 +419,7 @@ ShaderResources Compiler::get_shader_resources() const
 			continue;
 
 		// Input
-		if (var.storage == StorageClassInput)
+		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
 				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
@@ -432,7 +432,7 @@ ShaderResources Compiler::get_shader_resources() const
 			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Outputs
-		else if (var.storage == StorageClassOutput)
+		else if (var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
 				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
@@ -929,20 +929,23 @@ void Compiler::parse(const Instruction &instruction)
 
 	case OpEntryPoint:
 	{
-		if (execution.entry_point)
-			throw CompilerError("More than one entry point not supported.");
+		auto itr = entry_points.emplace(ops[1], SPIREntryPoint(ops[1], static_cast<ExecutionModel>(ops[0]),
+		                                                       extract_string(spirv, instruction.offset + 2)));
+		auto &e = itr.first->second;
 
-		execution.model = static_cast<ExecutionModel>(ops[0]);
-		execution.entry_point = ops[1];
+		// Strings need nul-terminator and consume the whole word.
+		uint32_t strlen_words = (e.name.size() + 1 + 3) >> 2;
+		e.interface_variables.insert(end(e.interface_variables), ops + strlen_words + 2, ops + instruction.length);
+
+		// If we don't have an entry, make the first one our "default".
+		if (!entry_point)
+			entry_point = ops[1];
 		break;
 	}
 
 	case OpExecutionMode:
 	{
-		uint32_t entry = ops[0];
-		if (entry != execution.entry_point)
-			throw CompilerError("Cannot set execution mode to non-existing entry point.");
-
+		auto &execution = entry_points[ops[0]];
 		auto mode = static_cast<ExecutionMode>(ops[1]);
 		execution.flags |= 1ull << mode;
 
@@ -1921,7 +1924,7 @@ std::vector<BufferRange> Compiler::get_active_buffer_ranges(uint32_t id) const
 {
 	std::vector<BufferRange> ranges;
 	BufferAccessHandler handler(*this, ranges, id);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(execution.entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 	return ranges;
 }
 
@@ -1974,11 +1977,13 @@ bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType 
 
 uint64_t Compiler::get_execution_mode_mask() const
 {
-	return execution.flags;
+	return get_entry_point().flags;
 }
 
 void Compiler::set_execution_mode(ExecutionMode mode, uint32_t arg0, uint32_t arg1, uint32_t arg2)
 {
+	auto &execution = get_entry_point();
+
 	execution.flags |= 1ull << mode;
 	switch (mode)
 	{
@@ -2003,11 +2008,13 @@ void Compiler::set_execution_mode(ExecutionMode mode, uint32_t arg0, uint32_t ar
 
 void Compiler::unset_execution_mode(ExecutionMode mode)
 {
+	auto &execution = get_entry_point();
 	execution.flags &= ~(1ull << mode);
 }
 
 uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index) const
 {
+	auto &execution = get_entry_point();
 	switch (mode)
 	{
 	case ExecutionModeLocalSize:
@@ -2036,6 +2043,7 @@ uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t
 
 ExecutionModel Compiler::get_execution_model() const
 {
+	auto &execution = get_entry_point();
 	return execution.model;
 }
 
@@ -2075,4 +2083,70 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 
 	// Eliminate duplicated dependencies.
 	e_deps.erase(unique(begin(e_deps), end(e_deps)), end(e_deps));
+}
+
+vector<string> Compiler::get_entry_points() const
+{
+	vector<string> entries;
+	for (auto &entry : entry_points)
+		entries.push_back(entry.second.name);
+	return entries;
+}
+
+void Compiler::set_entry_point(const std::string &name)
+{
+	auto &entry = get_entry_point(name);
+	entry_point = entry.self;
+}
+
+SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
+{
+	auto itr =
+	    find_if(begin(entry_points), end(entry_points),
+	            [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.name == name; });
+
+	if (itr == end(entry_points))
+		throw CompilerError("Entry point does not exist.");
+
+	return itr->second;
+}
+
+const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
+{
+	auto itr =
+	    find_if(begin(entry_points), end(entry_points),
+	            [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.name == name; });
+
+	if (itr == end(entry_points))
+		throw CompilerError("Entry point does not exist.");
+
+	return itr->second;
+}
+
+const SPIREntryPoint &Compiler::get_entry_point() const
+{
+	return entry_points.find(entry_point)->second;
+}
+
+SPIREntryPoint &Compiler::get_entry_point()
+{
+	return entry_points.find(entry_point)->second;
+}
+
+bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
+{
+	auto &var = get<SPIRVariable>(id);
+	if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+		throw CompilerError("Only Input and Output variables are part of a shader linking interface.");
+
+	// This is to avoid potential problems with very old glslang versions which did
+	// not emit input/output interfaces properly.
+	// We can assume they only had a single entry point, and single entry point
+	// shaders could easily be assumed to use every interface variable anyways.
+	if (entry_points.size() <= 1)
+		return true;
+
+	auto &execution = get_entry_point();
+	return find(begin(execution.interface_variables), end(execution.interface_variables), id) !=
+	       end(execution.interface_variables);
 }
