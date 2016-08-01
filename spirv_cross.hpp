@@ -194,6 +194,18 @@ public:
 	void set_subpass_input_remapped_components(uint32_t id, uint32_t components);
 	uint32_t get_subpass_input_remapped_components(uint32_t id) const;
 
+	// All operations work on the current entry point.
+	// Entry points can be swapped out with set_entry_point().
+	// Entry points should be set right after the constructor completes as some reflection functions traverse the graph from the entry point.
+	// Resource reflection also depends on the entry point.
+	// By default, the current entry point is set to the first OpEntryPoint which appears in the SPIR-V module.
+	std::vector<std::string> get_entry_points() const;
+	void set_entry_point(const std::string &name);
+
+	// Returns the internal data structure for entry points to allow poking around.
+	const SPIREntryPoint &get_entry_point(const std::string &name) const;
+	SPIREntryPoint &get_entry_point(const std::string &name);
+
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;
 	void unset_execution_mode(spv::ExecutionMode mode);
@@ -269,20 +281,12 @@ protected:
 			return nullptr;
 	}
 
-	struct Execution
-	{
-		uint64_t flags = 0;
-		spv::ExecutionModel model;
-		uint32_t entry_point = 0;
-		struct
-		{
-			uint32_t x = 0, y = 0, z = 0;
-		} workgroup_size;
-		uint32_t invocations = 0;
-		uint32_t output_vertices = 0;
-
-		Execution() = default;
-	} execution;
+	uint32_t entry_point = 0;
+	// Normally, we'd stick SPIREntryPoint in ids array, but it conflicts with SPIRFunction.
+	// Entry points can therefore be seen as some sort of meta structure.
+	std::unordered_map<uint32_t, SPIREntryPoint> entry_points;
+	const SPIREntryPoint &get_entry_point() const;
+	SPIREntryPoint &get_entry_point();
 
 	struct Source
 	{
@@ -361,6 +365,10 @@ protected:
 
 	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
 	void inherit_expression_dependencies(uint32_t dst, uint32_t source);
+
+	// For proper multiple entry point support, allow querying if an Input or Output
+	// variable is part of that entry points interface.
+	bool interface_variable_exists_in_entry_point(uint32_t id) const;
 
 private:
 	void parse();

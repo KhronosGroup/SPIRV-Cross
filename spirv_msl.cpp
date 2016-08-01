@@ -85,7 +85,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 		emit_header();
 		emit_resources();
 		emit_function_declarations();
-		emit_function(get<SPIRFunction>(execution.entry_point), 0);
+		emit_function(get<SPIRFunction>(entry_point), 0);
 
 		pass_count++;
 	} while (force_recompile);
@@ -147,7 +147,7 @@ void CompilerMSL::add_builtin(BuiltIn builtin_type) {
 // Non-constant variables cannot have global scope in Metal.
 void CompilerMSL::localize_global_variables()
 {
-	auto &entry_func = get<SPIRFunction>(execution.entry_point);
+	auto &entry_func = get<SPIRFunction>(entry_point);
 	auto iter = global_variables.begin();
 	while (iter != global_variables.end())
 	{
@@ -254,6 +254,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id,
 // Adds any interface structure variables needed by this shader
 void CompilerMSL::add_interface_structs()
 {
+	auto &execution = get_entry_point();
+
 	stage_in_var_ids.clear();
 	qual_pos_var_name = "";
 
@@ -283,6 +285,8 @@ void CompilerMSL::add_interface_structs()
 // from the binding info provided during compiler construction, matching by location.
 void CompilerMSL::bind_vertex_attributes(std::set<uint32_t> &bindings)
 {
+	auto &execution = get_entry_point();
+
 	if (execution.model == ExecutionModelVertex)
 	{
 		for (auto &id : ids)
@@ -292,8 +296,8 @@ void CompilerMSL::bind_vertex_attributes(std::set<uint32_t> &bindings)
 				auto &var = id.get<SPIRVariable>();
 				auto &type = get<SPIRType>(var.basetype);
 
-				if (var.storage == StorageClassInput && (!is_builtin_variable(var)) && !var.remapped_variable &&
-				    type.pointer)
+				if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self) &&
+				    (!is_builtin_variable(var)) && !var.remapped_variable && type.pointer)
 				{
 					auto &dec = meta[var.self].decoration;
 					MSLVertexAttr *p_va = vtx_attrs_by_location[dec.location];
@@ -320,6 +324,7 @@ void CompilerMSL::bind_vertex_attributes(std::set<uint32_t> &bindings)
 // Returns the ID of the newly added variable, or zero if no variable was added.
 uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_binding)
 {
+	auto &execution = get_entry_point();
 	bool incl_builtins = (storage == StorageClassOutput);
 	bool match_binding = (execution.model == ExecutionModelVertex) && (storage == StorageClassInput);
 
@@ -333,8 +338,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			auto &type = get<SPIRType>(var.basetype);
 			auto &dec = meta[var.self].decoration;
 
-			if (var.storage == storage && (!is_builtin_variable(var) || incl_builtins) &&
-			    (!match_binding || (vtx_binding == dec.binding)) && !var.remapped_variable && type.pointer)
+			if (var.storage == storage && interface_variable_exists_in_entry_point(var.self) &&
+			    (!is_builtin_variable(var) || incl_builtins) && (!match_binding || (vtx_binding == dec.binding)) &&
+			    !var.remapped_variable && type.pointer)
 			{
 				vars.push_back(&var);
 			}
@@ -377,7 +383,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 		// Add the output interface struct as a local variable to the entry function,
 		// and force the entry function to return the output interface struct from
 		// any blocks that perform a function return.
-		auto &entry_func = get<SPIRFunction>(execution.entry_point);
+		auto &entry_func = get<SPIRFunction>(entry_point);
 		entry_func.add_local_variable(ib_var_id);
 		for (auto &blk_id : entry_func.blocks)
 		{
@@ -571,7 +577,7 @@ void CompilerMSL::emit_function_declarations()
 		if (id.get_type() == TypeFunction)
 		{
 			auto &func = id.get<SPIRFunction>();
-			if (func.self != execution.entry_point)
+			if (func.self != entry_point)
 				emit_function_prototype(func, true);
 		}
 
@@ -590,7 +596,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 	local_variable_names = resource_names;
 	string decl;
 
-	processing_entry_point = (func.self == execution.entry_point);
+	processing_entry_point = (func.self == entry_point);
 
 	auto &type = get<SPIRType>(func.return_type);
 	decl += func_type_decl(type);
@@ -989,6 +995,8 @@ string CompilerMSL::to_sampler_expression(uint32_t id)
 // Called automatically at the end of the entry point function
 void CompilerMSL::emit_fixup()
 {
+	auto &execution = get_entry_point();
+
 	if ((execution.model == ExecutionModelVertex) && stage_out_var_id && !qual_pos_var_name.empty())
 	{
 		if (options.vertex.fixup_clipspace)
@@ -1014,6 +1022,7 @@ string CompilerMSL::member_decl(const SPIRType &type, const SPIRType &membertype
 // Return a MSL qualifier for the specified function attribute member
 string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t index)
 {
+	auto &execution = get_entry_point();
 
 	BuiltIn builtin;
 	bool is_builtin = is_member_builtin(type, index, &builtin);
@@ -1154,7 +1163,7 @@ string CompilerMSL::constant_expression(const SPIRConstant &c)
 // entry type if the current function is the entry point function
 string CompilerMSL::func_type_decl(SPIRType &type)
 {
-
+	auto &execution = get_entry_point();
 	// The regular function return type. If not processing the entry point function, that's all we need
 	string return_type = type_to_glsl(type);
 	if (!processing_entry_point)
@@ -1202,6 +1211,7 @@ string CompilerMSL::clean_func_name(string func_name)
 // Returns a string containing a comma-delimited list of args for the entry point function
 string CompilerMSL::entry_point_args(bool append_comma)
 {
+	auto &execution = get_entry_point();
 	string ep_args;
 
 	// Stage-in structures
@@ -1291,7 +1301,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 // Returns the Metal index of the resource of the specified type as used by the specified variable.
 uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype)
 {
-
+	auto &execution = get_entry_point();
 	auto &var_dec = meta[var.self].decoration;
 	uint32_t var_desc_set = (var.storage == StorageClassPushConstant) ? kPushConstDescSet : var_dec.set;
 	uint32_t var_binding = (var.storage == StorageClassPushConstant) ? kPushConstBinding : var_dec.binding;
@@ -1335,7 +1345,7 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 // Returns the name of the entry point of this shader
 string CompilerMSL::get_entry_point_name()
 {
-	return clean_func_name(to_name(execution.entry_point));
+	return clean_func_name(to_name(entry_point));
 }
 
 // Returns the name of either the vertex index or instance index builtin
@@ -1604,6 +1614,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin)
 // Returns an MSL string attribute qualifer for a SPIR-V builtin
 string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 {
+	auto &execution = get_entry_point();
+
 	switch (builtin)
 	{
 	// Vertex function in

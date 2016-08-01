@@ -176,8 +176,37 @@ void CompilerGLSL::remap_pls_variables()
 	}
 }
 
+void CompilerGLSL::find_static_extensions()
+{
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeType)
+		{
+			auto &type = id.get<SPIRType>();
+			if (type.basetype == SPIRType::Double)
+			{
+				if (options.es)
+					throw CompilerError("FP64 not supported in ES profile.");
+				if (!options.es && options.version < 400)
+					require_extension("GL_ARB_gpu_shader_fp64");
+			}
+
+			if (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64)
+			{
+				if (options.es)
+					throw CompilerError("64-bit integers not supported in ES profile.");
+				if (!options.es)
+					require_extension("GL_ARB_gpu_shader_int64");
+			}
+		}
+	}
+}
+
 string CompilerGLSL::compile()
 {
+	// Scan the SPIR-V to find trivial uses of extensions.
+	find_static_extensions();
+
 	uint32_t pass_count = 0;
 	do
 	{
@@ -192,7 +221,7 @@ string CompilerGLSL::compile()
 		emit_header();
 		emit_resources();
 
-		emit_function(get<SPIRFunction>(execution.entry_point), 0);
+		emit_function(get<SPIRFunction>(entry_point), 0);
 
 		pass_count++;
 	} while (force_recompile);
@@ -202,6 +231,7 @@ string CompilerGLSL::compile()
 
 void CompilerGLSL::emit_header()
 {
+	auto &execution = get_entry_point();
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
 	for (auto &header : header_lines)
@@ -578,10 +608,22 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 	}
 }
 
+uint32_t CompilerGLSL::type_to_std430_base_size(const SPIRType &type)
+{
+	switch (type.basetype)
+	{
+	case SPIRType::Double:
+	case SPIRType::Int64:
+	case SPIRType::UInt64:
+		return 8;
+	default:
+		return 4;
+	}
+}
+
 uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t flags)
 {
-	// float, int and uint all take 4 bytes.
-	const uint32_t base_alignment = 4;
+	const uint32_t base_alignment = type_to_std430_base_size(type);
 
 	if (type.basetype == SPIRType::Struct)
 	{
@@ -654,8 +696,7 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 	if (!type.array.empty())
 		return type.array.back() * type_to_std430_array_stride(type, flags);
 
-	// float, int and uint all take 4 bytes.
-	const uint32_t base_alignment = 4;
+	const uint32_t base_alignment = type_to_std430_base_size(type);
 	uint32_t size = 0;
 
 	if (type.basetype == SPIRType::Struct)
@@ -908,6 +949,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
+	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
 
 	// Either make it plain in/out or in/out blocks depending on what shader is doing ...
@@ -1024,6 +1066,7 @@ string CompilerGLSL::remap_swizzle(uint32_t result_type, uint32_t input_componen
 
 void CompilerGLSL::emit_pls()
 {
+	auto &execution = get_entry_point();
 	if (execution.model != ExecutionModelFragment)
 		throw CompilerError("Pixel local storage only supported in fragment shaders.");
 
@@ -1056,6 +1099,8 @@ void CompilerGLSL::emit_pls()
 
 void CompilerGLSL::emit_resources()
 {
+	auto &execution = get_entry_point();
+
 	// Legacy GL uses gl_FragData[], redeclare all fragment outputs
 	// with builtins.
 	if (execution.model == ExecutionModelFragment && is_legacy())
@@ -1143,7 +1188,8 @@ void CompilerGLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput))
+			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block(var);
 				emitted = true;
@@ -1317,10 +1363,20 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	bool splat = c.vector_size() > 1;
 	if (splat)
 	{
-		uint32_t ident = c.scalar(vector, 0);
-		for (uint32_t i = 1; i < c.vector_size(); i++)
-			if (ident != c.scalar(vector, i))
-				splat = false;
+		if (type_to_std430_base_size(type) == 8)
+		{
+			uint64_t ident = c.scalar_u64(vector, 0);
+			for (uint32_t i = 1; i < c.vector_size(); i++)
+				if (ident != c.scalar_u64(vector, i))
+					splat = false;
+		}
+		else
+		{
+			uint32_t ident = c.scalar(vector, 0);
+			for (uint32_t i = 1; i < c.vector_size(); i++)
+				if (ident != c.scalar(vector, i))
+					splat = false;
+		}
 	}
 
 	switch (type.basetype)
@@ -1339,6 +1395,74 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				res += convert_to_string(c.scalar_f32(vector, i));
 				if (backend.float_literal_suffix)
 					res += "f";
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::Double:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_f64(vector, 0));
+			if (backend.double_literal_suffix)
+				res += "lf";
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				res += convert_to_string(c.scalar_f64(vector, i));
+				if (backend.double_literal_suffix)
+					res += "lf";
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::Int64:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_i64(vector, 0));
+			if (backend.long_long_literal_suffix)
+				res += "ll";
+			else
+				res += "l";
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				res += convert_to_string(c.scalar_i64(vector, i));
+				if (backend.long_long_literal_suffix)
+					res += "ll";
+				else
+					res += "l";
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::UInt64:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_u64(vector, 0));
+			if (backend.long_long_literal_suffix)
+				res += "ull";
+			else
+				res += "ul";
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				res += convert_to_string(c.scalar_u64(vector, i));
+				if (backend.long_long_literal_suffix)
+					res += "ull";
+				else
+					res += "ul";
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -1988,9 +2112,16 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 	// FP fiddling
 	case GLSLstd450Round:
-	case GLSLstd450RoundEven:
 		emit_unary_func_op(result_type, id, args[0], "round");
 		break;
+
+	case GLSLstd450RoundEven:
+		if ((options.es && options.version >= 300) || (!options.es && options.version >= 130))
+			emit_unary_func_op(result_type, id, args[0], "roundEven");
+		else
+			throw CompilerError("roundEven supported only in ESSL 300 and GLSL 130 and up.");
+		break;
+
 	case GLSLstd450Trunc:
 		emit_unary_func_op(result_type, id, args[0], "trunc");
 		break;
@@ -2169,6 +2300,13 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_unary_func_op(result_type, id, args[0], "unpackHalf2x16");
 		break;
 
+	case GLSLstd450PackDouble2x32:
+		emit_unary_func_op(result_type, id, args[0], "packDouble2x32");
+		break;
+	case GLSLstd450UnpackDouble2x32:
+		emit_unary_func_op(result_type, id, args[0], "unpackDouble2x32");
+		break;
+
 	// Vector math
 	case GLSLstd450Length:
 		emit_unary_func_op(result_type, id, args[0], "length");
@@ -2222,9 +2360,13 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
 		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64)
+		return type_to_glsl(out_type);
 	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float)
 		return "floatBitsToUint";
 	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64)
 		return type_to_glsl(out_type);
 	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float)
 		return "floatBitsToInt";
@@ -2232,6 +2374,14 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 		return "uintBitsToFloat";
 	else if (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::Int)
 		return "intBitsToFloat";
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double)
+		return "doubleBitsToInt64";
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double)
+		return "doubleBitsToUint64";
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64)
+		return "int64BitsToDouble";
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
+		return "uint64BitsToDouble";
 	else
 		return "";
 }
@@ -3138,7 +3288,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpOuterProduct:
-		UFOP(outerProduct);
+		BFOP(outerProduct);
 		break;
 
 	case OpDot:
@@ -3871,7 +4021,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpControlBarrier:
 	{
 		// Ignore execution and memory scope.
-		if (execution.model == ExecutionModelGLCompute)
+		if (get_entry_point().model == ExecutionModelGLCompute)
 		{
 			uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
 			if (mem == MemorySemanticsWorkgroupMemoryMask)
@@ -3986,7 +4136,9 @@ const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 {
 	if (options.es)
 	{
-		// Structs do not have precision qualifiers.
+		auto &execution = get_entry_point();
+
+		// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
 		if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
 		    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
 		    type.basetype != SPIRType::Sampler)
@@ -4261,6 +4413,12 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return "atomic_uint";
 		case SPIRType::Float:
 			return "float";
+		case SPIRType::Double:
+			return "double";
+		case SPIRType::Int64:
+			return "int64_t";
+		case SPIRType::UInt64:
+			return "uint64_t";
 		default:
 			return "???";
 		}
@@ -4277,6 +4435,12 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("uvec", type.vecsize);
 		case SPIRType::Float:
 			return join("vec", type.vecsize);
+		case SPIRType::Double:
+			return join("dvec", type.vecsize);
+		case SPIRType::Int64:
+			return join("i64vec", type.vecsize);
+		case SPIRType::UInt64:
+			return join("u64vec", type.vecsize);
 		default:
 			return "???";
 		}
@@ -4293,6 +4457,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("umat", type.vecsize);
 		case SPIRType::Float:
 			return join("mat", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.vecsize);
+		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
 		}
@@ -4309,6 +4476,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 			return join("umat", type.columns, "x", type.vecsize);
 		case SPIRType::Float:
 			return join("mat", type.columns, "x", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.columns, "x", type.vecsize);
+		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
 		}
@@ -4392,7 +4562,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 	decl += type_to_glsl(type);
 	decl += " ";
 
-	if (func.self == execution.entry_point)
+	if (func.self == entry_point)
 	{
 		decl += "main";
 		processing_entry_point = true;
@@ -4492,6 +4662,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 
 void CompilerGLSL::emit_fixup()
 {
+	auto &execution = get_entry_point();
 	if (execution.model == ExecutionModelVertex && options.vertex.fixup_clipspace)
 	{
 		const char *suffix = backend.float_literal_suffix ? "f" : "";
