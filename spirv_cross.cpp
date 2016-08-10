@@ -873,6 +873,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpMemoryModel:
 	case OpSourceExtension:
 	case OpNop:
+	case OpLine:
 		break;
 
 	case OpSource:
