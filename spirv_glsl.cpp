@@ -449,7 +449,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 	auto &memb = meta[type.self].members;
 	if (index >= memb.size())
-		return 0;
+		return "";
 	auto &dec = memb[index];
 
 	vector<string> attr;
