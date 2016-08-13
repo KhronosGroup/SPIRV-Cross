@@ -1024,7 +1024,6 @@ void CompilerGLSL::replace_illegal_names()
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
 
 			if (!is_builtin_variable(var) && !var.remapped_variable)
 			{
