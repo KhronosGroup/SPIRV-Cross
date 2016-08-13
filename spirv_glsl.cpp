@@ -1026,7 +1026,7 @@ void CompilerGLSL::replace_illegal_names()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (!is_builtin_variable(var))
+			if (!is_builtin_variable(var) && !var.remapped_variable)
 			{
 				auto &m = meta[var.self].decoration;
 				if (m.alias.compare(0, 3, "gl_") == 0)
