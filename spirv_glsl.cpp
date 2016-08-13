@@ -1017,6 +1017,26 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), "uniform ", variable_decl(var), ";");
 }
 
+void CompilerGLSL::replace_illegal_names()
+{
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+
+			if (!is_builtin_variable(var) && !var.remapped_variable)
+			{
+				auto &m = meta[var.self].decoration;
+				if (m.alias.compare(0, 3, "gl_") == 0)
+				{
+					m.alias = join("_", m.alias);
+				}
+			}
+		}
+	}
+}
+
 void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 {
 	auto &m = meta[var.self].decoration;
@@ -1100,6 +1120,8 @@ void CompilerGLSL::emit_pls()
 void CompilerGLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
+
+	replace_illegal_names();
 
 	// Legacy GL uses gl_FragData[], redeclare all fragment outputs
 	// with builtins.
