@@ -23,24 +23,24 @@
 
 namespace spirv_cross
 {
-	class CompilerHLSL : public CompilerGLSL
+class CompilerHLSL : public CompilerGLSL
+{
+public:
+	CompilerHLSL(std::vector<uint32_t> spirv_)
+	    : CompilerGLSL(move(spirv_))
 	{
-	public:
-		CompilerHLSL(std::vector<uint32_t> spirv_)
-			: CompilerGLSL(move(spirv_))
-		{
-		}
-		std::string compile() override;
+	}
+	std::string compile() override;
 
-	private:
-		std::string type_to_glsl(const SPIRType &type) override;
-		void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
-		void emit_hlsl_entry_point();
-		void emit_header() override;
-		void emit_resources();
-		void emit_interface_block_globally(const SPIRVariable &type);
-		void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
-	};
+private:
+	std::string type_to_glsl(const SPIRType &type) override;
+	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
+	void emit_hlsl_entry_point();
+	void emit_header() override;
+	void emit_resources();
+	void emit_interface_block_globally(const SPIRVariable &type);
+	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
+};
 }
 
 #endif

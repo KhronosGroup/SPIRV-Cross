@@ -108,7 +108,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 			return join("mat", type.vecsize);
 		case SPIRType::Double:
 			return join("dmat", type.vecsize);
-			// Matrix types not supported for int64/uint64.
+		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
 		}
@@ -127,7 +127,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 			return join("mat", type.columns, "x", type.vecsize);
 		case SPIRType::Double:
 			return join("dmat", type.columns, "x", type.vecsize);
-			// Matrix types not supported for int64/uint64.
+		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
 		}
@@ -140,7 +140,7 @@ void CompilerHLSL::emit_header()
 
 	for (auto &header : header_lines)
 		statement(header);
-		
+
 	statement("");
 }
 
@@ -158,12 +158,12 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
 
-	const char* binding = "TEXCOORD";
+	const char *binding = "TEXCOORD";
 	if (is_builtin_variable(var) || var.remapped_variable)
 	{
 		binding = "COLOR";
 	}
-	
+
 	auto &m = meta[var.self].decoration;
 	statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
 
@@ -176,7 +176,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 void CompilerHLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
-	
+
 	// Emit PLS blocks if we have such variables.
 	if (!pls_inputs.empty() || !pls_outputs.empty())
 		emit_pls();
@@ -189,14 +189,14 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &type = id.get<SPIRType>();
 			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
-				(meta[type.self].decoration.decoration_flags &
-				((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) == 0)
+			    (meta[type.self].decoration.decoration_flags &
+			     ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) == 0)
 			{
 				emit_struct(type);
 			}
 		}
 	}
-	
+
 	bool emitted = false;
 
 	// Output Uniform Constants (values, samplers, images, etc).
@@ -208,8 +208,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-				type.pointer &&
-				(type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
+			    type.pointer &&
+			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
 			{
 				emit_uniform(var);
 				emitted = true;
@@ -228,9 +228,9 @@ void CompilerHLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable &&
-				type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-				interface_variable_exists_in_entry_point(var.self))
+			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block_globally(var);
 				emitted = true;
@@ -259,9 +259,8 @@ void CompilerHLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable &&
-				type.pointer && var.storage == StorageClassInput &&
-				interface_variable_exists_in_entry_point(var.self))
+			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block_in_struct(var, binding_number);
 				emitted = true;
@@ -288,9 +287,8 @@ void CompilerHLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable &&
-				type.pointer && var.storage == StorageClassOutput &&
-				interface_variable_exists_in_entry_point(var.self))
+			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+			    var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block_in_struct(var, binding_number);
 				emitted = true;
@@ -370,7 +368,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 void CompilerHLSL::emit_hlsl_entry_point()
 {
 	auto &execution = get_entry_point();
-	const char* post = "Frag";
+	const char *post = "Frag";
 	if (execution.model == ExecutionModelVertex)
 	{
 		post = "Vert";
@@ -386,9 +384,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable &&
-				type.pointer && var.storage == StorageClassInput &&
-				interface_variable_exists_in_entry_point(var.self))
+			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
 				auto &m = meta[var.self].decoration;
 				statement(m.alias, " = input.", m.alias, ";");
@@ -414,9 +411,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable &&
-				type.pointer && var.storage == StorageClassOutput &&
-				interface_variable_exists_in_entry_point(var.self))
+			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+			    var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 			{
 				auto &m = meta[var.self].decoration;
 				statement("output.", m.alias, " = ", m.alias, ";");
@@ -437,7 +433,6 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		output.gl_FragColor = f_gl_FragColor;
 		return output;
 	}*/
-
 }
 
 string CompilerHLSL::compile()
@@ -456,7 +451,7 @@ string CompilerHLSL::compile()
 	backend.flexible_member_array_supported = false;
 	backend.explicit_struct_type = true;
 	backend.use_initializer_list = true;
-	
+
 	uint32_t pass_count = 0;
 	do
 	{
