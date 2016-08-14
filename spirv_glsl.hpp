@@ -147,6 +147,7 @@ protected:
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
 	virtual std::string variable_decl(const SPIRType &type, const std::string &name);
+	virtual void emit_instruction(const Instruction &instr);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -231,7 +232,6 @@ protected:
 	} backend;
 
 	void emit_struct(SPIRType &type);
-	void emit_instruction(const Instruction &instr);
 
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);

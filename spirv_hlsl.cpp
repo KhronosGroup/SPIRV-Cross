@@ -94,39 +94,20 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 			return "???";
 		}
 	}
-	else if (type.vecsize == type.columns) // Simple Matrix builtin
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-			return join("bmat", type.vecsize);
-		case SPIRType::Int:
-			return join("imat", type.vecsize);
-		case SPIRType::UInt:
-			return join("umat", type.vecsize);
-		case SPIRType::Float:
-			return join("mat", type.vecsize);
-		case SPIRType::Double:
-			return join("dmat", type.vecsize);
-		// Matrix types not supported for int64/uint64.
-		default:
-			return "???";
-		}
-	}
 	else
 	{
 		switch (type.basetype)
 		{
 		case SPIRType::Boolean:
-			return join("bmat", type.columns, "x", type.vecsize);
+			return join("bool", type.columns, "x", type.vecsize);
 		case SPIRType::Int:
-			return join("imat", type.columns, "x", type.vecsize);
+			return join("int", type.columns, "x", type.vecsize);
 		case SPIRType::UInt:
-			return join("umat", type.columns, "x", type.vecsize);
+			return join("uint", type.columns, "x", type.vecsize);
 		case SPIRType::Float:
-			return join("mat", type.columns, "x", type.vecsize);
+			return join("float", type.columns, "x", type.vecsize);
 		case SPIRType::Double:
-			return join("dmat", type.columns, "x", type.vecsize);
+			return join("double", type.columns, "x", type.vecsize);
 		// Matrix types not supported for int64/uint64.
 		default:
 			return "???";
@@ -163,6 +144,11 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 	if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
 	{
 		binding = "COLOR";
+		use_binding_number = false;
+	}
+	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var))
+	{
+		binding = "POSITION";
 		use_binding_number = false;
 	}
 
@@ -701,6 +687,54 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	expr += ")";
 
 	emit_op(result_type, id, expr, forward, false);
+}
+
+void CompilerHLSL::emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+	const char *op)
+{
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id, join(op, "(transpose(", to_expression(op0), "), ", to_expression(op1), ")"), forward, false);
+
+	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+	{
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
+	}
+}
+
+void CompilerHLSL::emit_instruction(const Instruction &instruction)
+{
+	auto ops = stream(instruction);
+	auto opcode = static_cast<Op>(instruction.op);
+	uint32_t length = instruction.length;
+
+#define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define BOP_CAST(op, type, skip_cast) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
+#define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
+#define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
+#define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
+#define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define BFOP_CAST(op, type, skip_cast) emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
+#define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
+
+	switch (opcode)
+	{
+	case OpMatrixTimesVector:
+	{
+		emit_binary_func_op_transpose_first(ops[0], ops[1], ops[2], ops[3], "mul");
+		break;
+	}
+
+	// TODO: Take care of remaining matrix binops
+	//case OpMatrixTimesScalar:
+	//case OpVectorTimesMatrix:
+	//case OpMatrixTimesMatrix:
+	
+	default:
+		CompilerGLSL::emit_instruction(instruction);
+		break;
+	}
 }
 
 string CompilerHLSL::compile()
