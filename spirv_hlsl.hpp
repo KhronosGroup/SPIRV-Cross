@@ -33,6 +33,7 @@ namespace spirv_cross
 		std::string compile() override;
 
 	private:
+		std::string type_to_glsl(const SPIRType &type) override;
 		void emit_header() override;
 		void emit_resources();
 		void emit_interface_block(const SPIRVariable &type, uint32_t &binding_number);

@@ -20,6 +20,120 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+string CompilerHLSL::type_to_glsl(const SPIRType &type)
+{
+	// Ignore the pointer type since GLSL doesn't have pointers.
+
+	switch (type.basetype)
+	{
+	case SPIRType::Struct:
+		// Need OpName lookup here to get a "sensible" name for a struct.
+		if (backend.explicit_struct_type)
+			return join("struct ", to_name(type.self));
+		else
+			return to_name(type.self);
+
+	case SPIRType::Image:
+	case SPIRType::SampledImage:
+		return image_type_glsl(type);
+
+	case SPIRType::Sampler:
+		// Not really used.
+		return "sampler";
+
+	case SPIRType::Void:
+		return "void";
+
+	default:
+		break;
+	}
+
+	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return "bool";
+		case SPIRType::Int:
+			return backend.basic_int_type;
+		case SPIRType::UInt:
+			return backend.basic_uint_type;
+		case SPIRType::AtomicCounter:
+			return "atomic_uint";
+		case SPIRType::Float:
+			return "float";
+		case SPIRType::Double:
+			return "double";
+		case SPIRType::Int64:
+			return "int64_t";
+		case SPIRType::UInt64:
+			return "uint64_t";
+		default:
+			return "???";
+		}
+	}
+	else if (type.vecsize > 1 && type.columns == 1) // Vector builtin
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return join("bfloat", type.vecsize);
+		case SPIRType::Int:
+			return join("ifloat", type.vecsize);
+		case SPIRType::UInt:
+			return join("ufloat", type.vecsize);
+		case SPIRType::Float:
+			return join("float", type.vecsize);
+		case SPIRType::Double:
+			return join("double", type.vecsize);
+		case SPIRType::Int64:
+			return join("i64vec", type.vecsize);
+		case SPIRType::UInt64:
+			return join("u64vec", type.vecsize);
+		default:
+			return "???";
+		}
+	}
+	else if (type.vecsize == type.columns) // Simple Matrix builtin
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return join("bmat", type.vecsize);
+		case SPIRType::Int:
+			return join("imat", type.vecsize);
+		case SPIRType::UInt:
+			return join("umat", type.vecsize);
+		case SPIRType::Float:
+			return join("mat", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.vecsize);
+			// Matrix types not supported for int64/uint64.
+		default:
+			return "???";
+		}
+	}
+	else
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return join("bmat", type.columns, "x", type.vecsize);
+		case SPIRType::Int:
+			return join("imat", type.columns, "x", type.vecsize);
+		case SPIRType::UInt:
+			return join("umat", type.columns, "x", type.vecsize);
+		case SPIRType::Float:
+			return join("mat", type.columns, "x", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.columns, "x", type.vecsize);
+			// Matrix types not supported for int64/uint64.
+		default:
+			return "???";
+		}
+	}
+}
+
 void CompilerHLSL::emit_header()
 {
 	auto &execution = get_entry_point();
