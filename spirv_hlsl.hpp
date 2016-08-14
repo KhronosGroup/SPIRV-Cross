@@ -33,7 +33,9 @@ namespace spirv_cross
 		std::string compile() override;
 
 	private:
-		
+		void emit_header() override;
+		void emit_resources();
+		void emit_interface_block(const SPIRVariable &type, uint32_t &binding_number);
 	};
 }
 
