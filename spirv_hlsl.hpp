@@ -40,6 +40,7 @@ private:
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
 	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
+	void emit_texture_op(const Instruction &i) override;
 };
 }
 

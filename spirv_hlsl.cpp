@@ -159,13 +159,22 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 	auto &type = get<SPIRType>(var.basetype);
 
 	const char *binding = "TEXCOORD";
-	if (is_builtin_variable(var) || var.remapped_variable)
+	bool use_binding_number = true;
+	if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
 	{
 		binding = "COLOR";
+		use_binding_number = false;
 	}
 
 	auto &m = meta[var.self].decoration;
-	statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
+	if (use_binding_number)
+	{
+		statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
+	}
+	else
+	{
+		statement(variable_decl(type, m.alias), " : ", binding, ";");
+	}
 
 	if (!is_builtin_variable(var) && !var.remapped_variable)
 	{
@@ -423,16 +432,275 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	statement("return output;");
 
 	end_scope();
+}
 
-	/*OutputFrag main(InputFrag input)
+void CompilerHLSL::emit_texture_op(const Instruction &i)
+{
+	auto ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+	uint32_t length = i.length;
+
+	if (i.offset + length > spirv.size())
+		throw CompilerError("Compiler::parse() opcode out of range.");
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+	uint32_t img = ops[2];
+	uint32_t coord = ops[3];
+	uint32_t dref = 0;
+	uint32_t comp = 0;
+	bool gather = false;
+	bool proj = false;
+	const uint32_t *opt = nullptr;
+
+	switch (op)
 	{
-		f_color = input.color;
-		f_texCoord = input.texCoord;
-		frag_main();
-		OutputFrag output;
-		output.gl_FragColor = f_gl_FragColor;
-		return output;
-	}*/
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleDrefExplicitLod:
+		dref = ops[4];
+		opt = &ops[5];
+		length -= 5;
+		break;
+
+	case OpImageSampleProjDrefImplicitLod:
+	case OpImageSampleProjDrefExplicitLod:
+		dref = ops[4];
+		proj = true;
+		opt = &ops[5];
+		length -= 5;
+		break;
+
+	case OpImageDrefGather:
+		dref = ops[4];
+		opt = &ops[5];
+		gather = true;
+		length -= 5;
+		break;
+
+	case OpImageGather:
+		comp = ops[4];
+		opt = &ops[5];
+		gather = true;
+		length -= 5;
+		break;
+
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleProjExplicitLod:
+		opt = &ops[4];
+		length -= 4;
+		proj = true;
+		break;
+
+	default:
+		opt = &ops[4];
+		length -= 4;
+		break;
+	}
+
+	auto &imgtype = expression_type(img);
+	uint32_t coord_components = 0;
+	switch (imgtype.image.dim)
+	{
+	case spv::Dim1D:
+		coord_components = 1;
+		break;
+	case spv::Dim2D:
+		coord_components = 2;
+		break;
+	case spv::Dim3D:
+		coord_components = 3;
+		break;
+	case spv::DimCube:
+		coord_components = 3;
+		break;
+	case spv::DimBuffer:
+		coord_components = 1;
+		break;
+	default:
+		coord_components = 2;
+		break;
+	}
+
+	if (proj)
+		coord_components++;
+	if (imgtype.image.arrayed)
+		coord_components++;
+
+	uint32_t bias = 0;
+	uint32_t lod = 0;
+	uint32_t grad_x = 0;
+	uint32_t grad_y = 0;
+	uint32_t coffset = 0;
+	uint32_t offset = 0;
+	uint32_t coffsets = 0;
+	uint32_t sample = 0;
+	uint32_t flags = 0;
+
+	if (length)
+	{
+		flags = opt[0];
+		opt++;
+		length--;
+	}
+
+	auto test = [&](uint32_t &v, uint32_t flag) {
+		if (length && (flags & flag))
+		{
+			v = *opt++;
+			length--;
+		}
+	};
+
+	test(bias, ImageOperandsBiasMask);
+	test(lod, ImageOperandsLodMask);
+	test(grad_x, ImageOperandsGradMask);
+	test(grad_y, ImageOperandsGradMask);
+	test(coffset, ImageOperandsConstOffsetMask);
+	test(offset, ImageOperandsOffsetMask);
+	test(coffsets, ImageOperandsConstOffsetsMask);
+	test(sample, ImageOperandsSampleMask);
+
+	string expr;
+	string texop;
+
+	if (op == OpImageFetch)
+		texop += "texelFetch";
+	else
+	{
+		texop += "tex2D";
+
+		if (gather)
+			texop += "Gather";
+		if (coffsets)
+			texop += "Offsets";
+		if (proj)
+			texop += "Proj";
+		if (grad_x || grad_y)
+			texop += "Grad";
+		if (lod)
+			texop += "Lod";
+	}
+
+	if (coffset || offset)
+		texop += "Offset";
+
+	if (is_legacy())
+		texop = legacy_tex_op(texop, imgtype);
+
+	expr += texop;
+	expr += "(";
+	expr += to_expression(img);
+
+	bool swizz_func = backend.swizzle_is_function;
+	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
+		if (comps == in_comps)
+			return "";
+
+		switch (comps)
+		{
+		case 1:
+			return ".x";
+		case 2:
+			return swizz_func ? ".xy()" : ".xy";
+		case 3:
+			return swizz_func ? ".xyz()" : ".xyz";
+		default:
+			return "";
+		}
+	};
+
+	bool forward = should_forward(coord);
+
+	// The IR can give us more components than we need, so chop them off as needed.
+	auto coord_expr = to_expression(coord) + swizzle(coord_components, expression_type(coord).vecsize);
+
+	// TODO: implement rest ... A bit intensive.
+
+	if (dref)
+	{
+		forward = forward && should_forward(dref);
+
+		// SPIR-V splits dref and coordinate.
+		if (coord_components == 4) // GLSL also splits the arguments in two.
+		{
+			expr += ", ";
+			expr += to_expression(coord);
+			expr += ", ";
+			expr += to_expression(dref);
+		}
+		else
+		{
+			// Create a composite which merges coord/dref into a single vector.
+			auto type = expression_type(coord);
+			type.vecsize = coord_components + 1;
+			expr += ", ";
+			expr += type_to_glsl_constructor(type);
+			expr += "(";
+			expr += coord_expr;
+			expr += ", ";
+			expr += to_expression(dref);
+			expr += ")";
+		}
+	}
+	else
+	{
+		expr += ", ";
+		expr += coord_expr;
+	}
+
+	if (grad_x || grad_y)
+	{
+		forward = forward && should_forward(grad_x);
+		forward = forward && should_forward(grad_y);
+		expr += ", ";
+		expr += to_expression(grad_x);
+		expr += ", ";
+		expr += to_expression(grad_y);
+	}
+
+	if (lod)
+	{
+		forward = forward && should_forward(lod);
+		expr += ", ";
+		expr += to_expression(lod);
+	}
+
+	if (coffset)
+	{
+		forward = forward && should_forward(coffset);
+		expr += ", ";
+		expr += to_expression(coffset);
+	}
+	else if (offset)
+	{
+		forward = forward && should_forward(offset);
+		expr += ", ";
+		expr += to_expression(offset);
+	}
+
+	if (bias)
+	{
+		forward = forward && should_forward(bias);
+		expr += ", ";
+		expr += to_expression(bias);
+	}
+
+	if (comp)
+	{
+		forward = forward && should_forward(comp);
+		expr += ", ";
+		expr += to_expression(comp);
+	}
+
+	if (sample)
+	{
+		expr += ", ";
+		expr += to_expression(sample);
+	}
+
+	expr += ")";
+
+	emit_op(result_type, id, expr, forward, false);
 }
 
 string CompilerHLSL::compile()
@@ -444,9 +712,9 @@ string CompilerHLSL::compile()
 	backend.double_literal_suffix = false;
 	backend.long_long_literal_suffix = true;
 	backend.uint32_t_literal_suffix = true;
-	backend.basic_int_type = "int32_t";
-	backend.basic_uint_type = "uint32_t";
-	backend.swizzle_is_function = true;
+	backend.basic_int_type = "int";
+	backend.basic_uint_type = "uint";
+	backend.swizzle_is_function = false;
 	backend.shared_is_implied = true;
 	backend.flexible_member_array_supported = false;
 	backend.explicit_struct_type = true;
