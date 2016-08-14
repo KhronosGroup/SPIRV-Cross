@@ -144,7 +144,16 @@ void CompilerHLSL::emit_header()
 	statement("");
 }
 
-void CompilerHLSL::emit_interface_block(const SPIRVariable &var, uint32_t &binding_number)
+void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
+{
+	auto &execution = get_entry_point();
+	auto &type = get<SPIRType>(var.basetype);
+
+	add_resource_name(var.self);
+	statement("static ", variable_decl(var), ";");
+}
+
+void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number)
 {
 	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
@@ -155,8 +164,8 @@ void CompilerHLSL::emit_interface_block(const SPIRVariable &var, uint32_t &bindi
 		binding = "COLOR";
 	}
 	
-	add_resource_name(var.self);
-	statement(layout_for_variable(var), variable_decl(var), " : ", binding, binding_number, ";");
+	auto &m = meta[var.self].decoration;
+	statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
 
 	if (!is_builtin_variable(var) && !var.remapped_variable)
 	{
@@ -212,6 +221,27 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	emitted = false;
 
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+
+			if (var.storage != StorageClassFunction && !var.remapped_variable &&
+				type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+				interface_variable_exists_in_entry_point(var.self))
+			{
+				emit_interface_block_globally(var);
+				emitted = true;
+			}
+		}
+	}
+
+	if (emitted)
+		statement("");
+	emitted = false;
+
 	if (execution.model == ExecutionModelVertex)
 	{
 		statement("struct InputVert");
@@ -233,7 +263,7 @@ void CompilerHLSL::emit_resources()
 				type.pointer && var.storage == StorageClassInput &&
 				interface_variable_exists_in_entry_point(var.self))
 			{
-				emit_interface_block(var, binding_number);
+				emit_interface_block_in_struct(var, binding_number);
 				emitted = true;
 			}
 		}
@@ -262,7 +292,7 @@ void CompilerHLSL::emit_resources()
 				type.pointer && var.storage == StorageClassOutput &&
 				interface_variable_exists_in_entry_point(var.self))
 			{
-				emit_interface_block(var, binding_number);
+				emit_interface_block_in_struct(var, binding_number);
 				emitted = true;
 			}
 		}
@@ -284,6 +314,130 @@ void CompilerHLSL::emit_resources()
 
 	if (emitted)
 		statement("");
+}
+
+void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
+{
+	auto &execution = get_entry_point();
+	// Avoid shadow declarations.
+	local_variable_names = resource_names;
+
+	string decl;
+
+	auto &type = get<SPIRType>(func.return_type);
+	decl += flags_to_precision_qualifiers_glsl(type, return_flags);
+	decl += type_to_glsl(type);
+	decl += " ";
+
+	if (func.self == entry_point)
+	{
+		if (execution.model == ExecutionModelVertex)
+		{
+			decl += "vert_main";
+		}
+		else
+		{
+			decl += "frag_main";
+		}
+		processing_entry_point = true;
+	}
+	else
+		decl += to_name(func.self);
+
+	decl += "(";
+	for (auto &arg : func.arguments)
+	{
+		// Might change the variable name if it already exists in this function.
+		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
+		// to use same name for variables.
+		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
+		add_local_variable_name(arg.id);
+
+		decl += argument_decl(arg);
+		if (&arg != &func.arguments.back())
+			decl += ", ";
+
+		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
+		auto *var = maybe_get<SPIRVariable>(arg.id);
+		if (var)
+			var->parameter = &arg;
+	}
+
+	decl += ")";
+	statement(decl);
+}
+
+void CompilerHLSL::emit_hlsl_entry_point()
+{
+	auto &execution = get_entry_point();
+	const char* post = "Frag";
+	if (execution.model == ExecutionModelVertex)
+	{
+		post = "Vert";
+	}
+
+	statement("Output", post, " main(Input", post, " input)");
+	begin_scope();
+
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+
+			if (var.storage != StorageClassFunction && !var.remapped_variable &&
+				type.pointer && var.storage == StorageClassInput &&
+				interface_variable_exists_in_entry_point(var.self))
+			{
+				auto &m = meta[var.self].decoration;
+				statement(m.alias, " = input.", m.alias, ";");
+			}
+		}
+	}
+
+	if (execution.model == ExecutionModelVertex)
+	{
+		statement("vert_main();");
+	}
+	else
+	{
+		statement("frag_main();");
+	}
+
+	statement("Output", post, " output;");
+
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+
+			if (var.storage != StorageClassFunction && !var.remapped_variable &&
+				type.pointer && var.storage == StorageClassOutput &&
+				interface_variable_exists_in_entry_point(var.self))
+			{
+				auto &m = meta[var.self].decoration;
+				statement("output.", m.alias, " = ", m.alias, ";");
+			}
+		}
+	}
+
+	statement("return output;");
+
+	end_scope();
+
+	/*OutputFrag main(InputFrag input)
+	{
+		f_color = input.color;
+		f_texCoord = input.texCoord;
+		frag_main();
+		OutputFrag output;
+		output.gl_FragColor = f_gl_FragColor;
+		return output;
+	}*/
+
 }
 
 string CompilerHLSL::compile()
@@ -318,6 +472,7 @@ string CompilerHLSL::compile()
 		emit_resources();
 
 		emit_function(get<SPIRFunction>(entry_point), 0);
+		emit_hlsl_entry_point();
 
 		pass_count++;
 	} while (force_recompile);

@@ -34,9 +34,12 @@ namespace spirv_cross
 
 	private:
 		std::string type_to_glsl(const SPIRType &type) override;
+		void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
+		void emit_hlsl_entry_point();
 		void emit_header() override;
 		void emit_resources();
-		void emit_interface_block(const SPIRVariable &type, uint32_t &binding_number);
+		void emit_interface_block_globally(const SPIRVariable &type);
+		void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
 	};
 }
 
