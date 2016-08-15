@@ -15,10 +15,25 @@
 */
 
 #include "spirv_hlsl.hpp"
+#include <algorithm>
 
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
+
+namespace
+{
+	struct VariableComparator {
+		VariableComparator(const std::vector<Meta>& meta) : meta(meta) { }
+
+		bool operator () (SPIRVariable* var1, SPIRVariable* var2)
+		{
+			return meta[var1->self].decoration.alias.compare(meta[var2->self].decoration.alias) < 0;
+		}
+
+		const std::vector<Meta>& meta;
+	};
+}
 
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
 {
@@ -247,6 +262,7 @@ void CompilerHLSL::emit_resources()
 	}
 	begin_scope();
 	uint32_t binding_number = 0;
+	std::vector<SPIRVariable*> variables;
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -257,10 +273,15 @@ void CompilerHLSL::emit_resources()
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
-				emit_interface_block_in_struct(var, binding_number);
-				emitted = true;
+				variables.push_back(&var);
 			}
 		}
+	}
+	sort(variables.begin(), variables.end(), VariableComparator(meta));
+	for (auto var : variables)
+	{
+		emit_interface_block_in_struct(*var, binding_number);
+		emitted = true;
 	}
 	end_scope_decl();
 	statement("");
@@ -275,6 +296,7 @@ void CompilerHLSL::emit_resources()
 	}
 	begin_scope();
 	binding_number = 0;
+	variables.clear();
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -285,10 +307,15 @@ void CompilerHLSL::emit_resources()
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 			{
-				emit_interface_block_in_struct(var, binding_number);
-				emitted = true;
+				variables.push_back(&var);
 			}
 		}
+	}
+	sort(variables.begin(), variables.end(), VariableComparator(meta));
+	for (auto var : variables)
+	{
+		emit_interface_block_in_struct(*var, binding_number);
+		emitted = true;
 	}
 	end_scope_decl();
 	statement("");

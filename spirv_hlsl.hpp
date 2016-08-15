@@ -44,6 +44,7 @@ private:
 	void emit_instruction(const Instruction &instruction) override;
 	void emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
 	                                         const char *op);
+	bool myfunction(Variant id1, Variant id2);
 };
 }
 
