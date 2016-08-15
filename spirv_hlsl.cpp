@@ -209,6 +209,12 @@ void CompilerHLSL::emit_resources()
 
 	bool emitted = false;
 
+	if (execution.model == ExecutionModelVertex)
+	{
+		statement("uniform float4 gl_HalfPixel;");
+		emitted = true;
+	}
+
 	// Output Uniform Constants (values, samplers, images, etc).
 	for (auto &id : ids)
 	{
@@ -440,6 +446,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				statement("output.", m.alias, " = ", m.alias, ";");
 			}
 		}
+	}
+
+	if (execution.model == ExecutionModelVertex)
+	{
+		statement("output.gl_Position.x = output.gl_Position.x - gl_HalfPixel.x * output.gl_Position.w;");
+		statement("output.gl_Position.y = output.gl_Position.y + gl_HalfPixel.y * output.gl_Position.w;");
+		statement("output.gl_Position.z = (output.gl_Position.z + output.gl_Position.w) * 0.5;");
 	}
 
 	statement("return output;");
