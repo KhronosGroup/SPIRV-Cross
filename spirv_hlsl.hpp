@@ -26,10 +26,26 @@ namespace spirv_cross
 class CompilerHLSL : public CompilerGLSL
 {
 public:
+	struct Options
+	{
+		uint32_t shader_model = 30; // TODO: map ps_4_0_level_9_0,... somehow
+	};
+
 	CompilerHLSL(std::vector<uint32_t> spirv_)
 	    : CompilerGLSL(move(spirv_))
 	{
 	}
+
+	const Options &get_options() const
+	{
+		return options;
+	}
+	
+	void set_options(Options &opts)
+	{
+		options = opts;
+	}
+
 	std::string compile() override;
 
 private:
@@ -44,7 +60,8 @@ private:
 	void emit_instruction(const Instruction &instruction) override;
 	void emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
 	                                         const char *op);
-	bool myfunction(Variant id1, Variant id2);
+
+	Options options;
 };
 }
 

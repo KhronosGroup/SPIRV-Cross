@@ -163,7 +163,14 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 	}
 	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var))
 	{
-		binding = "POSITION";
+		if (options.shader_model <= 30)
+		{
+			binding = "POSITION";
+		}
+		else
+		{
+			binding = "SV_POSITION";
+		}
 		use_binding_number = false;
 	}
 
@@ -209,7 +216,7 @@ void CompilerHLSL::emit_resources()
 
 	bool emitted = false;
 
-	if (execution.model == ExecutionModelVertex)
+	if (execution.model == ExecutionModelVertex && options.shader_model <= 30)
 	{
 		statement("uniform float4 gl_HalfPixel;");
 		emitted = true;
@@ -450,8 +457,11 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	if (execution.model == ExecutionModelVertex)
 	{
-		statement("output.gl_Position.x = output.gl_Position.x - gl_HalfPixel.x * output.gl_Position.w;");
-		statement("output.gl_Position.y = output.gl_Position.y + gl_HalfPixel.y * output.gl_Position.w;");
+		if (options.shader_model <= 30)
+		{
+			statement("output.gl_Position.x = output.gl_Position.x - gl_HalfPixel.x * output.gl_Position.w;");
+			statement("output.gl_Position.y = output.gl_Position.y + gl_HalfPixel.y * output.gl_Position.w;");
+		}
 		statement("output.gl_Position.z = (output.gl_Position.z + output.gl_Position.w) * 0.5;");
 	}
 
@@ -780,8 +790,8 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 string CompilerHLSL::compile()
 {
 	// Do not deal with ES-isms like precision, older extensions and such.
-	options.es = false;
-	options.version = 450;
+	CompilerGLSL::options.es = false;
+	CompilerGLSL::options.version = 450;
 	backend.float_literal_suffix = true;
 	backend.double_literal_suffix = false;
 	backend.long_long_literal_suffix = true;
