@@ -695,7 +695,11 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
-	auto &dec = meta.at(id).members.at(index);
+	auto &m = meta.at(id);
+	if (index >= m.members.size())
+		return 0;
+
+	auto &dec = m.members[index];
 	if (!(dec.decoration_flags & (1ull << decoration)))
 		return 0;
 
