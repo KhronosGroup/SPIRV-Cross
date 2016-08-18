@@ -15,6 +15,7 @@
 */
 
 #include "spirv_hlsl.hpp"
+#include "GLSL.std.450.h"
 #include <algorithm>
 
 using namespace spv;
@@ -775,6 +776,39 @@ void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint3
 	{
 		inherit_expression_dependencies(result_id, op0);
 		inherit_expression_dependencies(result_id, op1);
+	}
+}
+
+void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
+{
+	GLSLstd450 op = static_cast<GLSLstd450>(eop);
+
+	switch (op)
+	{
+	case GLSLstd450InverseSqrt:
+	{
+		emit_unary_func_op(result_type, id, args[0], "rsqrt");
+		break;
+	}
+	case GLSLstd450Fract:
+	{
+		emit_unary_func_op(result_type, id, args[0], "frac");
+		break;
+	}
+	case GLSLstd450FMix:
+	case GLSLstd450IMix:
+	{
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "lerp");
+		break;
+	}
+	case GLSLstd450Atan2:
+	{
+		emit_binary_func_op(result_type, id, args[1], args[0], "atan2");
+		break;
+	}
+	default:
+		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
 	}
 }
 
