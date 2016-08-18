@@ -1044,7 +1044,28 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 	if (m.decoration_flags & (1ull << DecorationLocation))
 		location = m.location;
 
-	m.alias = join("gl_FragData[", location, "]");
+	// If our variable is arrayed, we must not emit the array part of this as the SPIR-V will
+	// do the access chain part of this for us.
+	auto &type = get<SPIRType>(var.basetype);
+
+	if (type.array.empty())
+	{
+		// Redirect the write to a specific render target in legacy GLSL.
+		m.alias = join("gl_FragData[", location, "]");
+	}
+	else if (type.array.size() == 1)
+	{
+		// If location is non-zero, we probably have to add an offset.
+		// This gets really tricky since we'd have to inject an offset in the access chain.
+		// FIXME: This seems like an extremely odd-ball case, so it's probably fine to leave it like this for now.
+		m.alias = "gl_FragData";
+		if (location != 0)
+			throw CompilerError("Arrayed output variable used, but location is not 0. "
+			                    "This is unimplemented in SPIRV-Cross.");
+	}
+	else
+		throw CompilerError("Array-of-array output variable used. This cannot be implemented in legacy GLSL.");
+
 	var.compat_builtin = true; // We don't want to declare this variable, but use the name as-is.
 }
 
