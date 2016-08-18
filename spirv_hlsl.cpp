@@ -138,7 +138,10 @@ void CompilerHLSL::emit_header()
 	for (auto &header : header_lines)
 		statement(header);
 
-	statement("");
+	if (header_lines.size() > 0)
+	{
+		statement("");
+	}
 }
 
 void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
@@ -295,7 +298,6 @@ void CompilerHLSL::emit_resources()
 	for (auto var : variables)
 	{
 		emit_interface_block_in_struct(*var, binding_number);
-		emitted = true;
 	}
 	end_scope_decl();
 	statement("");
@@ -329,7 +331,6 @@ void CompilerHLSL::emit_resources()
 	for (auto var : variables)
 	{
 		emit_interface_block_in_struct(*var, binding_number);
-		emitted = true;
 	}
 	end_scope_decl();
 	statement("");
@@ -348,6 +349,15 @@ void CompilerHLSL::emit_resources()
 
 	if (emitted)
 		statement("");
+
+	if (requires_op_fmod)
+	{
+		statement("float mod(float x, float y)");
+		begin_scope();
+		statement("return x - y * floor(x / y);");
+		end_scope();
+		statement("");
+	}
 }
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
@@ -843,6 +853,12 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	case OpMatrixTimesMatrix:
 	{
 		emit_binary_func_op_transpose_all(ops[0], ops[1], ops[2], ops[3], "mul");
+		break;
+	}
+	case OpFMod:
+	{
+		requires_op_fmod = true;
+		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
 	default:

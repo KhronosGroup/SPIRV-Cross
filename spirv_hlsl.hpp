@@ -67,6 +67,7 @@ private:
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args, uint32_t count) override;
 
 	Options options;
+	bool requires_op_fmod = false;
 };
 }
 
