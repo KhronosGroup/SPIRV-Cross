@@ -176,8 +176,28 @@ public:
 	// The name of the uniform will be the same as the interface block name.
 	void flatten_interface_block(uint32_t id);
 
+	// Returns a set of all global variables which are statically accessed
+	// by the control flow graph from the current entry point.
+	// Only variables which change the interface for a shader are returned, that is,
+	// variables with storage class of Input, Output, Uniform, UniformConstant, PushConstant and AtomicCounter
+	// storage classes are returned.
+	//
+	// To use the returned set as the filter for which variables are used during compilation,
+	// this set can be moved to set_enabled_interface_variables().
+	std::unordered_set<uint32_t> get_active_interface_variables() const;
+
+	// Sets the interface variables which are used during compilation.
+	// By default, all variables are used.
+	// Once set, compile() will only consider the set in active_variables.
+	void set_enabled_interface_variables(std::unordered_set<uint32_t> active_variables);
+
 	// Query shader resources, use ids with reflection interface to modify or query binding points, etc.
 	ShaderResources get_shader_resources() const;
+
+	// Query shader resources, but only return the variables which are part of active_variables.
+	// E.g.: get_shader_resources(get_active_variables()) to only return the variables which are statically
+	// accessed.
+	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> &active_variables) const;
 
 	// Remapped variables are considered built-in variables and a backend will
 	// not emit a declaration for this variable.
@@ -237,6 +257,8 @@ protected:
 	SPIRBlock *current_block = nullptr;
 	std::vector<uint32_t> global_variables;
 	std::vector<uint32_t> aliased_variables;
+	std::unordered_set<uint32_t> active_interface_variables;
+	bool check_active_interface_variables = false;
 
 	// If our IDs are out of range here as part of opcodes, throw instead of
 	// undefined behavior.
@@ -302,6 +324,7 @@ protected:
 
 	std::string to_name(uint32_t id, bool allow_alias = true);
 	bool is_builtin_variable(const SPIRVariable &var) const;
+	bool is_hidden_variable(const SPIRVariable &var, bool include_builtins = false) const;
 	bool is_immutable(uint32_t id) const;
 	bool is_member_builtin(const SPIRType &type, uint32_t index, spv::BuiltIn *builtin) const;
 	bool is_scalar(const SPIRType &type) const;
@@ -399,10 +422,26 @@ private:
 		std::unordered_set<uint32_t> seen;
 	};
 
+	struct InterfaceVariableAccessHandler : OpcodeHandler
+	{
+		InterfaceVariableAccessHandler(const Compiler &compiler_, std::unordered_set<uint32_t> &variables_)
+		    : compiler(compiler_)
+		    , variables(variables_)
+		{
+		}
+
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+
+		const Compiler &compiler;
+		std::unordered_set<uint32_t> &variables;
+	};
+
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
 	bool traverse_all_reachable_opcodes(const SPIRFunction &block, OpcodeHandler &handler) const;
 	// This must be an ordered data structure so we always pick the same type aliases.
 	std::vector<uint32_t> global_struct_cache;
+
+	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
 };
 }
 

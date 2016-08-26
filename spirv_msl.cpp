@@ -184,7 +184,7 @@ void CompilerMSL::bind_vertex_attributes(std::set<uint32_t> &bindings)
 				auto &type = get<SPIRType>(var.basetype);
 
 				if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self) &&
-				    (!is_builtin_variable(var)) && !var.remapped_variable && type.pointer)
+				    !is_hidden_variable(var) && type.pointer)
 				{
 					auto &dec = meta[var.self].decoration;
 					MSLVertexAttr *p_va = vtx_attrs_by_location[dec.location];
@@ -226,8 +226,8 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			auto &dec = meta[var.self].decoration;
 
 			if (var.storage == storage && interface_variable_exists_in_entry_point(var.self) &&
-			    (!is_builtin_variable(var) || incl_builtins) && (!match_binding || (vtx_binding == dec.binding)) &&
-			    !var.remapped_variable && type.pointer)
+			    !is_hidden_variable(var, incl_builtins) && (!match_binding || (vtx_binding == dec.binding)) &&
+			    type.pointer)
 			{
 				vars.push_back(&var);
 			}
@@ -427,8 +427,8 @@ void CompilerMSL::emit_resources()
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
 			     type.storage == StorageClassPushConstant) &&
-			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_struct(type);
 			}
@@ -1094,6 +1094,9 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+
+			if (is_hidden_variable(var, true))
+				continue;
 
 			if (var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 			    var.storage == StorageClassPushConstant)
