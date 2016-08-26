@@ -51,10 +51,15 @@ void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 	auto instance_name = to_name(var.self);
 	uint32_t location = meta[var.self].decoration.location;
 
+	string buffer_name;
 	auto flags = meta[type.self].decoration.decoration_flags;
 	if (flags & (1ull << DecorationBlock))
+	{
 		emit_block_struct(type);
-	auto buffer_name = to_name(type.self);
+		buffer_name = to_name(type.self);
+	}
+	else
+		buffer_name = type_to_glsl(type);
 
 	statement("internal::", qual, "<", buffer_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 	statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
