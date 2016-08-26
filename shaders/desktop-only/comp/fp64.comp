@@ -84,4 +84,8 @@ void main()
 	k = lessThanEqual(a, a);
 	k = greaterThan(a, a);
 	k = greaterThanEqual(a, a);
+
+	ssbo_1.b.x += 1.0lf;
+	ssbo_2.b[0].x += 1.0lf;
+	ssbo_3.b[0].x += 1.0lf;
 }

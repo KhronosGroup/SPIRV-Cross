@@ -49,4 +49,7 @@ void main()
 
 	ssbo_1.b = doubleBitsToUint64(int64BitsToDouble(ssbo_0.a));
 	ssbo_0.a = doubleBitsToInt64(uint64BitsToDouble(ssbo_1.b));
+
+	ssbo_2.a[0] += 1l;
+	ssbo_3.a[0] += 2l;
 }

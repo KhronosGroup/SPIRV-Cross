@@ -1024,14 +1024,11 @@ void CompilerGLSL::replace_illegal_names()
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-
-			if (!is_builtin_variable(var) && !var.remapped_variable)
+			if (!is_hidden_variable(var))
 			{
 				auto &m = meta[var.self].decoration;
 				if (m.alias.compare(0, 3, "gl_") == 0)
-				{
 					m.alias = join("_", m.alias);
-				}
 			}
 		}
 	}
@@ -1178,8 +1175,8 @@ void CompilerGLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
-			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_buffer_block(var);
 			}
@@ -1193,8 +1190,11 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant)
+			if (!is_hidden_variable(var) && var.storage != StorageClassFunction && type.pointer &&
+			    type.storage == StorageClassPushConstant)
+			{
 				emit_push_constant_block(var);
+			}
 		}
 	}
 
@@ -1208,8 +1208,7 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			    type.pointer &&
+			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
 			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
 			{
 				emit_uniform(var);
@@ -1230,8 +1229,8 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
+			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block(var);

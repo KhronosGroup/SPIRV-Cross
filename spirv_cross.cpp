@@ -360,6 +360,34 @@ bool Compiler::is_immutable(uint32_t id) const
 		return false;
 }
 
+static inline bool storage_class_is_interface(spv::StorageClass storage)
+{
+	switch (storage)
+	{
+	case StorageClassInput:
+	case StorageClassOutput:
+	case StorageClassUniform:
+	case StorageClassUniformConstant:
+	case StorageClassAtomicCounter:
+	case StorageClassPushConstant:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins) const
+{
+	if ((is_builtin_variable(var) && !include_builtins) || var.remapped_variable)
+		return true;
+
+	bool hidden = false;
+	if (check_active_interface_variables && storage_class_is_interface(var.storage))
+		hidden = active_interface_variables.find(var.self) == end(active_interface_variables);
+	return hidden;
+}
+
 bool Compiler::is_builtin_variable(const SPIRVariable &var) const
 {
 	if (var.compat_builtin || meta[var.self].decoration.builtin)
@@ -403,6 +431,99 @@ bool Compiler::is_matrix(const SPIRType &type) const
 
 ShaderResources Compiler::get_shader_resources() const
 {
+	return get_shader_resources(nullptr);
+}
+
+ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> &active_variables) const
+{
+	return get_shader_resources(&active_variables);
+}
+
+bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	uint32_t variable = 0;
+	switch (opcode)
+	{
+	// Need this first, otherwise, GCC complains about unhandled switch statements.
+	default:
+		break;
+
+	case OpFunctionCall:
+	{
+		// Invalid SPIR-V.
+		if (length < 3)
+			return false;
+
+		uint32_t count = length - 3;
+		args += 3;
+		for (uint32_t i = 0; i < count; i++)
+		{
+			auto *var = compiler.maybe_get<SPIRVariable>(args[i]);
+			if (var && storage_class_is_interface(var->storage))
+				variables.insert(args[i]);
+		}
+		break;
+	}
+
+	case OpAtomicStore:
+	case OpStore:
+		// Invalid SPIR-V.
+		if (length < 1)
+			return false;
+		variable = args[0];
+		break;
+
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
+	case OpLoad:
+	case OpImageTexelPointer:
+	case OpAtomicLoad:
+	case OpAtomicExchange:
+	case OpAtomicCompareExchange:
+	case OpAtomicIIncrement:
+	case OpAtomicIDecrement:
+	case OpAtomicIAdd:
+	case OpAtomicISub:
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+	case OpAtomicAnd:
+	case OpAtomicOr:
+	case OpAtomicXor:
+		// Invalid SPIR-V.
+		if (length < 3)
+			return false;
+		variable = args[2];
+		break;
+	}
+
+	if (variable)
+	{
+		auto *var = compiler.maybe_get<SPIRVariable>(variable);
+		if (var && storage_class_is_interface(var->storage))
+			variables.insert(variable);
+	}
+	return true;
+}
+
+unordered_set<uint32_t> Compiler::get_active_interface_variables() const
+{
+	// Traverse the call graph and find all interface variables which are in use.
+	unordered_set<uint32_t> variables;
+	InterfaceVariableAccessHandler handler(*this, variables);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	return variables;
+}
+
+void Compiler::set_enabled_interface_variables(std::unordered_set<uint32_t> active_variables)
+{
+	active_interface_variables = move(active_variables);
+	check_active_interface_variables = true;
+}
+
+ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *active_variables) const
+{
 	ShaderResources res;
 
 	for (auto &id : ids)
@@ -416,6 +537,9 @@ ShaderResources Compiler::get_shader_resources() const
 		// It is possible for uniform storage classes to be passed as function parameters, so detect
 		// that. To detect function parameters, check of StorageClass of variable is function scope.
 		if (var.storage == StorageClassFunction || !type.pointer || is_builtin_variable(var))
+			continue;
+
+		if (active_variables && active_variables->find(var.self) == end(*active_variables))
 			continue;
 
 		// Input
@@ -1777,8 +1901,7 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 		if (!handler.handle(op, ops, i.length))
 			return false;
 
-		uint32_t func = ops[2];
-		if (op == OpFunctionCall && !traverse_all_reachable_opcodes(get<SPIRFunction>(func), handler))
+		if (op == OpFunctionCall && !traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
 			return false;
 	}
 
