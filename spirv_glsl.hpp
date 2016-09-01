@@ -310,6 +310,8 @@ protected:
 	// and force recompile.
 	bool check_atomic_image(uint32_t id);
 
+	void replace_illegal_names();
+
 	void replace_fragment_output(SPIRVariable &var);
 	void replace_fragment_outputs();
 	std::string legacy_tex_op(const std::string &op, const SPIRType &imgtype);

@@ -381,6 +381,7 @@ struct CLIArguments
 	bool cpp = false;
 	bool metal = false;
 	bool vulkan_semantics = false;
+	bool remove_unused = false;
 };
 
 static void print_help()
@@ -389,7 +390,7 @@ static void print_help()
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
 	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
 	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext] [--entry name]\n");
+	                "[--extension ext] [--entry name] [--remove-unused-variables]\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -527,6 +528,8 @@ int main(int argc, char *argv[])
 		args.pls_out.push_back({ move(fmt), move(name) });
 	});
 
+	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
+
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };
 
@@ -580,7 +583,15 @@ int main(int argc, char *argv[])
 	opts.vertex.fixup_clipspace = args.fixup;
 	compiler->set_options(opts);
 
-	auto res = compiler->get_shader_resources();
+	ShaderResources res;
+	if (args.remove_unused)
+	{
+		auto active = compiler->get_active_interface_variables();
+		res = compiler->get_shader_resources(active);
+		compiler->set_enabled_interface_variables(move(active));
+	}
+	else
+		res = compiler->get_shader_resources();
 
 	if (args.flatten_ubo)
 		for (auto &ubo : res.uniform_buffers)

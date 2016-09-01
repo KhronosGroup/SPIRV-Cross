@@ -449,7 +449,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 	auto &memb = meta[type.self].members;
 	if (index >= memb.size())
-		return 0;
+		return "";
 	auto &dec = memb[index];
 
 	vector<string> attr;
@@ -1017,6 +1017,23 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), "uniform ", variable_decl(var), ";");
 }
 
+void CompilerGLSL::replace_illegal_names()
+{
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			if (!is_hidden_variable(var))
+			{
+				auto &m = meta[var.self].decoration;
+				if (m.alias.compare(0, 3, "gl_") == 0)
+					m.alias = join("_", m.alias);
+			}
+		}
+	}
+}
+
 void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 {
 	auto &m = meta[var.self].decoration;
@@ -1024,7 +1041,28 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 	if (m.decoration_flags & (1ull << DecorationLocation))
 		location = m.location;
 
-	m.alias = join("gl_FragData[", location, "]");
+	// If our variable is arrayed, we must not emit the array part of this as the SPIR-V will
+	// do the access chain part of this for us.
+	auto &type = get<SPIRType>(var.basetype);
+
+	if (type.array.empty())
+	{
+		// Redirect the write to a specific render target in legacy GLSL.
+		m.alias = join("gl_FragData[", location, "]");
+	}
+	else if (type.array.size() == 1)
+	{
+		// If location is non-zero, we probably have to add an offset.
+		// This gets really tricky since we'd have to inject an offset in the access chain.
+		// FIXME: This seems like an extremely odd-ball case, so it's probably fine to leave it like this for now.
+		m.alias = "gl_FragData";
+		if (location != 0)
+			throw CompilerError("Arrayed output variable used, but location is not 0. "
+			                    "This is unimplemented in SPIRV-Cross.");
+	}
+	else
+		throw CompilerError("Array-of-array output variable used. This cannot be implemented in legacy GLSL.");
+
 	var.compat_builtin = true; // We don't want to declare this variable, but use the name as-is.
 }
 
@@ -1101,6 +1139,8 @@ void CompilerGLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
 
+	replace_illegal_names();
+
 	// Legacy GL uses gl_FragData[], redeclare all fragment outputs
 	// with builtins.
 	if (execution.model == ExecutionModelFragment && is_legacy())
@@ -1135,8 +1175,8 @@ void CompilerGLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
-			    !is_builtin_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                  ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_buffer_block(var);
 			}
@@ -1150,8 +1190,11 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant)
+			if (!is_hidden_variable(var) && var.storage != StorageClassFunction && type.pointer &&
+			    type.storage == StorageClassPushConstant)
+			{
 				emit_push_constant_block(var);
+			}
 		}
 	}
 
@@ -1165,8 +1208,7 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			    type.pointer &&
+			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
 			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
 			{
 				emit_uniform(var);
@@ -1187,8 +1229,8 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			    type.pointer && (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
+			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block(var);

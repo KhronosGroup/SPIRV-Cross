@@ -116,6 +116,7 @@ void CompilerMSL::extract_builtins()
         }
     }
 
+    auto &execution = get_entry_point();
     if (execution.model == ExecutionModelVertex) {
         if ( !(builtin_vars[BuiltInVertexIndex] || builtin_vars[BuiltInVertexId]) )
             add_builtin(BuiltInVertexIndex);
@@ -187,7 +188,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 
     std::set<uint32_t> added_arg_ids;
     std::set<uint32_t> processed_func_ids;
-    extract_global_variables_from_function(execution.entry_point, added_arg_ids, global_var_ids, processed_func_ids);
+    extract_global_variables_from_function(entry_point, added_arg_ids, global_var_ids, processed_func_ids);
 }
 
 // MSL does not support the use of global variables for shader input content.
@@ -238,7 +239,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id,
     }
 
     // Add the global variables as arguments to the function
-    if (func_id != execution.entry_point) {
+    if (func_id != entry_point) {
         uint32_t next_id = increase_bound_by((uint32_t)added_arg_ids.size());
         for (uint32_t arg_id : added_arg_ids) {
             uint32_t type_id = get<SPIRVariable>(arg_id).basetype;
@@ -297,7 +298,7 @@ void CompilerMSL::bind_vertex_attributes(std::set<uint32_t> &bindings)
 				auto &type = get<SPIRType>(var.basetype);
 
 				if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self) &&
-				    (!is_builtin_variable(var)) && !var.remapped_variable && type.pointer)
+				    !is_hidden_variable(var) && type.pointer)
 				{
 					auto &dec = meta[var.self].decoration;
 					MSLVertexAttr *p_va = vtx_attrs_by_location[dec.location];
@@ -339,8 +340,8 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			auto &dec = meta[var.self].decoration;
 
 			if (var.storage == storage && interface_variable_exists_in_entry_point(var.self) &&
-			    (!is_builtin_variable(var) || incl_builtins) && (!match_binding || (vtx_binding == dec.binding)) &&
-			    !var.remapped_variable && type.pointer)
+			    !is_hidden_variable(var, incl_builtins) && (!match_binding || (vtx_binding == dec.binding)) &&
+			    type.pointer)
 			{
 				vars.push_back(&var);
 			}
@@ -537,13 +538,11 @@ void CompilerMSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (type.pointer &&
-                !is_builtin_variable(var) &&
-                (var.storage == StorageClassUniform ||
-                 var.storage == StorageClassUniformConstant ||
-                 var.storage == StorageClassPushConstant) &&
-                (meta[type.self].decoration.decoration_flags &
-                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			if (var.storage != StorageClassFunction && type.pointer &&
+			    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
+			     type.storage == StorageClassPushConstant) &&
+			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_struct(type);
 			}
@@ -1241,6 +1240,9 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
+			if (is_hidden_variable(var, true))
+				continue;
+
 			if (var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 			    var.storage == StorageClassPushConstant)
 			{
@@ -1418,7 +1420,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 // has a qualified name, use it, otherwise use the standard name.
 string CompilerMSL::to_name(uint32_t id, bool allow_alias)
 {
-    if (current_function && (current_function->self == execution.entry_point) ) {
+    if (current_function && (current_function->self == entry_point) ) {
         string qual_name = meta.at(id).decoration.qualified_alias;
         if ( !qual_name.empty() )
             return qual_name;
