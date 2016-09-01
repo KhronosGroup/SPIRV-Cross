@@ -415,9 +415,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 		}
 
 		auto &type = get<SPIRType>(p_var->basetype);
-		auto &type_dec = meta[type.self].decoration;
-
-		if (type_dec.decoration_flags & (1ull << DecorationBlock))
+        if (type.basetype == SPIRType::Struct)
 		{
 			// Flatten the struct members into the interface struct
 			uint32_t i = 0;
