@@ -19,6 +19,7 @@
 
 #include "spirv.hpp"
 #include <memory>
+#include <stack>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -443,6 +444,16 @@ private:
 		// Return true if traversal should continue.
 		// If false, traversal will end immediately.
 		virtual bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) = 0;
+
+		virtual bool begin_function_scope(const uint32_t *, uint32_t)
+		{
+			return true;
+		}
+
+		virtual bool end_function_scope()
+		{
+			return true;
+		}
 	};
 
 	struct BufferAccessHandler : OpcodeHandler
@@ -484,8 +495,17 @@ private:
 		{
 		}
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool end_function_scope() override;
 
 		Compiler &compiler;
+
+		// Each function in the call stack needs its own remapping for parameters so we can deduce which global variable each texture/sampler the parameter is statically bound to.
+		std::stack<std::unordered_map<uint32_t, uint32_t>> parameter_remapping;
+
+		uint32_t remap_parameter(uint32_t id);
+		void push_remap_parameters(const SPIRFunction &func, const uint32_t *args, uint32_t length);
+		void pop_remap_parameters();
 	};
 
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;

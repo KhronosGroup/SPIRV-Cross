@@ -390,16 +390,6 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 		return false;
 	}
 
-	// If we're remapping separate samplers and images, only emit the combined samplers.
-	if (!combined_image_samplers.empty())
-	{
-		auto &type = get<SPIRType>(var.basetype);
-		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
-		bool separate_sampler = type.basetype == SPIRType::Sampler;
-		if (separate_image || separate_sampler)
-			return true;
-	}
-
 	bool hidden = false;
 	if (check_active_interface_variables && storage_class_is_interface(var.storage))
 		hidden = active_interface_variables.find(var.self) == end(active_interface_variables);
@@ -1931,8 +1921,15 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 		if (!handler.handle(op, ops, i.length))
 			return false;
 
-		if (op == OpFunctionCall && !traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
-			return false;
+		if (op == OpFunctionCall)
+		{
+			if (!handler.begin_function_scope(ops, i.length))
+				return false;
+			if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
+				return false;
+			if (!handler.end_function_scope())
+				return false;
+		}
 	}
 
 	return true;
@@ -2309,6 +2306,57 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	       end(execution.interface_variables);
 }
 
+void Compiler::CombinedImageSamplerHandler::push_remap_parameters(const SPIRFunction &func, const uint32_t *args,
+                                                                  uint32_t length)
+{
+	// If possible, pipe through a remapping table so that parameters know
+	// which variables they actually bind to in this scope.
+	unordered_map<uint32_t, uint32_t> remapping;
+	for (uint32_t i = 0; i < length; i++)
+		remapping[func.arguments[i].id] = remap_parameter(args[i]);
+	parameter_remapping.push(move(remapping));
+}
+
+void Compiler::CombinedImageSamplerHandler::pop_remap_parameters()
+{
+	parameter_remapping.pop();
+}
+
+uint32_t Compiler::CombinedImageSamplerHandler::remap_parameter(uint32_t id)
+{
+	if (parameter_remapping.empty())
+		return id;
+
+	auto *var = compiler.maybe_get_backing_variable(id);
+	if (var)
+		id = var->self;
+
+	auto &remapping = parameter_remapping.top();
+	auto itr = remapping.find(id);
+	if (itr != end(remapping))
+		return itr->second;
+	else
+		return id;
+}
+
+bool Compiler::CombinedImageSamplerHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 3)
+		return false;
+
+	auto &callee = compiler.get<SPIRFunction>(args[2]);
+	args += 3;
+	length -= 3;
+	push_remap_parameters(callee, args, length);
+	return true;
+}
+
+bool Compiler::CombinedImageSamplerHandler::end_function_scope()
+{
+	pop_remap_parameters();
+	return true;
+}
+
 bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
 	// We need to figure out where samplers and images are loaded from, so do only the bare bones compilation we need.
@@ -2371,16 +2419,13 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	if (length < 4)
 		return false;
 
-	auto *image = compiler.maybe_get_backing_variable(args[2]);
-	auto *sampler = compiler.maybe_get_backing_variable(args[3]);
-	auto image_id = image ? image->self : args[2];
-	auto sampler_id = sampler ? sampler->self : args[3];
-
-	// FIXME: For function calls, we need to remap IDs which are function parameters into global variables.
+	// For function calls, we need to remap IDs which are function parameters into global variables.
 	// This information is statically known from the current place in the call stack.
-	// For now, we only look directly at global variables.
 	// Function parameters are not necessarily pointers, so if we don't have a backing variable, remapping will know
 	// which backing variable the image/sample came from.
+	auto image_id = remap_parameter(args[2]);
+	auto sampler_id = remap_parameter(args[3]);
+
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
 	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
 		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
@@ -2412,6 +2457,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 		compiler.combined_image_samplers.push_back({ combined_id, image_id, sampler_id });
 	}
+
 	return true;
 }
 

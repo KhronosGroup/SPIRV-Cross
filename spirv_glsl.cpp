@@ -1200,6 +1200,8 @@ void CompilerGLSL::emit_resources()
 
 	bool emitted = false;
 
+	bool skip_separate_image_sampler = !combined_image_samplers.empty() || !options.vulkan_semantics;
+
 	// Output Uniform Constants (values, samplers, images, etc).
 	for (auto &id : ids)
 	{
@@ -1207,6 +1209,15 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+
+			// If we're remapping separate samplers and images, only emit the combined samplers.
+			if (skip_separate_image_sampler)
+			{
+				bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+				bool separate_sampler = type.basetype == SPIRType::Sampler;
+				if (separate_image || separate_sampler)
+					continue;
+			}
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
@@ -1891,8 +1902,11 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 		if (itr != end(combined_image_samplers))
 			emit_op(result_type, result_id, to_expression(itr->combined_id), true, false);
 		else
-			throw CompilerError("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
-			                    "before compile() was called?");
+		{
+			//throw CompilerError("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
+			//                    "before compile() was called?");
+			emit_op(result_type, result_id, "DUMMY", true, false);
+		}
 	}
 }
 
