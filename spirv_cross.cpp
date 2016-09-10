@@ -2090,11 +2090,11 @@ std::vector<BufferRange> Compiler::get_active_buffer_ranges(uint32_t id) const
 // Returns the value of the first ID available for use in the expanded bound.
 uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
 {
-	uint32_t curr_bound = (uint32_t)ids.size();
-	uint32_t new_bound = curr_bound + incr_amount;
+	auto curr_bound = ids.size();
+	auto new_bound = curr_bound + incr_amount;
 	ids.resize(new_bound);
 	meta.resize(new_bound);
-	return curr_bound;
+	return uint32_t(curr_bound);
 }
 
 bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const
@@ -2402,7 +2402,14 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		type.storage = StorageClassUniformConstant;
 
 		// Build new variable.
-		compiler.set<SPIRVariable>(combined_id, sampled_type, StorageClassUniformConstant, 0);
+		auto &var = compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
+		var.storage = StorageClassUniformConstant;
+
+		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
+		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
+		auto old_flags = compiler.meta[sampler_id].decoration.decoration_flags;
+		new_flags = old_flags & (1ull << DecorationRelaxedPrecision);
+
 		compiler.combined_image_samplers.push_back({ combined_id, image_id, sampler_id });
 	}
 	return true;

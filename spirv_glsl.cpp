@@ -1190,8 +1190,8 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (!is_hidden_variable(var) && var.storage != StorageClassFunction && type.pointer &&
-			    type.storage == StorageClassPushConstant)
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
+			    !is_hidden_variable(var))
 			{
 				emit_push_constant_block(var);
 			}
@@ -1208,8 +1208,9 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
-			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
+			if (var.storage != StorageClassFunction && type.pointer &&
+			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
+			    !is_hidden_variable(var))
 			{
 				emit_uniform(var);
 				emitted = true;
@@ -1229,9 +1230,9 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
+			if (var.storage != StorageClassFunction && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-			    interface_variable_exists_in_entry_point(var.self))
+			    interface_variable_exists_in_entry_point(var.self) && !is_hidden_variable(var))
 			{
 				emit_interface_block(var);
 				emitted = true;
