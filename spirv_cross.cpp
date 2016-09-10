@@ -583,9 +583,21 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Images
-		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image)
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
+		         type.image.sampled == 2)
 		{
 			res.storage_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+		}
+		// Separate images
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
+		         type.image.sampled == 1)
+		{
+			res.separate_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+		}
+		// Separate samplers
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Sampler)
+		{
+			res.separate_samplers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Textures
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::SampledImage)

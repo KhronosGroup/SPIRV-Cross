@@ -73,6 +73,11 @@ struct ShaderResources
 	// There can only be one push constant block,
 	// but keep the vector in case this restriction is lifted in the future.
 	std::vector<Resource> push_constant_buffers;
+
+	// For Vulkan GLSL and HLSL source,
+	// these correspond to separate texture2D and samplers respectively.
+	std::vector<Resource> separate_images;
+	std::vector<Resource> separate_samplers;
 };
 
 struct BufferRange
