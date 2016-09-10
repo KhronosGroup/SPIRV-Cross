@@ -2324,12 +2324,12 @@ void Compiler::CombinedImageSamplerHandler::pop_remap_parameters()
 
 uint32_t Compiler::CombinedImageSamplerHandler::remap_parameter(uint32_t id)
 {
-	if (parameter_remapping.empty())
-		return id;
-
 	auto *var = compiler.maybe_get_backing_variable(id);
 	if (var)
 		id = var->self;
+
+	if (parameter_remapping.empty())
+		return id;
 
 	auto &remapping = parameter_remapping.top();
 	auto itr = remapping.find(id);
