@@ -263,6 +263,8 @@ public:
 	//
 	// The resulting samplers will be void of any decorations like name, descriptor sets and binding points,
 	// so this can be added before compile() if desired.
+	//
+	// Combined image samplers originating from this set are always considered active variables.
 	void build_combined_image_samplers();
 
 	// Gets a remapping for the combined image samplers.

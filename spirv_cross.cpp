@@ -382,6 +382,24 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	if ((is_builtin_variable(var) && !include_builtins) || var.remapped_variable)
 		return true;
 
+	// Combined image samplers are always considered active as they are "magic" variables.
+	if (find_if(begin(combined_image_samplers), end(combined_image_samplers), [&var](const CombinedImageSampler &samp) {
+		    return samp.combined_id == var.self;
+		}) != end(combined_image_samplers))
+	{
+		return false;
+	}
+
+	// If we're remapping separate samplers and images, only emit the combined samplers.
+	if (!combined_image_samplers.empty())
+	{
+		auto &type = get<SPIRType>(var.basetype);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+		bool separate_sampler = type.basetype == SPIRType::Sampler;
+		if (separate_image || separate_sampler)
+			return true;
+	}
+
 	bool hidden = false;
 	if (check_active_interface_variables && storage_class_is_interface(var.storage))
 		hidden = active_interface_variables.find(var.self) == end(active_interface_variables);
