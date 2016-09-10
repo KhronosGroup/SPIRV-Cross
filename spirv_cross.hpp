@@ -80,6 +80,16 @@ struct ShaderResources
 	std::vector<Resource> separate_samplers;
 };
 
+struct CombinedImageSampler
+{
+	// The ID of the sampler2D variable.
+	uint32_t combined_id;
+	// The ID of the texture2D variable.
+	uint32_t image_id;
+	// The ID of the sampler variable.
+	uint32_t sampler_id;
+};
+
 struct BufferRange
 {
 	unsigned index;
@@ -239,6 +249,28 @@ public:
 	uint32_t get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index = 0) const;
 	spv::ExecutionModel get_execution_model() const;
 
+	// Analyzes all separate image and samplers used from the currently selected entry point,
+	// and re-routes them all to a combined image sampler instead.
+	// This is required to "support" separate image samplers in targets which do not natively support
+	// this feature, like GLSL/ESSL.
+	//
+	// This must be called before compile() if such remapping is desired.
+	// This call will add new sampled images to the SPIR-V,
+	// so it will appear in reflection if get_shader_resources() is called after build_combined_image_samplers.
+	//
+	// If any image/sampler remapping was found, no separate image/samplers will appear in the decompiled output,
+	// but will still appear in reflection.
+	//
+	// The resulting samplers will be void of any decorations like name, descriptor sets and binding points,
+	// so this can be added before compile() if desired.
+	void build_combined_image_samplers();
+
+	// Gets a remapping for the combined image samplers.
+	const std::vector<CombinedImageSampler> &get_combined_image_samplers() const
+	{
+		return combined_image_samplers;
+	}
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -394,6 +426,8 @@ protected:
 	// For proper multiple entry point support, allow querying if an Input or Output
 	// variable is part of that entry points interface.
 	bool interface_variable_exists_in_entry_point(uint32_t id) const;
+
+	std::vector<CombinedImageSampler> combined_image_samplers;
 
 private:
 	void parse();

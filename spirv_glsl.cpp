@@ -1013,6 +1013,12 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 			throw CompilerError("At least ESSL 3.10 required for shader image load store.");
 	}
 
+	// If we're remapping, only emit combined samplers.
+	bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+	bool separate_sampler = type.basetype == SPIRType::Sampler;
+	if (!combined_image_samplers.empty() && separate_image && separate_sampler)
+		return;
+
 	add_resource_name(var.self);
 	statement(layout_for_variable(var), "uniform ", variable_decl(var), ";");
 }

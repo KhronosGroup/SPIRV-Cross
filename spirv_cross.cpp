@@ -2290,3 +2290,7 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	return find(begin(execution.interface_variables), end(execution.interface_variables), id) !=
 	       end(execution.interface_variables);
 }
+
+void Compiler::build_combined_image_samplers()
+{
+}
