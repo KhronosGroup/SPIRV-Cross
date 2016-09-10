@@ -2309,6 +2309,108 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	       end(execution.interface_variables);
 }
 
+bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	// We need to figure out where samplers and images are loaded from, so do only the bare bones compilation we need.
+	switch (opcode)
+	{
+	case OpLoad:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+
+		auto &type = compiler.get<SPIRType>(result_type);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+		bool separate_sampler = type.basetype == SPIRType::Sampler;
+
+		// If not separate texture or sampler, don't bother.
+		if (!separate_image && !separate_sampler)
+			return true;
+
+		uint32_t id = args[1];
+		uint32_t ptr = args[2];
+		compiler.set<SPIRExpression>(id, "", result_type, true);
+		compiler.register_read(id, ptr, true);
+		return true;
+	}
+
+	case OpInBoundsAccessChain:
+	case OpAccessChain:
+	{
+		if (length < 3)
+			return false;
+
+		// Technically, it is possible to have arrays of textures and arrays of samplers and combine them, but this becomes essentially
+		// impossible to implement, since we don't know which concrete sampler we are accessing.
+		// One potential way is to create a combinatorial explosion where N textures and M samplers are combined into N * M sampler2Ds,
+		// but this seems ridiculously complicated for a problem which is easy to work around.
+		// Checking access chains like this assumes we don't have samplers or textures inside uniform structs, but this makes no sense.
+
+		auto &type = compiler.get<SPIRType>(args[0]);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+		bool separate_sampler = type.basetype == SPIRType::Sampler;
+		if (separate_image)
+			throw CompilerError(
+			    "Attempting to use arrays of separate images. This is not possible to statically remap to plain GLSL.");
+		if (separate_sampler)
+			throw CompilerError("Attempting to use arrays of separate samplers. This is not possible to statically "
+			                    "remap to plain GLSL.");
+		return true;
+	}
+
+	case OpSampledImage:
+		// Do it outside.
+		break;
+
+	default:
+		return true;
+	}
+
+	if (length < 4)
+		return false;
+
+	auto *image = compiler.maybe_get_backing_variable(args[2]);
+	auto *sampler = compiler.maybe_get_backing_variable(args[3]);
+	auto image_id = image ? image->self : args[2];
+	auto sampler_id = sampler ? sampler->self : args[3];
+
+	// FIXME: For function calls, we need to remap IDs which are function parameters into global variables.
+	// This information is statically known from the current place in the call stack.
+	// For now, we only look directly at global variables.
+	// Function parameters are not necessarily pointers, so if we don't have a backing variable, remapping will know
+	// which backing variable the image/sample came from.
+	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
+	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
+		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
+		               });
+
+	if (itr == end(compiler.combined_image_samplers))
+	{
+		auto id = compiler.increase_bound_by(2);
+		auto type_id = id + 0;
+		auto combined_id = id + 1;
+		auto sampled_type = args[0];
+
+		// Make a new type, pointer to OpTypeSampledImage, so we can make a variable of this type.
+		// We will probably have this type lying around, but it doesn't hurt to make duplicates for internal purposes.
+		auto &type = compiler.set<SPIRType>(type_id);
+		auto &base = compiler.get<SPIRType>(sampled_type);
+		type = base;
+		type.pointer = true;
+		type.storage = StorageClassUniformConstant;
+
+		// Build new variable.
+		compiler.set<SPIRVariable>(combined_id, sampled_type, StorageClassUniformConstant, 0);
+		compiler.combined_image_samplers.push_back({ combined_id, image_id, sampler_id });
+	}
+	return true;
+}
+
 void Compiler::build_combined_image_samplers()
 {
+	combined_image_samplers.clear();
+	CombinedImageSamplerHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 }

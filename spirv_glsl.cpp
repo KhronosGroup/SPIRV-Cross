@@ -1866,7 +1866,33 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 
 void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
 {
-	emit_binary_func_op(result_type, result_id, image_id, samp_id, type_to_glsl(get<SPIRType>(result_type)).c_str());
+	if (options.vulkan_semantics)
+		emit_binary_func_op(result_type, result_id, image_id, samp_id,
+		                    type_to_glsl(get<SPIRType>(result_type)).c_str());
+	else
+	{
+		// For GLSL and ESSL targets, we must enumerate all possible combinations for sampler2D(texture2D, sampler) and redirect
+		// all possible combinations into new sampler2D uniforms.
+		auto *image = maybe_get_backing_variable(image_id);
+		auto *samp = maybe_get_backing_variable(samp_id);
+		if (image)
+			image_id = image->self;
+		if (samp)
+			samp_id = samp->self;
+
+		// FIXME: This must be context-dependent.
+		auto &mapping = combined_image_samplers;
+
+		auto itr = find_if(begin(mapping), end(mapping), [image_id, samp_id](const CombinedImageSampler &combined) {
+			return combined.image_id == image_id && combined.sampler_id == samp_id;
+		});
+
+		if (itr != end(combined_image_samplers))
+			emit_op(result_type, result_id, to_expression(itr->combined_id), true, false);
+		else
+			throw CompilerError("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
+			                    "before compile() was called?");
+	}
 }
 
 void CompilerGLSL::emit_texture_op(const Instruction &i)

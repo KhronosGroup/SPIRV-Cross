@@ -477,6 +477,17 @@ private:
 		std::unordered_set<uint32_t> &variables;
 	};
 
+	struct CombinedImageSamplerHandler : OpcodeHandler
+	{
+		CombinedImageSamplerHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+	};
+
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
 	bool traverse_all_reachable_opcodes(const SPIRFunction &block, OpcodeHandler &handler) const;
 	// This must be an ordered data structure so we always pick the same type aliases.
