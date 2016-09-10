@@ -55,7 +55,11 @@ void main()
     meow(param_1);
     foo = param_1;
     Foo param_2 = foo;
-    Foo param_3 = foobar.foos[gl_GlobalInvocationID.x];
+    Foo param_3;
+    param_3.a = foobar.foos[gl_GlobalInvocationID.x].a;
+    param_3.b = foobar.foos[gl_GlobalInvocationID.x].b;
+    param_3.c = foobar.foos[gl_GlobalInvocationID.x].c;
+    param_3.d = foobar.foos[gl_GlobalInvocationID.x].d;
     outdata.data[gl_GlobalInvocationID.x] = (bar(param_2) + bar(param_3));
 }
 

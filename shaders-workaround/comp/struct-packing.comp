@@ -1,4 +1,6 @@
 #version 310 es
+// This shader currently breaks in glslang (issue #506).
+// Will not be part of test suite again until issue is resolved.
 layout(local_size_x = 1) in;
 
 struct S0

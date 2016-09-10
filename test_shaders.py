@@ -79,7 +79,7 @@ def cross_compile(shader, vulkan, spirv, eliminate):
     if spirv:
         subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
     else:
-        subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
+        subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
 
     # Workaround Issue #217 in SPIRV-Tools until the issue is resolved.
     #if spirv:
@@ -166,13 +166,13 @@ def test_shader(stats, shader, update, keep):
     vulkan = shader_is_vulkan(shader[1])
     desktop = shader_is_desktop(shader[1])
     eliminate = shader_is_eliminate_dead_variables(shader[1])
-    spirv = shader_is_spirv(shader[1])
+    is_spirv = shader_is_spirv(shader[1])
 
     print('Testing shader:', joined_path)
-    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, spirv, eliminate)
+    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, eliminate)
 
     # Only test GLSL stats if we have a shader following GL semantics.
-    if stats and (not vulkan) and (not spirv) and (not desktop):
+    if stats and (not vulkan) and (not is_spirv) and (not desktop):
         cross_stats = get_shader_stats(glsl)
 
     regression_check(shader, glsl, update, keep)
@@ -180,7 +180,7 @@ def test_shader(stats, shader, update, keep):
         regression_check((shader[0], shader[1] + '.vk'), vulkan_glsl, update, keep)
     os.remove(spirv)
 
-    if stats and (not vulkan):
+    if stats and (not vulkan) and (not is_spirv) and (not desktop):
         pristine_stats = get_shader_stats(joined_path)
 
         a = []

@@ -141,10 +141,16 @@ vec2 lod_factor(vec2 uv)
     return vec2(floor_level, fract_level);
 }
 
+#ifdef VULKAN
+#define INSTANCE_ID gl_InstanceIndex
+#else
+#define INSTANCE_ID gl_InstanceID
+#endif
+
 vec2 warp_position()
 {
-    float vlod = dot(LODWeights, Patches[gl_InstanceID].LODs);
-    vlod = mix(vlod, Patches[gl_InstanceID].Position.w, all(equal(LODWeights, vec4(0.0))));
+    float vlod = dot(LODWeights, Patches[INSTANCE_ID].LODs);
+    vlod = mix(vlod, Patches[INSTANCE_ID].Position.w, all(equal(LODWeights, vec4(0.0))));
 
     float floor_lod = floor(vlod);
     float fract_lod = vlod - floor_lod;
@@ -166,7 +172,7 @@ vec2 warp_position()
 
 void main()
 {
-    vec2 PatchPos = Patches[gl_InstanceID].Position.xz * InvOceanSize_PatchScale.zw;
+    vec2 PatchPos = Patches[INSTANCE_ID].Position.xz * InvOceanSize_PatchScale.zw;
     vec2 WarpedPos = warp_position();
     vec2 VertexPos = PatchPos + WarpedPos;
     vec2 NormalizedPos = VertexPos * InvOceanSize_PatchScale.xy;
