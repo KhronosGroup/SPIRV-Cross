@@ -2502,12 +2502,34 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	if (length < 4)
 		return false;
 
+	// Registers sampler2D calls used in case they are parameters so
+	// that their callees know which combined image samplers to propagate down the call stack.
+	if (!functions.empty())
+	{
+		auto &callee = *functions.top();
+		if (callee.do_combined_parameters)
+		{
+			uint32_t image_id = args[2];
+
+			auto *image = compiler.maybe_get_backing_variable(image_id);
+			if (image)
+				image_id = image->self;
+
+			uint32_t sampler_id = args[3];
+			auto *sampler = compiler.maybe_get_backing_variable(sampler_id);
+			if (sampler)
+				sampler_id = sampler->self;
+
+			register_combined_image_sampler(callee, image_id, sampler_id);
+		}
+	}
+
 	// For function calls, we need to remap IDs which are function parameters into global variables.
 	// This information is statically known from the current place in the call stack.
 	// Function parameters are not necessarily pointers, so if we don't have a backing variable, remapping will know
 	// which backing variable the image/sample came from.
-	auto image_id = remap_parameter(args[2]);
-	auto sampler_id = remap_parameter(args[3]);
+	uint32_t image_id = remap_parameter(args[2]);
+	uint32_t sampler_id = remap_parameter(args[3]);
 
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
 	                   [image_id, sampler_id](const CombinedImageSampler &combined) {

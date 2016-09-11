@@ -1878,11 +1878,15 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 
 void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
 {
-	if (options.vulkan_semantics)
+	if (options.vulkan_semantics && combined_image_samplers.empty())
+	{
 		emit_binary_func_op(result_type, result_id, image_id, samp_id,
 		                    type_to_glsl(get<SPIRType>(result_type)).c_str());
+	}
 	else
 	{
+		auto &args = current_function->arguments;
+
 		// For GLSL and ESSL targets, we must enumerate all possible combinations for sampler2D(texture2D, sampler) and redirect
 		// all possible combinations into new sampler2D uniforms.
 		auto *image = maybe_get_backing_variable(image_id);
@@ -1892,20 +1896,56 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 		if (samp)
 			samp_id = samp->self;
 
-		// FIXME: This must be context-dependent.
-		auto &mapping = combined_image_samplers;
+		auto image_itr = find_if(begin(args), end(args),
+		                         [image_id](const SPIRFunction::Parameter &param) { return param.id == image_id; });
 
-		auto itr = find_if(begin(mapping), end(mapping), [image_id, samp_id](const CombinedImageSampler &combined) {
-			return combined.image_id == image_id && combined.sampler_id == samp_id;
-		});
+		auto sampler_itr = find_if(begin(args), end(args),
+		                           [samp_id](const SPIRFunction::Parameter &param) { return param.id == samp_id; });
 
-		if (itr != end(combined_image_samplers))
-			emit_op(result_type, result_id, to_expression(itr->combined_id), true, false);
+		if (image_itr != end(args) || sampler_itr != end(args))
+		{
+			// If any parameter originates from a parameter, we will find it in our argument list.
+			uint32_t param_index = 0;
+			bool global_texture = image_itr == end(args);
+			bool global_sampler = sampler_itr == end(args);
+			uint32_t texture_id = global_texture ? image_id : (image_itr - begin(args));
+			uint32_t sampler_id = global_sampler ? samp_id : (sampler_itr - begin(args));
+
+			auto &combined = current_function->combined_parameters;
+			auto itr =
+			    find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
+				    return p.global_texture == global_texture && p.global_sampler == global_sampler &&
+				           p.texture_id == texture_id && p.sampler_id == sampler_id;
+				});
+
+			if (itr != end(combined))
+			{
+				param_index = itr - begin(combined);
+				emit_op(result_type, result_id, join("PARAMETER", param_index), true, false);
+			}
+			else
+			{
+				throw CompilerError(
+				    "Cannot find mapping for combined sampler parameter, was build_combined_image_samplers() used "
+				    "before compile() was called?");
+			}
+		}
 		else
 		{
-			//throw CompilerError("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
-			//                    "before compile() was called?");
-			emit_op(result_type, result_id, "DUMMY", true, false);
+			// For global sampler2D, look directly at the global remapping table.
+			auto &mapping = combined_image_samplers;
+			auto itr = find_if(begin(mapping), end(mapping), [image_id, samp_id](const CombinedImageSampler &combined) {
+				return combined.image_id == image_id && combined.sampler_id == samp_id;
+			});
+
+			if (itr != end(combined_image_samplers))
+				emit_op(result_type, result_id, to_expression(itr->combined_id), true, false);
+			else
+			{
+				throw CompilerError(
+				    "Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
+				    "before compile() was called?");
+			}
 		}
 	}
 }
