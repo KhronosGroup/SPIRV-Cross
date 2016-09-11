@@ -1876,6 +1876,66 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		emit_trinary_func_op(result_type, id, left, right, lerp, "mix");
 }
 
+string CompilerGLSL::to_combined_image_sampler(uint32_t image_id, uint32_t samp_id)
+{
+	auto &args = current_function->arguments;
+
+	// For GLSL and ESSL targets, we must enumerate all possible combinations for sampler2D(texture2D, sampler) and redirect
+	// all possible combinations into new sampler2D uniforms.
+	auto *image = maybe_get_backing_variable(image_id);
+	auto *samp = maybe_get_backing_variable(samp_id);
+	if (image)
+		image_id = image->self;
+	if (samp)
+		samp_id = samp->self;
+
+	auto image_itr = find_if(begin(args), end(args),
+	                         [image_id](const SPIRFunction::Parameter &param) { return param.id == image_id; });
+
+	auto sampler_itr = find_if(begin(args), end(args),
+	                           [samp_id](const SPIRFunction::Parameter &param) { return param.id == samp_id; });
+
+	if (image_itr != end(args) || sampler_itr != end(args))
+	{
+		// If any parameter originates from a parameter, we will find it in our argument list.
+		bool global_texture = image_itr == end(args);
+		bool global_sampler = sampler_itr == end(args);
+		uint32_t texture_id = global_texture ? image_id : (image_itr - begin(args));
+		uint32_t sampler_id = global_sampler ? samp_id : (sampler_itr - begin(args));
+
+		auto &combined = current_function->combined_parameters;
+		auto itr = find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
+			return p.global_texture == global_texture && p.global_sampler == global_sampler &&
+			       p.texture_id == texture_id && p.sampler_id == sampler_id;
+		});
+
+		if (itr != end(combined))
+			return to_expression(itr->id);
+		else
+		{
+			throw CompilerError(
+			    "Cannot find mapping for combined sampler parameter, was build_combined_image_samplers() used "
+			    "before compile() was called?");
+		}
+	}
+	else
+	{
+		// For global sampler2D, look directly at the global remapping table.
+		auto &mapping = combined_image_samplers;
+		auto itr = find_if(begin(mapping), end(mapping), [image_id, samp_id](const CombinedImageSampler &combined) {
+			return combined.image_id == image_id && combined.sampler_id == samp_id;
+		});
+
+		if (itr != end(combined_image_samplers))
+			return to_expression(itr->combined_id);
+		else
+		{
+			throw CompilerError("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
+			                    "before compile() was called?");
+		}
+	}
+}
+
 void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
 {
 	if (options.vulkan_semantics && combined_image_samplers.empty())
@@ -1884,68 +1944,7 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 		                    type_to_glsl(get<SPIRType>(result_type)).c_str());
 	}
 	else
-	{
-		auto &args = current_function->arguments;
-
-		// For GLSL and ESSL targets, we must enumerate all possible combinations for sampler2D(texture2D, sampler) and redirect
-		// all possible combinations into new sampler2D uniforms.
-		auto *image = maybe_get_backing_variable(image_id);
-		auto *samp = maybe_get_backing_variable(samp_id);
-		if (image)
-			image_id = image->self;
-		if (samp)
-			samp_id = samp->self;
-
-		auto image_itr = find_if(begin(args), end(args),
-		                         [image_id](const SPIRFunction::Parameter &param) { return param.id == image_id; });
-
-		auto sampler_itr = find_if(begin(args), end(args),
-		                           [samp_id](const SPIRFunction::Parameter &param) { return param.id == samp_id; });
-
-		if (image_itr != end(args) || sampler_itr != end(args))
-		{
-			// If any parameter originates from a parameter, we will find it in our argument list.
-			bool global_texture = image_itr == end(args);
-			bool global_sampler = sampler_itr == end(args);
-			uint32_t texture_id = global_texture ? image_id : (image_itr - begin(args));
-			uint32_t sampler_id = global_sampler ? samp_id : (sampler_itr - begin(args));
-
-			auto &combined = current_function->combined_parameters;
-			auto itr =
-			    find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
-				    return p.global_texture == global_texture && p.global_sampler == global_sampler &&
-				           p.texture_id == texture_id && p.sampler_id == sampler_id;
-				});
-
-			if (itr != end(combined))
-			{
-				emit_op(result_type, result_id, to_expression(itr->id), true, false);
-			}
-			else
-			{
-				throw CompilerError(
-				    "Cannot find mapping for combined sampler parameter, was build_combined_image_samplers() used "
-				    "before compile() was called?");
-			}
-		}
-		else
-		{
-			// For global sampler2D, look directly at the global remapping table.
-			auto &mapping = combined_image_samplers;
-			auto itr = find_if(begin(mapping), end(mapping), [image_id, samp_id](const CombinedImageSampler &combined) {
-				return combined.image_id == image_id && combined.sampler_id == samp_id;
-			});
-
-			if (itr != end(combined_image_samplers))
-				emit_op(result_type, result_id, to_expression(itr->combined_id), true, false);
-			else
-			{
-				throw CompilerError(
-				    "Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
-				    "before compile() was called?");
-			}
-		}
-	}
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, false);
 }
 
 void CompilerGLSL::emit_texture_op(const Instruction &i)
@@ -4672,7 +4671,25 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		add_local_variable_name(arg.id);
 
 		decl += argument_decl(arg);
-		if (&arg != &func.arguments.back())
+		if (&arg != &func.arguments.back() || !func.shadow_arguments.empty())
+			decl += ", ";
+
+		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
+		auto *var = maybe_get<SPIRVariable>(arg.id);
+		if (var)
+			var->parameter = &arg;
+	}
+
+	for (auto &arg : func.shadow_arguments)
+	{
+		// Might change the variable name if it already exists in this function.
+		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
+		// to use same name for variables.
+		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
+		add_local_variable_name(arg.id);
+
+		decl += argument_decl(arg);
+		if (&arg != &func.shadow_arguments.back())
 			decl += ", ";
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.

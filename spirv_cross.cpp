@@ -2438,18 +2438,26 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 
 	if (itr == end(caller.combined_parameters))
 	{
-		uint32_t id = compiler.increase_bound_by(2);
+		uint32_t id = compiler.increase_bound_by(3);
 		auto type_id = id + 0;
-		auto combined_id = id + 1;
-		auto &base = compiler.expression_type(sampler_id);
+		auto ptr_type_id = id + 1;
+		auto combined_id = id + 2;
+		auto &base = compiler.expression_type(texture_id);
 		auto &type = compiler.set<SPIRType>(type_id);
+		auto &ptr_type = compiler.set<SPIRType>(ptr_type_id);
 
 		type = base;
-		type.pointer = true;
-		type.storage = StorageClassUniformConstant;
+		type.self = type_id;
+		type.basetype = SPIRType::SampledImage;
+		type.pointer = false;
+		type.storage = StorageClassGeneric;
+
+		ptr_type = type;
+		ptr_type.pointer = true;
+		ptr_type.storage = StorageClassUniformConstant;
 
 		// Build new variable.
-		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassFunction, 0);
+		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
 		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
@@ -2462,7 +2470,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		                  join("SPIRV_Cross_Combined", compiler.to_name(texture_id), compiler.to_name(sampler_id)));
 
 		caller.combined_parameters.push_back(param);
-		caller.shadow_arguments.push_back({ type_id, combined_id, 0u, 0u });
+		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u });
 	}
 }
 
@@ -2599,6 +2607,7 @@ void Compiler::build_combined_image_samplers()
 		{
 			auto &func = id.get<SPIRFunction>();
 			func.combined_parameters.clear();
+			func.shadow_arguments.clear();
 			func.do_combined_parameters = true;
 		}
 	}
