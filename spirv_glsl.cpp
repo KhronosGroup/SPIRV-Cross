@@ -1190,8 +1190,8 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (!is_hidden_variable(var) && var.storage != StorageClassFunction && type.pointer &&
-			    type.storage == StorageClassPushConstant)
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
+			    !is_hidden_variable(var))
 			{
 				emit_push_constant_block(var);
 			}
@@ -1199,6 +1199,8 @@ void CompilerGLSL::emit_resources()
 	}
 
 	bool emitted = false;
+
+	bool skip_separate_image_sampler = !combined_image_samplers.empty() || !options.vulkan_semantics;
 
 	// Output Uniform Constants (values, samplers, images, etc).
 	for (auto &id : ids)
@@ -1208,8 +1210,18 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
-			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
+			// If we're remapping separate samplers and images, only emit the combined samplers.
+			if (skip_separate_image_sampler)
+			{
+				bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+				bool separate_sampler = type.basetype == SPIRType::Sampler;
+				if (separate_image || separate_sampler)
+					continue;
+			}
+
+			if (var.storage != StorageClassFunction && type.pointer &&
+			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
+			    !is_hidden_variable(var))
 			{
 				emit_uniform(var);
 				emitted = true;
@@ -1229,9 +1241,9 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
+			if (var.storage != StorageClassFunction && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-			    interface_variable_exists_in_entry_point(var.self))
+			    interface_variable_exists_in_entry_point(var.self) && !is_hidden_variable(var))
 			{
 				emit_interface_block(var);
 				emitted = true;
@@ -1864,9 +1876,75 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		emit_trinary_func_op(result_type, id, left, right, lerp, "mix");
 }
 
+string CompilerGLSL::to_combined_image_sampler(uint32_t image_id, uint32_t samp_id)
+{
+	auto &args = current_function->arguments;
+
+	// For GLSL and ESSL targets, we must enumerate all possible combinations for sampler2D(texture2D, sampler) and redirect
+	// all possible combinations into new sampler2D uniforms.
+	auto *image = maybe_get_backing_variable(image_id);
+	auto *samp = maybe_get_backing_variable(samp_id);
+	if (image)
+		image_id = image->self;
+	if (samp)
+		samp_id = samp->self;
+
+	auto image_itr = find_if(begin(args), end(args),
+	                         [image_id](const SPIRFunction::Parameter &param) { return param.id == image_id; });
+
+	auto sampler_itr = find_if(begin(args), end(args),
+	                           [samp_id](const SPIRFunction::Parameter &param) { return param.id == samp_id; });
+
+	if (image_itr != end(args) || sampler_itr != end(args))
+	{
+		// If any parameter originates from a parameter, we will find it in our argument list.
+		bool global_image = image_itr == end(args);
+		bool global_sampler = sampler_itr == end(args);
+		uint32_t iid = global_image ? image_id : (image_itr - begin(args));
+		uint32_t sid = global_sampler ? samp_id : (sampler_itr - begin(args));
+
+		auto &combined = current_function->combined_parameters;
+		auto itr = find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
+			return p.global_image == global_image && p.global_sampler == global_sampler && p.image_id == iid &&
+			       p.sampler_id == sid;
+		});
+
+		if (itr != end(combined))
+			return to_expression(itr->id);
+		else
+		{
+			throw CompilerError(
+			    "Cannot find mapping for combined sampler parameter, was build_combined_image_samplers() used "
+			    "before compile() was called?");
+		}
+	}
+	else
+	{
+		// For global sampler2D, look directly at the global remapping table.
+		auto &mapping = combined_image_samplers;
+		auto itr = find_if(begin(mapping), end(mapping), [image_id, samp_id](const CombinedImageSampler &combined) {
+			return combined.image_id == image_id && combined.sampler_id == samp_id;
+		});
+
+		if (itr != end(combined_image_samplers))
+			return to_expression(itr->combined_id);
+		else
+		{
+			throw CompilerError("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
+			                    "before compile() was called?");
+		}
+	}
+}
+
 void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
 {
-	emit_binary_func_op(result_type, result_id, image_id, samp_id, type_to_glsl(get<SPIRType>(result_type)).c_str());
+	if (options.vulkan_semantics && combined_image_samplers.empty())
+	{
+		emit_binary_func_op(result_type, result_id, image_id, samp_id,
+		                    type_to_glsl(get<SPIRType>(result_type)).c_str());
+	}
+	else
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, false);
 }
 
 void CompilerGLSL::emit_texture_op(const Instruction &i)
@@ -2879,6 +2957,17 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 	return op;
 }
 
+bool CompilerGLSL::skip_argument(uint32_t id) const
+{
+	if (!combined_image_samplers.empty() || !options.vulkan_semantics)
+	{
+		auto &type = expression_type(id);
+		if (type.basetype == SPIRType::Sampler || (type.basetype == SPIRType::Image && type.image.sampled == 1))
+			return true;
+	}
+	return false;
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -2993,13 +3082,34 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			register_impure_function_call();
 
 		string funexpr;
+		vector<string> arglist;
 		funexpr += to_name(func) + "(";
 		for (uint32_t i = 0; i < length; i++)
 		{
-			funexpr += to_expression(arg[i]);
-			if (i + 1 < length)
-				funexpr += ", ";
+			// Do not pass in separate images or samplers if we're remapping
+			// to combined image samplers.
+			if (skip_argument(arg[i]))
+				continue;
+
+			arglist.push_back(to_expression(arg[i]));
 		}
+
+		for (auto &combined : callee.combined_parameters)
+		{
+			uint32_t image_id = combined.global_image ? combined.image_id : arg[combined.image_id];
+			uint32_t sampler_id = combined.global_sampler ? combined.sampler_id : arg[combined.sampler_id];
+
+			auto *image = maybe_get_backing_variable(image_id);
+			if (image)
+				image_id = image->self;
+
+			auto *samp = maybe_get_backing_variable(sampler_id);
+			if (samp)
+				sampler_id = samp->self;
+
+			arglist.push_back(to_combined_image_sampler(image_id, sampler_id));
+		}
+		funexpr += merge(arglist);
 		funexpr += ")";
 
 		// Check for function call constraints.
@@ -4584,17 +4694,21 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		decl += to_name(func.self);
 
 	decl += "(";
+	vector<string> arglist;
 	for (auto &arg : func.arguments)
 	{
+		// Do not pass in separate images or samplers if we're remapping
+		// to combined image samplers.
+		if (skip_argument(arg.id))
+			continue;
+
 		// Might change the variable name if it already exists in this function.
 		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
 		// to use same name for variables.
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
 		add_local_variable_name(arg.id);
 
-		decl += argument_decl(arg);
-		if (&arg != &func.arguments.back())
-			decl += ", ";
+		arglist.push_back(argument_decl(arg));
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 		auto *var = maybe_get<SPIRVariable>(arg.id);
@@ -4602,6 +4716,23 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 			var->parameter = &arg;
 	}
 
+	for (auto &arg : func.shadow_arguments)
+	{
+		// Might change the variable name if it already exists in this function.
+		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
+		// to use same name for variables.
+		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
+		add_local_variable_name(arg.id);
+
+		arglist.push_back(argument_decl(arg));
+
+		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
+		auto *var = maybe_get<SPIRVariable>(arg.id);
+		if (var)
+			var->parameter = &arg;
+	}
+
+	decl += merge(arglist);
 	decl += ")";
 	statement(decl);
 }

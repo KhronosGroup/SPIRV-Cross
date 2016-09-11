@@ -439,12 +439,34 @@ struct SPIRFunction : IVariant
 		uint32_t write_count;
 	};
 
+	// When calling a function, and we're remapping separate image samplers,
+	// resolve these arguments into combined image samplers and pass them
+	// as additional arguments in this order.
+	// It gets more complicated as functions can pull in their own globals
+	// and combine them with parameters,
+	// so we need to distinguish if something is local parameter index
+	// or a global ID.
+	struct CombinedImageSamplerParameter
+	{
+		uint32_t id;
+		uint32_t image_id;
+		uint32_t sampler_id;
+		bool global_image;
+		bool global_sampler;
+	};
+
 	uint32_t return_type;
 	uint32_t function_type;
 	std::vector<Parameter> arguments;
+
+	// Can be used by backends to add magic arguments.
+	// Currently used by combined image/sampler implementation.
+
+	std::vector<Parameter> shadow_arguments;
 	std::vector<uint32_t> local_variables;
 	uint32_t entry_block = 0;
 	std::vector<uint32_t> blocks;
+	std::vector<CombinedImageSamplerParameter> combined_parameters;
 
 	void add_local_variable(uint32_t id)
 	{
@@ -459,6 +481,7 @@ struct SPIRFunction : IVariant
 
 	bool active = false;
 	bool flush_undeclared = true;
+	bool do_combined_parameters = true;
 };
 
 struct SPIRVariable : IVariant

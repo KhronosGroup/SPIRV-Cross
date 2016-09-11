@@ -317,7 +317,7 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "inputs", res.stage_inputs);
 	print_resources(compiler, "outputs", res.stage_outputs);
 	print_resources(compiler, "textures", res.sampled_images);
-	print_resources(compiler, "separate textures", res.separate_images);
+	print_resources(compiler, "separate images", res.separate_images);
 	print_resources(compiler, "separate samplers", res.separate_samplers);
 	print_resources(compiler, "images", res.storage_images);
 	print_resources(compiler, "ssbos", res.storage_buffers);
@@ -554,6 +554,8 @@ int main(int argc, char *argv[])
 
 	unique_ptr<CompilerGLSL> compiler;
 
+	bool combined_image_samplers = false;
+
 	if (args.cpp)
 	{
 		compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
@@ -563,7 +565,10 @@ int main(int argc, char *argv[])
 	else if (args.metal)
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
 	else
+	{
+		combined_image_samplers = !args.vulkan_semantics;
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
+	}
 
 	if (!args.entry.empty())
 		compiler->set_entry_point(args.entry);
@@ -620,6 +625,17 @@ int main(int argc, char *argv[])
 	{
 		print_resources(*compiler, res);
 		print_push_constant_resources(*compiler, res.push_constant_buffers);
+	}
+
+	if (combined_image_samplers)
+	{
+		compiler->build_combined_image_samplers();
+		// Give the remapped combined samplers new names.
+		for (auto &remap : compiler->get_combined_image_samplers())
+		{
+			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id),
+			                                           compiler->get_name(remap.sampler_id)));
+		}
 	}
 
 	string glsl;
