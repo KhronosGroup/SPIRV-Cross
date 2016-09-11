@@ -633,7 +633,7 @@ int main(int argc, char *argv[])
 		// Give the remapped combined samplers new names.
 		for (auto &remap : compiler->get_combined_image_samplers())
 		{
-			compiler->set_name(remap.combined_id, join("_Combined", compiler->get_name(remap.image_id),
+			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id),
 			                                           compiler->get_name(remap.sampler_id)));
 		}
 	}
