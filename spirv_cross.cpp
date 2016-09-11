@@ -1927,7 +1927,7 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 				return false;
 			if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
 				return false;
-			if (!handler.end_function_scope())
+			if (!handler.end_function_scope(ops, i.length))
 				return false;
 		}
 	}
@@ -2348,13 +2348,96 @@ bool Compiler::CombinedImageSamplerHandler::begin_function_scope(const uint32_t 
 	args += 3;
 	length -= 3;
 	push_remap_parameters(callee, args, length);
+	functions.push(&callee);
 	return true;
 }
 
-bool Compiler::CombinedImageSamplerHandler::end_function_scope()
+bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *args, uint32_t length)
 {
+	if (length < 3)
+		return false;
+
+	auto &callee = compiler.get<SPIRFunction>(args[2]);
+	args += 3;
+	length -= 3;
+
+	// There are two types of cases we have to handle,
+	// a callee might call sampler2D(texture2D, sampler) directly where
+	// one or more parameters originate from parameters.
+	// Alternatively, we need to provide combined image samplers to our callees,
+	// and in this case we need to add those as well.
+
 	pop_remap_parameters();
+
+	// Our callee has now been processed at least once.
+	// No point in doing it again.
+	callee.do_combined_parameters = false;
+
+	auto &params = functions.top()->combined_parameters;
+	functions.pop();
+	if (functions.empty())
+		return true;
+
+	auto &caller = *functions.top();
+	if (caller.do_combined_parameters)
+	{
+		for (auto &param : params)
+		{
+			uint32_t texture_id = param.global_texture ? param.texture_id : args[param.texture_id];
+			uint32_t sampler_id = param.global_sampler ? param.sampler_id : args[param.sampler_id];
+
+			auto *t = compiler.maybe_get_backing_variable(texture_id);
+			auto *s = compiler.maybe_get_backing_variable(sampler_id);
+			if (t)
+				texture_id = t->self;
+			if (s)
+				sampler_id = s->self;
+
+			register_combined_image_sampler(caller, texture_id, sampler_id);
+		}
+	}
+
 	return true;
+}
+
+void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id,
+                                                                            uint32_t sampler_id)
+{
+	// We now have a texture ID and a sampler ID which will either be found as a global
+	// or a parameter in our own function. If both are global, they will not need a parameter,
+	// otherwise, add it to our list.
+	SPIRFunction::CombinedImageSamplerParameter param = {
+		texture_id, sampler_id, true, true,
+	};
+
+	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
+	                           [texture_id](const SPIRFunction::Parameter &p) { return p.id == texture_id; });
+	auto sampler_itr = find_if(begin(caller.arguments), end(caller.arguments),
+	                           [sampler_id](const SPIRFunction::Parameter &p) { return p.id == sampler_id; });
+
+	if (texture_itr != end(caller.arguments))
+	{
+		param.global_texture = false;
+		param.texture_id = texture_itr - begin(caller.arguments);
+	}
+
+	if (sampler_itr != end(caller.arguments))
+	{
+		param.global_sampler = false;
+		param.sampler_id = sampler_itr - begin(caller.arguments);
+	}
+
+	if (param.global_texture && param.global_sampler)
+		return;
+
+	auto itr = find_if(begin(caller.combined_parameters), end(caller.combined_parameters),
+	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
+		                   return param.texture_id == p.texture_id && param.sampler_id == p.sampler_id &&
+		                          param.global_texture == p.global_texture && param.global_sampler == p.global_sampler;
+		               });
+
+	if (itr == end(caller.combined_parameters))
+		caller.combined_parameters.push_back(param);
 }
 
 bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
@@ -2463,6 +2546,16 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 void Compiler::build_combined_image_samplers()
 {
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeFunction)
+		{
+			auto &func = id.get<SPIRFunction>();
+			func.combined_parameters.clear();
+			func.do_combined_parameters = true;
+		}
+	}
+
 	combined_image_samplers.clear();
 	CombinedImageSamplerHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
