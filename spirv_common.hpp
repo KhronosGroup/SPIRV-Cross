@@ -449,9 +449,9 @@ struct SPIRFunction : IVariant
 	struct CombinedImageSamplerParameter
 	{
 		uint32_t id;
-		uint32_t texture_id;
+		uint32_t image_id;
 		uint32_t sampler_id;
-		bool global_texture;
+		bool global_image;
 		bool global_sampler;
 	};
 

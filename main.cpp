@@ -317,7 +317,7 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "inputs", res.stage_inputs);
 	print_resources(compiler, "outputs", res.stage_outputs);
 	print_resources(compiler, "textures", res.sampled_images);
-	print_resources(compiler, "separate textures", res.separate_images);
+	print_resources(compiler, "separate images", res.separate_images);
 	print_resources(compiler, "separate samplers", res.separate_samplers);
 	print_resources(compiler, "images", res.storage_images);
 	print_resources(compiler, "ssbos", res.storage_buffers);

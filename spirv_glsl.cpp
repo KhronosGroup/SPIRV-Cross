@@ -1898,15 +1898,15 @@ string CompilerGLSL::to_combined_image_sampler(uint32_t image_id, uint32_t samp_
 	if (image_itr != end(args) || sampler_itr != end(args))
 	{
 		// If any parameter originates from a parameter, we will find it in our argument list.
-		bool global_texture = image_itr == end(args);
+		bool global_image = image_itr == end(args);
 		bool global_sampler = sampler_itr == end(args);
-		uint32_t texture_id = global_texture ? image_id : (image_itr - begin(args));
-		uint32_t sampler_id = global_sampler ? samp_id : (sampler_itr - begin(args));
+		uint32_t iid = global_image ? image_id : (image_itr - begin(args));
+		uint32_t sid = global_sampler ? samp_id : (sampler_itr - begin(args));
 
 		auto &combined = current_function->combined_parameters;
 		auto itr = find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
-			return p.global_texture == global_texture && p.global_sampler == global_sampler &&
-			       p.texture_id == texture_id && p.sampler_id == sampler_id;
+			return p.global_image == global_image && p.global_sampler == global_sampler && p.image_id == iid &&
+			       p.sampler_id == sid;
 		});
 
 		if (itr != end(combined))
@@ -3096,18 +3096,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		for (auto &combined : callee.combined_parameters)
 		{
-			uint32_t texture_id = combined.global_texture ? combined.texture_id : arg[combined.texture_id];
+			uint32_t image_id = combined.global_image ? combined.image_id : arg[combined.image_id];
 			uint32_t sampler_id = combined.global_sampler ? combined.sampler_id : arg[combined.sampler_id];
 
-			auto *tex = maybe_get_backing_variable(texture_id);
-			if (tex)
-				texture_id = tex->self;
+			auto *image = maybe_get_backing_variable(image_id);
+			if (image)
+				image_id = image->self;
 
 			auto *samp = maybe_get_backing_variable(sampler_id);
 			if (samp)
 				sampler_id = samp->self;
 
-			arglist.push_back(to_combined_image_sampler(texture_id, sampler_id));
+			arglist.push_back(to_combined_image_sampler(image_id, sampler_id));
 		}
 		funexpr += merge(arglist);
 		funexpr += ")";

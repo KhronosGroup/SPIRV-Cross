@@ -2383,42 +2383,42 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 	{
 		for (auto &param : params)
 		{
-			uint32_t texture_id = param.global_texture ? param.texture_id : args[param.texture_id];
+			uint32_t image_id = param.global_image ? param.image_id : args[param.image_id];
 			uint32_t sampler_id = param.global_sampler ? param.sampler_id : args[param.sampler_id];
 
-			auto *t = compiler.maybe_get_backing_variable(texture_id);
+			auto *i = compiler.maybe_get_backing_variable(image_id);
 			auto *s = compiler.maybe_get_backing_variable(sampler_id);
-			if (t)
-				texture_id = t->self;
+			if (i)
+				image_id = i->self;
 			if (s)
 				sampler_id = s->self;
 
-			register_combined_image_sampler(caller, texture_id, sampler_id);
+			register_combined_image_sampler(caller, image_id, sampler_id);
 		}
 	}
 
 	return true;
 }
 
-void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id,
+void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t image_id,
                                                                             uint32_t sampler_id)
 {
 	// We now have a texture ID and a sampler ID which will either be found as a global
 	// or a parameter in our own function. If both are global, they will not need a parameter,
 	// otherwise, add it to our list.
 	SPIRFunction::CombinedImageSamplerParameter param = {
-		0u, texture_id, sampler_id, true, true,
+		0u, image_id, sampler_id, true, true,
 	};
 
 	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
-	                           [texture_id](const SPIRFunction::Parameter &p) { return p.id == texture_id; });
+	                           [image_id](const SPIRFunction::Parameter &p) { return p.id == image_id; });
 	auto sampler_itr = find_if(begin(caller.arguments), end(caller.arguments),
 	                           [sampler_id](const SPIRFunction::Parameter &p) { return p.id == sampler_id; });
 
 	if (texture_itr != end(caller.arguments))
 	{
-		param.global_texture = false;
-		param.texture_id = texture_itr - begin(caller.arguments);
+		param.global_image = false;
+		param.image_id = texture_itr - begin(caller.arguments);
 	}
 
 	if (sampler_itr != end(caller.arguments))
@@ -2427,13 +2427,13 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		param.sampler_id = sampler_itr - begin(caller.arguments);
 	}
 
-	if (param.global_texture && param.global_sampler)
+	if (param.global_image && param.global_sampler)
 		return;
 
 	auto itr = find_if(begin(caller.combined_parameters), end(caller.combined_parameters),
 	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
-		                   return param.texture_id == p.texture_id && param.sampler_id == p.sampler_id &&
-		                          param.global_texture == p.global_texture && param.global_sampler == p.global_sampler;
+		                   return param.image_id == p.image_id && param.sampler_id == p.sampler_id &&
+		                          param.global_image == p.global_image && param.global_sampler == p.global_sampler;
 		               });
 
 	if (itr == end(caller.combined_parameters))
@@ -2442,7 +2442,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		auto type_id = id + 0;
 		auto ptr_type_id = id + 1;
 		auto combined_id = id + 2;
-		auto &base = compiler.expression_type(texture_id);
+		auto &base = compiler.expression_type(image_id);
 		auto &type = compiler.set<SPIRType>(type_id);
 		auto &ptr_type = compiler.set<SPIRType>(ptr_type_id);
 
@@ -2467,7 +2467,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		param.id = combined_id;
 
 		compiler.set_name(combined_id,
-		                  join("SPIRV_Cross_Combined", compiler.to_name(texture_id), compiler.to_name(sampler_id)));
+		                  join("SPIRV_Cross_Combined", compiler.to_name(image_id), compiler.to_name(sampler_id)));
 
 		caller.combined_parameters.push_back(param);
 		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u });
@@ -2490,7 +2490,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
 		bool separate_sampler = type.basetype == SPIRType::Sampler;
 
-		// If not separate texture or sampler, don't bother.
+		// If not separate image or sampler, don't bother.
 		if (!separate_image && !separate_sampler)
 			return true;
 
