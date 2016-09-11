@@ -3093,6 +3093,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			arglist.push_back(to_expression(arg[i]));
 		}
+
+		for (auto &combined : callee.combined_parameters)
+		{
+			uint32_t texture_id = combined.global_texture ? combined.texture_id : arg[combined.texture_id];
+			uint32_t sampler_id = combined.global_sampler ? combined.sampler_id : arg[combined.sampler_id];
+
+			auto *tex = maybe_get_backing_variable(texture_id);
+			if (tex)
+				texture_id = tex->self;
+
+			auto *samp = maybe_get_backing_variable(sampler_id);
+			if (samp)
+				sampler_id = samp->self;
+
+			arglist.push_back(to_combined_image_sampler(texture_id, sampler_id));
+		}
 		funexpr += merge(arglist);
 		funexpr += ")";
 
