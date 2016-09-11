@@ -1905,7 +1905,6 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 		if (image_itr != end(args) || sampler_itr != end(args))
 		{
 			// If any parameter originates from a parameter, we will find it in our argument list.
-			uint32_t param_index = 0;
 			bool global_texture = image_itr == end(args);
 			bool global_sampler = sampler_itr == end(args);
 			uint32_t texture_id = global_texture ? image_id : (image_itr - begin(args));
@@ -1920,8 +1919,7 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 
 			if (itr != end(combined))
 			{
-				param_index = itr - begin(combined);
-				emit_op(result_type, result_id, join("PARAMETER", param_index), true, false);
+				emit_op(result_type, result_id, to_expression(itr->id), true, false);
 			}
 			else
 			{

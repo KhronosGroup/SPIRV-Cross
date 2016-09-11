@@ -2407,7 +2407,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	// or a parameter in our own function. If both are global, they will not need a parameter,
 	// otherwise, add it to our list.
 	SPIRFunction::CombinedImageSamplerParameter param = {
-		texture_id, sampler_id, true, true,
+		0u, texture_id, sampler_id, true, true,
 	};
 
 	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
@@ -2437,7 +2437,33 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		               });
 
 	if (itr == end(caller.combined_parameters))
+	{
+		uint32_t id = compiler.increase_bound_by(2);
+		auto type_id = id + 0;
+		auto combined_id = id + 1;
+		auto &base = compiler.expression_type(sampler_id);
+		auto &type = compiler.set<SPIRType>(type_id);
+
+		type = base;
+		type.pointer = true;
+		type.storage = StorageClassUniformConstant;
+
+		// Build new variable.
+		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassFunction, 0);
+
+		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
+		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
+		auto old_flags = compiler.meta[sampler_id].decoration.decoration_flags;
+		new_flags = old_flags & (1ull << DecorationRelaxedPrecision);
+
+		param.id = combined_id;
+
+		compiler.set_name(combined_id,
+		                  join("SPIRV_Cross_Combined", compiler.to_name(texture_id), compiler.to_name(sampler_id)));
+
 		caller.combined_parameters.push_back(param);
+		caller.shadow_arguments.push_back({ type_id, combined_id, 0u, 0u });
+	}
 }
 
 bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
@@ -2552,8 +2578,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		type.storage = StorageClassUniformConstant;
 
 		// Build new variable.
-		auto &var = compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
-		var.storage = StorageClassUniformConstant;
+		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
 		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;

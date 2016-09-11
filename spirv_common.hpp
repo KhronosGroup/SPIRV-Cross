@@ -448,6 +448,7 @@ struct SPIRFunction : IVariant
 	// or a global ID.
 	struct CombinedImageSamplerParameter
 	{
+		uint32_t id;
 		uint32_t texture_id;
 		uint32_t sampler_id;
 		bool global_texture;
@@ -457,6 +458,11 @@ struct SPIRFunction : IVariant
 	uint32_t return_type;
 	uint32_t function_type;
 	std::vector<Parameter> arguments;
+
+	// Can be used by backends to add magic arguments.
+	// Currently used by combined image/sampler implementation.
+
+	std::vector<Parameter> shadow_arguments;
 	std::vector<uint32_t> local_variables;
 	uint32_t entry_block = 0;
 	std::vector<uint32_t> blocks;
