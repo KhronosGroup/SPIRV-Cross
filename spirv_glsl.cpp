@@ -2957,6 +2957,17 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 	return op;
 }
 
+bool CompilerGLSL::skip_argument(uint32_t id) const
+{
+	if (!combined_image_samplers.empty() || !options.vulkan_semantics)
+	{
+		auto &type = expression_type(id);
+		if (type.basetype == SPIRType::Sampler || (type.basetype == SPIRType::Image && type.image.sampled == 1))
+			return true;
+	}
+	return false;
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -3071,13 +3082,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			register_impure_function_call();
 
 		string funexpr;
+		vector<string> arglist;
 		funexpr += to_name(func) + "(";
 		for (uint32_t i = 0; i < length; i++)
 		{
-			funexpr += to_expression(arg[i]);
-			if (i + 1 < length)
-				funexpr += ", ";
+			// Do not pass in separate images or samplers if we're remapping
+			// to combined image samplers.
+			if (skip_argument(arg[i]))
+				continue;
+
+			arglist.push_back(to_expression(arg[i]));
 		}
+		funexpr += merge(arglist);
 		funexpr += ")";
 
 		// Check for function call constraints.
@@ -4662,17 +4678,21 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		decl += to_name(func.self);
 
 	decl += "(";
+	vector<string> arglist;
 	for (auto &arg : func.arguments)
 	{
+		// Do not pass in separate images or samplers if we're remapping
+		// to combined image samplers.
+		if (skip_argument(arg.id))
+			continue;
+
 		// Might change the variable name if it already exists in this function.
 		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
 		// to use same name for variables.
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
 		add_local_variable_name(arg.id);
 
-		decl += argument_decl(arg);
-		if (&arg != &func.arguments.back() || !func.shadow_arguments.empty())
-			decl += ", ";
+		arglist.push_back(argument_decl(arg));
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 		auto *var = maybe_get<SPIRVariable>(arg.id);
@@ -4688,9 +4708,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
 		add_local_variable_name(arg.id);
 
-		decl += argument_decl(arg);
-		if (&arg != &func.shadow_arguments.back())
-			decl += ", ";
+		arglist.push_back(argument_decl(arg));
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 		auto *var = maybe_get<SPIRVariable>(arg.id);
@@ -4698,6 +4716,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 			var->parameter = &arg;
 	}
 
+	decl += merge(arglist);
 	decl += ")";
 	statement(decl);
 }
