@@ -63,6 +63,20 @@ layout(binding = 0, std140) buffer SSBO0
 
 void main()
 {
-    ssbo_430.content = ssbo_140.content;
+    ssbo_430.content.m0s[0].a[0] = ssbo_140.content.m0s[0].a[0];
+    ssbo_430.content.m0s[0].b = ssbo_140.content.m0s[0].b;
+    ssbo_430.content.m1s[0].a = ssbo_140.content.m1s[0].a;
+    ssbo_430.content.m1s[0].b = ssbo_140.content.m1s[0].b;
+    ssbo_430.content.m2s[0].a[0] = ssbo_140.content.m2s[0].a[0];
+    ssbo_430.content.m2s[0].b = ssbo_140.content.m2s[0].b;
+    ssbo_430.content.m0.a[0] = ssbo_140.content.m0.a[0];
+    ssbo_430.content.m0.b = ssbo_140.content.m0.b;
+    ssbo_430.content.m1.a = ssbo_140.content.m1.a;
+    ssbo_430.content.m1.b = ssbo_140.content.m1.b;
+    ssbo_430.content.m2.a[0] = ssbo_140.content.m2.a[0];
+    ssbo_430.content.m2.b = ssbo_140.content.m2.b;
+    ssbo_430.content.m3.a = ssbo_140.content.m3.a;
+    ssbo_430.content.m3.b = ssbo_140.content.m3.b;
+    ssbo_430.content.m4 = ssbo_140.content.m4;
 }
 
