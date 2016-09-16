@@ -48,7 +48,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	resource_bindings.clear();
 	if (p_res_bindings)
 	{
-		resource_bindings.reserve(p_vtx_attrs->size());
+		resource_bindings.reserve(p_res_bindings->size());
 		for (auto &rb : *p_res_bindings)
 		{
 			rb.used_by_shader = false;
