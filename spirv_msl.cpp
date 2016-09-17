@@ -390,6 +390,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
+	for (auto &header : header_lines)
+        	statement(header);
+
 	statement("#include <metal_stdlib>");
 	statement("#include <simd/simd.h>");
 	statement("");
