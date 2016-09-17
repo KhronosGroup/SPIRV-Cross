@@ -1049,6 +1049,9 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 	{
 		// Redirect the write to a specific render target in legacy GLSL.
 		m.alias = join("gl_FragData[", location, "]");
+
+		if (is_legacy_es() && location != 0)
+			require_extension("GL_EXT_draw_buffers");
 	}
 	else if (type.array.size() == 1)
 	{
@@ -1059,6 +1062,9 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 		if (location != 0)
 			throw CompilerError("Arrayed output variable used, but location is not 0. "
 			                    "This is unimplemented in SPIRV-Cross.");
+		
+		if (is_legacy_es())
+			require_extension("GL_EXT_draw_buffers");
 	}
 	else
 		throw CompilerError("Array-of-array output variable used. This cannot be implemented in legacy GLSL.");
@@ -1820,14 +1826,17 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
+	if (is_legacy_es() && (op == "textureLod" || op == "textureProjLod"))
+		require_extension("GL_EXT_shader_texture_lod");
+
 	if (op == "texture")
 		return join("texture", type);
 	else if (op == "textureLod")
-		return join("texture", type, "Lod");
+		return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		return join("texture", type, "ProjLod");
+		return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 	else
 		throw CompilerError(join("Unsupported legacy texture op: ", op));
 }
@@ -3719,14 +3728,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	// Derivatives
 	case OpDPdx:
 		UFOP(dFdx);
+		if (is_legacy_es())
+			require_extension("GL_OES_standard_derivatives");
 		break;
 
 	case OpDPdy:
 		UFOP(dFdy);
+		if (is_legacy_es())
+			require_extension("GL_OES_standard_derivatives");
 		break;
 
 	case OpFwidth:
 		UFOP(fwidth);
+		if (is_legacy_es())
+			require_extension("GL_OES_standard_derivatives");
 		break;
 
 	// Bitfield
@@ -3894,14 +3909,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	// Textures
-	case OpImageSampleImplicitLod:
 	case OpImageSampleExplicitLod:
-	case OpImageSampleProjImplicitLod:
 	case OpImageSampleProjExplicitLod:
-	case OpImageSampleDrefImplicitLod:
 	case OpImageSampleDrefExplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
 	case OpImageSampleProjDrefExplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
 	case OpImageFetch:
 	case OpImageGather:
 	case OpImageDrefGather:
@@ -4480,8 +4495,8 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 		res += "MS";
 	if (type.image.arrayed)
 	{
-		if (!options.es && options.version < 130)
-            		require_extension("GL_EXT_texture_array");
+		if (is_legacy_desktop())
+			require_extension("GL_EXT_texture_array");
 		res += "Array";
 	}
 	if (type.image.depth)
