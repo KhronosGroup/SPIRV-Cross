@@ -1059,6 +1059,9 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 		if (location != 0)
 			throw CompilerError("Arrayed output variable used, but location is not 0. "
 			                    "This is unimplemented in SPIRV-Cross.");
+		
+		if (is_legacy_es())
+			require_extension("GL_EXT_draw_buffers");
 	}
 	else
 		throw CompilerError("Array-of-array output variable used. This cannot be implemented in legacy GLSL.");
@@ -1823,11 +1826,21 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	if (op == "texture")
 		return join("texture", type);
 	else if (op == "textureLod")
-		return join("texture", type, "Lod");
+	{
+		if (is_legacy_es())
+			return join("texture", type, "LodEXT");
+		else 
+			return join("texture", type, "Lod");
+	}
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		return join("texture", type, "ProjLod");
+	{
+		if (is_legacy_es())
+			return join("texture", type, "ProjLodEXT");
+		else
+			return join("texture", type, "ProjLod");
+	}
 	else
 		throw CompilerError(join("Unsupported legacy texture op: ", op));
 }
@@ -3719,14 +3732,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	// Derivatives
 	case OpDPdx:
 		UFOP(dFdx);
+		if (is_legacy_es())
+			require_extension("GL_OES_standard_derivatives");
 		break;
 
 	case OpDPdy:
 		UFOP(dFdy);
+		if (is_legacy_es())
+			require_extension("GL_OES_standard_derivatives");
 		break;
 
 	case OpFwidth:
 		UFOP(fwidth);
+		if (is_legacy_es())
+			require_extension("GL_OES_standard_derivatives");
 		break;
 
 	// Bitfield
@@ -3894,14 +3913,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	// Textures
-	case OpImageSampleImplicitLod:
 	case OpImageSampleExplicitLod:
-	case OpImageSampleProjImplicitLod:
 	case OpImageSampleProjExplicitLod:
-	case OpImageSampleDrefImplicitLod:
 	case OpImageSampleDrefExplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
 	case OpImageSampleProjDrefExplicitLod:
+	{
+		emit_texture_op(instruction);
+		if (is_legacy_es())
+			require_extension("GL_EXT_shader_texture_lod");
+		break;
+	}
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
 	case OpImageFetch:
 	case OpImageGather:
 	case OpImageDrefGather:
@@ -4481,7 +4506,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 	if (type.image.arrayed)
 	{
 		if (!options.es && options.version < 130)
-            		require_extension("GL_EXT_texture_array");
+			require_extension("GL_EXT_texture_array");
 		res += "Array";
 	}
 	if (type.image.depth)
