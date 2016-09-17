@@ -1832,11 +1832,11 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	if (op == "texture")
 		return join("texture", type);
 	else if (op == "textureLod")
-		return is_legacy_es() ? join("texture", type, "LodEXT") : join("texture", type, "Lod");
+		return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		return is_legacy_es() ? join("texture", type, "ProjLodEXT") : join("texture", type, "ProjLod");
+		return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 	else
 		throw CompilerError(join("Unsupported legacy texture op: ", op));
 }
