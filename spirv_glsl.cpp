@@ -1798,10 +1798,10 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	switch (imgtype.image.dim)
 	{
 	case spv::Dim1D:
-		type = "1D";
+		type = (imgtype.image.arrayed && !options.es) ? "1DArray" : "1D";
 		break;
 	case spv::Dim2D:
-		type = "2D";
+		type = (imgtype.image.arrayed && !options.es) ? "2DArray" : "2D";
 		break;
 	case spv::Dim3D:
 		type = "3D";
@@ -4479,7 +4479,11 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 	if (type.image.ms)
 		res += "MS";
 	if (type.image.arrayed)
+	{
+		if (!options.es && options.version < 130)
+            		require_extension("GL_EXT_texture_array");
 		res += "Array";
+	}
 	if (type.image.depth)
 		res += "Shadow";
 
