@@ -77,7 +77,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 		reset();
 
 		next_metal_resource_index = MSLResourceBinding(); // Start bindings at zero
-		
+
 		// Move constructor for this type is broken on GCC 4.9 ...
 		buffer = unique_ptr<ostringstream>(new ostringstream());
 
@@ -391,7 +391,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 void CompilerMSL::emit_header()
 {
 	for (auto &header : header_lines)
-        	statement(header);
+		statement(header);
 
 	statement("#include <metal_stdlib>");
 	statement("#include <simd/simd.h>");

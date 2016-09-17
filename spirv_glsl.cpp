@@ -1062,7 +1062,7 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 		if (location != 0)
 			throw CompilerError("Arrayed output variable used, but location is not 0. "
 			                    "This is unimplemented in SPIRV-Cross.");
-		
+
 		if (is_legacy_es())
 			require_extension("GL_EXT_draw_buffers");
 	}
