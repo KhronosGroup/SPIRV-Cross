@@ -814,6 +814,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.offset = argument;
 		break;
 
+	case DecorationSpecId:
+		dec.spec_id = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -855,6 +859,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.location;
 	case DecorationOffset:
 		return dec.offset;
+	case DecorationSpecId:
+		return dec.spec_id;
 	default:
 		return 0;
 	}
@@ -890,6 +896,10 @@ void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration d
 
 	case DecorationOffset:
 		dec.offset = 0;
+		break;
+
+	case DecorationSpecId:
+		dec.spec_id = 0;
 		break;
 
 	default:
@@ -933,6 +943,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.input_attachment = argument;
 		break;
 
+	case DecorationSpecId:
+		dec.spec_id = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -974,6 +988,8 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.set;
 	case DecorationInputAttachmentIndex:
 		return dec.input_attachment;
+	case DecorationSpecId:
+		return dec.spec_id;
 	default:
 		return 0;
 	}
@@ -1003,6 +1019,14 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 	case DecorationDescriptorSet:
 		dec.set = 0;
+		break;
+
+	case DecorationInputAttachmentIndex:
+		dec.input_attachment = 0;
+		break;
+
+	case DecorationSpecId:
+		dec.spec_id = 0;
 		break;
 
 	default:
@@ -2615,4 +2639,31 @@ void Compiler::build_combined_image_samplers()
 	combined_image_samplers.clear();
 	CombinedImageSamplerHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+}
+
+vector<SpecializationConstant> Compiler::get_specialization_constants() const
+{
+	vector<SpecializationConstant> spec_consts;
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (c.specialization)
+			{
+				spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
+			}
+		}
+	}
+	return spec_consts;
+}
+
+SPIRConstant &Compiler::get_constant(uint32_t id)
+{
+	return get<SPIRConstant>(id);
+}
+
+const SPIRConstant &Compiler::get_constant(uint32_t id) const
+{
+	return get<SPIRConstant>(id);
 }

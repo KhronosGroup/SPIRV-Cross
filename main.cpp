@@ -347,6 +347,16 @@ static void print_push_constant_resources(const Compiler &compiler, const vector
 	}
 }
 
+static void print_spec_constants(const Compiler &compiler)
+{
+	auto spec_constants = compiler.get_specialization_constants();
+	fprintf(stderr, "Specialization constants\n");
+	fprintf(stderr, "==================\n\n");
+	for (auto &c : spec_constants)
+		fprintf(stderr, "ID: %u, Spec ID: %u\n", c.id, c.constant_id);
+	fprintf(stderr, "==================\n\n");
+}
+
 struct PLSArg
 {
 	PlsFormat format;
@@ -650,6 +660,7 @@ int main(int argc, char *argv[])
 	{
 		print_resources(*compiler, res);
 		print_push_constant_resources(*compiler, res.push_constant_buffers);
+		print_spec_constants(*compiler);
 	}
 
 	if (combined_image_samplers)
