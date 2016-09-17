@@ -31,8 +31,6 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
                             std::vector<MSLResourceBinding> *p_res_bindings)
 {
-	next_metal_resource_index = MSLResourceBinding(); // Start bindings at zero
-
 	pad_type_ids_by_pad_len.clear();
 
 	msl_config = msl_cfg;
@@ -78,6 +76,8 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 
 		reset();
 
+		next_metal_resource_index = MSLResourceBinding(); // Start bindings at zero
+		
 		// Move constructor for this type is broken on GCC 4.9 ...
 		buffer = unique_ptr<ostringstream>(new ostringstream());
 
