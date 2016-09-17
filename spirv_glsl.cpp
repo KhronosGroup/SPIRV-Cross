@@ -1826,7 +1826,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
-	if (is_legacy_es() && (op == "textureLod" || op == "textureProj"))
+	if (is_legacy_es() && (op == "textureLod" || op == "textureProjLod"))
 		require_extension("GL_EXT_shader_texture_lod");
 
 	if (op == "texture")
