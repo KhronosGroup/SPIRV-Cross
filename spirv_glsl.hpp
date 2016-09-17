@@ -339,7 +339,12 @@ protected:
 
 	inline bool is_legacy_es() const
 	{
-		return (options.es && options.version < 300);
+		return options.es && options.version < 300;
+	}
+
+	inline bool is_legacy_desktop() const
+	{
+		return !options.es && options.version < 130;
 	}
 
 	bool args_will_forward(uint32_t id, const uint32_t *args, uint32_t num_args, bool pure);

@@ -1049,6 +1049,9 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 	{
 		// Redirect the write to a specific render target in legacy GLSL.
 		m.alias = join("gl_FragData[", location, "]");
+
+		if (is_legacy_es() && location != 0)
+			require_extension("GL_EXT_draw_buffers");
 	}
 	else if (type.array.size() == 1)
 	{
@@ -1823,24 +1826,17 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
+	if (is_legacy_es() && (op == "textureLod" || op == "textureProj"))
+		require_extension("GL_EXT_shader_texture_lod");
+
 	if (op == "texture")
 		return join("texture", type);
 	else if (op == "textureLod")
-	{
-		if (is_legacy_es())
-			return join("texture", type, "LodEXT");
-		else 
-			return join("texture", type, "Lod");
-	}
+		return is_legacy_es() ? join("texture", type, "LodEXT") : join("texture", type, "Lod");
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-	{
-		if (is_legacy_es())
-			return join("texture", type, "ProjLodEXT");
-		else
-			return join("texture", type, "ProjLod");
-	}
+		return is_legacy_es() ? join("texture", type, "ProjLodEXT") : join("texture", type, "ProjLod");
 	else
 		throw CompilerError(join("Unsupported legacy texture op: ", op));
 }
@@ -3917,12 +3913,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpImageSampleProjExplicitLod:
 	case OpImageSampleDrefExplicitLod:
 	case OpImageSampleProjDrefExplicitLod:
-	{
-		emit_texture_op(instruction);
-		if (is_legacy_es())
-			require_extension("GL_EXT_shader_texture_lod");
-		break;
-	}
 	case OpImageSampleImplicitLod:
 	case OpImageSampleProjImplicitLod:
 	case OpImageSampleDrefImplicitLod:
@@ -4505,7 +4495,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 		res += "MS";
 	if (type.image.arrayed)
 	{
-		if (!options.es && options.version < 130)
+		if (is_legacy_desktop())
 			require_extension("GL_EXT_texture_array");
 		res += "Array";
 	}
