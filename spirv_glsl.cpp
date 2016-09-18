@@ -804,6 +804,9 @@ bool CompilerGLSL::ssbo_is_std430_packing(const SPIRType &type)
 
 string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 {
+	if (is_legacy_es() || (!options.es && options.version < 330))
+		return "";
+
 	vector<string> attr;
 
 	auto &dec = meta[var.self].decoration;
