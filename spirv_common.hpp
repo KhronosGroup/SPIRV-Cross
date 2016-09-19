@@ -255,7 +255,7 @@ struct SPIREntryPoint
 	} workgroup_size;
 	uint32_t invocations = 0;
 	uint32_t output_vertices = 0;
-	spv::ExecutionModel model = {};
+	spv::ExecutionModel model;
 };
 
 struct SPIRExpression : IVariant
