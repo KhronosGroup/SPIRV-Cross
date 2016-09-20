@@ -414,6 +414,7 @@ string CompilerCPP::argument_decl(const SPIRFunction::Parameter &arg)
 string CompilerCPP::variable_decl(const SPIRType &type, const string &name)
 {
 	string base = type_to_glsl(type);
+	remap_variable_name(type, name, base);
 	bool runtime = false;
 	for (auto &array : type.array)
 	{

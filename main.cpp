@@ -360,6 +360,12 @@ struct Remap
 	unsigned components;
 };
 
+struct VariableTypeRemap
+{
+	string variable_name;
+	string new_variable_type;
+};
+
 struct CLIArguments
 {
 	const char *input = nullptr;
@@ -377,6 +383,7 @@ struct CLIArguments
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
 	vector<string> extensions;
+	vector<VariableTypeRemap> variable_type_remaps;
 	string entry;
 
 	uint32_t iterations = 1;
@@ -392,7 +399,8 @@ static void print_help()
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
 	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
 	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext] [--entry name] [--remove-unused-variables]\n");
+	                "[--extension ext] [--entry name] [--remove-unused-variables] "
+	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -519,6 +527,12 @@ int main(int argc, char *argv[])
 		args.remaps.push_back({ move(src), move(dst), components });
 	});
 
+	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
+		string var_name = parser.next_string();
+		string new_type = parser.next_string();
+		args.variable_type_remaps.push_back({ move(var_name), move(new_type) });
+	});
+
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
@@ -568,6 +582,17 @@ int main(int argc, char *argv[])
 	{
 		combined_image_samplers = !args.vulkan_semantics;
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
+	}
+
+	if (!args.variable_type_remaps.empty())
+	{
+		auto remap_cb = [&](const SPIRType &, const string &name, string &out) -> void {
+			for (const VariableTypeRemap &remap : args.variable_type_remaps)
+				if (name == remap.variable_name)
+					out = remap.new_variable_type;
+		};
+
+		compiler->set_variable_type_remap_callback(move(remap_cb));
 	}
 
 	if (!args.entry.empty())

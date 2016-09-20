@@ -17,6 +17,7 @@
 #ifndef SPIRV_COMMON_HPP
 #define SPIRV_COMMON_HPP
 
+#include <functional>
 #include <sstream>
 #include <stdio.h>
 #include <string.h>
@@ -833,6 +834,10 @@ struct Meta
 	std::vector<Decoration> members;
 	uint32_t sampler = 0;
 };
+
+// A user callback that remaps the type of any variable.
+using VariableTypeRemapCallback =
+    std::function<void(const SPIRType &type, const std::string &var_name, std::string &name_of_type)>;
 }
 
 #endif

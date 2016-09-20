@@ -274,6 +274,12 @@ public:
 		return combined_image_samplers;
 	}
 
+	// Set a new variable type remap callback.
+	void set_variable_type_remap_callback(VariableTypeRemapCallback cb)
+	{
+		variable_remap_callback = std::move(cb);
+	}
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -432,6 +438,12 @@ protected:
 
 	std::vector<CombinedImageSampler> combined_image_samplers;
 
+	void remap_variable_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
+	{
+		if (variable_remap_callback)
+			variable_remap_callback(type, var_name, type_name);
+	}
+
 private:
 	void parse();
 	void parse(const Instruction &i);
@@ -516,6 +528,8 @@ private:
 	std::vector<uint32_t> global_struct_cache;
 
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
+
+	VariableTypeRemapCallback variable_remap_callback;
 };
 }
 
