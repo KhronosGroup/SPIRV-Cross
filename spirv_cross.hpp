@@ -275,6 +275,14 @@ public:
 	}
 
 	// Set a new variable type remap callback.
+	// The type remapping is designed to allow global interface variable to assume more special types.
+	// A typical example here is to remap sampler2D into samplerExternalOES, which currently isn't supported
+	// directly by SPIR-V.
+	//
+	// In compile() while emitting code,
+	// for every variable that is declared, including function parameters, the callback will be called
+	// and the API user has a chance to change the textual representation of the type used to declare the variable.
+	// The API user can detect special patterns in names to guide the remapping.
 	void set_variable_type_remap_callback(VariableTypeRemapCallback cb)
 	{
 		variable_remap_callback = std::move(cb);
@@ -438,7 +446,7 @@ protected:
 
 	std::vector<CombinedImageSampler> combined_image_samplers;
 
-	void remap_variable_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
+	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
 	{
 		if (variable_remap_callback)
 			variable_remap_callback(type, var_name, type_name);

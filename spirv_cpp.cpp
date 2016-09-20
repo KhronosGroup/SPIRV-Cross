@@ -87,17 +87,20 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
 	uint32_t binding = meta[var.self].decoration.binding;
 	uint32_t location = meta[var.self].decoration.location;
 
+	string type_name = type_to_glsl(type);
+	remap_variable_type_name(type, instance_name, type_name);
+
 	if (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	    type.basetype == SPIRType::AtomicCounter)
 	{
-		statement("internal::Resource<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
+		statement("internal::Resource<", type_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 		statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 		resource_registrations.push_back(
 		    join("s.register_resource(", instance_name, "__", ", ", descriptor_set, ", ", binding, ");"));
 	}
 	else
 	{
-		statement("internal::UniformConstant<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name,
+		statement("internal::UniformConstant<", type_name, type_to_array_glsl(type), "> ", instance_name,
 		          "__;");
 		statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 		resource_registrations.push_back(
@@ -405,16 +408,19 @@ string CompilerCPP::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &var = get<SPIRVariable>(arg.id);
 
 	string base = type_to_glsl(type);
+	string variable_name = to_name(var.self);
+	remap_variable_type_name(type, variable_name, base);
+
 	for (auto &array : type.array)
 		base = join("std::array<", base, ", ", array, ">");
 
-	return join(constref ? "const " : "", base, " &", to_name(var.self));
+	return join(constref ? "const " : "", base, " &", variable_name);
 }
 
 string CompilerCPP::variable_decl(const SPIRType &type, const string &name)
 {
 	string base = type_to_glsl(type);
-	remap_variable_name(type, name, base);
+	remap_variable_type_name(type, name, base);
 	bool runtime = false;
 	for (auto &array : type.array)
 	{

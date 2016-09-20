@@ -4257,7 +4257,7 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
 {
 	string type_name = type_to_glsl(type);
-	remap_variable_name(type, name, type_name);
+	remap_variable_type_name(type, name, type_name);
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 

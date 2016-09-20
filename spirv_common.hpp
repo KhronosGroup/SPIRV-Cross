@@ -836,6 +836,8 @@ struct Meta
 };
 
 // A user callback that remaps the type of any variable.
+// var_name is the declared name of the variable.
+// name_of_type is the textual name of the type which will be used in the code unless written to by the callback.
 using VariableTypeRemapCallback =
     std::function<void(const SPIRType &type, const std::string &var_name, std::string &name_of_type)>;
 }
