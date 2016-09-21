@@ -804,7 +804,11 @@ bool CompilerGLSL::ssbo_is_std430_packing(const SPIRType &type)
 
 string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 {
-	if (is_legacy_es() || (!options.es && options.version < 130))
+	// FIXME: Come up with a better solution for when to disable layouts.
+	// Having layouts depend on extensions as well as which types
+	// of layouts are used. For now, the simple solution is to just disable
+	// layouts for legacy versions.
+	if (is_legacy())
 		return "";
 
 	vector<string> attr;
