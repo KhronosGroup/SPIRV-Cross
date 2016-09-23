@@ -153,7 +153,7 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	statement("static ", variable_decl(var), ";");
 }
 
-void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number)
+void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number, bool builtins)
 {
 	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
@@ -178,17 +178,22 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 		use_binding_number = false;
 	}
 
-	auto &m = meta[var.self].decoration;
-	if (use_binding_number)
+	bool is_no_builtin = !is_builtin_variable(var) && !var.remapped_variable;
+
+	if ((is_no_builtin && !builtins) || (!is_no_builtin && builtins))
 	{
-		statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
-	}
-	else
-	{
-		statement(variable_decl(type, m.alias), " : ", binding, ";");
+		auto &m = meta[var.self].decoration;
+		if (use_binding_number)
+		{
+			statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
+		}
+		else
+		{
+			statement(variable_decl(type, m.alias), " : ", binding, ";");
+		}
 	}
 
-	if (!is_builtin_variable(var) && !var.remapped_variable)
+	if (is_no_builtin)
 	{
 		++binding_number;
 	}
@@ -297,7 +302,11 @@ void CompilerHLSL::emit_resources()
 	sort(variables.begin(), variables.end(), VariableComparator(meta));
 	for (auto var : variables)
 	{
-		emit_interface_block_in_struct(*var, binding_number);
+		emit_interface_block_in_struct(*var, binding_number, false);
+	}
+	for (auto var : variables)
+	{
+		emit_interface_block_in_struct(*var, binding_number, true);
 	}
 	end_scope_decl();
 	statement("");
@@ -330,7 +339,11 @@ void CompilerHLSL::emit_resources()
 	sort(variables.begin(), variables.end(), VariableComparator(meta));
 	for (auto var : variables)
 	{
-		emit_interface_block_in_struct(*var, binding_number);
+		emit_interface_block_in_struct(*var, binding_number, false);
+	}
+	for (auto var : variables)
+	{
+		emit_interface_block_in_struct(*var, binding_number, true);
 	}
 	end_scope_decl();
 	statement("");

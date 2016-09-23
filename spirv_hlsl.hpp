@@ -55,7 +55,7 @@ private:
 	void emit_header() override;
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
-	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
+	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number, bool builtins);
 	void emit_texture_op(const Instruction &i) override;
 	void emit_instruction(const Instruction &instruction) override;
 	void emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
