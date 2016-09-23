@@ -200,6 +200,45 @@ void CompilerGLSL::find_static_extensions()
 			}
 		}
 	}
+
+	auto &execution = get_entry_point();
+	switch (execution.model)
+	{
+	case ExecutionModelGLCompute:
+		if (!options.es && options.version < 430)
+			require_extension("GL_ARB_compute_shader");
+		if (options.es && options.version < 310)
+			throw CompilerError("At least ESSL 3.10 required for compute shaders.");
+		break;
+
+	case ExecutionModelGeometry:
+		if (options.es && options.version < 320)
+			require_extension("GL_EXT_geometry_shader");
+		if (!options.es && options.version < 320)
+			require_extension("GL_ARB_geometry_shader4");
+
+		if ((execution.flags & (1ull << ExecutionModeInvocations)) && execution.invocations != 1)
+		{
+			// Instanced GS is part of 400 core or this extension.
+			if (!options.es && options.version < 400)
+				require_extension("GL_ARB_gpu_shader5");
+		}
+		break;
+
+	case ExecutionModelTessellationEvaluation:
+	case ExecutionModelTessellationControl:
+		if (options.es && options.version < 320)
+			require_extension("GL_EXT_tessellation_shader");
+		if (!options.es && options.version < 400)
+			require_extension("GL_ARB_tessellation_shader");
+		break;
+
+	default:
+		break;
+	}
+
+	if (!pls_inputs.empty() || !pls_outputs.empty())
+		require_extension("GL_EXT_shader_pixel_local_storage");
 }
 
 string CompilerGLSL::compile()
@@ -234,9 +273,6 @@ void CompilerGLSL::emit_header()
 	auto &execution = get_entry_point();
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
-	for (auto &header : header_lines)
-		statement(header);
-
 	// Needed for binding = # on UBOs, etc.
 	if (!options.es && options.version < 420)
 	{
@@ -248,8 +284,8 @@ void CompilerGLSL::emit_header()
 	for (auto &ext : forced_extensions)
 		statement("#extension ", ext, " : require");
 
-	if (!pls_inputs.empty() || !pls_outputs.empty())
-		statement("#extension GL_EXT_shader_pixel_local_storage : require");
+	for (auto &header : header_lines)
+		statement(header);
 
 	vector<string> inputs;
 	vector<string> outputs;
@@ -257,18 +293,9 @@ void CompilerGLSL::emit_header()
 	switch (execution.model)
 	{
 	case ExecutionModelGeometry:
-		if (options.es && options.version < 320)
-			statement("#extension GL_EXT_geometry_shader : require");
-		if (!options.es && options.version < 320)
-			statement("#extension GL_ARB_geometry_shader4 : require");
 		outputs.push_back(join("max_vertices = ", execution.output_vertices));
 		if ((execution.flags & (1ull << ExecutionModeInvocations)) && execution.invocations != 1)
-		{
-			// Instanced GS is part of 400 core or this extension.
-			if (!options.es && options.version < 400)
-				statement("#extension GL_ARB_gpu_shader5 : require");
 			inputs.push_back(join("invocations = ", execution.invocations));
-		}
 		if (execution.flags & (1ull << ExecutionModeInputPoints))
 			inputs.push_back("points");
 		if (execution.flags & (1ull << ExecutionModeInputLines))
@@ -288,19 +315,11 @@ void CompilerGLSL::emit_header()
 		break;
 
 	case ExecutionModelTessellationControl:
-		if (options.es && options.version < 320)
-			statement("#extension GL_EXT_tessellation_shader : require");
-		if (!options.es && options.version < 400)
-			statement("#extension GL_ARB_tessellation_shader : require");
 		if (execution.flags & (1ull << ExecutionModeOutputVertices))
 			outputs.push_back(join("vertices = ", execution.output_vertices));
 		break;
 
 	case ExecutionModelTessellationEvaluation:
-		if (options.es && options.version < 320)
-			statement("#extension GL_EXT_tessellation_shader : require");
-		if (!options.es && options.version < 400)
-			statement("#extension GL_ARB_tessellation_shader : require");
 		if (execution.flags & (1ull << ExecutionModeQuads))
 			inputs.push_back("quads");
 		if (execution.flags & (1ull << ExecutionModeIsolines))
@@ -320,10 +339,6 @@ void CompilerGLSL::emit_header()
 		break;
 
 	case ExecutionModelGLCompute:
-		if (!options.es && options.version < 430)
-			statement("#extension GL_ARB_compute_shader : require");
-		if (options.es && options.version < 310)
-			throw CompilerError("At least ESSL 3.10 required for compute shaders.");
 		inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
 		inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
 		inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
