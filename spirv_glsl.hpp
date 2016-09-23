@@ -230,6 +230,7 @@ protected:
 		bool flexible_member_array_supported = true;
 		bool explicit_struct_type = false;
 		bool use_initializer_list = false;
+		bool use_constructor_splatting = true;
 	} backend;
 
 	void emit_struct(SPIRType &type);

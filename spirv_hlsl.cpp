@@ -883,6 +883,7 @@ string CompilerHLSL::compile()
 	backend.flexible_member_array_supported = false;
 	backend.explicit_struct_type = true;
 	backend.use_initializer_list = true;
+	backend.use_constructor_splatting = false;
 
 	uint32_t pass_count = 0;
 	do
