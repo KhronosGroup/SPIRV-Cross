@@ -192,7 +192,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 					strcpy(name, m.alias.c_str());
 					strcat(name, "_");
 					size_t length = strlen(name);
-					_itoa(i, &name[length], 10);
+					sprintf(&name[length], "%d", i);
 					name[length + 1] = 0;
 					SPIRType newtype = type;
 					newtype.columns = 1;
