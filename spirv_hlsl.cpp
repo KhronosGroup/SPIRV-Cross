@@ -198,6 +198,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 					newtype.columns = 1;
 					statement(variable_decl(newtype, name), " : ", binding, binding_number++, ";");
 				}
+				--binding_number;
 			}
 			else
 			{

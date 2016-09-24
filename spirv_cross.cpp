@@ -649,6 +649,11 @@ const SPIRType &Compiler::get_type(uint32_t id) const
 	return get<SPIRType>(id);
 }
 
+const SPIRType &Compiler::get_type_from_variable(uint32_t id) const
+{
+	return get<SPIRType>(get<SPIRVariable>(id).basetype);
+}
+
 void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration decoration, uint32_t argument)
 {
 	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));

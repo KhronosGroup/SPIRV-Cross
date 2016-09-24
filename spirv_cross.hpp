@@ -122,6 +122,8 @@ public:
 	// Mostly used with Resource::type_id and Resource::base_type_id to parse the underlying type of a resource.
 	const SPIRType &get_type(uint32_t id) const;
 
+	const SPIRType &get_type_from_variable(uint32_t id) const;
+
 	// Gets the underlying storage class for an OpVariable.
 	spv::StorageClass get_storage_class(uint32_t id) const;
 
