@@ -322,14 +322,21 @@ void CompilerGLSL::emit_header()
 	case ExecutionModelTessellationEvaluation:
 		if (execution.flags & (1ull << ExecutionModeQuads))
 			inputs.push_back("quads");
+		if (execution.flags & (1ull << ExecutionModeTriangles))
+			inputs.push_back("triangles");
 		if (execution.flags & (1ull << ExecutionModeIsolines))
 			inputs.push_back("isolines");
 		if (execution.flags & (1ull << ExecutionModePointMode))
 			inputs.push_back("point_mode");
-		if (execution.flags & (1ull << ExecutionModeVertexOrderCw))
-			inputs.push_back("cw");
-		if (execution.flags & (1ull << ExecutionModeVertexOrderCcw))
-			inputs.push_back("ccw");
+
+		if ((execution.flags & (1ull << ExecutionModeIsolines)) == 0)
+		{
+			if (execution.flags & (1ull << ExecutionModeVertexOrderCw))
+				inputs.push_back("cw");
+			if (execution.flags & (1ull << ExecutionModeVertexOrderCcw))
+				inputs.push_back("ccw");
+		}
+
 		if (execution.flags & (1ull << ExecutionModeSpacingFractionalEven))
 			inputs.push_back("fractional_even_spacing");
 		if (execution.flags & (1ull << ExecutionModeSpacingFractionalOdd))
