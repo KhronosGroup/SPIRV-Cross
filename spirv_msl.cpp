@@ -968,7 +968,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return "";
 			}
 		}
-		return "";
+		uint32_t locn = get_ordered_member_location(type.self, index);
+		return string(" [[color(") + convert_to_string(locn) + ")]]";
 	}
 
 	return "";
