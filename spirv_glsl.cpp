@@ -1046,6 +1046,15 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), "uniform ", variable_decl(var), ";");
 }
 
+void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
+{
+	auto &type = get<SPIRType>(constant.constant_type);
+	auto name = to_name(constant.self);
+
+	statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
+	          variable_decl(type, name), " = ", constant_expression(constant), ";");
+}
+
 void CompilerGLSL::replace_illegal_names()
 {
 	for (auto &id : ids)
@@ -1308,6 +1317,25 @@ void CompilerGLSL::emit_resources()
 		}
 	}
 
+	// If emitted Vulkan GLSL,
+	// emit specialization constants as actual floats,
+	// spec op expressions will redirect to the constant name.
+	if (options.vulkan_semantics)
+	{
+		for (auto &id : ids)
+		{
+			if (id.get_type() == TypeConstant)
+			{
+				auto &c = id.get<SPIRConstant>();
+				if (!c.specialization)
+					continue;
+
+				emit_specialization_constant(c);
+				emitted = true;
+			}
+		}
+	}
+
 	if (emitted)
 		statement("");
 }
@@ -1366,7 +1394,13 @@ string CompilerGLSL::to_expression(uint32_t id)
 	}
 
 	case TypeConstant:
-		return constant_expression(get<SPIRConstant>(id));
+	{
+		auto &c = get<SPIRConstant>(id);
+		if (c.specialization && options.vulkan_semantics)
+			return to_name(id);
+		else
+			return constant_expression(c);
+	}
 
 	case TypeVariable:
 	{
@@ -1406,7 +1440,12 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 
 		for (auto &elem : c.subconstants)
 		{
-			res += constant_expression(get<SPIRConstant>(elem));
+			auto &subc = get<SPIRConstant>(elem);
+			if (subc.specialization && options.vulkan_semantics)
+				res += to_name(elem);
+			else
+				res += constant_expression(get<SPIRConstant>(elem));
+
 			if (&elem != &c.subconstants.back())
 				res += ", ";
 		}

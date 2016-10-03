@@ -240,6 +240,7 @@ protected:
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);
 	void emit_block_chain(SPIRBlock &block);
+	void emit_specialization_constant(const SPIRConstant &constant);
 	std::string emit_continue_block(uint32_t continue_block);
 	bool attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method);
 	void emit_uniform(const SPIRVariable &var);
