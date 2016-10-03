@@ -134,6 +134,7 @@ enum Types
 	TypeBlock,
 	TypeExtension,
 	TypeExpression,
+	TypeConstantOp,
 	TypeUndef
 };
 
@@ -147,6 +148,25 @@ struct SPIRUndef : IVariant
 	    : basetype(basetype_)
 	{
 	}
+	uint32_t basetype;
+};
+
+struct SPIRConstantOp : IVariant
+{
+	enum
+	{
+		type = TypeConstantOp
+	};
+
+	SPIRConstantOp(uint32_t result_type, spv::Op op, const uint32_t *args, uint32_t length)
+	    : opcode(op)
+	    , arguments(args, args + length)
+	    , basetype(result_type)
+	{
+	}
+
+	spv::Op opcode;
+	std::vector<uint32_t> arguments;
 	uint32_t basetype;
 };
 

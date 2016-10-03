@@ -319,6 +319,9 @@ const SPIRType &Compiler::expression_type(uint32_t id) const
 	case TypeConstant:
 		return get<SPIRType>(get<SPIRConstant>(id).constant_type);
 
+	case TypeConstantOp:
+		return get<SPIRType>(get<SPIRConstantOp>(id).basetype);
+
 	case TypeUndef:
 		return get<SPIRType>(get<SPIRUndef>(id).basetype);
 
@@ -354,7 +357,8 @@ bool Compiler::is_immutable(uint32_t id) const
 	}
 	else if (ids[id].get_type() == TypeExpression)
 		return get<SPIRExpression>(id).immutable;
-	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeUndef)
+	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeConstantOp ||
+	         ids[id].get_type() == TypeUndef)
 		return true;
 	else
 		return false;
@@ -1750,6 +1754,19 @@ void Compiler::parse(const Instruction &instruction)
 		// they are treated as continues.
 		if (current_block->continue_block != current_block->self)
 			continue_blocks.insert(current_block->continue_block);
+		break;
+	}
+
+	case OpSpecConstantOp:
+	{
+		if (length < 3)
+			throw CompilerError("OpSpecConstantOp not enough arguments.");
+
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto spec_op = static_cast<Op>(ops[2]);
+
+		set<SPIRConstantOp>(id, result_type, spec_op, ops + 3, length - 3);
 		break;
 	}
 

@@ -23,6 +23,27 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+// Returns true if an arithmetic operation does not change behavior depending on signedness.
+static bool opcode_is_sign_invariant(Op opcode)
+{
+	switch (opcode)
+	{
+	case OpIEqual:
+	case OpINotEqual:
+	case OpISub:
+	case OpIAdd:
+	case OpIMul:
+	case OpShiftLeftLogical:
+	case OpBitwiseOr:
+	case OpBitwiseXor:
+	case OpBitwiseAnd:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 static const char *to_pls_layout(PlsFormat format)
 {
 	switch (format)
@@ -1402,6 +1423,9 @@ string CompilerGLSL::to_expression(uint32_t id)
 			return constant_expression(c);
 	}
 
+	case TypeConstantOp:
+		return constant_op_expression(get<SPIRConstantOp>(id));
+
 	case TypeVariable:
 	{
 		auto &var = get<SPIRVariable>(id);
@@ -1424,6 +1448,150 @@ string CompilerGLSL::to_expression(uint32_t id)
 
 	default:
 		return to_name(id);
+	}
+}
+
+string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
+{
+	auto &type = get<SPIRType>(cop.basetype);
+	bool binary = false;
+	bool unary = false;
+	string op;
+
+	// TODO: Find a clean way to reuse emit_instruction.
+	//
+	// FIXME: This doesn't take into account the possibility
+	// of type mismatches like emit_instruction does yet, but
+	// for spec op purposes, this seems extremely unlikely to
+	// hit in practice.
+	switch (cop.opcode)
+	{
+	case OpSConvert:
+	case OpUConvert:
+	case OpFConvert:
+		op = type_to_glsl_constructor(type);
+		break;
+
+#define BOP(opname, x) \
+	case Op##opname:   \
+		binary = true; \
+		op = x;        \
+		break
+
+#define UOP(opname, x) \
+	case Op##opname:   \
+		unary = true;  \
+		op = x;        \
+		break
+
+		UOP(SNegate, "-");
+		UOP(Not, "~");
+		BOP(IAdd, "+");
+		BOP(ISub, "-");
+		BOP(IMul, "*");
+		BOP(SDiv, "/");
+		BOP(UDiv, "/");
+		BOP(UMod, "%");
+		BOP(SMod, "%");
+		BOP(ShiftRightLogical, ">>");
+		BOP(ShiftRightArithmetic, ">>");
+		BOP(ShiftLeftLogical, "<<");
+		BOP(BitwiseOr, "|");
+		BOP(BitwiseXor, "^");
+		BOP(BitwiseAnd, "&");
+		BOP(LogicalOr, "||");
+		BOP(LogicalAnd, "&&");
+		UOP(LogicalNot, "!");
+		BOP(LogicalEqual, "==");
+		BOP(LogicalNotEqual, "!=");
+		BOP(IEqual, "==");
+		BOP(INotEqual, "!=");
+		BOP(ULessThan, "<");
+		BOP(SLessThan, "<");
+		BOP(ULessThanEqual, "<=");
+		BOP(SLessThanEqual, "<=");
+		BOP(UGreaterThan, ">");
+		BOP(SGreaterThan, ">");
+		BOP(UGreaterThanEqual, ">=");
+		BOP(SGreaterThanEqual, ">=");
+
+	case OpSelect:
+	{
+		if (cop.arguments.size() < 3)
+			throw CompilerError("Not enough arguments to OpSpecConstantOp.");
+
+		// This one is pretty annoying. It's triggered from
+		// uint(bool), int(bool) from spec constants.
+		// In order to preserve its compile-time constness in Vulkan GLSL,
+		// we need to reduce the OpSelect expression back to this simplified model.
+		// If we cannot, fail.
+		if (!to_trivial_mix_op(type, op, cop.arguments[2], cop.arguments[1], cop.arguments[0]))
+		{
+			throw CompilerError(
+			    "Cannot implement specialization constant op OpSelect. "
+			    "Need trivial select implementation which can be resolved to a simple cast from boolean.");
+		}
+		break;
+	}
+
+	default:
+		// Some opcodes are unimplemented here, these are currently not possible to test from glslang.
+		throw CompilerError("Unimplemented spec constant op.");
+	}
+
+	SPIRType::BaseType input_type;
+	bool skip_cast_if_equal_type = opcode_is_sign_invariant(cop.opcode);
+
+	switch (cop.opcode)
+	{
+	case OpIEqual:
+	case OpINotEqual:
+		input_type = SPIRType::Int;
+		break;
+
+	default:
+		input_type = type.basetype;
+		break;
+	}
+
+#undef BOP
+#undef UOP
+	if (binary)
+	{
+		if (cop.arguments.size() < 2)
+			throw CompilerError("Not enough arguments to OpSpecConstantOp.");
+
+		string cast_op0;
+		string cast_op1;
+		auto expected_type = binary_op_bitcast_helper(cast_op0, cast_op1, input_type, cop.arguments[0],
+		                                              cop.arguments[1], skip_cast_if_equal_type);
+
+		if (type.basetype != input_type && type.basetype != SPIRType::Boolean)
+		{
+			expected_type.basetype = input_type;
+			auto expr = bitcast_glsl_op(type, expected_type);
+			expr += '(';
+			expr += join(cast_op0, " ", op, " ", cast_op1);
+			expr += ')';
+			return expr;
+		}
+		else
+			return join("(", cast_op0, " ", op, " ", cast_op1, ")");
+	}
+	else if (unary)
+	{
+		if (cop.arguments.size() < 1)
+			throw CompilerError("Not enough arguments to OpSpecConstantOp.");
+
+		// Auto-bitcast to result type as needed.
+		// Works around various casting scenarios in glslang as there is no OpBitcast for specialization constants.
+		return join("(", op, bitcast_glsl(type, cop.arguments[0]), ")");
+	}
+	else
+	{
+		if (cop.arguments.size() < 1)
+			throw CompilerError("Not enough arguments to OpSpecConstantOp.");
+		return join(op, "(", to_expression(cop.arguments[0]), ")");
 	}
 }
 
@@ -1781,9 +1949,7 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 		extra_parens = false;
 	}
 	else
-	{
 		expr += join(cast_op0, " ", op, " ", cast_op1);
-	}
 
 	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1), extra_parens);
 }
@@ -1909,17 +2075,77 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		throw CompilerError(join("Unsupported legacy texture op: ", op));
 }
 
+bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t left, uint32_t right, uint32_t lerp)
+{
+	auto *cleft = maybe_get<SPIRConstant>(left);
+	auto *cright = maybe_get<SPIRConstant>(right);
+	auto &lerptype = expression_type(lerp);
+
+	// If our targets aren't constants, we cannot use construction.
+	if (!cleft || !cright)
+		return false;
+
+	// If our targets are spec constants, we cannot use construction.
+	if (cleft->specialization || cright->specialization)
+		return false;
+
+	// We can only use trivial construction if we have a scalar
+	// (should be possible to do it for vectors as well, but that is overkill for now).
+	if (lerptype.basetype != SPIRType::Boolean || lerptype.vecsize > 1)
+		return false;
+
+	// If our bool selects between 0 and 1, we can cast from bool instead, making our trivial constructor.
+	bool ret = false;
+	switch (type.basetype)
+	{
+	case SPIRType::Int:
+	case SPIRType::UInt:
+		ret = cleft->scalar() == 0 && cright->scalar() == 1;
+		break;
+
+	case SPIRType::Float:
+		ret = cleft->scalar_f32() == 0.0f && cright->scalar_f32() == 1.0f;
+		break;
+
+	case SPIRType::Double:
+		ret = cleft->scalar_f64() == 0.0 && cright->scalar_f64() == 1.0;
+		break;
+
+	case SPIRType::Int64:
+	case SPIRType::UInt64:
+		ret = cleft->scalar_u64() == 0 && cright->scalar_u64() == 1;
+		break;
+
+	default:
+		break;
+	}
+
+	if (ret)
+		op = type_to_glsl_constructor(type);
+	return ret;
+}
+
 void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp)
 {
 	auto &lerptype = expression_type(lerp);
 	auto &restype = get<SPIRType>(result_type);
 
+	string mix_op;
 	bool has_boolean_mix = (options.es && options.version >= 310) || (!options.es && options.version >= 450);
+	bool trivial_mix = to_trivial_mix_op(restype, mix_op, left, right, lerp);
 
-	// Boolean mix not supported on desktop without extension.
-	// Was added in OpenGL 4.5 with ES 3.1 compat.
-	if (!has_boolean_mix && lerptype.basetype == SPIRType::Boolean)
+	// If we can reduce the mix to a simple cast, do so.
+	// This helps for cases like int(bool), uint(bool) which is implemented with
+	// OpSelect bool 1 0.
+	if (trivial_mix)
 	{
+		emit_unary_func_op(result_type, id, lerp, mix_op.c_str());
+	}
+	else if (!has_boolean_mix && lerptype.basetype == SPIRType::Boolean)
+	{
+		// Boolean mix not supported on desktop without extension.
+		// Was added in OpenGL 4.5 with ES 3.1 compat.
+		//
 		// Could use GL_EXT_shader_integer_mix on desktop at least,
 		// but Apple doesn't support it. :(
 		// Just implement it as ternary expressions.
@@ -3052,12 +3278,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	uint32_t length = instruction.length;
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BOP_CAST(op, type, skip_cast) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
+#define BOP_CAST(op, type) \
+	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
 #define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
 #define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BFOP_CAST(op, type, skip_cast) emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
+#define BFOP_CAST(op, type) \
+	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 
@@ -3472,7 +3700,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		// For simple arith ops, prefer the output type if there's a mismatch to avoid extra bitcasts.
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(+, type, true);
+		BOP_CAST(+, type);
 		break;
 	}
 
@@ -3483,7 +3711,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpISub:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(-, type, true);
+		BOP_CAST(-, type);
 		break;
 	}
 
@@ -3494,7 +3722,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpIMul:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(*, type, true);
+		BOP_CAST(*, type);
 		break;
 	}
 
@@ -3520,11 +3748,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpSDiv:
-		BOP_CAST(/, SPIRType::Int, false);
+		BOP_CAST(/, SPIRType::Int);
 		break;
 
 	case OpUDiv:
-		BOP_CAST(/, SPIRType::UInt, false);
+		BOP_CAST(/, SPIRType::UInt);
 		break;
 
 	case OpFDiv:
@@ -3532,38 +3760,38 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpShiftRightLogical:
-		BOP_CAST(>>, SPIRType::UInt, false);
+		BOP_CAST(>>, SPIRType::UInt);
 		break;
 
 	case OpShiftRightArithmetic:
-		BOP_CAST(>>, SPIRType::Int, false);
+		BOP_CAST(>>, SPIRType::Int);
 		break;
 
 	case OpShiftLeftLogical:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(<<, type, true);
+		BOP_CAST(<<, type);
 		break;
 	}
 
 	case OpBitwiseOr:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(|, type, true);
+		BOP_CAST(|, type);
 		break;
 	}
 
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST (^, type, true);
+		BOP_CAST (^, type);
 		break;
 	}
 
 	case OpBitwiseAnd:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(&, type, true);
+		BOP_CAST(&, type);
 		break;
 	}
 
@@ -3572,11 +3800,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpUMod:
-		BOP_CAST(%, SPIRType::UInt, false);
+		BOP_CAST(%, SPIRType::UInt);
 		break;
 
 	case OpSMod:
-		BOP_CAST(%, SPIRType::Int, false);
+		BOP_CAST(%, SPIRType::Int);
 		break;
 
 	case OpFMod:
@@ -3611,9 +3839,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpIEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
-			BFOP_CAST(equal, SPIRType::Int, true);
+			BFOP_CAST(equal, SPIRType::Int);
 		else
-			BOP_CAST(==, SPIRType::Int, true);
+			BOP_CAST(==, SPIRType::Int);
 		break;
 	}
 
@@ -3630,9 +3858,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpINotEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
-			BFOP_CAST(notEqual, SPIRType::Int, true);
+			BFOP_CAST(notEqual, SPIRType::Int);
 		else
-			BOP_CAST(!=, SPIRType::Int, true);
+			BOP_CAST(!=, SPIRType::Int);
 		break;
 	}
 
@@ -3651,9 +3879,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto type = opcode == OpUGreaterThan ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			BFOP_CAST(greaterThan, type, false);
+			BFOP_CAST(greaterThan, type);
 		else
-			BOP_CAST(>, type, false);
+			BOP_CAST(>, type);
 		break;
 	}
 
@@ -3671,9 +3899,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto type = opcode == OpUGreaterThanEqual ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			BFOP_CAST(greaterThanEqual, type, false);
+			BFOP_CAST(greaterThanEqual, type);
 		else
-			BOP_CAST(>=, type, false);
+			BOP_CAST(>=, type);
 		break;
 	}
 
@@ -3691,9 +3919,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto type = opcode == OpULessThan ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			BFOP_CAST(lessThan, type, false);
+			BFOP_CAST(lessThan, type);
 		else
-			BOP_CAST(<, type, false);
+			BOP_CAST(<, type);
 		break;
 	}
 
@@ -3711,9 +3939,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto type = opcode == OpULessThanEqual ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			BFOP_CAST(lessThanEqual, type, false);
+			BFOP_CAST(lessThanEqual, type);
 		else
-			BOP_CAST(<=, type, false);
+			BOP_CAST(<=, type);
 		break;
 	}
 
