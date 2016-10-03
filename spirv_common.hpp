@@ -202,8 +202,15 @@ struct SPIRType : IVariant
 	uint32_t vecsize = 1;
 	uint32_t columns = 1;
 
-	// Arrays, suport array of arrays by having a vector of array sizes.
+	// Arrays, support array of arrays by having a vector of array sizes.
 	std::vector<uint32_t> array;
+
+	// Array elements can be either specialization constants or specialization ops.
+	// This array determines how to interpret the array size.
+	// If an element is true, the element is a literal,
+	// otherwise, it's an expression, which must be resolved on demand.
+	// The actual size is not really known until runtime.
+	std::vector<bool> array_size_literal;
 
 	// Pointers
 	bool pointer = false;

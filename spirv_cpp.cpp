@@ -410,8 +410,8 @@ string CompilerCPP::argument_decl(const SPIRFunction::Parameter &arg)
 	string variable_name = to_name(var.self);
 	remap_variable_type_name(type, variable_name, base);
 
-	for (auto &array : type.array)
-		base = join("std::array<", base, ", ", array, ">");
+	for (uint32_t i = 0; i < type.array.size(); i++)
+		base = join("std::array<", base, ", ", to_array_size(type, i), ">");
 
 	return join(constref ? "const " : "", base, " &", variable_name);
 }
@@ -421,16 +421,18 @@ string CompilerCPP::variable_decl(const SPIRType &type, const string &name)
 	string base = type_to_glsl(type);
 	remap_variable_type_name(type, name, base);
 	bool runtime = false;
-	for (auto &array : type.array)
+
+	for (uint32_t i = 0; i < type.array.size(); i++)
 	{
-		if (array)
-			base = join("std::array<", base, ", ", array, ">");
-		else
+		auto &array = type.array[i];
+		if (!array && type.array_size_literal[i])
 		{
 			// Avoid using runtime arrays with std::array since this is undefined.
 			// Runtime arrays cannot be passed around as values, so this is fine.
 			runtime = true;
 		}
+		else
+			base = join("std::array<", base, ", ", to_array_size(type, i), ">");
 	}
 	base += ' ';
 	return base + name + (runtime ? "[1]" : "");

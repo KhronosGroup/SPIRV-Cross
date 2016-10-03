@@ -2,6 +2,11 @@
 precision mediump float;
 precision highp int;
 
+struct Foo
+{
+    float elems[(4 + 2)];
+};
+
 layout(location = 0) out vec4 FragColor;
 
 void main()
@@ -46,6 +51,9 @@ void main()
     mediump int c35 = int(false);
     mediump uint c36 = uint(false);
     float c37 = float(false);
-    FragColor = vec4((t0 + t1));
+    float vec0[4][(3 + 3)];
+    float vec1[(3 + 2)][(4 + 5)];
+    Foo foo;
+    FragColor = (((vec4((t0 + t1)) + vec4(vec0[0][0])) + vec4(vec1[0][0])) + vec4(foo.elems[3]));
 }
 

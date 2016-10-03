@@ -729,6 +729,7 @@ uint32_t CompilerGLSL::type_to_std430_array_stride(const SPIRType &type, uint64_
 	// Array stride is equal to aligned size of the underlying type.
 	SPIRType tmp = type;
 	tmp.array.pop_back();
+	tmp.array_size_literal.pop_back();
 	uint32_t size = type_to_std430_size(tmp, flags);
 	uint32_t alignment = type_to_std430_alignment(tmp, flags);
 	return (size + alignment - 1) & ~(alignment - 1);
@@ -737,7 +738,7 @@ uint32_t CompilerGLSL::type_to_std430_array_stride(const SPIRType &type, uint64_
 uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 {
 	if (!type.array.empty())
-		return type.array.back() * type_to_std430_array_stride(type, flags);
+		return to_array_size_literal(type, type.array.size() - 1) * type_to_std430_array_stride(type, flags);
 
 	const uint32_t base_alignment = type_to_std430_base_size(type);
 	uint32_t size = 0;
@@ -1215,6 +1216,34 @@ void CompilerGLSL::emit_resources()
 	if (!pls_inputs.empty() || !pls_outputs.empty())
 		emit_pls();
 
+	bool emitted = false;
+
+	// If emitted Vulkan GLSL,
+	// emit specialization constants as actual floats,
+	// spec op expressions will redirect to the constant name.
+	//
+	// TODO: If we have the fringe case that we create a spec constant which depends on a struct type,
+	// we'll have to deal with that, but there's currently no known way to express that.
+	if (options.vulkan_semantics)
+	{
+		for (auto &id : ids)
+		{
+			if (id.get_type() == TypeConstant)
+			{
+				auto &c = id.get<SPIRConstant>();
+				if (!c.specialization)
+					continue;
+
+				emit_specialization_constant(c);
+				emitted = true;
+			}
+		}
+	}
+
+	if (emitted)
+		statement("");
+	emitted = false;
+
 	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
 	// when such variables are instantiated.
 	for (auto &id : ids)
@@ -1262,8 +1291,6 @@ void CompilerGLSL::emit_resources()
 			}
 		}
 	}
-
-	bool emitted = false;
 
 	bool skip_separate_image_sampler = !combined_image_samplers.empty() || !options.vulkan_semantics;
 
@@ -1335,25 +1362,6 @@ void CompilerGLSL::emit_resources()
 			add_resource_name(var.self);
 			statement(variable_decl(var), ";");
 			emitted = true;
-		}
-	}
-
-	// If emitted Vulkan GLSL,
-	// emit specialization constants as actual floats,
-	// spec op expressions will redirect to the constant name.
-	if (options.vulkan_semantics)
-	{
-		for (auto &id : ids)
-		{
-			if (id.get_type() == TypeConstant)
-			{
-				auto &c = id.get<SPIRConstant>();
-				if (!c.specialization)
-					continue;
-
-				emit_specialization_constant(c);
-				emitted = true;
-			}
 		}
 	}
 
@@ -4702,6 +4710,39 @@ string CompilerGLSL::pls_decl(const PlsRemap &var)
 	            to_name(variable.self));
 }
 
+uint32_t CompilerGLSL::to_array_size_literal(const SPIRType &type, uint32_t index) const
+{
+	assert(type.array.size() == type.array_size_literal.size());
+
+	if (!type.array_size_literal[index])
+		throw CompilerError("The array size is not a literal, but a specialization constant or spec constant op.");
+
+	return type.array[index];
+}
+
+string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
+{
+	assert(type.array.size() == type.array_size_literal.size());
+
+	auto &size = type.array[index];
+	if (!type.array_size_literal[index])
+		return to_expression(size);
+	else if (size)
+		return convert_to_string(size);
+	else if (!backend.flexible_member_array_supported)
+	{
+		// For runtime-sized arrays, we can work around
+		// lack of standard support for this by simply having
+		// a single element array.
+		//
+		// Runtime length arrays must always be the last element
+		// in an interface block.
+		return "1";
+	}
+	else
+		return "";
+}
+
 string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 {
 	if (type.array.empty())
@@ -4710,23 +4751,8 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 	string res;
 	for (size_t i = type.array.size(); i; i--)
 	{
-		auto &size = type.array[i - 1];
-
 		res += "[";
-		if (size)
-		{
-			res += convert_to_string(size);
-		}
-		else if (!backend.flexible_member_array_supported)
-		{
-			// For runtime-sized arrays, we can work around
-			// lack of standard support for this by simply having
-			// a single element array.
-			//
-			// Runtime length arrays must always be the last element
-			// in an interface block.
-			res += '1';
-		}
+		res += to_array_size(type, i - 1);
 		res += "]";
 	}
 	return res;

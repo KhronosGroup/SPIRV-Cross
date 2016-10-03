@@ -12,6 +12,11 @@ layout(constant_id = 7) const bool g = false;
 layout(constant_id = 8) const bool h = true;
 // glslang doesn't seem to support partial spec constants or composites yet, so only test the basics.
 
+struct Foo
+{
+	float elems[d + 2];
+};
+
 void main()
 {
 	float t0 = a;
@@ -63,5 +68,10 @@ void main()
 	uint c36 = uint(g); // bool -> uint
 	float c37 = float(g); // bool -> float
 
-	FragColor = vec4(t0 + t1);
+	// Flexible sized arrays with spec constants and spec constant ops.
+	float vec0[d][c + 3];
+	float vec1[c + 2][d + 5];
+
+	Foo foo;
+	FragColor = vec4(t0 + t1) + vec0[0][0] + vec1[0][0] + foo.elems[c];
 }

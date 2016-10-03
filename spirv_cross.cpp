@@ -1265,7 +1265,12 @@ void Compiler::parse(const Instruction &instruction)
 		auto &arraybase = set<SPIRType>(id);
 
 		arraybase = base;
-		arraybase.array.push_back(get<SPIRConstant>(ops[2]).scalar());
+
+		auto *c = maybe_get<SPIRConstant>(ops[2]);
+		bool literal = c && !c->specialization;
+
+		arraybase.array_size_literal.push_back(literal);
+		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1279,6 +1284,7 @@ void Compiler::parse(const Instruction &instruction)
 
 		arraybase = base;
 		arraybase.array.push_back(0);
+		arraybase.array_size_literal.push_back(true);
 		// Do NOT set arraybase.self!
 		break;
 	}

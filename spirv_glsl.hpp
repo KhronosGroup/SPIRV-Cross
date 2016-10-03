@@ -204,6 +204,8 @@ protected:
 	Options options;
 
 	std::string type_to_array_glsl(const SPIRType &type);
+	std::string to_array_size(const SPIRType &type, uint32_t index);
+	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
 	std::string variable_decl(const SPIRVariable &variable);
 
 	void add_local_variable_name(uint32_t id);
