@@ -144,6 +144,7 @@ protected:
 	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member);
 	virtual std::string image_type_glsl(const SPIRType &type);
 	virtual std::string constant_expression(const SPIRConstant &c);
+	std::string constant_op_expression(const SPIRConstantOp &cop);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
 	virtual std::string variable_decl(const SPIRType &type, const std::string &name);
@@ -203,6 +204,8 @@ protected:
 	Options options;
 
 	std::string type_to_array_glsl(const SPIRType &type);
+	std::string to_array_size(const SPIRType &type, uint32_t index);
+	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
 	std::string variable_decl(const SPIRVariable &variable);
 
 	void add_local_variable_name(uint32_t id);
@@ -240,6 +243,7 @@ protected:
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);
 	void emit_block_chain(SPIRBlock &block);
+	void emit_specialization_constant(const SPIRConstant &constant);
 	std::string emit_continue_block(uint32_t continue_block);
 	bool attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method);
 	void emit_uniform(const SPIRVariable &var);
@@ -254,6 +258,7 @@ protected:
 
 	bool should_forward(uint32_t id);
 	void emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp);
+	bool to_trivial_mix_op(const SPIRType &type, std::string &op, uint32_t left, uint32_t right, uint32_t lerp);
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args, uint32_t count);
 	void emit_quaternary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                             uint32_t op3, const char *op);

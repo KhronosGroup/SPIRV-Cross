@@ -1260,6 +1260,7 @@ SPIRType &CompilerMSL::get_pad_type(uint32_t pad_len)
 	ib_type.basetype = SPIRType::Char;
 	ib_type.width = 8;
 	ib_type.array.push_back(pad_len);
+	ib_type.array_size_literal.push_back(true);
 	set_decoration(ib_type.self, DecorationArrayStride, pad_len);
 
 	pad_type_ids_by_pad_len[pad_len] = pad_type_id;
@@ -1616,7 +1617,7 @@ size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_ma
 			// ArrayStride is part of the array type not OpMemberDecorate.
 			auto &dec = meta[type.self].decoration;
 			if (dec.decoration_flags & (1ull << DecorationArrayStride))
-				return dec.array_stride * type.array.back();
+				return dec.array_stride * to_array_size_literal(type, type.array.size() - 1);
 			else
 				throw CompilerError("Type does not have ArrayStride set.");
 		}

@@ -319,6 +319,9 @@ const SPIRType &Compiler::expression_type(uint32_t id) const
 	case TypeConstant:
 		return get<SPIRType>(get<SPIRConstant>(id).constant_type);
 
+	case TypeConstantOp:
+		return get<SPIRType>(get<SPIRConstantOp>(id).basetype);
+
 	case TypeUndef:
 		return get<SPIRType>(get<SPIRUndef>(id).basetype);
 
@@ -354,7 +357,8 @@ bool Compiler::is_immutable(uint32_t id) const
 	}
 	else if (ids[id].get_type() == TypeExpression)
 		return get<SPIRExpression>(id).immutable;
-	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeUndef)
+	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeConstantOp ||
+	         ids[id].get_type() == TypeUndef)
 		return true;
 	else
 		return false;
@@ -814,6 +818,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.offset = argument;
 		break;
 
+	case DecorationSpecId:
+		dec.spec_id = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -855,6 +863,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.location;
 	case DecorationOffset:
 		return dec.offset;
+	case DecorationSpecId:
+		return dec.spec_id;
 	default:
 		return 0;
 	}
@@ -890,6 +900,10 @@ void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration d
 
 	case DecorationOffset:
 		dec.offset = 0;
+		break;
+
+	case DecorationSpecId:
+		dec.spec_id = 0;
 		break;
 
 	default:
@@ -933,6 +947,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.input_attachment = argument;
 		break;
 
+	case DecorationSpecId:
+		dec.spec_id = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -974,6 +992,8 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.set;
 	case DecorationInputAttachmentIndex:
 		return dec.input_attachment;
+	case DecorationSpecId:
+		return dec.spec_id;
 	default:
 		return 0;
 	}
@@ -1003,6 +1023,14 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 	case DecorationDescriptorSet:
 		dec.set = 0;
+		break;
+
+	case DecorationInputAttachmentIndex:
+		dec.input_attachment = 0;
+		break;
+
+	case DecorationSpecId:
+		dec.spec_id = 0;
 		break;
 
 	default:
@@ -1237,7 +1265,12 @@ void Compiler::parse(const Instruction &instruction)
 		auto &arraybase = set<SPIRType>(id);
 
 		arraybase = base;
-		arraybase.array.push_back(get<SPIRConstant>(ops[2]).scalar());
+
+		auto *c = maybe_get<SPIRConstant>(ops[2]);
+		bool literal = c && !c->specialization;
+
+		arraybase.array_size_literal.push_back(literal);
+		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1251,6 +1284,7 @@ void Compiler::parse(const Instruction &instruction)
 
 		arraybase = base;
 		arraybase.array.push_back(0);
+		arraybase.array_size_literal.push_back(true);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1726,6 +1760,19 @@ void Compiler::parse(const Instruction &instruction)
 		// they are treated as continues.
 		if (current_block->continue_block != current_block->self)
 			continue_blocks.insert(current_block->continue_block);
+		break;
+	}
+
+	case OpSpecConstantOp:
+	{
+		if (length < 3)
+			throw CompilerError("OpSpecConstantOp not enough arguments.");
+
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto spec_op = static_cast<Op>(ops[2]);
+
+		set<SPIRConstantOp>(id, result_type, spec_op, ops + 3, length - 3);
 		break;
 	}
 
@@ -2615,4 +2662,31 @@ void Compiler::build_combined_image_samplers()
 	combined_image_samplers.clear();
 	CombinedImageSamplerHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+}
+
+vector<SpecializationConstant> Compiler::get_specialization_constants() const
+{
+	vector<SpecializationConstant> spec_consts;
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (c.specialization)
+			{
+				spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
+			}
+		}
+	}
+	return spec_consts;
+}
+
+SPIRConstant &Compiler::get_constant(uint32_t id)
+{
+	return get<SPIRConstant>(id);
+}
+
+const SPIRConstant &Compiler::get_constant(uint32_t id) const
+{
+	return get<SPIRConstant>(id);
 }

@@ -91,6 +91,14 @@ struct CombinedImageSampler
 	uint32_t sampler_id;
 };
 
+struct SpecializationConstant
+{
+	// The ID of the specialization constant.
+	uint32_t id;
+	// The constant ID of the constant, used in Vulkan during pipeline creation.
+	uint32_t constant_id;
+};
+
 struct BufferRange
 {
 	unsigned index;
@@ -287,6 +295,16 @@ public:
 	{
 		variable_remap_callback = std::move(cb);
 	}
+
+	// API for querying which specialization constants exist.
+	// To modify a specialization constant before compile(), use get_constant(constant.id),
+	// then update constants directly in the SPIRConstant data structure.
+	// For composite types, the subconstants can be iterated over and modified.
+	// constant_type is the SPIRType for the specialization constant,
+	// which can be queried to determine which fields in the unions should be poked at.
+	std::vector<SpecializationConstant> get_specialization_constants() const;
+	SPIRConstant &get_constant(uint32_t id);
+	const SPIRConstant &get_constant(uint32_t id) const;
 
 protected:
 	const uint32_t *stream(const Instruction &instr) const
