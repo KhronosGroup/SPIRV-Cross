@@ -1467,11 +1467,6 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	string op;
 
 	// TODO: Find a clean way to reuse emit_instruction.
-	//
-	// FIXME: This doesn't take into account the possibility
-	// of type mismatches like emit_instruction does yet, but
-	// for spec op purposes, this seems extremely unlikely to
-	// hit in practice.
 	switch (cop.opcode)
 	{
 	case OpSConvert:
