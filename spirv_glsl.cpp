@@ -5354,7 +5354,7 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
 	for (auto &s : statements)
 	{
 		if (!s.empty() && s.back() == ';')
-			s.pop_back();
+			s.erase(s.size() - 1, 1);
 	}
 
 	current_continue_block = nullptr;
