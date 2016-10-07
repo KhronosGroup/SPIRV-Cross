@@ -475,12 +475,33 @@ uint64_t CompilerGLSL::combined_decoration_for_member(const SPIRType &type, uint
 		return 0;
 	auto &dec = memb[index];
 
-	// If our type is a sturct, traverse all the members as well recursively.
+	// If our type is a struct, traverse all the members as well recursively.
 	flags |= dec.decoration_flags;
 	for (uint32_t i = 0; i < type.member_types.size(); i++)
 		flags |= combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i);
 
 	return flags;
+}
+
+string CompilerGLSL::to_interpolation_qualifiers(uint64_t flags)
+{
+	string res;
+	//if (flags & (1ull << DecorationSmooth))
+	//    res += "smooth ";
+	if (flags & (1ull << DecorationFlat))
+		res += "flat ";
+	if (flags & (1ull << DecorationNoPerspective))
+		res += "noperspective ";
+	if (flags & (1ull << DecorationCentroid))
+		res += "centroid ";
+	if (flags & (1ull << DecorationPatch))
+		res += "patch ";
+	if (flags & (1ull << DecorationSample))
+		res += "sample ";
+	if (flags & (1ull << DecorationInvariant))
+		res += "invariant ";
+
+	return res;
 }
 
 string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
@@ -877,7 +898,16 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	}
 
 	if (flags & (1ull << DecorationLocation))
-		attr.push_back(join("location = ", dec.location));
+	{
+		uint64_t combined_decoration = 0;
+		for (uint32_t i = 0; i < meta[type.self].members.size(); i++)
+			combined_decoration |= combined_decoration_for_member(type, i);
+
+		// If our members have location decorations, we don't need to
+		// emit location decorations at the top as well (looks weird).
+		if ((combined_decoration & (1ull << DecorationLocation)) == 0)
+			attr.push_back(join("location = ", dec.location));
+	}
 
 	// set = 0 is the default. Do not emit set = decoration in regular GLSL output, but
 	// we should preserve it in Vulkan GLSL mode.
@@ -4567,7 +4597,13 @@ string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertyp
 	if (index < memb.size())
 		memberflags = memb[index].decoration_flags;
 
-	return join(layout_for_member(type, index), flags_to_precision_qualifiers_glsl(membertype, memberflags),
+	string qualifiers;
+	bool is_block = (meta[type.self].decoration.decoration_flags &
+	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+	if (is_block)
+		qualifiers = to_interpolation_qualifiers(memberflags);
+
+	return join(layout_for_member(type, index), flags_to_precision_qualifiers_glsl(membertype, memberflags), qualifiers,
 	            variable_decl(membertype, to_member_name(type, index)));
 }
 
@@ -4630,20 +4666,7 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 		res += "shared ";
 
 	res += to_precision_qualifiers_glsl(id);
-
-	//if (flags & (1ull << DecorationSmooth))
-	//    res += "smooth ";
-	if (flags & (1ull << DecorationFlat))
-		res += "flat ";
-	if (flags & (1ull << DecorationNoPerspective))
-		res += "noperspective ";
-	if (flags & (1ull << DecorationPatch))
-		res += "patch ";
-	if (flags & (1ull << DecorationSample))
-		res += "sample ";
-	if (flags & (1ull << DecorationInvariant))
-		res += "invariant ";
-
+	res += to_interpolation_qualifiers(flags);
 	auto &type = expression_type(id);
 	if (type.image.dim != DimSubpassData && type.image.sampled == 2)
 	{
