@@ -317,6 +317,8 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "inputs", res.stage_inputs);
 	print_resources(compiler, "outputs", res.stage_outputs);
 	print_resources(compiler, "textures", res.sampled_images);
+	print_resources(compiler, "separate images", res.separate_images);
+	print_resources(compiler, "separate samplers", res.separate_samplers);
 	print_resources(compiler, "images", res.storage_images);
 	print_resources(compiler, "ssbos", res.storage_buffers);
 	print_resources(compiler, "ubos", res.uniform_buffers);
@@ -345,6 +347,16 @@ static void print_push_constant_resources(const Compiler &compiler, const vector
 	}
 }
 
+static void print_spec_constants(const Compiler &compiler)
+{
+	auto spec_constants = compiler.get_specialization_constants();
+	fprintf(stderr, "Specialization constants\n");
+	fprintf(stderr, "==================\n\n");
+	for (auto &c : spec_constants)
+		fprintf(stderr, "ID: %u, Spec ID: %u\n", c.id, c.constant_id);
+	fprintf(stderr, "==================\n\n");
+}
+
 struct PLSArg
 {
 	PlsFormat format;
@@ -356,6 +368,12 @@ struct Remap
 	string src_name;
 	string dst_name;
 	unsigned components;
+};
+
+struct VariableTypeRemap
+{
+	string variable_name;
+	string new_variable_type;
 };
 
 struct CLIArguments
@@ -375,6 +393,7 @@ struct CLIArguments
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
 	vector<string> extensions;
+	vector<VariableTypeRemap> variable_type_remaps;
 	string entry;
 
 	uint32_t iterations = 1;
@@ -390,7 +409,8 @@ static void print_help()
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
 	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
 	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext] [--entry name] [--remove-unused-variables]\n");
+	                "[--extension ext] [--entry name] [--remove-unused-variables] "
+	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -517,6 +537,12 @@ int main(int argc, char *argv[])
 		args.remaps.push_back({ move(src), move(dst), components });
 	});
 
+	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
+		string var_name = parser.next_string();
+		string new_type = parser.next_string();
+		args.variable_type_remaps.push_back({ move(var_name), move(new_type) });
+	});
+
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
@@ -552,6 +578,8 @@ int main(int argc, char *argv[])
 
 	unique_ptr<CompilerGLSL> compiler;
 
+	bool combined_image_samplers = false;
+
 	if (args.cpp)
 	{
 		compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
@@ -561,7 +589,21 @@ int main(int argc, char *argv[])
 	else if (args.metal)
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
 	else
+	{
+		combined_image_samplers = !args.vulkan_semantics;
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
+	}
+
+	if (!args.variable_type_remaps.empty())
+	{
+		auto remap_cb = [&](const SPIRType &, const string &name, string &out) -> void {
+			for (const VariableTypeRemap &remap : args.variable_type_remaps)
+				if (name == remap.variable_name)
+					out = remap.new_variable_type;
+		};
+
+		compiler->set_variable_type_remap_callback(move(remap_cb));
+	}
 
 	if (!args.entry.empty())
 		compiler->set_entry_point(args.entry);
@@ -618,6 +660,18 @@ int main(int argc, char *argv[])
 	{
 		print_resources(*compiler, res);
 		print_push_constant_resources(*compiler, res.push_constant_buffers);
+		print_spec_constants(*compiler);
+	}
+
+	if (combined_image_samplers)
+	{
+		compiler->build_combined_image_samplers();
+		// Give the remapped combined samplers new names.
+		for (auto &remap : compiler->get_combined_image_samplers())
+		{
+			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id),
+			                                           compiler->get_name(remap.sampler_id)));
+		}
 	}
 
 	string glsl;

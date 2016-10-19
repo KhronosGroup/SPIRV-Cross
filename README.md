@@ -21,7 +21,7 @@ However, most missing features are expected to be "trivial" improvements at this
 
 SPIRV-Cross has been tested on Linux, OSX and Windows.
 
-### Linux and OSX
+### Linux and macOS
 
 Just run `make` on the command line. A recent GCC (4.8+) or Clang (3.x+) compiler is required as SPIRV-Cross uses C++11 extensively.
 

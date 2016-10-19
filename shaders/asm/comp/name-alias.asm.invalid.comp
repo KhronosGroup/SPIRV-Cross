@@ -114,9 +114,11 @@
          %21 = OpVariable %20 Function
          %34 = OpAccessChain %33 %30 %32
          %35 = OpLoad %27 %34
+; This shader has an illegal aliased store for testing purposes. spirv-val is not run for this shader.
                OpStore %21 %35
          %45 = OpLoad %19 %21
          %47 = OpAccessChain %46 %44 %32
+; This shader has an illegal aliased store for testing purposes. spirv-val is not run for this shader.
                OpStore %47 %45
                OpReturn
                OpFunctionEnd

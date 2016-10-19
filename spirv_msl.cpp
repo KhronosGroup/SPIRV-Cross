@@ -31,8 +31,6 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
                             std::vector<MSLResourceBinding> *p_res_bindings)
 {
-	next_metal_resource_index = MSLResourceBinding(); // Start bindings at zero
-
 	pad_type_ids_by_pad_len.clear();
 
 	msl_config = msl_cfg;
@@ -48,7 +46,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	resource_bindings.clear();
 	if (p_res_bindings)
 	{
-		resource_bindings.reserve(p_vtx_attrs->size());
+		resource_bindings.reserve(p_res_bindings->size());
 		for (auto &rb : *p_res_bindings)
 		{
 			rb.used_by_shader = false;
@@ -78,6 +76,8 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 			throw CompilerError("Over 3 compilation loops detected. Must be a bug!");
 
 		reset();
+
+		next_metal_resource_index = MSLResourceBinding(); // Start bindings at zero
 
 		// Move constructor for this type is broken on GCC 4.9 ...
 		buffer = unique_ptr<ostringstream>(new ostringstream());
@@ -502,6 +502,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
+	for (auto &header : header_lines)
+		statement(header);
+
 	statement("#include <metal_stdlib>");
 	statement("#include <simd/simd.h>");
 	statement("");
@@ -1108,7 +1111,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return "";
 			}
 		}
-		return "";
+		uint32_t locn = get_ordered_member_location(type.self, index);
+		return string(" [[color(") + convert_to_string(locn) + ")]]";
 	}
 
 	return "";
@@ -1399,6 +1403,7 @@ SPIRType &CompilerMSL::get_pad_type(uint32_t pad_len)
 	ib_type.basetype = SPIRType::Char;
 	ib_type.width = 8;
 	ib_type.array.push_back(pad_len);
+	ib_type.array_size_literal.push_back(true);
 	set_decoration(ib_type.self, DecorationArrayStride, pad_len);
 
 	pad_type_ids_by_pad_len[pad_len] = pad_type_id;
@@ -1767,7 +1772,7 @@ size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_ma
 			// ArrayStride is part of the array type not OpMemberDecorate.
 			auto &dec = meta[type.self].decoration;
 			if (dec.decoration_flags & (1ull << DecorationArrayStride))
-				return dec.array_stride * type.array.back();
+				return dec.array_stride * to_array_size_literal(type, type.array.size() - 1);
 			else
 				throw CompilerError("Type does not have ArrayStride set.");
 		}

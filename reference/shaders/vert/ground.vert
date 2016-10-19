@@ -44,14 +44,15 @@ layout(binding = 1) uniform mediump sampler2D TexLOD;
 layout(binding = 0) uniform mediump sampler2D TexHeightmap;
 
 layout(location = 1) in vec4 LODWeights;
+uniform int SPIRV_Cross_BaseInstance;
 layout(location = 0) in vec2 Position;
 layout(location = 1) out vec3 EyeVec;
 layout(location = 0) out vec2 TexCoord;
 
 vec2 warp_position()
 {
-    float vlod = dot(LODWeights, _284.Patches[gl_InstanceID].LODs);
-    vlod = mix(vlod, _284.Patches[gl_InstanceID].Position.w, all(equal(LODWeights, vec4(0.0))));
+    float vlod = dot(LODWeights, _284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].LODs);
+    vlod = mix(vlod, _284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.w, all(equal(LODWeights, vec4(0.0))));
     float floor_lod = floor(vlod);
     float fract_lod = (vlod - floor_lod);
     uint ufloor_lod = uint(floor_lod);
@@ -93,7 +94,7 @@ vec2 lod_factor(vec2 uv)
 
 void main()
 {
-    vec2 PatchPos = (_284.Patches[gl_InstanceID].Position.xz * _381.InvGroundSize_PatchScale.zw);
+    vec2 PatchPos = (_284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.xz * _381.InvGroundSize_PatchScale.zw);
     vec2 WarpedPos = warp_position();
     vec2 VertexPos = (PatchPos + WarpedPos);
     vec2 NormalizedPos = (VertexPos * _381.InvGroundSize_PatchScale.xy);

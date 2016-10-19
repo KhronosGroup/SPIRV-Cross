@@ -319,6 +319,9 @@ const SPIRType &Compiler::expression_type(uint32_t id) const
 	case TypeConstant:
 		return get<SPIRType>(get<SPIRConstant>(id).constant_type);
 
+	case TypeConstantOp:
+		return get<SPIRType>(get<SPIRConstantOp>(id).basetype);
+
 	case TypeUndef:
 		return get<SPIRType>(get<SPIRUndef>(id).basetype);
 
@@ -354,7 +357,8 @@ bool Compiler::is_immutable(uint32_t id) const
 	}
 	else if (ids[id].get_type() == TypeExpression)
 		return get<SPIRExpression>(id).immutable;
-	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeUndef)
+	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeConstantOp ||
+	         ids[id].get_type() == TypeUndef)
 		return true;
 	else
 		return false;
@@ -381,6 +385,14 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 {
 	if ((is_builtin_variable(var) && !include_builtins) || var.remapped_variable)
 		return true;
+
+	// Combined image samplers are always considered active as they are "magic" variables.
+	if (find_if(begin(combined_image_samplers), end(combined_image_samplers), [&var](const CombinedImageSampler &samp) {
+		    return samp.combined_id == var.self;
+		}) != end(combined_image_samplers))
+	{
+		return false;
+	}
 
 	bool hidden = false;
 	if (check_active_interface_variables && storage_class_is_interface(var.storage))
@@ -583,9 +595,21 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Images
-		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image)
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
+		         type.image.sampled == 2)
 		{
 			res.storage_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+		}
+		// Separate images
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
+		         type.image.sampled == 1)
+		{
+			res.separate_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+		}
+		// Separate samplers
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Sampler)
+		{
+			res.separate_samplers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
 		// Textures
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::SampledImage)
@@ -794,6 +818,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.offset = argument;
 		break;
 
+	case DecorationSpecId:
+		dec.spec_id = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -841,6 +869,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.location;
 	case DecorationOffset:
 		return dec.offset;
+	case DecorationSpecId:
+		return dec.spec_id;
 	default:
 		return 0;
 	}
@@ -876,6 +906,10 @@ void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration d
 
 	case DecorationOffset:
 		dec.offset = 0;
+		break;
+
+	case DecorationSpecId:
+		dec.spec_id = 0;
 		break;
 
 	default:
@@ -919,6 +953,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.input_attachment = argument;
 		break;
 
+	case DecorationSpecId:
+		dec.spec_id = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -960,6 +998,8 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.set;
 	case DecorationInputAttachmentIndex:
 		return dec.input_attachment;
+	case DecorationSpecId:
+		return dec.spec_id;
 	default:
 		return 0;
 	}
@@ -989,6 +1029,14 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 	case DecorationDescriptorSet:
 		dec.set = 0;
+		break;
+
+	case DecorationInputAttachmentIndex:
+		dec.input_attachment = 0;
+		break;
+
+	case DecorationSpecId:
+		dec.spec_id = 0;
 		break;
 
 	default:
@@ -1064,8 +1112,8 @@ void Compiler::parse(const Instruction &instruction)
 
 	case OpEntryPoint:
 	{
-		auto itr = entry_points.emplace(ops[1], SPIREntryPoint(ops[1], static_cast<ExecutionModel>(ops[0]),
-		                                                       extract_string(spirv, instruction.offset + 2)));
+		auto itr = entry_points.insert(make_pair(ops[1], SPIREntryPoint(ops[1], static_cast<ExecutionModel>(ops[0]),
+		                                                       extract_string(spirv, instruction.offset + 2))));
 		auto &e = itr.first->second;
 
 		// Strings need nul-terminator and consume the whole word.
@@ -1223,7 +1271,12 @@ void Compiler::parse(const Instruction &instruction)
 		auto &arraybase = set<SPIRType>(id);
 
 		arraybase = base;
-		arraybase.array.push_back(get<SPIRConstant>(ops[2]).scalar());
+
+		auto *c = maybe_get<SPIRConstant>(ops[2]);
+		bool literal = c && !c->specialization;
+
+		arraybase.array_size_literal.push_back(literal);
+		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1237,6 +1290,7 @@ void Compiler::parse(const Instruction &instruction)
 
 		arraybase = base;
 		arraybase.array.push_back(0);
+		arraybase.array_size_literal.push_back(true);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1715,6 +1769,19 @@ void Compiler::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpSpecConstantOp:
+	{
+		if (length < 3)
+			throw CompilerError("OpSpecConstantOp not enough arguments.");
+
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto spec_op = static_cast<Op>(ops[2]);
+
+		set<SPIRConstantOp>(id, result_type, spec_op, ops + 3, length - 3);
+		break;
+	}
+
 	// Actual opcodes.
 	default:
 	{
@@ -1907,8 +1974,15 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 		if (!handler.handle(op, ops, i.length))
 			return false;
 
-		if (op == OpFunctionCall && !traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
-			return false;
+		if (op == OpFunctionCall)
+		{
+			if (!handler.begin_function_scope(ops, i.length))
+				return false;
+			if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
+				return false;
+			if (!handler.end_function_scope(ops, i.length))
+				return false;
+		}
 	}
 
 	return true;
@@ -2066,11 +2140,11 @@ std::vector<BufferRange> Compiler::get_active_buffer_ranges(uint32_t id) const
 // Returns the value of the first ID available for use in the expanded bound.
 uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
 {
-	uint32_t curr_bound = (uint32_t)ids.size();
-	uint32_t new_bound = curr_bound + incr_amount;
+	auto curr_bound = ids.size();
+	auto new_bound = curr_bound + incr_amount;
 	ids.resize(new_bound);
 	meta.resize(new_bound);
-	return curr_bound;
+	return uint32_t(curr_bound);
 }
 
 bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const
@@ -2283,4 +2357,342 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	auto &execution = get_entry_point();
 	return find(begin(execution.interface_variables), end(execution.interface_variables), id) !=
 	       end(execution.interface_variables);
+}
+
+void Compiler::CombinedImageSamplerHandler::push_remap_parameters(const SPIRFunction &func, const uint32_t *args,
+                                                                  uint32_t length)
+{
+	// If possible, pipe through a remapping table so that parameters know
+	// which variables they actually bind to in this scope.
+	unordered_map<uint32_t, uint32_t> remapping;
+	for (uint32_t i = 0; i < length; i++)
+		remapping[func.arguments[i].id] = remap_parameter(args[i]);
+	parameter_remapping.push(move(remapping));
+}
+
+void Compiler::CombinedImageSamplerHandler::pop_remap_parameters()
+{
+	parameter_remapping.pop();
+}
+
+uint32_t Compiler::CombinedImageSamplerHandler::remap_parameter(uint32_t id)
+{
+	auto *var = compiler.maybe_get_backing_variable(id);
+	if (var)
+		id = var->self;
+
+	if (parameter_remapping.empty())
+		return id;
+
+	auto &remapping = parameter_remapping.top();
+	auto itr = remapping.find(id);
+	if (itr != end(remapping))
+		return itr->second;
+	else
+		return id;
+}
+
+bool Compiler::CombinedImageSamplerHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 3)
+		return false;
+
+	auto &callee = compiler.get<SPIRFunction>(args[2]);
+	args += 3;
+	length -= 3;
+	push_remap_parameters(callee, args, length);
+	functions.push(&callee);
+	return true;
+}
+
+bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 3)
+		return false;
+
+	auto &callee = compiler.get<SPIRFunction>(args[2]);
+	args += 3;
+	length -= 3;
+
+	// There are two types of cases we have to handle,
+	// a callee might call sampler2D(texture2D, sampler) directly where
+	// one or more parameters originate from parameters.
+	// Alternatively, we need to provide combined image samplers to our callees,
+	// and in this case we need to add those as well.
+
+	pop_remap_parameters();
+
+	// Our callee has now been processed at least once.
+	// No point in doing it again.
+	callee.do_combined_parameters = false;
+
+	auto &params = functions.top()->combined_parameters;
+	functions.pop();
+	if (functions.empty())
+		return true;
+
+	auto &caller = *functions.top();
+	if (caller.do_combined_parameters)
+	{
+		for (auto &param : params)
+		{
+			uint32_t image_id = param.global_image ? param.image_id : args[param.image_id];
+			uint32_t sampler_id = param.global_sampler ? param.sampler_id : args[param.sampler_id];
+
+			auto *i = compiler.maybe_get_backing_variable(image_id);
+			auto *s = compiler.maybe_get_backing_variable(sampler_id);
+			if (i)
+				image_id = i->self;
+			if (s)
+				sampler_id = s->self;
+
+			register_combined_image_sampler(caller, image_id, sampler_id);
+		}
+	}
+
+	return true;
+}
+
+void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t image_id,
+                                                                            uint32_t sampler_id)
+{
+	// We now have a texture ID and a sampler ID which will either be found as a global
+	// or a parameter in our own function. If both are global, they will not need a parameter,
+	// otherwise, add it to our list.
+	SPIRFunction::CombinedImageSamplerParameter param = {
+		0u, image_id, sampler_id, true, true,
+	};
+
+	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
+	                           [image_id](const SPIRFunction::Parameter &p) { return p.id == image_id; });
+	auto sampler_itr = find_if(begin(caller.arguments), end(caller.arguments),
+	                           [sampler_id](const SPIRFunction::Parameter &p) { return p.id == sampler_id; });
+
+	if (texture_itr != end(caller.arguments))
+	{
+		param.global_image = false;
+		param.image_id = texture_itr - begin(caller.arguments);
+	}
+
+	if (sampler_itr != end(caller.arguments))
+	{
+		param.global_sampler = false;
+		param.sampler_id = sampler_itr - begin(caller.arguments);
+	}
+
+	if (param.global_image && param.global_sampler)
+		return;
+
+	auto itr = find_if(begin(caller.combined_parameters), end(caller.combined_parameters),
+	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
+		                   return param.image_id == p.image_id && param.sampler_id == p.sampler_id &&
+		                          param.global_image == p.global_image && param.global_sampler == p.global_sampler;
+		               });
+
+	if (itr == end(caller.combined_parameters))
+	{
+		uint32_t id = compiler.increase_bound_by(3);
+		auto type_id = id + 0;
+		auto ptr_type_id = id + 1;
+		auto combined_id = id + 2;
+		auto &base = compiler.expression_type(image_id);
+		auto &type = compiler.set<SPIRType>(type_id);
+		auto &ptr_type = compiler.set<SPIRType>(ptr_type_id);
+
+		type = base;
+		type.self = type_id;
+		type.basetype = SPIRType::SampledImage;
+		type.pointer = false;
+		type.storage = StorageClassGeneric;
+
+		ptr_type = type;
+		ptr_type.pointer = true;
+		ptr_type.storage = StorageClassUniformConstant;
+
+		// Build new variable.
+		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0);
+
+		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
+		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
+		auto old_flags = compiler.meta[sampler_id].decoration.decoration_flags;
+		new_flags = old_flags & (1ull << DecorationRelaxedPrecision);
+
+		param.id = combined_id;
+
+		compiler.set_name(combined_id,
+		                  join("SPIRV_Cross_Combined", compiler.to_name(image_id), compiler.to_name(sampler_id)));
+
+		caller.combined_parameters.push_back(param);
+		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u });
+	}
+}
+
+bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	// We need to figure out where samplers and images are loaded from, so do only the bare bones compilation we need.
+	switch (opcode)
+	{
+	case OpLoad:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+
+		auto &type = compiler.get<SPIRType>(result_type);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+		bool separate_sampler = type.basetype == SPIRType::Sampler;
+
+		// If not separate image or sampler, don't bother.
+		if (!separate_image && !separate_sampler)
+			return true;
+
+		uint32_t id = args[1];
+		uint32_t ptr = args[2];
+		compiler.set<SPIRExpression>(id, "", result_type, true);
+		compiler.register_read(id, ptr, true);
+		return true;
+	}
+
+	case OpInBoundsAccessChain:
+	case OpAccessChain:
+	{
+		if (length < 3)
+			return false;
+
+		// Technically, it is possible to have arrays of textures and arrays of samplers and combine them, but this becomes essentially
+		// impossible to implement, since we don't know which concrete sampler we are accessing.
+		// One potential way is to create a combinatorial explosion where N textures and M samplers are combined into N * M sampler2Ds,
+		// but this seems ridiculously complicated for a problem which is easy to work around.
+		// Checking access chains like this assumes we don't have samplers or textures inside uniform structs, but this makes no sense.
+
+		auto &type = compiler.get<SPIRType>(args[0]);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+		bool separate_sampler = type.basetype == SPIRType::Sampler;
+		if (separate_image)
+			throw CompilerError(
+			    "Attempting to use arrays of separate images. This is not possible to statically remap to plain GLSL.");
+		if (separate_sampler)
+			throw CompilerError("Attempting to use arrays of separate samplers. This is not possible to statically "
+			                    "remap to plain GLSL.");
+		return true;
+	}
+
+	case OpSampledImage:
+		// Do it outside.
+		break;
+
+	default:
+		return true;
+	}
+
+	if (length < 4)
+		return false;
+
+	// Registers sampler2D calls used in case they are parameters so
+	// that their callees know which combined image samplers to propagate down the call stack.
+	if (!functions.empty())
+	{
+		auto &callee = *functions.top();
+		if (callee.do_combined_parameters)
+		{
+			uint32_t image_id = args[2];
+
+			auto *image = compiler.maybe_get_backing_variable(image_id);
+			if (image)
+				image_id = image->self;
+
+			uint32_t sampler_id = args[3];
+			auto *sampler = compiler.maybe_get_backing_variable(sampler_id);
+			if (sampler)
+				sampler_id = sampler->self;
+
+			register_combined_image_sampler(callee, image_id, sampler_id);
+		}
+	}
+
+	// For function calls, we need to remap IDs which are function parameters into global variables.
+	// This information is statically known from the current place in the call stack.
+	// Function parameters are not necessarily pointers, so if we don't have a backing variable, remapping will know
+	// which backing variable the image/sample came from.
+	uint32_t image_id = remap_parameter(args[2]);
+	uint32_t sampler_id = remap_parameter(args[3]);
+
+	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
+	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
+		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
+		               });
+
+	if (itr == end(compiler.combined_image_samplers))
+	{
+		auto id = compiler.increase_bound_by(2);
+		auto type_id = id + 0;
+		auto combined_id = id + 1;
+		auto sampled_type = args[0];
+
+		// Make a new type, pointer to OpTypeSampledImage, so we can make a variable of this type.
+		// We will probably have this type lying around, but it doesn't hurt to make duplicates for internal purposes.
+		auto &type = compiler.set<SPIRType>(type_id);
+		auto &base = compiler.get<SPIRType>(sampled_type);
+		type = base;
+		type.pointer = true;
+		type.storage = StorageClassUniformConstant;
+
+		// Build new variable.
+		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
+
+		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
+		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
+		auto old_flags = compiler.meta[sampler_id].decoration.decoration_flags;
+		new_flags = old_flags & (1ull << DecorationRelaxedPrecision);
+
+		compiler.combined_image_samplers.push_back({ combined_id, image_id, sampler_id });
+	}
+
+	return true;
+}
+
+void Compiler::build_combined_image_samplers()
+{
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeFunction)
+		{
+			auto &func = id.get<SPIRFunction>();
+			func.combined_parameters.clear();
+			func.shadow_arguments.clear();
+			func.do_combined_parameters = true;
+		}
+	}
+
+	combined_image_samplers.clear();
+	CombinedImageSamplerHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+}
+
+vector<SpecializationConstant> Compiler::get_specialization_constants() const
+{
+	vector<SpecializationConstant> spec_consts;
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (c.specialization)
+			{
+				spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
+			}
+		}
+	}
+	return spec_consts;
+}
+
+SPIRConstant &Compiler::get_constant(uint32_t id)
+{
+	return get<SPIRConstant>(id);
+}
+
+const SPIRConstant &Compiler::get_constant(uint32_t id) const
+{
+	return get<SPIRConstant>(id);
 }

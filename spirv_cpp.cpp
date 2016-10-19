@@ -87,18 +87,20 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
 	uint32_t binding = meta[var.self].decoration.binding;
 	uint32_t location = meta[var.self].decoration.location;
 
+	string type_name = type_to_glsl(type);
+	remap_variable_type_name(type, instance_name, type_name);
+
 	if (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	    type.basetype == SPIRType::AtomicCounter)
 	{
-		statement("internal::Resource<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name, "__;");
+		statement("internal::Resource<", type_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 		statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 		resource_registrations.push_back(
 		    join("s.register_resource(", instance_name, "__", ", ", descriptor_set, ", ", binding, ");"));
 	}
 	else
 	{
-		statement("internal::UniformConstant<", type_to_glsl(type), type_to_array_glsl(type), "> ", instance_name,
-		          "__;");
+		statement("internal::UniformConstant<", type_name, type_to_array_glsl(type), "> ", instance_name, "__;");
 		statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 		resource_registrations.push_back(
 		    join("s.register_uniform_constant(", instance_name, "__", ", ", location, ");"));
@@ -405,26 +407,32 @@ string CompilerCPP::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &var = get<SPIRVariable>(arg.id);
 
 	string base = type_to_glsl(type);
-	for (auto &array : type.array)
-		base = join("std::array<", base, ", ", array, ">");
+	string variable_name = to_name(var.self);
+	remap_variable_type_name(type, variable_name, base);
 
-	return join(constref ? "const " : "", base, " &", to_name(var.self));
+	for (uint32_t i = 0; i < type.array.size(); i++)
+		base = join("std::array<", base, ", ", to_array_size(type, i), ">");
+
+	return join(constref ? "const " : "", base, " &", variable_name);
 }
 
 string CompilerCPP::variable_decl(const SPIRType &type, const string &name)
 {
 	string base = type_to_glsl(type);
+	remap_variable_type_name(type, name, base);
 	bool runtime = false;
-	for (auto &array : type.array)
+
+	for (uint32_t i = 0; i < type.array.size(); i++)
 	{
-		if (array)
-			base = join("std::array<", base, ", ", array, ">");
-		else
+		auto &array = type.array[i];
+		if (!array && type.array_size_literal[i])
 		{
 			// Avoid using runtime arrays with std::array since this is undefined.
 			// Runtime arrays cannot be passed around as values, so this is fine.
 			runtime = true;
 		}
+		else
+			base = join("std::array<", base, ", ", to_array_size(type, i), ">");
 	}
 	base += ' ';
 	return base + name + (runtime ? "[1]" : "");

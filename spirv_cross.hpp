@@ -19,6 +19,7 @@
 
 #include "spirv.hpp"
 #include <memory>
+#include <stack>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -73,6 +74,29 @@ struct ShaderResources
 	// There can only be one push constant block,
 	// but keep the vector in case this restriction is lifted in the future.
 	std::vector<Resource> push_constant_buffers;
+
+	// For Vulkan GLSL and HLSL source,
+	// these correspond to separate texture2D and samplers respectively.
+	std::vector<Resource> separate_images;
+	std::vector<Resource> separate_samplers;
+};
+
+struct CombinedImageSampler
+{
+	// The ID of the sampler2D variable.
+	uint32_t combined_id;
+	// The ID of the texture2D variable.
+	uint32_t image_id;
+	// The ID of the sampler variable.
+	uint32_t sampler_id;
+};
+
+struct SpecializationConstant
+{
+	// The ID of the specialization constant.
+	uint32_t id;
+	// The constant ID of the constant, used in Vulkan during pipeline creation.
+	uint32_t constant_id;
 };
 
 struct BufferRange
@@ -237,6 +261,54 @@ public:
 	uint32_t get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index = 0) const;
 	spv::ExecutionModel get_execution_model() const;
 
+	// Analyzes all separate image and samplers used from the currently selected entry point,
+	// and re-routes them all to a combined image sampler instead.
+	// This is required to "support" separate image samplers in targets which do not natively support
+	// this feature, like GLSL/ESSL.
+	//
+	// This must be called before compile() if such remapping is desired.
+	// This call will add new sampled images to the SPIR-V,
+	// so it will appear in reflection if get_shader_resources() is called after build_combined_image_samplers.
+	//
+	// If any image/sampler remapping was found, no separate image/samplers will appear in the decompiled output,
+	// but will still appear in reflection.
+	//
+	// The resulting samplers will be void of any decorations like name, descriptor sets and binding points,
+	// so this can be added before compile() if desired.
+	//
+	// Combined image samplers originating from this set are always considered active variables.
+	void build_combined_image_samplers();
+
+	// Gets a remapping for the combined image samplers.
+	const std::vector<CombinedImageSampler> &get_combined_image_samplers() const
+	{
+		return combined_image_samplers;
+	}
+
+	// Set a new variable type remap callback.
+	// The type remapping is designed to allow global interface variable to assume more special types.
+	// A typical example here is to remap sampler2D into samplerExternalOES, which currently isn't supported
+	// directly by SPIR-V.
+	//
+	// In compile() while emitting code,
+	// for every variable that is declared, including function parameters, the callback will be called
+	// and the API user has a chance to change the textual representation of the type used to declare the variable.
+	// The API user can detect special patterns in names to guide the remapping.
+	void set_variable_type_remap_callback(VariableTypeRemapCallback cb)
+	{
+		variable_remap_callback = std::move(cb);
+	}
+
+	// API for querying which specialization constants exist.
+	// To modify a specialization constant before compile(), use get_constant(constant.id),
+	// then update constants directly in the SPIRConstant data structure.
+	// For composite types, the subconstants can be iterated over and modified.
+	// constant_type is the SPIRType for the specialization constant,
+	// which can be queried to determine which fields in the unions should be poked at.
+	std::vector<SpecializationConstant> get_specialization_constants() const;
+	SPIRConstant &get_constant(uint32_t id);
+	const SPIRConstant &get_constant(uint32_t id) const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -393,6 +465,14 @@ protected:
 	// variable is part of that entry points interface.
 	bool interface_variable_exists_in_entry_point(uint32_t id) const;
 
+	std::vector<CombinedImageSampler> combined_image_samplers;
+
+	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
+	{
+		if (variable_remap_callback)
+			variable_remap_callback(type, var_name, type_name);
+	}
+
 private:
 	void parse();
 	void parse(const Instruction &i);
@@ -405,6 +485,16 @@ private:
 		// Return true if traversal should continue.
 		// If false, traversal will end immediately.
 		virtual bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) = 0;
+
+		virtual bool begin_function_scope(const uint32_t *, uint32_t)
+		{
+			return true;
+		}
+
+		virtual bool end_function_scope(const uint32_t *, uint32_t)
+		{
+			return true;
+		}
 	};
 
 	struct BufferAccessHandler : OpcodeHandler
@@ -439,12 +529,36 @@ private:
 		std::unordered_set<uint32_t> &variables;
 	};
 
+	struct CombinedImageSamplerHandler : OpcodeHandler
+	{
+		CombinedImageSamplerHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool end_function_scope(const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+
+		// Each function in the call stack needs its own remapping for parameters so we can deduce which global variable each texture/sampler the parameter is statically bound to.
+		std::stack<std::unordered_map<uint32_t, uint32_t>> parameter_remapping;
+		std::stack<SPIRFunction *> functions;
+
+		uint32_t remap_parameter(uint32_t id);
+		void push_remap_parameters(const SPIRFunction &func, const uint32_t *args, uint32_t length);
+		void pop_remap_parameters();
+		void register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id, uint32_t sampler_id);
+	};
+
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
 	bool traverse_all_reachable_opcodes(const SPIRFunction &block, OpcodeHandler &handler) const;
 	// This must be an ordered data structure so we always pick the same type aliases.
 	std::vector<uint32_t> global_struct_cache;
 
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
+
+	VariableTypeRemapCallback variable_remap_callback;
 };
 }
 
