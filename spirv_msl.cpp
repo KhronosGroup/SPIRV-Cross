@@ -510,6 +510,12 @@ void CompilerMSL::emit_header()
 	statement("");
 	statement("using namespace metal;");
 	statement("");
+	statement("#define discard discard_fragment()");
+	statement("#define dFdy dfdy");
+	statement("#define dFdx dfdy");
+	statement("#define atan(x,y) atan2((y),(x))");
+	statement("inline bool greaterThan(float2 a,float2 b) { return all(a>b) ? true : false; }");
+	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), tex.get_height()); }");
 }
 
 void CompilerMSL::emit_resources()
@@ -1568,7 +1574,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin)
 	switch (builtin)
 	{
 	case BuiltInPosition:
-		return (stage_out_var_name + ".gl_Position");
+		return qual_pos_var_name.empty() ? (stage_out_var_name + ".gl_Position") : qual_pos_var_name;
 	case BuiltInPointSize:
 		return (stage_out_var_name + ".gl_PointSize");
 	case BuiltInVertexId:

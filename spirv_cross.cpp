@@ -1175,9 +1175,17 @@ void Compiler::parse(const Instruction &instruction)
 
 		auto decoration = static_cast<Decoration>(ops[1]);
 		if (length >= 3)
+		{
 			set_decoration(id, decoration, ops[2]);
+			if (meta.at(id).decoration.alias.empty())
+				set_name(id, "m_" + convert_to_string(id));
+		}
 		else
+		{
 			set_decoration(id, decoration);
+			if (meta.at(id).decoration.alias.empty())
+				set_name(id, "m_" + convert_to_string(id));
+		}
 		break;
 	}
 
