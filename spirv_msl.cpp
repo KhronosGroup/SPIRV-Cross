@@ -431,7 +431,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 				ib_type.member_types.push_back(membertype.self);
 
 				// Give the member a name, and assign it an offset within the struct.
-				string mbr_name = to_member_name(type, i);
+				string mbr_name = ensure_member_name(to_qualified_member_name(type, i));
 				set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, (uint32_t)struct_size);
 				struct_size = get_declared_struct_size(ib_type);
@@ -466,7 +466,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			ib_type.member_types.push_back(type.self);
 
 			// Give the member a name, and assign it an offset within the struct.
-			string mbr_name = to_name(p_var->self);
+			string mbr_name = ensure_member_name(to_name(p_var->self));
 			set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, (uint32_t)struct_size);
 			struct_size = get_declared_struct_size(ib_type);
@@ -510,12 +510,19 @@ void CompilerMSL::emit_header()
 	statement("");
 	statement("using namespace metal;");
 	statement("");
-	statement("#define discard discard_fragment()");
-	statement("#define dFdy dfdy");
-	statement("#define dFdx dfdy");
-	statement("#define atan(x,y) atan2((y),(x))");
-	statement("inline bool greaterThan(float2 a,float2 b) { return all(a>b) ? true : false; }");
-	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), tex.get_height()); }");
+    emit_msl_defines();
+}
+
+void CompilerMSL::emit_msl_defines()
+{
+    statement("// Standard GLSL->MSL redefinitions");
+    statement("#define discard discard_fragment()");
+    statement("#define dFdy dfdy");
+    statement("#define dFdx dfdy");
+    statement("#define atan(x,y) atan2((y),(x))");
+    statement("inline bool greaterThan(float2 a,float2 b) { return all(a>b) ? true : false; }");
+    statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), tex.get_height()); }");
+    statement("");
 }
 
 void CompilerMSL::emit_resources()
@@ -1009,7 +1016,7 @@ void CompilerMSL::emit_fixup()
 		{
 			const char *suffix = backend.float_literal_suffix ? "f" : "";
 			statement(qual_pos_var_name, ".z = 2.0", suffix, " * ", qual_pos_var_name, ".z - ", qual_pos_var_name,
-			          ".w;");
+			          ".w;", "    // Adjust clip-space for Metal");
 		}
 
 		if (msl_config.flip_vert_y)
@@ -1437,6 +1444,26 @@ string CompilerMSL::to_name(uint32_t id, bool allow_alias)
     return Compiler::to_name(id, allow_alias);
 }
 
+// Returns a name that combines the name of the struct with the name of the member
+string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t index)
+{
+    // Get name and strip any underscore prefix
+    string mbr_name = to_member_name(type, index);
+    size_t startPos = mbr_name.find_first_not_of("_");
+    mbr_name = (startPos != std::string::npos) ? mbr_name.substr(startPos) : "";
+    return join(to_name(type.self), "_", mbr_name);
+}
+
+// Ensures that the specified struct member name is permanently usable by prepending
+// an alpha char if the first chars are _ and a digit, which indicate a transient name.
+string CompilerMSL::ensure_member_name(string mbr_name)
+{
+    if (mbr_name.size() >= 2 && mbr_name[0] == '_' && isdigit(mbr_name[1]))
+        return join("m", mbr_name);
+    else
+        return mbr_name;
+}
+
 // Returns an MSL string describing  the SPIR-V type
 string CompilerMSL::type_to_glsl(const SPIRType &type)
 {
@@ -1737,60 +1764,53 @@ size_t CompilerMSL::get_declared_type_size(const SPIRType &type) const
 // taking into consideration the specified mask of decorations.
 size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_mask) const
 {
-	if (type.basetype != SPIRType::Struct)
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Unknown:
-		case SPIRType::Void:
-		case SPIRType::AtomicCounter:
-		case SPIRType::Image:
-		case SPIRType::SampledImage:
-		case SPIRType::Sampler:
-			throw CompilerError("Querying size of object with opaque size.");
-		default:
-			break;
-		}
+	if (type.basetype == SPIRType::Struct)
+        return get_declared_struct_size(type);
 
-		size_t component_size = type.width / 8;
-		unsigned vecsize = type.vecsize;
-		unsigned columns = type.columns;
+    switch (type.basetype)
+    {
+    case SPIRType::Unknown:
+    case SPIRType::Void:
+    case SPIRType::AtomicCounter:
+    case SPIRType::Image:
+    case SPIRType::SampledImage:
+    case SPIRType::Sampler:
+        throw CompilerError("Querying size of object with opaque size.");
+    default:
+        break;
+    }
 
-		if (type.array.empty())
-		{
-			// Vectors.
-			if (columns == 1)
-				return vecsize * component_size;
-			else
-			{
-				// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
-				if ((dec_mask & (1ull << DecorationRowMajor)) && columns == 3)
-					columns = 4;
-				else if ((dec_mask & (1ull << DecorationColMajor)) && vecsize == 3)
-					vecsize = 4;
+    size_t component_size = type.width / 8;
+    unsigned vecsize = type.vecsize;
+    unsigned columns = type.columns;
 
-				return vecsize * columns * component_size;
-			}
-		}
-		else
-		{
-			// For arrays, we can use ArrayStride to get an easy check.
-			// ArrayStride is part of the array type not OpMemberDecorate.
-			auto &dec = meta[type.self].decoration;
-			if (dec.decoration_flags & (1ull << DecorationArrayStride))
-				return dec.array_stride * to_array_size_literal(type, type.array.size() - 1);
-			else
-				throw CompilerError("Type does not have ArrayStride set.");
-		}
-	}
-	else
-	{
-		// Recurse.
-		uint32_t last = uint32_t(type.member_types.size() - 1);
-		uint32_t offset = type_struct_member_offset(type, last);
-		size_t size = get_declared_struct_size(get<SPIRType>(type.member_types.back()));
-		return offset + size;
-	}
+    if (type.array.empty())
+    {
+        // Vectors.
+        if (columns == 1)
+            return vecsize * component_size;
+        else
+        {
+            // Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
+            if ((dec_mask & (1ull << DecorationRowMajor)) && columns == 3)
+                columns = 4;
+            else if ((dec_mask & (1ull << DecorationColMajor)) && vecsize == 3)
+                vecsize = 4;
+
+            return vecsize * columns * component_size;
+        }
+    }
+    else
+    {
+        // For arrays, we can use ArrayStride to get an easy check.
+        // ArrayStride is part of the array type not OpMemberDecorate.
+        auto &dec = meta[type.self].decoration;
+        if (dec.decoration_flags & (1ull << DecorationArrayStride))
+            return dec.array_stride * to_array_size_literal(type, (uint32_t)type.array.size() - 1);
+        else {
+            throw CompilerError("Type does not have ArrayStride set.");
+        }
+    }
 }
 
 // Sort both type and meta member content based on builtin status (put builtins at end), then by location.

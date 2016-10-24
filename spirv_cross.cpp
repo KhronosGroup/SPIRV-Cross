@@ -1120,6 +1120,9 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t strlen_words = (e.name.size() + 1 + 3) >> 2;
 		e.interface_variables.insert(end(e.interface_variables), ops + strlen_words + 2, ops + instruction.length);
 
+        // Set the name of the entry point in case OpName is not provided later
+        set_name(ops[1], e.name);
+
 		// If we don't have an entry, make the first one our "default".
 		if (!entry_point)
 			entry_point = ops[1];
@@ -1175,18 +1178,11 @@ void Compiler::parse(const Instruction &instruction)
 
 		auto decoration = static_cast<Decoration>(ops[1]);
 		if (length >= 3)
-		{
 			set_decoration(id, decoration, ops[2]);
-			if (meta.at(id).decoration.alias.empty())
-				set_name(id, "m_" + convert_to_string(id));
-		}
 		else
-		{
 			set_decoration(id, decoration);
-			if (meta.at(id).decoration.alias.empty())
-				set_name(id, "m_" + convert_to_string(id));
-		}
-		break;
+
+        break;
 	}
 
 	case OpMemberDecorate:
