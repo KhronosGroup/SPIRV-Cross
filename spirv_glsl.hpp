@@ -148,7 +148,7 @@ protected:
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
 	virtual std::string variable_decl(const SPIRType &type, const std::string &name);
-    virtual std::string to_func_call_arg(uint32_t id);
+	virtual std::string to_func_call_arg(uint32_t id);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -286,7 +286,7 @@ protected:
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);
 	std::string declare_temporary(uint32_t type, uint32_t id);
-    void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);

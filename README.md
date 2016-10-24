@@ -142,8 +142,14 @@ along with the Apache 2.0 licensing stub.
 
 ### Formatting
 
-SPIRV-Cross uses clang-format to automatically format code.
-Please use clang-format with the style sheet found in `.clang-format` to automatically format code before submitting a pull request.
+SPIRV-Cross uses `clang-format` to automatically format code.
+Please use `clang-format` with the style sheet found in `.clang-format` to automatically format code before submitting a pull request.
+
+To make things easy, the `format_all.sh` script can be used to format all
+source files in the library. In this directory, run the following from the
+command line:
+
+	./format_all.sh
 
 ## ABI concerns
 

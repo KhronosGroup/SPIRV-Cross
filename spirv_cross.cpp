@@ -847,8 +847,8 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 
 void Compiler::set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name)
 {
-    meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
-    meta.at(id).members[index].qualified_alias = name;
+	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
+	meta.at(id).members[index].qualified_alias = name;
 }
 
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
@@ -1112,16 +1112,17 @@ void Compiler::parse(const Instruction &instruction)
 
 	case OpEntryPoint:
 	{
-		auto itr = entry_points.insert(make_pair(ops[1], SPIREntryPoint(ops[1], static_cast<ExecutionModel>(ops[0]),
-		                                                       extract_string(spirv, instruction.offset + 2))));
+		auto itr =
+		    entry_points.insert(make_pair(ops[1], SPIREntryPoint(ops[1], static_cast<ExecutionModel>(ops[0]),
+		                                                         extract_string(spirv, instruction.offset + 2))));
 		auto &e = itr.first->second;
 
 		// Strings need nul-terminator and consume the whole word.
 		uint32_t strlen_words = (e.name.size() + 1 + 3) >> 2;
 		e.interface_variables.insert(end(e.interface_variables), ops + strlen_words + 2, ops + instruction.length);
 
-        // Set the name of the entry point in case OpName is not provided later
-        set_name(ops[1], e.name);
+		// Set the name of the entry point in case OpName is not provided later
+		set_name(ops[1], e.name);
 
 		// If we don't have an entry, make the first one our "default".
 		if (!entry_point)
@@ -1182,7 +1183,7 @@ void Compiler::parse(const Instruction &instruction)
 		else
 			set_decoration(id, decoration);
 
-        break;
+		break;
 	}
 
 	case OpMemberDecorate:

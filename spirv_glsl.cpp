@@ -1404,7 +1404,7 @@ void CompilerGLSL::emit_resources()
 // Subclasses may override to modify the return value.
 string CompilerGLSL::to_func_call_arg(uint32_t id)
 {
-    return to_expression(id);
+	return to_expression(id);
 }
 
 void CompilerGLSL::handle_invalid_expression(uint32_t id)
@@ -3437,7 +3437,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (skip_argument(arg[i]))
 				continue;
 
-            arglist.push_back(to_func_call_arg(arg[i]));
+			arglist.push_back(to_func_call_arg(arg[i]));
 		}
 
 		for (auto &combined : callee.combined_parameters)
@@ -3456,9 +3456,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			arglist.push_back(to_combined_image_sampler(image_id, sampler_id));
 		}
 
-        append_global_func_args(callee, length, arglist);
+		append_global_func_args(callee, length, arglist);
 
-        funexpr += merge(arglist);
+		funexpr += merge(arglist);
 		funexpr += ")";
 
 		// Check for function call constraints.
@@ -4575,10 +4575,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 // functions and calls all the way up the nesting chain.
 void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t index, vector<string> &arglist)
 {
-    auto& args = func.arguments;
-    uint32_t arg_cnt = (uint32_t)args.size();
-    for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++)
-        arglist.push_back(to_func_call_arg(args[arg_idx].id));
+	auto &args = func.arguments;
+	uint32_t arg_cnt = (uint32_t)args.size();
+	for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++)
+		arglist.push_back(to_func_call_arg(args[arg_idx].id));
 }
 
 string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
