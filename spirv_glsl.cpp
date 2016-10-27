@@ -1109,6 +1109,29 @@ void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 
 void CompilerGLSL::replace_illegal_names()
 {
+  static const std::unordered_set<std::string> keywords = {"active","asm","atomic_uint","attribute","bool","break",
+    "bvec2","bvec3","bvec4","case","cast","centroid","class","coherent","common","const","continue","default","discard",
+    "dmat2","dmat2x2","dmat2x3","dmat2x4","dmat3","dmat3x2","dmat3x3","dmat3x4","dmat4","dmat4x2","dmat4x3","dmat4x4",
+    "do","double","dvec2","dvec3","dvec4","else","enum","extern","external","false","filter","fixed","flat","float",
+    "for","fvec2","fvec3","fvec4","goto","half","highp","hvec2","hvec3","hvec4","if","iimage1D","iimage1DArray",
+    "iimage2D","iimage2DArray","iimage2DMS","iimage2DMSArray","iimage2DRect","iimage3D","iimageBuffer","iimageCube",
+    "iimageCubeArray","image1D","image1DArray","image2D","image2DArray","image2DMS","image2DMSArray","image2DRect",
+    "image3D","imageBuffer","imageCube","imageCubeArray","in","inline","inout","input","int","interface","invariant",
+    "isampler1D","isampler1DArray","isampler2D","isampler2DArray","isampler2DMS","isampler2DMSArray","isampler2DRect",
+    "isampler3D","isamplerBuffer","isamplerCube","isamplerCubeArray","ivec2","ivec3","ivec4","layout","long","lowp",
+    "mat2","mat2x2","mat2x3","mat2x4","mat3","mat3x2","mat3x3","mat3x4","mat4","mat4x2","mat4x3","mat4x4","mediump",
+    "namespace","noinline","noperspective","out","output","packed","partition","patch","precision","public","readonly",
+    "resource","restrict","return","row_major","sample","sampler1D","sampler1DArray","sampler1DArrayShadow",
+    "sampler1DShadow","sampler2D","sampler2DArray","sampler2DArrayShadow","sampler2DMS","sampler2DMSArray",
+    "sampler2DRect","sampler2DRectShadow","sampler2DShadow","sampler3D","sampler3DRect","samplerBuffer",
+    "samplerCube","samplerCubeArray","samplerCubeArrayShadow","samplerCubeShadow","short","sizeof","smooth","static",
+    "struct","subroutine","superp","switch","template","this","true","typedef","uimage1D","uimage1DArray","uimage2D",
+    "uimage2DArray","uimage2DMS","uimage2DMSArray","uimage2DRect","uimage3D","uimageBuffer","uimageCube",
+    "uimageCubeArray","uint","uniform","union","unsigned","usampler1D","usampler1DArray","usampler2D","usampler2DArray",
+    "usampler2DMS","usampler2DMSArray","usampler2DRect","usampler3D","usamplerBuffer","usamplerCube",
+    "usamplerCubeArray","using","uvec2","uvec3","uvec4","varying","vec2","vec3","vec4","void","volatile","volatile",
+    "while","writeonly"};
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -1117,7 +1140,8 @@ void CompilerGLSL::replace_illegal_names()
 			if (!is_hidden_variable(var))
 			{
 				auto &m = meta[var.self].decoration;
-				if (m.alias.compare(0, 3, "gl_") == 0)
+				if (m.alias.compare(0, 3, "gl_") == 0 ||
+            keywords.find(m.alias) != keywords.end())
 					m.alias = join("_", m.alias);
 			}
 		}
