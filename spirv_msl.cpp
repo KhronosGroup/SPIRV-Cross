@@ -525,8 +525,9 @@ void CompilerMSL::emit_msl_defines()
 	statement("#define dFdy dfdy");
 	statement("#define dFdx dfdy");
 	statement("#define atan(y,x) atan2((y),(x))");
-    statement("#define greaterThan(a,b) ((a)>(b))");
-	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), tex.get_height()); }");
+	statement("#define greaterThan(a,b) ((a)>(b))");
+	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), "
+	          "tex.get_height()); }");
 	statement("");
 }
 
