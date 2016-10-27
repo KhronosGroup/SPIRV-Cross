@@ -4576,7 +4576,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t index, vector<string> &arglist)
 {
 	auto &args = func.arguments;
-	uint32_t arg_cnt = (uint32_t)args.size();
+	uint32_t arg_cnt = uint32_t(args.size());
 	for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++)
 		arglist.push_back(to_func_call_arg(args[arg_idx].id));
 }
@@ -5677,7 +5677,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 
 	case SPIRBlock::Kill:
-		statement("discard;");
+		statement(backend.discard_literal, ";");
 		break;
 
 	default:

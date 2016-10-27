@@ -66,6 +66,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
+	backend.discard_literal = "discard_fragment()";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
 
@@ -244,7 +245,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 	// Add the global variables as arguments to the function
 	if (func_id != entry_point)
 	{
-		uint32_t next_id = increase_bound_by((uint32_t)added_arg_ids.size());
+		uint32_t next_id = increase_bound_by(uint32_t(added_arg_ids.size()));
 		for (uint32_t arg_id : added_arg_ids)
 		{
 			uint32_t type_id = get<SPIRVariable>(arg_id).basetype;
@@ -428,17 +429,17 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			{
 				// If needed, add a padding member to the struct to align to the next member's offset.
 				uint32_t mbr_offset = get_member_decoration(type.self, i, DecorationOffset);
-				struct_size = pad_to_offset(ib_type, (var_dec.offset + mbr_offset), (uint32_t)struct_size);
+				struct_size = pad_to_offset(ib_type, (var_dec.offset + mbr_offset), uint32_t(struct_size));
 
 				// Add a reference to the member to the interface struct.
 				auto &membertype = get<SPIRType>(member);
-				uint32_t ib_mbr_idx = (uint32_t)ib_type.member_types.size();
+				uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 				ib_type.member_types.push_back(membertype.self);
 
 				// Give the member a name, and assign it an offset within the struct.
 				string mbr_name = ensure_member_name(to_qualified_member_name(type, i));
 				set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, (uint32_t)struct_size);
+				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
 				struct_size = get_declared_struct_size(ib_type);
 
 				// Update the original variable reference to include the structure reference
@@ -464,16 +465,16 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 		else
 		{
 			// If needed, add a padding member to the struct to align to the next member's offset.
-			struct_size = pad_to_offset(ib_type, var_dec.offset, (uint32_t)struct_size);
+			struct_size = pad_to_offset(ib_type, var_dec.offset, uint32_t(struct_size));
 
 			// Add a reference to the variable type to the interface struct.
-			uint32_t ib_mbr_idx = (uint32_t)ib_type.member_types.size();
+			uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 			ib_type.member_types.push_back(type.self);
 
 			// Give the member a name, and assign it an offset within the struct.
 			string mbr_name = ensure_member_name(to_name(p_var->self));
 			set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, (uint32_t)struct_size);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
 			struct_size = get_declared_struct_size(ib_type);
 
 			// Update the original variable reference to include the structure reference
@@ -521,13 +522,11 @@ void CompilerMSL::emit_header()
 void CompilerMSL::emit_msl_defines()
 {
 	statement("// Standard GLSL->MSL redefinitions");
-	statement("#define discard discard_fragment()");
 	statement("#define dFdy dfdy");
 	statement("#define dFdx dfdy");
-	statement("#define atan(x,y) atan2((y),(x))");
-	statement("inline bool greaterThan(float2 a,float2 b) { return all(a>b) ? true : false; }");
-	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), "
-	          "tex.get_height()); }");
+	statement("#define atan(y,x) atan2((y),(x))");
+    statement("#define greaterThan(a,b) ((a)>(b))");
+	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), tex.get_height()); }");
 	statement("");
 }
 
@@ -1403,7 +1402,7 @@ uint32_t CompilerMSL::pad_to_offset(SPIRType &struct_type, uint32_t offset, uint
 		return struct_size;
 
 	auto &pad_type = get_pad_type(offset - struct_size);
-	uint32_t mbr_idx = (uint32_t)struct_type.member_types.size();
+	uint32_t mbr_idx = uint32_t(struct_type.member_types.size());
 	struct_type.member_types.push_back(pad_type.self);
 	set_member_name(struct_type.self, mbr_idx, ("pad" + convert_to_string(mbr_idx)));
 	set_member_decoration(struct_type.self, mbr_idx, DecorationOffset, struct_size);
@@ -1814,7 +1813,7 @@ size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_ma
 		// ArrayStride is part of the array type not OpMemberDecorate.
 		auto &dec = meta[type.self].decoration;
 		if (dec.decoration_flags & (1ull << DecorationArrayStride))
-			return dec.array_stride * to_array_size_literal(type, (uint32_t)type.array.size() - 1);
+			return dec.array_stride * to_array_size_literal(type, uint32_t(type.array.size()) - 1);
 		else
 		{
 			throw CompilerError("Type does not have ArrayStride set.");

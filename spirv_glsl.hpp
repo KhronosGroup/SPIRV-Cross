@@ -221,6 +221,7 @@ protected:
 	// shouldn't need polymorphism.
 	struct BackendVariations
 	{
+		std::string discard_literal = "discard";
 		bool float_literal_suffix = false;
 		bool double_literal_suffix = true;
 		bool uint32_t_literal_suffix = true;
