@@ -96,6 +96,8 @@ public:
 	std::string compile() override;
 
 protected:
+	void emit_instruction(const Instruction &instr) override;
+	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args, uint32_t count) override;
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
@@ -124,7 +126,6 @@ protected:
 	void emit_interface_block(uint32_t ib_var_id);
 	void emit_function_prototype(SPIRFunction &func, bool is_decl);
 	void emit_function_declarations();
-	void emit_msl_defines();
 
 	std::string func_type_decl(SPIRType &type);
 	std::string clean_func_name(std::string func_name);

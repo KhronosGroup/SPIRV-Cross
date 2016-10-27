@@ -15,6 +15,7 @@
  */
 
 #include "spirv_msl.hpp"
+#include "GLSL.std.450.h"
 #include <algorithm>
 #include <numeric>
 
@@ -61,7 +62,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 
 	// Do not deal with ES-isms like precision, older extensions and such.
 	options.es = false;
-	options.version = 1;
+	options.version = 120;
 	backend.float_literal_suffix = false;
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
@@ -516,18 +517,6 @@ void CompilerMSL::emit_header()
 	statement("");
 	statement("using namespace metal;");
 	statement("");
-	emit_msl_defines();
-}
-
-void CompilerMSL::emit_msl_defines()
-{
-	statement("// Standard GLSL->MSL redefinitions");
-	statement("#define dFdy dfdy");
-	statement("#define dFdx dfdy");
-	statement("#define atan(y,x) atan2((y),(x))");
-    statement("#define greaterThan(a,b) ((a)>(b))");
-	statement("inline uint2 imageSize(thread const texture2d<float>& tex) { return uint2(tex.get_width(), tex.get_height()); }");
-	statement("");
 }
 
 void CompilerMSL::emit_resources()
@@ -575,6 +564,134 @@ void CompilerMSL::emit_resources()
 	emit_interface_block(stage_out_var_id);
 
 	// TODO: Consolidate and output loose uniforms into an input struct
+}
+
+// Override for MSL-specific syntax instructions
+void CompilerMSL::emit_instruction(const Instruction &instruction)
+{
+
+#define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define BOP_CAST(op, type) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
+#define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
+#define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
+#define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
+#define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define BFOP_CAST(op, type) emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
+#define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
+
+	auto ops = stream(instruction);
+	auto opcode = static_cast<Op>(instruction.op);
+
+	switch (opcode)
+	{
+	// Comparisons
+	case OpIEqual:
+	case OpLogicalEqual:
+	case OpFOrdEqual:
+		BOP(==);
+		break;
+
+	case OpINotEqual:
+	case OpLogicalNotEqual:
+	case OpFOrdNotEqual:
+		BOP(!=);
+		break;
+
+	case OpUGreaterThan:
+	case OpSGreaterThan:
+	case OpFOrdGreaterThan:
+		BOP(>);
+		break;
+
+	case OpUGreaterThanEqual:
+	case OpSGreaterThanEqual:
+	case OpFOrdGreaterThanEqual:
+		BOP(>=);
+		break;
+
+	case OpULessThan:
+	case OpSLessThan:
+	case OpFOrdLessThan:
+		BOP(<);
+		break;
+
+	case OpULessThanEqual:
+	case OpSLessThanEqual:
+	case OpFOrdLessThanEqual:
+		BOP(<=);
+		break;
+
+	// Derivatives
+	case OpDPdx:
+		UFOP(dfdx);
+		break;
+
+	case OpDPdy:
+		UFOP(dfdy);
+		break;
+
+	case OpImageQuerySize:
+	{
+		auto &type = expression_type(ops[2]);
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		if (type.basetype == SPIRType::Image)
+		{
+			string img_exp = to_expression(ops[2]);
+			auto &img_type = type.image;
+			switch (img_type.dim)
+			{
+			case Dim1D:
+				if (img_type.arrayed)
+					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_array_size())"), false, false);
+				else
+					emit_op(result_type, id, join(img_exp, ".get_width()"), true, false);
+				break;
+
+			case Dim2D:
+			case DimCube:
+				if (img_type.arrayed)
+					emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_array_size())"), false, false);
+				else
+					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_height())"), false, false);
+				break;
+
+			case Dim3D:
+				emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_depth())"), false, false);
+				break;
+				
+			default:
+				break;
+			}
+		}
+		else
+			throw CompilerError("Invalid type for OpImageQuerySize.");
+		break;
+	}
+
+	default:
+		CompilerGLSL::emit_instruction(instruction);
+		break;
+	}
+}
+
+// Override for MSL-specific extension syntax instructions
+void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
+{
+	GLSLstd450 op = static_cast<GLSLstd450>(eop);
+
+	switch (op)
+	{
+	case GLSLstd450Atan2:
+		emit_binary_func_op(result_type, id, args[0], args[1], "atan2");
+		break;
+
+	default:
+		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+	}
 }
 
 // Emit a structure declaration for the specified interface variable.
