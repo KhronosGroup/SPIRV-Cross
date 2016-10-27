@@ -845,6 +845,12 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 	return m.members[index].alias;
 }
 
+void Compiler::set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name)
+{
+	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
+	meta.at(id).members[index].qualified_alias = name;
+}
+
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
 	auto &m = meta.at(id);
@@ -1115,6 +1121,9 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t strlen_words = (e.name.size() + 1 + 3) >> 2;
 		e.interface_variables.insert(end(e.interface_variables), ops + strlen_words + 2, ops + instruction.length);
 
+		// Set the name of the entry point in case OpName is not provided later
+		set_name(ops[1], e.name);
+
 		// If we don't have an entry, make the first one our "default".
 		if (!entry_point)
 			entry_point = ops[1];
@@ -1173,6 +1182,7 @@ void Compiler::parse(const Instruction &instruction)
 			set_decoration(id, decoration, ops[2]);
 		else
 			set_decoration(id, decoration);
+
 		break;
 	}
 

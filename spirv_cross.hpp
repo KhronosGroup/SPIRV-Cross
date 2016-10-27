@@ -166,6 +166,9 @@ public:
 	// Sets the member identifier for OpTypeStruct ID, member number "index".
 	void set_member_name(uint32_t id, uint32_t index, const std::string &name);
 
+	// Sets the qualified member identifier for OpTypeStruct ID, member number "index".
+	void set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name);
+
 	// Gets the decoration mask for a member of a struct, similar to get_decoration_mask.
 	uint64_t get_member_decoration_mask(uint32_t id, uint32_t index) const;
 
@@ -394,7 +397,7 @@ protected:
 	std::unordered_set<uint32_t> selection_merge_targets;
 	std::unordered_set<uint32_t> multiselect_merge_targets;
 
-	std::string to_name(uint32_t id, bool allow_alias = true);
+	virtual std::string to_name(uint32_t id, bool allow_alias = true);
 	bool is_builtin_variable(const SPIRVariable &var) const;
 	bool is_hidden_variable(const SPIRVariable &var, bool include_builtins = false) const;
 	bool is_immutable(uint32_t id) const;

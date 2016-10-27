@@ -1426,6 +1426,14 @@ void CompilerGLSL::emit_resources()
 		statement("");
 }
 
+// Returns a string representation of the ID, usable as a function arg.
+// Default is to simply return the expression representation fo the arg ID.
+// Subclasses may override to modify the return value.
+string CompilerGLSL::to_func_call_arg(uint32_t id)
+{
+	return to_expression(id);
+}
+
 void CompilerGLSL::handle_invalid_expression(uint32_t id)
 {
 	auto &expr = get<SPIRExpression>(id);
@@ -3456,7 +3464,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (skip_argument(arg[i]))
 				continue;
 
-			arglist.push_back(to_expression(arg[i]));
+			arglist.push_back(to_func_call_arg(arg[i]));
 		}
 
 		for (auto &combined : callee.combined_parameters)
@@ -3474,6 +3482,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			arglist.push_back(to_combined_image_sampler(image_id, sampler_id));
 		}
+
+		append_global_func_args(callee, length, arglist);
+
 		funexpr += merge(arglist);
 		funexpr += ")";
 
@@ -4581,6 +4592,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 }
 
+// Appends function arguments, mapped from global variables, beyond the specified arg index.
+// This is used when a function call uses fewer arguments than the function defines.
+// This situation may occur if the function signature has been dynamically modified to
+// extract global variables referenced from within the function, and convert them to
+// function arguments. This is necessary for shader languages that do not support global
+// access to shader input content from within a function (eg. Metal). Each additional
+// function args uses the name of the global variable. Function nesting will modify the
+// functions and calls all the way up the nesting chain.
+void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t index, vector<string> &arglist)
+{
+	auto &args = func.arguments;
+	uint32_t arg_cnt = uint32_t(args.size());
+	for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++)
+		arglist.push_back(to_func_call_arg(args[arg_idx].id));
+}
+
 string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
 {
 	auto &memb = meta[type.self].members;
@@ -5677,7 +5704,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 
 	case SPIRBlock::Kill:
-		statement("discard;");
+		statement(backend.discard_literal, ";");
 		break;
 
 	default:

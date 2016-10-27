@@ -21,7 +21,7 @@ However, most missing features are expected to be "trivial" improvements at this
 
 SPIRV-Cross has been tested on Linux, OSX and Windows.
 
-### Linux and OSX
+### Linux and macOS
 
 Just run `make` on the command line. A recent GCC (4.8+) or Clang (3.x+) compiler is required as SPIRV-Cross uses C++11 extensively.
 
@@ -142,8 +142,14 @@ along with the Apache 2.0 licensing stub.
 
 ### Formatting
 
-SPIRV-Cross uses clang-format to automatically format code.
-Please use clang-format with the style sheet found in `.clang-format` to automatically format code before submitting a pull request.
+SPIRV-Cross uses `clang-format` to automatically format code.
+Please use `clang-format` with the style sheet found in `.clang-format` to automatically format code before submitting a pull request.
+
+To make things easy, the `format_all.sh` script can be used to format all
+source files in the library. In this directory, run the following from the
+command line:
+
+	./format_all.sh
 
 ## ABI concerns
 

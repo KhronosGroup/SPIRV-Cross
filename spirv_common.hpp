@@ -845,6 +845,7 @@ struct Meta
 	struct Decoration
 	{
 		std::string alias;
+		std::string qualified_alias;
 		uint64_t decoration_flags = 0;
 		spv::BuiltIn builtin_type;
 		uint32_t location = 0;
