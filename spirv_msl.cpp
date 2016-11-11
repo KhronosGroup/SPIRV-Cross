@@ -1568,11 +1568,17 @@ string CompilerMSL::to_name(uint32_t id, bool allow_alias)
 	return Compiler::to_name(id, allow_alias);
 }
 
-// Returns a name that combines the name of the struct with the name of the member
+// Returns a name that combines the name of the struct with the name of the member, except for Builtins
 string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t index)
 {
-	// Get name and strip any underscore prefix
+	//Start with existing member name
 	string mbr_name = to_member_name(type, index);
+
+	// Don't qualify Builtin names because they are unique and are treated as such when building expressions
+	if (is_member_builtin(type, index, nullptr))
+		return mbr_name;
+
+	// Strip any underscore prefix from member name
 	size_t startPos = mbr_name.find_first_not_of("_");
 	mbr_name = (startPos != std::string::npos) ? mbr_name.substr(startPos) : "";
 	return join(to_name(type.self), "_", mbr_name);
