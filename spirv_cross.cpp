@@ -16,6 +16,7 @@
 
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
+#include "spirv_cfg.hpp"
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -1975,6 +1976,8 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
 {
+	handler.set_current_block(block);
+
 	// Ideally, perhaps traverse the CFG instead of all blocks in order to eliminate dead blocks,
 	// but this shouldn't be a problem in practice unless the SPIR-V is doing insane things like recursing
 	// inside dead blocks ...
@@ -1988,12 +1991,16 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 
 		if (op == OpFunctionCall)
 		{
-			if (!handler.begin_function_scope(ops, i.length))
-				return false;
-			if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
-				return false;
-			if (!handler.end_function_scope(ops, i.length))
-				return false;
+			auto &func = get<SPIRFunction>(ops[2]);
+			if (handler.follow_function_call(func))
+			{
+				if (!handler.begin_function_scope(ops, i.length))
+					return false;
+				if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
+					return false;
+				if (!handler.end_function_scope(ops, i.length))
+					return false;
+			}
 		}
 	}
 
@@ -2707,4 +2714,101 @@ SPIRConstant &Compiler::get_constant(uint32_t id)
 const SPIRConstant &Compiler::get_constant(uint32_t id) const
 {
 	return get<SPIRConstant>(id);
+}
+
+void Compiler::analyze_variable_scope(SPIRFunction &entry)
+{
+	struct AccessHandler : OpcodeHandler
+	{
+	public:
+		AccessHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+		bool follow_function_call(const SPIRFunction &)
+		{
+			// Only analyze within this function.
+			return false;
+		}
+
+		void set_current_block(const SPIRBlock &block)
+		{
+			current_block = &block;
+		}
+
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length)
+		{
+			switch (op)
+			{
+			case OpStore:
+			{
+				if (length < 2)
+					return false;
+
+				uint32_t ptr = args[0];
+				auto *var = compiler.maybe_get_backing_variable(ptr);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpAccessChain:
+			case OpInBoundsAccessChain:
+			{
+				if (length < 3)
+					return false;
+
+				uint32_t ptr = args[2];
+				auto *var = compiler.maybe_get<SPIRVariable>(ptr);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpLoad:
+			{
+				if (length < 3)
+					return false;
+				uint32_t ptr = args[2];
+				auto *var = compiler.maybe_get_backing_variable(ptr);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			// TODO: OpFunctionCall and other opcodes which access variables.
+
+			default:
+				break;
+			}
+			return true;
+		}
+
+		Compiler &compiler;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
+		const SPIRBlock *current_block = nullptr;
+	} handler(*this);
+
+	// First, we map out all variable access within a function.
+	// Essentially a map of block -> { variables accessed in the basic block }
+	traverse_all_reachable_opcodes(entry, handler);
+
+	// Compute the control flow graph for this function.
+	CFG cfg(*this, entry);
+
+	// For each variable which is statically accessed.
+	for (auto &var : handler.accessed_variables_to_block)
+	{
+		DominatorBuilder builder(cfg);
+		auto &blocks = var.second;
+
+		// Figure out which block is dominating all accesses of those variables.
+		for (auto &block : blocks)
+			builder.add_block(block);
+
+		// Add it to a per-block list of variables.
+		uint32_t dominating_block = builder.get_dominator();
+		auto &block = get<SPIRBlock>(dominating_block);
+		block.dominated_variables.push_back(var.first);
+	}
 }

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SPIRV_MSL_HPP
-#define SPIRV_MSL_HPP
+#ifndef SPIRV_CROSS_MSL_HPP
+#define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
 #include <set>
