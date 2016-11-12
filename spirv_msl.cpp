@@ -571,12 +571,14 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BOP_CAST(op, type) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
+#define BOP_CAST(op, type) \
+	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
 #define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
 #define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BFOP_CAST(op, type) emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
+#define BFOP_CAST(op, type) \
+	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 
@@ -645,7 +647,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			{
 			case Dim1D:
 				if (img_type.arrayed)
-					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_array_size())"), false, false);
+					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_array_size())"),
+					        false, false);
 				else
 					emit_op(result_type, id, join(img_exp, ".get_width()"), true, false);
 				break;
@@ -653,15 +656,20 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			case Dim2D:
 			case DimCube:
 				if (img_type.arrayed)
-					emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_array_size())"), false, false);
+					emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ",
+					                              img_exp, ".get_array_size())"),
+					        false, false);
 				else
-					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_height())"), false, false);
+					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_height())"),
+					        false, false);
 				break;
 
 			case Dim3D:
-				emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_depth())"), false, false);
+				emit_op(result_type, id,
+				        join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_depth())"),
+				        false, false);
 				break;
-				
+
 			default:
 				break;
 			}
