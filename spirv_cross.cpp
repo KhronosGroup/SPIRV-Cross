@@ -1632,6 +1632,13 @@ void Compiler::parse(const Instruction &instruction)
 
 	case OpFunctionEnd:
 	{
+		if (current_block)
+		{
+			// Very specific error message, but seems to come up quite often.
+			throw CompilerError(
+			    "Cannot end a function before ending the current block.\n"
+			    "Likely cause: If this SPIR-V was created from glslang HLSL, make sure the entry point is valid.");
+		}
 		current_function = nullptr;
 		break;
 	}
