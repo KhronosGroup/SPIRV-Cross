@@ -16,46 +16,20 @@
 
 #include "spirv_cfg.hpp"
 #include <algorithm>
+#include <assert.h>
 
 using namespace std;
 
 namespace spirv_cross
 {
 CFG::CFG(Compiler &compiler_, const SPIRFunction &func_)
-    : compiler(compiler_), func(func_)
+    : compiler(compiler_)
+    , func(func_)
 {
 	preceding_edges.resize(compiler.get_current_id_bound());
 	succeeding_edges.resize(compiler.get_current_id_bound());
 	visit_order.resize(compiler.get_current_id_bound());
 	immediate_dominators.resize(compiler.get_current_id_bound());
-
-	// Set up all edges between blocks.
-	for (auto block_id : func.blocks)
-	{
-		auto &block = compiler.get<SPIRBlock>(block_id);
-
-		switch (block.terminator)
-		{
-		case SPIRBlock::Direct:
-			add_branch(block.self, block.next_block);
-			break;
-
-		case SPIRBlock::Select:
-			add_branch(block.self, block.true_block);
-			add_branch(block.self, block.false_block);
-			break;
-
-		case SPIRBlock::MultiSelect:
-			for (auto &target : block.cases)
-				add_branch(block.self, target.block);
-			if (block.default_block)
-				add_branch(block.self, block.default_block);
-			break;
-
-		default:
-			break;
-		}
-	}
 
 	build_post_order_visit_order();
 	build_immediate_dominators();
@@ -98,28 +72,58 @@ void CFG::build_immediate_dominators()
 		{
 			if (!immediate_dominators[block])
 				immediate_dominators[block] = edge;
-			else if (immediate_dominators[block] && immediate_dominators[edge])
+			else
+			{
+				assert(immediate_dominators[edge]);
 				immediate_dominators[block] = update_common_dominator(block, edge);
+			}
 		}
 	}
 }
 
-void CFG::post_order_visit(uint32_t block)
+bool CFG::post_order_visit(uint32_t block_id)
 {
 	// If we have already branched to this block (back edge), stop recursion.
-	if (visit_order[block] >= 0)
-		return;
+	if (visit_order[block_id] >= 0)
+		return false;
 
 	// Block back-edges from recursively revisiting ourselves.
-	visit_order[block] = 0;
+	visit_order[block_id] = 0;
 
 	// First visit our branch targets.
-	auto &succeeding = succeeding_edges[block];
-	for (auto &id : succeeding)
-		post_order_visit(id);
+	auto &block = compiler.get<SPIRBlock>(block_id);
+	switch (block.terminator)
+	{
+	case SPIRBlock::Direct:
+		if (post_order_visit(block.next_block))
+			add_branch(block_id, block.next_block);
+		break;
+
+	case SPIRBlock::Select:
+		if (post_order_visit(block.true_block))
+			add_branch(block_id, block.true_block);
+		if (post_order_visit(block.false_block))
+			add_branch(block_id, block.false_block);
+		break;
+
+	case SPIRBlock::MultiSelect:
+		for (auto &target : block.cases)
+		{
+			if (post_order_visit(target.block))
+				add_branch(block_id, target.block);
+		}
+		if (block.default_block && post_order_visit(block.default_block))
+			add_branch(block_id, block.default_block);
+		break;
+
+	default:
+		break;
+	}
+
 	// Then visit ourselves.
-	visit_order[block] = visit_count++;
-	post_order.push_back(block);
+	visit_order[block_id] = visit_count++;
+	post_order.push_back(block_id);
+	return true;
 }
 
 void CFG::build_post_order_visit_order()
@@ -143,12 +147,18 @@ void CFG::add_branch(uint32_t from, uint32_t to)
 }
 
 DominatorBuilder::DominatorBuilder(const CFG &cfg_)
-	: cfg(cfg_)
+    : cfg(cfg_)
 {
 }
 
 void DominatorBuilder::add_block(uint32_t block)
 {
+	if (!cfg.get_immediate_dominator(block))
+	{
+		// Unreachable block via the CFG, we will never emit this code anyways.
+		return;
+	}
+
 	if (!dominator)
 	{
 		dominator = block;

@@ -17,8 +17,6 @@ void main()
     uint ident = gl_GlobalInvocationID.x;
     vec4 idat = _24.in_data[ident];
     int k = 0;
-    uint i;
-    uint j;
     for (;;)
     {
         int _39 = k;
@@ -35,10 +33,10 @@ void main()
             break;
         }
     }
-    i = 0u;
+    uint i = 0u;
     for (; (i < 16u); i = (i + uint(1)), k = (k + 1))
     {
-        j = 0u;
+        uint j = 0u;
         for (; (j < 30u); j = (j + uint(1)))
         {
             idat = (_24.mvp * idat);

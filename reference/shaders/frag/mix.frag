@@ -15,7 +15,6 @@ void main()
     bool f = true;
     FragColor = vec4(mix(vIn2, vIn3, f));
     highp vec4 _35;
-    highp float _44;
     if (f)
     {
         _35 = vIn0;
@@ -25,6 +24,7 @@ void main()
         _35 = vIn1;
     }
     FragColor = _35;
+    highp float _44;
     if (f)
     {
         _44 = vIn2;

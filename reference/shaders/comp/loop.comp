@@ -18,9 +18,6 @@ void main()
     vec4 idat = _24.in_data[ident];
     int k = 0;
     uint i = 0u;
-    uint i_1;
-    uint j;
-    int l;
     if ((idat.y == 20.0))
     {
         do
@@ -63,10 +60,10 @@ void main()
         idat = (idat * 2.0);
         k = (k + 1);
     }
-    i_1 = 0u;
+    uint i_1 = 0u;
     for (; (i_1 < 16u); i_1 = (i_1 + uint(1)), k = (k + 1))
     {
-        j = 0u;
+        uint j = 0u;
         for (; (j < 30u); j = (j + uint(1)))
         {
             idat = (_24.mvp * idat);
@@ -93,7 +90,7 @@ void main()
     {
         k = (k + 1);
     } while ((k > 10));
-    l = 0;
+    int l = 0;
     for (;;)
     {
         if ((l == 5))

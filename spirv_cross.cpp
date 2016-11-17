@@ -2734,6 +2734,39 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		void set_current_block(const SPIRBlock &block)
 		{
 			current_block = &block;
+
+			// If we're branching to a block which uses OpPhi, in GLSL
+			// this will be a variable write when we branch,
+			// so we need to track access to these variables as well to
+			// have a complete picture.
+			const auto test_phi = [this, &block](uint32_t to) {
+				auto &next = compiler.get<SPIRBlock>(to);
+				for (auto &phi : next.phi_variables)
+					if (phi.parent == block.self)
+						accessed_variables_to_block[phi.function_variable].insert(block.self);
+			};
+
+			switch (block.terminator)
+			{
+			case SPIRBlock::Direct:
+				test_phi(block.next_block);
+				break;
+
+			case SPIRBlock::Select:
+				test_phi(block.true_block);
+				test_phi(block.false_block);
+				break;
+
+			case SPIRBlock::MultiSelect:
+				for (auto &target : block.cases)
+					test_phi(target.block);
+				if (block.default_block)
+					test_phi(block.default_block);
+				break;
+
+			default:
+				break;
+			}
 		}
 
 		bool handle(spv::Op op, const uint32_t *args, uint32_t length)
@@ -2808,7 +2841,12 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 		// Add it to a per-block list of variables.
 		uint32_t dominating_block = builder.get_dominator();
-		auto &block = get<SPIRBlock>(dominating_block);
-		block.dominated_variables.push_back(var.first);
+		// If all blocks here are dead code, this will be 0, so the variable in question
+		// will be completely eliminated.
+		if (dominating_block)
+		{
+			auto &block = get<SPIRBlock>(dominating_block);
+			block.dominated_variables.push_back(var.first);
+		}
 	}
 }

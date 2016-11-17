@@ -9,7 +9,6 @@ layout(binding = 1, std430) buffer SSBO2
 void main()
 {
     uint ident = gl_GlobalInvocationID.x;
-    int i;
     if ((ident == 2u))
     {
         _27.out_data[ident] = vec4(20.0);
@@ -22,7 +21,7 @@ void main()
             return;
         }
     }
-    i = 0;
+    int i = 0;
     for (; (i < 20); i = (i + 1))
     {
         if ((i == 10))

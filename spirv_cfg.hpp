@@ -55,7 +55,7 @@ private:
 	void add_branch(uint32_t from, uint32_t to);
 	void build_post_order_visit_order();
 	void build_immediate_dominators();
-	void post_order_visit(uint32_t block);
+	bool post_order_visit(uint32_t block);
 	uint32_t visit_count = 0;
 
 	uint32_t update_common_dominator(uint32_t a, uint32_t b);
