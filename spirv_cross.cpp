@@ -2912,6 +2912,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		for (auto &block : blocks)
 			builder.add_block(block);
 
+		builder.lift_continue_block_dominator();
+
 		// Add it to a per-block list of variables.
 		uint32_t dominating_block = builder.get_dominator();
 		// If all blocks here are dead code, this will be 0, so the variable in question

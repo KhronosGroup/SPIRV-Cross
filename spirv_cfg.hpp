@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_CFG_HPP
 
 #include "spirv_cross.hpp"
+#include <assert.h>
 
 namespace spirv_cross
 {
@@ -31,14 +32,26 @@ public:
 		return compiler;
 	}
 
+	const Compiler &get_compiler() const
+	{
+		return compiler;
+	}
+
+	const SPIRFunction &get_function() const
+	{
+		return func;
+	}
+
 	uint32_t get_immediate_dominator(uint32_t block) const
 	{
 		return immediate_dominators[block];
 	}
 
-	uint32_t get_post_order(uint32_t block) const
+	uint32_t get_visit_order(uint32_t block) const
 	{
-		return post_order[block];
+		int v = visit_order[block];
+		assert(v > 0);
+		return uint32_t(v);
 	}
 
 	uint32_t find_common_dominator(uint32_t a, uint32_t b) const;
@@ -72,6 +85,8 @@ public:
 	{
 		return dominator;
 	}
+
+	void lift_continue_block_dominator();
 
 private:
 	const CFG &cfg;

@@ -110,6 +110,7 @@ class Compiler
 {
 public:
 	friend class CFG;
+	friend class DominatorBuilder;
 
 	// The constructor takes a buffer of SPIR-V words and parses it.
 	Compiler(std::vector<uint32_t> ir);

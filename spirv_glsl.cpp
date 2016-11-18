@@ -5508,8 +5508,12 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 	}
 	else if (method == SPIRBlock::MergeToDirectForLoop)
 	{
-		uint32_t current_count = statement_count;
 		auto &child = get<SPIRBlock>(block.next_block);
+
+		// This block may be a dominating block, so make sure we flush undeclared variables before building the for loop header.
+		flush_undeclared_variables(child);
+
+		uint32_t current_count = statement_count;
 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.

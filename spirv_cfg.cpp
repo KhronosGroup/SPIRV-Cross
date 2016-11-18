@@ -177,4 +177,53 @@ void DominatorBuilder::add_block(uint32_t block)
 	if (block != dominator)
 		dominator = cfg.find_common_dominator(block, dominator);
 }
+
+void DominatorBuilder::lift_continue_block_dominator()
+{
+	// It is possible for a continue block to be the dominator if a variable is only accessed inside the while block of a do-while loop.
+	// We cannot safely declare variables inside a continue block, so move any variable declared
+	// in a continue block to the entry block to simplify.
+	// It makes very little sense for a continue block to ever be a dominator, so fall back to the simplest
+	// solution.
+
+	if (!dominator)
+		return;
+
+	auto &block = cfg.get_compiler().get<SPIRBlock>(dominator);
+	auto post_order = cfg.get_visit_order(dominator);
+
+	// If we are branching to a block with a higher post-order traversal index (continue blocks), we have a problem
+	// since we cannot create sensible GLSL code for this, fallback to entry block.
+	bool back_edge_dominator = false;
+	switch (block.terminator)
+	{
+	case SPIRBlock::Direct:
+		if (cfg.get_visit_order(block.next_block) > post_order)
+			back_edge_dominator = true;
+		break;
+
+	case SPIRBlock::Select:
+		if (cfg.get_visit_order(block.true_block) > post_order)
+			back_edge_dominator = true;
+		if (cfg.get_visit_order(block.false_block) > post_order)
+			back_edge_dominator = true;
+		break;
+
+	case SPIRBlock::MultiSelect:
+		for (auto &target : block.cases)
+		{
+			if (cfg.get_visit_order(target.block) > post_order)
+				back_edge_dominator = true;
+		}
+		if (block.default_block && cfg.get_visit_order(block.default_block) > post_order)
+			back_edge_dominator = true;
+		break;
+
+	default:
+		break;
+	}
+
+	if (back_edge_dominator)
+		dominator = cfg.get_function().entry_block;
+}
 }
