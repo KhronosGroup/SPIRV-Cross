@@ -401,11 +401,13 @@ struct CLIArguments
 	bool metal = false;
 	bool vulkan_semantics = false;
 	bool remove_unused = false;
+	bool cfg_analysis = true;
 };
 
 static void print_help()
 {
-	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL "
+	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
+	                "[--version <GLSL "
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
 	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
 	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
@@ -519,6 +521,7 @@ int main(int argc, char *argv[])
 		args.version = parser.next_uint();
 		args.set_version = true;
 	});
+	cbs.add("--no-cfg-analysis", [&args](CLIParser &) { args.cfg_analysis = false; });
 	cbs.add("--dump-resources", [&args](CLIParser &) { args.dump_resources = true; });
 	cbs.add("--force-temporary", [&args](CLIParser &) { args.force_temporary = true; });
 	cbs.add("--flatten-ubo", [&args](CLIParser &) { args.flatten_ubo = true; });
@@ -623,6 +626,7 @@ int main(int argc, char *argv[])
 	opts.force_temporary = args.force_temporary;
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
+	opts.cfg_analysis = args.cfg_analysis;
 	compiler->set_options(opts);
 
 	ShaderResources res;

@@ -578,10 +578,6 @@ private:
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
 
 	VariableTypeRemapCallback variable_remap_callback;
-
-	SPIRBlock &find_common_dominator(
-	    const SPIRBlock &entry, uint32_t variable,
-	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &block_to_variable_map);
 };
 }
 

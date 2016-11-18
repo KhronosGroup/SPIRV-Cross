@@ -5232,9 +5232,17 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 		}
 	}
 
-	analyze_variable_scope(func);
-
 	auto &entry_block = get<SPIRBlock>(func.entry_block);
+
+	if (!func.analyzed_variable_scope)
+	{
+		if (options.cfg_analysis)
+			analyze_variable_scope(func);
+		else
+			entry_block.dominated_variables = func.local_variables;
+		func.analyzed_variable_scope = true;
+	}
+
 	entry_block.loop_dominator = SPIRBlock::NoDominator;
 	emit_block_chain(entry_block);
 
