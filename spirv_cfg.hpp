@@ -59,6 +59,7 @@ private:
 	uint32_t visit_count = 0;
 
 	uint32_t update_common_dominator(uint32_t a, uint32_t b);
+	bool is_back_edge(uint32_t to) const;
 };
 
 class DominatorBuilder

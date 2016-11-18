@@ -3678,14 +3678,31 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCopyMemory:
+	{
+		uint32_t lhs = ops[0];
+		uint32_t rhs = ops[1];
+		if (lhs != rhs)
+		{
+			flush_variable_declaration(lhs);
+			flush_variable_declaration(rhs);
+			statement(to_expression(lhs), " = ", to_expression(rhs), ";");
+			register_write(lhs);
+		}
+		break;
+	}
+
 	case OpCopyObject:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t rhs = ops[2];
-		if (expression_is_lvalue(rhs))
+		bool pointer = get<SPIRType>(result_type).pointer;
+
+		if (expression_is_lvalue(rhs) && !pointer)
 		{
 			// Need a copy.
+			// For pointer types, we copy the pointer itself.
 			statement(declare_temporary(result_type, id), to_expression(rhs), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
 		}
@@ -3694,7 +3711,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// RHS expression is immutable, so just forward it.
 			// Copying these things really make no sense, but
 			// seems to be allowed anyways.
-			set<SPIRExpression>(id, to_expression(rhs), result_type, true);
+			auto &e = set<SPIRExpression>(id, to_expression(rhs), result_type, true);
+			if (pointer)
+			{
+				auto *var = maybe_get_backing_variable(rhs);
+				e.loaded_from = var ? var->self : 0;
+			}
 		}
 		break;
 	}

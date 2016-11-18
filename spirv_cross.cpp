@@ -82,6 +82,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 			break;
 		}
 
+		case OpCopyMemory:
 		case OpStore:
 		{
 			auto &type = expression_type(ops[0]);
@@ -486,9 +487,25 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 		variable = args[0];
 		break;
 
+	case OpCopyMemory:
+	{
+		if (length < 3)
+			return false;
+
+		auto *var = compiler.maybe_get<SPIRVariable>(args[0]);
+		if (var && storage_class_is_interface(var->storage))
+			variables.insert(variable);
+
+		var = compiler.maybe_get<SPIRVariable>(args[1]);
+		if (var && storage_class_is_interface(var->storage))
+			variables.insert(variable);
+		break;
+	}
+
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
 	case OpLoad:
+	case OpCopyObject:
 	case OpImageTexelPointer:
 	case OpAtomicLoad:
 	case OpAtomicExchange:
@@ -2725,6 +2742,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		    : compiler(compiler_)
 		{
 		}
+
 		bool follow_function_call(const SPIRFunction &)
 		{
 			// Only analyze within this function.
@@ -2798,6 +2816,34 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				break;
 			}
 
+			case OpCopyMemory:
+			{
+				if (length < 3)
+					return false;
+
+				uint32_t lhs = args[0];
+				uint32_t rhs = args[1];
+				auto *var = compiler.maybe_get_backing_variable(lhs);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				var = compiler.maybe_get_backing_variable(rhs);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpCopyObject:
+			{
+				if (length < 3)
+					return false;
+
+				auto *var = compiler.maybe_get_backing_variable(args[2]);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
 			case OpLoad:
 			{
 				if (length < 3)
@@ -2809,7 +2855,34 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				break;
 			}
 
-			// TODO: OpFunctionCall and other opcodes which access variables.
+			case OpFunctionCall:
+			{
+				if (length < 3)
+					return false;
+
+				length -= 3;
+				args += 3;
+				for (uint32_t i = 0; i < length; i++)
+				{
+					auto *var = compiler.maybe_get_backing_variable(args[i]);
+					if (var && var->storage == StorageClassFunction)
+						accessed_variables_to_block[var->self].insert(current_block->self);
+				}
+				break;
+			}
+
+			case OpPhi:
+			{
+				if (length < 2)
+					return false;
+
+				// Phi nodes are implemented as function variables, so register an access here.
+				accessed_variables_to_block[args[1]].insert(current_block->self);
+				break;
+			}
+
+			// Atomics shouldn't be able to access function-local variables.
+			// Some GLSL builtins access a pointer.
 
 			default:
 				break;

@@ -70,22 +70,31 @@ void CFG::build_immediate_dominators()
 
 		for (auto &edge : pred)
 		{
-			if (!immediate_dominators[block])
-				immediate_dominators[block] = edge;
-			else
+			if (immediate_dominators[block])
 			{
 				assert(immediate_dominators[edge]);
 				immediate_dominators[block] = update_common_dominator(block, edge);
 			}
+			else
+				immediate_dominators[block] = edge;
 		}
 	}
+}
+
+bool CFG::is_back_edge(uint32_t to) const
+{
+	// We have a back edge if the visit order is set with the temporary magic value 0.
+	// Crossing edges will have already been recorded with a visit order.
+	return visit_order[to] == 0;
 }
 
 bool CFG::post_order_visit(uint32_t block_id)
 {
 	// If we have already branched to this block (back edge), stop recursion.
+	// If our branches are back-edges, we do not record them.
+	// We have to record crossing edges however.
 	if (visit_order[block_id] >= 0)
-		return false;
+		return !is_back_edge(block_id);
 
 	// Block back-edges from recursively revisiting ourselves.
 	visit_order[block_id] = 0;
@@ -120,8 +129,8 @@ bool CFG::post_order_visit(uint32_t block_id)
 		break;
 	}
 
-	// Then visit ourselves.
-	visit_order[block_id] = visit_count++;
+	// Then visit ourselves. Start counting at one, to let 0 be a magic value for testing back vs. crossing edges.
+	visit_order[block_id] = ++visit_count;
 	post_order.push_back(block_id);
 	return true;
 }
