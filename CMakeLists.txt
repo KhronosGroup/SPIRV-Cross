@@ -66,11 +66,11 @@ endif(NOT "${MSVC}")
 #  - Update the reference files
 #  - Get cycle counts from malisc
 #  - Keep failing outputs
-find_program(PYTHON3_EXE python3)
-if(${PYTHON3_EXE} MATCHES "NOTFOUND")
-  message(WARNING "Testing disabled. Could not find python3")
-else()
+find_package(PythonInterp)
+if(${PYTHONINTERP_FOUND} AND ${PYTHON_VERSION_MAJOR} GREATER 2)
   add_test(NAME spirv-cross-test
-	   COMMAND ${PYTHON3_EXE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
+	   COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
 		   ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+else()
+  message(WARNING "Testing disabled. Could not find python3")
 endif()
