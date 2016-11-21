@@ -16,6 +16,7 @@
 
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
+#include "spirv_cfg.hpp"
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -81,6 +82,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 			break;
 		}
 
+		case OpCopyMemory:
 		case OpStore:
 		{
 			auto &type = expression_type(ops[0]);
@@ -485,9 +487,25 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 		variable = args[0];
 		break;
 
+	case OpCopyMemory:
+	{
+		if (length < 3)
+			return false;
+
+		auto *var = compiler.maybe_get<SPIRVariable>(args[0]);
+		if (var && storage_class_is_interface(var->storage))
+			variables.insert(variable);
+
+		var = compiler.maybe_get<SPIRVariable>(args[1]);
+		if (var && storage_class_is_interface(var->storage))
+			variables.insert(variable);
+		break;
+	}
+
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
 	case OpLoad:
+	case OpCopyObject:
 	case OpImageTexelPointer:
 	case OpAtomicLoad:
 	case OpAtomicExchange:
@@ -1975,6 +1993,8 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
 {
+	handler.set_current_block(block);
+
 	// Ideally, perhaps traverse the CFG instead of all blocks in order to eliminate dead blocks,
 	// but this shouldn't be a problem in practice unless the SPIR-V is doing insane things like recursing
 	// inside dead blocks ...
@@ -1988,12 +2008,16 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 
 		if (op == OpFunctionCall)
 		{
-			if (!handler.begin_function_scope(ops, i.length))
-				return false;
-			if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
-				return false;
-			if (!handler.end_function_scope(ops, i.length))
-				return false;
+			auto &func = get<SPIRFunction>(ops[2]);
+			if (handler.follow_function_call(func))
+			{
+				if (!handler.begin_function_scope(ops, i.length))
+					return false;
+				if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
+					return false;
+				if (!handler.end_function_scope(ops, i.length))
+					return false;
+			}
 		}
 	}
 
@@ -2707,4 +2731,197 @@ SPIRConstant &Compiler::get_constant(uint32_t id)
 const SPIRConstant &Compiler::get_constant(uint32_t id) const
 {
 	return get<SPIRConstant>(id);
+}
+
+void Compiler::analyze_variable_scope(SPIRFunction &entry)
+{
+	struct AccessHandler : OpcodeHandler
+	{
+	public:
+		AccessHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+
+		bool follow_function_call(const SPIRFunction &)
+		{
+			// Only analyze within this function.
+			return false;
+		}
+
+		void set_current_block(const SPIRBlock &block)
+		{
+			current_block = &block;
+
+			// If we're branching to a block which uses OpPhi, in GLSL
+			// this will be a variable write when we branch,
+			// so we need to track access to these variables as well to
+			// have a complete picture.
+			const auto test_phi = [this, &block](uint32_t to) {
+				auto &next = compiler.get<SPIRBlock>(to);
+				for (auto &phi : next.phi_variables)
+					if (phi.parent == block.self)
+						accessed_variables_to_block[phi.function_variable].insert(block.self);
+			};
+
+			switch (block.terminator)
+			{
+			case SPIRBlock::Direct:
+				test_phi(block.next_block);
+				break;
+
+			case SPIRBlock::Select:
+				test_phi(block.true_block);
+				test_phi(block.false_block);
+				break;
+
+			case SPIRBlock::MultiSelect:
+				for (auto &target : block.cases)
+					test_phi(target.block);
+				if (block.default_block)
+					test_phi(block.default_block);
+				break;
+
+			default:
+				break;
+			}
+		}
+
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length)
+		{
+			switch (op)
+			{
+			case OpStore:
+			{
+				if (length < 2)
+					return false;
+
+				uint32_t ptr = args[0];
+				auto *var = compiler.maybe_get_backing_variable(ptr);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpAccessChain:
+			case OpInBoundsAccessChain:
+			{
+				if (length < 3)
+					return false;
+
+				uint32_t ptr = args[2];
+				auto *var = compiler.maybe_get<SPIRVariable>(ptr);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpCopyMemory:
+			{
+				if (length < 3)
+					return false;
+
+				uint32_t lhs = args[0];
+				uint32_t rhs = args[1];
+				auto *var = compiler.maybe_get_backing_variable(lhs);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				var = compiler.maybe_get_backing_variable(rhs);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpCopyObject:
+			{
+				if (length < 3)
+					return false;
+
+				auto *var = compiler.maybe_get_backing_variable(args[2]);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpLoad:
+			{
+				if (length < 3)
+					return false;
+				uint32_t ptr = args[2];
+				auto *var = compiler.maybe_get_backing_variable(ptr);
+				if (var && var->storage == StorageClassFunction)
+					accessed_variables_to_block[var->self].insert(current_block->self);
+				break;
+			}
+
+			case OpFunctionCall:
+			{
+				if (length < 3)
+					return false;
+
+				length -= 3;
+				args += 3;
+				for (uint32_t i = 0; i < length; i++)
+				{
+					auto *var = compiler.maybe_get_backing_variable(args[i]);
+					if (var && var->storage == StorageClassFunction)
+						accessed_variables_to_block[var->self].insert(current_block->self);
+				}
+				break;
+			}
+
+			case OpPhi:
+			{
+				if (length < 2)
+					return false;
+
+				// Phi nodes are implemented as function variables, so register an access here.
+				accessed_variables_to_block[args[1]].insert(current_block->self);
+				break;
+			}
+
+			// Atomics shouldn't be able to access function-local variables.
+			// Some GLSL builtins access a pointer.
+
+			default:
+				break;
+			}
+			return true;
+		}
+
+		Compiler &compiler;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
+		const SPIRBlock *current_block = nullptr;
+	} handler(*this);
+
+	// First, we map out all variable access within a function.
+	// Essentially a map of block -> { variables accessed in the basic block }
+	traverse_all_reachable_opcodes(entry, handler);
+
+	// Compute the control flow graph for this function.
+	CFG cfg(*this, entry);
+
+	// For each variable which is statically accessed.
+	for (auto &var : handler.accessed_variables_to_block)
+	{
+		DominatorBuilder builder(cfg);
+		auto &blocks = var.second;
+
+		// Figure out which block is dominating all accesses of those variables.
+		for (auto &block : blocks)
+			builder.add_block(block);
+
+		builder.lift_continue_block_dominator();
+
+		// Add it to a per-block list of variables.
+		uint32_t dominating_block = builder.get_dominator();
+		// If all blocks here are dead code, this will be 0, so the variable in question
+		// will be completely eliminated.
+		if (dominating_block)
+		{
+			auto &block = get<SPIRBlock>(dominating_block);
+			block.dominated_variables.push_back(var.first);
+		}
+	}
 }

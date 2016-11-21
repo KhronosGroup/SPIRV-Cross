@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SPIRV_COMMON_HPP
-#define SPIRV_COMMON_HPP
+#ifndef SPIRV_CROSS_COMMON_HPP
+#define SPIRV_CROSS_COMMON_HPP
 
 #include <functional>
 #include <sstream>
@@ -356,7 +356,6 @@ struct SPIRBlock : IVariant
 
 		Select, // Block ends with an if/else block.
 		MultiSelect, // Block ends with switch statement.
-		Loop, // Block ends with a loop.
 
 		Return, // Block ends with return.
 		Unreachable, // Noop
@@ -444,6 +443,10 @@ struct SPIRBlock : IVariant
 	// The dominating block which this block might be within.
 	// Used in continue; blocks to determine if we really need to write continue.
 	uint32_t loop_dominator = 0;
+
+	// All access to these variables are dominated by this block,
+	// so before branching anywhere we need to make sure that we declare these variables.
+	std::vector<uint32_t> dominated_variables;
 };
 
 struct SPIRFunction : IVariant
@@ -510,6 +513,7 @@ struct SPIRFunction : IVariant
 	bool active = false;
 	bool flush_undeclared = true;
 	bool do_combined_parameters = true;
+	bool analyzed_variable_scope = false;
 };
 
 struct SPIRVariable : IVariant

@@ -109,6 +109,9 @@ struct BufferRange
 class Compiler
 {
 public:
+	friend class CFG;
+	friend class DominatorBuilder;
+
 	// The constructor takes a buffer of SPIR-V words and parses it.
 	Compiler(std::vector<uint32_t> ir);
 
@@ -309,6 +312,11 @@ public:
 	SPIRConstant &get_constant(uint32_t id);
 	const SPIRConstant &get_constant(uint32_t id) const;
 
+	uint32_t get_current_id_bound() const
+	{
+		return uint32_t(ids.size());
+	}
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -473,6 +481,8 @@ protected:
 			variable_remap_callback(type, var_name, type_name);
 	}
 
+	void analyze_variable_scope(SPIRFunction &function);
+
 private:
 	void parse();
 	void parse(const Instruction &i);
@@ -485,6 +495,15 @@ private:
 		// Return true if traversal should continue.
 		// If false, traversal will end immediately.
 		virtual bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) = 0;
+
+		virtual bool follow_function_call(const SPIRFunction &)
+		{
+			return true;
+		}
+
+		virtual void set_current_block(const SPIRBlock &)
+		{
+		}
 
 		virtual bool begin_function_scope(const uint32_t *, uint32_t)
 		{

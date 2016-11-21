@@ -23,23 +23,25 @@ if(${CMAKE_GENERATOR} MATCHES "Makefile")
 endif()
 
 add_library(spirv-cross-core STATIC
-	${CMAKE_CURRENT_SOURCE_DIR}/GLSL.std.450.h
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.cpp)
+		${CMAKE_CURRENT_SOURCE_DIR}/GLSL.std.450.h
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.cpp)
 
 add_library(spirv-cross-glsl STATIC
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_glsl.cpp
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_glsl.hpp)
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_glsl.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_glsl.hpp)
 
 add_library(spirv-cross-cpp STATIC
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_cpp.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_cpp.cpp)
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cpp.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cpp.cpp)
 
 add_library(spirv-cross-msl STATIC
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.hpp
-	${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.cpp)
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.cpp)
 
 add_executable(spirv-cross main.cpp)
 target_link_libraries(spirv-cross spirv-cross-glsl spirv-cross-cpp spirv-cross-msl spirv-cross-core)

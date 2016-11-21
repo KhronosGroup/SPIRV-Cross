@@ -99,7 +99,6 @@ void main()
 {
     vec2 p0 = vPatchPosBase[0];
     vec2 param = p0;
-    vec2 param_1;
     if ((!frustum_cull(param)))
     {
         gl_TessLevelOuter[0] = -1.0;
@@ -111,7 +110,7 @@ void main()
     }
     else
     {
-        param_1 = p0;
+        vec2 param_1 = p0;
         compute_tess_levels(param_1);
     }
 }

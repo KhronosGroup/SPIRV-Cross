@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SPIRV_GLSL_HPP
-#define SPIRV_GLSL_HPP
+#ifndef SPIRV_CROSS_GLSL_HPP
+#define SPIRV_CROSS_GLSL_HPP
 
 #include "spirv_cross.hpp"
 #include <sstream>
@@ -59,6 +59,9 @@ public:
 		uint32_t version = 450;
 		bool es = false;
 		bool force_temporary = false;
+
+		// If true, variables will be moved to their appropriate scope through CFG analysis.
+		bool cfg_analysis = true;
 
 		// If true, Vulkan GLSL features are used instead of GL-compatible features.
 		// Mostly useful for debugging SPIR-V files.
@@ -257,7 +260,7 @@ protected:
 	void flush_phi(uint32_t from, uint32_t to);
 	bool flush_phi_required(uint32_t from, uint32_t to);
 	void flush_variable_declaration(uint32_t id);
-	void flush_undeclared_variables();
+	void flush_undeclared_variables(SPIRBlock &block);
 
 	bool should_forward(uint32_t id);
 	void emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp);

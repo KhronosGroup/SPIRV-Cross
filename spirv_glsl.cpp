@@ -3678,14 +3678,31 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCopyMemory:
+	{
+		uint32_t lhs = ops[0];
+		uint32_t rhs = ops[1];
+		if (lhs != rhs)
+		{
+			flush_variable_declaration(lhs);
+			flush_variable_declaration(rhs);
+			statement(to_expression(lhs), " = ", to_expression(rhs), ";");
+			register_write(lhs);
+		}
+		break;
+	}
+
 	case OpCopyObject:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t rhs = ops[2];
-		if (expression_is_lvalue(rhs))
+		bool pointer = get<SPIRType>(result_type).pointer;
+
+		if (expression_is_lvalue(rhs) && !pointer)
 		{
 			// Need a copy.
+			// For pointer types, we copy the pointer itself.
 			statement(declare_temporary(result_type, id), to_expression(rhs), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
 		}
@@ -3694,7 +3711,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// RHS expression is immutable, so just forward it.
 			// Copying these things really make no sense, but
 			// seems to be allowed anyways.
-			set<SPIRExpression>(id, to_expression(rhs), result_type, true);
+			auto &e = set<SPIRExpression>(id, to_expression(rhs), result_type, true);
+			if (pointer)
+			{
+				auto *var = maybe_get_backing_variable(rhs);
+				e.loaded_from = var ? var->self : 0;
+			}
 		}
 		break;
 	}
@@ -5211,6 +5233,16 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 	}
 
 	auto &entry_block = get<SPIRBlock>(func.entry_block);
+
+	if (!func.analyzed_variable_scope)
+	{
+		if (options.cfg_analysis)
+			analyze_variable_scope(func);
+		else
+			entry_block.dominated_variables = func.local_variables;
+		func.analyzed_variable_scope = true;
+	}
+
 	entry_block.loop_dominator = SPIRBlock::NoDominator;
 	emit_block_chain(entry_block);
 
@@ -5484,8 +5516,12 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 	}
 	else if (method == SPIRBlock::MergeToDirectForLoop)
 	{
-		uint32_t current_count = statement_count;
 		auto &child = get<SPIRBlock>(block.next_block);
+
+		// This block may be a dominating block, so make sure we flush undeclared variables before building the for loop header.
+		flush_undeclared_variables(child);
+
+		uint32_t current_count = statement_count;
 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
@@ -5530,19 +5566,14 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		return false;
 }
 
-void CompilerGLSL::flush_undeclared_variables()
+void CompilerGLSL::flush_undeclared_variables(SPIRBlock &block)
 {
-	// Declare undeclared variables.
-	if (current_function->flush_undeclared)
+	for (auto &v : block.dominated_variables)
 	{
-		for (auto &v : current_function->local_variables)
-		{
-			auto &var = get<SPIRVariable>(v);
-			if (var.deferred_declaration)
-				statement(variable_decl(var), ";");
-			var.deferred_declaration = false;
-		}
-		current_function->flush_undeclared = false;
+		auto &var = get<SPIRVariable>(v);
+		if (var.deferred_declaration)
+			statement(variable_decl(var), ";");
+		var.deferred_declaration = false;
 	}
 }
 
@@ -5568,7 +5599,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	// This is the older loop behavior in glslang which branches to loop body directly from the loop header.
 	if (block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
 	{
-		flush_undeclared_variables();
+		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectForLoop))
 		{
 			// The body of while, is actually just the true block, so always branch there
@@ -5580,7 +5611,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	// a new block, which in turn has a OpBranchSelection without a selection merge.
 	else if (block_is_loop_candidate(block, SPIRBlock::MergeToDirectForLoop))
 	{
-		flush_undeclared_variables();
+		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToDirectForLoop))
 			skip_direct_branch = true;
 	}
@@ -5593,7 +5624,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 	else if (block.merge == SPIRBlock::MergeLoop)
 	{
-		flush_undeclared_variables();
+		flush_undeclared_variables(block);
 
 		// We have a generic loop without any distinguishable pattern like for, while or do while.
 		get<SPIRBlock>(block.continue_block).complex_continue = true;
@@ -5610,6 +5641,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			emit_instruction(op);
 	}
 
+	flush_undeclared_variables(block);
 	bool emit_next_block = true;
 
 	// Handle end of block.
@@ -5637,15 +5669,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		if (select_branch_to_true_block)
 			branch(block.self, block.true_block);
 		else
-		{
-			flush_undeclared_variables();
 			branch(block.self, block.condition, block.true_block, block.false_block);
-		}
 		break;
 
 	case SPIRBlock::MultiSelect:
 	{
-		flush_undeclared_variables();
 		auto &type = expression_type(block.condition);
 		bool uint32_t_case = type.basetype == SPIRType::UInt;
 

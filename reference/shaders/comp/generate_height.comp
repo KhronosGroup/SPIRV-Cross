@@ -19,7 +19,6 @@ layout(binding = 1, std430) buffer HeightmapFFT
 uvec2 workaround_mix(uvec2 a, uvec2 b, bvec2 sel)
 {
     uint _137;
-    uint _148;
     if (sel.x)
     {
         _137 = b.x;
@@ -29,6 +28,7 @@ uvec2 workaround_mix(uvec2 a, uvec2 b, bvec2 sel)
         _137 = a.x;
     }
     uint _147 = _137;
+    uint _148;
     if (sel.y)
     {
         _148 = b.y;
