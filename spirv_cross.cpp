@@ -1136,7 +1136,7 @@ void Compiler::parse(const Instruction &instruction)
 		auto &e = itr.first->second;
 
 		// Strings need nul-terminator and consume the whole word.
-		uint32_t strlen_words = (e.name.size() + 1 + 3) >> 2;
+		uint32_t strlen_words = uint32_t((e.name.size() + 1 + 3) >> 2);
 		e.interface_variables.insert(end(e.interface_variables), ops + strlen_words + 2, ops + instruction.length);
 
 		// Set the name of the entry point in case OpName is not provided later
@@ -2507,13 +2507,13 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	if (texture_itr != end(caller.arguments))
 	{
 		param.global_image = false;
-		param.image_id = texture_itr - begin(caller.arguments);
+		param.image_id = uint32_t(texture_itr - begin(caller.arguments));
 	}
 
 	if (sampler_itr != end(caller.arguments))
 	{
 		param.global_sampler = false;
-		param.sampler_id = sampler_itr - begin(caller.arguments);
+		param.sampler_id = uint32_t(sampler_itr - begin(caller.arguments));
 	}
 
 	if (param.global_image && param.global_sampler)
@@ -2897,7 +2897,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 	// First, we map out all variable access within a function.
 	// Essentially a map of block -> { variables accessed in the basic block }
-	traverse_all_reachable_opcodes(entry, handler);
+	this->traverse_all_reachable_opcodes(entry, handler);
 
 	// Compute the control flow graph for this function.
 	CFG cfg(*this, entry);
@@ -2920,7 +2920,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		// will be completely eliminated.
 		if (dominating_block)
 		{
-			auto &block = get<SPIRBlock>(dominating_block);
+			auto &block = this->get<SPIRBlock>(dominating_block);
 			block.dominated_variables.push_back(var.first);
 		}
 	}

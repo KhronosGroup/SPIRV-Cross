@@ -759,7 +759,7 @@ uint32_t CompilerGLSL::type_to_std430_array_stride(const SPIRType &type, uint64_
 uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 {
 	if (!type.array.empty())
-		return to_array_size_literal(type, type.array.size() - 1) * type_to_std430_array_stride(type, flags);
+		return to_array_size_literal(type, uint32_t(type.array.size()) - 1) * type_to_std430_array_stride(type, flags);
 
 	const uint32_t base_alignment = type_to_std430_base_size(type);
 	uint32_t size = 0;
@@ -2271,8 +2271,8 @@ string CompilerGLSL::to_combined_image_sampler(uint32_t image_id, uint32_t samp_
 		// If any parameter originates from a parameter, we will find it in our argument list.
 		bool global_image = image_itr == end(args);
 		bool global_sampler = sampler_itr == end(args);
-		uint32_t iid = global_image ? image_id : (image_itr - begin(args));
-		uint32_t sid = global_sampler ? samp_id : (sampler_itr - begin(args));
+		uint32_t iid = global_image ? image_id : uint32_t(image_itr - begin(args));
+		uint32_t sid = global_sampler ? samp_id : uint32_t(sampler_itr - begin(args));
 
 		auto &combined = current_function->combined_parameters;
 		auto itr = find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
@@ -4843,7 +4843,7 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 		return "";
 
 	string res;
-	for (size_t i = type.array.size(); i; i--)
+	for (auto i = uint32_t(type.array.size()); i; i--)
 	{
 		res += "[";
 		res += to_array_size(type, i - 1);
