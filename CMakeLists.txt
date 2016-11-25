@@ -55,11 +55,17 @@ target_include_directories(spirv-cross-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 # However, we require the C++11 dialect.
 if (NOT "${MSVC}")
   set(spirv-compiler-options -std=c++11 -Wall -Wextra -Werror -Wshadow)
+  set(spirv-compiler-defines __STDC_LIMIT_MACROS)
   target_compile_options(spirv-cross-core PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross-glsl PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross-msl PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross-cpp PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross PRIVATE ${spirv-compiler-options})
+  target_compile_definitions(spirv-cross-core PRIVATE ${spirv-compiler-defines})
+  target_compile_definitions(spirv-cross-glsl PRIVATE ${spirv-compiler-defines})
+  target_compile_definitions(spirv-cross-msl PRIVATE ${spirv-compiler-defines})
+  target_compile_definitions(spirv-cross-cpp PRIVATE ${spirv-compiler-defines})
+  target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines})
 endif(NOT "${MSVC}")
 
 
