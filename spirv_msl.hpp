@@ -21,6 +21,10 @@
 #include <set>
 #include <vector>
 
+#ifndef UINT32_MAX
+#define UINT32_MAX ((uint32_t)-1)
+#endif
+
 namespace spirv_cross
 {
 
