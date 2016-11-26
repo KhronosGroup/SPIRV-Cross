@@ -2970,7 +2970,19 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 {
 	string expr;
 	if (!chain_only)
+	{
 		expr = to_expression(base);
+		
+		// Avoid replace_fragment_output scrambling array access
+		if (expr.substr(0, 11) == "gl_FragData")
+		{
+			size_t bracket_pos = expr.find_last_of('[');
+			if (bracket_pos != string::npos)
+			{
+				expr = expr.substr(0, bracket_pos);
+			}
+		}
+	}
 
 	const auto *type = &expression_type(base);
 
