@@ -1118,11 +1118,15 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 {
 	string arg_str = CompilerGLSL::to_func_call_arg(id);
 
-	// Manufacture automatic sampler arg for SampledImage texture.
-	auto &var = get<SPIRVariable>(id);
-	auto &type = get<SPIRType>(var.basetype);
-	if (type.basetype == SPIRType::SampledImage)
-		arg_str += ", " + to_sampler_expression(id);
+	// Manufacture automatic sampler arg if the arg is a SampledImage texture.
+	Variant &id_v = ids[id];
+	if (id_v.get_type() == TypeVariable)
+	{
+		auto &var = id_v.get<SPIRVariable>();
+		auto &type = get<SPIRType>(var.basetype);
+		if (type.basetype == SPIRType::SampledImage)
+			arg_str += ", " + to_sampler_expression(id);
+	}
 
 	return arg_str;
 }

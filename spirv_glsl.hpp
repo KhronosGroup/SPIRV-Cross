@@ -115,7 +115,12 @@ public:
 	{
 		options = opts;
 	}
+
 	std::string compile() override;
+
+	// Returns the current string held in the conversion buffer. Useful for
+	// capturing what has been converted so far when compile() throws an error.
+	std::string get_partial_source();
 
 	// Adds a line to be added right after #version in GLSL backend.
 	// This is useful for enabling custom extensions which are outside the scope of SPIRV-Cross.

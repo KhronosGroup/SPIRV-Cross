@@ -289,6 +289,11 @@ string CompilerGLSL::compile()
 	return buffer->str();
 }
 
+std::string CompilerGLSL::get_partial_source()
+{
+	return buffer->str();
+}
+
 void CompilerGLSL::emit_header()
 {
 	auto &execution = get_entry_point();
@@ -2128,7 +2133,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
-	if (op == "textureLod" || op == "textureProjLod") 
+	if (op == "textureLod" || op == "textureProjLod")
 	{
 		if (is_legacy_es())
 			require_extension("GL_EXT_shader_texture_lod");
