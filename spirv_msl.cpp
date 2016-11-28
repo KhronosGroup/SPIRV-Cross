@@ -252,7 +252,12 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			uint32_t type_id = get<SPIRVariable>(arg_id).basetype;
 			func.add_parameter(type_id, next_id);
 			set<SPIRVariable>(next_id, type_id, StorageClassFunction);
-			set_name(next_id, get_name(arg_id));
+
+			// Ensure both the existing and new variables have the same name, and the name is valid
+			string vld_name = ensure_valid_name(to_name(arg_id), "v");
+			set_name(arg_id, vld_name);
+			set_name(next_id, vld_name);
+
 			meta[next_id].decoration.qualified_alias = meta[arg_id].decoration.qualified_alias;
 			next_id++;
 		}
@@ -438,7 +443,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 				ib_type.member_types.push_back(membertype.self);
 
 				// Give the member a name, and assign it an offset within the struct.
-				string mbr_name = ensure_member_name(to_qualified_member_name(type, i));
+				string mbr_name = ensure_valid_name(to_qualified_member_name(type, i), "m");
 				set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
 				struct_size = get_declared_struct_size(ib_type);
@@ -473,7 +478,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			ib_type.member_types.push_back(type.self);
 
 			// Give the member a name, and assign it an offset within the struct.
-			string mbr_name = ensure_member_name(to_name(p_var->self));
+			string mbr_name = ensure_valid_name(to_name(p_var->self), "m");
 			set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
 			struct_size = get_declared_struct_size(ib_type);
@@ -1118,11 +1123,15 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 {
 	string arg_str = CompilerGLSL::to_func_call_arg(id);
 
-	// Manufacture automatic sampler arg for SampledImage texture.
-	auto &var = get<SPIRVariable>(id);
-	auto &type = get<SPIRType>(var.basetype);
-	if (type.basetype == SPIRType::SampledImage)
-		arg_str += ", " + to_sampler_expression(id);
+	// Manufacture automatic sampler arg if the arg is a SampledImage texture.
+	Variant &id_v = ids[id];
+	if (id_v.get_type() == TypeVariable)
+	{
+		auto &var = id_v.get<SPIRVariable>();
+		auto &type = get<SPIRType>(var.basetype);
+		if (type.basetype == SPIRType::SampledImage)
+			arg_str += ", " + to_sampler_expression(id);
+	}
 
 	return arg_str;
 }
@@ -1592,14 +1601,14 @@ string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t inde
 	return join(to_name(type.self), "_", mbr_name);
 }
 
-// Ensures that the specified struct member name is permanently usable by prepending
-// an alpha char if the first chars are _ and a digit, which indicate a transient name.
-string CompilerMSL::ensure_member_name(string mbr_name)
+// Ensures that the specified name is permanently usable by prepending a prefix
+// if the first chars are _ and a digit, which indicate a transient name.
+string CompilerMSL::ensure_valid_name(string name, string pfx)
 {
-	if (mbr_name.size() >= 2 && mbr_name[0] == '_' && isdigit(mbr_name[1]))
-		return join("m", mbr_name);
+	if (name.size() >= 2 && name[0] == '_' && isdigit(name[1]))
+		return join(pfx, name);
 	else
-		return mbr_name;
+		return name;
 }
 
 // Returns an MSL string describing  the SPIR-V type
@@ -1715,7 +1724,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 			img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
 			break;
 		case spv::Dim3D:
-			img_type_name += "texture3D";
+			img_type_name += "texture3d";
 			break;
 		case spv::DimCube:
 			img_type_name += (img_type.arrayed ? "texturecube_array" : "texturecube");
