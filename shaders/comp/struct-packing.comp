@@ -25,6 +25,11 @@ struct S3
     float b;
 };
 
+struct S4
+{
+	vec2 c;
+};
+
 struct Content
 {
     S0 m0s[1];
@@ -35,6 +40,8 @@ struct Content
     S2 m2;
     S3 m3;
     float m4;
+
+	S4 m3s[8];
 };
 
 layout(binding = 1, std430) buffer SSBO1
