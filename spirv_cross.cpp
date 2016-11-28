@@ -2115,7 +2115,14 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 		// Recurse.
 		uint32_t last = uint32_t(struct_type.member_types.size() - 1);
 		uint32_t offset = type_struct_member_offset(struct_type, last);
-		size_t size = get_declared_struct_size(get<SPIRType>(struct_type.member_types.back()));
+		size_t size;
+
+		// If we have an array of structs inside our struct, handle that with array strides instead.
+		auto &last_type = get<SPIRType>(struct_type.member_types.back());
+		if (last_type.array.empty())
+			size = get_declared_struct_size(last_type);
+		else
+			size = type_struct_member_array_stride(struct_type, last) * last_type.array.back();
 		return offset + size;
 	}
 }
