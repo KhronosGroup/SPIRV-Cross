@@ -196,10 +196,12 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		bool is_push_constant = compiler.get_storage_class(res.id) == StorageClassPushConstant;
 		bool is_block = (compiler.get_decoration_mask(type.self) &
 		                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+		bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == StorageClassUniform ||
+		                                   compiler.get_storage_class(res.id) == StorageClassUniformConstant);
 		uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
 
 		uint32_t block_size = 0;
-		if (is_block)
+		if (is_sized_block)
 			block_size = compiler.get_declared_struct_size(compiler.get_type(res.base_type_id));
 
 		string array;
@@ -217,7 +219,7 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
 		if (mask & (1ull << DecorationInputAttachmentIndex))
 			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
-		if (is_block)
+		if (is_sized_block)
 			fprintf(stderr, " (BlockSize : %u bytes)", block_size);
 		fprintf(stderr, "\n");
 	}
