@@ -19,6 +19,6 @@ layout(binding = 0, std430) buffer SSBO
 void main()
 {
     uint ident = gl_GlobalInvocationID.x;
-    _23.out_data[ident].m = (_30.in_data[ident].m * _30.in_data[ident].m);
+    _23.out_data[ident].m = _30.in_data[ident].m * _30.in_data[ident].m;
 }
 

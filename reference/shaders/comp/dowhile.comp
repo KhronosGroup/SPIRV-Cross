@@ -21,9 +21,9 @@ void main()
     vec4 idat = _28.in_data[ident];
     do
     {
-        idat = (_28.mvp * idat);
-        i = (i + 1);
-    } while ((i < 16));
+        idat = _28.mvp * idat;
+        i = i + 1;
+    } while (i < 16);
     _52.out_data[ident] = idat;
 }
 

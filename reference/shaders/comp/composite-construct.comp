@@ -19,7 +19,7 @@ layout(binding = 1, std430) buffer SSBO1
 
 vec4 summe(vec4 values[3][2])
 {
-    return (((values[0][0] + values[2][1]) + values[0][1]) + values[1][0]);
+    return ((values[0][0] + values[2][1]) + values[0][1]) + values[1][0];
 }
 
 void main()

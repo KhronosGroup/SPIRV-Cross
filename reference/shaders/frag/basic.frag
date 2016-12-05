@@ -10,6 +10,6 @@ in vec2 vTex;
 
 void main()
 {
-    FragColor = (vColor * texture(uTex, vTex));
+    FragColor = vColor * texture(uTex, vTex);
 }
 

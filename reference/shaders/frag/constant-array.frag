@@ -13,7 +13,7 @@ layout(location = 0) in mediump flat int index;
 
 vec4 resolve(Foobar f)
 {
-    return vec4((f.a + f.b));
+    return vec4(f.a + f.b);
 }
 
 void main()
@@ -23,6 +23,6 @@ void main()
     Foobar param = Foobar(10.0, 20.0);
     Foobar indexable_2[2] = Foobar[](Foobar(10.0, 40.0), Foobar(90.0, 70.0));
     Foobar param_1 = indexable_2[index];
-    FragColor = (((indexable[index] + indexable_1[index][(index + 1)]) + resolve(param)) + resolve(param_1));
+    FragColor = ((indexable[index] + (indexable_1[index][index + 1])) + resolve(param)) + resolve(param_1);
 }
 

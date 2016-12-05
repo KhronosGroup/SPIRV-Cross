@@ -21,6 +21,6 @@ layout(location = 0) out vec4 FragColor;
 
 void main()
 {
-    FragColor = (ubo1.foo.foo[0] + ubo0.foo.foo[0]);
+    FragColor = ubo1.foo.foo[0] + ubo0.foo.foo[0];
 }
 

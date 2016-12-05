@@ -18,13 +18,13 @@ void main()
     vec4 idat = _24.in_data[ident];
     int k = 0;
     uint i = 0u;
-    if ((idat.y == 20.0))
+    if (idat.y == 20.0)
     {
         do
         {
-            k = (k * 2);
-            i = (i + uint(1));
-        } while ((i < ident));
+            k = k * 2;
+            i = i + uint(1);
+        } while (i < ident);
     }
     switch (k)
     {
@@ -32,8 +32,8 @@ void main()
         {
             for (;;)
             {
-                i = (i + uint(1));
-                if ((i > 10u))
+                i = i + uint(1);
+                if (i > 10u)
                 {
                     break;
                 }
@@ -45,8 +45,8 @@ void main()
         {
             for (;;)
             {
-                i = (i + 2u);
-                if ((i > 20u))
+                i = i + 2u;
+                if (i > 20u)
                 {
                     break;
                 }
@@ -55,51 +55,51 @@ void main()
             break;
         }
     }
-    while ((k < 10))
+    while (k < 10)
     {
-        idat = (idat * 2.0);
-        k = (k + 1);
+        idat = idat * 2.0;
+        k = k + 1;
     }
     uint i_1 = 0u;
-    for (; (i_1 < 16u); i_1 = (i_1 + uint(1)), k = (k + 1))
+    for (; i_1 < 16u; i_1 = i_1 + uint(1), k = k + 1)
     {
         uint j = 0u;
-        for (; (j < 30u); j = (j + uint(1)))
+        for (; j < 30u; j = j + uint(1))
         {
-            idat = (_24.mvp * idat);
+            idat = _24.mvp * idat;
         }
     }
     k = 0;
     for (;;)
     {
-        k = (k + 1);
-        if ((k > 10))
+        k = k + 1;
+        if (k > 10)
         {
-            k = (k + 2);
+            k = k + 2;
         }
         else
         {
-            k = (k + 3);
+            k = k + 3;
             continue;
         }
-        k = (k + 10);
+        k = k + 10;
         continue;
     }
     k = 0;
     do
     {
-        k = (k + 1);
-    } while ((k > 10));
+        k = k + 1;
+    } while (k > 10);
     int l = 0;
     for (;;)
     {
-        if ((l == 5))
+        if (l == 5)
         {
-            l = (l + 1);
+            l = l + 1;
             continue;
         }
-        idat = (idat + vec4(1.0));
-        l = (l + 1);
+        idat = idat + vec4(1.0);
+        l = l + 1;
         continue;
     }
     _177.out_data[ident] = idat;

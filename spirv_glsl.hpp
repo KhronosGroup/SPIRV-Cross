@@ -288,7 +288,7 @@ protected:
 	void emit_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	bool expression_is_forwarded(uint32_t id);
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
-	                        bool extra_parens, bool suppress_usage_tracking = false);
+	                        bool suppress_usage_tracking = false);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
 	                         bool chain_only = false);
 
@@ -297,6 +297,7 @@ protected:
 	std::string declare_temporary(uint32_t type, uint32_t id);
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id);
+	std::string to_enclosed_expression(uint32_t id);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);

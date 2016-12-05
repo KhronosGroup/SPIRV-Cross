@@ -16,6 +16,6 @@ layout(location = 7) in sample float i;
 
 void main()
 {
-    FragColor = (((((((vec4(vin.f) + vin.g) + vec4(float(vin.h))) + vec4(vin.i)) + vec4(f)) + g) + vec4(float(h))) + vec4(i));
+    FragColor = ((((((vec4(vin.f) + vin.g) + vec4(float(vin.h))) + vec4(vin.i)) + vec4(f)) + g) + vec4(float(h))) + vec4(i);
 }
 

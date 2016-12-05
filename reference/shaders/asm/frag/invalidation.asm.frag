@@ -10,6 +10,6 @@ void main()
     float b = v1;
     float _17 = a;
     a = v1;
-    FragColor = ((_17 + b) * b);
+    FragColor = (_17 + b) * b;
 }
 
