@@ -218,8 +218,6 @@ struct SPIRType : IVariant
 
 	std::vector<uint32_t> member_types;
 
-	bool is_packed = false; // Tightly packed in memory (no alignment padding)
-
 	struct Image
 	{
 		uint32_t type;

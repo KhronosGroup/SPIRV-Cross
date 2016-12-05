@@ -142,7 +142,7 @@ protected:
 	std::string get_vtx_idx_var_name(bool per_instance);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
-	uint32_t pad_to_offset(SPIRType &struct_type, uint32_t offset, uint32_t struct_size);
+	uint32_t pad_to_offset(SPIRType &struct_type, bool is_indxd_vtx_input, uint32_t offset, uint32_t struct_size);
 	SPIRType &get_pad_type(uint32_t pad_len);
 	size_t get_declared_type_size(const SPIRType &type) const;
 	size_t get_declared_type_size(const SPIRType &type, uint64_t dec_mask) const;
@@ -161,20 +161,28 @@ protected:
 	std::string sampler_name_suffix = "Smplr";
 };
 
-// Sorts the members of a SPIRType and associated Meta info based on the location
-// and builtin decorations of the members. Members are rearranged by location,
-// with all builtin members appearing a the end.
-struct MemberSorterByLocation
+// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
+// aspect, which defines which aspect of the struct members will be used to sort them.
+// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
+struct MemberSorter
 {
+	enum SortAspect
+	{
+		Location,
+		Offset,
+	};
+
 	void sort();
 	bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
-	MemberSorterByLocation(SPIRType &t, Meta &m)
+	MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
 	    : type(t)
 	    , meta(m)
+	    , sort_aspect(sa)
 	{
 	}
 	SPIRType &type;
 	Meta &meta;
+	SortAspect sort_aspect;
 };
 }
 

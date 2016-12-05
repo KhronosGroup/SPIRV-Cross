@@ -39,20 +39,14 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	vtx_attrs_by_location.clear();
 	if (p_vtx_attrs)
 		for (auto &va : *p_vtx_attrs)
-		{
-			va.used_by_shader = false;
 			vtx_attrs_by_location[va.location] = &va;
-		}
 
 	resource_bindings.clear();
 	if (p_res_bindings)
 	{
 		resource_bindings.reserve(p_res_bindings->size());
 		for (auto &rb : *p_res_bindings)
-		{
-			rb.used_by_shader = false;
 			resource_bindings.push_back(&rb);
-		}
 	}
 
 	extract_builtins();
@@ -382,12 +376,21 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 	// Set the binding of the variable and mark if packed (used only with vertex inputs)
 	auto &var_dec = meta[ib_var_id].decoration;
 	var_dec.binding = vtx_binding;
-	ib_type.is_packed = (execution.model == ExecutionModelVertex && storage == StorageClassInput &&
-	                     var_dec.binding != msl_config.vtx_attr_stage_in_binding);
+
+	// Track whether this is vertex input that is indexed, as opposed to stage_in
+	bool is_indxd_vtx_input = (execution.model == ExecutionModelVertex && storage == StorageClassInput &&
+	                           var_dec.binding != msl_config.vtx_attr_stage_in_binding);
 
 	string ib_var_ref;
+
 	if (storage == StorageClassInput)
-		ib_var_ref = ib_type.is_packed ? stage_in_var_name + convert_to_string(vtx_binding) : stage_in_var_name;
+	{
+		ib_var_ref = stage_in_var_name;
+
+		// Multiple vertex input bindings are available, so qualify each with the Metal buffer index
+		if (execution.model == ExecutionModelVertex)
+			ib_var_ref += convert_to_string(vtx_binding);
+	}
 
 	if (storage == StorageClassOutput)
 	{
@@ -413,10 +416,10 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 	bool first_elem = true;
 	for (auto p_var : vars)
 	{
-		// For packed vertex attributes, copy the attribute characteristics to the parent
+		// For index-accessed vertex attributes, copy the attribute characteristics to the parent
 		// structure (all components have same vertex attribute characteristics except offset),
 		// and add a reference to the vertex index builtin to the parent struct variable name.
-		if (ib_type.is_packed && first_elem)
+		if (is_indxd_vtx_input && first_elem)
 		{
 			auto &elem_dec = meta[p_var->self].decoration;
 			var_dec.binding = elem_dec.binding;
@@ -435,7 +438,8 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			{
 				// If needed, add a padding member to the struct to align to the next member's offset.
 				uint32_t mbr_offset = get_member_decoration(type.self, i, DecorationOffset);
-				struct_size = pad_to_offset(ib_type, (var_dec.offset + mbr_offset), uint32_t(struct_size));
+				struct_size =
+				    pad_to_offset(ib_type, is_indxd_vtx_input, (var_dec.offset + mbr_offset), uint32_t(struct_size));
 
 				// Add a reference to the member to the interface struct.
 				auto &membertype = get<SPIRType>(member);
@@ -471,7 +475,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 		else
 		{
 			// If needed, add a padding member to the struct to align to the next member's offset.
-			struct_size = pad_to_offset(ib_type, var_dec.offset, uint32_t(struct_size));
+			struct_size = pad_to_offset(ib_type, is_indxd_vtx_input, var_dec.offset, uint32_t(struct_size));
 
 			// Add a reference to the variable type to the interface struct.
 			uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -501,12 +505,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 		}
 	}
 
-	if (!ib_type.is_packed)
-	{
-		// Sort the members of the interface structure, unless this is packed input
-		MemberSorterByLocation memberSorter(ib_type, meta[ib_type.self]);
-		memberSorter.sort();
-	}
+	// Sort the members of the interface structure by their offsets
+	MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Offset);
+	memberSorter.sort();
 
 	return ib_var_id;
 }
@@ -592,6 +593,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
+
+	// ALU
+	case OpFMod:
+		BFOP(fmod);
+		break;
+
 	// Comparisons
 	case OpIEqual:
 	case OpLogicalEqual:
@@ -1167,9 +1174,8 @@ void CompilerMSL::emit_fixup()
 // Returns a declaration for a structure member.
 string CompilerMSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index)
 {
-	bool should_pack = type.is_packed && is_vector(membertype);
-	return join((should_pack ? "packed_" : ""), type_to_glsl(membertype), " ", to_member_name(type, index),
-	            type_to_array_glsl(membertype), member_attribute_qualifier(type, index));
+	return join(type_to_glsl(membertype), " ", to_member_name(type, index), type_to_array_glsl(membertype),
+	            member_attribute_qualifier(type, index));
 }
 
 // Return a MSL qualifier for the specified function attribute member
@@ -1271,13 +1277,21 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	return "";
 }
 
-// Returns the location decoration of the member with the specified index in the specified
-// type, or the value of the member index if the location has not been specified.
-// This function assumes the members are ordered in their location order.
-// This can be ensured using the MemberSorterByLocation class.
+// Returns the location decoration of the member with the specified index in the specified type.
+// If the location of the member has been explicitly set, that location is used. If not, this
+// function assumes the members are ordered in their location order, and simply returns the
+// index as the location.
 uint32_t CompilerMSL::get_ordered_member_location(uint32_t type_id, uint32_t index)
 {
-	return max(get_member_decoration(type_id, index, DecorationLocation), index);
+	auto &m = meta.at(type_id);
+	if (index < m.members.size())
+	{
+		auto &dec = m.members[index];
+		if (dec.decoration_flags & (1ull << DecorationLocation))
+			return dec.location;
+	}
+
+	return index;
 }
 
 string CompilerMSL::constant_expression(const SPIRConstant &c)
@@ -1526,13 +1540,14 @@ string CompilerMSL::get_vtx_idx_var_name(bool per_instance)
 	return "missing_vtx_idx_var";
 }
 
-// If the struct is packed, and the offset is greater than the current size of the struct,
-// appends a padding member to the struct, and returns the offset to use for the next member,
-// which is the offset provided. If the struct is not packed, or the offset is not greater
-// than the struct size, no padding is added, and the struct size is returned.
-uint32_t CompilerMSL::pad_to_offset(SPIRType &struct_type, uint32_t offset, uint32_t struct_size)
+// If the struct contains indexed vertex input, and the offset is greater than the current
+// size of the struct, appends a padding member to the struct, and returns the offset to
+// use for the next member, which is the offset provided. Otherwise, no padding is added,
+// and the struct size is returned.
+uint32_t CompilerMSL::pad_to_offset(SPIRType &struct_type, bool is_indxd_vtx_input, uint32_t offset,
+                                    uint32_t struct_size)
 {
-	if (!(struct_type.is_packed && offset > struct_size))
+	if (!(is_indxd_vtx_input && offset > struct_size))
 		return struct_size;
 
 	auto &pad_type = get_pad_type(offset - struct_size);
@@ -1962,7 +1977,7 @@ size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_ma
 }
 
 // Sort both type and meta member content based on builtin status (put builtins at end), then by location.
-void MemberSorterByLocation::sort()
+void MemberSorter::sort()
 {
 	// Create a temporary array of consecutive member indices and sort it base on
 	// how the members should be reordered, based on builtin and location meta info.
@@ -1984,12 +1999,20 @@ void MemberSorterByLocation::sort()
 }
 
 // Sort first by builtin status (put builtins at end), then by location.
-bool MemberSorterByLocation::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
+bool MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 {
 	auto &mbr_meta1 = meta.members[mbr_idx1];
 	auto &mbr_meta2 = meta.members[mbr_idx2];
 	if (mbr_meta1.builtin != mbr_meta2.builtin)
 		return mbr_meta2.builtin;
 	else
-		return mbr_meta1.location < mbr_meta2.location;
+		switch (sort_aspect)
+		{
+		case Location:
+			return mbr_meta1.location < mbr_meta2.location;
+		case Offset:
+			return mbr_meta1.offset < mbr_meta2.offset;
+		default:
+			return false;
+		}
 }
