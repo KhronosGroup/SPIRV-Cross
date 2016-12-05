@@ -39,20 +39,14 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	vtx_attrs_by_location.clear();
 	if (p_vtx_attrs)
 		for (auto &va : *p_vtx_attrs)
-		{
-			va.used_by_shader = false;
 			vtx_attrs_by_location[va.location] = &va;
-		}
 
 	resource_bindings.clear();
 	if (p_res_bindings)
 	{
 		resource_bindings.reserve(p_res_bindings->size());
 		for (auto &rb : *p_res_bindings)
-		{
-			rb.used_by_shader = false;
 			resource_bindings.push_back(&rb);
-		}
 	}
 
 	extract_builtins();
