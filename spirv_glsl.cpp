@@ -1519,7 +1519,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 	{
 		auto &e = get<SPIRExpression>(id);
 		if (e.base_expression)
-			return to_expression(e.base_expression) + e.expression;
+			return to_enclosed_expression(e.base_expression) + e.expression;
 		else
 			return e.expression;
 	}
