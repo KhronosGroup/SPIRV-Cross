@@ -923,7 +923,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
 	// Add texture coordinates
 	bool forward = should_forward(coord);
-	auto coord_expr = to_expression(coord);
+	auto coord_expr = to_enclosed_expression(coord);
 	string tex_coords = coord_expr;
 	string array_coord;
 

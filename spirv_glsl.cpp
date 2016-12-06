@@ -1454,6 +1454,32 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 	force_recompile = true;
 }
 
+// Sometimes we proactively enclosed an expression where it turns out we might have not needed it after all.
+void CompilerGLSL::strip_enclosed_expression(string &expr)
+{
+	if (expr.size() < 2 || expr.front() != '(' || expr.back() != ')')
+		return;
+
+	// Have to make sure that our first and last parens actually enclose everything inside it.
+	uint32_t paren_count = 0;
+	for (auto &c : expr)
+	{
+		if (c == '(')
+			paren_count++;
+		else if (c == ')')
+		{
+			paren_count--;
+
+			// If we hit 0 and this is not the final char, our first and final parens actually don't
+			// enclose the expression, and we cannot strip, e.g.: (a + b) * (c + d).
+			if (paren_count == 0 && &c != &expr.back())
+				return;
+		}
+	}
+	expr.pop_back();
+	expr.erase(begin(expr));
+}
+
 // Just like to_expression except that we enclose the expression inside parentheses if needed.
 string CompilerGLSL::to_enclosed_expression(uint32_t id)
 {
@@ -1985,7 +2011,8 @@ void CompilerGLSL::emit_unary_op(uint32_t result_type, uint32_t result_id, uint3
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(to_enclosed_expression(op0), " ", op, " ", to_enclosed_expression(op1)), forward);
+	emit_op(result_type, result_id, join(to_enclosed_expression(op0), " ", op, " ", to_enclosed_expression(op1)),
+	        forward);
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{
@@ -2256,7 +2283,8 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		// Just implement it as ternary expressions.
 		string expr;
 		if (lerptype.vecsize == 1)
-			expr = join(to_enclosed_expression(lerp), " ? ", to_enclosed_expression(right), " : ", to_enclosed_expression(left));
+			expr = join(to_enclosed_expression(lerp), " ? ", to_enclosed_expression(right), " : ",
+			            to_enclosed_expression(left));
 		else
 		{
 			auto swiz = [this](uint32_t expression, uint32_t i) {
@@ -3305,6 +3333,7 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 	uint32_t base = 0;
 	bool swizzle_optimization = false;
 	string op;
+	string subop;
 
 	for (uint32_t i = 0; i < length; i++)
 	{
@@ -3316,7 +3345,7 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 		{
 			// Only supposed to be used for vector swizzle -> scalar.
 			assert(!e->expression.empty() && e->expression.front() == '.');
-			op += e->expression.substr(1, string::npos);
+			subop += e->expression.substr(1, string::npos);
 			swizzle_optimization = true;
 		}
 		else
@@ -3330,7 +3359,7 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 			if (swizzle_optimization)
 			{
 				if (backend.swizzle_is_function)
-					op += "()";
+					subop += "()";
 
 				// Don't attempt to remove unity swizzling if we managed to remove duplicate swizzles.
 				// The base "foo" might be vec4, while foo.xyz is vec3 (OpVectorShuffle) and looks like a vec3 due to the .xyz tacked on.
@@ -3342,14 +3371,20 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 				// Case 2:
 				//  foo.xyz: Duplicate swizzle won't kick in.
 				//           If foo is vec3, we can remove xyz, giving just foo.
-				if (!remove_duplicate_swizzle(op))
-					remove_unity_swizzle(base, op);
+				if (!remove_duplicate_swizzle(subop))
+					remove_unity_swizzle(base, subop);
+
+				// Strips away redundant parens if we created them during component extraction.
+				strip_enclosed_expression(subop);
 				swizzle_optimization = false;
+				op += subop;
 			}
+			else
+				op += subop;
 
 			if (i)
 				op += ", ";
-			op += to_expression(elems[i]);
+			subop = to_expression(elems[i]);
 		}
 
 		base = e ? e->base_expression : 0;
@@ -3358,12 +3393,15 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 	if (swizzle_optimization)
 	{
 		if (backend.swizzle_is_function)
-			op += "()";
+			subop += "()";
 
-		if (!remove_duplicate_swizzle(op))
-			remove_unity_swizzle(base, op);
+		if (!remove_duplicate_swizzle(subop))
+			remove_unity_swizzle(base, subop);
+		// Strips away redundant parens if we created them during component extraction.
+		strip_enclosed_expression(subop);
 	}
 
+	op += subop;
 	return op;
 }
 
