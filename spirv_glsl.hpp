@@ -138,6 +138,12 @@ public:
 	// require_extension("GL_KHR_my_extension");
 	void require_extension(const std::string &ext);
 
+	// Legacy GLSL compatibility method.
+	// Takes a uniform or storage buffer variable and flattens it into a vec4 array[N]; array instead.
+	// For this to work, all types in the block must not be integers or vector of integers.
+	// The name of the uniform array will be the same as the interface block name.
+	void flatten_buffer_block(uint32_t id);
+
 protected:
 	void reset();
 	void emit_function(SPIRFunction &func, uint64_t return_flags);
@@ -265,6 +271,7 @@ protected:
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
+	void emit_flattened_buffer_block(const SPIRVariable &type);
 	void emit_push_constant_block(const SPIRVariable &var);
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
@@ -307,6 +314,13 @@ protected:
 	                        bool suppress_usage_tracking = false);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
 	                         bool chain_only = false, bool *need_transpose = nullptr);
+	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, bool *need_transpose);
+
+	void flattened_access_chain(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	void flattened_access_chain_struct(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	void flattened_access_chain_matrix(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	void flattened_access_chain_vector_scalar(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	uint32_t flattened_access_chain_offset(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, uint32_t offset);
 
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);
@@ -354,6 +368,8 @@ protected:
 	uint32_t indent = 0;
 
 	std::unordered_set<uint32_t> emitted_functions;
+
+	std::unordered_set<uint32_t> flattened_buffer_blocks;
 
 	// Usage tracking. If a temporary is used more than once, use the temporary instead to
 	// avoid AST explosion when SPIRV is generated with pure SSA and doesn't write stuff to variables.
