@@ -2,7 +2,7 @@
 
 SPIRV-Cross is a tool designed for parsing and converting SPIR-V to other shader languages.
 
-![travis](https://travis-ci.org/KhronosGroup/SPIRV-Cross.svg?branch=master)
+[![Build Status](https://travis-ci.org/KhronosGroup/SPIRV-Cross.svg?branch=master)](https://travis-ci.org/KhronosGroup/SPIRV-Cross)
 
 ## Features
 
