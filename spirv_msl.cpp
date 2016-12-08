@@ -660,9 +660,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			case Dim1D:
 				if (img_type.arrayed)
 					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_array_size())"),
-					        false, false);
+					        false);
 				else
-					emit_op(result_type, id, join(img_exp, ".get_width()"), true, false);
+					emit_op(result_type, id, join(img_exp, ".get_width()"), true);
 				break;
 
 			case Dim2D:
@@ -670,16 +670,16 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				if (img_type.arrayed)
 					emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ",
 					                              img_exp, ".get_array_size())"),
-					        false, false);
+					        false);
 				else
 					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_height())"),
-					        false, false);
+					        false);
 				break;
 
 			case Dim3D:
 				emit_op(result_type, id,
 				        join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_depth())"),
-				        false, false);
+				        false);
 				break;
 
 			default:
@@ -923,7 +923,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
 	// Add texture coordinates
 	bool forward = should_forward(coord);
-	auto coord_expr = to_expression(coord);
+	auto coord_expr = to_enclosed_expression(coord);
 	string tex_coords = coord_expr;
 	string array_coord;
 
@@ -1114,7 +1114,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
 	expr += ")";
 
-	emit_op(result_type, id, expr, forward, false);
+	emit_op(result_type, id, expr, forward);
 }
 
 // Establish sampled image as expression object and assign the sampler to it.

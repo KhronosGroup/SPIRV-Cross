@@ -44,6 +44,6 @@ void main()
     s1.a = _55.s1s[gl_GlobalInvocationID.x].a;
     S0 param = s0;
     S1 param_1 = s1;
-    _66.outputs[gl_GlobalInvocationID.x] = (overload(param) + overload(param_1));
+    _66.outputs[gl_GlobalInvocationID.x] = overload(param) + overload(param_1);
 }
 

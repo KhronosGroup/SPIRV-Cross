@@ -20,7 +20,7 @@ void main()
 {
     uint ident = gl_GlobalInvocationID.x;
     float idata = _22.in_data[ident];
-    if ((idata > 12.0))
+    if (idata > 12.0)
     {
         uint _45 = atomicAdd(_41.count, 1u);
         _38.out_data[_45] = idata;

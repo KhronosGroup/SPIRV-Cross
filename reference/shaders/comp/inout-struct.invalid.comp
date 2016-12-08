@@ -27,23 +27,23 @@ layout(binding = 2, std430) buffer SSBO3
 void baz(out Foo foo)
 {
     uint ident = gl_GlobalInvocationID.x;
-    foo.a = indata.data[((4u * ident) + 0u)];
-    foo.b = indata.data[((4u * ident) + 1u)];
-    foo.c = indata.data[((4u * ident) + 2u)];
-    foo.d = indata.data[((4u * ident) + 3u)];
+    foo.a = indata.data[(4u * ident) + 0u];
+    foo.b = indata.data[(4u * ident) + 1u];
+    foo.c = indata.data[(4u * ident) + 2u];
+    foo.d = indata.data[(4u * ident) + 3u];
 }
 
 void meow(inout Foo foo)
 {
-    foo.a = (foo.a + vec4(10.0));
-    foo.b = (foo.b + vec4(20.0));
-    foo.c = (foo.c + vec4(30.0));
-    foo.d = (foo.d + vec4(40.0));
+    foo.a = foo.a + vec4(10.0);
+    foo.b = foo.b + vec4(20.0);
+    foo.c = foo.c + vec4(30.0);
+    foo.d = foo.d + vec4(40.0);
 }
 
 vec4 bar(Foo foo)
 {
-    return (((foo.a + foo.b) + foo.c) + foo.d);
+    return ((foo.a + foo.b) + foo.c) + foo.d;
 }
 
 void main()
@@ -60,6 +60,6 @@ void main()
     param_3.b = foobar.foos[gl_GlobalInvocationID.x].b;
     param_3.c = foobar.foos[gl_GlobalInvocationID.x].c;
     param_3.d = foobar.foos[gl_GlobalInvocationID.x].d;
-    outdata.data[gl_GlobalInvocationID.x] = (bar(param_2) + bar(param_3));
+    outdata.data[gl_GlobalInvocationID.x] = bar(param_2) + bar(param_3);
 }
 

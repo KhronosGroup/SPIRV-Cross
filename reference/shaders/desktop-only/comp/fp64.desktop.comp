@@ -37,8 +37,8 @@ layout(binding = 3, std140) buffer SSBO3
 
 void main()
 {
-    ssbo_0.a = (ssbo_0.a + dvec4(10.0lf, 20.0lf, 30.0lf, 40.0lf));
-    ssbo_0.a = (ssbo_0.a + dvec4(20.0lf));
+    ssbo_0.a = ssbo_0.a + dvec4(10.0lf, 20.0lf, 30.0lf, 40.0lf);
+    ssbo_0.a = ssbo_0.a + dvec4(20.0lf);
     dvec4 a = ssbo_0.a;
     dmat4 amat = ssbo_0.b;
     ssbo_0.a = abs(a);
@@ -68,7 +68,7 @@ void main()
     a = faceforward(a, a, a);
     a = reflect(a, a);
     a = refract(a, a, a.x);
-    dmat4 l = dmat4((amat[0] * amat[0]), (amat[1] * amat[1]), (amat[2] * amat[2]), (amat[3] * amat[3]));
+    dmat4 l = dmat4(amat[0] * amat[0], amat[1] * amat[1], amat[2] * amat[2], amat[3] * amat[3]);
     l = outerProduct(a, a);
     l = transpose(l);
     double m = determinant(l);
@@ -77,8 +77,8 @@ void main()
     k = lessThanEqual(a, a);
     k = greaterThan(a, a);
     k = greaterThanEqual(a, a);
-    ssbo_1.b.x = (ssbo_1.b.x + 1.0lf);
-    ssbo_2.b[0].x = (ssbo_2.b[0].x + 1.0lf);
-    ssbo_3.b[0].x = (ssbo_3.b[0].x + 1.0lf);
+    ssbo_1.b.x = ssbo_1.b.x + 1.0lf;
+    ssbo_2.b[0].x = ssbo_2.b[0].x + 1.0lf;
+    ssbo_3.b[0].x = ssbo_3.b[0].x + 1.0lf;
 }
 

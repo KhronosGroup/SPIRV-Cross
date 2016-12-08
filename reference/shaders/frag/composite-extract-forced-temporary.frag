@@ -10,6 +10,6 @@ layout(location = 0) out vec4 FragColor;
 void main()
 {
     float f = texture(Texture, vTexCoord).x;
-    FragColor = vec4((f * f));
+    FragColor = vec4(f * f);
 }
 

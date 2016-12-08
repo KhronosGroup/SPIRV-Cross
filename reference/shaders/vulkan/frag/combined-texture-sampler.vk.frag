@@ -19,21 +19,21 @@ vec4 sample_duals()
 {
     vec4 a = sample_dual(SPIRV_Cross_CombineduTexture0uSampler0);
     vec4 b = sample_dual(SPIRV_Cross_CombineduTexture1uSampler1);
-    return (a + b);
+    return a + b;
 }
 
 vec4 sample_global_tex(mediump sampler2D SPIRV_Cross_CombineduTexture0samp, mediump sampler2D SPIRV_Cross_CombineduTexture1samp)
 {
     vec4 a = texture(SPIRV_Cross_CombineduTexture0samp, vTex);
     vec4 b = sample_dual(SPIRV_Cross_CombineduTexture1samp);
-    return (a + b);
+    return a + b;
 }
 
 vec4 sample_global_sampler(mediump sampler2D SPIRV_Cross_CombinedtexuSampler0, mediump sampler2D SPIRV_Cross_CombinedtexuSampler1)
 {
     vec4 a = texture(SPIRV_Cross_CombinedtexuSampler0, vTex);
     vec4 b = sample_dual(SPIRV_Cross_CombinedtexuSampler1);
-    return (a + b);
+    return a + b;
 }
 
 void main()
@@ -43,6 +43,6 @@ void main()
     vec4 c2 = sample_global_tex(SPIRV_Cross_CombineduTexture0uSampler1, SPIRV_Cross_CombineduTexture1uSampler1);
     vec4 c3 = sample_global_sampler(SPIRV_Cross_CombineduTexture0uSampler0, SPIRV_Cross_CombineduTexture0uSampler1);
     vec4 c4 = sample_global_sampler(SPIRV_Cross_CombineduTexture1uSampler0, SPIRV_Cross_CombineduTexture1uSampler1);
-    FragColor = ((((c0 + c1) + c2) + c3) + c4);
+    FragColor = (((c0 + c1) + c2) + c3) + c4;
 }
 

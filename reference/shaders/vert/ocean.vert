@@ -55,12 +55,12 @@ vec2 warp_position()
     float vlod = dot(LODWeights, _284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].LODs);
     vlod = mix(vlod, _284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.w, all(equal(LODWeights, vec4(0.0))));
     float floor_lod = floor(vlod);
-    float fract_lod = (vlod - floor_lod);
+    float fract_lod = vlod - floor_lod;
     uint ufloor_lod = uint(floor_lod);
     uvec4 uPosition = uvec4(Position);
-    uvec2 mask = ((uvec2(1u) << uvec2(ufloor_lod, (ufloor_lod + 1u))) - uvec2(1u));
+    uvec2 mask = (uvec2(1u) << uvec2(ufloor_lod, ufloor_lod + 1u)) - uvec2(1u);
     uint _333;
-    if ((uPosition.x < 32u))
+    if (uPosition.x < 32u)
     {
         _333 = mask.x;
     }
@@ -71,7 +71,7 @@ vec2 warp_position()
     uvec4 rounding;
     rounding.x = _333;
     uint _345;
-    if ((uPosition.y < 32u))
+    if (uPosition.y < 32u)
     {
         _345 = mask.x;
     }
@@ -81,7 +81,7 @@ vec2 warp_position()
     }
     rounding.y = _345;
     uint _356;
-    if ((uPosition.x < 32u))
+    if (uPosition.x < 32u)
     {
         _356 = mask.y;
     }
@@ -91,7 +91,7 @@ vec2 warp_position()
     }
     rounding.z = _356;
     uint _368;
-    if ((uPosition.y < 32u))
+    if (uPosition.y < 32u)
     {
         _368 = mask.y;
     }
@@ -100,34 +100,34 @@ vec2 warp_position()
         _368 = 0u;
     }
     rounding.w = _368;
-    vec4 lower_upper_snapped = vec4(((uPosition.xyxy + rounding) & (~mask).xxyy));
+    vec4 lower_upper_snapped = vec4((uPosition.xyxy + rounding) & ~mask.xxyy);
     return mix(lower_upper_snapped.xy, lower_upper_snapped.zw, vec2(fract_lod));
 }
 
 vec2 lod_factor(vec2 uv)
 {
-    float level = (textureLod(TexLOD, uv, 0.0).x * 7.96875);
+    float level = textureLod(TexLOD, uv, 0.0).x * 7.96875;
     float floor_level = floor(level);
-    float fract_level = (level - floor_level);
+    float fract_level = level - floor_level;
     return vec2(floor_level, fract_level);
 }
 
 void main()
 {
-    vec2 PatchPos = (_284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.xz * _405.InvOceanSize_PatchScale.zw);
+    vec2 PatchPos = _284.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.xz * _405.InvOceanSize_PatchScale.zw;
     vec2 WarpedPos = warp_position();
-    vec2 VertexPos = (PatchPos + WarpedPos);
-    vec2 NormalizedPos = (VertexPos * _405.InvOceanSize_PatchScale.xy);
-    vec2 NormalizedTex = (NormalizedPos * _405.NormalTexCoordScale.zw);
+    vec2 VertexPos = PatchPos + WarpedPos;
+    vec2 NormalizedPos = VertexPos * _405.InvOceanSize_PatchScale.xy;
+    vec2 NormalizedTex = NormalizedPos * _405.NormalTexCoordScale.zw;
     vec2 param = NormalizedPos;
     vec2 lod = lod_factor(param);
-    vec2 Offset = ((_405.InvOceanSize_PatchScale.xy * exp2(lod.x)) * _405.NormalTexCoordScale.zw);
-    vec3 Displacement = mix(textureLod(TexDisplacement, (NormalizedTex + (Offset * 0.5)), lod.x).yxz, textureLod(TexDisplacement, (NormalizedTex + (Offset * 1.0)), (lod.x + 1.0)).yxz, vec3(lod.y));
-    vec3 WorldPos = (vec3(NormalizedPos.x, 0.0, NormalizedPos.y) + Displacement);
-    WorldPos = (WorldPos * _405.OceanScale.xyz);
-    WorldPos = (WorldPos + _405.OceanPosition.xyz);
-    EyeVec = (WorldPos - _58.g_CamPos.xyz);
-    TexCoord = (vec4(NormalizedTex, (NormalizedTex * _405.NormalTexCoordScale.xy)) + ((_405.InvOceanSize_PatchScale.xyxy * 0.5) * _405.NormalTexCoordScale.zwzw));
-    gl_Position = ((((_58.g_ViewProj_Row0 * WorldPos.x) + (_58.g_ViewProj_Row1 * WorldPos.y)) + (_58.g_ViewProj_Row2 * WorldPos.z)) + _58.g_ViewProj_Row3);
+    vec2 Offset = (_405.InvOceanSize_PatchScale.xy * exp2(lod.x)) * _405.NormalTexCoordScale.zw;
+    vec3 Displacement = mix(textureLod(TexDisplacement, NormalizedTex + (Offset * 0.5), lod.x).yxz, textureLod(TexDisplacement, NormalizedTex + (Offset * 1.0), lod.x + 1.0).yxz, vec3(lod.y));
+    vec3 WorldPos = vec3(NormalizedPos.x, 0.0, NormalizedPos.y) + Displacement;
+    WorldPos = WorldPos * _405.OceanScale.xyz;
+    WorldPos = WorldPos + _405.OceanPosition.xyz;
+    EyeVec = WorldPos - _58.g_CamPos.xyz;
+    TexCoord = vec4(NormalizedTex, NormalizedTex * _405.NormalTexCoordScale.xy) + ((_405.InvOceanSize_PatchScale.xyxy * 0.5) * _405.NormalTexCoordScale.zwzw);
+    gl_Position = (((_58.g_ViewProj_Row0 * WorldPos.x) + (_58.g_ViewProj_Row1 * WorldPos.y)) + (_58.g_ViewProj_Row2 * WorldPos.z)) + _58.g_ViewProj_Row3;
 }
 

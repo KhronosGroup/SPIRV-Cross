@@ -53,7 +53,7 @@ void main()
     bool c28 = (_34 <= _35);
     bool c29 = (_16 >= _25);
     bool c30 = (_34 >= _35);
-    mediump int c31 = (c8 + c3);
+    mediump int c31 = c8 + c3;
     mediump int c32 = int(_34 + 0u);
     bool c33 = (_16 != int(0u));
     bool c34 = (_34 != 0u);
@@ -63,6 +63,6 @@ void main()
     float vec0[_25][(_16 + 3)];
     float vec1[(_16 + 2)][(_25 + 5)];
     Foo foo;
-    FragColor = (((vec4((t0 + t1)) + vec4(vec0[0][0])) + vec4(vec1[0][0])) + vec4(foo.elems[_16]));
+    FragColor = ((vec4(t0 + t1) + vec4(vec0[0][0])) + vec4(vec1[0][0])) + vec4(foo.elems[_16]);
 }
 

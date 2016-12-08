@@ -9,6 +9,6 @@ layout(location = 0) out vec4 FragColor;
 
 void main()
 {
-    FragColor = (subpassLoad(uSubpass0) + subpassLoad(uSubpass1));
+    FragColor = subpassLoad(uSubpass0) + subpassLoad(uSubpass1);
 }
 

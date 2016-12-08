@@ -16,9 +16,9 @@ void main()
     uint ident = gl_GlobalInvocationID.x;
     vec4 v = mod(_23.in_data[ident], _33.out_data[ident]);
     _33.out_data[ident] = v;
-    uvec4 vu = (floatBitsToUint(_23.in_data[ident]) % floatBitsToUint(_33.out_data[ident]));
+    uvec4 vu = floatBitsToUint(_23.in_data[ident]) % floatBitsToUint(_33.out_data[ident]);
     _33.out_data[ident] = uintBitsToFloat(vu);
-    ivec4 vi = (floatBitsToInt(_23.in_data[ident]) % floatBitsToInt(_33.out_data[ident]));
+    ivec4 vi = floatBitsToInt(_23.in_data[ident]) % floatBitsToInt(_33.out_data[ident]);
     _33.out_data[ident] = intBitsToFloat(vi);
 }
 

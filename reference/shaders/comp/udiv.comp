@@ -13,6 +13,6 @@ layout(binding = 0, std430) buffer SSBO
 
 void main()
 {
-    _10.outputs[gl_GlobalInvocationID.x] = (_23.inputs[gl_GlobalInvocationID.x] / 29u);
+    _10.outputs[gl_GlobalInvocationID.x] = _23.inputs[gl_GlobalInvocationID.x] / 29u;
 }
 

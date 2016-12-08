@@ -9,7 +9,7 @@ layout(binding = 0, std430) buffer SSBO
 layout(binding = 1, std430) buffer SSBO2
 {
     float out_data[];
-} _43;
+} _44;
 
 shared float sShared[4];
 
@@ -20,6 +20,6 @@ void main()
     sShared[gl_LocalInvocationIndex] = idata;
     memoryBarrierShared();
     barrier();
-    _43.out_data[ident] = sShared[((4u - gl_LocalInvocationIndex) - 1u)];
+    _44.out_data[ident] = sShared[(4u - gl_LocalInvocationIndex) - 1u];
 }
 
