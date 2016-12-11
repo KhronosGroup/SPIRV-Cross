@@ -223,6 +223,11 @@ protected:
 	void add_local_variable_name(uint32_t id);
 	void add_resource_name(uint32_t id);
 	void add_member_name(SPIRType &type, uint32_t name);
+
+	bool matrix_needs_transposition(uint32_t id);
+	bool member_matrix_needs_transposition(const SPIRType &type, uint32_t index);
+	virtual std::string transpose(std::string exp_str);
+
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
 
@@ -244,6 +249,7 @@ protected:
 		bool flexible_member_array_supported = true;
 		bool explicit_struct_type = false;
 		bool use_initializer_list = false;
+		bool transpose_row_major_matrices = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

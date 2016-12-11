@@ -3040,6 +3040,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	SPIRType temp;
 
 	bool access_chain_is_arrayed = false;
+	bool mtx_needs_transp = matrix_needs_transposition(base);
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -3092,11 +3093,18 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 				expr += ".";
 				expr += to_member_name(*type, index);
 			}
+			mtx_needs_transp = member_matrix_needs_transposition(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
 		}
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
+			if (mtx_needs_transp)
+			{
+				expr = transpose(expr);
+				mtx_needs_transp = false;
+			}
+
 			expr += "[";
 			if (index_is_literal)
 				expr += convert_to_string(index);
@@ -3140,6 +3148,9 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 		else
 			throw CompilerError("Cannot subdivide a scalar value!");
 	}
+
+	if (mtx_needs_transp)
+		expr = transpose(expr);
 
 	return expr;
 }
@@ -4734,6 +4745,27 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 
 		update_name_cache(type.member_name_cache, name);
 	}
+}
+
+// Checks whether the member is a row_major matrix that requires transposition before use
+bool CompilerGLSL::matrix_needs_transposition(uint32_t id)
+{
+	return (backend.transpose_row_major_matrices &&
+	        (meta[id].decoration.decoration_flags & (1ull << DecorationRowMajor)));
+}
+
+// Checks whether the member is a row_major matrix that requires transposition before use
+bool CompilerGLSL::member_matrix_needs_transposition(const SPIRType &type, uint32_t index)
+{
+	return (backend.transpose_row_major_matrices &&
+	        (combined_decoration_for_member(type, index) & (1ull << DecorationRowMajor)));
+}
+
+// Wraps the expression in a transpose() function call
+string CompilerGLSL::transpose(string exp_str)
+{
+	strip_enclosed_expression(exp_str);
+	return join("transpose(", exp_str, ")");
 }
 
 string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
