@@ -327,7 +327,7 @@ protected:
 			return nullptr;
 
 		if (instr.offset + instr.length > spirv.size())
-			throw CompilerError("Compiler::stream() out of range.");
+			SPIRV_CROSS_THROW("Compiler::stream() out of range.");
 		return &spirv[instr.offset];
 	}
 	std::vector<uint32_t> spirv;

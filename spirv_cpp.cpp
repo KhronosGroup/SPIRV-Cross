@@ -116,8 +116,8 @@ void CompilerCPP::emit_push_constant_block(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 	auto &flags = meta[var.self].decoration.decoration_flags;
 	if ((flags & (1ull << DecorationBinding)) || (flags & (1ull << DecorationDescriptorSet)))
-		throw CompilerError("Push constant blocks cannot be compiled to GLSL with Binding or Set syntax. "
-		                    "Remap to location with reflection API first or disable these decorations.");
+		SPIRV_CROSS_THROW("Push constant blocks cannot be compiled to GLSL with Binding or Set syntax. "
+		                  "Remap to location with reflection API first or disable these decorations.");
 
 	emit_block_struct(type);
 	auto buffer_name = to_name(type.self);
@@ -298,7 +298,7 @@ string CompilerCPP::compile()
 	do
 	{
 		if (pass_count >= 3)
-			throw CompilerError("Over 3 compilation loops detected. Must be a bug!");
+			SPIRV_CROSS_THROW("Over 3 compilation loops detected. Must be a bug!");
 
 		resource_registrations.clear();
 		reset();
@@ -469,7 +469,7 @@ void CompilerCPP::emit_header()
 		break;
 
 	default:
-		throw CompilerError("Unsupported execution model.");
+		SPIRV_CROSS_THROW("Unsupported execution model.");
 	}
 
 	switch (execution.model)
@@ -506,6 +506,6 @@ void CompilerCPP::emit_header()
 		break;
 
 	default:
-		throw CompilerError("Unsupported execution model.");
+		SPIRV_CROSS_THROW("Unsupported execution model.");
 	}
 }

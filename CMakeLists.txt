@@ -16,6 +16,12 @@ cmake_minimum_required(VERSION 2.8)
 project(SPIRV-Cross)
 enable_testing()
 
+option(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS "Instead of throwing exceptions assert. Only applies to the library targets" OFF)
+
+if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+	add_definitions(-DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+endif()
+
 if(${CMAKE_GENERATOR} MATCHES "Makefile")
   if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
     message(FATAL_ERROR "Build out of tree to avoid overwriting Makefile")
@@ -56,17 +62,23 @@ target_include_directories(spirv-cross-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 if (NOT "${MSVC}")
   set(spirv-compiler-options -std=c++11 -Wall -Wextra -Werror -Wshadow)
   set(spirv-compiler-defines __STDC_LIMIT_MACROS)
+
+  set(spirv-exe-options ${spirv-compiler-options})
+  if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+    set(spirv-compiler-options ${spirv-compiler-options} -fno-exceptions)
+  endif()
+
   target_compile_options(spirv-cross-core PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross-glsl PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross-msl PRIVATE ${spirv-compiler-options})
   target_compile_options(spirv-cross-cpp PRIVATE ${spirv-compiler-options})
-  target_compile_options(spirv-cross PRIVATE ${spirv-compiler-options})
+  target_compile_options(spirv-cross PRIVATE ${spirv-exe-options})
   target_compile_definitions(spirv-cross-core PRIVATE ${spirv-compiler-defines})
   target_compile_definitions(spirv-cross-glsl PRIVATE ${spirv-compiler-defines})
   target_compile_definitions(spirv-cross-msl PRIVATE ${spirv-compiler-defines})
   target_compile_definitions(spirv-cross-cpp PRIVATE ${spirv-compiler-defines})
   target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines})
-endif(NOT "${MSVC}")
+endif()
 
 
 # Set up tests, using only the simplest modes of the test_shaders
@@ -80,5 +92,6 @@ if(${PYTHONINTERP_FOUND} AND ${PYTHON_VERSION_MAJOR} GREATER 2)
 	   COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
 		   ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
 else()
-  message(WARNING "Testing disabled. Could not find python3")
+  message(WARNING "Testing disabled. Could not find python3. If you have python3 installed try running "
+		  "cmake with -DPYTHON_EXECUTABLE:FILEPATH=/path/to/python3 to help it find the executable")
 endif()

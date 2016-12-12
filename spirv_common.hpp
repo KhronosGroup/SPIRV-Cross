@@ -17,13 +17,27 @@
 #ifndef SPIRV_CROSS_COMMON_HPP
 #define SPIRV_CROSS_COMMON_HPP
 
+#include <cstdio>
+#include <cstring>
 #include <functional>
 #include <sstream>
-#include <stdio.h>
-#include <string.h>
 
 namespace spirv_cross
 {
+
+#ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
+[[noreturn]] inline void report_and_abort(const std::string &msg)
+{
+#ifdef NDEBUG
+	(void)msg;
+#else
+	fprintf(stderr, "There was a compiler error: %s\n", std::string(msg).c_str());
+#endif
+	abort();
+}
+
+#define SPIRV_CROSS_THROW(x) report_and_abort(x)
+#else
 class CompilerError : public std::runtime_error
 {
 public:
@@ -32,6 +46,9 @@ public:
 	{
 	}
 };
+
+#define SPIRV_CROSS_THROW(x) throw CompilerError(x)
+#endif
 
 namespace inner
 {
@@ -778,7 +795,7 @@ public:
 	{
 		holder = std::move(val);
 		if (type != TypeNone && type != new_type)
-			throw CompilerError("Overwriting a variant with new type.");
+			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
 		type = new_type;
 	}
 
@@ -786,9 +803,9 @@ public:
 	T &get()
 	{
 		if (!holder)
-			throw CompilerError("nullptr");
+			SPIRV_CROSS_THROW("nullptr");
 		if (T::type != type)
-			throw CompilerError("Bad cast");
+			SPIRV_CROSS_THROW("Bad cast");
 		return *static_cast<T *>(holder.get());
 	}
 
@@ -796,9 +813,9 @@ public:
 	const T &get() const
 	{
 		if (!holder)
-			throw CompilerError("nullptr");
+			SPIRV_CROSS_THROW("nullptr");
 		if (T::type != type)
-			throw CompilerError("Bad cast");
+			SPIRV_CROSS_THROW("Bad cast");
 		return *static_cast<const T *>(holder.get());
 	}
 
