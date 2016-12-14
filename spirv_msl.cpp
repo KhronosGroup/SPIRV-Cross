@@ -64,7 +64,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	backend.discard_literal = "discard_fragment()";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
-	backend.transpose_row_major_matrices = true;
+	backend.native_row_major_matrix = false;
 
 	uint32_t pass_count = 0;
 	do
