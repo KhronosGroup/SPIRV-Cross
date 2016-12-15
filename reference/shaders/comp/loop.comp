@@ -60,11 +60,9 @@ void main()
         idat = idat * 2.0;
         k = k + 1;
     }
-    uint i_1 = 0u;
-    for (; i_1 < 16u; i_1 = i_1 + uint(1), k = k + 1)
+    for (uint i_1 = 0u; i_1 < 16u; i_1 = i_1 + uint(1), k = k + 1)
     {
-        uint j = 0u;
-        for (; j < 30u; j = j + uint(1))
+        for (uint j = 0u; j < 30u; j = j + uint(1))
         {
             idat = _24.mvp * idat;
         }

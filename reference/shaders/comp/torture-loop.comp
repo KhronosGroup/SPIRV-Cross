@@ -33,11 +33,9 @@ void main()
             break;
         }
     }
-    uint i = 0u;
-    for (; i < 16u; i = i + uint(1), k = k + 1)
+    for (uint i = 0u; i < 16u; i = i + uint(1), k = k + 1)
     {
-        uint j = 0u;
-        for (; j < 30u; j = j + uint(1))
+        for (uint j = 0u; j < 30u; j = j + uint(1))
         {
             idat = _24.mvp * idat;
         }

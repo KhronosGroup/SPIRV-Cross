@@ -63,9 +63,8 @@ void test()
             break;
         }
     }
-    int i = 0;
     float h;
-    for (; i < 20; i = i + 1, h = h + 10.0)
+    for (int i = 0; i < 20; i = i + 1, h = h + 10.0)
     {
     }
     _11.data = h;

@@ -5354,7 +5354,38 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 	if (!func.analyzed_variable_scope)
 	{
 		if (options.cfg_analysis)
+		{
 			analyze_variable_scope(func);
+
+			// Check if we can actually use the loop variables we found in analyze_variable_scope.
+			// To use multiple initializers, we need the same type and qualifiers.
+			for (auto block : func.blocks)
+			{
+				auto &b = get<SPIRBlock>(block);
+				if (b.loop_variables.size() < 2)
+					continue;
+
+				uint64_t flags = get_decoration_mask(b.loop_variables.front());
+				uint32_t type = get<SPIRVariable>(b.loop_variables.front()).basetype;
+				bool invalid_initializers = false;
+				for (auto loop_variable : b.loop_variables)
+				{
+					if (flags != get_decoration_mask(loop_variable) ||
+					    type != get<SPIRVariable>(b.loop_variables.front()).basetype)
+					{
+						invalid_initializers = true;
+						break;
+					}
+				}
+
+				if (invalid_initializers)
+				{
+					for (auto loop_variable : b.loop_variables)
+						get<SPIRVariable>(loop_variable).loop_variable = false;
+					b.loop_variables.clear();
+				}
+			}
+		}
 		else
 			entry_block.dominated_variables = func.local_variables;
 		func.analyzed_variable_scope = true;
