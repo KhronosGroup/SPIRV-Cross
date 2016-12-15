@@ -16,11 +16,7 @@ cmake_minimum_required(VERSION 2.8)
 project(SPIRV-Cross)
 enable_testing()
 
-option(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS "Instead of throwing exceptions assert. Only applies to the library targets" OFF)
-
-if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
-	add_definitions(-DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
-endif()
+option(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS "Instead of throwing exceptions assert" OFF)
 
 if(${CMAKE_GENERATOR} MATCHES "Makefile")
   if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
@@ -56,30 +52,35 @@ target_link_libraries(spirv-cross-msl spirv-cross-glsl)
 target_link_libraries(spirv-cross-cpp spirv-cross-glsl)
 target_include_directories(spirv-cross-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+set(spirv-compiler-options "")
+set(spirv-compiler-defines "")
+
+if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+  set(spirv-compiler-defines ${spirv-compiler-defines} SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+endif()
+
 # To specify special debug or optimization options, use
 # -DCMAKE_CXX_COMPILE_FLAGS
 # However, we require the C++11 dialect.
 if (NOT "${MSVC}")
-  set(spirv-compiler-options -std=c++11 -Wall -Wextra -Werror -Wshadow)
-  set(spirv-compiler-defines __STDC_LIMIT_MACROS)
+  set(spirv-compiler-options ${spirv-compiler-options} -std=c++11 -Wall -Wextra -Werror -Wshadow)
+  set(spirv-compiler-defines ${spirv-compiler-defines} __STDC_LIMIT_MACROS)
 
-  set(spirv-exe-options ${spirv-compiler-options})
   if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
     set(spirv-compiler-options ${spirv-compiler-options} -fno-exceptions)
   endif()
-
-  target_compile_options(spirv-cross-core PRIVATE ${spirv-compiler-options})
-  target_compile_options(spirv-cross-glsl PRIVATE ${spirv-compiler-options})
-  target_compile_options(spirv-cross-msl PRIVATE ${spirv-compiler-options})
-  target_compile_options(spirv-cross-cpp PRIVATE ${spirv-compiler-options})
-  target_compile_options(spirv-cross PRIVATE ${spirv-exe-options})
-  target_compile_definitions(spirv-cross-core PRIVATE ${spirv-compiler-defines})
-  target_compile_definitions(spirv-cross-glsl PRIVATE ${spirv-compiler-defines})
-  target_compile_definitions(spirv-cross-msl PRIVATE ${spirv-compiler-defines})
-  target_compile_definitions(spirv-cross-cpp PRIVATE ${spirv-compiler-defines})
-  target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines})
 endif()
 
+target_compile_options(spirv-cross-core PRIVATE ${spirv-compiler-options})
+target_compile_options(spirv-cross-glsl PRIVATE ${spirv-compiler-options})
+target_compile_options(spirv-cross-msl PRIVATE ${spirv-compiler-options})
+target_compile_options(spirv-cross-cpp PRIVATE ${spirv-compiler-options})
+target_compile_options(spirv-cross PRIVATE ${spirv-compiler-options})
+target_compile_definitions(spirv-cross-core PRIVATE ${spirv-compiler-defines})
+target_compile_definitions(spirv-cross-glsl PRIVATE ${spirv-compiler-defines})
+target_compile_definitions(spirv-cross-msl PRIVATE ${spirv-compiler-defines})
+target_compile_definitions(spirv-cross-cpp PRIVATE ${spirv-compiler-defines})
+target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines})
 
 # Set up tests, using only the simplest modes of the test_shaders
 # script.  You have to invoke the script manually to:

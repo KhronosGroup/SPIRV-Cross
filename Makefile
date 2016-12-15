@@ -18,6 +18,10 @@ else
 	CXXFLAGS += -O2 -DNDEBUG
 endif
 
+ifeq ($(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS), 1)
+	CXXFLAGS += -DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS -fno-exceptions
+endif
+
 all: $(TARGET)
 
 -include $(DEPS)

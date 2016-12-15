@@ -26,12 +26,16 @@ namespace spirv_cross
 {
 
 #ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
-[[noreturn]] inline void report_and_abort(const std::string &msg)
+#ifndef _MSC_VER
+[[noreturn]]
+#endif
+    inline void
+    report_and_abort(const std::string &msg)
 {
 #ifdef NDEBUG
 	(void)msg;
 #else
-	fprintf(stderr, "There was a compiler error: %s\n", std::string(msg).c_str());
+	fprintf(stderr, "There was a compiler error: %s\n", msg.c_str());
 #endif
 	abort();
 }

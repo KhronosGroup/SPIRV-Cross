@@ -4766,7 +4766,7 @@ bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 	// swaps matrix elements while retaining the original dimensional form of the matrix.
 	const auto type = expression_type(id);
 	if (type.columns != type.vecsize)
-		throw CompilerError("Row-major matrices must be square on this platform.");
+		SPIRV_CROSS_THROW("Row-major matrices must be square on this platform.");
 
 	return true;
 }
@@ -4787,7 +4787,7 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 	// swaps matrix elements while retaining the original dimensional form of the matrix.
 	const auto mbr_type = get<SPIRType>(type.member_types[index]);
 	if (mbr_type.columns != mbr_type.vecsize)
-		throw CompilerError("Row-major matrices must be square on this platform.");
+		SPIRV_CROSS_THROW("Row-major matrices must be square on this platform.");
 
 	return true;
 }
