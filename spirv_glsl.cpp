@@ -3040,6 +3040,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	SPIRType temp;
 
 	bool access_chain_is_arrayed = false;
+	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -3092,11 +3093,18 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 				expr += ".";
 				expr += to_member_name(*type, index);
 			}
+			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
 		}
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
+			if (row_major_matrix_needs_conversion)
+			{
+				expr = convert_row_major_matrix(expr);
+				row_major_matrix_needs_conversion = false;
+			}
+
 			expr += "[";
 			if (index_is_literal)
 				expr += convert_to_string(index);
@@ -3450,8 +3458,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
 
+		// If loading a non-native row-major matrix, convert it to column-major
+		auto expr = to_expression(ptr);
+		if (is_non_native_row_major_matrix(ptr))
+			expr = convert_row_major_matrix(expr);
+
 		// Suppress usage tracking since using same expression multiple times does not imply any extra work.
-		emit_op(result_type, id, to_expression(ptr), forward, true);
+		emit_op(result_type, id, expr, forward, true);
 		register_read(id, ptr, forward);
 		break;
 	}
@@ -4734,6 +4747,58 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 
 		update_name_cache(type.member_name_cache, name);
 	}
+}
+
+// Checks whether the member is a row_major matrix that requires conversion before use
+bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
+{
+	// Natively supported row-major matrices do not need to be converted.
+	if (backend.native_row_major_matrix)
+		return false;
+
+	// Non-matrix or column-major matrix types do not need to be converted.
+	if (!(meta[id].decoration.decoration_flags & (1ull << DecorationRowMajor)))
+		return false;
+
+	// Only square row-major matrices can be converted at this time.
+	// Converting non-square matrices will require defining custom GLSL function that
+	// swaps matrix elements while retaining the original dimensional form of the matrix.
+	const auto type = expression_type(id);
+	if (type.columns != type.vecsize)
+		throw CompilerError("Row-major matrices must be square on this platform.");
+
+	return true;
+}
+
+// Checks whether the member is a row_major matrix that requires conversion before use
+bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
+{
+	// Natively supported row-major matrices do not need to be converted.
+	if (backend.native_row_major_matrix)
+		return false;
+
+	// Non-matrix or column-major matrix types do not need to be converted.
+	if (!(combined_decoration_for_member(type, index) & (1ull << DecorationRowMajor)))
+		return false;
+
+	// Only square row-major matrices can be converted at this time.
+	// Converting non-square matrices will require defining custom GLSL function that
+	// swaps matrix elements while retaining the original dimensional form of the matrix.
+	const auto mbr_type = get<SPIRType>(type.member_types[index]);
+	if (mbr_type.columns != mbr_type.vecsize)
+		throw CompilerError("Row-major matrices must be square on this platform.");
+
+	return true;
+}
+
+// Wraps the expression string in a function call that converts the
+// row_major matrix result of the expression to a column_major matrix.
+// Base implementation uses the standard library transpose() function.
+// Subclasses may override to use a different function.
+string CompilerGLSL::convert_row_major_matrix(string exp_str)
+{
+	strip_enclosed_expression(exp_str);
+	return join("transpose(", exp_str, ")");
 }
 
 string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
