@@ -56,6 +56,24 @@ public:
 
 	uint32_t find_common_dominator(uint32_t a, uint32_t b) const;
 
+	const std::vector<uint32_t> &get_preceding_edges(uint32_t block) const
+	{
+		return preceding_edges[block];
+	}
+
+	const std::vector<uint32_t> &get_succeeding_edges(uint32_t block) const
+	{
+		return succeeding_edges[block];
+	}
+
+	template <typename Op>
+	void walk_from(uint32_t block, const Op &op) const
+	{
+		op(block);
+		for (auto b : succeeding_edges[block])
+			walk_from(b, op);
+	}
+
 private:
 	Compiler &compiler;
 	const SPIRFunction &func;
