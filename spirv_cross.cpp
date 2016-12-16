@@ -2916,13 +2916,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	{
 		DominatorBuilder builder(cfg);
 		auto &blocks = var.second;
+		auto &type = expression_type(var.first);
 
 		// Figure out which block is dominating all accesses of those variables.
 		for (auto &block : blocks)
 		{
-			// If we're accessing a variable inside a continue block, this variable
-			// might be a loop variable.
-			if (is_continue(block))
+			// If we're accessing a variable inside a continue block, this variable might be a loop variable.
+			// We can only use loop variables with scalars, as we cannot track static expressions for vectors.
+			if (is_continue(block) && type.vecsize == 1 && type.columns == 1)
 			{
 				// The variable is used in multiple continue blocks, this is not a loop
 				// candidate, signal that by setting block to -1u.

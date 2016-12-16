@@ -1565,7 +1565,9 @@ string CompilerGLSL::to_expression(uint32_t id)
 	case TypeVariable:
 	{
 		auto &var = get<SPIRVariable>(id);
-		if (var.statically_assigned)
+		// If we try to use a loop variable before the loop header, we have to redirect it to the static expression,
+		// the variable has not been declared yet.
+		if (var.statically_assigned || (var.loop_variable && !var.loop_variable_enable))
 			return to_expression(var.static_expression);
 		else if (var.deferred_declaration)
 		{
@@ -5703,10 +5705,6 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			switch (continue_type)
 			{
 			case SPIRBlock::ForLoop:
-				// If we have loop variables, stop masking out access to the variable now.
-				for (auto var : block.loop_variables)
-					get<SPIRVariable>(var).loop_variable_enable = true;
-
 				statement("for (", emit_for_loop_initializers(block), "; ", to_expression(block.condition), "; ",
 				          emit_continue_block(block.continue_block), ")");
 				break;
@@ -5754,10 +5752,6 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			switch (continue_type)
 			{
 			case SPIRBlock::ForLoop:
-				// If we have loop variables, stop masking out access to the variable now.
-				for (auto var : block.loop_variables)
-					get<SPIRVariable>(var).loop_variable_enable = true;
-
 				statement("for (", emit_for_loop_initializers(block), "; ", to_expression(child.condition), "; ",
 				          emit_continue_block(block.continue_block), ")");
 				break;
@@ -5816,6 +5810,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	SPIRBlock::ContinueBlockType continue_type = SPIRBlock::ContinueNone;
 	if (block.continue_block)
 		continue_type = continue_block_type(get<SPIRBlock>(block.continue_block));
+
+	// If we have loop variables, stop masking out access to the variable now.
+	for (auto var : block.loop_variables)
+		get<SPIRVariable>(var).loop_variable_enable = true;
 
 	// This is the older loop behavior in glslang which branches to loop body directly from the loop header.
 	if (block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
