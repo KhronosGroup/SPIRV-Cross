@@ -22,8 +22,8 @@ void main()
     {
         do
         {
-            k = k * 2;
-            i = i + uint(1);
+            k *= 2;
+            i++;
         } while (i < ident);
     }
     switch (k)
@@ -32,7 +32,7 @@ void main()
         {
             for (;;)
             {
-                i = i + uint(1);
+                i++;
                 if (i > 10u)
                 {
                     break;
@@ -45,7 +45,7 @@ void main()
         {
             for (;;)
             {
-                i = i + 2u;
+                i += 2u;
                 if (i > 20u)
                 {
                     break;
@@ -57,14 +57,12 @@ void main()
     }
     while (k < 10)
     {
-        idat = idat * 2.0;
-        k = k + 1;
+        idat *= 2.0;
+        k++;
     }
-    uint i_1 = 0u;
-    for (; i_1 < 16u; i_1 = i_1 + uint(1), k = k + 1)
+    for (uint i_1 = 0u; i_1 < 16u; i_1++, k++)
     {
-        uint j = 0u;
-        for (; j < 30u; j = j + uint(1))
+        for (uint j = 0u; j < 30u; j++)
         {
             idat = _24.mvp * idat;
         }
@@ -72,34 +70,34 @@ void main()
     k = 0;
     for (;;)
     {
-        k = k + 1;
+        k++;
         if (k > 10)
         {
-            k = k + 2;
+            k += 2;
         }
         else
         {
-            k = k + 3;
+            k += 3;
             continue;
         }
-        k = k + 10;
+        k += 10;
         continue;
     }
     k = 0;
     do
     {
-        k = k + 1;
+        k++;
     } while (k > 10);
     int l = 0;
     for (;;)
     {
         if (l == 5)
         {
-            l = l + 1;
+            l++;
             continue;
         }
-        idat = idat + vec4(1.0);
-        l = l + 1;
+        idat += vec4(1.0);
+        l++;
         continue;
     }
     _177.out_data[ident] = idat;

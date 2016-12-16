@@ -101,8 +101,8 @@ void main()
     vec2 Offset = _381.InvGroundSize_PatchScale.xy * exp2(lod.x);
     float Elevation = mix(textureLod(TexHeightmap, NormalizedPos + (Offset * 0.5), lod.x).x, textureLod(TexHeightmap, NormalizedPos + (Offset * 1.0), lod.x + 1.0).x, lod.y);
     vec3 WorldPos = vec3(NormalizedPos.x, Elevation, NormalizedPos.y);
-    WorldPos = WorldPos * _381.GroundScale.xyz;
-    WorldPos = WorldPos + _381.GroundPosition.xyz;
+    WorldPos *= _381.GroundScale.xyz;
+    WorldPos += _381.GroundPosition.xyz;
     EyeVec = WorldPos - _58.g_CamPos.xyz;
     TexCoord = NormalizedPos + (_381.InvGroundSize_PatchScale.xy * 0.5);
     gl_Position = (((_58.g_ViewProj_Row0 * WorldPos.x) + (_58.g_ViewProj_Row1 * WorldPos.y)) + (_58.g_ViewProj_Row2 * WorldPos.z)) + _58.g_ViewProj_Row3;
