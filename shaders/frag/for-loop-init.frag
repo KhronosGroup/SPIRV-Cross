@@ -4,7 +4,7 @@ layout(location = 0) out int FragColor;
 
 void main()
 {
-   FragColor = 15;
+   FragColor = 16;
 
    // Basic loop variable.
    for (int i = 0; i < 25; i++)

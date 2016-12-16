@@ -22,5 +22,5 @@ script:
   - cd glslang && cmake . && make -j2 && cd ..
   - cd SPIRV-Tools && cmake . && make -j2 && cd ..
   - make -j2
-  - PATH=$PATH:./glslang/StandAlone:./SPIRV-Tools/tools
+  - PATH=./glslang/StandAlone:./SPIRV-Tools/tools:$PATH
   - ./test_shaders.py shaders

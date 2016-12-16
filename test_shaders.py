@@ -137,6 +137,14 @@ def regression_check(shader, glsl, update, keep):
                 shutil.move(glsl, reference)
             else:
                 print('Generated GLSL in {} does not match reference {}!'.format(glsl, reference))
+                with open(glsl, 'r') as f:
+                    print('')
+                    print('Generated:')
+                    print('======================')
+                    print(f.read())
+                    print('======================')
+                    print('')
+
                 # Otherwise, fail the test. Keep the shader file around so we can inspect.
                 if not keep:
                     os.remove(glsl)

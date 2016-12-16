@@ -6,7 +6,7 @@ layout(location = 0) out mediump int FragColor;
 
 void main()
 {
-    FragColor = 15;
+    FragColor = 16;
     for (mediump int i = 0; i < 25; i++)
     {
         FragColor += 10;
