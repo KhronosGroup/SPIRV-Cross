@@ -11,7 +11,7 @@ void main()
     {
         FragColor += 10;
     }
-    for (mediump int j = 4, i_1 = 1; i_1 < 30; i_1++, j += 4)
+    for (mediump int i_1 = 1, j = 4; i_1 < 30; i_1++, j += 4)
     {
         FragColor += 11;
     }

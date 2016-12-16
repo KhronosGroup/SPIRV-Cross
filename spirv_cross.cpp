@@ -3025,6 +3025,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 		// We have a loop variable.
 		header_block.loop_variables.push_back(loop_variable.first);
+		// Need to sort here as variables come from an unordered container, and pushing stuff in wrong order
+		// will break reproducability in regression runs.
+		sort(begin(header_block.loop_variables), end(header_block.loop_variables));
 		get<SPIRVariable>(loop_variable.first).loop_variable = true;
 	}
 }
