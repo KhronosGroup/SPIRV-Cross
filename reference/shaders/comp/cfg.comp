@@ -64,7 +64,7 @@ void test()
         }
     }
     float h;
-    for (int i = 0; i < 20; i += 1, h += 10.0)
+    for (int i = 0; i < 20; i++, h += 10.0)
     {
     }
     _11.data = h;

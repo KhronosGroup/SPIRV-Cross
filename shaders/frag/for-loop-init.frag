@@ -37,7 +37,7 @@ void main()
    }
 
    // Vectors cannot be loop variables
-   for (ivec2 i = ivec2(0); i.x < 10; i.x++)
+   for (ivec2 i = ivec2(0); i.x < 10; i.x += 4)
    {
       FragColor += i.y;
    }

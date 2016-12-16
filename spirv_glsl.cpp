@@ -3430,6 +3430,9 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 {
 	// Do this with strings because we have a very clear pattern we can check for and it avoids
 	// adding lots of special cases to the code emission.
+	if (rhs.size() < lhs.size() + 3)
+		return false;
+
 	auto index = rhs.find(lhs);
 	if (index != 0)
 		return false;
@@ -3439,7 +3442,14 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 	if (op != lhs.size() + 1)
 		return false;
 
-	statement(lhs, " ", rhs[op], "=", rhs.substr(lhs.size() + 2), ";");
+	char bop = rhs[op];
+	auto expr = rhs.substr(lhs.size() + 3);
+	// Try to find increments and decrements. Makes it look neater as += 1, -= 1 is fairly rare to see in real code.
+	// Find some common patterns which are equivalent.
+	if ((bop == '+' || bop == '-') && (expr == "1" || expr == "uint(1)" || expr == "1u" || expr == "int(1u)"))
+		statement(lhs, bop, bop, ";");
+	else
+		statement(lhs, " ", bop, "= ", expr, ";");
 	return true;
 }
 
