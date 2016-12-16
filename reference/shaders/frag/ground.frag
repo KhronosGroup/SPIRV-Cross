@@ -51,7 +51,7 @@ void main()
     vec3 base = mix(grass, snow, vec3(grass_snow));
     float edge = smoothstep(0.699999988079071044921875, 0.75, Normal.y);
     Color = mix(dirt, base, vec3(edge));
-    Color = Color * Color;
+    Color *= Color;
     float Roughness = 1.0 - (edge * grass_snow);
     highp vec3 param_1 = Color;
     highp vec3 param_2 = Normal;
