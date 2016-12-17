@@ -46,7 +46,7 @@ void main()
     vec2 param_1 = tess_coord;
     mediump vec2 lod = lod_factor(param_1);
     vec2 tex = pos * _31.uInvHeightmapSize;
-    pos = pos * _31.uScale.xy;
+    pos *= _31.uScale.xy;
     mediump float delta_mod = exp2(lod.x);
     vec2 off = _31.uInvHeightmapSize * delta_mod;
     vGradNormalTex = vec4(tex + (_31.uInvHeightmapSize * 0.5), tex * _31.uScale.zw);
@@ -54,7 +54,7 @@ void main()
     vec2 param_3 = off;
     vec2 param_4 = lod;
     vec3 height_displacement = sample_height_displacement(param_2, param_3, param_4);
-    pos = pos + height_displacement.yz;
+    pos += height_displacement.yz;
     vWorld = vec3(pos.x, height_displacement.x, pos.y);
     gl_Position = _31.uMVP * vec4(vWorld, 1.0);
 }

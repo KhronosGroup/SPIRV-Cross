@@ -445,6 +445,11 @@ struct SPIRBlock : IVariant
 	// All access to these variables are dominated by this block,
 	// so before branching anywhere we need to make sure that we declare these variables.
 	std::vector<uint32_t> dominated_variables;
+
+	// These are variables which should be declared in a for loop header, if we
+	// fail to use a classic for-loop,
+	// we remove these variables, and fall back to regular variables outside the loop.
+	std::vector<uint32_t> loop_variables;
 };
 
 struct SPIRFunction : IVariant
@@ -552,6 +557,15 @@ struct SPIRVariable : IVariant
 	bool phi_variable = false;
 	bool remapped_variable = false;
 	uint32_t remapped_components = 0;
+
+	// The block which dominates all access to this variable.
+	uint32_t dominator = 0;
+	// If true, this variable is a loop variable, when accessing the variable
+	// outside a loop,
+	// we should statically forward it.
+	bool loop_variable = false;
+	// Set to true while we're inside the for loop.
+	bool loop_variable_enable = false;
 
 	SPIRFunction::Parameter *parameter = nullptr;
 };

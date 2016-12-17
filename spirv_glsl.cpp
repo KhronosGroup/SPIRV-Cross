@@ -1565,7 +1565,9 @@ string CompilerGLSL::to_expression(uint32_t id)
 	case TypeVariable:
 	{
 		auto &var = get<SPIRVariable>(id);
-		if (var.statically_assigned)
+		// If we try to use a loop variable before the loop header, we have to redirect it to the static expression,
+		// the variable has not been declared yet.
+		if (var.statically_assigned || (var.loop_variable && !var.loop_variable_enable))
 			return to_expression(var.static_expression);
 		else if (var.deferred_declaration)
 		{
@@ -3426,6 +3428,33 @@ bool CompilerGLSL::skip_argument(uint32_t id) const
 	return false;
 }
 
+bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &rhs)
+{
+	// Do this with strings because we have a very clear pattern we can check for and it avoids
+	// adding lots of special cases to the code emission.
+	if (rhs.size() < lhs.size() + 3)
+		return false;
+
+	auto index = rhs.find(lhs);
+	if (index != 0)
+		return false;
+
+	// TODO: Shift operators, but it's not important for now.
+	auto op = rhs.find_first_of("+-/*%|&^", lhs.size() + 1);
+	if (op != lhs.size() + 1)
+		return false;
+
+	char bop = rhs[op];
+	auto expr = rhs.substr(lhs.size() + 3);
+	// Try to find increments and decrements. Makes it look neater as += 1, -= 1 is fairly rare to see in real code.
+	// Find some common patterns which are equivalent.
+	if ((bop == '+' || bop == '-') && (expr == "1" || expr == "uint(1)" || expr == "1u" || expr == "int(1u)"))
+		statement(lhs, bop, bop, ";");
+	else
+		statement(lhs, " ", bop, "= ", expr, ";");
+	return true;
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -3492,6 +3521,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (var && var->statically_assigned)
 			var->static_expression = ops[1];
+		else if (var && var->loop_variable && !var->loop_variable_enable)
+			var->static_expression = ops[1];
 		else
 		{
 			auto lhs = to_expression(ops[0]);
@@ -3501,7 +3532,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// For this case, we don't need to invalidate anything and emit any opcode.
 			if (lhs != rhs)
 			{
-				statement(lhs, " = ", rhs, ";");
+				// Tries to optimize assignments like "<lhs> = <lhs> op expr".
+				// While this is purely cosmetic, this is important for legacy ESSL where loop
+				// variable increments must be in either i++ or i += const-expr.
+				// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
+				if (!optimize_read_modify_write(lhs, rhs))
+					statement(lhs, " = ", rhs, ";");
 				register_write(ops[0]);
 			}
 		}
@@ -4922,7 +4958,9 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get<SPIRType>(variable.basetype);
 	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self)));
-	if (variable.initializer)
+	if (variable.loop_variable)
+		res += join(" = ", to_expression(variable.static_expression));
+	else if (variable.initializer)
 		res += join(" = ", to_expression(variable.initializer));
 	return res;
 }
@@ -5347,6 +5385,47 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 	begin_scope();
 
 	current_function = &func;
+	auto &entry_block = get<SPIRBlock>(func.entry_block);
+
+	if (!func.analyzed_variable_scope)
+	{
+		if (options.cfg_analysis)
+		{
+			analyze_variable_scope(func);
+
+			// Check if we can actually use the loop variables we found in analyze_variable_scope.
+			// To use multiple initializers, we need the same type and qualifiers.
+			for (auto block : func.blocks)
+			{
+				auto &b = get<SPIRBlock>(block);
+				if (b.loop_variables.size() < 2)
+					continue;
+
+				uint64_t flags = get_decoration_mask(b.loop_variables.front());
+				uint32_t type = get<SPIRVariable>(b.loop_variables.front()).basetype;
+				bool invalid_initializers = false;
+				for (auto loop_variable : b.loop_variables)
+				{
+					if (flags != get_decoration_mask(loop_variable) ||
+					    type != get<SPIRVariable>(b.loop_variables.front()).basetype)
+					{
+						invalid_initializers = true;
+						break;
+					}
+				}
+
+				if (invalid_initializers)
+				{
+					for (auto loop_variable : b.loop_variables)
+						get<SPIRVariable>(loop_variable).loop_variable = false;
+					b.loop_variables.clear();
+				}
+			}
+		}
+		else
+			entry_block.dominated_variables = func.local_variables;
+		func.analyzed_variable_scope = true;
+	}
 
 	for (auto &v : func.local_variables)
 	{
@@ -5367,24 +5446,19 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 		}
 		else
 		{
-			// HACK: SPIRV likes to use samplers and images as local variables, but GLSL does not allow
-			// this. For these types (non-lvalue), we enforce forwarding through a shadowed variable.
+			// HACK: SPIRV likes to use samplers and images as local variables, but GLSL does not allow this.
+			// For these types (non-lvalue), we enforce forwarding through a shadowed variable.
 			// This means that when we OpStore to these variables, we just write in the expression ID directly.
 			// This breaks any kind of branching, since the variable must be statically assigned.
 			// Branching on samplers and images would be pretty much impossible to fake in GLSL.
 			var.statically_assigned = true;
 		}
-	}
 
-	auto &entry_block = get<SPIRBlock>(func.entry_block);
+		var.loop_variable_enable = false;
 
-	if (!func.analyzed_variable_scope)
-	{
-		if (options.cfg_analysis)
-			analyze_variable_scope(func);
-		else
-			entry_block.dominated_variables = func.local_variables;
-		func.analyzed_variable_scope = true;
+		// Loop variables are never declared outside their for-loop, so block any implicit declaration.
+		if (var.loop_variable)
+			var.deferred_declaration = false;
 	}
 
 	entry_block.loop_dominator = SPIRBlock::NoDominator;
@@ -5614,6 +5688,36 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
 	return merge(statements);
 }
 
+string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
+{
+	if (block.loop_variables.empty())
+		return "";
+
+	if (block.loop_variables.size() == 1)
+	{
+		return variable_decl(get<SPIRVariable>(block.loop_variables.front()));
+	}
+	else
+	{
+		auto &var = get<SPIRVariable>(block.loop_variables.front());
+		auto &type = get<SPIRType>(var.basetype);
+
+		// Don't remap the type here as we have multiple names,
+		// doesn't make sense to remap types for loop variables anyways.
+		// It is assumed here that all relevant qualifiers are equal for all loop variables.
+		string expr = join(to_qualifiers_glsl(var.self), type_to_glsl(type), " ");
+
+		for (auto &loop_var : block.loop_variables)
+		{
+			auto &v = get<SPIRVariable>(loop_var);
+			expr += join(to_name(loop_var), " = ", to_expression(v.static_expression));
+			if (&loop_var != &block.loop_variables.back())
+				expr += ", ";
+		}
+		return expr;
+	}
+}
+
 bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method)
 {
 	SPIRBlock::ContinueBlockType continue_type = continue_block_type(get<SPIRBlock>(block.continue_block));
@@ -5635,8 +5739,8 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			switch (continue_type)
 			{
 			case SPIRBlock::ForLoop:
-				statement("for (; ", to_expression(block.condition), "; ", emit_continue_block(block.continue_block),
-				          ")");
+				statement("for (", emit_for_loop_initializers(block), "; ", to_expression(block.condition), "; ",
+				          emit_continue_block(block.continue_block), ")");
 				break;
 
 			case SPIRBlock::WhileLoop:
@@ -5682,8 +5786,8 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			switch (continue_type)
 			{
 			case SPIRBlock::ForLoop:
-				statement("for (; ", to_expression(child.condition), "; ", emit_continue_block(block.continue_block),
-				          ")");
+				statement("for (", emit_for_loop_initializers(block), "; ", to_expression(child.condition), "; ",
+				          emit_continue_block(block.continue_block), ")");
 				break;
 
 			case SPIRBlock::WhileLoop:
@@ -5727,6 +5831,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	bool select_branch_to_true_block = false;
 	bool skip_direct_branch = false;
+	bool emitted_for_loop_header = false;
 
 	// If we need to force temporaries for certain IDs due to continue blocks, do it before starting loop header.
 	for (auto &tmp : block.declare_temporary)
@@ -5740,15 +5845,19 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	if (block.continue_block)
 		continue_type = continue_block_type(get<SPIRBlock>(block.continue_block));
 
+	// If we have loop variables, stop masking out access to the variable now.
+	for (auto var : block.loop_variables)
+		get<SPIRVariable>(var).loop_variable_enable = true;
+
 	// This is the older loop behavior in glslang which branches to loop body directly from the loop header.
 	if (block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
 	{
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectForLoop))
 		{
-			// The body of while, is actually just the true block, so always branch there
-			// unconditionally.
+			// The body of while, is actually just the true block, so always branch there unconditionally.
 			select_branch_to_true_block = true;
+			emitted_for_loop_header = true;
 		}
 	}
 	// This is the newer loop behavior in glslang which branches from Loop header directly to
@@ -5757,7 +5866,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToDirectForLoop))
+		{
 			skip_direct_branch = true;
+			emitted_for_loop_header = true;
+		}
 	}
 	else if (continue_type == SPIRBlock::DoWhileLoop)
 	{
@@ -5783,6 +5895,16 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		for (auto &op : block.ops)
 			emit_instruction(op);
+	}
+
+	// If we didn't successfully emit a loop header and we had loop variable candidates, we have a problem
+	// as writes to said loop variables might have been masked out, we need a recompile.
+	if (!emitted_for_loop_header && !block.loop_variables.empty())
+	{
+		force_recompile = true;
+		for (auto var : block.loop_variables)
+			get<SPIRVariable>(var).loop_variable = false;
+		block.loop_variables.clear();
 	}
 
 	flush_undeclared_variables(block);

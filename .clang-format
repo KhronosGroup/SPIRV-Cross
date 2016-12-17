@@ -162,3 +162,6 @@ TabWidth: 4
 
 # The way to use tab characters in the resulting file. Possible values: Never, ForIndentation, Always.
 UseTab: ForIndentation
+
+# Do not reflow comments
+ReflowComments: false

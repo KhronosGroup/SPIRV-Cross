@@ -124,8 +124,8 @@ void main()
     vec2 Offset = (_405.InvOceanSize_PatchScale.xy * exp2(lod.x)) * _405.NormalTexCoordScale.zw;
     vec3 Displacement = mix(textureLod(TexDisplacement, NormalizedTex + (Offset * 0.5), lod.x).yxz, textureLod(TexDisplacement, NormalizedTex + (Offset * 1.0), lod.x + 1.0).yxz, vec3(lod.y));
     vec3 WorldPos = vec3(NormalizedPos.x, 0.0, NormalizedPos.y) + Displacement;
-    WorldPos = WorldPos * _405.OceanScale.xyz;
-    WorldPos = WorldPos + _405.OceanPosition.xyz;
+    WorldPos *= _405.OceanScale.xyz;
+    WorldPos += _405.OceanPosition.xyz;
     EyeVec = WorldPos - _58.g_CamPos.xyz;
     TexCoord = vec4(NormalizedTex, NormalizedTex * _405.NormalTexCoordScale.xy) + ((_405.InvOceanSize_PatchScale.xyxy * 0.5) * _405.NormalTexCoordScale.zwzw);
     gl_Position = (((_58.g_ViewProj_Row0 * WorldPos.x) + (_58.g_ViewProj_Row1 * WorldPos.y)) + (_58.g_ViewProj_Row2 * WorldPos.z)) + _58.g_ViewProj_Row3;

@@ -2909,15 +2909,33 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	// Compute the control flow graph for this function.
 	CFG cfg(*this, entry);
 
+	unordered_map<uint32_t, uint32_t> potential_loop_variables;
+
 	// For each variable which is statically accessed.
 	for (auto &var : handler.accessed_variables_to_block)
 	{
 		DominatorBuilder builder(cfg);
 		auto &blocks = var.second;
+		auto &type = expression_type(var.first);
 
 		// Figure out which block is dominating all accesses of those variables.
 		for (auto &block : blocks)
+		{
+			// If we're accessing a variable inside a continue block, this variable might be a loop variable.
+			// We can only use loop variables with scalars, as we cannot track static expressions for vectors.
+			if (is_continue(block) && type.vecsize == 1 && type.columns == 1)
+			{
+				// The variable is used in multiple continue blocks, this is not a loop
+				// candidate, signal that by setting block to -1u.
+				auto &potential = potential_loop_variables[var.first];
+
+				if (potential == 0)
+					potential = block;
+				else
+					potential = -1u;
+			}
 			builder.add_block(block);
+		}
 
 		builder.lift_continue_block_dominator();
 
@@ -2929,6 +2947,87 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		{
 			auto &block = this->get<SPIRBlock>(dominating_block);
 			block.dominated_variables.push_back(var.first);
+			get<SPIRVariable>(var.first).dominator = dominating_block;
 		}
+	}
+
+	// Now, try to analyze whether or not these variables are actually loop variables.
+	for (auto &loop_variable : potential_loop_variables)
+	{
+		auto &var = get<SPIRVariable>(loop_variable.first);
+		auto dominator = var.dominator;
+		auto block = loop_variable.second;
+
+		// The variable was accessed in multiple continue blocks, ignore.
+		if (block == -1u || block == 0)
+			continue;
+
+		// Dead code.
+		if (dominator == 0)
+			continue;
+
+		uint32_t header = 0;
+
+		// Find the loop header for this block.
+		for (auto b : loop_blocks)
+		{
+			auto &potential_header = get<SPIRBlock>(b);
+			if (potential_header.continue_block == block)
+			{
+				header = b;
+				break;
+			}
+		}
+
+		assert(header);
+		auto &header_block = get<SPIRBlock>(header);
+
+		// Now, there are two conditions we need to meet for the variable to be a loop variable.
+		// 1. The dominating block must have a branch-free path to the loop header,
+		// this way we statically know which expression should be part of the loop variable initializer.
+
+		// Walk from the dominator, if there is one straight edge connecting
+		// dominator and loop header, we statically know the loop initializer.
+		bool static_loop_init = true;
+		while (dominator != header)
+		{
+			auto &succ = cfg.get_succeeding_edges(dominator);
+			if (succ.size() != 1)
+			{
+				static_loop_init = false;
+				break;
+			}
+
+			auto &pred = cfg.get_preceding_edges(succ.front());
+			if (pred.size() != 1 || pred.front() != dominator)
+			{
+				static_loop_init = false;
+				break;
+			}
+
+			dominator = succ.front();
+		}
+
+		if (!static_loop_init)
+			continue;
+
+		// The second condition we need to meet is that no access after the loop
+		// merge can occur. Walk the CFG to see if we find anything.
+		auto &blocks = handler.accessed_variables_to_block[loop_variable.first];
+		cfg.walk_from(header_block.merge_block, [&](uint32_t walk_block) {
+			// We found a block which accesses the variable outside the loop.
+			if (blocks.find(walk_block) != end(blocks))
+				static_loop_init = false;
+		});
+
+		if (!static_loop_init)
+			continue;
+
+		// We have a loop variable.
+		header_block.loop_variables.push_back(loop_variable.first);
+		// Need to sort here as variables come from an unordered container, and pushing stuff in wrong order
+		// will break reproducability in regression runs.
+		sort(begin(header_block.loop_variables), end(header_block.loop_variables));
+		get<SPIRVariable>(loop_variable.first).loop_variable = true;
 	}
 }
