@@ -144,8 +144,8 @@ protected:
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	uint32_t pad_to_offset(SPIRType &struct_type, bool is_indxd_vtx_input, uint32_t offset, uint32_t struct_size);
 	SPIRType &get_pad_type(uint32_t pad_len);
-	size_t get_declared_type_size(const SPIRType &type) const;
-	size_t get_declared_type_size(const SPIRType &type, uint64_t dec_mask) const;
+	size_t get_declared_type_size(uint32_t type_id) const;
+	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 
 	MSLConfiguration msl_config;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;

@@ -355,10 +355,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 		}
 	}
 
+	// If no variables qualify, leave
 	if (vars.empty())
-	{
 		return 0;
-	} // Leave if no variables qualify
 
 	// Add a new typed variable for this interface structure.
 	// The initializer expression is allocated here, but populated when the function
@@ -430,7 +429,8 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			first_elem = false;
 		}
 
-		auto &type = get<SPIRType>(p_var->basetype);
+		uint32_t type_id = p_var->basetype;
+		auto &type = get<SPIRType>(type_id);
 		if (type.basetype == SPIRType::Struct)
 		{
 			// Flatten the struct members into the interface struct
@@ -438,34 +438,34 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 			for (auto &member : type.member_types)
 			{
 				// If needed, add a padding member to the struct to align to the next member's offset.
-				uint32_t mbr_offset = get_member_decoration(type.self, i, DecorationOffset);
+				uint32_t mbr_offset = get_member_decoration(type_id, i, DecorationOffset);
 				struct_size =
 				    pad_to_offset(ib_type, is_indxd_vtx_input, (var_dec.offset + mbr_offset), uint32_t(struct_size));
 
 				// Add a reference to the member to the interface struct.
 				auto &membertype = get<SPIRType>(member);
 				uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-				ib_type.member_types.push_back(membertype.self);
+				ib_type.member_types.push_back(member); // membertype.self is different for array types
 
 				// Give the member a name, and assign it an offset within the struct.
 				string mbr_name = ensure_valid_name(to_qualified_member_name(type, i), "m");
-				set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
+				set_member_name(ib_type_id, ib_mbr_idx, mbr_name);
+				set_member_decoration(ib_type_id, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
 				struct_size = get_declared_struct_size(ib_type);
 
 				// Update the original variable reference to include the structure reference
 				string qual_var_name = ib_var_ref + "." + mbr_name;
-				set_member_qualified_name(type.self, i, qual_var_name);
+				set_member_qualified_name(type_id, i, qual_var_name);
 
 				// Copy the variable location from the original variable to the member
-				uint32_t locn = get_member_decoration(type.self, i, DecorationLocation);
-				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
+				uint32_t locn = get_member_decoration(type_id, i, DecorationLocation);
+				set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 
 				// Mark the member as builtin if needed
 				BuiltIn builtin;
 				if (is_member_builtin(type, i, &builtin))
 				{
-					set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+					set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
 					if (builtin == BuiltInPosition)
 						qual_pos_var_name = qual_var_name;
 				}
@@ -480,12 +480,12 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 
 			// Add a reference to the variable type to the interface struct.
 			uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-			ib_type.member_types.push_back(type.self);
+			ib_type.member_types.push_back(type_id);
 
 			// Give the member a name, and assign it an offset within the struct.
-			string mbr_name = ensure_valid_name(to_name(p_var->self), "m");
-			set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
+			string mbr_name = ensure_valid_name(to_expression(p_var->self), "m");
+			set_member_name(ib_type_id, ib_mbr_idx, mbr_name);
+			set_member_decoration(ib_type_id, ib_mbr_idx, DecorationOffset, uint32_t(struct_size));
 			struct_size = get_declared_struct_size(ib_type);
 
 			// Update the original variable reference to include the structure reference
@@ -494,12 +494,12 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, dec.location);
+			set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, dec.location);
 
 			// Mark the member as builtin if needed
 			if (is_builtin_variable(*p_var))
 			{
-				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, dec.builtin_type);
+				set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, dec.builtin_type);
 				if (dec.builtin_type == BuiltInPosition)
 					qual_pos_var_name = qual_var_name;
 			}
@@ -507,7 +507,7 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 	}
 
 	// Sort the members of the interface structure by their offsets
-	MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Offset);
+	MemberSorter memberSorter(ib_type, meta[ib_type_id], MemberSorter::Offset);
 	memberSorter.sort();
 
 	return ib_var_id;
@@ -1604,14 +1604,13 @@ string CompilerMSL::to_name(uint32_t id, bool allow_alias)
 // Returns a name that combines the name of the struct with the name of the member, except for Builtins
 string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t index)
 {
-	//Start with existing member name
-	string mbr_name = to_member_name(type, index);
-
 	// Don't qualify Builtin names because they are unique and are treated as such when building expressions
-	if (is_member_builtin(type, index, nullptr))
-		return mbr_name;
+	BuiltIn builtin;
+	if (is_member_builtin(type, index, &builtin))
+		return builtin_to_glsl(builtin);
 
 	// Strip any underscore prefix from member name
+	string mbr_name = to_member_name(type, index);
 	size_t startPos = mbr_name.find_first_not_of("_");
 	mbr_name = (startPos != std::string::npos) ? mbr_name.substr(startPos) : "";
 	return join(to_name(type.self), "_", mbr_name);
@@ -1758,15 +1757,14 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 	return img_type_name;
 }
 
-// Returns an MSL string identifying the name of a SPIR-V builtin
+// Returns an MSL string identifying the name of a SPIR-V builtin.
+// Output builtins are qualified with the name of the stage out structure.
 string CompilerMSL::builtin_to_glsl(BuiltIn builtin)
 {
 	switch (builtin)
 	{
-	case BuiltInPosition:
-		return qual_pos_var_name.empty() ? (stage_out_var_name + ".gl_Position") : qual_pos_var_name;
-	case BuiltInPointSize:
-		return (stage_out_var_name + ".gl_PointSize");
+
+	// Override GLSL compiler strictness
 	case BuiltInVertexId:
 		return "gl_VertexID";
 	case BuiltInInstanceId:
@@ -1775,40 +1773,19 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin)
 		return "gl_VertexIndex";
 	case BuiltInInstanceIndex:
 		return "gl_InstanceIndex";
-	case BuiltInPrimitiveId:
-		return "gl_PrimitiveID";
-	case BuiltInInvocationId:
-		return "gl_InvocationID";
+
+	// Output builtins qualified with output struct when used in the entry function
+	case BuiltInPosition:
+	case BuiltInPointSize:
+	case BuiltInClipDistance:
 	case BuiltInLayer:
-		return "gl_Layer";
-	case BuiltInTessLevelOuter:
-		return "gl_TessLevelOuter";
-	case BuiltInTessLevelInner:
-		return "gl_TessLevelInner";
-	case BuiltInTessCoord:
-		return "gl_TessCoord";
-	case BuiltInFragCoord:
-		return "gl_FragCoord";
-	case BuiltInPointCoord:
-		return "gl_PointCoord";
-	case BuiltInFrontFacing:
-		return "gl_FrontFacing";
-	case BuiltInFragDepth:
-		return "gl_FragDepth";
-	case BuiltInNumWorkgroups:
-		return "gl_NumWorkGroups";
-	case BuiltInWorkgroupSize:
-		return "gl_WorkGroupSize";
-	case BuiltInWorkgroupId:
-		return "gl_WorkGroupID";
-	case BuiltInLocalInvocationId:
-		return "gl_LocalInvocationID";
-	case BuiltInGlobalInvocationId:
-		return "gl_GlobalInvocationID";
-	case BuiltInLocalInvocationIndex:
-		return "gl_LocalInvocationIndex";
+		if (current_function && (current_function->self == entry_point))
+			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin);
+		else
+			return CompilerGLSL::builtin_to_glsl(builtin);
+
 	default:
-		return "gl_???";
+		return CompilerGLSL::builtin_to_glsl(builtin);
 	}
 }
 
@@ -1912,21 +1889,23 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 // Returns the effective size of a buffer block struct member.
 size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
-	auto &type = get<SPIRType>(struct_type.member_types[index]);
+	uint32_t type_id = struct_type.member_types[index];
 	auto dec_mask = get_member_decoration_mask(struct_type.self, index);
-	return get_declared_type_size(type, dec_mask);
+	return get_declared_type_size(type_id, dec_mask);
 }
 
 // Returns the effective size of a variable type.
-size_t CompilerMSL::get_declared_type_size(const SPIRType &type) const
+size_t CompilerMSL::get_declared_type_size(uint32_t type_id) const
 {
-	return get_declared_type_size(type, get_decoration_mask(type.self));
+	return get_declared_type_size(type_id, get_decoration_mask(type_id));
 }
 
 // Returns the effective size of a variable type or member type,
 // taking into consideration the specified mask of decorations.
-size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_mask) const
+size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const
 {
+	auto &type = get<SPIRType>(type_id);
+
 	if (type.basetype == SPIRType::Struct)
 		return get_declared_struct_size(type);
 
@@ -1947,33 +1926,27 @@ size_t CompilerMSL::get_declared_type_size(const SPIRType &type, uint64_t dec_ma
 	unsigned vecsize = type.vecsize;
 	unsigned columns = type.columns;
 
-	if (type.array.empty())
+	if (!type.array.empty())
 	{
-		// Vectors.
-		if (columns == 1)
-			return vecsize * component_size;
-		else
-		{
-			// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
-			if ((dec_mask & (1ull << DecorationRowMajor)) && columns == 3)
-				columns = 4;
-			else if ((dec_mask & (1ull << DecorationColMajor)) && vecsize == 3)
-				vecsize = 4;
-
-			return vecsize * columns * component_size;
-		}
-	}
-	else
-	{
-		// For arrays, we can use ArrayStride to get an easy check.
+		// For arrays, we can use ArrayStride to get an easy check if it has been populated.
 		// ArrayStride is part of the array type not OpMemberDecorate.
-		auto &dec = meta[type.self].decoration;
+		auto &dec = meta[type_id].decoration;
 		if (dec.decoration_flags & (1ull << DecorationArrayStride))
 			return dec.array_stride * to_array_size_literal(type, uint32_t(type.array.size()) - 1);
-		else
-		{
-			throw CompilerError("Type does not have ArrayStride set.");
-		}
+	}
+
+	// Vectors.
+	if (columns == 1)
+		return vecsize * component_size;
+	else
+	{
+		// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
+		if ((dec_mask & (1ull << DecorationRowMajor)) && columns == 3)
+			columns = 4;
+		else if ((dec_mask & (1ull << DecorationColMajor)) && vecsize == 3)
+			vecsize = 4;
+
+		return vecsize * columns * component_size;
 	}
 }
 
