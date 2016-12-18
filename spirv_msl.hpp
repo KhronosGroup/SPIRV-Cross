@@ -18,7 +18,7 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
-#include <set>
+#include <unordered_set>
 #include <vector>
 
 namespace spirv_cross
@@ -117,11 +117,11 @@ protected:
 	void add_builtin(spv::BuiltIn builtin_type);
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
-	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
-	                                            std::set<uint32_t> &global_var_ids,
-	                                            std::set<uint32_t> &processed_func_ids);
+	void extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
+	                                            std::unordered_set<uint32_t> &global_var_ids,
+	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	void add_interface_structs();
-	void bind_vertex_attributes(std::set<uint32_t> &bindings);
+	void bind_vertex_attributes(std::unordered_set<uint32_t> &bindings);
 	uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
@@ -169,7 +169,9 @@ struct MemberSorter
 	enum SortAspect
 	{
 		Location,
+		LocationReverse,
 		Offset,
+		OffsetThenLocationReverse,
 	};
 
 	void sort();
