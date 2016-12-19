@@ -494,7 +494,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, dec.location);
+            if (is_decoration_set(p_var->self, DecorationLocation)) {
+                set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, dec.location);
+            }
 
 			// Mark the member as builtin if needed
 			if (is_builtin_variable(*p_var))

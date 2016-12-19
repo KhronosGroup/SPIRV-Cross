@@ -996,6 +996,12 @@ uint64_t Compiler::get_decoration_mask(uint32_t id) const
 	return dec.decoration_flags;
 }
 
+bool Compiler::is_decoration_set(uint32_t id, spv::Decoration decoration) const
+{
+    auto &dec = meta.at(id).decoration;
+    return (dec.decoration_flags & (1ull << DecorationLocation));
+}
+
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 {
 	auto &dec = meta.at(id).decoration;

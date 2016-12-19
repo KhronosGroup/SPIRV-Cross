@@ -136,6 +136,8 @@ public:
 	// Gets a bitmask for the decorations which are applied to ID.
 	// I.e. (1ull << spv::DecorationFoo) | (1ull << spv::DecorationBar)
 	uint64_t get_decoration_mask(uint32_t id) const;
+    
+    bool is_decoration_set(uint32_t id, spv::Decoration decoration) const;
 
 	// Gets the value for decorations which take arguments.
 	// If decoration doesn't exist or decoration is not recognized,
