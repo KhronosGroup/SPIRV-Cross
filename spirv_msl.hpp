@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -113,6 +114,8 @@ protected:
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) override;
 
+	void register_custom_functions();
+	void emit_custom_functions();
 	void extract_builtins();
 	void add_builtin(spv::BuiltIn builtin_type);
 	void localize_global_variables();
@@ -148,6 +151,7 @@ protected:
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 
 	MSLConfiguration msl_config;
+	std::unordered_set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	std::unordered_map<uint32_t, uint32_t> builtin_vars;

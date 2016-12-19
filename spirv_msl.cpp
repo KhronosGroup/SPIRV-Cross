@@ -51,6 +51,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 
 	set_enabled_interface_variables(get_active_interface_variables());
 
+	register_custom_functions();
 	extract_builtins();
 	localize_global_variables();
 	add_interface_structs();
@@ -83,6 +84,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 
 		emit_header();
 		emit_resources();
+		emit_custom_functions();
 		emit_function_declarations();
 		emit_function(get<SPIRFunction>(entry_point), 0);
 
@@ -96,6 +98,25 @@ string CompilerMSL::compile()
 {
 	MSLConfiguration default_msl_cfg;
 	return compile(default_msl_cfg, nullptr, nullptr);
+}
+
+// Register the need to output any custom functions.
+void CompilerMSL::register_custom_functions()
+{
+	custom_function_ops.clear();
+	for (auto &i : inst)
+	{
+		auto op = static_cast<Op>(i.op);
+		switch (op)
+		{
+		case OpFMod:
+			custom_function_ops.insert(op);
+			break;
+
+		default:
+			break;
+		}
+	}
 }
 
 // Adds any builtins used by this shader to the builtin_vars collection
@@ -542,6 +563,31 @@ void CompilerMSL::emit_header()
 	statement("");
 }
 
+// Emits any needed custom function bodies.
+void CompilerMSL::emit_custom_functions()
+{
+	for (auto &op : custom_function_ops)
+	{
+		switch (op)
+		{
+		case OpFMod:
+			statement("// Support GLSL mod(), which is slightly different than Metal fmod()");
+			statement("template<typename Tx, typename Ty>");
+			statement("Tx mod(Tx x, Ty y);");
+			statement("template<typename Tx, typename Ty>");
+			statement("Tx mod(Tx x, Ty y)");
+			begin_scope();
+			statement("return x - y * floor(x / y);");
+			end_scope();
+			statement("");
+			break;
+
+		default:
+			break;
+		}
+	}
+}
+
 void CompilerMSL::emit_resources()
 {
 
@@ -610,11 +656,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
-
-	// ALU
-	case OpFMod:
-		BFOP(fmod);
-		break;
 
 	// Comparisons
 	case OpIEqual:
