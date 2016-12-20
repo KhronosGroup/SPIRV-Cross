@@ -19,6 +19,8 @@
 #include <algorithm>
 #include <numeric>
 
+#include <iostream>
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
@@ -285,8 +287,9 @@ void CompilerMSL::add_interface_structs()
 		if (var_id)
 			stage_in_var_ids.push_back(var_id);
 	}
-
+    
 	stage_out_var_id = add_interface_struct(StorageClassOutput);
+    stage_uniforms_var_id = add_interface_struct(StorageClassUniformConstant); // TODO: use StorageClassUniform
 }
 
 // Iterate through the variables and populates each input vertex attribute variable
@@ -409,6 +412,10 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 				blk.return_value = ib_var_id;
 		}
 	}
+    
+    if (storage == StorageClassUniformConstant) {
+        ib_var_ref = stage_uniform_var_name;
+    }
 
 	set_name(ib_type_id, get_entry_point_name() + "_" + ib_var_ref);
 	set_name(ib_var_id, ib_var_ref);
@@ -573,6 +580,9 @@ void CompilerMSL::emit_resources()
 	emit_interface_block(stage_out_var_id);
 
 	// TODO: Consolidate and output loose uniforms into an input struct
+    
+    emit_interface_block(stage_uniforms_var_id);
+    
 }
 
 // Override for MSL-specific syntax instructions

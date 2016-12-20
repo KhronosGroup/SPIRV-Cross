@@ -155,9 +155,11 @@ protected:
 	std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
 	std::vector<uint32_t> stage_in_var_ids;
 	uint32_t stage_out_var_id = 0;
+    uint32_t stage_uniforms_var_id = 0;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
+    std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
 };
 
