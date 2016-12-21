@@ -94,6 +94,8 @@ public:
 
 	// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
 	std::string compile() override;
+    
+    void set_func_name(std::string func_name);
 
 protected:
 	void emit_instruction(const Instruction &instr) override;
@@ -129,6 +131,7 @@ protected:
 	void emit_function_declarations();
 
 	std::string func_type_decl(SPIRType &type);
+    std::string _clean_msl_main_func_name;
 	std::string clean_func_name(std::string func_name);
 	std::string entry_point_args(bool append_comma);
 	std::string get_entry_point_name();

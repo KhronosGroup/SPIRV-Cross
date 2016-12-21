@@ -1385,8 +1385,12 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 // Ensures the function name is not "main", which is illegal in MSL
 string CompilerMSL::clean_func_name(string func_name)
 {
-	static std::string _clean_msl_main_func_name = "mmain";
+	if (_clean_msl_main_func_name.empty()) _clean_msl_main_func_name = "mmain";
 	return (func_name == "main") ? _clean_msl_main_func_name : func_name;
+}
+
+void CompilerMSL::set_func_name(std::string func_name) {
+    _clean_msl_main_func_name = func_name;
 }
 
 // Returns a string containing a comma-delimited list of args for the entry point function
