@@ -104,19 +104,8 @@ string CompilerMSL::compile()
 void CompilerMSL::register_custom_functions()
 {
 	custom_function_ops.clear();
-	for (auto &i : inst)
-	{
-		auto op = static_cast<Op>(i.op);
-		switch (op)
-		{
-		case OpFMod:
-			custom_function_ops.insert(op);
-			break;
-
-		default:
-			break;
-		}
-	}
+	CustomFunctionHandler handler(*this, custom_function_ops);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 }
 
 // Adds any builtins used by this shader to the builtin_vars collection
@@ -2005,9 +1994,24 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 	}
 }
 
+// If the opcode requires a bespoke custom function be output, remember it.
+bool CompilerMSL::CustomFunctionHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	switch (opcode)
+	{
+	case OpFMod:
+		custom_function_ops.insert(opcode);
+		break;
+
+	default:
+		break;
+	}
+	return true;
+}
+
 // Sort both type and meta member content based on builtin status (put builtins at end),
 // then by the required sorting aspect.
-void MemberSorter::sort()
+void CompilerMSL::MemberSorter::sort()
 {
 	// Create a temporary array of consecutive member indices and sort it base on how
 	// the members should be reordered, based on builtin and sorting aspect meta info.
@@ -2029,7 +2033,7 @@ void MemberSorter::sort()
 }
 
 // Sort first by builtin status (put builtins at end), then by the sorting aspect.
-bool MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
+bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 {
 	auto &mbr_meta1 = meta.members[mbr_idx1];
 	auto &mbr_meta2 = meta.members[mbr_idx2];

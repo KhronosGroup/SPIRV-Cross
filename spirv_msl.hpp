@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -151,7 +152,7 @@ protected:
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 
 	MSLConfiguration msl_config;
-	std::unordered_set<uint32_t> custom_function_ops;
+	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	std::unordered_map<uint32_t, uint32_t> builtin_vars;
@@ -163,32 +164,48 @@ protected:
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string sampler_name_suffix = "Smplr";
-};
 
-// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
-// aspect, which defines which aspect of the struct members will be used to sort them.
-// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
-struct MemberSorter
-{
-	enum SortAspect
+	// Extracts a set of opcodes that should be implemented as a bespoke custom function
+	// whose full source code is output as part of the shader source code.
+	struct CustomFunctionHandler : OpcodeHandler
 	{
-		Location,
-		LocationReverse,
-		Offset,
-		OffsetThenLocationReverse,
+		CustomFunctionHandler(const CompilerMSL &compiler_, std::set<uint32_t> &custom_function_ops_)
+		    : compiler(compiler_)
+		    , custom_function_ops(custom_function_ops_)
+		{
+		}
+
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+
+		const CompilerMSL &compiler;
+		std::set<uint32_t> &custom_function_ops;
 	};
 
-	void sort();
-	bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
-	MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
-	    : type(t)
-	    , meta(m)
-	    , sort_aspect(sa)
+	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
+	// aspect, which defines which aspect of the struct members will be used to sort them.
+	// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
+	struct MemberSorter
 	{
-	}
-	SPIRType &type;
-	Meta &meta;
-	SortAspect sort_aspect;
+		enum SortAspect
+		{
+			Location,
+			LocationReverse,
+			Offset,
+			OffsetThenLocationReverse,
+		};
+
+		void sort();
+		bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
+		MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
+		    : type(t)
+		    , meta(m)
+		    , sort_aspect(sa)
+		{
+		}
+		SPIRType &type;
+		Meta &meta;
+		SortAspect sort_aspect;
+	};
 };
 }
 
