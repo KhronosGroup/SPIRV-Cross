@@ -30,6 +30,17 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+#ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
+#define THROW(x)                   \
+	do                             \
+	{                              \
+		fprintf(stderr, "%s.", x); \
+		exit(1);                   \
+	} while (0)
+#else
+#define THROW(x) runtime_error(x)
+#endif
+
 struct CLIParser;
 struct CLICallbacks
 {
@@ -53,7 +64,9 @@ struct CLIParser
 
 	bool parse()
 	{
+#ifndef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 		try
+#endif
 		{
 			while (argc && !ended_state)
 			{
@@ -69,7 +82,7 @@ struct CLIParser
 					auto itr = cbs.callbacks.find(next);
 					if (itr == ::end(cbs.callbacks))
 					{
-						throw logic_error("Invalid argument.\n");
+						THROW("Invalid argument");
 					}
 
 					itr->second(*this);
@@ -78,6 +91,7 @@ struct CLIParser
 
 			return true;
 		}
+#ifndef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 		catch (...)
 		{
 			if (cbs.error_handler)
@@ -86,6 +100,7 @@ struct CLIParser
 			}
 			return false;
 		}
+#endif
 	}
 
 	void end()
@@ -97,13 +112,13 @@ struct CLIParser
 	{
 		if (!argc)
 		{
-			throw logic_error("Tried to parse uint, but nothing left in arguments.\n");
+			THROW("Tried to parse uint, but nothing left in arguments");
 		}
 
 		uint32_t val = stoul(*argv);
 		if (val > numeric_limits<uint32_t>::max())
 		{
-			throw out_of_range("next_uint() out of range.\n");
+			THROW("next_uint() out of range");
 		}
 
 		argc--;
@@ -116,7 +131,7 @@ struct CLIParser
 	{
 		if (!argc)
 		{
-			throw logic_error("Tried to parse double, but nothing left in arguments.\n");
+			THROW("Tried to parse double, but nothing left in arguments");
 		}
 
 		double val = stod(*argv);
@@ -131,7 +146,7 @@ struct CLIParser
 	{
 		if (!argc)
 		{
-			throw logic_error("Tried to parse string, but nothing left in arguments.\n");
+			THROW("Tried to parse string, but nothing left in arguments");
 		}
 
 		const char *ret = *argv;

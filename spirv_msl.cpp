@@ -73,7 +73,7 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	do
 	{
 		if (pass_count >= 3)
-			throw CompilerError("Over 3 compilation loops detected. Must be a bug!");
+			SPIRV_CROSS_THROW("Over 3 compilation loops detected. Must be a bug!");
 
 		reset();
 
@@ -745,7 +745,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			}
 		}
 		else
-			throw CompilerError("Invalid type for OpImageQuerySize.");
+			SPIRV_CROSS_THROW("Invalid type for OpImageQuerySize.");
 		break;
 	}
 
@@ -876,7 +876,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 	uint32_t length = i.length;
 
 	if (i.offset + length > spirv.size())
-		throw CompilerError("Compiler::compile() opcode out of range.");
+		SPIRV_CROSS_THROW("Compiler::compile() opcode out of range.");
 
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
@@ -1972,7 +1972,7 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
 	case SPIRType::Sampler:
-		throw CompilerError("Querying size of object with opaque size.");
+		SPIRV_CROSS_THROW("Querying size of object with opaque size.");
 	default:
 		break;
 	}

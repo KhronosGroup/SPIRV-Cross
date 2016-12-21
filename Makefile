@@ -15,7 +15,11 @@ CXXFLAGS += -std=c++11 -Wall -Wextra -Wshadow -D__STDC_LIMIT_MACROS
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -O0 -g
 else
-	CXXFLAGS += -O2 -g
+	CXXFLAGS += -O2 -DNDEBUG
+endif
+
+ifeq ($(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS), 1)
+	CXXFLAGS += -DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS -fno-exceptions
 endif
 
 all: $(TARGET)
