@@ -483,7 +483,7 @@ protected:
 
 	void analyze_variable_scope(SPIRFunction &function);
 
-private:
+protected:
 	void parse();
 	void parse(const Instruction &i);
 

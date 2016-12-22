@@ -2957,6 +2957,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 		return "gl_Position";
 	case BuiltInPointSize:
 		return "gl_PointSize";
+	case BuiltInClipDistance:
+		return "gl_ClipDistance";
 	case BuiltInVertexId:
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW(
@@ -3010,7 +3012,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 	case BuiltInLocalInvocationIndex:
 		return "gl_LocalInvocationIndex";
 	default:
-		return "gl_???";
+		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
 }
 

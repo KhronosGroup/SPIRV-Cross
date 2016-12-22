@@ -19,6 +19,8 @@
 
 #include "spirv_glsl.hpp"
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace spirv_cross
@@ -113,15 +115,17 @@ protected:
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) override;
 
+	void register_custom_functions();
+	void emit_custom_functions();
 	void extract_builtins();
 	void add_builtin(spv::BuiltIn builtin_type);
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
-	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
-	                                            std::set<uint32_t> &global_var_ids,
-	                                            std::set<uint32_t> &processed_func_ids);
+	void extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
+	                                            std::unordered_set<uint32_t> &global_var_ids,
+	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	void add_interface_structs();
-	void bind_vertex_attributes(std::set<uint32_t> &bindings);
+	void bind_vertex_attributes(std::unordered_set<uint32_t> &bindings);
 	uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
@@ -144,10 +148,11 @@ protected:
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	uint32_t pad_to_offset(SPIRType &struct_type, bool is_indxd_vtx_input, uint32_t offset, uint32_t struct_size);
 	SPIRType &get_pad_type(uint32_t pad_len);
-	size_t get_declared_type_size(const SPIRType &type) const;
-	size_t get_declared_type_size(const SPIRType &type, uint64_t dec_mask) const;
+	size_t get_declared_type_size(uint32_t type_id) const;
+	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 
 	MSLConfiguration msl_config;
+	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	std::unordered_map<uint32_t, uint32_t> builtin_vars;
@@ -159,30 +164,48 @@ protected:
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string sampler_name_suffix = "Smplr";
-};
 
-// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
-// aspect, which defines which aspect of the struct members will be used to sort them.
-// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
-struct MemberSorter
-{
-	enum SortAspect
+	// Extracts a set of opcodes that should be implemented as a bespoke custom function
+	// whose full source code is output as part of the shader source code.
+	struct CustomFunctionHandler : OpcodeHandler
 	{
-		Location,
-		Offset,
+		CustomFunctionHandler(const CompilerMSL &compiler_, std::set<uint32_t> &custom_function_ops_)
+		    : compiler(compiler_)
+		    , custom_function_ops(custom_function_ops_)
+		{
+		}
+
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+
+		const CompilerMSL &compiler;
+		std::set<uint32_t> &custom_function_ops;
 	};
 
-	void sort();
-	bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
-	MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
-	    : type(t)
-	    , meta(m)
-	    , sort_aspect(sa)
+	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
+	// aspect, which defines which aspect of the struct members will be used to sort them.
+	// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
+	struct MemberSorter
 	{
-	}
-	SPIRType &type;
-	Meta &meta;
-	SortAspect sort_aspect;
+		enum SortAspect
+		{
+			Location,
+			LocationReverse,
+			Offset,
+			OffsetThenLocationReverse,
+		};
+
+		void sort();
+		bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
+		MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
+		    : type(t)
+		    , meta(m)
+		    , sort_aspect(sa)
+		{
+		}
+		SPIRType &type;
+		Meta &meta;
+		SortAspect sort_aspect;
+	};
 };
 }
 
