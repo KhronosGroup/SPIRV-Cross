@@ -104,7 +104,6 @@ protected:
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
-	void emit_texture_op(const Instruction &i) override;
 	void emit_fixup() override;
 	std::string type_to_glsl(const SPIRType &type) override;
 	std::string image_type_glsl(const SPIRType &type) override;
@@ -114,6 +113,13 @@ protected:
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) override;
+	std::string to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+	                             bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod,
+	                             bool has_dref) override;
+	std::string to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
+	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
+	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 
 	void register_custom_functions();
 	void emit_custom_functions();
@@ -150,6 +156,7 @@ protected:
 	SPIRType &get_pad_type(uint32_t pad_len);
 	size_t get_declared_type_size(uint32_t type_id) const;
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
+	std::string to_component_argument(uint32_t id);
 
 	MSLConfiguration msl_config;
 	std::set<uint32_t> custom_function_ops;

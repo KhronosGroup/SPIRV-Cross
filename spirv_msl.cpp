@@ -857,139 +857,50 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 	statement(decl, (is_decl ? ";" : ""));
 }
 
-// Emit a texture operation
-void CompilerMSL::emit_texture_op(const Instruction &i)
+// Returns the texture sampling function string for the specified image and sampling characteristics.
+string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+                                     bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod,
+                                     bool has_dref)
 {
-	auto ops = stream(i);
-	auto op = static_cast<Op>(i.op);
-	uint32_t length = i.length;
-
-	if (i.offset + length > spirv.size())
-		SPIRV_CROSS_THROW("Compiler::compile() opcode out of range.");
-
-	uint32_t result_type = ops[0];
-	uint32_t id = ops[1];
-	uint32_t img = ops[2];
-	uint32_t coord = ops[3];
-	uint32_t comp = 0;
-	bool gather = false;
-	bool fetch = false;
-	const uint32_t *opt = nullptr;
-
-	switch (op)
-	{
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleDrefExplicitLod:
-		opt = &ops[5];
-		length -= 5;
-		break;
-
-	case OpImageSampleProjDrefImplicitLod:
-	case OpImageSampleProjDrefExplicitLod:
-		opt = &ops[5];
-		length -= 5;
-		break;
-
-	case OpImageDrefGather:
-		opt = &ops[5];
-		gather = true;
-		length -= 5;
-		break;
-
-	case OpImageGather:
-		comp = ops[4];
-		opt = &ops[5];
-		gather = true;
-		length -= 5;
-		break;
-
-	case OpImageFetch:
-		fetch = true;
-		opt = &ops[4];
-		length -= 4;
-		break;
-
-	case OpImageSampleImplicitLod:
-	case OpImageSampleExplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleProjExplicitLod:
-	default:
-		opt = &ops[4];
-		length -= 4;
-		break;
-	}
-
-	uint32_t bias = 0;
-	uint32_t lod = 0;
-	uint32_t grad_x = 0;
-	uint32_t grad_y = 0;
-	uint32_t coffset = 0;
-	uint32_t offset = 0;
-	uint32_t coffsets = 0;
-	uint32_t sample = 0;
-	uint32_t flags = 0;
-
-	if (length)
-	{
-		flags = *opt;
-		opt++;
-		length--;
-	}
-
-	auto test = [&](uint32_t &v, uint32_t flag) {
-		if (length && (flags & flag))
-		{
-			v = *opt++;
-			length--;
-		}
-	};
-
-	test(bias, ImageOperandsBiasMask);
-	test(lod, ImageOperandsLodMask);
-	test(grad_x, ImageOperandsGradMask);
-	test(grad_y, ImageOperandsGradMask);
-	test(coffset, ImageOperandsConstOffsetMask);
-	test(offset, ImageOperandsOffsetMask);
-	test(coffsets, ImageOperandsConstOffsetsMask);
-	test(sample, ImageOperandsSampleMask);
-
-	auto &img_type = expression_type(img).image;
-
 	// Texture reference
-	string expr = to_expression(img);
+	string fname = to_expression(img) + ".";
 
 	// Texture function and sampler
-	if (fetch)
-	{
-		expr += ".read(";
-	}
+	if (is_fetch)
+		fname += "read";
+	else if (is_gather)
+		fname += "gather";
 	else
-	{
-		expr += std::string(".") + (gather ? "gather" : "sample") + "(" + to_sampler_expression(img) + ", ";
-	}
+		fname += "sample";
 
-	// Add texture coordinates
+	if (has_dref)
+		fname += "_compare";
+
+	return fname;
+}
+
+// Returns the function args for a texture sampling function for the specified image and sampling characteristics.
+string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+                                     uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
+                                     uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
+                                     uint32_t comp, uint32_t sample, bool *p_forward)
+{
+	string farg_str = to_sampler_expression(img);
+
+	// Texture coordinates
 	bool forward = should_forward(coord);
 	auto coord_expr = to_enclosed_expression(coord);
 	string tex_coords = coord_expr;
-	string array_coord;
+	const char *alt_coord = "";
 
-	switch (img_type.dim)
+	switch (imgtype.image.dim)
 	{
-	case spv::DimBuffer:
-		break;
 	case Dim1D:
-		if (img_type.arrayed)
-		{
-			tex_coords = coord_expr + ".x";
-			array_coord = coord_expr + ".y";
-			remove_duplicate_swizzle(tex_coords);
-			remove_duplicate_swizzle(array_coord);
-		}
-		else
-		{
-			tex_coords = coord_expr + ".x";
-		}
+		tex_coords = coord_expr + ".x";
+		remove_duplicate_swizzle(tex_coords);
+
+		alt_coord = ".y";
+
 		break;
 
 	case Dim2D:
@@ -1007,11 +918,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 			remove_duplicate_swizzle(tex_coords);
 		}
 
-		if (img_type.arrayed)
-		{
-			array_coord = coord_expr + ".z";
-			remove_duplicate_swizzle(array_coord);
-		}
+		alt_coord = ".z";
 
 		break;
 
@@ -1033,40 +940,48 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 			remove_duplicate_swizzle(tex_coords);
 		}
 
-		if (img_type.arrayed)
-		{
-			array_coord = coord_expr + ".w";
-			remove_duplicate_swizzle(array_coord);
-		}
+		alt_coord = ".w";
 
 		break;
 
 	default:
 		break;
 	}
-	expr += tex_coords;
 
-	// Add texture array index
-	if (!array_coord.empty())
-		expr += ", " + array_coord;
+	// Use alt coord for projection or texture array
+	if (imgtype.image.arrayed)
+		tex_coords += ", " + coord_expr + alt_coord;
+	else if (is_proj)
+		tex_coords += " / " + coord_expr + alt_coord;
+
+	farg_str += ", ";
+	farg_str += tex_coords;
+
+	// Depth compare reference value
+	if (dref)
+	{
+		forward = forward && should_forward(dref);
+		farg_str += ", ";
+		farg_str += to_expression(dref);
+	}
 
 	// LOD Options
 	if (bias)
 	{
 		forward = forward && should_forward(bias);
-		expr += ", bias(" + to_expression(bias) + ")";
+		farg_str += ", bias(" + to_expression(bias) + ")";
 	}
 
 	if (lod)
 	{
 		forward = forward && should_forward(lod);
-		if (fetch)
+		if (is_fetch)
 		{
-			expr += ", " + to_expression(lod);
+			farg_str += ", " + to_expression(lod);
 		}
 		else
 		{
-			expr += ", level(" + to_expression(lod) + ")";
+			farg_str += ", level(" + to_expression(lod) + ")";
 		}
 	}
 
@@ -1075,7 +990,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 		forward = forward && should_forward(grad_x);
 		forward = forward && should_forward(grad_y);
 		string grad_opt;
-		switch (img_type.dim)
+		switch (imgtype.image.dim)
 		{
 		case Dim2D:
 			grad_opt = "2d";
@@ -1090,7 +1005,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 			grad_opt = "unsupported_gradient_dimension";
 			break;
 		}
-		expr += ", gradient" + grad_opt + "(" + to_expression(grad_x) + ", " + to_expression(grad_y) + ")";
+		farg_str += ", gradient" + grad_opt + "(" + to_expression(grad_x) + ", " + to_expression(grad_y) + ")";
 	}
 
 	// Add offsets
@@ -1108,7 +1023,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 
 	if (!offset_expr.empty())
 	{
-		switch (img_type.dim)
+		switch (imgtype.image.dim)
 		{
 		case Dim2D:
 			if (msl_config.flip_frag_y)
@@ -1125,7 +1040,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 				remove_duplicate_swizzle(offset_expr);
 			}
 
-			expr += ", " + offset_expr;
+			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
@@ -1145,7 +1060,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 				remove_duplicate_swizzle(offset_expr);
 			}
 
-			expr += ", " + offset_expr;
+			farg_str += ", " + offset_expr;
 			break;
 
 		default:
@@ -1156,12 +1071,41 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 	if (comp)
 	{
 		forward = forward && should_forward(comp);
-		expr += ", " + to_expression(comp);
+		farg_str += ", " + to_component_argument(comp);
 	}
 
-	expr += ")";
+	*p_forward = forward;
 
-	emit_op(result_type, id, expr, forward);
+	return farg_str;
+}
+
+// Returns a string to use in an image sampling function argument.
+// The ID must be a scalar constant.
+string CompilerMSL::to_component_argument(uint32_t id)
+{
+	if (ids[id].get_type() != TypeConstant)
+	{
+		SPIRV_CROSS_THROW("ID " + to_string(id) + " is not an OpConstant.");
+		return "component::x";
+	}
+
+	uint32_t component_index = get<SPIRConstant>(id).scalar();
+	switch (component_index)
+	{
+	case 0:
+		return "component::x";
+	case 1:
+		return "component::y";
+	case 2:
+		return "component::z";
+	case 3:
+		return "component::w";
+
+	default:
+		SPIRV_CROSS_THROW("The value (" + to_string(component_index) + ") of OpConstant ID " + to_string(id) +
+		                  " is not a valid Component index, which must be one of 0, 1, 2, or 3.");
+		return "component::x";
+	}
 }
 
 // Establish sampled image as expression object and assign the sampler to it.
