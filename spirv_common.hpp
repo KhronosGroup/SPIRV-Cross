@@ -893,7 +893,6 @@ struct Meta
 		uint32_t input_attachment = 0;
 		uint32_t spec_id = 0;
 		bool builtin = false;
-		bool per_instance = false;
 	};
 
 	Decoration decoration;

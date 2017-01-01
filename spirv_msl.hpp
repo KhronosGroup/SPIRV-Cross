@@ -29,7 +29,6 @@ namespace spirv_cross
 // Options for compiling to Metal Shading Language
 struct MSLConfiguration
 {
-	uint32_t vtx_attr_stage_in_binding = 0;
 	bool flip_vert_y = true;
 	bool flip_frag_y = true;
 	bool is_rendering_points = false;
@@ -41,10 +40,6 @@ struct MSLConfiguration
 struct MSLVertexAttr
 {
 	uint32_t location = 0;
-	uint32_t msl_buffer = 0;
-	uint32_t msl_offset = 0;
-	uint32_t msl_stride = 0;
-	bool per_instance = false;
 	bool used_by_shader = false;
 };
 
@@ -123,16 +118,13 @@ protected:
 
 	void register_custom_functions();
 	void emit_custom_functions();
-	void extract_builtins();
-	void add_builtin(spv::BuiltIn builtin_type);
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
 	void extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
 	                                            std::unordered_set<uint32_t> &global_var_ids,
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
-	void add_interface_structs();
-	void bind_vertex_attributes(std::unordered_set<uint32_t> &bindings);
-	uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);
+	uint32_t add_interface_block(spv::StorageClass storage);
+	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
 	void emit_function_prototype(SPIRFunction &func, bool is_decl);
@@ -149,11 +141,8 @@ protected:
 	std::string builtin_type_decl(spv::BuiltIn builtin);
 	std::string member_attribute_qualifier(const SPIRType &type, uint32_t index);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
-	std::string get_vtx_idx_var_name(bool per_instance);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
-	uint32_t pad_to_offset(SPIRType &struct_type, bool is_indxd_vtx_input, uint32_t offset, uint32_t struct_size);
-	SPIRType &get_pad_type(uint32_t pad_len);
 	size_t get_declared_type_size(uint32_t type_id) const;
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 	std::string to_component_argument(uint32_t id);
@@ -162,10 +151,8 @@ protected:
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
-	std::unordered_map<uint32_t, uint32_t> builtin_vars;
 	MSLResourceBinding next_metal_resource_index;
-	std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
-	std::vector<uint32_t> stage_in_var_ids;
+	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
