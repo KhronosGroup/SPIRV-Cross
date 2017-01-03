@@ -1523,6 +1523,7 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	switch (basetype)
 	{
 	case SPIRType::Struct:
+        if (execution.model == ExecutionModelVertex && next_metal_resource_index.msl_buffer == 0) next_metal_resource_index.msl_buffer = 1;
 		return next_metal_resource_index.msl_buffer++;
 	case SPIRType::Image:
 		return next_metal_resource_index.msl_texture++;
