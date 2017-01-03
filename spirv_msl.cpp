@@ -289,7 +289,7 @@ void CompilerMSL::add_interface_structs()
 	}
     
 	stage_out_var_id = add_interface_struct(StorageClassOutput);
-    stage_uniforms_var_id = add_interface_struct(StorageClassUniformConstant); // TODO: use StorageClassUniform
+    stage_uniforms_var_id = add_interface_struct(StorageClassUniformConstant);
 }
 
 // Iterate through the variables and populates each input vertex attribute variable
@@ -480,7 +480,9 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 				i++;
 			}
 		}
-		else
+        else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char || type.basetype == SPIRType::Int ||
+                 type.basetype == SPIRType::UInt || type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
+                 type.basetype == SPIRType::Float || type.basetype == SPIRType::Double || type.basetype == SPIRType::Boolean)
 		{
 			// If needed, add a padding member to the struct to align to the next member's offset.
 			struct_size = pad_to_offset(ib_type, is_indxd_vtx_input, var_dec.offset, uint32_t(struct_size));
