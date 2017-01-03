@@ -28,8 +28,8 @@ namespace spirv_cross
 struct MSLConfiguration
 {
 	uint32_t vtx_attr_stage_in_binding = 0;
-	bool flip_vert_y = true;
-	bool flip_frag_y = true;
+	bool flip_vert_y = false;
+	bool flip_frag_y = false;
 	bool is_rendering_points = false;
 };
 
