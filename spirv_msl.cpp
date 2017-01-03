@@ -1390,6 +1390,7 @@ string CompilerMSL::clean_func_name(string func_name)
 }
 
 void CompilerMSL::set_func_name(std::string func_name) {
+    if (func_name.find("main") == std::string::npos) func_name += "_main";
     _clean_msl_main_func_name = func_name;
 }
 
