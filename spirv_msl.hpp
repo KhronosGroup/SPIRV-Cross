@@ -175,6 +175,7 @@ struct MemberSorter
 	{
 		Location,
 		Offset,
+        Alphabetical
 	};
 
 	void sort();

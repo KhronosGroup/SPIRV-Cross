@@ -520,6 +520,13 @@ uint32_t CompilerMSL::add_interface_struct(StorageClass storage, uint32_t vtx_bi
 	// Sort the members of the interface structure by their offsets
 	MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Offset);
 	memberSorter.sort();
+    
+    // Sort input or output variables alphabetical
+    if ((execution.model == ExecutionModelFragment && storage == StorageClassInput) ||
+        (execution.model == ExecutionModelVertex && storage == StorageClassOutput)) {
+        MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Alphabetical);
+        memberSorter.sort();
+    }
 
 	return ib_var_id;
 }
@@ -2034,6 +2041,8 @@ bool MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 			return mbr_meta1.location < mbr_meta2.location;
 		case Offset:
 			return mbr_meta1.offset < mbr_meta2.offset;
+        case Alphabetical:
+            return mbr_meta1.alias > mbr_meta2.alias;
 		default:
 			return false;
 		}
