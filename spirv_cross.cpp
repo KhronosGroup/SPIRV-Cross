@@ -1438,17 +1438,6 @@ void Compiler::parse(const Instruction &instruction)
 		if (variable_storage_is_aliased(var))
 			aliased_variables.push_back(var.self);
 
-		// glslangValidator does not emit required qualifiers here.
-		// Solve this by making the image access as restricted as possible
-		// and loosen up if we need to.
-		auto &vartype = expression_type(id);
-		if (vartype.basetype == SPIRType::Image)
-		{
-			auto &flags = meta.at(id).decoration.decoration_flags;
-			flags |= 1ull << DecorationNonWritable;
-			flags |= 1ull << DecorationNonReadable;
-		}
-
 		break;
 	}
 
