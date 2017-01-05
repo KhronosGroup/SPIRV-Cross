@@ -150,7 +150,16 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 
 	add_resource_name(var.self);
-	statement("static ", variable_decl(var), ";");
+
+	if (execution.model == ExecutionModelVertex && var.storage == StorageClassInput && is_builtin_variable(var)) {
+
+	}
+	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var)) {
+		statement("static float4 gl_Position;");
+	}
+	else {
+		statement("static ", variable_decl(var), ";");
+	}
 }
 
 void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number, bool builtins)
@@ -207,7 +216,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 		}
 		else
 		{
-			statement(variable_decl(type, m.alias), " : ", binding, ";");
+			statement("float4 gl_Position", " : ", binding, ";");
 		}
 	}
 
@@ -313,6 +322,7 @@ void CompilerHLSL::emit_resources()
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
+				if (execution.model == ExecutionModelVertex && is_builtin_variable(var)) continue;
 				variables.push_back(&var);
 			}
 		}
@@ -464,6 +474,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
+				if (execution.model == ExecutionModelVertex && is_builtin_variable(var)) continue;
+
 				auto &m = meta[var.self].decoration;
 				auto &type = get<SPIRType>(var.basetype);
 				if (type.vecsize == 4 && type.columns == 4)
@@ -503,7 +515,11 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			    var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 			{
 				auto &m = meta[var.self].decoration;
-				statement("output.", m.alias, " = ", m.alias, ";");
+				bool is_no_builtin = !is_builtin_variable(var) && !var.remapped_variable;
+				if (is_no_builtin) statement("output.", m.alias, " = ", m.alias, ";");
+				else if (execution.model == ExecutionModelVertex) {
+					statement("output.gl_Position = gl_Position;");
+				}
 			}
 		}
 	}
