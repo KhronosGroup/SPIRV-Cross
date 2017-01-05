@@ -794,7 +794,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 		return;
 
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
-	// Normally, we would never see '(' in any legal indentifiers, so just strip them out.
+	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
 	str = name.substr(0, name.find('('));
 
 	for (uint32_t i = 0; i < str.size(); i++)
@@ -890,7 +890,7 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 	case DecorationSpecId:
 		return dec.spec_id;
 	default:
-		return 0;
+		return 1;
 	}
 }
 
@@ -1019,7 +1019,7 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 	case DecorationSpecId:
 		return dec.spec_id;
 	default:
-		return 0;
+		return 1;
 	}
 }
 
@@ -2921,7 +2921,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				if (potential == 0)
 					potential = block;
 				else
-					potential = -1u;
+					potential = ~(0u);
 			}
 			builder.add_block(block);
 		}
@@ -2948,7 +2948,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		auto block = loop_variable.second;
 
 		// The variable was accessed in multiple continue blocks, ignore.
-		if (block == -1u || block == 0)
+		if (block == ~(0u) || block == 0)
 			continue;
 
 		// Dead code.

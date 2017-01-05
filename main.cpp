@@ -217,7 +217,7 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 
 		uint32_t block_size = 0;
 		if (is_sized_block)
-			block_size = compiler.get_declared_struct_size(compiler.get_type(res.base_type_id));
+			block_size = uint32_t(compiler.get_declared_struct_size(compiler.get_type(res.base_type_id)));
 
 		string array;
 		for (auto arr : type.array)
