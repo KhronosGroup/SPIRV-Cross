@@ -266,6 +266,7 @@ string CompilerGLSL::compile()
 {
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
+	fixup_image_load_store_access();
 
 	uint32_t pass_count = 0;
 	do
@@ -1260,6 +1261,30 @@ void CompilerGLSL::emit_pls()
 			statement(pls_decl(output), ";");
 		end_scope_decl();
 		statement("");
+	}
+}
+
+void CompilerGLSL::fixup_image_load_store_access()
+{
+	for (auto &id : ids)
+	{
+		if (id.get_type() != TypeVariable)
+			continue;
+
+		uint32_t var = id.get<SPIRVariable>().self;
+		auto &vartype = expression_type(var);
+		if (vartype.basetype == SPIRType::Image)
+		{
+			// Older glslangValidator does not emit required qualifiers here.
+			// Solve this by making the image access as restricted as possible and loosen up if we need to.
+			// If any no-read/no-write flags are actually set, assume that the compiler knows what it's doing.
+
+			auto &flags = meta.at(var).decoration.decoration_flags;
+			static const uint64_t NoWrite = 1ull << DecorationNonWritable;
+			static const uint64_t NoRead = 1ull << DecorationNonReadable;
+			if ((flags & (NoWrite | NoRead)) == 0)
+				flags |= NoRead | NoWrite;
+		}
 	}
 }
 
