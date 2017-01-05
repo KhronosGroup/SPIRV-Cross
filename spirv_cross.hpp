@@ -141,7 +141,7 @@ public:
 	// If the decoration is a boolean (i.e. spv::DecorationNonWritable),
 	// 1 will be returned.
 	// If decoration doesn't exist or decoration is not recognized,
-	// 0 will be returned. 
+	// 0 will be returned.
 	uint32_t get_decoration(uint32_t id, spv::Decoration decoration) const;
 
 	// Removes the decoration for a an ID.
