@@ -816,7 +816,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 			      var_type.storage == StorageClassPushConstant));
 		}
 
-		decl += (is_uniform_struct ? "constant " : "thread ");
+               decl += (is_uniform_struct ? "constant " : "thread ");
 		decl += argument_decl(arg);
 
 		// Manufacture automatic sampler arg for SampledImage texture
@@ -1611,9 +1611,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	auto &type = expression_type(arg.id);
 	bool constref = !type.pointer || arg.write_count == 0;
+    
+    // TODO: Check if this arg is an uniform pointer
+    bool pointer = type.storage == StorageClassUniformConstant;
 
 	auto &var = get<SPIRVariable>(arg.id);
-	return join(constref ? "const " : "", type_to_glsl(type), "& ", to_name(var.self), type_to_array_glsl(type));
+    return join(constref ? "const " : "", type_to_glsl(type), pointer ? " " : "& ", to_name(var.self), type_to_array_glsl(type));
 }
 
 // If we're currently in the entry point function, and the object
