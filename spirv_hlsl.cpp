@@ -216,7 +216,12 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 		}
 		else
 		{
-			statement("float4 gl_Position", " : ", binding, ";");
+			if (execution.model == ExecutionModelVertex) {
+				statement("float4 gl_Position", " : ", binding, ";");
+			}
+			else {
+				statement(variable_decl(type, m.alias), " : ", binding, ";");
+			}
 		}
 	}
 
