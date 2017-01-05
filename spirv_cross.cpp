@@ -1018,6 +1018,9 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.input_attachment;
 	case DecorationSpecId:
 		return dec.spec_id;
+	case DecorationNonWritable:
+	case DecorationNonReadable:
+		return 1;
 	default:
 		return 0;
 	}
