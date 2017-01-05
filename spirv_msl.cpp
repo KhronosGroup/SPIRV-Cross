@@ -1652,10 +1652,15 @@ string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t inde
 // if the first chars are _ and a digit, which indicate a transient name.
 string CompilerMSL::ensure_valid_name(string name, string pfx)
 {
-	if (name.size() >= 2 && name[0] == '_' && isdigit(name[1]))
+   if (name.size() >= 2 && name[0] == '_' && isdigit(name[1])) {
 		return join(pfx, name);
-	else
+    }
+    else if (std::find(reserved_names.begin(), reserved_names.end(), name) != reserved_names.end()) {
+        return join(pfx, name);
+    }
+    else {
 		return name;
+    }
 }
 
 // Returns an MSL string describing  the SPIR-V type

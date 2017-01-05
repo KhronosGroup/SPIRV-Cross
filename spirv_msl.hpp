@@ -164,6 +164,7 @@ protected:
 	std::string stage_out_var_name = "out";
     std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
+    std::vector<std::string> reserved_names = {"kernel", "bias"};
 };
 
 // Sorts the members of a SPIRType and associated Meta info based on a settable sorting
