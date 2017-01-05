@@ -794,7 +794,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 		return;
 
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
-	// Normally, we would never see '(' in any legal indentifiers, so just strip them out.
+	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
 	str = name.substr(0, name.find('('));
 
 	for (uint32_t i = 0; i < str.size(); i++)
