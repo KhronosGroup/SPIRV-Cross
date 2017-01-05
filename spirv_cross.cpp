@@ -890,7 +890,7 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 	case DecorationSpecId:
 		return dec.spec_id;
 	default:
-		return 0;
+		return 1;
 	}
 }
 
@@ -1018,11 +1018,8 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.input_attachment;
 	case DecorationSpecId:
 		return dec.spec_id;
-	case DecorationNonWritable:
-	case DecorationNonReadable:
-		return 1;
 	default:
-		return 0;
+		return 1;
 	}
 }
 
