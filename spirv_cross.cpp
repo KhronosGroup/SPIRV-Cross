@@ -2932,7 +2932,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				if (potential == 0)
 					potential = block;
 				else
-					potential = -1u;
+					potential = ~(0u);
 			}
 			builder.add_block(block);
 		}
@@ -2959,7 +2959,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		auto block = loop_variable.second;
 
 		// The variable was accessed in multiple continue blocks, ignore.
-		if (block == -1u || block == 0)
+		if (block == ~(0u) || block == 0)
 			continue;
 
 		// Dead code.
