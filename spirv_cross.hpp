@@ -138,6 +138,8 @@ public:
 	uint64_t get_decoration_mask(uint32_t id) const;
 
 	// Gets the value for decorations which take arguments.
+	// If the decoration is a boolean (i.e. spv::DecorationNonWritable),
+	// 1 will be returned.
 	// If decoration doesn't exist or decoration is not recognized,
 	// 0 will be returned.
 	uint32_t get_decoration(uint32_t id, spv::Decoration decoration) const;

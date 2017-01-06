@@ -217,7 +217,7 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 
 		uint32_t block_size = 0;
 		if (is_sized_block)
-			block_size = compiler.get_declared_struct_size(compiler.get_type(res.base_type_id));
+			block_size = uint32_t(compiler.get_declared_struct_size(compiler.get_type(res.base_type_id)));
 
 		string array;
 		for (auto arr : type.array)
@@ -234,6 +234,10 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
 		if (mask & (1ull << DecorationInputAttachmentIndex))
 			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
+		if (mask & (1ull << DecorationNonReadable))
+			fprintf(stderr, " writeonly");
+		if (mask & (1ull << DecorationNonWritable))
+			fprintf(stderr, " readonly");
 		if (is_sized_block)
 			fprintf(stderr, " (BlockSize : %u bytes)", block_size);
 		fprintf(stderr, "\n");

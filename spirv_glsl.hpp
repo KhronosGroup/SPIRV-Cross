@@ -398,8 +398,8 @@ protected:
 	void find_static_extensions();
 
 	std::string emit_for_loop_initializers(const SPIRBlock &block);
-
 	bool optimize_read_modify_write(const std::string &lhs, const std::string &rhs);
+	void fixup_image_load_store_access();
 };
 }
 
