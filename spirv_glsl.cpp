@@ -2558,9 +2558,9 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
-string CompilerGLSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
+string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is_fetch, bool is_gather,
                                       bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad,
-                                      bool has_lod, bool has_dref)
+                                      bool has_lod, bool)
 {
 	string fname;
 
@@ -2589,8 +2589,8 @@ string CompilerGLSL::to_function_name(uint32_t img, const SPIRType &imgtype, boo
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
-                                      bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool,
+                                      bool, uint32_t coord, uint32_t coord_components, uint32_t dref,
                                       uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset,
                                       uint32_t bias, uint32_t comp, uint32_t sample, bool *p_forward)
 {

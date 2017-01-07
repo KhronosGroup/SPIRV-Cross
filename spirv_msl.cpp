@@ -699,9 +699,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 }
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
-string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                     bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod,
-                                     bool has_dref)
+string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fetch, bool is_gather,
+                                     bool, bool, bool, bool, bool, bool has_dref)
 {
 	// Texture reference
 	string fname = to_expression(img) + ".";
@@ -721,10 +720,10 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                     uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
-                                     uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
-                                     uint32_t comp, uint32_t sample, bool *p_forward)
+string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
+                                     uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
+                                     uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
+                                     uint32_t, bool *p_forward)
 {
 	string farg_str = to_sampler_expression(img);
 
