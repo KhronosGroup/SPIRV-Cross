@@ -2429,6 +2429,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	uint32_t comp = 0;
 	bool gather = false;
 	bool proj = false;
+	bool fetch = false;
 	const uint32_t *opt = nullptr;
 
 	switch (op)
@@ -2443,23 +2444,29 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	case OpImageSampleProjDrefImplicitLod:
 	case OpImageSampleProjDrefExplicitLod:
 		dref = ops[4];
-		proj = true;
 		opt = &ops[5];
 		length -= 5;
+		proj = true;
 		break;
 
 	case OpImageDrefGather:
 		dref = ops[4];
 		opt = &ops[5];
-		gather = true;
 		length -= 5;
+		gather = true;
 		break;
 
 	case OpImageGather:
 		comp = ops[4];
 		opt = &ops[5];
-		gather = true;
 		length -= 5;
+		gather = true;
+		break;
+
+	case OpImageFetch:
+		opt = &ops[4];
+		length -= 4;
+		fetch = true;
 		break;
 
 	case OpImageSampleProjImplicitLod:
@@ -2516,8 +2523,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 	if (length)
 	{
-		flags = opt[0];
-		opt++;
+		flags = *opt++;
 		length--;
 	}
 
@@ -2539,35 +2545,55 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	test(sample, ImageOperandsSampleMask);
 
 	string expr;
-	string texop;
+	bool forward = false;
+	expr += to_function_name(img, imgtype, fetch, gather, proj, coffsets, (coffset || offset), (grad_x || grad_y), lod,
+	                         dref);
+	expr += "(";
+	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
+	                         coffset, offset, bias, comp, sample, &forward);
+	expr += ")";
 
-	if (op == OpImageFetch)
-		texop += "texelFetch";
+	emit_op(result_type, id, expr, forward);
+}
+
+// Returns the function name for a texture sampling function for the specified image and sampling characteristics.
+// For some subclasses, the function is a method on the specified image.
+string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+                                      bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod, bool)
+{
+	string fname;
+
+	if (is_fetch)
+		fname += "texelFetch";
 	else
 	{
-		texop += "texture";
+		fname += "texture";
 
-		if (gather)
-			texop += "Gather";
-		if (coffsets)
-			texop += "Offsets";
-		if (proj)
-			texop += "Proj";
-		if (grad_x || grad_y)
-			texop += "Grad";
-		if (lod)
-			texop += "Lod";
+		if (is_gather)
+			fname += "Gather";
+		if (has_array_offsets)
+			fname += "Offsets";
+		if (is_proj)
+			fname += "Proj";
+		if (has_grad)
+			fname += "Grad";
+		if (has_lod)
+			fname += "Lod";
 	}
 
-	if (coffset || offset)
-		texop += "Offset";
+	if (has_offset)
+		fname += "Offset";
 
-	if (is_legacy())
-		texop = legacy_tex_op(texop, imgtype);
+	return is_legacy() ? legacy_tex_op(fname, imgtype) : fname;
+}
 
-	expr += texop;
-	expr += "(";
-	expr += to_expression(img);
+// Returns the function args for a texture sampling function for the specified image and sampling characteristics.
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool, bool, uint32_t coord,
+                                      uint32_t coord_components, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
+                                      uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
+                                      uint32_t sample, bool *p_forward)
+{
+	string farg_str = to_expression(img);
 
 	bool swizz_func = backend.swizzle_is_function;
 	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
@@ -2603,84 +2629,93 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		// SPIR-V splits dref and coordinate.
 		if (coord_components == 4) // GLSL also splits the arguments in two.
 		{
-			expr += ", ";
-			expr += to_expression(coord);
-			expr += ", ";
-			expr += to_expression(dref);
+			farg_str += ", ";
+			farg_str += to_expression(coord);
+			farg_str += ", ";
+			farg_str += to_expression(dref);
 		}
 		else
 		{
 			// Create a composite which merges coord/dref into a single vector.
 			auto type = expression_type(coord);
 			type.vecsize = coord_components + 1;
-			expr += ", ";
-			expr += type_to_glsl_constructor(type);
-			expr += "(";
-			expr += coord_expr;
-			expr += ", ";
-			expr += to_expression(dref);
-			expr += ")";
+			farg_str += ", ";
+			farg_str += type_to_glsl_constructor(type);
+			farg_str += "(";
+			farg_str += coord_expr;
+			farg_str += ", ";
+			farg_str += to_expression(dref);
+			farg_str += ")";
 		}
 	}
 	else
 	{
-		expr += ", ";
-		expr += coord_expr;
+		farg_str += ", ";
+		farg_str += coord_expr;
 	}
 
 	if (grad_x || grad_y)
 	{
 		forward = forward && should_forward(grad_x);
 		forward = forward && should_forward(grad_y);
-		expr += ", ";
-		expr += to_expression(grad_x);
-		expr += ", ";
-		expr += to_expression(grad_y);
+		farg_str += ", ";
+		farg_str += to_expression(grad_x);
+		farg_str += ", ";
+		farg_str += to_expression(grad_y);
 	}
 
 	if (lod)
 	{
 		forward = forward && should_forward(lod);
-		expr += ", ";
-		expr += to_expression(lod);
+		farg_str += ", ";
+		farg_str += to_expression(lod);
 	}
 
 	if (coffset)
 	{
 		forward = forward && should_forward(coffset);
-		expr += ", ";
-		expr += to_expression(coffset);
+		farg_str += ", ";
+		farg_str += to_expression(coffset);
 	}
 	else if (offset)
 	{
 		forward = forward && should_forward(offset);
-		expr += ", ";
-		expr += to_expression(offset);
+		farg_str += ", ";
+		farg_str += to_expression(offset);
 	}
 
 	if (bias)
 	{
 		forward = forward && should_forward(bias);
-		expr += ", ";
-		expr += to_expression(bias);
+		farg_str += ", ";
+		farg_str += to_expression(bias);
 	}
 
 	if (comp)
 	{
 		forward = forward && should_forward(comp);
-		expr += ", ";
-		expr += to_expression(comp);
+		farg_str += ", ";
+		farg_str += to_expression(comp);
 	}
 
 	if (sample)
 	{
-		expr += ", ";
-		expr += to_expression(sample);
+		farg_str += ", ";
+		farg_str += to_expression(sample);
 	}
 
-	expr += ")";
+	*p_forward = forward;
 
-	emit_op(result_type, id, expr, forward);
+	return farg_str;
+}
+
+// Some languages may have additional standard library functions whose names conflict
+// with a function defined in the body of the shader. Subclasses can override to rename
+// the function name defined in the shader to avoid conflict with the language standard
+// functions (eg. MSL includes saturate()).
+string CompilerGLSL::clean_func_name(string func_name)
+{
+	return func_name;
 }
 
 void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
@@ -3611,7 +3646,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		string funexpr;
 		vector<string> arglist;
-		funexpr += to_name(func) + "(";
+		funexpr += clean_func_name(to_name(func)) + "(";
 		for (uint32_t i = 0; i < length; i++)
 		{
 			// Do not pass in separate images or samplers if we're remapping
@@ -5332,11 +5367,11 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 
 	if (func.self == entry_point)
 	{
-		decl += "main";
+		decl += clean_func_name("main");
 		processing_entry_point = true;
 	}
 	else
-		decl += to_name(func.self);
+		decl += clean_func_name(to_name(func.self));
 
 	decl += "(";
 	vector<string> arglist;
