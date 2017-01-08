@@ -28,14 +28,14 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
 {
 	options.vertex.fixup_clipspace = false;
 
-    populate_func_name_overrides();
+	populate_func_name_overrides();
 }
 
 // Populate the collection of function names that need to be overridden
 void CompilerMSL::populate_func_name_overrides()
 {
-    func_name_overrides["main"] = "main0";
-    func_name_overrides["saturate"] = "saturate0";
+	func_name_overrides["main"] = "main0";
+	func_name_overrides["saturate"] = "saturate0";
 }
 
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
@@ -708,8 +708,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 }
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
-string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fetch, bool is_gather,
-                                     bool, bool, bool, bool, bool, bool has_dref)
+string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fetch, bool is_gather, bool, bool, bool,
+                                     bool, bool, bool has_dref)
 {
 	// Texture reference
 	string fname = to_expression(img) + ".";
@@ -1212,8 +1212,8 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 // Ensures the function name is not "main", which is illegal in MSL
 string CompilerMSL::clean_func_name(string func_name)
 {
-    auto iter = func_name_overrides.find(func_name);
-    return (iter != func_name_overrides.end()) ? iter->second : func_name;
+	auto iter = func_name_overrides.find(func_name);
+	return (iter != func_name_overrides.end()) ? iter->second : func_name;
 }
 
 // Returns a string containing a comma-delimited list of args for the entry point function

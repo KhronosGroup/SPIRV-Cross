@@ -168,7 +168,7 @@ protected:
 	                                     uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset,
 	                                     uint32_t offset, uint32_t bias, uint32_t comp, uint32_t sample,
 	                                     bool *p_forward);
-    virtual std::string clean_func_name(std::string func_name);
+	virtual std::string clean_func_name(std::string func_name);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
