@@ -2710,6 +2710,15 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 	return farg_str;
 }
 
+// Some languages may have additional standard library functions whose names conflict
+// with a function defined in the body of the shader. Subclasses can override to rename
+// the function name defined in the shader to avoid conflict with the language standard
+// functions (eg. MSL includes saturate()).
+string CompilerGLSL::clean_func_name(string func_name)
+{
+    return func_name;
+}
+
 void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
 {
 	GLSLstd450 op = static_cast<GLSLstd450>(eop);
@@ -3638,7 +3647,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		string funexpr;
 		vector<string> arglist;
-		funexpr += to_name(func) + "(";
+		funexpr += clean_func_name(to_name(func)) + "(";
 		for (uint32_t i = 0; i < length; i++)
 		{
 			// Do not pass in separate images or samplers if we're remapping
@@ -5359,11 +5368,11 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 
 	if (func.self == entry_point)
 	{
-		decl += "main";
+		decl += clean_func_name("main");
 		processing_entry_point = true;
 	}
 	else
-		decl += to_name(func.self);
+		decl += clean_func_name(to_name(func.self));
 
 	decl += "(";
 	vector<string> arglist;

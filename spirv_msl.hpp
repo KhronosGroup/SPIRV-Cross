@@ -115,6 +115,7 @@ protected:
 	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
+    std::string clean_func_name(std::string func_name) override;
 
 	void register_custom_functions();
 	void emit_custom_functions();
@@ -129,9 +130,9 @@ protected:
 	void emit_interface_block(uint32_t ib_var_id);
 	void emit_function_prototype(SPIRFunction &func, bool is_decl);
 	void emit_function_declarations();
+    void populate_func_name_overrides();
 
 	std::string func_type_decl(SPIRType &type);
-	std::string clean_func_name(std::string func_name);
 	std::string entry_point_args(bool append_comma);
 	std::string get_entry_point_name();
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
@@ -148,6 +149,7 @@ protected:
 	std::string to_component_argument(uint32_t id);
 
 	MSLConfiguration msl_config;
+    std::unordered_map<std::string,std::string> func_name_overrides;
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
