@@ -122,6 +122,9 @@ protected:
 	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
 	                                            std::set<uint32_t> &global_var_ids,
 	                                            std::set<uint32_t> &processed_func_ids);
+    
+    std::unordered_map<uint32_t, std::set<uint32_t>> function_global_vars;
+    
 	void add_interface_structs();
 	void bind_vertex_attributes(std::set<uint32_t> &bindings);
 	uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);

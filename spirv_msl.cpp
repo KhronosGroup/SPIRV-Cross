@@ -158,7 +158,8 @@ void CompilerMSL::localize_global_variables()
 		if (gbl_var.storage == StorageClassPrivate)
 		{
 			entry_func.add_local_variable(gv_id);
-			iter = global_variables.erase(iter);
+			//iter = global_variables.erase(iter);
+			iter++;
 		}
 		else
 		{
@@ -180,8 +181,9 @@ void CompilerMSL::extract_global_variables_from_functions()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassInput || var.storage == StorageClassUniform ||
-			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant)
+				var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant) {
 				global_var_ids.insert(var.self);
+			}
 		}
 	}
 
@@ -198,8 +200,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
                                                          std::set<uint32_t> &processed_func_ids)
 {
 	// Avoid processing a function more than once
-	if (processed_func_ids.find(func_id) != processed_func_ids.end())
+	if (processed_func_ids.find(func_id) != processed_func_ids.end()) {
+		// Return function global variables
+		added_arg_ids = function_global_vars[func_id];
 		return;
+	}
 
 	processed_func_ids.insert(func_id);
 
@@ -222,6 +227,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+                
+				if (std::find(global_variables.begin(), global_variables.end(), base_id) != global_variables.end())
+					added_arg_ids.insert(base_id);
+                
 				break;
 			}
 			case OpFunctionCall:
@@ -239,6 +248,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			}
 		}
 	}
+    
+    function_global_vars[func_id] = added_arg_ids;
 
 	// Add the global variables as arguments to the function
 	if (func_id != entry_point)
@@ -754,8 +765,15 @@ void CompilerMSL::emit_function_declarations()
 		if (id.get_type() == TypeFunction)
 		{
 			auto &func = id.get<SPIRFunction>();
-			if (func.self != entry_point)
+			if (func.self != entry_point) {
+				auto &dec = meta[func.self].decoration;
+				if (dec.alias[0] != 'm') {
+					// Add prefix to all fuctions in order to avoid ambiguous function names (e.g. builtin functions)
+					// TODO: check if current function is a builtin function
+					dec.alias = join("m", dec.alias);
+				}
 				emit_function_prototype(func, true);
+            }
 		}
 
 	statement("");
