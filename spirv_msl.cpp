@@ -1313,11 +1313,14 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				switch (type.basetype)
 				{
-				case SPIRType::Struct:
-					if (!ep_args.empty())
-						ep_args += ", ";
-					ep_args += "constant " + type_to_glsl(type) + "& " + to_name(var.self);
-					ep_args += " [[buffer(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
+					case SPIRType::Struct: {
+						auto &m = meta.at(type.self);
+						if (m.members.size() == 0) break;
+						if (!ep_args.empty())
+							ep_args += ", ";
+						ep_args += "constant " + type_to_glsl(type) + "& " + to_name(var.self);
+						ep_args += " [[buffer(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
+					}
 					break;
 				case SPIRType::Sampler:
 					if (!ep_args.empty())
