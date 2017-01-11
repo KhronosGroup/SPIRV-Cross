@@ -678,15 +678,7 @@ void CompilerMSL::emit_function_declarations()
 		if (id.get_type() == TypeFunction)
 		{
 			auto &func = id.get<SPIRFunction>();
-			if (func.self != entry_point)
-			{
-				auto &dec = meta[func.self].decoration;
-				if (dec.alias[0] != 'm')
-				{
-					// Add prefix to all fuctions in order to avoid ambiguous function names (e.g. builtin functions)
-					// TODO: check if current function is a builtin function
-					dec.alias = join("m", dec.alias);
-				}
+			if (func.self != entry_point) {
 				emit_function_prototype(func, true);
 			}
 		}
