@@ -52,6 +52,8 @@ Compiler::Compiler(vector<uint32_t> ir)
 
 string Compiler::compile()
 {
+	// Force a classic "C" locale, reverts when function returns
+	ClassicLocale classic_locale;
 	return "";
 }
 

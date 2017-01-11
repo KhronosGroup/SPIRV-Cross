@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <locale>
 #include <sstream>
 
 namespace spirv_cross
@@ -905,6 +906,22 @@ struct Meta
 // name_of_type is the textual name of the type which will be used in the code unless written to by the callback.
 using VariableTypeRemapCallback =
     std::function<void(const SPIRType &type, const std::string &var_name, std::string &name_of_type)>;
+
+class ClassicLocale
+{
+public:
+	ClassicLocale()
+	{
+		old = std::locale::global(std::locale::classic());
+	}
+	~ClassicLocale()
+	{
+		std::locale::global(old);
+	}
+
+private:
+	std::locale old;
+};
 }
 
 #endif
