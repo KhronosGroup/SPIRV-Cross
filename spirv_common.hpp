@@ -103,6 +103,11 @@ inline std::string convert_to_string(T &&t)
 #define SPIRV_CROSS_FLT_FMT "%.32g"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+
 inline std::string convert_to_string(float t)
 {
 	// std::to_string for floating point values is broken.
@@ -126,6 +131,10 @@ inline std::string convert_to_string(double t)
 		strcat(buf, ".0");
 	return buf;
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 struct Instruction
 {

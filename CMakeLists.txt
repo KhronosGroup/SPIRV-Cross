@@ -88,10 +88,12 @@ target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines})
 #  - Get cycle counts from malisc
 #  - Keep failing outputs
 find_package(PythonInterp)
-if(${PYTHONINTERP_FOUND} AND ${PYTHON_VERSION_MAJOR} GREATER 2)
-  add_test(NAME spirv-cross-test
-	   COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
-		   ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+if (${PYTHONINTERP_FOUND})
+  if (${PYTHON_VERSION_MAJOR} GREATER 2)
+	add_test(NAME spirv-cross-test
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+  endif()
 else()
   message(WARNING "Testing disabled. Could not find python3. If you have python3 installed try running "
 		  "cmake with -DPYTHON_EXECUTABLE:FILEPATH=/path/to/python3 to help it find the executable")

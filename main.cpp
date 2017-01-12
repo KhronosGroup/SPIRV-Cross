@@ -26,6 +26,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4996)
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
