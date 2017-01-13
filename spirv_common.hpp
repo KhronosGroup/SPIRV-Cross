@@ -105,7 +105,7 @@ inline std::string convert_to_string(T &&t)
 
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable: 4996)
+#pragma warning(disable : 4996)
 #endif
 
 inline std::string convert_to_string(float t)

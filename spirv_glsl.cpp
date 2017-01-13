@@ -1042,7 +1042,6 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	else
 		resource_names.insert(buffer_name);
 
-
 	statement(layout_for_variable(var), is_restrict ? "restrict " : "", ssbo ? "buffer " : "uniform ", buffer_name);
 	begin_scope();
 
@@ -2579,8 +2578,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 	string expr;
 	bool forward = false;
-	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset), (!!grad_x || !!grad_y), !!lod,
-	                         !!dref);
+	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
+	                         (!!grad_x || !!grad_y), !!lod, !!dref);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
