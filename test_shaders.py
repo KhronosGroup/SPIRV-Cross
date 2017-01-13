@@ -66,7 +66,7 @@ def validate_shader(shader, vulkan):
     else:
         subprocess.check_call(['glslangValidator', shader])
 
-def cross_compile(shader, vulkan, spirv, eliminate, invalid_spirv):
+def cross_compile(shader, vulkan, spirv, eliminate, invalid_spirv, is_legacy):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
@@ -84,11 +84,15 @@ def cross_compile(shader, vulkan, spirv, eliminate, invalid_spirv):
     if not invalid_spirv:
         subprocess.check_call(['spirv-val', spirv_path])
 
+    legacy_cmd = []
+    if is_legacy:
+        legacy_cmd = ['--version', '100', '--es']
+
     spirv_cross_path = './spirv-cross'
     if eliminate:
-        subprocess.check_call([spirv_cross_path, '--remove-unused-variables', '--entry', 'main', '--output', glsl_path, spirv_path])
+        subprocess.check_call([spirv_cross_path, '--remove-unused-variables', '--entry', 'main', '--output', glsl_path, spirv_path] + legacy_cmd)
     else:
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path])
+        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path] + legacy_cmd)
 
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if (not ('nocompat' in glsl_path)) and (not spirv):
@@ -171,6 +175,9 @@ def shader_is_spirv(shader):
 def shader_is_invalid_spirv(shader):
     return '.invalid.' in shader
 
+def shader_is_legacy(shader):
+    return '.legacy.' in shader
+
 def test_shader(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     vulkan = shader_is_vulkan(shader[1])
@@ -178,9 +185,10 @@ def test_shader(stats, shader, update, keep):
     eliminate = shader_is_eliminate_dead_variables(shader[1])
     is_spirv = shader_is_spirv(shader[1])
     invalid_spirv = shader_is_invalid_spirv(shader[1])
+    is_legacy = shader_is_legacy(shader[1])
 
     print('Testing shader:', joined_path)
-    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, eliminate, invalid_spirv)
+    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, eliminate, invalid_spirv, is_legacy)
 
     # Only test GLSL stats if we have a shader following GL semantics.
     if stats and (not vulkan) and (not is_spirv) and (not desktop):
