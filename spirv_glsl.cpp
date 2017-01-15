@@ -264,6 +264,9 @@ void CompilerGLSL::find_static_extensions()
 
 string CompilerGLSL::compile()
 {
+	// Force a classic "C" locale, reverts when function returns
+	ClassicLocale classic_locale;
+
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
 	fixup_image_load_store_access();
@@ -2546,8 +2549,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 	string expr;
 	bool forward = false;
-	expr += to_function_name(img, imgtype, fetch, gather, proj, coffsets, (coffset || offset), (grad_x || grad_y), lod,
-	                         dref);
+	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset), (!!grad_x || !!grad_y), !!lod,
+	                         !!dref);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);

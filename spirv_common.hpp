@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
+#include <locale>
 #include <sstream>
 
 namespace spirv_cross
@@ -102,6 +103,11 @@ inline std::string convert_to_string(T &&t)
 #define SPIRV_CROSS_FLT_FMT "%.32g"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable: 4996)
+#endif
+
 inline std::string convert_to_string(float t)
 {
 	// std::to_string for floating point values is broken.
@@ -125,6 +131,10 @@ inline std::string convert_to_string(double t)
 		strcat(buf, ".0");
 	return buf;
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 struct Instruction
 {
@@ -905,6 +915,22 @@ struct Meta
 // name_of_type is the textual name of the type which will be used in the code unless written to by the callback.
 using VariableTypeRemapCallback =
     std::function<void(const SPIRType &type, const std::string &var_name, std::string &name_of_type)>;
+
+class ClassicLocale
+{
+public:
+	ClassicLocale()
+	{
+		old = std::locale::global(std::locale::classic());
+	}
+	~ClassicLocale()
+	{
+		std::locale::global(old);
+	}
+
+private:
+	std::locale old;
+};
 }
 
 #endif

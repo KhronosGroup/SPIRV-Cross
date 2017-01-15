@@ -52,6 +52,8 @@ Compiler::Compiler(vector<uint32_t> ir)
 
 string Compiler::compile()
 {
+	// Force a classic "C" locale, reverts when function returns
+	ClassicLocale classic_locale;
 	return "";
 }
 
@@ -2915,14 +2917,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	{
 		DominatorBuilder builder(cfg);
 		auto &blocks = var.second;
-		auto &type = expression_type(var.first);
+		auto &type = this->expression_type(var.first);
 
 		// Figure out which block is dominating all accesses of those variables.
 		for (auto &block : blocks)
 		{
 			// If we're accessing a variable inside a continue block, this variable might be a loop variable.
 			// We can only use loop variables with scalars, as we cannot track static expressions for vectors.
-			if (is_continue(block) && type.vecsize == 1 && type.columns == 1)
+			if (this->is_continue(block) && type.vecsize == 1 && type.columns == 1)
 			{
 				// The variable is used in multiple continue blocks, this is not a loop
 				// candidate, signal that by setting block to -1u.
@@ -2946,14 +2948,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		{
 			auto &block = this->get<SPIRBlock>(dominating_block);
 			block.dominated_variables.push_back(var.first);
-			get<SPIRVariable>(var.first).dominator = dominating_block;
+			this->get<SPIRVariable>(var.first).dominator = dominating_block;
 		}
 	}
 
 	// Now, try to analyze whether or not these variables are actually loop variables.
 	for (auto &loop_variable : potential_loop_variables)
 	{
-		auto &var = get<SPIRVariable>(loop_variable.first);
+		auto &var = this->get<SPIRVariable>(loop_variable.first);
 		auto dominator = var.dominator;
 		auto block = loop_variable.second;
 
@@ -2968,9 +2970,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		uint32_t header = 0;
 
 		// Find the loop header for this block.
-		for (auto b : loop_blocks)
+		for (auto b : this->loop_blocks)
 		{
-			auto &potential_header = get<SPIRBlock>(b);
+			auto &potential_header = this->get<SPIRBlock>(b);
 			if (potential_header.continue_block == block)
 			{
 				header = b;
@@ -2979,7 +2981,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		}
 
 		assert(header);
-		auto &header_block = get<SPIRBlock>(header);
+		auto &header_block = this->get<SPIRBlock>(header);
 
 		// Now, there are two conditions we need to meet for the variable to be a loop variable.
 		// 1. The dominating block must have a branch-free path to the loop header,
@@ -3027,6 +3029,6 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		// Need to sort here as variables come from an unordered container, and pushing stuff in wrong order
 		// will break reproducability in regression runs.
 		sort(begin(header_block.loop_variables), end(header_block.loop_variables));
-		get<SPIRVariable>(loop_variable.first).loop_variable = true;
+		this->get<SPIRVariable>(loop_variable.first).loop_variable = true;
 	}
 }

@@ -43,6 +43,9 @@ void CompilerMSL::populate_func_name_overrides()
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
                             std::vector<MSLResourceBinding> *p_res_bindings)
 {
+	// Force a classic "C" locale, reverts when function returns
+	ClassicLocale classic_locale;
+
 	// Remember the input parameters
 	msl_config = msl_cfg;
 
