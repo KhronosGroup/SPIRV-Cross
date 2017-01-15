@@ -158,7 +158,8 @@ void CompilerMSL::extract_global_variables_from_functions()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassInput || var.storage == StorageClassUniform ||
-				var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant) {
+			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant)
+			{
 				global_var_ids.insert(var.self);
 			}
 		}
@@ -177,7 +178,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
                                                          std::unordered_set<uint32_t> &processed_func_ids)
 {
 	// Avoid processing a function more than once
-	if (processed_func_ids.find(func_id) != processed_func_ids.end()) {
+	if (processed_func_ids.find(func_id) != processed_func_ids.end())
+	{
 		// Return function global variables
 		added_arg_ids = function_global_vars[func_id];
 		return;
@@ -204,10 +206,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
-                
+
 				if (std::find(global_variables.begin(), global_variables.end(), base_id) != global_variables.end())
 					added_arg_ids.insert(base_id);
-                
+
 				break;
 			}
 			case OpFunctionCall:
@@ -225,8 +227,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			}
 		}
 	}
-    
-    function_global_vars[func_id] = added_arg_ids;
+
+	function_global_vars[func_id] = added_arg_ids;
 
 	// Add the global variables as arguments to the function
 	if (func_id != entry_point)
@@ -322,12 +324,11 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		}
 		break;
 	}
-	
+
 	case StorageClassUniformConstant:
 	{
 		ib_var_ref = stage_uniform_var_name;
 	}
-		
 
 	default:
 		break;
@@ -375,9 +376,11 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				mbr_idx++;
 			}
 		}
-		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char || type.basetype == SPIRType::Int ||
-				 type.basetype == SPIRType::UInt || type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
-				 type.basetype == SPIRType::Float || type.basetype == SPIRType::Double || type.basetype == SPIRType::Boolean)
+		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char ||
+		         type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
+		         type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
+		         type.basetype == SPIRType::Float || type.basetype == SPIRType::Double ||
+		         type.basetype == SPIRType::Boolean)
 		{
 			// Add a reference to the variable type to the interface struct.
 			uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -394,7 +397,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
 			uint32_t locn = dec.location;
-			if (is_decoration_set(p_var->self, DecorationLocation)) {
+			if (is_decoration_set(p_var->self, DecorationLocation))
+			{
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			}
 			mark_location_as_used_by_shader(locn, storage);
@@ -417,11 +421,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	    (storage == StorageClassInput) ? MemberSorter::LocationReverse : MemberSorter::Location;
 	MemberSorter memberSorter(ib_type, meta[ib_type_id], sort_aspect);
 	memberSorter.sort();
-    
-    // Sort input or output variables alphabetical
+
+	// Sort input or output variables alphabetical
 	auto &execution = get_entry_point();
 	if ((execution.model == ExecutionModelFragment && storage == StorageClassInput) ||
-		(execution.model == ExecutionModelVertex && storage == StorageClassOutput)) {
+	    (execution.model == ExecutionModelVertex && storage == StorageClassOutput))
+	{
 		MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Alphabetical);
 		memberSorter.sort();
 	}
@@ -666,15 +671,17 @@ void CompilerMSL::emit_function_declarations()
 		if (id.get_type() == TypeFunction)
 		{
 			auto &func = id.get<SPIRFunction>();
-			if (func.self != entry_point) {
+			if (func.self != entry_point)
+			{
 				auto &dec = meta[func.self].decoration;
-				if (dec.alias[0] != 'm') {
+				if (dec.alias[0] != 'm')
+				{
 					// Add prefix to all fuctions in order to avoid ambiguous function names (e.g. builtin functions)
 					// TODO: check if current function is a builtin function
 					dec.alias = join("m", dec.alias);
 				}
 				emit_function_prototype(func, true);
-            }
+			}
 		}
 
 	statement("");
@@ -735,7 +742,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 			      var_type.storage == StorageClassPushConstant));
 		}
 
-               decl += (is_uniform_struct ? "constant " : "thread ");
+		decl += (is_uniform_struct ? "constant " : "thread ");
 		decl += argument_decl(arg);
 
 		// Manufacture automatic sampler arg for SampledImage texture
@@ -1048,7 +1055,8 @@ void CompilerMSL::emit_fixup()
 			/*const char *suffix = backend.float_literal_suffix ? "f" : "";
 			statement(qual_pos_var_name, ".z = 2.0", suffix, " * ", qual_pos_var_name, ".z - ", qual_pos_var_name,
 			          ".w;", "    // Adjust clip-space for Metal");*/
-            statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name, ".w) * 0.5;       // Adjust clip-space for Metal");
+			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
+			          ".w) * 0.5;       // Adjust clip-space for Metal");
 		}
 
 		if (msl_config.flip_vert_y)
@@ -1261,8 +1269,10 @@ string CompilerMSL::clean_func_name(string func_name)
 	return (iter != func_name_overrides.end()) ? iter->second : func_name;
 }
 
-void CompilerMSL::set_entry_point_name(string func_name) {
-	if (func_name.find("main") == std::string::npos) func_name += "_main";
+void CompilerMSL::set_entry_point_name(string func_name)
+{
+	if (func_name.find("main") == std::string::npos)
+		func_name += "_main";
 	meta.at(entry_point).decoration.alias = func_name;
 }
 
@@ -1290,7 +1300,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			
+
 			if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 			     var.storage == StorageClassPushConstant))
 			{
@@ -1382,7 +1392,8 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	switch (basetype)
 	{
 	case SPIRType::Struct:
-        if (execution.model == ExecutionModelVertex && next_metal_resource_index.msl_buffer == 0) next_metal_resource_index.msl_buffer = 1;
+		if (execution.model == ExecutionModelVertex && next_metal_resource_index.msl_buffer == 0)
+			next_metal_resource_index.msl_buffer = 1;
 		return next_metal_resource_index.msl_buffer++;
 	case SPIRType::Image:
 		return next_metal_resource_index.msl_texture++;
@@ -1403,12 +1414,13 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	auto &type = expression_type(arg.id);
 	bool constref = !type.pointer || arg.write_count == 0;
-    
-    // TODO: Check if this arg is an uniform pointer
-    bool pointer = type.storage == StorageClassUniformConstant;
+
+	// TODO: Check if this arg is an uniform pointer
+	bool pointer = type.storage == StorageClassUniformConstant;
 
 	auto &var = get<SPIRVariable>(arg.id);
-    return join(constref ? "const " : "", type_to_glsl(type), pointer ? " " : "& ", to_name(var.self), type_to_array_glsl(type));
+	return join(constref ? "const " : "", type_to_glsl(type), pointer ? " " : "& ", to_name(var.self),
+	            type_to_array_glsl(type));
 }
 
 // If we're currently in the entry point function, and the object
@@ -1443,15 +1455,18 @@ string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t inde
 // if the first chars are _ and a digit, which indicate a transient name.
 string CompilerMSL::ensure_valid_name(string name, string pfx)
 {
-   if (name.size() >= 2 && name[0] == '_' && isdigit(name[1])) {
+	if (name.size() >= 2 && name[0] == '_' && isdigit(name[1]))
+	{
 		return join(pfx, name);
-    }
-    else if (std::find(reserved_names.begin(), reserved_names.end(), name) != reserved_names.end()) {
-        return join(pfx, name);
-    }
-    else {
+	}
+	else if (std::find(reserved_names.begin(), reserved_names.end(), name) != reserved_names.end())
+	{
+		return join(pfx, name);
+	}
+	else
+	{
 		return name;
-    }
+	}
 }
 
 // Returns an MSL string describing  the SPIR-V type
@@ -1832,7 +1847,7 @@ bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 			return mbr_meta1.location > mbr_meta2.location;
 		case Offset:
 			return mbr_meta1.offset < mbr_meta2.offset;
-			
+
 		case OffsetThenLocationReverse:
 			return (mbr_meta1.offset < mbr_meta2.offset) ||
 			       ((mbr_meta1.offset == mbr_meta2.offset) && (mbr_meta1.location > mbr_meta2.location));

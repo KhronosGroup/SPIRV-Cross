@@ -1000,8 +1000,8 @@ uint64_t Compiler::get_decoration_mask(uint32_t id) const
 
 bool Compiler::is_decoration_set(uint32_t id, spv::Decoration decoration) const
 {
-    auto &dec = meta.at(id).decoration;
-    return (dec.decoration_flags & (1ull << DecorationLocation));
+	auto &dec = meta.at(id).decoration;
+	return (dec.decoration_flags & (1ull << DecorationLocation));
 }
 
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
@@ -2388,8 +2388,10 @@ SPIREntryPoint &Compiler::get_entry_point()
 bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 {
 	auto &var = get<SPIRVariable>(id);
-	if (var.storage != StorageClassInput && var.storage != StorageClassOutput && var.storage != StorageClassUniformConstant)
-		throw CompilerError("Only Input, Output variables and Uniform constants are part of a shader linking interface.");
+	if (var.storage != StorageClassInput && var.storage != StorageClassOutput &&
+	    var.storage != StorageClassUniformConstant)
+		throw CompilerError(
+		    "Only Input, Output variables and Uniform constants are part of a shader linking interface.");
 
 	// This is to avoid potential problems with very old glslang versions which did
 	// not emit input/output interfaces properly.

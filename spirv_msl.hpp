@@ -92,8 +92,8 @@ public:
 
 	// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
 	std::string compile() override;
-    
-    void set_entry_point_name(std::string func_name);
+
+	void set_entry_point_name(std::string func_name);
 
 protected:
 	void emit_instruction(const Instruction &instr) override;
@@ -123,14 +123,14 @@ protected:
 	void emit_custom_functions();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
-    
+
 	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> function_global_vars;
 	void extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
 	                                            std::unordered_set<uint32_t> &global_var_ids,
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	uint32_t add_interface_block(spv::StorageClass storage);
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
-	
+
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
 	void emit_function_prototype(SPIRFunction &func, bool is_decl);
@@ -168,7 +168,7 @@ protected:
 	std::string stage_out_var_name = "out";
 	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
-	std::vector<std::string> reserved_names = {"kernel", "bias"};
+	std::vector<std::string> reserved_names = { "kernel", "bias" };
 
 	// Extracts a set of opcodes that should be implemented as a bespoke custom function
 	// whose full source code is output as part of the shader source code.
