@@ -19,6 +19,8 @@
 
 #include "spirv_glsl.hpp"
 #include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace spirv_cross
@@ -39,10 +41,6 @@ struct MSLConfiguration
 struct MSLVertexAttr
 {
 	uint32_t location = 0;
-	uint32_t msl_buffer = 0;
-	uint32_t msl_offset = 0;
-	uint32_t msl_stride = 0;
-	bool per_instance = false;
 	bool used_by_shader = false;
 };
 
@@ -95,7 +93,7 @@ public:
 	// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
 	std::string compile() override;
     
-    void set_func_name(std::string func_name);
+    void set_entry_point_name(std::string func_name);
 
 protected:
 	void emit_instruction(const Instruction &instr) override;
@@ -104,7 +102,6 @@ protected:
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
-	void emit_texture_op(const Instruction &i) override;
 	void emit_fixup() override;
 	std::string type_to_glsl(const SPIRType &type) override;
 	std::string image_type_glsl(const SPIRType &type) override;
@@ -114,28 +111,34 @@ protected:
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) override;
+	std::string to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+	                             bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod,
+	                             bool has_dref) override;
+	std::string to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
+	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
+	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 
-	void extract_builtins();
-	void add_builtin(spv::BuiltIn builtin_type);
+	void register_custom_functions();
+	void emit_custom_functions();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
-	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
-	                                            std::set<uint32_t> &global_var_ids,
-	                                            std::set<uint32_t> &processed_func_ids);
     
-    std::unordered_map<uint32_t, std::set<uint32_t>> function_global_vars;
-    
-	void add_interface_structs();
-	void bind_vertex_attributes(std::set<uint32_t> &bindings);
-	uint32_t add_interface_struct(spv::StorageClass storage, uint32_t vtx_binding = 0);
+	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> function_global_vars;
+	void extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
+	                                            std::unordered_set<uint32_t> &global_var_ids,
+	                                            std::unordered_set<uint32_t> &processed_func_ids);
+	uint32_t add_interface_block(spv::StorageClass storage);
+	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
+	
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
 	void emit_function_prototype(SPIRFunction &func, bool is_decl);
 	void emit_function_declarations();
+	void populate_func_name_overrides();
 
 	std::string func_type_decl(SPIRType &type);
-    std::string _clean_msl_main_func_name;
-	std::string clean_func_name(std::string func_name);
+	std::string clean_func_name(std::string func_name) override;
 	std::string entry_point_args(bool append_comma);
 	std::string get_entry_point_name();
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
@@ -145,54 +148,70 @@ protected:
 	std::string builtin_type_decl(spv::BuiltIn builtin);
 	std::string member_attribute_qualifier(const SPIRType &type, uint32_t index);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
-	std::string get_vtx_idx_var_name(bool per_instance);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
-	uint32_t pad_to_offset(SPIRType &struct_type, bool is_indxd_vtx_input, uint32_t offset, uint32_t struct_size);
-	SPIRType &get_pad_type(uint32_t pad_len);
-	size_t get_declared_type_size(const SPIRType &type) const;
-	size_t get_declared_type_size(const SPIRType &type, uint64_t dec_mask) const;
+	size_t get_declared_type_size(uint32_t type_id) const;
+	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
+	std::string to_component_argument(uint32_t id);
 
 	MSLConfiguration msl_config;
+	std::unordered_map<std::string, std::string> func_name_overrides;
+	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
-	std::unordered_map<uint32_t, uint32_t> builtin_vars;
 	MSLResourceBinding next_metal_resource_index;
-	std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
-	std::vector<uint32_t> stage_in_var_ids;
+	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
-    uint32_t stage_uniforms_var_id = 0;
+	uint32_t stage_uniforms_var_id = 0;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
-    std::string stage_uniform_var_name = "uniforms";
+	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
-    std::vector<std::string> reserved_names = {"kernel", "bias"};
-};
+	std::vector<std::string> reserved_names = {"kernel", "bias"};
 
-// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
-// aspect, which defines which aspect of the struct members will be used to sort them.
-// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
-struct MemberSorter
-{
-	enum SortAspect
+	// Extracts a set of opcodes that should be implemented as a bespoke custom function
+	// whose full source code is output as part of the shader source code.
+	struct CustomFunctionHandler : OpcodeHandler
 	{
-		Location,
-		Offset,
-        Alphabetical
+		CustomFunctionHandler(const CompilerMSL &compiler_, std::set<uint32_t> &custom_function_ops_)
+		    : compiler(compiler_)
+		    , custom_function_ops(custom_function_ops_)
+		{
+		}
+
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+
+		const CompilerMSL &compiler;
+		std::set<uint32_t> &custom_function_ops;
 	};
 
-	void sort();
-	bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
-	MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
-	    : type(t)
-	    , meta(m)
-	    , sort_aspect(sa)
+	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
+	// aspect, which defines which aspect of the struct members will be used to sort them.
+	// Regardless of the sorting aspect, built-in members always appear at the end of the struct.
+	struct MemberSorter
 	{
-	}
-	SPIRType &type;
-	Meta &meta;
-	SortAspect sort_aspect;
+		enum SortAspect
+		{
+			Location,
+			LocationReverse,
+			Offset,
+			OffsetThenLocationReverse,
+			Alphabetical
+		};
+
+		void sort();
+		bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
+		MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
+		    : type(t)
+		    , meta(m)
+		    , sort_aspect(sa)
+		{
+		}
+		SPIRType &type;
+		Meta &meta;
+		SortAspect sort_aspect;
+	};
 };
 }
 

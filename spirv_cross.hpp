@@ -140,6 +140,8 @@ public:
     bool is_decoration_set(uint32_t id, spv::Decoration decoration) const;
 
 	// Gets the value for decorations which take arguments.
+	// If the decoration is a boolean (i.e. spv::DecorationNonWritable),
+	// 1 will be returned.
 	// If decoration doesn't exist or decoration is not recognized,
 	// 0 will be returned.
 	uint32_t get_decoration(uint32_t id, spv::Decoration decoration) const;
@@ -329,7 +331,7 @@ protected:
 			return nullptr;
 
 		if (instr.offset + instr.length > spirv.size())
-			throw CompilerError("Compiler::stream() out of range.");
+			SPIRV_CROSS_THROW("Compiler::stream() out of range.");
 		return &spirv[instr.offset];
 	}
 	std::vector<uint32_t> spirv;
@@ -485,7 +487,7 @@ protected:
 
 	void analyze_variable_scope(SPIRFunction &function);
 
-private:
+protected:
 	void parse();
 	void parse(const Instruction &i);
 
