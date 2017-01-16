@@ -137,8 +137,7 @@ void CompilerMSL::localize_global_variables()
 		if (gbl_var.storage == StorageClassPrivate)
 		{
 			entry_func.add_local_variable(gv_id);
-			//iter = global_variables.erase(iter);
-			iter++;
+			iter = global_variables.erase(iter);
 		}
 		else
 			iter++;
@@ -163,6 +162,17 @@ void CompilerMSL::extract_global_variables_from_functions()
 				global_var_ids.insert(var.self);
 			}
 		}
+	}
+	
+	// Local vars that are declared in the main function and accessed directy by a function
+	auto &entry_func = get<SPIRFunction>(entry_point);
+	auto iter = entry_func.local_variables.begin();
+	while (iter != entry_func.local_variables.end())
+	{
+		uint32_t gv_id = *iter;
+		auto &gbl_var = get<SPIRVariable>(gv_id);
+		global_var_ids.insert(gbl_var.self);
+		iter++;
 	}
 
 	std::unordered_set<uint32_t> added_arg_ids;
