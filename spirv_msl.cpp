@@ -666,7 +666,8 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 	{
 		auto &ib_var = get<SPIRVariable>(ib_var_id);
 		auto &ib_type = get<SPIRType>(ib_var.basetype);
-		emit_struct(ib_type);
+		auto &m = meta.at(ib_type.self);
+		if (m.members.size() > 0) emit_struct(ib_type);
 	}
 }
 
@@ -1853,7 +1854,6 @@ bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 			return mbr_meta1.location > mbr_meta2.location;
 		case Offset:
 			return mbr_meta1.offset < mbr_meta2.offset;
-
 		case OffsetThenLocationReverse:
 			return (mbr_meta1.offset < mbr_meta2.offset) ||
 			       ((mbr_meta1.offset == mbr_meta2.offset) && (mbr_meta1.location > mbr_meta2.location));
