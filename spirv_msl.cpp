@@ -217,9 +217,6 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
 
-				if (std::find(global_variables.begin(), global_variables.end(), base_id) != global_variables.end())
-					added_arg_ids.insert(base_id);
-
 				break;
 			}
 			case OpFunctionCall:
