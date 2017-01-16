@@ -3272,17 +3272,13 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, bool* need_transpose)
 {
-	if (flattened_buffer_blocks.find(base) != flattened_buffer_blocks.end())
+	if (flattened_buffer_blocks.count(base))
 	{
 		std::string expr;
 		flattened_access_chain(expr, base, indices, count, target_type, 0);
 
 		if (need_transpose)
 			*need_transpose = false;
-
-		expr += "/*";
-		expr += access_chain(base, indices, count, false);
-		expr += "*/";
 
 		return expr;
 	}
