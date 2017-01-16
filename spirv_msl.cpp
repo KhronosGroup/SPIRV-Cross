@@ -336,6 +336,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	case StorageClassUniformConstant:
 	{
 		ib_var_ref = stage_uniform_var_name;
+		break;
 	}
 
 	default:
