@@ -23,6 +23,8 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static const std::vector<std::string> reserved_names = {"kernel", "bias"};
+
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
     : CompilerGLSL(move(spirv_))
 {

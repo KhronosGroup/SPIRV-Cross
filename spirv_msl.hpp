@@ -168,7 +168,6 @@ protected:
 	std::string stage_out_var_name = "out";
 	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
-	std::vector<std::string> reserved_names = { "kernel", "bias" };
 
 	// Extracts a set of opcodes that should be implemented as a bespoke custom function
 	// whose full source code is output as part of the shader source code.
