@@ -415,7 +415,6 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			if (is_builtin_variable(*p_var))
 			{
 				set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, dec.builtin_type);
-				is_builtin_variable(*p_var);
 				if (dec.builtin_type == BuiltInPosition)
 					qual_pos_var_name = qual_var_name;
 			}
