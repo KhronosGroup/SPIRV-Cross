@@ -105,7 +105,7 @@ inline std::string convert_to_string(T &&t)
 
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable: 4996)
+#pragma warning(disable : 4996)
 #endif
 
 inline std::string convert_to_string(float t)
@@ -350,6 +350,10 @@ struct SPIRExpression : IVariant
 
 	// If this expression has been used while invalidated.
 	bool used_while_invalidated = false;
+
+	// Before use, this expression must be transposed.
+	// This is needed for targets which don't support row_major layouts.
+	bool need_transpose = false;
 
 	// A list of expressions which this expression depends on.
 	std::vector<uint32_t> expression_dependencies;

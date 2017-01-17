@@ -1000,11 +1000,35 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 	statement("");
 }
 
+void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+
+	// We're emitting the push constant block as a regular struct, so disable the block qualifier temporarily.
+	// Otherwise, we will end up emitting layout() qualifiers on naked structs which is not allowed.
+	auto &block_flags = meta[type.self].decoration.decoration_flags;
+	uint64_t block_flag = block_flags & (1ull << DecorationBlock);
+	block_flags &= ~block_flag;
+	emit_struct(type);
+	block_flags |= block_flag;
+	emit_uniform(var);
+	statement("");
+}
+
 void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
 	bool is_restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
+
+	// By default, for legacy targets, fall back to declaring a uniform struct.
+	if (is_legacy())
+	{
+		if (ssbo)
+			SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
+		emit_buffer_block_legacy(var);
+		return;
+	}
 
 	add_resource_name(var.self);
 
@@ -1055,6 +1079,9 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 
 	if (block)
 	{
+		if (is_legacy())
+			SPIRV_CROSS_THROW("IO blocks are not supported in legacy targets.");
+
 		add_resource_name(var.self);
 
 		// Block names should never alias.
@@ -1574,6 +1601,8 @@ string CompilerGLSL::to_expression(uint32_t id)
 		auto &e = get<SPIRExpression>(id);
 		if (e.base_expression)
 			return to_enclosed_expression(e.base_expression) + e.expression;
+		else if (e.need_transpose)
+			return convert_row_major_matrix(e.expression);
 		else
 			return e.expression;
 	}
@@ -2549,8 +2578,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 	string expr;
 	bool forward = false;
-	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset), (!!grad_x || !!grad_y), !!lod,
-	                         !!dref);
+	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
+	                         (!!grad_x || !!grad_y), !!lod, !!dref);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
@@ -3097,7 +3126,7 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-                                  bool chain_only)
+                                  bool chain_only, bool *need_transpose)
 {
 	string expr;
 	if (!chain_only)
@@ -3218,6 +3247,8 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
 	}
 
+	if (need_transpose)
+		*need_transpose = row_major_matrix_needs_conversion;
 	return expr;
 }
 
@@ -3554,13 +3585,28 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
 
-		// If loading a non-native row-major matrix, convert it to column-major
+		// If loading a non-native row-major matrix, mark the expression as need_transpose.
+		bool need_transpose = false;
+		bool old_need_transpose = false;
+
+		auto *ptr_expression = maybe_get<SPIRExpression>(ptr);
+		if (ptr_expression && ptr_expression->need_transpose)
+		{
+			old_need_transpose = true;
+			ptr_expression->need_transpose = false;
+			need_transpose = true;
+		}
+		else if (is_non_native_row_major_matrix(ptr))
+			need_transpose = true;
+
 		auto expr = to_expression(ptr);
-		if (is_non_native_row_major_matrix(ptr))
-			expr = convert_row_major_matrix(expr);
+
+		if (ptr_expression)
+			ptr_expression->need_transpose = old_need_transpose;
 
 		// Suppress usage tracking since using same expression multiple times does not imply any extra work.
-		emit_op(result_type, id, expr, forward, true);
+		auto &e = emit_op(result_type, id, expr, forward, true);
+		e.need_transpose = need_transpose;
 		register_read(id, ptr, forward);
 		break;
 	}
@@ -3574,9 +3620,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// If the base is immutable, the access chain pointer must also be.
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
-		auto e = access_chain(ops[2], &ops[3], length - 3, false);
+		bool need_transpose;
+		auto e = access_chain(ops[2], &ops[3], length - 3, false, false, &need_transpose);
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 		expr.loaded_from = ops[2];
+		expr.need_transpose = need_transpose;
 		break;
 	}
 
@@ -4012,11 +4060,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFMul:
+	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
+	{
+		// If the matrix needs transpose, just flip the multiply order.
+		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
+		if (e && e->need_transpose)
+		{
+			e->need_transpose = false;
+			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			e->need_transpose = true;
+		}
+		else
+			BOP(*);
+		break;
+	}
+
+	case OpFMul:
 	case OpMatrixTimesScalar:
 	case OpVectorTimesScalar:
-	case OpVectorTimesMatrix:
 	case OpMatrixTimesMatrix:
 		BOP(*);
 		break;
@@ -4855,7 +4917,8 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 {
 	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix)
+	// Legacy targets do not support row major.
+	if (backend.native_row_major_matrix && !is_legacy())
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
@@ -4876,7 +4939,7 @@ bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
 {
 	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix)
+	if (backend.native_row_major_matrix && !is_legacy())
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.

@@ -264,6 +264,7 @@ protected:
 	void emit_struct(SPIRType &type);
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);
+	void emit_buffer_block_legacy(const SPIRVariable &var);
 	void emit_push_constant_block(const SPIRVariable &var);
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
@@ -305,7 +306,7 @@ protected:
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-	                         bool chain_only = false);
+	                         bool chain_only = false, bool *need_transpose = nullptr);
 
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);
