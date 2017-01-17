@@ -1000,9 +1000,28 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 	statement("");
 }
 
+void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
+{
+	if (flattened_buffer_blocks.count(var.self))
+	{
+		emit_buffer_block_flattened(var);
+	}
+	else if (is_legacy())
+	{
+		emit_buffer_block_legacy(var);
+	}
+	else
+	{
+		emit_buffer_block_native(var);
+	}
+}
+
 void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
+	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	if (ssbo)
+		SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
 
 	// We're emitting the push constant block as a regular struct, so disable the block qualifier temporarily.
 	// Otherwise, we will end up emitting layout() qualifiers on naked structs which is not allowed.
@@ -1015,20 +1034,11 @@ void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 	statement("");
 }
 
-void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
+void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
 	bool is_restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
-
-	// By default, for legacy targets, fall back to declaring a uniform struct.
-	if (is_legacy())
-	{
-		if (ssbo)
-			SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
-		emit_buffer_block_legacy(var);
-		return;
-	}
 
 	add_resource_name(var.self);
 
@@ -1061,7 +1071,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	statement("");
 }
 
-void CompilerGLSL::emit_flattened_buffer_block(const SPIRVariable &var)
+void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
@@ -1400,14 +1410,7 @@ void CompilerGLSL::emit_resources()
 			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
 			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
-				if (flattened_buffer_blocks.count(var.self))
-				{
-					emit_flattened_buffer_block(var);
-				}
-				else
-				{
-					emit_buffer_block(var);
-				}
+				emit_buffer_block(var);
 			}
 		}
 	}

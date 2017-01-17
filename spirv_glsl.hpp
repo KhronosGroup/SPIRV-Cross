@@ -270,8 +270,9 @@ protected:
 	void emit_struct(SPIRType &type);
 	void emit_resources();
 	void emit_buffer_block(const SPIRVariable &type);
+	void emit_buffer_block_native(const SPIRVariable &var);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
-	void emit_flattened_buffer_block(const SPIRVariable &type);
+	void emit_buffer_block_flattened(const SPIRVariable &type);
 	void emit_push_constant_block(const SPIRVariable &var);
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
