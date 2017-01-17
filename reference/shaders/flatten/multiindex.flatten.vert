@@ -5,6 +5,6 @@ in ivec2 aIndex;
 
 void main()
 {
-    gl_Position = UBO[aIndex.x*5+aIndex.y*1+0];
+    gl_Position = UBO[aIndex.x * 5 + aIndex.y * 1 + 0];
 }
 

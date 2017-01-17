@@ -3316,7 +3316,7 @@ void CompilerGLSL::flattened_access_chain_struct(std::string &expr, uint32_t bas
 	for (size_t i = 0; i < target_type.member_types.size(); ++i)
 	{
 		if (i != 0)
-			expr += ",";
+			expr += ", ";
 
 		const SPIRType &member_type = get<SPIRType>(target_type.member_types[i]);
 		uint32_t member_offset = type_struct_member_offset(target_type, uint32_t(i));
@@ -3335,7 +3335,7 @@ void CompilerGLSL::flattened_access_chain_matrix(std::string &expr, uint32_t bas
 	for (uint32_t i = 0; i < target_type.columns; ++i)
 	{
 		if (i != 0)
-			expr += ",";
+			expr += ", ";
 
 		flattened_access_chain_vector_scalar(expr, base, indices, count, target_type, offset + i * 16);
 	}
@@ -3405,9 +3405,9 @@ uint32_t CompilerGLSL::flattened_access_chain_offset(std::string &expr, uint32_t
 			assert(array_stride % 16 == 0);
 
 			expr += to_expression(index);
-			expr += "*";
+			expr += " * ";
 			expr += convert_to_string(array_stride / 16);
-			expr += "+";
+			expr += " + ";
 
 			type_size = array_stride;
 		}
