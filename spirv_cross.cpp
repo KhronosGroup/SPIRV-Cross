@@ -2058,63 +2058,49 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 	auto flags = get_member_decoration_mask(struct_type.self, index);
 	auto &type = get<SPIRType>(struct_type.member_types[index]);
 
-	if (type.basetype != SPIRType::Struct)
+	switch (type.basetype)
 	{
-		switch (type.basetype)
-		{
-		case SPIRType::Unknown:
-		case SPIRType::Void:
-		case SPIRType::Boolean: // Bools are purely logical, and cannot be used for externally visible types.
-		case SPIRType::AtomicCounter:
-		case SPIRType::Image:
-		case SPIRType::SampledImage:
-		case SPIRType::Sampler:
-			SPIRV_CROSS_THROW("Querying size for object with opaque size.\n");
+	case SPIRType::Unknown:
+	case SPIRType::Void:
+	case SPIRType::Boolean: // Bools are purely logical, and cannot be used for externally visible types.
+	case SPIRType::AtomicCounter:
+	case SPIRType::Image:
+	case SPIRType::SampledImage:
+	case SPIRType::Sampler:
+		SPIRV_CROSS_THROW("Querying size for object with opaque size.\n");
 
-		default:
-			break;
-		}
+	default:
+		break;
+	}
 
+	if (!type.array.empty())
+	{
+		// For arrays, we can use ArrayStride to get an easy check.
+		return type_struct_member_array_stride(struct_type, index) * type.array.back();
+	}
+	else if (type.basetype == SPIRType::Struct)
+	{
+		return get_declared_struct_size(type);
+	}
+	else
+	{
 		size_t component_size = type.width / 8;
 		unsigned vecsize = type.vecsize;
 		unsigned columns = type.columns;
 
-		if (type.array.empty())
-		{
-			// Vectors.
-			if (columns == 1)
-				return vecsize * component_size;
-			else
-			{
-				// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
-				if ((flags & (1ull << DecorationRowMajor)) && columns == 3)
-					columns = 4;
-				else if ((flags & (1ull << DecorationColMajor)) && vecsize == 3)
-					vecsize = 4;
-
-				return vecsize * columns * component_size;
-			}
-		}
+		// Vectors.
+		if (columns == 1)
+			return vecsize * component_size;
 		else
 		{
-			// For arrays, we can use ArrayStride to get an easy check.
-			return type_struct_member_array_stride(struct_type, index) * type.array.back();
-		}
-	}
-	else
-	{
-		// Recurse.
-		uint32_t last = uint32_t(struct_type.member_types.size() - 1);
-		uint32_t offset = type_struct_member_offset(struct_type, last);
-		size_t size;
+			// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
+			if ((flags & (1ull << DecorationRowMajor)) && columns == 3)
+				columns = 4;
+			else if ((flags & (1ull << DecorationColMajor)) && vecsize == 3)
+				vecsize = 4;
 
-		// If we have an array of structs inside our struct, handle that with array strides instead.
-		auto &last_type = get<SPIRType>(struct_type.member_types.back());
-		if (last_type.array.empty())
-			size = get_declared_struct_size(last_type);
-		else
-			size = type_struct_member_array_stride(struct_type, last) * last_type.array.back();
-		return offset + size;
+			return vecsize * columns * component_size;
+		}
 	}
 }
 
