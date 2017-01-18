@@ -405,7 +405,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
 			uint32_t locn = dec.location;
-			if (get_decoration_mask(p_var->self) == DecorationLocation) {
+			if (get_decoration_mask(p_var->self) & (1ull << DecorationLocation)) {
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			}
 			mark_location_as_used_by_shader(locn, storage);
