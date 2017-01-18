@@ -171,6 +171,8 @@ In these cases, run `./test_shaders.py shaders --update` to update the reference
 Always make sure you are running up to date glslangValidator as well as SPIRV-Tools when updating reference files.
 
 In short, the master branch should always be able to run `./test_shaders.py shaders` without failure.
+SPIRV-Cross uses Travis CI to test all pull requests, so it is not strictly needed to perform testing yourself if you have problems running it locally.
+A pull request which does not pass testing on Travis will not be accepted however.
 
 When adding support for new features to SPIRV-Cross, a new shader and reference file should be added which covers usage of the new shader features in question.
 
@@ -204,6 +206,10 @@ The current reference output is contained in reference/.
 `./test_shaders.py shaders` can be run to perform regression testing.
 
 See `./test_shaders.py --help` for more.
+
+### Metal backend
+
+To test the roundtrip path GLSL -> SPIR-V -> MSL, `--metal` can be added, e.g. `./test_shaders.py --metal shaders-msl`.
 
 ### Updating regression tests
 
