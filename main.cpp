@@ -672,7 +672,7 @@ int main(int argc, char *argv[])
 
 	if (args.flatten_ubo)
 		for (auto &ubo : res.uniform_buffers)
-			compiler->flatten_interface_block(ubo.id);
+			compiler->flatten_buffer_block(ubo.id);
 
 	auto pls_inputs = remap_pls(args.pls_in, res.stage_inputs, &res.subpass_inputs);
 	auto pls_outputs = remap_pls(args.pls_out, res.stage_outputs, nullptr);

@@ -201,11 +201,7 @@ public:
 	// Returns the effective size of a buffer block struct member.
 	virtual size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const;
 
-	// Legacy GLSL compatibility method.
-	// Takes a variable with a block interface and flattens it into a T array[N]; array instead.
-	// For this to work, all types in the block must not themselves be composites
-	// (except vectors and matrices), and all types must be the same.
-	// The name of the uniform will be the same as the interface block name.
+	// Legacy GLSL compatibility method. Deprecated in favor of CompilerGLSL::flatten_buffer_block
 	void flatten_interface_block(uint32_t id);
 
 	// Returns a set of all global variables which are statically accessed
