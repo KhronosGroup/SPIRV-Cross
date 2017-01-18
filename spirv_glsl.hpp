@@ -317,11 +317,11 @@ protected:
 	                         bool chain_only = false, bool *need_transpose = nullptr);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, bool *need_transpose);
 
-	void flattened_access_chain(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
-	void flattened_access_chain_struct(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
-	void flattened_access_chain_matrix(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
-	void flattened_access_chain_vector_scalar(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
-	uint32_t flattened_access_chain_offset(std::string &expr, uint32_t base, const uint32_t *indices, uint32_t count, uint32_t offset);
+	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	std::string flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	std::string flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	std::string flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset);
+	std::pair<std::string, uint32_t> flattened_access_chain_offset(uint32_t base, const uint32_t *indices, uint32_t count, uint32_t offset);
 
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);
