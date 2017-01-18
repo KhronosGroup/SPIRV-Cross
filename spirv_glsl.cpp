@@ -3295,7 +3295,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	if (flattened_buffer_blocks.count(base))
 	{
 		if (need_transpose)
-			*need_transpose = false;
+			flattened_access_chain_offset(base, indices, count, 0, need_transpose);
 
 		return flattened_access_chain(base, indices, count, target_type, 0);
 	}
@@ -3393,7 +3393,7 @@ std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, co
 	return expr;
 }
 
-std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices, uint32_t count, uint32_t offset)
+std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices, uint32_t count, uint32_t offset, bool *need_transpose)
 {
 	const auto *type = &expression_type(base);
 	uint32_t type_size = 0;
@@ -3402,6 +3402,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 	SPIRType temp;
 
 	std::string expr;
+	bool row_major_matrix_needs_conversion = false;
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -3443,11 +3444,15 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 			offset += type_struct_member_offset(*type, index);
 
 			type_size = uint32_t(get_declared_struct_member_size(*type, index));
+			row_major_matrix_needs_conversion = (combined_decoration_for_member(*type, index) & (1ull << DecorationRowMajor)) != 0;
 			type = &get<SPIRType>(type->member_types[index]);
 		}
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
+			if (row_major_matrix_needs_conversion)
+				SPIRV_CROSS_THROW("Matrix indexing is not supported for flattened row major matrices!");
+
 			if (ids[index].get_type() != TypeConstant)
 				SPIRV_CROSS_THROW("Cannot flatten dynamic matrix indexing!");
 
@@ -3480,6 +3485,9 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
 	}
+
+	if (need_transpose)
+		*need_transpose = row_major_matrix_needs_conversion;
 
 	return std::make_pair(expr, offset);
 }
@@ -5641,13 +5649,6 @@ void CompilerGLSL::flatten_buffer_block(uint32_t id)
 		SPIRV_CROSS_THROW(name + " is not a block.");
 	if (type.member_types.empty())
 		SPIRV_CROSS_THROW(name + " is an empty struct.");
-
-	uint64_t member_flags = 0;
-	for (uint32_t i = 0; i < type.member_types.size(); i++)
-		member_flags |= combined_decoration_for_member(type, i);
-
-	if (member_flags & (1ull << DecorationRowMajor))
-		SPIRV_CROSS_THROW(name + " uses row major matrices which is not supported.");
 
 	flattened_buffer_blocks.insert(id);
 }
