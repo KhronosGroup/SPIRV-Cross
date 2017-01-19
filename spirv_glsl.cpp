@@ -1569,7 +1569,7 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 				return;
 		}
 	}
-	expr.pop_back();
+	expr.erase(expr.size() - 1, 1);
 	expr.erase(begin(expr));
 }
 
