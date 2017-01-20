@@ -160,17 +160,18 @@ protected:
 	std::string sampler_name_suffix = "Smplr";
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
-    struct OpCodePreprocessor : OpcodeHandler
-    {
-        OpCodePreprocessor(CompilerMSL &compiler_) : compiler(compiler_)
-        {
-        }
+	struct OpCodePreprocessor : OpcodeHandler
+	{
+		OpCodePreprocessor(CompilerMSL &compiler_)
+		    : compiler(compiler_)
+		{
+		}
 
-        bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 
-        CompilerMSL &compiler;
-        bool suppress_missing_prototypes = false;
-    };
+		CompilerMSL &compiler;
+		bool suppress_missing_prototypes = false;
+	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
 	// aspect, which defines which aspect of the struct members will be used to sort them.

@@ -117,11 +117,11 @@ void CompilerMSL::preprocess_op_codes()
 {
 	custom_function_ops.clear();
 
-    OpCodePreprocessor preproc(*this);
+	OpCodePreprocessor preproc(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), preproc);
 
-    if (preproc.suppress_missing_prototypes)
-        add_header_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+	if (preproc.suppress_missing_prototypes)
+		add_header_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
 }
 
 // Move the Private global variables to the entry function.
@@ -402,12 +402,13 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
-    if ( !header_lines.empty() ) {
-        for (auto &header : header_lines)
-            statement(header);
+	if (!header_lines.empty())
+	{
+		for (auto &header : header_lines)
+			statement(header);
 
-        statement("");
-    }
+		statement("");
+	}
 
 	statement("#include <metal_stdlib>");
 	statement("#include <simd/simd.h>");
@@ -693,7 +694,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	}
 
 	decl += ")";
-    statement(decl);
+	statement(decl);
 }
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
@@ -1720,24 +1721,24 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 
 bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t * /*args*/, uint32_t /*length*/)
 {
-    switch (opcode)
-    {
-        // If an opcode requires a bespoke custom function be output, remember it.
-        case OpFMod:
-            compiler.custom_function_ops.insert(uint32_t(opcode));
-            break;
+	switch (opcode)
+	{
+	// If an opcode requires a bespoke custom function be output, remember it.
+	case OpFMod:
+		compiler.custom_function_ops.insert(uint32_t(opcode));
+		break;
 
-        // Since MSL exists in a single execution scope, function prototype declarations are not
-        // needed, and clutter the output. If secondary functions are output (as indicated by the
-        // presence of OpFunctionCall, then suppress compiler warnings of missing function prototypes.
-        case OpFunctionCall:
-            suppress_missing_prototypes = true;
-            break;
+	// Since MSL exists in a single execution scope, function prototype declarations are not
+	// needed, and clutter the output. If secondary functions are output (as indicated by the
+	// presence of OpFunctionCall, then suppress compiler warnings of missing function prototypes.
+	case OpFunctionCall:
+		suppress_missing_prototypes = true;
+		break;
 
-        default:
-            break;
-    }
-    return true;
+	default:
+		break;
+	}
+	return true;
 }
 
 // Sort both type and meta member content based on builtin status (put builtins at end),

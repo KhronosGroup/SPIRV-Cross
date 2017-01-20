@@ -129,14 +129,10 @@ static uint32_t pls_format_to_components(PlsFormat format)
 	}
 }
 
-static const char* vector_swizzle(int vecsize, int index)
+static const char *vector_swizzle(int vecsize, int index)
 {
-	static const char* swizzle[4][4] =
-	{
-		{ ".x", ".y", ".z", ".w" },
-		{ ".xy", ".yz", ".zw" },
-		{ ".xyz", ".yzw" },
-		{ "" }
+	static const char *swizzle[4][4] = {
+		{ ".x", ".y", ".z", ".w" }, { ".xy", ".yz", ".zw" }, { ".xyz", ".yzw" }, { "" }
 	};
 
 	assert(vecsize >= 1 && vecsize <= 4);
@@ -3290,7 +3286,8 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	return expr;
 }
 
-string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, bool* need_transpose)
+string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
+                                  bool *need_transpose)
 {
 	if (flattened_buffer_blocks.count(base))
 	{
@@ -3305,7 +3302,8 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 }
 
-std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset)
+std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                 const SPIRType &target_type, uint32_t offset)
 {
 	if (!target_type.array.empty())
 	{
@@ -3325,7 +3323,8 @@ std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *
 	}
 }
 
-std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset)
+std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                        const SPIRType &target_type, uint32_t offset)
 {
 	std::string expr;
 
@@ -3348,7 +3347,8 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 	return expr;
 }
 
-std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset)
+std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                        const SPIRType &target_type, uint32_t offset)
 {
 	std::string expr;
 
@@ -3368,7 +3368,8 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 	return expr;
 }
 
-std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type, uint32_t offset)
+std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                               const SPIRType &target_type, uint32_t offset)
 {
 	if (target_type.basetype != SPIRType::Float)
 		SPIRV_CROSS_THROW("Access chains that use non-floating-point base types can not be flattened");
@@ -3393,7 +3394,9 @@ std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, co
 	return expr;
 }
 
-std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices, uint32_t count, uint32_t offset, bool *need_transpose)
+std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
+                                                                             uint32_t count, uint32_t offset,
+                                                                             bool *need_transpose)
 {
 	const auto *type = &expression_type(base);
 	uint32_t type_size = 0;
@@ -3444,7 +3447,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 			offset += type_struct_member_offset(*type, index);
 
 			type_size = uint32_t(get_declared_struct_member_size(*type, index));
-			row_major_matrix_needs_conversion = (combined_decoration_for_member(*type, index) & (1ull << DecorationRowMajor)) != 0;
+			row_major_matrix_needs_conversion =
+			    (combined_decoration_for_member(*type, index) & (1ull << DecorationRowMajor)) != 0;
 			type = &get<SPIRType>(type->member_types[index]);
 		}
 		// Matrix -> Vector
