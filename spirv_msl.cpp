@@ -57,9 +57,9 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 		for (auto &rb : *p_res_bindings)
 			resource_bindings.push_back(&rb);
 
-	// Establish the need to output any custom functions
+	// Preprocess OpCodes to extract the need to output additional header content
 	set_enabled_interface_variables(get_active_interface_variables());
-	register_custom_functions();
+	preprocess_op_codes();
 
 	// Create structs to hold input and output variables
 	qual_pos_var_name = "";
@@ -98,7 +98,6 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 		emit_header();
 		emit_resources();
 		emit_custom_functions();
-		emit_function_declarations();
 		emit_function(get<SPIRFunction>(entry_point), 0);
 
 		pass_count++;
@@ -114,11 +113,15 @@ string CompilerMSL::compile()
 }
 
 // Register the need to output any custom functions.
-void CompilerMSL::register_custom_functions()
+void CompilerMSL::preprocess_op_codes()
 {
 	custom_function_ops.clear();
-	CustomFunctionHandler handler(*this, custom_function_ops);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+
+    OpCodePreprocessor preproc(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), preproc);
+
+    if (preproc.suppress_missing_prototypes)
+        add_header_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
 }
 
 // Move the Private global variables to the entry function.
@@ -399,8 +402,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
-	for (auto &header : header_lines)
-		statement(header);
+    if ( !header_lines.empty() ) {
+        for (auto &header : header_lines)
+            statement(header);
+
+        statement("");
+    }
 
 	statement("#include <metal_stdlib>");
 	statement("#include <simd/simd.h>");
@@ -418,8 +425,6 @@ void CompilerMSL::emit_custom_functions()
 		{
 		case OpFMod:
 			statement("// Support GLSL mod(), which is slightly different than Metal fmod()");
-			statement("template<typename Tx, typename Ty>");
-			statement("Tx mod(Tx x, Ty y);");
 			statement("template<typename Tx, typename Ty>");
 			statement("Tx mod(Tx x, Ty y)");
 			begin_scope();
@@ -625,28 +630,9 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 	}
 }
 
-// Output a declaration statement for each function.
-void CompilerMSL::emit_function_declarations()
-{
-	for (auto &id : ids)
-		if (id.get_type() == TypeFunction)
-		{
-			auto &func = id.get<SPIRFunction>();
-			if (func.self != entry_point)
-				emit_function_prototype(func, true);
-		}
-
-	statement("");
-}
-
-void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
-{
-	emit_function_prototype(func, false);
-}
-
 // Emits the declaration signature of the specified function.
 // If this is the entry point function, Metal-specific return value and function arguments are added.
-void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
+void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 {
 	local_variable_names = resource_names;
 	string decl;
@@ -707,7 +693,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, bool is_decl)
 	}
 
 	decl += ")";
-	statement(decl, (is_decl ? ";" : ""));
+    statement(decl);
 }
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
@@ -1723,19 +1709,26 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 	}
 }
 
-// If the opcode requires a bespoke custom function be output, remember it.
-bool CompilerMSL::CustomFunctionHandler::handle(Op opcode, const uint32_t * /*args*/, uint32_t /*length*/)
+bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t * /*args*/, uint32_t /*length*/)
 {
-	switch (opcode)
-	{
-	case OpFMod:
-		custom_function_ops.insert(opcode);
-		break;
+    switch (opcode)
+    {
+        // If an opcode requires a bespoke custom function be output, remember it.
+        case OpFMod:
+            compiler.custom_function_ops.insert(uint32_t(opcode));
+            break;
 
-	default:
-		break;
-	}
-	return true;
+        // Since MSL exists in a single execution scope, function prototype declarations are not
+        // needed, and clutter the output. If secondary functions are output (as indicated by the
+        // presence of OpFunctionCall, then suppress compiler warnings of missing function prototypes.
+        case OpFunctionCall:
+            suppress_missing_prototypes = true;
+            break;
+
+        default:
+            break;
+    }
+    return true;
 }
 
 // Sort both type and meta member content based on builtin status (put builtins at end),
