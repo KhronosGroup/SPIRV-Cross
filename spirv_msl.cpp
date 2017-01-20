@@ -1254,7 +1254,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 					if (!ep_args.empty())
 						ep_args += ", ";
 					if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
-					    (meta[type.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0)
+					    (meta[var.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0)
 					{
 						ep_args += "device ";
 					}
