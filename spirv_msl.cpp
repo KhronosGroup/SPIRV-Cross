@@ -722,14 +722,17 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fet
 string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
                                      uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
                                      uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
-                                     uint32_t, bool *p_forward)
+                                     uint32_t sample, bool *p_forward)
 {
-	string farg_str = to_sampler_expression(img);
+	string farg_str;
+	if (!is_fetch)
+		farg_str += to_sampler_expression(img);
 
 	// Texture coordinates
 	bool forward = should_forward(coord);
 	auto coord_expr = to_enclosed_expression(coord);
 	string tex_coords = coord_expr;
+	string face_expr;
 	const char *alt_coord = "";
 
 	switch (imgtype.image.dim)
@@ -737,6 +740,9 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	case Dim1D:
 		tex_coords = coord_expr + ".x";
 		remove_duplicate_swizzle(tex_coords);
+
+		if (is_fetch)
+			tex_coords = "uint(" + tex_coords + ")";
 
 		alt_coord = ".y";
 
@@ -749,12 +755,18 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			remove_duplicate_swizzle(coord_x);
 			string coord_y = coord_expr + ".y";
 			remove_duplicate_swizzle(coord_y);
-			tex_coords = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
+			if (is_fetch)
+				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
+			else
+				tex_coords = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
 		}
 		else
 		{
 			tex_coords = coord_expr + ".xy";
 			remove_duplicate_swizzle(tex_coords);
+
+			if (is_fetch)
+				tex_coords = "uint2(" + tex_coords + ")";
 		}
 
 		alt_coord = ".z";
@@ -762,6 +774,32 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		break;
 
 	case Dim3D:
+		if (msl_config.flip_frag_y)
+		{
+			string coord_x = coord_expr + ".x";
+			remove_duplicate_swizzle(coord_x);
+			string coord_y = coord_expr + ".y";
+			remove_duplicate_swizzle(coord_y);
+			string coord_z = coord_expr + ".z";
+			remove_duplicate_swizzle(coord_z);
+			if (is_fetch)
+				tex_coords = "uint3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
+			else
+				tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
+		}
+		else
+		{
+			tex_coords = coord_expr + ".xyz";
+			remove_duplicate_swizzle(tex_coords);
+
+			if (is_fetch)
+				tex_coords = "uint3(" + tex_coords + ")";
+		}
+
+		alt_coord = ".w";
+
+		break;
+
 	case DimCube:
 		if (msl_config.flip_frag_y)
 		{
@@ -771,12 +809,31 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			remove_duplicate_swizzle(coord_y);
 			string coord_z = coord_expr + ".z";
 			remove_duplicate_swizzle(coord_z);
-			tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
+
+			if (is_fetch)
+			{
+				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
+				face_expr = coord_z;
+			}
+			else
+				tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
 		}
 		else
 		{
-			tex_coords = coord_expr + ".xyz";
-			remove_duplicate_swizzle(tex_coords);
+			if (is_fetch)
+			{
+				tex_coords = coord_expr + ".xy";
+				remove_duplicate_swizzle(tex_coords);
+				tex_coords = "uint2(" + tex_coords + ")";
+
+				face_expr = coord_expr + ".z";
+				remove_duplicate_swizzle(face_expr);
+			}
+			else
+			{
+				tex_coords = coord_expr + ".xyz";
+				remove_duplicate_swizzle(tex_coords);
+			}
 		}
 
 		alt_coord = ".w";
@@ -787,14 +844,29 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		break;
 	}
 
-	// Use alt coord for projection or texture array
-	if (imgtype.image.arrayed)
-		tex_coords += ", " + coord_expr + alt_coord;
-	else if (is_proj)
-		tex_coords += " / " + coord_expr + alt_coord;
+	// If projection, use alt coord as divisor
+	if (is_proj)
+	{
+		string divisor = coord_expr + alt_coord;
+		remove_duplicate_swizzle(divisor);
+		tex_coords += " / " + divisor;
+	}
 
-	farg_str += ", ";
+	if (!farg_str.empty())
+		farg_str += ", ";
 	farg_str += tex_coords;
+
+	// If fetch from cube, add face explicitly
+	if (!face_expr.empty())
+		farg_str += ", uint(" + face_expr + ")";
+
+	// If array, use alt coord
+	if (imgtype.image.arrayed)
+	{
+		string array_index = coord_expr + alt_coord;
+		remove_duplicate_swizzle(array_index);
+		farg_str += ", uint(" + array_index + ")";
+	}
 
 	// Depth compare reference value
 	if (dref)
@@ -911,6 +983,12 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		forward = forward && should_forward(comp);
 		farg_str += ", " + to_component_argument(comp);
+	}
+
+	if (sample)
+	{
+		farg_str += ", ";
+		farg_str += to_expression(sample);
 	}
 
 	*p_forward = forward;
