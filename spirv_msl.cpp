@@ -1239,7 +1239,16 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				case SPIRType::Struct:
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += "constant " + type_to_glsl(type) + "& " + to_name(var.self);
+					if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
+					    (meta[var.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0)
+					{
+						ep_args += "device ";
+					}
+					else
+					{
+						ep_args += "constant ";
+					}
+					ep_args += type_to_glsl(type) + "& " + to_name(var.self);
 					ep_args += " [[buffer(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
 					break;
 				case SPIRType::Sampler:
