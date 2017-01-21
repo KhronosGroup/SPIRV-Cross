@@ -1094,7 +1094,33 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 	auto buffer_name = to_name(type.self, false);
 	size_t buffer_size = (get_declared_struct_size(type) + 15) / 16;
 
-	statement("uniform vec4 ", buffer_name, "[", buffer_size, "];");
+	SPIRType::BaseType basic_type;
+	if (get_common_basic_type(type, basic_type))
+	{
+		SPIRType tmp;
+		tmp.basetype = basic_type;
+
+		const char *flat_type = nullptr;
+		switch (basic_type)
+		{
+		case SPIRType::Float:
+			flat_type = "vec4 ";
+			break;
+		case SPIRType::Int:
+			flat_type = "ivec4 ";
+			break;
+		case SPIRType::UInt:
+			flat_type = "uvec4 ";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Basic types in a flattened UBO must be float, int or uint.");
+		}
+
+		auto flags = get_buffer_block_flags(var);
+		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), flat_type, buffer_name, "[", buffer_size, "];");
+	}
+	else
+		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
 }
 
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
@@ -3346,15 +3372,18 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 {
 	std::string expr;
 
+	uint32_t matrix_stride = 0;
+	flattened_access_chain_offset(base, indices, count, offset, nullptr, &matrix_stride);
+
 	expr += type_to_glsl_constructor(target_type);
 	expr += "(";
 
-	for (uint32_t i = 0; i < target_type.columns; ++i)
+	for (uint32_t i = 0; i < target_type.columns; i++)
 	{
 		if (i != 0)
 			expr += ", ";
 
-		expr += flattened_access_chain_vector_scalar(base, indices, count, target_type, offset + i * 16);
+		expr += flattened_access_chain_vector_scalar(base, indices, count, target_type, offset + i * matrix_stride);
 	}
 
 	expr += ")";
@@ -3365,13 +3394,10 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count,
                                                                const SPIRType &target_type, uint32_t offset)
 {
-	if (target_type.basetype != SPIRType::Float)
-		SPIRV_CROSS_THROW("Access chains that use non-floating-point base types can not be flattened");
-
 	auto result = flattened_access_chain_offset(base, indices, count, offset);
 
-	assert(result.second % 4 == 0);
-	uint32_t index = result.second / 4;
+	assert(result.second % (target_type.width / 8) == 0);
+	uint32_t index = 8 * result.second / target_type.width;
 
 	auto buffer_name = to_name(expression_type(base).self);
 
@@ -3379,7 +3405,7 @@ std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, co
 
 	expr += buffer_name;
 	expr += "[";
-	expr += result.first; // this is a series of N1*k1+N2*k2+... that is either empty or ends with a +
+	expr += result.first; // this is a series of N1 * k1 + N2 * k2 + ... that is either empty or ends with a +
 	expr += convert_to_string(index / 4);
 	expr += "]";
 
@@ -3390,7 +3416,7 @@ std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, co
 
 std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
                                                                              uint32_t count, uint32_t offset,
-                                                                             bool *need_transpose)
+                                                                             bool *need_transpose, uint32_t *out_matrix_stride)
 {
 	const auto *type = &expression_type(base);
 	uint32_t current_type = type->self;
@@ -3410,10 +3436,28 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 			if (!array_stride)
 				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
 
-			expr += to_expression(index);
-			expr += " * ";
-			expr += convert_to_string(array_stride / 16);
-			expr += " + ";
+			auto *constant = maybe_get<SPIRConstant>(index);
+			if (constant)
+			{
+				// Constant array access.
+				offset += constant->scalar() * array_stride;
+			}
+			else
+			{
+				// Dynamic array access.
+				// FIXME: This will need to change if we support other flattening types than 32-bit.
+				const uint32_t word_stride = 16;
+				if (array_stride % word_stride)
+				{
+					SPIRV_CROSS_THROW("Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
+						                  "Likely culprit here is a float or vec2 array inside a push constant block. This cannot be flattened.");
+				}
+
+				expr += to_expression(index);
+				expr += " * ";
+				expr += convert_to_string(array_stride / word_stride);
+				expr += " + ";
+			}
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(parent_type);
@@ -3476,6 +3520,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 
 	if (need_transpose)
 		*need_transpose = row_major_matrix_needs_conversion;
+	if (out_matrix_stride)
+		*out_matrix_stride = matrix_stride;
 
 	return std::make_pair(expr, offset);
 }

@@ -3056,3 +3056,28 @@ uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
 
 	return base_flags | (~all_members_flag_mask);
 }
+
+bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
+{
+	if (type.basetype == SPIRType::Struct)
+	{
+		base_type = SPIRType::Unknown;
+		for (auto &member_type : type.member_types)
+		{
+			SPIRType::BaseType member_base;
+			if (!get_common_basic_type(get<SPIRType>(member_type), member_base))
+				return false;
+
+			if (base_type == SPIRType::Unknown)
+				base_type = member_base;
+			else if (base_type != member_base)
+				return false;
+		}
+		return true;
+	}
+	else
+	{
+		base_type = type.basetype;
+		return true;
+	}
+}
