@@ -842,6 +842,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.spec_id = argument;
 		break;
 
+	case DecorationMatrixStride:
+		dec.matrix_stride = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -961,6 +965,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.array_stride = argument;
 		break;
 
+	case DecorationMatrixStride:
+		dec.matrix_stride = argument;
+		break;
+
 	case DecorationBinding:
 		dec.binding = argument;
 		break;
@@ -1020,6 +1028,10 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.input_attachment;
 	case DecorationSpecId:
 		return dec.spec_id;
+	case DecorationArrayStride:
+		return dec.array_stride;
+	case DecorationMatrixStride:
+		return dec.matrix_stride;
 	default:
 		return 1;
 	}
@@ -1271,6 +1283,7 @@ void Compiler::parse(const Instruction &instruction)
 		vecbase = base;
 		vecbase.vecsize = vecsize;
 		vecbase.self = id;
+		vecbase.parent_type = ops[1];
 		break;
 	}
 
@@ -1285,6 +1298,7 @@ void Compiler::parse(const Instruction &instruction)
 		matrixbase = base;
 		matrixbase.columns = colcount;
 		matrixbase.self = id;
+		matrixbase.parent_type = ops[1];
 		break;
 	}
 
@@ -1302,6 +1316,7 @@ void Compiler::parse(const Instruction &instruction)
 
 		arraybase.array_size_literal.push_back(literal);
 		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
+		arraybase.parent_type = ops[1];
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1316,6 +1331,7 @@ void Compiler::parse(const Instruction &instruction)
 		arraybase = base;
 		arraybase.array.push_back(0);
 		arraybase.array_size_literal.push_back(true);
+		arraybase.parent_type = ops[1];
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1370,6 +1386,8 @@ void Compiler::parse(const Instruction &instruction)
 
 		if (ptrbase.storage == StorageClassAtomicCounter)
 			ptrbase.basetype = SPIRType::AtomicCounter;
+
+		ptrbase.parent_type = ops[2];
 
 		// Do NOT set ptrbase.self!
 		break;
@@ -2045,6 +2063,17 @@ uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_
 		SPIRV_CROSS_THROW("Struct member does not have ArrayStride set.");
 }
 
+uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const
+{
+	// Decoration must be set in valid SPIR-V, otherwise throw.
+	// MatrixStride is part of OpMemberDecorate.
+	auto &dec = meta[type.self].members[index];
+	if (dec.decoration_flags & (1ull << DecorationMatrixStride))
+		return dec.matrix_stride;
+	else
+		SPIRV_CROSS_THROW("Struct member does not have MatrixStride set.");
+}
+
 size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 {
 	uint32_t last = uint32_t(type.member_types.size() - 1);
@@ -2067,7 +2096,7 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
 	case SPIRType::Sampler:
-		SPIRV_CROSS_THROW("Querying size for object with opaque size.\n");
+		SPIRV_CROSS_THROW("Querying size for object with opaque size.");
 
 	default:
 		break;
@@ -2084,22 +2113,26 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 	}
 	else
 	{
-		size_t component_size = type.width / 8;
 		unsigned vecsize = type.vecsize;
 		unsigned columns = type.columns;
 
 		// Vectors.
 		if (columns == 1)
+		{
+			size_t component_size = type.width / 8;
 			return vecsize * component_size;
+		}
 		else
 		{
-			// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
-			if ((flags & (1ull << DecorationRowMajor)) && columns == 3)
-				columns = 4;
-			else if ((flags & (1ull << DecorationColMajor)) && vecsize == 3)
-				vecsize = 4;
+			uint32_t matrix_stride = type_struct_member_matrix_stride(struct_type, index);
 
-			return vecsize * columns * component_size;
+			// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
+			if (flags & (1ull << DecorationRowMajor))
+				return matrix_stride * vecsize;
+			else if (flags & (1ull << DecorationColMajor))
+				return matrix_stride * columns;
+			else
+				SPIRV_CROSS_THROW("Either row-major or column-major must be declared for matrices.");
 		}
 	}
 }

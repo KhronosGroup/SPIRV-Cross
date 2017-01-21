@@ -3393,10 +3393,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
                                                                              bool *need_transpose)
 {
 	const auto *type = &expression_type(base);
-	uint32_t type_size = 0;
-
-	// For resolving array accesses, etc, keep a local copy for poking.
-	SPIRType temp;
+	uint32_t current_type = type->self;
+	uint32_t matrix_stride = 0;
 
 	std::string expr;
 	bool row_major_matrix_needs_conversion = false;
@@ -3408,26 +3406,18 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 		// Arrays
 		if (!type->array.empty())
 		{
-			// We have to modify the type, so keep a local copy.
-			if (&temp != type)
-				temp = *type;
-			type = &temp;
-
-			uint32_t array_size = temp.array.back();
-			temp.array.pop_back();
-
-			assert(type_size > 0);
-			assert(type_size % array_size == 0);
-
-			uint32_t array_stride = type_size / array_size;
-			assert(array_stride % 16 == 0);
+			uint32_t array_stride = get_decoration(current_type, DecorationArrayStride);
+			if (!array_stride)
+				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
 
 			expr += to_expression(index);
 			expr += " * ";
 			expr += convert_to_string(array_stride / 16);
 			expr += " + ";
 
-			type_size = array_stride;
+			uint32_t parent_type = type->parent_type;
+			type = &get<SPIRType>(parent_type);
+			current_type = parent_type;
 		}
 		// For structs, the index refers to a constant, which indexes into the members.
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
@@ -3440,10 +3430,16 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 
 			offset += type_struct_member_offset(*type, index);
 
-			type_size = uint32_t(get_declared_struct_member_size(*type, index));
 			row_major_matrix_needs_conversion =
 			    (combined_decoration_for_member(*type, index) & (1ull << DecorationRowMajor)) != 0;
+
+			current_type = type->member_types[index];
+
+			auto &struct_type = *type;
 			type = &get<SPIRType>(type->member_types[index]);
+
+			if (type->columns > 1)
+				matrix_stride = type_struct_member_matrix_stride(struct_type, index);
 		}
 		// Matrix -> Vector
 		else if (type->columns > 1)
@@ -3455,14 +3451,11 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 				SPIRV_CROSS_THROW("Cannot flatten dynamic matrix indexing!");
 
 			index = get<SPIRConstant>(index).scalar();
+			offset += index * matrix_stride;
 
-			offset += index * 16;
-
-			// We have to modify the type, so keep a local copy.
-			if (&temp != type)
-				temp = *type;
-			type = &temp;
-			temp.columns = 1;
+			uint32_t parent_type = type->parent_type;
+			type = &get<SPIRType>(type->parent_type);
+			current_type = parent_type;
 		}
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
@@ -3471,14 +3464,11 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 				SPIRV_CROSS_THROW("Cannot flatten dynamic vector indexing!");
 
 			index = get<SPIRConstant>(index).scalar();
+			offset += index * type->width / 8;
 
-			offset += index * 4;
-
-			// We have to modify the type, so keep a local copy.
-			if (&temp != type)
-				temp = *type;
-			type = &temp;
-			temp.vecsize = 1;
+			uint32_t parent_type = type->parent_type;
+			type = &get<SPIRType>(type->parent_type);
+			current_type = parent_type;
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
