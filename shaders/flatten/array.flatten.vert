@@ -2,7 +2,7 @@
 
 layout(std140) uniform UBO
 {
-    uniform mat4 uMVP;
+    mat4 uMVP;
     vec4 A1[2];
     vec4 A2[2][3];
     float A3[3];

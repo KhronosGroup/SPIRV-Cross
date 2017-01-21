@@ -4,27 +4,27 @@
 layout(std140) uniform UBO
 {
     // 16b boundary
-    uniform vec4 A;
+    vec4 A;
     // 16b boundary
-    uniform vec2 B0;
-    uniform vec2 B1;
+    vec2 B0;
+    vec2 B1;
     // 16b boundary
-    uniform float C0;
+    float C0;
     // 16b boundary (vec3 is aligned to 16b)
-    uniform vec3 C1;
+    vec3 C1;
     // 16b boundary
-    uniform vec3 D0;
-    uniform float D1;
+    vec3 D0;
+    float D1;
     // 16b boundary
-    uniform float E0;
-    uniform float E1;
-    uniform float E2;
-    uniform float E3;
+    float E0;
+    float E1;
+    float E2;
+    float E3;
     // 16b boundary
-    uniform float F0;
-    uniform vec2 F1;
+    float F0;
+    vec2 F1;
     // 16b boundary (vec2 before us is aligned to 8b)
-    uniform float F2;
+    float F2;
 };
 
 out vec4 oA, oB, oC, oD, oE, oF;
