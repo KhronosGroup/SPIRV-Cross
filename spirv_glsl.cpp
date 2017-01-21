@@ -974,7 +974,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 void CompilerGLSL::emit_push_constant_block(const SPIRVariable &var)
 {
-	if (options.vulkan_semantics)
+	if (flattened_buffer_blocks.count(var.self))
+		emit_buffer_block_flattened(var);
+	else if (options.vulkan_semantics)
 		emit_push_constant_block_vulkan(var);
 	else
 		emit_push_constant_block_glsl(var);
@@ -1016,17 +1018,11 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	if (flattened_buffer_blocks.count(var.self))
-	{
 		emit_buffer_block_flattened(var);
-	}
 	else if (is_legacy())
-	{
 		emit_buffer_block_legacy(var);
-	}
 	else
-	{
 		emit_buffer_block_native(var);
-	}
 }
 
 void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
@@ -3312,21 +3308,13 @@ std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *
                                                  const SPIRType &target_type, uint32_t offset)
 {
 	if (!target_type.array.empty())
-	{
 		SPIRV_CROSS_THROW("Access chains that result in an array can not be flattened");
-	}
 	else if (target_type.basetype == SPIRType::Struct)
-	{
 		return flattened_access_chain_struct(base, indices, count, target_type, offset);
-	}
 	else if (target_type.columns > 1)
-	{
 		return flattened_access_chain_matrix(base, indices, count, target_type, offset);
-	}
 	else
-	{
 		return flattened_access_chain_vector_scalar(base, indices, count, target_type, offset);
-	}
 }
 
 std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
@@ -3334,7 +3322,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 {
 	std::string expr;
 
-	expr += type_to_glsl(target_type);
+	expr += type_to_glsl_constructor(target_type);
 	expr += "(";
 
 	for (size_t i = 0; i < target_type.member_types.size(); ++i)
@@ -3358,7 +3346,7 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 {
 	std::string expr;
 
-	expr += type_to_glsl(target_type);
+	expr += type_to_glsl_constructor(target_type);
 	expr += "(";
 
 	for (uint32_t i = 0; i < target_type.columns; ++i)
