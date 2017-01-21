@@ -576,6 +576,8 @@ protected:
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
 
 	VariableTypeRemapCallback variable_remap_callback;
+
+	uint64_t get_buffer_block_flags(const SPIRVariable &var);
 };
 }
 

@@ -1050,8 +1050,12 @@ void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
+
+	uint64_t flags = get_buffer_block_flags(var);
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
-	bool is_restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
+	bool is_restrict = ssbo && (flags & (1ull << DecorationRestrict)) != 0;
+	bool is_writeonly = ssbo && (flags & (1ull << DecorationNonReadable)) != 0;
+	bool is_readonly = ssbo && (flags & (1ull << DecorationNonWritable)) != 0;
 
 	add_resource_name(var.self);
 
@@ -1065,7 +1069,9 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	else
 		resource_names.insert(buffer_name);
 
-	statement(layout_for_variable(var), is_restrict ? "restrict " : "", ssbo ? "buffer " : "uniform ", buffer_name);
+	statement(layout_for_variable(var), is_restrict ? "restrict " : "", is_writeonly ? "writeonly " : "",
+	          is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ", buffer_name);
+
 	begin_scope();
 
 	type.member_name_cache.clear();
