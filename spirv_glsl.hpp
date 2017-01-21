@@ -329,7 +329,8 @@ protected:
 	                                                 const SPIRType &target_type, uint32_t offset);
 	std::pair<std::string, uint32_t> flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
 	                                                               uint32_t count, uint32_t offset,
-	                                                               bool *need_transpose = nullptr, uint32_t *matrix_stride = nullptr);
+	                                                               bool *need_transpose = nullptr,
+	                                                               uint32_t *matrix_stride = nullptr);
 
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);

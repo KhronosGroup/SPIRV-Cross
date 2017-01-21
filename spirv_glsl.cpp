@@ -1117,7 +1117,8 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 		}
 
 		auto flags = get_buffer_block_flags(var);
-		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), flat_type, buffer_name, "[", buffer_size, "];");
+		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), flat_type, buffer_name, "[", buffer_size,
+		          "];");
 	}
 	else
 		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
@@ -3416,7 +3417,8 @@ std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, co
 
 std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
                                                                              uint32_t count, uint32_t offset,
-                                                                             bool *need_transpose, uint32_t *out_matrix_stride)
+                                                                             bool *need_transpose,
+                                                                             uint32_t *out_matrix_stride)
 {
 	const auto *type = &expression_type(base);
 	uint32_t current_type = type->self;
@@ -3449,8 +3451,10 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 				const uint32_t word_stride = 16;
 				if (array_stride % word_stride)
 				{
-					SPIRV_CROSS_THROW("Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
-						                  "Likely culprit here is a float or vec2 array inside a push constant block. This cannot be flattened.");
+					SPIRV_CROSS_THROW(
+					    "Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
+					    "Likely culprit here is a float or vec2 array inside a push constant block. This cannot be "
+					    "flattened.");
 				}
 
 				expr += to_expression(index);
