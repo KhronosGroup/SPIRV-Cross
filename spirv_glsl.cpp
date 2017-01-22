@@ -1100,25 +1100,12 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 	{
 		SPIRType tmp;
 		tmp.basetype = basic_type;
-
-		const char *flat_type = nullptr;
-		switch (basic_type)
-		{
-		case SPIRType::Float:
-			flat_type = "vec4 ";
-			break;
-		case SPIRType::Int:
-			flat_type = "ivec4 ";
-			break;
-		case SPIRType::UInt:
-			flat_type = "uvec4 ";
-			break;
-		default:
+		tmp.vecsize = 4;
+		if (basic_type != SPIRType::Float && basic_type != SPIRType::Int && basic_type != SPIRType::UInt)
 			SPIRV_CROSS_THROW("Basic types in a flattened UBO must be float, int or uint.");
-		}
 
 		auto flags = get_buffer_block_flags(var);
-		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), flat_type, buffer_name, "[", buffer_size,
+		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[", buffer_size,
 		          "];");
 	}
 	else
