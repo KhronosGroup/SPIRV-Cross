@@ -1105,8 +1105,8 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 			SPIRV_CROSS_THROW("Basic types in a flattened UBO must be float, int or uint.");
 
 		auto flags = get_buffer_block_flags(var);
-		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[", buffer_size,
-		          "];");
+		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[",
+		          buffer_size, "];");
 	}
 	else
 		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
@@ -3431,7 +3431,15 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
                                                                              uint32_t *out_matrix_stride)
 {
 	const auto *type = &expression_type(base);
-	uint32_t current_type = type->self;
+
+	// This holds the type of the current pointer which we are traversing through.
+	// We always start out from a struct type which is the block.
+	// This is primarily used to reflect the array strides and matrix strides later.
+	// For the first access chain index, type_id won't be needed, so just keep it as 0, it will be set
+	// accordingly as members of structs are accessed.
+	assert(type->basetype == SPIRType::Struct);
+	uint32_t type_id = 0;
+
 	uint32_t matrix_stride = 0;
 
 	std::string expr;
@@ -3444,7 +3452,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 		// Arrays
 		if (!type->array.empty())
 		{
-			uint32_t array_stride = get_decoration(current_type, DecorationArrayStride);
+			// Here, the type_id will be a type ID for the array type itself.
+			uint32_t array_stride = get_decoration(type_id, DecorationArrayStride);
 			if (!array_stride)
 				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
 
@@ -3463,8 +3472,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 				{
 					SPIRV_CROSS_THROW(
 					    "Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
-					    "Likely culprit here is a float or vec2 array inside a push constant block. This cannot be "
-					    "flattened.");
+					    "Likely culprit here is a float or vec2 array inside a push constant block which is std430. "
+					    "This cannot be flattened. Try using std140 layout instead.");
 				}
 
 				expr += to_expression(index);
@@ -3475,7 +3484,9 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(parent_type);
-			current_type = parent_type;
+			type_id = parent_type;
+
+			// Type ID now refers to the array type with one less dimension.
 		}
 		// For structs, the index refers to a constant, which indexes into the members.
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
@@ -3490,7 +3501,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
 			offset += type_struct_member_offset(*type, index);
-			current_type = type->member_types[index];
+			type_id = type->member_types[index];
 
 			auto &struct_type = *type;
 			type = &get<SPIRType>(type->member_types[index]);
@@ -3518,7 +3529,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
-			current_type = parent_type;
+			type_id = parent_type;
 		}
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
@@ -3531,7 +3542,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
-			current_type = parent_type;
+			type_id = parent_type;
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
