@@ -1104,6 +1104,22 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		return string(" [[color(") + convert_to_string(locn) + ")]]";
 	}
 
+	// Compute function inputs
+	if (execution.model == ExecutionModelGLCompute && type.storage == StorageClassInput)
+	{
+		if (is_builtin)
+		{
+			switch (builtin)
+			{
+			case BuiltInGlobalInvocationId:
+				return string(" [[") + builtin_qualifier(builtin) + "]]";
+
+			default:
+				return "";
+			}
+		}
+	}
+
 	return "";
 }
 
@@ -1610,6 +1626,10 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			return "depth(any)";
 	}
 
+    // Fragment function in
+	case BuiltInGlobalInvocationId:
+		return "thread_position_in_grid";
+
 	default:
 		return "unsupported-built-in";
 	}
@@ -1649,6 +1669,10 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "uint";
 	case BuiltInSampleMask:
 		return "uint";
+
+	// Compute function in
+	case BuiltInGlobalInvocationId:
+		return "uint3";
 
 	default:
 		return "unsupported-built-in-type";
