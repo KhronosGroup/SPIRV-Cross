@@ -3320,14 +3320,21 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 }
 
 std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
-                                                 const SPIRType &target_type, uint32_t offset)
+                                                 const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
+                                                 bool need_transpose)
 {
 	if (!target_type.array.empty())
 		SPIRV_CROSS_THROW("Access chains that result in an array can not be flattened");
 	else if (target_type.basetype == SPIRType::Struct)
 		return flattened_access_chain_struct(base, indices, count, target_type, offset);
 	else if (target_type.columns > 1)
-		return flattened_access_chain_matrix(base, indices, count, target_type, offset);
+	{
+		// Matrix stride might have been set to something non-zero already by the caller.
+		// If not, we should find this information before flattening the matrix access.
+		if (matrix_stride == 0)
+			flattened_access_chain_offset(base, indices, count, offset, &need_transpose, &matrix_stride);
+		return flattened_access_chain_matrix(base, indices, count, target_type, offset, matrix_stride, need_transpose);
+	}
 	else
 		return flattened_access_chain_vector_scalar(base, indices, count, target_type, offset);
 }
@@ -3340,26 +3347,28 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 	expr += type_to_glsl_constructor(target_type);
 	expr += "(";
 
-	// Need to have an extra indices for the member so we can find matrix strides.
-	vector<uint32_t> indices_copy(indices, indices + count);
-	indices_copy.push_back(0);
-
 	for (size_t i = 0; i < target_type.member_types.size(); ++i)
 	{
 		if (i != 0)
 			expr += ", ";
 
 		const SPIRType &member_type = get<SPIRType>(target_type.member_types[i]);
+		uint32_t member_offset = type_struct_member_offset(target_type, i);
 
-		// The indices should be IDs, but to avoid creating new dummy SPIRConstant here,
-		// use MSB to indicate literals.
-		indices_copy.back() = uint32_t(i) | 0x80000000u;
-
+		// The access chain terminates at the struct, so we need to find matrix strides and row-major information
+		// ahead of time.
 		bool need_transpose = false;
+		uint32_t matrix_stride = 0;
 		if (member_type.columns > 1)
-			flattened_access_chain_offset(base, indices_copy.data(), count + 1, offset, &need_transpose);
+		{
+			need_transpose = (combined_decoration_for_member(target_type, i) & (1ull << DecorationRowMajor)) != 0;
+			matrix_stride = type_struct_member_matrix_stride(target_type, i);
+		}
 
-		auto tmp = flattened_access_chain(base, indices_copy.data(), count + 1, member_type, offset);
+		auto tmp = flattened_access_chain(base, indices, count, member_type, offset + member_offset, matrix_stride,
+		                                  need_transpose);
+
+		// Cannot forward transpositions, so resolve them here.
 		if (need_transpose)
 			expr += convert_row_major_matrix(tmp);
 		else
@@ -3372,16 +3381,12 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 }
 
 std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
-                                                        const SPIRType &target_type, uint32_t offset)
+                                                        const SPIRType &target_type, uint32_t offset,
+                                                        uint32_t matrix_stride, bool need_transpose)
 {
 	std::string expr;
 
-	uint32_t matrix_stride = 0;
-	bool need_transpose = false;
-	flattened_access_chain_offset(base, indices, count, offset, &need_transpose, &matrix_stride);
-
 	assert(matrix_stride);
-
 	SPIRType tmp_type = target_type;
 	if (need_transpose)
 		swap(tmp_type.vecsize, tmp_type.columns);
@@ -3492,10 +3497,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
 		else if (type->basetype == SPIRType::Struct)
 		{
-			// The indices should be IDs, but to avoid creating new dummy SPIRConstant here,
-			// use MSB to indicate literals.
-			// See flattened_access_chain_struct.
-			index = (index & 0x80000000u) ? (index & 0x7fffffffu) : get<SPIRConstant>(index).scalar();
+			index = get<SPIRConstant>(index).scalar();
 
 			if (index >= type->member_types.size())
 				SPIRV_CROSS_THROW("Member index is out of bounds!");

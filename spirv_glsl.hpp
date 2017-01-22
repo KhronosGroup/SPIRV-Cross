@@ -320,11 +320,13 @@ protected:
 	                         bool *need_transpose = nullptr);
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
-	                                   const SPIRType &target_type, uint32_t offset);
+	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride = 0,
+	                                   bool need_transpose = false);
 	std::string flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                          const SPIRType &target_type, uint32_t offset);
 	std::string flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
-	                                          const SPIRType &target_type, uint32_t offset);
+	                                          const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
+	                                          bool need_transpose);
 	std::string flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                                 const SPIRType &target_type, uint32_t offset);
 	std::pair<std::string, uint32_t> flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
