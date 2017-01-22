@@ -3045,16 +3045,21 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
+	assert(type.basetype == SPIRType::Struct);
 
 	// Some flags like non-writable, non-readable are actually found
 	// as member decorations. If all members have a decoration set, propagate
 	// the decoration up as a regular variable decoration.
 	uint64_t base_flags = meta[var.self].decoration.decoration_flags;
-	uint64_t all_members_flag_mask = 0;
-	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
-		all_members_flag_mask |= ~get_member_decoration_mask(type.self, i);
 
-	return base_flags | (~all_members_flag_mask);
+	if (type.member_types.empty())
+		return base_flags;
+
+	uint64_t all_members_flag_mask = ~(0ull);
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+		all_members_flag_mask &= get_member_decoration_mask(type.self, i);
+
+	return base_flags | all_members_flag_mask;
 }
 
 bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
