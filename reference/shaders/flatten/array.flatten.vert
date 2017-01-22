@@ -1,11 +1,12 @@
 #version 310 es
 
-uniform vec4 UBO[16];
+uniform vec4 UBO[56];
 in vec4 aVertex;
 
 void main()
 {
-    vec4 offset = (UBO[10] + UBO[5]) + vec4(UBO[14].x);
-    gl_Position = ((mat4(UBO[0], UBO[1], UBO[2], UBO[3]) * aVertex) + UBO[15]) + offset;
+    vec4 a4 = UBO[23];
+    vec4 offset = (UBO[50] + UBO[45]) + vec4(UBO[54].x);
+    gl_Position = ((mat4(UBO[40], UBO[41], UBO[42], UBO[43]) * aVertex) + UBO[55]) + offset;
 }
 
