@@ -139,8 +139,9 @@ public:
 	void require_extension(const std::string &ext);
 
 	// Legacy GLSL compatibility method.
-	// Takes a uniform or storage buffer variable and flattens it into a vec4 array[N]; array instead.
-	// For this to work, all types in the block must not be integers or vector of integers.
+	// Takes a uniform or push constant variable and flattens it into a (i|u)vec4 array[N]; array instead.
+	// For this to work, all types in the block must be the same basic type, e.g. mixing vec2 and vec4 is fine, but
+	// mixing int and float is not.
 	// The name of the uniform array will be the same as the interface block name.
 	void flatten_buffer_block(uint32_t id);
 
@@ -319,16 +320,19 @@ protected:
 	                         bool *need_transpose = nullptr);
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
-	                                   const SPIRType &target_type, uint32_t offset);
+	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride = 0,
+	                                   bool need_transpose = false);
 	std::string flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                          const SPIRType &target_type, uint32_t offset);
 	std::string flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
-	                                          const SPIRType &target_type, uint32_t offset);
+	                                          const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
+	                                          bool need_transpose);
 	std::string flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                                 const SPIRType &target_type, uint32_t offset);
 	std::pair<std::string, uint32_t> flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
 	                                                               uint32_t count, uint32_t offset,
-	                                                               bool *need_transpose = nullptr);
+	                                                               bool *need_transpose = nullptr,
+	                                                               uint32_t *matrix_stride = nullptr);
 
 	const char *index_to_swizzle(uint32_t index);
 	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);

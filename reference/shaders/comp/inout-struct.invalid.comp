@@ -9,17 +9,17 @@ struct Foo
     vec4 d;
 };
 
-layout(binding = 1, std430) buffer SSBO2
+layout(binding = 1, std430) readonly buffer SSBO2
 {
     vec4 data[];
 } indata;
 
-layout(binding = 0, std430) buffer SSBO
+layout(binding = 0, std430) writeonly buffer SSBO
 {
     vec4 data[];
 } outdata;
 
-layout(binding = 2, std430) buffer SSBO3
+layout(binding = 2, std430) readonly buffer SSBO3
 {
     Foo foos[];
 } foobar;
