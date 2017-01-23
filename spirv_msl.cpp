@@ -54,6 +54,10 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	// Remember the input parameters
 	msl_config = msl_cfg;
 
+	// Set main function name if it was explicitly set
+	if (!msl_config.entry_point_name.empty())
+		set_name(entry_point, msl_config.entry_point_name);
+
 	vtx_attrs_by_location.clear();
 	if (p_vtx_attrs)
 		for (auto &va : *p_vtx_attrs)
@@ -1268,13 +1272,6 @@ string CompilerMSL::clean_func_name(string func_name)
 {
 	auto iter = func_name_overrides.find(func_name);
 	return (iter != func_name_overrides.end()) ? iter->second : func_name;
-}
-
-void CompilerMSL::set_entry_point_name(string func_name)
-{
-	if (func_name.find("main") == std::string::npos)
-		func_name += "_main";
-	meta.at(entry_point).decoration.alias = func_name;
 }
 
 // Returns a string containing a comma-delimited list of args for the entry point function

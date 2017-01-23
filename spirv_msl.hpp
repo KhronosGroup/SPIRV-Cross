@@ -29,10 +29,10 @@ namespace spirv_cross
 // Options for compiling to Metal Shading Language
 struct MSLConfiguration
 {
-	uint32_t vtx_attr_stage_in_binding = 0;
 	bool flip_vert_y = false;
 	bool flip_frag_y = false;
 	bool is_rendering_points = false;
+	std::string entry_point_name;
 };
 
 // Defines MSL characteristics of a vertex attribute at a particular location.
@@ -92,8 +92,6 @@ public:
 
 	// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
 	std::string compile() override;
-
-	void set_entry_point_name(std::string func_name);
 
 protected:
 	void emit_instruction(const Instruction &instr) override;
