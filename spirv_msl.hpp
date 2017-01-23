@@ -136,6 +136,7 @@ protected:
 	void emit_function_prototype(SPIRFunction &func, bool is_decl);
 	void emit_function_declarations();
 	void populate_func_name_overrides();
+	void populate_var_name_overrides();
 
 	std::string func_type_decl(SPIRType &type);
 	std::string clean_func_name(std::string func_name) override;
@@ -156,6 +157,7 @@ protected:
 
 	MSLConfiguration msl_config;
 	std::unordered_map<std::string, std::string> func_name_overrides;
+	std::unordered_map<std::string, std::string> var_name_overrides;
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;

@@ -23,14 +23,13 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-static const std::vector<std::string> reserved_names = {"kernel", "bias"};
-
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
     : CompilerGLSL(move(spirv_))
 {
 	options.vertex.fixup_clipspace = false;
 
 	populate_func_name_overrides();
+	populate_var_name_overrides();
 }
 
 // Populate the collection of function names that need to be overridden
@@ -38,6 +37,12 @@ void CompilerMSL::populate_func_name_overrides()
 {
 	func_name_overrides["main"] = "main0";
 	func_name_overrides["saturate"] = "saturate0";
+}
+
+void CompilerMSL::populate_var_name_overrides()
+{
+	var_name_overrides["kernel"] = "kernel0";
+	var_name_overrides["bias"] = "bias0";
 }
 
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
@@ -1458,13 +1463,10 @@ string CompilerMSL::ensure_valid_name(string name, string pfx)
 	{
 		return join(pfx, name);
 	}
-	else if (std::find(reserved_names.begin(), reserved_names.end(), name) != reserved_names.end())
-	{
-		return join(pfx, name);
-	}
 	else
 	{
-		return name;
+		auto iter = var_name_overrides.find(name);
+		return (iter != var_name_overrides.end()) ? iter->second : name;
 	}
 }
 
