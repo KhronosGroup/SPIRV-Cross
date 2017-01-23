@@ -177,7 +177,8 @@ protected:
 	                                     bool *p_forward);
 	virtual std::string clean_func_name(std::string func_name);
 	virtual void emit_instruction(const Instruction &instr);
-	virtual void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args, uint32_t count);
+	virtual void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                          uint32_t count);
 
 	std::unique_ptr<std::ostringstream> buffer;
 

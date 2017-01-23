@@ -24,16 +24,20 @@ using namespace std;
 
 namespace
 {
-	struct VariableComparator {
-		VariableComparator(const std::vector<Meta>& meta) : meta(meta) { }
+struct VariableComparator
+{
+	VariableComparator(const std::vector<Meta> &meta)
+	    : meta(meta)
+	{
+	}
 
-		bool operator () (SPIRVariable* var1, SPIRVariable* var2)
-		{
-			return meta[var1->self].decoration.alias.compare(meta[var2->self].decoration.alias) < 0;
-		}
+	bool operator()(SPIRVariable *var1, SPIRVariable *var2)
+	{
+		return meta[var1->self].decoration.alias.compare(meta[var2->self].decoration.alias) < 0;
+	}
 
-		const std::vector<Meta>& meta;
-	};
+	const std::vector<Meta> &meta;
+};
 }
 
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
@@ -151,13 +155,15 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 
 	add_resource_name(var.self);
 
-	if (execution.model == ExecutionModelVertex && var.storage == StorageClassInput && is_builtin_variable(var)) {
-
+	if (execution.model == ExecutionModelVertex && var.storage == StorageClassInput && is_builtin_variable(var))
+	{
 	}
-	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var)) {
+	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var))
+	{
 		statement("static float4 gl_Position;");
 	}
-	else {
+	else
+	{
 		statement("static ", variable_decl(var), ";");
 	}
 }
@@ -196,7 +202,8 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 		{
 			if (type.vecsize == 4 && type.columns == 4)
 			{
-				for (int i = 0; i < 4; ++i) {
+				for (int i = 0; i < 4; ++i)
+				{
 					char name[101];
 					strcpy(name, m.alias.c_str());
 					strcat(name, "_");
@@ -216,10 +223,12 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 		}
 		else
 		{
-			if (execution.model == ExecutionModelVertex) {
+			if (execution.model == ExecutionModelVertex)
+			{
 				statement("float4 gl_Position", " : ", binding, ";");
 			}
-			else {
+			else
+			{
 				statement(variable_decl(type, m.alias), " : ", binding, ";");
 			}
 		}
@@ -316,7 +325,7 @@ void CompilerHLSL::emit_resources()
 	}
 	begin_scope();
 	uint32_t binding_number = 0;
-	std::vector<SPIRVariable*> variables;
+	std::vector<SPIRVariable *> variables;
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -327,7 +336,8 @@ void CompilerHLSL::emit_resources()
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
-				if (execution.model == ExecutionModelVertex && is_builtin_variable(var)) continue;
+				if (execution.model == ExecutionModelVertex && is_builtin_variable(var))
+					continue;
 				variables.push_back(&var);
 			}
 		}
@@ -479,7 +489,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 			{
-				if (execution.model == ExecutionModelVertex && is_builtin_variable(var)) continue;
+				if (execution.model == ExecutionModelVertex && is_builtin_variable(var))
+					continue;
 
 				auto &m = meta[var.self].decoration;
 				auto &type = get<SPIRType>(var.basetype);
@@ -521,8 +532,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			{
 				auto &m = meta[var.self].decoration;
 				bool is_no_builtin = !is_builtin_variable(var) && !var.remapped_variable;
-				if (is_no_builtin) statement("output.", m.alias, " = ", m.alias, ";");
-				else if (execution.model == ExecutionModelVertex) {
+				if (is_no_builtin)
+					statement("output.", m.alias, " = ", m.alias, ";");
+				else if (execution.model == ExecutionModelVertex)
+				{
 					statement("output.gl_Position = gl_Position;");
 				}
 			}
@@ -813,11 +826,12 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	emit_op(result_type, id, expr, forward, false);
 }
 
-void CompilerHLSL::emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-	const char *op)
+void CompilerHLSL::emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                       uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(transpose(", to_expression(op0), "), ", to_expression(op1), ")"), forward, false);
+	emit_op(result_type, result_id, join(op, "(transpose(", to_expression(op0), "), ", to_expression(op1), ")"),
+	        forward, false);
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{
@@ -826,11 +840,12 @@ void CompilerHLSL::emit_binary_func_op_transpose_first(uint32_t result_type, uin
 	}
 }
 
-void CompilerHLSL::emit_binary_func_op_transpose_second(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-	const char *op)
+void CompilerHLSL::emit_binary_func_op_transpose_second(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                        uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", transpose(", to_expression(op1), "))"), forward, false);
+	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", transpose(", to_expression(op1), "))"),
+	        forward, false);
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{
@@ -839,11 +854,13 @@ void CompilerHLSL::emit_binary_func_op_transpose_second(uint32_t result_type, ui
 	}
 }
 
-void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-	const char *op)
+void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                     uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join("transpose(", op, "(transpose(", to_expression(op0), "), transpose(", to_expression(op1), ")))"), forward, false);
+	emit_op(result_type, result_id,
+	        join("transpose(", op, "(transpose(", to_expression(op0), "), transpose(", to_expression(op1), ")))"),
+	        forward, false);
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{

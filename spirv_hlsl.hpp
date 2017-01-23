@@ -40,7 +40,7 @@ public:
 	{
 		return options;
 	}
-	
+
 	void set_options(Options &opts)
 	{
 		options = opts;
@@ -64,7 +64,8 @@ private:
 	                                          const char *op);
 	void emit_binary_func_op_transpose_all(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
 	                                       const char *op);
-	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args, uint32_t count) override;
+	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                  uint32_t count) override;
 
 	Options options;
 	bool requires_op_fmod = false;
