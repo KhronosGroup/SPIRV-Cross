@@ -6,12 +6,12 @@ struct Foo
     mat4 m;
 };
 
-layout(binding = 1, std430) buffer SSBO2
+layout(binding = 1, std430) writeonly buffer SSBO2
 {
     Foo out_data[];
 } _23;
 
-layout(binding = 0, std430) buffer SSBO
+layout(binding = 0, std430) readonly buffer SSBO
 {
     Foo in_data[];
 } _30;
@@ -19,6 +19,6 @@ layout(binding = 0, std430) buffer SSBO
 void main()
 {
     uint ident = gl_GlobalInvocationID.x;
-    _23.out_data[ident].m = (_30.in_data[ident].m * _30.in_data[ident].m);
+    _23.out_data[ident].m = _30.in_data[ident].m * _30.in_data[ident].m;
 }
 

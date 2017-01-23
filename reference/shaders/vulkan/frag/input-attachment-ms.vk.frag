@@ -9,6 +9,6 @@ layout(location = 0) out vec4 FragColor;
 
 void main()
 {
-    FragColor = (texelFetch(uSubpass0, ivec2(gl_FragCoord.xy), 1) + texelFetch(uSubpass1, ivec2(gl_FragCoord.xy), 2));
+    FragColor = texelFetch(uSubpass0, ivec2(gl_FragCoord.xy), 1) + texelFetch(uSubpass1, ivec2(gl_FragCoord.xy), 2);
 }
 

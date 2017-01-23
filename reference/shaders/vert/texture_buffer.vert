@@ -6,6 +6,6 @@ layout(binding = 5, rgba32f) uniform highp readonly imageBuffer uSampo;
 
 void main()
 {
-    gl_Position = (texelFetch(uSamp, 10) + imageLoad(uSampo, 100));
+    gl_Position = texelFetch(uSamp, 10) + imageLoad(uSampo, 100);
 }
 

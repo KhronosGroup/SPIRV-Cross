@@ -15,6 +15,6 @@ layout(location = 0) in vec4 vColor;
 
 void main()
 {
-    FragColor = ((vColor + push.value0) + push.value1);
+    FragColor = (vColor + push.value0) + push.value1;
 }
 

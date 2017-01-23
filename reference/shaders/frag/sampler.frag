@@ -16,6 +16,6 @@ vec4 sample_texture(mediump sampler2D tex, vec2 uv)
 void main()
 {
     highp vec2 param = vTex;
-    FragColor = (vColor * sample_texture(uTex, param));
+    FragColor = vColor * sample_texture(uTex, param);
 }
 

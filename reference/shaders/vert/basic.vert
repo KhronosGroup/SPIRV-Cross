@@ -11,7 +11,7 @@ in vec3 aNormal;
 
 void main()
 {
-    gl_Position = (_16.uMVP * aVertex);
+    gl_Position = _16.uMVP * aVertex;
     vNormal = aNormal;
 }
 

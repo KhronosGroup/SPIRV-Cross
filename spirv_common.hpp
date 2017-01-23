@@ -14,15 +14,35 @@
  * limitations under the License.
  */
 
-#ifndef SPIRV_COMMON_HPP
-#define SPIRV_COMMON_HPP
+#ifndef SPIRV_CROSS_COMMON_HPP
+#define SPIRV_CROSS_COMMON_HPP
 
+#include <cstdio>
+#include <cstring>
+#include <functional>
+#include <locale>
 #include <sstream>
-#include <stdio.h>
-#include <string.h>
 
 namespace spirv_cross
 {
+
+#ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
+#ifndef _MSC_VER
+[[noreturn]]
+#endif
+    inline void
+    report_and_abort(const std::string &msg)
+{
+#ifdef NDEBUG
+	(void)msg;
+#else
+	fprintf(stderr, "There was a compiler error: %s\n", msg.c_str());
+#endif
+	abort();
+}
+
+#define SPIRV_CROSS_THROW(x) report_and_abort(x)
+#else
 class CompilerError : public std::runtime_error
 {
 public:
@@ -31,6 +51,9 @@ public:
 	{
 	}
 };
+
+#define SPIRV_CROSS_THROW(x) throw CompilerError(x)
+#endif
 
 namespace inner
 {
@@ -80,6 +103,11 @@ inline std::string convert_to_string(T &&t)
 #define SPIRV_CROSS_FLT_FMT "%.32g"
 #endif
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+
 inline std::string convert_to_string(float t)
 {
 	// std::to_string for floating point values is broken.
@@ -103,6 +131,10 @@ inline std::string convert_to_string(double t)
 		strcat(buf, ".0");
 	return buf;
 }
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 struct Instruction
 {
@@ -133,6 +165,7 @@ enum Types
 	TypeBlock,
 	TypeExtension,
 	TypeExpression,
+	TypeConstantOp,
 	TypeUndef
 };
 
@@ -146,6 +179,25 @@ struct SPIRUndef : IVariant
 	    : basetype(basetype_)
 	{
 	}
+	uint32_t basetype;
+};
+
+struct SPIRConstantOp : IVariant
+{
+	enum
+	{
+		type = TypeConstantOp
+	};
+
+	SPIRConstantOp(uint32_t result_type, spv::Op op, const uint32_t *args, uint32_t length)
+	    : opcode(op)
+	    , arguments(args, args + length)
+	    , basetype(result_type)
+	{
+	}
+
+	spv::Op opcode;
+	std::vector<uint32_t> arguments;
 	uint32_t basetype;
 };
 
@@ -181,16 +233,21 @@ struct SPIRType : IVariant
 	uint32_t vecsize = 1;
 	uint32_t columns = 1;
 
-	// Arrays, suport array of arrays by having a vector of array sizes.
+	// Arrays, support array of arrays by having a vector of array sizes.
 	std::vector<uint32_t> array;
+
+	// Array elements can be either specialization constants or specialization ops.
+	// This array determines how to interpret the array size.
+	// If an element is true, the element is a literal,
+	// otherwise, it's an expression, which must be resolved on demand.
+	// The actual size is not really known until runtime.
+	std::vector<bool> array_size_literal;
 
 	// Pointers
 	bool pointer = false;
 	spv::StorageClass storage = spv::StorageClassGeneric;
 
 	std::vector<uint32_t> member_types;
-
-	bool is_packed = false; // Tightly packed in memory (no alignment padding)
 
 	struct Image
 	{
@@ -207,6 +264,10 @@ struct SPIRType : IVariant
 	// We want to detect this so that we only emit the struct definition once.
 	// Since we cannot rely on OpName to be equal, we need to figure out aliases.
 	uint32_t type_alias = 0;
+
+	// Denotes the type which this type is based on.
+	// Allows the backend to traverse how a complex type is built up during access chains.
+	uint32_t parent_type = 0;
 
 	// Used in backends to avoid emitting members with conflicting names.
 	std::unordered_set<std::string> member_name_cache;
@@ -255,7 +316,7 @@ struct SPIREntryPoint
 	} workgroup_size;
 	uint32_t invocations = 0;
 	uint32_t output_vertices = 0;
-	spv::ExecutionModel model = {};
+	spv::ExecutionModel model;
 };
 
 struct SPIRExpression : IVariant
@@ -294,6 +355,10 @@ struct SPIRExpression : IVariant
 	// If this expression has been used while invalidated.
 	bool used_while_invalidated = false;
 
+	// Before use, this expression must be transposed.
+	// This is needed for targets which don't support row_major layouts.
+	bool need_transpose = false;
+
 	// A list of expressions which this expression depends on.
 	std::vector<uint32_t> expression_dependencies;
 };
@@ -328,7 +393,6 @@ struct SPIRBlock : IVariant
 
 		Select, // Block ends with an if/else block.
 		MultiSelect, // Block ends with switch statement.
-		Loop, // Block ends with a loop.
 
 		Return, // Block ends with return.
 		Unreachable, // Noop
@@ -416,6 +480,15 @@ struct SPIRBlock : IVariant
 	// The dominating block which this block might be within.
 	// Used in continue; blocks to determine if we really need to write continue.
 	uint32_t loop_dominator = 0;
+
+	// All access to these variables are dominated by this block,
+	// so before branching anywhere we need to make sure that we declare these variables.
+	std::vector<uint32_t> dominated_variables;
+
+	// These are variables which should be declared in a for loop header, if we
+	// fail to use a classic for-loop,
+	// we remove these variables, and fall back to regular variables outside the loop.
+	std::vector<uint32_t> loop_variables;
 };
 
 struct SPIRFunction : IVariant
@@ -439,12 +512,34 @@ struct SPIRFunction : IVariant
 		uint32_t write_count;
 	};
 
+	// When calling a function, and we're remapping separate image samplers,
+	// resolve these arguments into combined image samplers and pass them
+	// as additional arguments in this order.
+	// It gets more complicated as functions can pull in their own globals
+	// and combine them with parameters,
+	// so we need to distinguish if something is local parameter index
+	// or a global ID.
+	struct CombinedImageSamplerParameter
+	{
+		uint32_t id;
+		uint32_t image_id;
+		uint32_t sampler_id;
+		bool global_image;
+		bool global_sampler;
+	};
+
 	uint32_t return_type;
 	uint32_t function_type;
 	std::vector<Parameter> arguments;
+
+	// Can be used by backends to add magic arguments.
+	// Currently used by combined image/sampler implementation.
+
+	std::vector<Parameter> shadow_arguments;
 	std::vector<uint32_t> local_variables;
 	uint32_t entry_block = 0;
 	std::vector<uint32_t> blocks;
+	std::vector<CombinedImageSamplerParameter> combined_parameters;
 
 	void add_local_variable(uint32_t id)
 	{
@@ -459,6 +554,8 @@ struct SPIRFunction : IVariant
 
 	bool active = false;
 	bool flush_undeclared = true;
+	bool do_combined_parameters = true;
+	bool analyzed_variable_scope = false;
 };
 
 struct SPIRVariable : IVariant
@@ -499,6 +596,15 @@ struct SPIRVariable : IVariant
 	bool phi_variable = false;
 	bool remapped_variable = false;
 	uint32_t remapped_components = 0;
+
+	// The block which dominates all access to this variable.
+	uint32_t dominator = 0;
+	// If true, this variable is a loop variable, when accessing the variable
+	// outside a loop,
+	// we should statically forward it.
+	bool loop_variable = false;
+	// Set to true while we're inside the for loop.
+	bool loop_variable_enable = false;
 
 	SPIRFunction::Parameter *parameter = nullptr;
 };
@@ -725,7 +831,7 @@ public:
 	{
 		holder = std::move(val);
 		if (type != TypeNone && type != new_type)
-			throw CompilerError("Overwriting a variant with new type.");
+			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
 		type = new_type;
 	}
 
@@ -733,9 +839,9 @@ public:
 	T &get()
 	{
 		if (!holder)
-			throw CompilerError("nullptr");
+			SPIRV_CROSS_THROW("nullptr");
 		if (T::type != type)
-			throw CompilerError("Bad cast");
+			SPIRV_CROSS_THROW("Bad cast");
 		return *static_cast<T *>(holder.get());
 	}
 
@@ -743,9 +849,9 @@ public:
 	const T &get() const
 	{
 		if (!holder)
-			throw CompilerError("nullptr");
+			SPIRV_CROSS_THROW("nullptr");
 		if (T::type != type)
-			throw CompilerError("Bad cast");
+			SPIRV_CROSS_THROW("Bad cast");
 		return *static_cast<const T *>(holder.get());
 	}
 
@@ -794,6 +900,7 @@ struct Meta
 	struct Decoration
 	{
 		std::string alias;
+		std::string qualified_alias;
 		uint64_t decoration_flags = 0;
 		spv::BuiltIn builtin_type;
 		uint32_t location = 0;
@@ -801,14 +908,37 @@ struct Meta
 		uint32_t binding = 0;
 		uint32_t offset = 0;
 		uint32_t array_stride = 0;
+		uint32_t matrix_stride = 0;
 		uint32_t input_attachment = 0;
+		uint32_t spec_id = 0;
 		bool builtin = false;
-		bool per_instance = false;
 	};
 
 	Decoration decoration;
 	std::vector<Decoration> members;
 	uint32_t sampler = 0;
+};
+
+// A user callback that remaps the type of any variable.
+// var_name is the declared name of the variable.
+// name_of_type is the textual name of the type which will be used in the code unless written to by the callback.
+using VariableTypeRemapCallback =
+    std::function<void(const SPIRType &type, const std::string &var_name, std::string &name_of_type)>;
+
+class ClassicLocale
+{
+public:
+	ClassicLocale()
+	{
+		old = std::locale::global(std::locale::classic());
+	}
+	~ClassicLocale()
+	{
+		std::locale::global(old);
+	}
+
+private:
+	std::locale old;
 };
 }
 

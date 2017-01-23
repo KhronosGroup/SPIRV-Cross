@@ -66,7 +66,7 @@ def validate_shader(shader, vulkan):
     else:
         subprocess.check_call(['glslangValidator', shader])
 
-def cross_compile(shader, vulkan, spirv):
+def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
@@ -79,21 +79,28 @@ def cross_compile(shader, vulkan, spirv):
     if spirv:
         subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
     else:
-        subprocess.check_call(['glslangValidator', '-V' if vulkan else '-G', '-o', spirv_path, shader])
+        subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
 
-    # Workaround Issue #217 in SPIRV-Tools until the issue is resolved.
-    #if spirv:
-    #    subprocess.check_call(['spirv-val', spirv_path])
+    if not invalid_spirv:
+        subprocess.check_call(['spirv-val', spirv_path])
+
+    extra_args = []
+    if eliminate:
+        extra_args += ['--remove-unused-variables']
+    if is_legacy:
+        extra_args += ['--version', '100', '--es']
+    if flatten_ubo:
+        extra_args += ['--flatten-ubo']
 
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path])
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path] + extra_args)
 
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if (not ('nocompat' in glsl_path)) and (not spirv):
         validate_shader(glsl_path, False)
 
     if vulkan or spirv:
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path])
+        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path] + extra_args)
         validate_shader(vulkan_glsl_path, vulkan)
 
     return (spirv_path, glsl_path, vulkan_glsl_path if vulkan else None)
@@ -132,6 +139,14 @@ def regression_check(shader, glsl, update, keep):
                 shutil.move(glsl, reference)
             else:
                 print('Generated GLSL in {} does not match reference {}!'.format(glsl, reference))
+                with open(glsl, 'r') as f:
+                    print('')
+                    print('Generated:')
+                    print('======================')
+                    print(f.read())
+                    print('======================')
+                    print('')
+
                 # Otherwise, fail the test. Keep the shader file around so we can inspect.
                 if not keep:
                     os.remove(glsl)
@@ -149,20 +164,36 @@ def shader_is_vulkan(shader):
 def shader_is_desktop(shader):
     return '.desktop.' in shader
 
+def shader_is_eliminate_dead_variables(shader):
+    return '.noeliminate.' not in shader
+
 def shader_is_spirv(shader):
     return '.asm.' in shader
+
+def shader_is_invalid_spirv(shader):
+    return '.invalid.' in shader
+
+def shader_is_legacy(shader):
+    return '.legacy.' in shader
+
+def shader_is_flatten_ubo(shader):
+    return '.flatten.' in shader
 
 def test_shader(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     vulkan = shader_is_vulkan(shader[1])
     desktop = shader_is_desktop(shader[1])
-    spirv = shader_is_spirv(shader[1])
+    eliminate = shader_is_eliminate_dead_variables(shader[1])
+    is_spirv = shader_is_spirv(shader[1])
+    invalid_spirv = shader_is_invalid_spirv(shader[1])
+    is_legacy = shader_is_legacy(shader[1])
+    flatten_ubo = shader_is_flatten_ubo(shader[1])
 
     print('Testing shader:', joined_path)
-    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, spirv)
+    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo)
 
     # Only test GLSL stats if we have a shader following GL semantics.
-    if stats and (not vulkan) and (not spirv) and (not desktop):
+    if stats and (not vulkan) and (not is_spirv) and (not desktop):
         cross_stats = get_shader_stats(glsl)
 
     regression_check(shader, glsl, update, keep)
@@ -170,7 +201,7 @@ def test_shader(stats, shader, update, keep):
         regression_check((shader[0], shader[1] + '.vk'), vulkan_glsl, update, keep)
     os.remove(spirv)
 
-    if stats and (not vulkan):
+    if stats and (not vulkan) and (not is_spirv) and (not desktop):
         pristine_stats = get_shader_stats(joined_path)
 
         a = []

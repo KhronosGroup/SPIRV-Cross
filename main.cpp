@@ -26,9 +26,24 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
+
+#ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
+#define THROW(x)                   \
+	do                             \
+	{                              \
+		fprintf(stderr, "%s.", x); \
+		exit(1);                   \
+	} while (0)
+#else
+#define THROW(x) runtime_error(x)
+#endif
 
 struct CLIParser;
 struct CLICallbacks
@@ -53,7 +68,9 @@ struct CLIParser
 
 	bool parse()
 	{
+#ifndef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 		try
+#endif
 		{
 			while (argc && !ended_state)
 			{
@@ -69,7 +86,7 @@ struct CLIParser
 					auto itr = cbs.callbacks.find(next);
 					if (itr == ::end(cbs.callbacks))
 					{
-						throw logic_error("Invalid argument.\n");
+						THROW("Invalid argument");
 					}
 
 					itr->second(*this);
@@ -78,6 +95,7 @@ struct CLIParser
 
 			return true;
 		}
+#ifndef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 		catch (...)
 		{
 			if (cbs.error_handler)
@@ -86,6 +104,7 @@ struct CLIParser
 			}
 			return false;
 		}
+#endif
 	}
 
 	void end()
@@ -97,13 +116,13 @@ struct CLIParser
 	{
 		if (!argc)
 		{
-			throw logic_error("Tried to parse uint, but nothing left in arguments.\n");
+			THROW("Tried to parse uint, but nothing left in arguments");
 		}
 
 		uint32_t val = stoul(*argv);
 		if (val > numeric_limits<uint32_t>::max())
 		{
-			throw out_of_range("next_uint() out of range.\n");
+			THROW("next_uint() out of range");
 		}
 
 		argc--;
@@ -116,7 +135,7 @@ struct CLIParser
 	{
 		if (!argc)
 		{
-			throw logic_error("Tried to parse double, but nothing left in arguments.\n");
+			THROW("Tried to parse double, but nothing left in arguments");
 		}
 
 		double val = stod(*argv);
@@ -131,7 +150,7 @@ struct CLIParser
 	{
 		if (!argc)
 		{
-			throw logic_error("Tried to parse string, but nothing left in arguments.\n");
+			THROW("Tried to parse string, but nothing left in arguments");
 		}
 
 		const char *ret = *argv;
@@ -196,7 +215,13 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		bool is_push_constant = compiler.get_storage_class(res.id) == StorageClassPushConstant;
 		bool is_block = (compiler.get_decoration_mask(type.self) &
 		                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+		bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == StorageClassUniform ||
+		                                   compiler.get_storage_class(res.id) == StorageClassUniformConstant);
 		uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
+
+		uint32_t block_size = 0;
+		if (is_sized_block)
+			block_size = uint32_t(compiler.get_declared_struct_size(compiler.get_type(res.base_type_id)));
 
 		string array;
 		for (auto arr : type.array)
@@ -213,6 +238,12 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
 		if (mask & (1ull << DecorationInputAttachmentIndex))
 			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
+		if (mask & (1ull << DecorationNonReadable))
+			fprintf(stderr, " writeonly");
+		if (mask & (1ull << DecorationNonWritable))
+			fprintf(stderr, " readonly");
+		if (is_sized_block)
+			fprintf(stderr, " (BlockSize : %u bytes)", block_size);
 		fprintf(stderr, "\n");
 	}
 	fprintf(stderr, "=============\n\n");
@@ -317,6 +348,8 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "inputs", res.stage_inputs);
 	print_resources(compiler, "outputs", res.stage_outputs);
 	print_resources(compiler, "textures", res.sampled_images);
+	print_resources(compiler, "separate images", res.separate_images);
+	print_resources(compiler, "separate samplers", res.separate_samplers);
 	print_resources(compiler, "images", res.storage_images);
 	print_resources(compiler, "ssbos", res.storage_buffers);
 	print_resources(compiler, "ubos", res.uniform_buffers);
@@ -345,6 +378,16 @@ static void print_push_constant_resources(const Compiler &compiler, const vector
 	}
 }
 
+static void print_spec_constants(const Compiler &compiler)
+{
+	auto spec_constants = compiler.get_specialization_constants();
+	fprintf(stderr, "Specialization constants\n");
+	fprintf(stderr, "==================\n\n");
+	for (auto &c : spec_constants)
+		fprintf(stderr, "ID: %u, Spec ID: %u\n", c.id, c.constant_id);
+	fprintf(stderr, "==================\n\n");
+}
+
 struct PLSArg
 {
 	PlsFormat format;
@@ -356,6 +399,12 @@ struct Remap
 	string src_name;
 	string dst_name;
 	unsigned components;
+};
+
+struct VariableTypeRemap
+{
+	string variable_name;
+	string new_variable_type;
 };
 
 struct CLIArguments
@@ -375,21 +424,26 @@ struct CLIArguments
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
 	vector<string> extensions;
+	vector<VariableTypeRemap> variable_type_remaps;
 	string entry;
 
 	uint32_t iterations = 1;
 	bool cpp = false;
 	bool metal = false;
 	bool vulkan_semantics = false;
+	bool remove_unused = false;
+	bool cfg_analysis = true;
 };
 
 static void print_help()
 {
-	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--version <GLSL "
+	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
+	                "[--version <GLSL "
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
 	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
 	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext] [--entry name]\n");
+	                "[--extension ext] [--entry name] [--remove-unused-variables] "
+	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -498,6 +552,7 @@ int main(int argc, char *argv[])
 		args.version = parser.next_uint();
 		args.set_version = true;
 	});
+	cbs.add("--no-cfg-analysis", [&args](CLIParser &) { args.cfg_analysis = false; });
 	cbs.add("--dump-resources", [&args](CLIParser &) { args.dump_resources = true; });
 	cbs.add("--force-temporary", [&args](CLIParser &) { args.force_temporary = true; });
 	cbs.add("--flatten-ubo", [&args](CLIParser &) { args.flatten_ubo = true; });
@@ -516,6 +571,12 @@ int main(int argc, char *argv[])
 		args.remaps.push_back({ move(src), move(dst), components });
 	});
 
+	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
+		string var_name = parser.next_string();
+		string new_type = parser.next_string();
+		args.variable_type_remaps.push_back({ move(var_name), move(new_type) });
+	});
+
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
@@ -526,6 +587,8 @@ int main(int argc, char *argv[])
 		auto name = parser.next_string();
 		args.pls_out.push_back({ move(fmt), move(name) });
 	});
+
+	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };
@@ -549,6 +612,8 @@ int main(int argc, char *argv[])
 
 	unique_ptr<CompilerGLSL> compiler;
 
+	bool combined_image_samplers = false;
+
 	if (args.cpp)
 	{
 		compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
@@ -558,7 +623,21 @@ int main(int argc, char *argv[])
 	else if (args.metal)
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
 	else
+	{
+		combined_image_samplers = !args.vulkan_semantics;
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
+	}
+
+	if (!args.variable_type_remaps.empty())
+	{
+		auto remap_cb = [&](const SPIRType &, const string &name, string &out) -> void {
+			for (const VariableTypeRemap &remap : args.variable_type_remaps)
+				if (name == remap.variable_name)
+					out = remap.new_variable_type;
+		};
+
+		compiler->set_variable_type_remap_callback(move(remap_cb));
+	}
 
 	if (!args.entry.empty())
 		compiler->set_entry_point(args.entry);
@@ -578,13 +657,26 @@ int main(int argc, char *argv[])
 	opts.force_temporary = args.force_temporary;
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
+	opts.cfg_analysis = args.cfg_analysis;
 	compiler->set_options(opts);
 
-	auto res = compiler->get_shader_resources();
+	ShaderResources res;
+	if (args.remove_unused)
+	{
+		auto active = compiler->get_active_interface_variables();
+		res = compiler->get_shader_resources(active);
+		compiler->set_enabled_interface_variables(move(active));
+	}
+	else
+		res = compiler->get_shader_resources();
 
 	if (args.flatten_ubo)
+	{
 		for (auto &ubo : res.uniform_buffers)
-			compiler->flatten_interface_block(ubo.id);
+			compiler->flatten_buffer_block(ubo.id);
+		for (auto &ubo : res.push_constant_buffers)
+			compiler->flatten_buffer_block(ubo.id);
+	}
 
 	auto pls_inputs = remap_pls(args.pls_in, res.stage_inputs, &res.subpass_inputs);
 	auto pls_outputs = remap_pls(args.pls_out, res.stage_outputs, nullptr);
@@ -607,6 +699,18 @@ int main(int argc, char *argv[])
 	{
 		print_resources(*compiler, res);
 		print_push_constant_resources(*compiler, res.push_constant_buffers);
+		print_spec_constants(*compiler);
+	}
+
+	if (combined_image_samplers)
+	{
+		compiler->build_combined_image_samplers();
+		// Give the remapped combined samplers new names.
+		for (auto &remap : compiler->get_combined_image_samplers())
+		{
+			compiler->set_name(remap.combined_id, join("SPIRV_Cross_Combined", compiler->get_name(remap.image_id),
+			                                           compiler->get_name(remap.sampler_id)));
+		}
 	}
 
 	string glsl;

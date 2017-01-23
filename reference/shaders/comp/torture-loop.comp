@@ -1,13 +1,13 @@
 #version 310 es
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(binding = 0, std430) buffer SSBO
+layout(binding = 0, std430) readonly buffer SSBO
 {
     mat4 mvp;
     vec4 in_data[];
 } _24;
 
-layout(binding = 1, std430) buffer SSBO2
+layout(binding = 1, std430) writeonly buffer SSBO2
 {
     vec4 out_data[];
 } _89;
@@ -17,17 +17,15 @@ void main()
     uint ident = gl_GlobalInvocationID.x;
     vec4 idat = _24.in_data[ident];
     int k = 0;
-    uint i;
-    uint j;
     for (;;)
     {
         int _39 = k;
         int _40 = _39 + 1;
         k = _40;
-        if ((_40 < 10))
+        if (_40 < 10)
         {
-            idat = (idat * 2.0);
-            k = (k + 1);
+            idat *= 2.0;
+            k++;
             continue;
         }
         else
@@ -35,19 +33,17 @@ void main()
             break;
         }
     }
-    i = 0u;
-    for (; (i < 16u); i = (i + uint(1)), k = (k + 1))
+    for (uint i = 0u; i < 16u; i++, k++)
     {
-        j = 0u;
-        for (; (j < 30u); j = (j + uint(1)))
+        for (uint j = 0u; j < 30u; j++)
         {
-            idat = (_24.mvp * idat);
+            idat = _24.mvp * idat;
         }
     }
     do
     {
-        k = (k + 1);
-    } while ((k > 10));
+        k++;
+    } while (k > 10);
     _89.out_data[ident] = idat;
 }
 

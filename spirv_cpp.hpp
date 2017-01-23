@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SPIRV_CPP_HPP
-#define SPIRV_CPP_HPP
+#ifndef SPIRV_CROSS_CPP_HPP
+#define SPIRV_CROSS_CPP_HPP
 
 #include "spirv_glsl.hpp"
 #include <utility>
