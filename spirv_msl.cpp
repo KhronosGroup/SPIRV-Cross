@@ -1051,9 +1051,6 @@ void CompilerMSL::emit_fixup()
 	{
 		if (options.vertex.fixup_clipspace)
 		{
-			/*const char *suffix = backend.float_literal_suffix ? "f" : "";
-			statement(qual_pos_var_name, ".z = 2.0", suffix, " * ", qual_pos_var_name, ".z - ", qual_pos_var_name,
-			          ".w;", "    // Adjust clip-space for Metal");*/
 			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
 			          ".w) * 0.5;       // Adjust clip-space for Metal");
 		}
