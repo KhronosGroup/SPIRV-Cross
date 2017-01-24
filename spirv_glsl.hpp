@@ -178,6 +178,7 @@ protected:
 	virtual std::string clean_func_name(std::string func_name);
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);
+	virtual void emit_uniform(const SPIRVariable &var);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -283,7 +284,6 @@ protected:
 	void emit_specialization_constant(const SPIRConstant &constant);
 	std::string emit_continue_block(uint32_t continue_block);
 	bool attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method);
-	void emit_uniform(const SPIRVariable &var);
 	void propagate_loop_dominators(const SPIRBlock &block);
 
 	void branch(uint32_t from, uint32_t to);

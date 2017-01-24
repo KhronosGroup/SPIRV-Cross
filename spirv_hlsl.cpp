@@ -937,6 +937,13 @@ void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint3
 	}
 }
 
+void CompilerHLSL::emit_uniform(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+	add_resource_name(var.self);
+	statement("uniform ", variable_decl(var), ";");
+}
+
 void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
 {
 	GLSLstd450 op = static_cast<GLSLstd450>(eop);
