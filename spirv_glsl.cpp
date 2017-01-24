@@ -3418,8 +3418,11 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 	{
 		std::string expr;
 
-		expr += type_to_glsl_constructor(target_type);
-		expr += "(";
+		if (target_type.vecsize > 1)
+		{
+			expr += type_to_glsl_constructor(target_type);
+			expr += "(";
+		}
 
 		for (uint32_t i = 0; i < target_type.vecsize; ++i)
 		{
@@ -3440,7 +3443,10 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 			expr += vector_swizzle(1, index % 4);
 		}
 
-		expr += ")";
+		if (target_type.vecsize > 1)
+		{
+			expr += ")";
+		}
 
 		return expr;
 	}

@@ -14,6 +14,6 @@ void main()
     oB = vec4(UBO[4].y, UBO[5].y, UBO[6].y, UBO[7].y);
     oC = UBO[9];
     oD = vec4(UBO[10].x, UBO[11].x, UBO[12].x, UBO[13].x);
-    oE = vec4(UBO[1].z, float(UBO[6].y), UBO[9].z, float(UBO[12].y));
+    oE = vec4(UBO[1].z, UBO[6].y, UBO[9].z, UBO[12].y);
 }
 
