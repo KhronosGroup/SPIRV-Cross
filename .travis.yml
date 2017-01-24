@@ -24,3 +24,4 @@ script:
   - make -j2
   - PATH=./glslang/StandAlone:./SPIRV-Tools/tools:$PATH
   - ./test_shaders.py shaders
+  - ./test_shaders.py --metal shaders-msl
