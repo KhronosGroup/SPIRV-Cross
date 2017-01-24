@@ -459,6 +459,7 @@ protected:
 
 	uint32_t type_struct_member_offset(const SPIRType &type, uint32_t index) const;
 	uint32_t type_struct_member_array_stride(const SPIRType &type, uint32_t index) const;
+	uint32_t type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const;
 
 	bool block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const;
 
@@ -576,6 +577,9 @@ protected:
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
 
 	VariableTypeRemapCallback variable_remap_callback;
+
+	uint64_t get_buffer_block_flags(const SPIRVariable &var);
+	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type);
 };
 }
 

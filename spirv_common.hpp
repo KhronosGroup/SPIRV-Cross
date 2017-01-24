@@ -265,6 +265,10 @@ struct SPIRType : IVariant
 	// Since we cannot rely on OpName to be equal, we need to figure out aliases.
 	uint32_t type_alias = 0;
 
+	// Denotes the type which this type is based on.
+	// Allows the backend to traverse how a complex type is built up during access chains.
+	uint32_t parent_type = 0;
+
 	// Used in backends to avoid emitting members with conflicting names.
 	std::unordered_set<std::string> member_name_cache;
 };
@@ -904,6 +908,7 @@ struct Meta
 		uint32_t binding = 0;
 		uint32_t offset = 0;
 		uint32_t array_stride = 0;
+		uint32_t matrix_stride = 0;
 		uint32_t input_attachment = 0;
 		uint32_t spec_id = 0;
 		bool builtin = false;
