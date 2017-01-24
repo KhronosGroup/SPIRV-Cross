@@ -76,7 +76,7 @@ macro(spirv_cross_add_library name config_name)
 endmacro()
 
 
-spirv_cross_add_library(spirv-cross-core spirv_cross STATIC
+spirv_cross_add_library(spirv-cross-core spirv_cross_core STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/GLSL.std.450.h
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp
