@@ -3304,18 +3304,22 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-                                  bool *need_transpose)
+                                  bool *out_need_transpose)
 {
 	if (flattened_buffer_blocks.count(base))
 	{
-		if (need_transpose)
-			flattened_access_chain_offset(base, indices, count, 0, need_transpose);
+		uint32_t matrix_stride;
+		bool need_transpose;
+		flattened_access_chain_offset(base, indices, count, 0, &need_transpose, &matrix_stride);
 
-		return flattened_access_chain(base, indices, count, target_type, 0);
+		if (out_need_transpose)
+			*out_need_transpose = target_type.columns > 1 && need_transpose;
+
+		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, need_transpose);
 	}
 	else
 	{
-		return access_chain(base, indices, count, false, false, need_transpose);
+		return access_chain(base, indices, count, false, false, out_need_transpose);
 	}
 }
 
@@ -3328,15 +3332,9 @@ std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *
 	else if (target_type.basetype == SPIRType::Struct)
 		return flattened_access_chain_struct(base, indices, count, target_type, offset);
 	else if (target_type.columns > 1)
-	{
-		// Matrix stride might have been set to something non-zero already by the caller.
-		// If not, we should find this information before flattening the matrix access.
-		if (matrix_stride == 0)
-			flattened_access_chain_offset(base, indices, count, offset, &need_transpose, &matrix_stride);
 		return flattened_access_chain_matrix(base, indices, count, target_type, offset, matrix_stride, need_transpose);
-	}
 	else
-		return flattened_access_chain_vector_scalar(base, indices, count, target_type, offset);
+		return flattened_access_chain_vector(base, indices, count, target_type, offset, matrix_stride, need_transpose);
 }
 
 std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
@@ -3384,12 +3382,12 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
                                                         const SPIRType &target_type, uint32_t offset,
                                                         uint32_t matrix_stride, bool need_transpose)
 {
-	std::string expr;
-
 	assert(matrix_stride);
 	SPIRType tmp_type = target_type;
 	if (need_transpose)
 		swap(tmp_type.vecsize, tmp_type.columns);
+
+	std::string expr;
 
 	expr += type_to_glsl_constructor(tmp_type);
 	expr += "(";
@@ -3399,7 +3397,8 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 		if (i != 0)
 			expr += ", ";
 
-		expr += flattened_access_chain_vector_scalar(base, indices, count, tmp_type, offset + i * matrix_stride);
+		expr += flattened_access_chain_vector(base, indices, count, tmp_type, offset + i * matrix_stride, matrix_stride,
+		                                      /* need_transpose= */ false);
 	}
 
 	expr += ")";
@@ -3407,27 +3406,61 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 	return expr;
 }
 
-std::string CompilerGLSL::flattened_access_chain_vector_scalar(uint32_t base, const uint32_t *indices, uint32_t count,
-                                                               const SPIRType &target_type, uint32_t offset)
+std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                        const SPIRType &target_type, uint32_t offset,
+                                                        uint32_t matrix_stride, bool need_transpose)
 {
 	auto result = flattened_access_chain_offset(base, indices, count, offset);
 
-	assert(result.second % (target_type.width / 8) == 0);
-	uint32_t index = 8 * result.second / target_type.width;
-
 	auto buffer_name = to_name(expression_type(base).self);
 
-	std::string expr;
+	if (need_transpose)
+	{
+		std::string expr;
 
-	expr += buffer_name;
-	expr += "[";
-	expr += result.first; // this is a series of N1 * k1 + N2 * k2 + ... that is either empty or ends with a +
-	expr += convert_to_string(index / 4);
-	expr += "]";
+		expr += type_to_glsl_constructor(target_type);
+		expr += "(";
 
-	expr += vector_swizzle(target_type.vecsize, index % 4);
+		for (uint32_t i = 0; i < target_type.vecsize; ++i)
+		{
+			if (i != 0)
+				expr += ", ";
 
-	return expr;
+			uint32_t component_offset = result.second + i * matrix_stride;
+
+			assert(component_offset % (target_type.width / 8) == 0);
+			uint32_t index = component_offset / (target_type.width / 8);
+
+			expr += buffer_name;
+			expr += "[";
+			expr += result.first; // this is a series of N1 * k1 + N2 * k2 + ... that is either empty or ends with a +
+			expr += convert_to_string(index / 4);
+			expr += "]";
+
+			expr += vector_swizzle(1, index % 4);
+		}
+
+		expr += ")";
+
+		return expr;
+	}
+	else
+	{
+		assert(result.second % (target_type.width / 8) == 0);
+		uint32_t index = result.second / (target_type.width / 8);
+
+		std::string expr;
+
+		expr += buffer_name;
+		expr += "[";
+		expr += result.first; // this is a series of N1 * k1 + N2 * k2 + ... that is either empty or ends with a +
+		expr += convert_to_string(index / 4);
+		expr += "]";
+
+		expr += vector_swizzle(target_type.vecsize, index % 4);
+
+		return expr;
+	}
 }
 
 std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
@@ -3520,14 +3553,11 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
-			if (row_major_matrix_needs_conversion)
-				SPIRV_CROSS_THROW("Matrix indexing is not supported for flattened row major matrices!");
-
 			if (ids[index].get_type() != TypeConstant)
 				SPIRV_CROSS_THROW("Cannot flatten dynamic matrix indexing!");
 
 			index = get<SPIRConstant>(index).scalar();
-			offset += index * matrix_stride;
+			offset += index * (row_major_matrix_needs_conversion ? type->width / 8 : matrix_stride);
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
@@ -3540,7 +3570,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 				SPIRV_CROSS_THROW("Cannot flatten dynamic vector indexing!");
 
 			index = get<SPIRConstant>(index).scalar();
-			offset += index * type->width / 8;
+			offset += index * (row_major_matrix_needs_conversion ? matrix_stride : type->width / 8);
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
