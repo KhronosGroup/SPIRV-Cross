@@ -266,6 +266,40 @@ void CompilerHLSL::emit_resources()
 
 	bool emitted = false;
 
+	// Output UBOs and SSBOs
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
+				!is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
+				((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			{
+				emit_buffer_block(var);
+				emitted = true;
+			}
+		}
+	}
+
+	// Output push constant blocks
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
+				!is_hidden_variable(var))
+			{
+				emit_push_constant_block(var);
+				emitted = true;
+			}
+		}
+	}
+
 	if (execution.model == ExecutionModelVertex && options.shader_model <= 30)
 	{
 		statement("uniform float4 gl_HalfPixel;");
@@ -414,6 +448,40 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+}
+
+void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+
+	add_resource_name(type.self);
+
+	statement("struct _", to_name(type.self));
+	begin_scope();
+
+	type.member_name_cache.clear();
+
+	uint32_t i = 0;
+	for (auto &member : type.member_types)
+	{
+		add_member_name(type, i);
+
+		auto &membertype = get<SPIRType>(member);
+		statement(member_decl(type, membertype, i), ";");
+		i++;
+	}
+	end_scope_decl();
+	statement("");
+	
+	statement("cbuffer ", to_name(type.self));
+	begin_scope();
+	statement("_", to_name(type.self), " ", to_name(var.self), ";");
+	end_scope_decl();
+}
+
+void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
+{
+	statement("constant block");
 }
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)

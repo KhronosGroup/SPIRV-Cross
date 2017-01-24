@@ -66,6 +66,8 @@ private:
 	                                       const char *op);
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
+	void emit_buffer_block(const SPIRVariable &type) override;
+	void emit_push_constant_block(const SPIRVariable &var) override;
 
 	Options options;
 	bool requires_op_fmod = false;
