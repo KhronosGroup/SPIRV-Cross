@@ -275,8 +275,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
-				!is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
-				((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
+			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
 			{
 				emit_buffer_block(var);
 				emitted = true;
@@ -292,7 +292,7 @@ void CompilerHLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
-				!is_hidden_variable(var))
+			    !is_hidden_variable(var))
 			{
 				emit_push_constant_block(var);
 				emitted = true;
@@ -472,7 +472,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	}
 	end_scope_decl();
 	statement("");
-	
+
 	statement("cbuffer ", to_name(type.self));
 	begin_scope();
 	statement("_", to_name(type.self), " ", to_name(var.self), ";");
