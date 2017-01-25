@@ -11,6 +11,8 @@ import hashlib
 import shutil
 import argparse
 
+METALC = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/usr/bin/metal'
+
 def parse_stats(stats):
     m = re.search('([0-9]+) work registers', stats)
     registers = int(m.group(1)) if m else 0
@@ -62,9 +64,7 @@ def get_shader_stats(shader):
     return parse_stats(returned)
 
 def validate_shader_msl(shader):
-	path = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/usr/bin/metal"
-	if os.path.exists(path):
-		subprocess.check_call([path, '-x', 'metal', '-std=ios-metal1.0', '-Werror', shader])
+    subprocess.check_call([METALC, '-x', 'metal', '-std=ios-metal1.0', '-Werror', shader])
 
 def cross_compile_msl(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
@@ -76,7 +76,8 @@ def cross_compile_msl(shader):
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--metal'])
     subprocess.check_call(['spirv-val', spirv_path])
 
-    validate_shader_msl(msl_path)
+    if os.path.exists(METALC):
+        validate_shader_msl(msl_path)
 
     return (spirv_path, msl_path)
 
@@ -278,6 +279,9 @@ def main():
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
+
+    if os.path.exists(METALC):
+        subprocess.check_call([METALC, '--version'])
 
     test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else 'glsl')
     if args.malisc:
