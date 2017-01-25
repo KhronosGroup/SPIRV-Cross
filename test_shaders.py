@@ -2,6 +2,7 @@
 
 import sys
 import os
+import os.path
 import subprocess
 import tempfile
 import re
@@ -60,11 +61,10 @@ def get_shader_stats(shader):
     returned = stdout.decode('utf-8')
     return parse_stats(returned)
 
-def validate_shader(shader, vulkan):
-    if vulkan:
-        subprocess.check_call(['glslangValidator', '-V', shader])
-    else:
-        subprocess.check_call(['glslangValidator', shader])
+def validate_shader_msl(shader):
+	path = "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/usr/bin/metal"
+	if os.path.exists(path):
+		subprocess.check_call([path, '-x', 'metal', '-std=ios-metal1.0', '-Werror', shader])
 
 def cross_compile_msl(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
@@ -76,8 +76,15 @@ def cross_compile_msl(shader):
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--metal'])
     subprocess.check_call(['spirv-val', spirv_path])
 
-    # TODO: Add optional validation of the MSL output.
+    validate_shader_msl(msl_path)
+
     return (spirv_path, msl_path)
+
+def validate_shader(shader, vulkan):
+    if vulkan:
+        subprocess.check_call(['glslangValidator', '-V', shader])
+    else:
+        subprocess.check_call(['glslangValidator', shader])
 
 def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo):
     spirv_f, spirv_path = tempfile.mkstemp()
