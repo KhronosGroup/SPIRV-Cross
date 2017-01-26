@@ -175,7 +175,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 			}
 		}
 	}
-	
+
 	// Local vars that are declared in the main function and accessed directy by a function
 	auto &entry_func = get<SPIRFunction>(entry_point);
 	auto iter = entry_func.local_variables.begin();
@@ -417,7 +417,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
 			uint32_t locn = dec.location;
-			if (get_decoration_mask(p_var->self) & (1ull << DecorationLocation)) {
+			if (get_decoration_mask(p_var->self) & (1ull << DecorationLocation))
+			{
 				set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 			}
 			mark_location_as_used_by_shader(locn, storage);
@@ -682,7 +683,8 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 		auto &ib_var = get<SPIRVariable>(ib_var_id);
 		auto &ib_type = get<SPIRType>(ib_var.basetype);
 		auto &m = meta.at(ib_type.self);
-		if (m.members.size() > 0) emit_struct(ib_type);
+		if (m.members.size() > 0)
+			emit_struct(ib_type);
 	}
 }
 
@@ -1293,7 +1295,8 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				case SPIRType::Struct:
 				{
 					auto &m = meta.at(type.self);
-					if (m.members.size() == 0) break;
+					if (m.members.size() == 0)
+						break;
 					if (!ep_args.empty())
 						ep_args += ", ";
 					if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
