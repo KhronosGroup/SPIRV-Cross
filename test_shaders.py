@@ -2,6 +2,7 @@
 
 import sys
 import os
+import os.path
 import subprocess
 import tempfile
 import re
@@ -9,6 +10,8 @@ import itertools
 import hashlib
 import shutil
 import argparse
+
+METALC = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/usr/bin/metal'
 
 def parse_stats(stats):
     m = re.search('([0-9]+) work registers', stats)
@@ -60,11 +63,8 @@ def get_shader_stats(shader):
     returned = stdout.decode('utf-8')
     return parse_stats(returned)
 
-def validate_shader(shader, vulkan):
-    if vulkan:
-        subprocess.check_call(['glslangValidator', '-V', shader])
-    else:
-        subprocess.check_call(['glslangValidator', shader])
+def validate_shader_msl(shader):
+    subprocess.check_call([METALC, '-x', 'metal', '-std=ios-metal1.0', '-Werror', shader])
 
 def cross_compile_msl(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
@@ -76,7 +76,9 @@ def cross_compile_msl(shader):
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--metal'])
     subprocess.check_call(['spirv-val', spirv_path])
 
-    # TODO: Add optional validation of the MSL output.
+    if os.path.exists(METALC):
+        validate_shader_msl(msl_path)
+
     return (spirv_path, msl_path)
 
 def cross_compile_hlsl(shader):
@@ -91,6 +93,12 @@ def cross_compile_hlsl(shader):
 
     # TODO: Add optional validation of the HLSL output.
     return (spirv_path, msl_path)
+
+def validate_shader(shader, vulkan):
+    if vulkan:
+        subprocess.check_call(['glslangValidator', '-V', shader])
+    else:
+        subprocess.check_call(['glslangValidator', shader])
 
 def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo):
     spirv_f, spirv_path = tempfile.mkstemp()
@@ -296,6 +304,9 @@ def main():
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
+
+    if os.path.exists(METALC):
+        subprocess.check_call([METALC, '--version'])
 
     test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
