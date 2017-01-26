@@ -26,8 +26,8 @@ namespace
 {
 struct VariableComparator
 {
-	VariableComparator(const std::vector<Meta> &meta)
-	    : meta(meta)
+	VariableComparator(const std::vector<Meta> &m)
+	    : meta(m)
 	{
 	}
 
@@ -137,8 +137,6 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 
 void CompilerHLSL::emit_header()
 {
-	auto &execution = get_entry_point();
-
 	for (auto &header : header_lines)
 		statement(header);
 
@@ -151,7 +149,6 @@ void CompilerHLSL::emit_header()
 void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 {
 	auto &execution = get_entry_point();
-	auto &type = get<SPIRType>(var.basetype);
 
 	add_resource_name(var.self);
 
@@ -204,15 +201,11 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 			{
 				for (int i = 0; i < 4; ++i)
 				{
-					char name[101];
-					strcpy(name, m.alias.c_str());
-					strcat(name, "_");
-					size_t length = strlen(name);
-					sprintf(&name[length], "%d", i);
-					name[length + 1] = 0;
+					std::stringstream name;
+					name << m.alias << "_" << i;
 					SPIRType newtype = type;
 					newtype.columns = 1;
-					statement(variable_decl(newtype, name), " : ", binding, binding_number++, ";");
+					statement(variable_decl(newtype, name.str()), " : ", binding, binding_number++, ";");
 				}
 				--binding_number;
 			}
@@ -479,7 +472,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	end_scope_decl();
 }
 
-void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
+void CompilerHLSL::emit_push_constant_block(const SPIRVariable &)
 {
 	statement("constant block");
 }
@@ -561,8 +554,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					continue;
 
 				auto &m = meta[var.self].decoration;
-				auto &type = get<SPIRType>(var.basetype);
-				if (type.vecsize == 4 && type.columns == 4)
+				auto &mtype = get<SPIRType>(var.basetype);
+				if (mtype.vecsize == 4 && mtype.columns == 4)
 				{
 					statement(m.alias, "[0] = input.", m.alias, "_0;");
 					statement(m.alias, "[1] = input.", m.alias, "_1;");
@@ -939,7 +932,6 @@ void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint3
 
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
-	auto &type = get<SPIRType>(var.basetype);
 	add_resource_name(var.self);
 	statement("uniform ", variable_decl(var), ";");
 }
@@ -981,7 +973,6 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
-	uint32_t length = instruction.length;
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define BOP_CAST(op, type, skip_cast) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
