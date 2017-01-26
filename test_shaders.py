@@ -88,11 +88,11 @@ def cross_compile_hlsl(shader):
     os.close(hlsl_f)
     subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--hlsl'])
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl'])
     subprocess.check_call(['spirv-val', spirv_path])
 
     # TODO: Add optional validation of the HLSL output.
-    return (spirv_path, msl_path)
+    return (spirv_path, hlsl_path)
 
 def validate_shader(shader, vulkan):
     if vulkan:
