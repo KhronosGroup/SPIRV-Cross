@@ -79,6 +79,19 @@ def cross_compile_msl(shader):
     # TODO: Add optional validation of the MSL output.
     return (spirv_path, msl_path)
 
+def cross_compile_hlsl(shader):
+    spirv_f, spirv_path = tempfile.mkstemp()
+    hlsl_f, hlsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
+    os.close(spirv_f)
+    os.close(hlsl_f)
+    subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+    spirv_cross_path = './spirv-cross'
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--hlsl'])
+    subprocess.check_call(['spirv-val', spirv_path])
+
+    # TODO: Add optional validation of the HLSL output.
+    return (spirv_path, msl_path)
+
 def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
@@ -232,6 +245,13 @@ def test_shader_msl(stats, shader, update, keep):
     regression_check(shader, msl, update, keep)
     os.remove(spirv)
 
+def test_shader_hlsl(stats, shader, update, keep):
+    joined_path = os.path.join(shader[0], shader[1])
+    print('Testing HLSL shader:', joined_path)
+    spirv, msl = cross_compile_hlsl(joined_path)
+    regression_check(shader, msl, update, keep)
+    os.remove(spirv)
+
 def test_shaders_helper(stats, shader_dir, update, malisc, keep, backend):
     for root, dirs, files in os.walk(os.path.join(shader_dir)):
         for i in files:
@@ -239,6 +259,8 @@ def test_shaders_helper(stats, shader_dir, update, malisc, keep, backend):
             relpath = os.path.relpath(path, shader_dir)
             if backend == 'metal':
                 test_shader_msl(stats, (shader_dir, relpath), update, keep)
+            elif backend == 'hlsl':
+                test_shader_hlsl(stats, (shader_dir, relpath), update, keep)
             else:
                 test_shader(stats, (shader_dir, relpath), update, keep)
 
@@ -266,13 +288,16 @@ def main():
     parser.add_argument('--metal',
             action = 'store_true',
             help = 'Test Metal backend.')
+    parser.add_argument('--hlsl',
+            action = 'store_true',
+            help = 'Test HLSL backend.')
     args = parser.parse_args()
 
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else 'glsl')
+    test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')
