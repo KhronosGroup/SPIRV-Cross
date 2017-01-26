@@ -117,7 +117,7 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 
-	void register_custom_functions();
+	void preprocess_op_codes();
 	void emit_custom_functions();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
@@ -131,8 +131,6 @@ protected:
 
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
-	void emit_function_prototype(SPIRFunction &func, bool is_decl);
-	void emit_function_declarations();
 	void populate_func_name_overrides();
 	void populate_var_name_overrides();
 
@@ -169,20 +167,18 @@ protected:
 	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
 
-	// Extracts a set of opcodes that should be implemented as a bespoke custom function
-	// whose full source code is output as part of the shader source code.
-	struct CustomFunctionHandler : OpcodeHandler
+	// OpcodeHandler that handles several MSL preprocessing operations.
+	struct OpCodePreprocessor : OpcodeHandler
 	{
-		CustomFunctionHandler(const CompilerMSL &compiler_, std::set<uint32_t> &custom_function_ops_)
+		OpCodePreprocessor(CompilerMSL &compiler_)
 		    : compiler(compiler_)
-		    , custom_function_ops(custom_function_ops_)
 		{
 		}
 
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 
-		const CompilerMSL &compiler;
-		std::set<uint32_t> &custom_function_ops;
+		CompilerMSL &compiler;
+		bool suppress_missing_prototypes = false;
 	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting

@@ -842,6 +842,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.spec_id = argument;
 		break;
 
+	case DecorationMatrixStride:
+		dec.matrix_stride = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -961,6 +965,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.array_stride = argument;
 		break;
 
+	case DecorationMatrixStride:
+		dec.matrix_stride = argument;
+		break;
+
 	case DecorationBinding:
 		dec.binding = argument;
 		break;
@@ -1020,6 +1028,10 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.input_attachment;
 	case DecorationSpecId:
 		return dec.spec_id;
+	case DecorationArrayStride:
+		return dec.array_stride;
+	case DecorationMatrixStride:
+		return dec.matrix_stride;
 	default:
 		return 1;
 	}
@@ -1271,6 +1283,7 @@ void Compiler::parse(const Instruction &instruction)
 		vecbase = base;
 		vecbase.vecsize = vecsize;
 		vecbase.self = id;
+		vecbase.parent_type = ops[1];
 		break;
 	}
 
@@ -1285,6 +1298,7 @@ void Compiler::parse(const Instruction &instruction)
 		matrixbase = base;
 		matrixbase.columns = colcount;
 		matrixbase.self = id;
+		matrixbase.parent_type = ops[1];
 		break;
 	}
 
@@ -1302,6 +1316,7 @@ void Compiler::parse(const Instruction &instruction)
 
 		arraybase.array_size_literal.push_back(literal);
 		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
+		arraybase.parent_type = ops[1];
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1316,6 +1331,7 @@ void Compiler::parse(const Instruction &instruction)
 		arraybase = base;
 		arraybase.array.push_back(0);
 		arraybase.array_size_literal.push_back(true);
+		arraybase.parent_type = ops[1];
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -1370,6 +1386,8 @@ void Compiler::parse(const Instruction &instruction)
 
 		if (ptrbase.storage == StorageClassAtomicCounter)
 			ptrbase.basetype = SPIRType::AtomicCounter;
+
+		ptrbase.parent_type = ops[2];
 
 		// Do NOT set ptrbase.self!
 		break;
@@ -2045,6 +2063,17 @@ uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_
 		SPIRV_CROSS_THROW("Struct member does not have ArrayStride set.");
 }
 
+uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const
+{
+	// Decoration must be set in valid SPIR-V, otherwise throw.
+	// MatrixStride is part of OpMemberDecorate.
+	auto &dec = meta[type.self].members[index];
+	if (dec.decoration_flags & (1ull << DecorationMatrixStride))
+		return dec.matrix_stride;
+	else
+		SPIRV_CROSS_THROW("Struct member does not have MatrixStride set.");
+}
+
 size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 {
 	uint32_t last = uint32_t(type.member_types.size() - 1);
@@ -2058,63 +2087,53 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 	auto flags = get_member_decoration_mask(struct_type.self, index);
 	auto &type = get<SPIRType>(struct_type.member_types[index]);
 
-	if (type.basetype != SPIRType::Struct)
+	switch (type.basetype)
 	{
-		switch (type.basetype)
-		{
-		case SPIRType::Unknown:
-		case SPIRType::Void:
-		case SPIRType::Boolean: // Bools are purely logical, and cannot be used for externally visible types.
-		case SPIRType::AtomicCounter:
-		case SPIRType::Image:
-		case SPIRType::SampledImage:
-		case SPIRType::Sampler:
-			SPIRV_CROSS_THROW("Querying size for object with opaque size.\n");
+	case SPIRType::Unknown:
+	case SPIRType::Void:
+	case SPIRType::Boolean: // Bools are purely logical, and cannot be used for externally visible types.
+	case SPIRType::AtomicCounter:
+	case SPIRType::Image:
+	case SPIRType::SampledImage:
+	case SPIRType::Sampler:
+		SPIRV_CROSS_THROW("Querying size for object with opaque size.");
 
-		default:
-			break;
-		}
+	default:
+		break;
+	}
 
-		size_t component_size = type.width / 8;
-		unsigned vecsize = type.vecsize;
-		unsigned columns = type.columns;
-
-		if (type.array.empty())
-		{
-			// Vectors.
-			if (columns == 1)
-				return vecsize * component_size;
-			else
-			{
-				// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
-				if ((flags & (1ull << DecorationRowMajor)) && columns == 3)
-					columns = 4;
-				else if ((flags & (1ull << DecorationColMajor)) && vecsize == 3)
-					vecsize = 4;
-
-				return vecsize * columns * component_size;
-			}
-		}
-		else
-		{
-			// For arrays, we can use ArrayStride to get an easy check.
-			return type_struct_member_array_stride(struct_type, index) * type.array.back();
-		}
+	if (!type.array.empty())
+	{
+		// For arrays, we can use ArrayStride to get an easy check.
+		return type_struct_member_array_stride(struct_type, index) * type.array.back();
+	}
+	else if (type.basetype == SPIRType::Struct)
+	{
+		return get_declared_struct_size(type);
 	}
 	else
 	{
-		// Recurse.
-		uint32_t last = uint32_t(struct_type.member_types.size() - 1);
-		uint32_t offset = type_struct_member_offset(struct_type, last);
-		size_t size;
+		unsigned vecsize = type.vecsize;
+		unsigned columns = type.columns;
 
-		// If we have an array of structs inside our struct, handle that with array strides instead.
-		auto &last_type = get<SPIRType>(struct_type.member_types.back());
-		if (last_type.array.empty())
-			size = get_declared_struct_size(last_type);
+		// Vectors.
+		if (columns == 1)
+		{
+			size_t component_size = type.width / 8;
+			return vecsize * component_size;
+		}
 		else
-			size = type_struct_member_array_stride(struct_type, last) * last_type.array.back();
-		return offset + size;
+		{
+			uint32_t matrix_stride = type_struct_member_matrix_stride(struct_type, index);
+
+			// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
+			if (flags & (1ull << DecorationRowMajor))
+				return matrix_stride * vecsize;
+			else if (flags & (1ull << DecorationColMajor))
+				return matrix_stride * columns;
+			else
+				SPIRV_CROSS_THROW("Either row-major or column-major must be declared for matrices.");
+		}
 	}
 }
 
@@ -3022,5 +3041,50 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		// will break reproducability in regression runs.
 		sort(begin(header_block.loop_variables), end(header_block.loop_variables));
 		this->get<SPIRVariable>(loop_variable.first).loop_variable = true;
+	}
+}
+
+uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+	assert(type.basetype == SPIRType::Struct);
+
+	// Some flags like non-writable, non-readable are actually found
+	// as member decorations. If all members have a decoration set, propagate
+	// the decoration up as a regular variable decoration.
+	uint64_t base_flags = meta[var.self].decoration.decoration_flags;
+
+	if (type.member_types.empty())
+		return base_flags;
+
+	uint64_t all_members_flag_mask = ~(0ull);
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+		all_members_flag_mask &= get_member_decoration_mask(type.self, i);
+
+	return base_flags | all_members_flag_mask;
+}
+
+bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
+{
+	if (type.basetype == SPIRType::Struct)
+	{
+		base_type = SPIRType::Unknown;
+		for (auto &member_type : type.member_types)
+		{
+			SPIRType::BaseType member_base;
+			if (!get_common_basic_type(get<SPIRType>(member_type), member_base))
+				return false;
+
+			if (base_type == SPIRType::Unknown)
+				base_type = member_base;
+			else if (base_type != member_base)
+				return false;
+		}
+		return true;
+	}
+	else
+	{
+		base_type = type.basetype;
+		return true;
 	}
 }

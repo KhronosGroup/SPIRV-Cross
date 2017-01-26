@@ -201,11 +201,7 @@ public:
 	// Returns the effective size of a buffer block struct member.
 	virtual size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const;
 
-	// Legacy GLSL compatibility method.
-	// Takes a variable with a block interface and flattens it into a T array[N]; array instead.
-	// For this to work, all types in the block must not themselves be composites
-	// (except vectors and matrices), and all types must be the same.
-	// The name of the uniform will be the same as the interface block name.
+	// Legacy GLSL compatibility method. Deprecated in favor of CompilerGLSL::flatten_buffer_block
 	void flatten_interface_block(uint32_t id);
 
 	// Returns a set of all global variables which are statically accessed
@@ -463,6 +459,7 @@ protected:
 
 	uint32_t type_struct_member_offset(const SPIRType &type, uint32_t index) const;
 	uint32_t type_struct_member_array_stride(const SPIRType &type, uint32_t index) const;
+	uint32_t type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const;
 
 	bool block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const;
 
@@ -580,6 +577,9 @@ protected:
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
 
 	VariableTypeRemapCallback variable_remap_callback;
+
+	uint64_t get_buffer_block_flags(const SPIRVariable &var);
+	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type);
 };
 }
 

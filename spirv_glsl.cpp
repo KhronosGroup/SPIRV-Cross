@@ -18,6 +18,7 @@
 #include "GLSL.std.450.h"
 #include <algorithm>
 #include <assert.h>
+#include <utility>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -127,6 +128,19 @@ static uint32_t pls_format_to_components(PlsFormat format)
 	case PlsRGBA8UI:
 		return 4;
 	}
+}
+
+static const char *vector_swizzle(int vecsize, int index)
+{
+	static const char *swizzle[4][4] = {
+		{ ".x", ".y", ".z", ".w" }, { ".xy", ".yz", ".zw" }, { ".xyz", ".yzw" }, { "" }
+	};
+
+	assert(vecsize >= 1 && vecsize <= 4);
+	assert(index >= 0 && index < 4);
+	assert(swizzle[vecsize - 1][index]);
+
+	return swizzle[vecsize - 1][index];
 }
 
 void CompilerGLSL::reset()
@@ -961,7 +975,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 void CompilerGLSL::emit_push_constant_block(const SPIRVariable &var)
 {
-	if (options.vulkan_semantics)
+	if (flattened_buffer_blocks.count(var.self))
+		emit_buffer_block_flattened(var);
+	else if (options.vulkan_semantics)
 		emit_push_constant_block_vulkan(var);
 	else
 		emit_push_constant_block_glsl(var);
@@ -1002,9 +1018,41 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 
 void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
+	if (flattened_buffer_blocks.count(var.self))
+		emit_buffer_block_flattened(var);
+	else if (is_legacy())
+		emit_buffer_block_legacy(var);
+	else
+		emit_buffer_block_native(var);
+}
+
+void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
+{
 	auto &type = get<SPIRType>(var.basetype);
 	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
-	bool is_restrict = (meta[var.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
+	if (ssbo)
+		SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
+
+	// We're emitting the push constant block as a regular struct, so disable the block qualifier temporarily.
+	// Otherwise, we will end up emitting layout() qualifiers on naked structs which is not allowed.
+	auto &block_flags = meta[type.self].decoration.decoration_flags;
+	uint64_t block_flag = block_flags & (1ull << DecorationBlock);
+	block_flags &= ~block_flag;
+	emit_struct(type);
+	block_flags |= block_flag;
+	emit_uniform(var);
+	statement("");
+}
+
+void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+
+	uint64_t flags = get_buffer_block_flags(var);
+	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool is_restrict = ssbo && (flags & (1ull << DecorationRestrict)) != 0;
+	bool is_writeonly = ssbo && (flags & (1ull << DecorationNonReadable)) != 0;
+	bool is_readonly = ssbo && (flags & (1ull << DecorationNonWritable)) != 0;
 
 	add_resource_name(var.self);
 
@@ -1018,7 +1066,9 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 	else
 		resource_names.insert(buffer_name);
 
-	statement(layout_for_variable(var), is_restrict ? "restrict " : "", ssbo ? "buffer " : "uniform ", buffer_name);
+	statement(layout_for_variable(var), is_restrict ? "restrict " : "", is_writeonly ? "writeonly " : "",
+	          is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ", buffer_name);
+
 	begin_scope();
 
 	type.member_name_cache.clear();
@@ -1035,6 +1085,31 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 
 	end_scope_decl(to_name(var.self) + type_to_array_glsl(type));
 	statement("");
+}
+
+void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+
+	// Block names should never alias.
+	auto buffer_name = to_name(type.self, false);
+	size_t buffer_size = (get_declared_struct_size(type) + 15) / 16;
+
+	SPIRType::BaseType basic_type;
+	if (get_common_basic_type(type, basic_type))
+	{
+		SPIRType tmp;
+		tmp.basetype = basic_type;
+		tmp.vecsize = 4;
+		if (basic_type != SPIRType::Float && basic_type != SPIRType::Int && basic_type != SPIRType::UInt)
+			SPIRV_CROSS_THROW("Basic types in a flattened UBO must be float, int or uint.");
+
+		auto flags = get_buffer_block_flags(var);
+		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[",
+		          buffer_size, "];");
+	}
+	else
+		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
 }
 
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
@@ -1055,6 +1130,9 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 
 	if (block)
 	{
+		if (is_legacy())
+			SPIRV_CROSS_THROW("IO blocks are not supported in legacy targets.");
+
 		add_resource_name(var.self);
 
 		// Block names should never alias.
@@ -1504,7 +1582,7 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 				return;
 		}
 	}
-	expr.pop_back();
+	expr.erase(expr.size() - 1, 1);
 	expr.erase(begin(expr));
 }
 
@@ -1574,6 +1652,8 @@ string CompilerGLSL::to_expression(uint32_t id)
 		auto &e = get<SPIRExpression>(id);
 		if (e.base_expression)
 			return to_enclosed_expression(e.base_expression) + e.expression;
+		else if (e.need_transpose)
+			return convert_row_major_matrix(e.expression);
 		else
 			return e.expression;
 	}
@@ -2549,8 +2629,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 	string expr;
 	bool forward = false;
-	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset), (!!grad_x || !!grad_y), !!lod,
-	                         !!dref);
+	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
+	                         (!!grad_x || !!grad_y), !!lod, !!dref);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
@@ -3097,7 +3177,7 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-                                  bool chain_only)
+                                  bool chain_only, bool *need_transpose)
 {
 	string expr;
 	if (!chain_only)
@@ -3218,7 +3298,300 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
 	}
 
+	if (need_transpose)
+		*need_transpose = row_major_matrix_needs_conversion;
 	return expr;
+}
+
+string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
+                                  bool *out_need_transpose)
+{
+	if (flattened_buffer_blocks.count(base))
+	{
+		uint32_t matrix_stride;
+		bool need_transpose;
+		flattened_access_chain_offset(base, indices, count, 0, &need_transpose, &matrix_stride);
+
+		if (out_need_transpose)
+			*out_need_transpose = target_type.columns > 1 && need_transpose;
+
+		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, need_transpose);
+	}
+	else
+	{
+		return access_chain(base, indices, count, false, false, out_need_transpose);
+	}
+}
+
+std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                 const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
+                                                 bool need_transpose)
+{
+	if (!target_type.array.empty())
+		SPIRV_CROSS_THROW("Access chains that result in an array can not be flattened");
+	else if (target_type.basetype == SPIRType::Struct)
+		return flattened_access_chain_struct(base, indices, count, target_type, offset);
+	else if (target_type.columns > 1)
+		return flattened_access_chain_matrix(base, indices, count, target_type, offset, matrix_stride, need_transpose);
+	else
+		return flattened_access_chain_vector(base, indices, count, target_type, offset, matrix_stride, need_transpose);
+}
+
+std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                        const SPIRType &target_type, uint32_t offset)
+{
+	std::string expr;
+
+	expr += type_to_glsl_constructor(target_type);
+	expr += "(";
+
+	for (size_t i = 0; i < target_type.member_types.size(); ++i)
+	{
+		if (i != 0)
+			expr += ", ";
+
+		const SPIRType &member_type = get<SPIRType>(target_type.member_types[i]);
+		uint32_t member_offset = type_struct_member_offset(target_type, i);
+
+		// The access chain terminates at the struct, so we need to find matrix strides and row-major information
+		// ahead of time.
+		bool need_transpose = false;
+		uint32_t matrix_stride = 0;
+		if (member_type.columns > 1)
+		{
+			need_transpose = (combined_decoration_for_member(target_type, i) & (1ull << DecorationRowMajor)) != 0;
+			matrix_stride = type_struct_member_matrix_stride(target_type, i);
+		}
+
+		auto tmp = flattened_access_chain(base, indices, count, member_type, offset + member_offset, matrix_stride,
+		                                  need_transpose);
+
+		// Cannot forward transpositions, so resolve them here.
+		if (need_transpose)
+			expr += convert_row_major_matrix(tmp);
+		else
+			expr += tmp;
+	}
+
+	expr += ")";
+
+	return expr;
+}
+
+std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                        const SPIRType &target_type, uint32_t offset,
+                                                        uint32_t matrix_stride, bool need_transpose)
+{
+	assert(matrix_stride);
+	SPIRType tmp_type = target_type;
+	if (need_transpose)
+		swap(tmp_type.vecsize, tmp_type.columns);
+
+	std::string expr;
+
+	expr += type_to_glsl_constructor(tmp_type);
+	expr += "(";
+
+	for (uint32_t i = 0; i < tmp_type.columns; i++)
+	{
+		if (i != 0)
+			expr += ", ";
+
+		expr += flattened_access_chain_vector(base, indices, count, tmp_type, offset + i * matrix_stride, matrix_stride,
+		                                      /* need_transpose= */ false);
+	}
+
+	expr += ")";
+
+	return expr;
+}
+
+std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uint32_t *indices, uint32_t count,
+                                                        const SPIRType &target_type, uint32_t offset,
+                                                        uint32_t matrix_stride, bool need_transpose)
+{
+	auto result = flattened_access_chain_offset(base, indices, count, offset);
+
+	auto buffer_name = to_name(expression_type(base).self);
+
+	if (need_transpose)
+	{
+		std::string expr;
+
+		if (target_type.vecsize > 1)
+		{
+			expr += type_to_glsl_constructor(target_type);
+			expr += "(";
+		}
+
+		for (uint32_t i = 0; i < target_type.vecsize; ++i)
+		{
+			if (i != 0)
+				expr += ", ";
+
+			uint32_t component_offset = result.second + i * matrix_stride;
+
+			assert(component_offset % (target_type.width / 8) == 0);
+			uint32_t index = component_offset / (target_type.width / 8);
+
+			expr += buffer_name;
+			expr += "[";
+			expr += result.first; // this is a series of N1 * k1 + N2 * k2 + ... that is either empty or ends with a +
+			expr += convert_to_string(index / 4);
+			expr += "]";
+
+			expr += vector_swizzle(1, index % 4);
+		}
+
+		if (target_type.vecsize > 1)
+		{
+			expr += ")";
+		}
+
+		return expr;
+	}
+	else
+	{
+		assert(result.second % (target_type.width / 8) == 0);
+		uint32_t index = result.second / (target_type.width / 8);
+
+		std::string expr;
+
+		expr += buffer_name;
+		expr += "[";
+		expr += result.first; // this is a series of N1 * k1 + N2 * k2 + ... that is either empty or ends with a +
+		expr += convert_to_string(index / 4);
+		expr += "]";
+
+		expr += vector_swizzle(target_type.vecsize, index % 4);
+
+		return expr;
+	}
+}
+
+std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
+                                                                             uint32_t count, uint32_t offset,
+                                                                             bool *need_transpose,
+                                                                             uint32_t *out_matrix_stride)
+{
+	const auto *type = &expression_type(base);
+
+	// This holds the type of the current pointer which we are traversing through.
+	// We always start out from a struct type which is the block.
+	// This is primarily used to reflect the array strides and matrix strides later.
+	// For the first access chain index, type_id won't be needed, so just keep it as 0, it will be set
+	// accordingly as members of structs are accessed.
+	assert(type->basetype == SPIRType::Struct);
+	uint32_t type_id = 0;
+
+	uint32_t matrix_stride = 0;
+
+	std::string expr;
+	bool row_major_matrix_needs_conversion = false;
+
+	for (uint32_t i = 0; i < count; i++)
+	{
+		uint32_t index = indices[i];
+
+		// Arrays
+		if (!type->array.empty())
+		{
+			// Here, the type_id will be a type ID for the array type itself.
+			uint32_t array_stride = get_decoration(type_id, DecorationArrayStride);
+			if (!array_stride)
+				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
+
+			auto *constant = maybe_get<SPIRConstant>(index);
+			if (constant)
+			{
+				// Constant array access.
+				offset += constant->scalar() * array_stride;
+			}
+			else
+			{
+				// Dynamic array access.
+				// FIXME: This will need to change if we support other flattening types than 32-bit.
+				const uint32_t word_stride = 16;
+				if (array_stride % word_stride)
+				{
+					SPIRV_CROSS_THROW(
+					    "Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
+					    "Likely culprit here is a float or vec2 array inside a push constant block which is std430. "
+					    "This cannot be flattened. Try using std140 layout instead.");
+				}
+
+				expr += to_expression(index);
+				expr += " * ";
+				expr += convert_to_string(array_stride / word_stride);
+				expr += " + ";
+			}
+
+			uint32_t parent_type = type->parent_type;
+			type = &get<SPIRType>(parent_type);
+			type_id = parent_type;
+
+			// Type ID now refers to the array type with one less dimension.
+		}
+		// For structs, the index refers to a constant, which indexes into the members.
+		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
+		else if (type->basetype == SPIRType::Struct)
+		{
+			index = get<SPIRConstant>(index).scalar();
+
+			if (index >= type->member_types.size())
+				SPIRV_CROSS_THROW("Member index is out of bounds!");
+
+			offset += type_struct_member_offset(*type, index);
+			type_id = type->member_types[index];
+
+			auto &struct_type = *type;
+			type = &get<SPIRType>(type->member_types[index]);
+
+			if (type->columns > 1)
+			{
+				matrix_stride = type_struct_member_matrix_stride(struct_type, index);
+				row_major_matrix_needs_conversion =
+				    (combined_decoration_for_member(struct_type, index) & (1ull << DecorationRowMajor)) != 0;
+			}
+			else
+				row_major_matrix_needs_conversion = false;
+		}
+		// Matrix -> Vector
+		else if (type->columns > 1)
+		{
+			if (ids[index].get_type() != TypeConstant)
+				SPIRV_CROSS_THROW("Cannot flatten dynamic matrix indexing!");
+
+			index = get<SPIRConstant>(index).scalar();
+			offset += index * (row_major_matrix_needs_conversion ? type->width / 8 : matrix_stride);
+
+			uint32_t parent_type = type->parent_type;
+			type = &get<SPIRType>(type->parent_type);
+			type_id = parent_type;
+		}
+		// Vector -> Scalar
+		else if (type->vecsize > 1)
+		{
+			if (ids[index].get_type() != TypeConstant)
+				SPIRV_CROSS_THROW("Cannot flatten dynamic vector indexing!");
+
+			index = get<SPIRConstant>(index).scalar();
+			offset += index * (row_major_matrix_needs_conversion ? matrix_stride : type->width / 8);
+
+			uint32_t parent_type = type->parent_type;
+			type = &get<SPIRType>(type->parent_type);
+			type_id = parent_type;
+		}
+		else
+			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
+	}
+
+	if (need_transpose)
+		*need_transpose = row_major_matrix_needs_conversion;
+	if (out_matrix_stride)
+		*out_matrix_stride = matrix_stride;
+
+	return std::make_pair(expr, offset);
 }
 
 bool CompilerGLSL::should_forward(uint32_t id)
@@ -3554,13 +3927,28 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
 
-		// If loading a non-native row-major matrix, convert it to column-major
+		// If loading a non-native row-major matrix, mark the expression as need_transpose.
+		bool need_transpose = false;
+		bool old_need_transpose = false;
+
+		auto *ptr_expression = maybe_get<SPIRExpression>(ptr);
+		if (ptr_expression && ptr_expression->need_transpose)
+		{
+			old_need_transpose = true;
+			ptr_expression->need_transpose = false;
+			need_transpose = true;
+		}
+		else if (is_non_native_row_major_matrix(ptr))
+			need_transpose = true;
+
 		auto expr = to_expression(ptr);
-		if (is_non_native_row_major_matrix(ptr))
-			expr = convert_row_major_matrix(expr);
+
+		if (ptr_expression)
+			ptr_expression->need_transpose = old_need_transpose;
 
 		// Suppress usage tracking since using same expression multiple times does not imply any extra work.
-		emit_op(result_type, id, expr, forward, true);
+		auto &e = emit_op(result_type, id, expr, forward, true);
+		e.need_transpose = need_transpose;
 		register_read(id, ptr, forward);
 		break;
 	}
@@ -3574,9 +3962,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// If the base is immutable, the access chain pointer must also be.
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
-		auto e = access_chain(ops[2], &ops[3], length - 3, false);
+		bool need_transpose;
+		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &need_transpose);
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 		expr.loaded_from = ops[2];
+		expr.need_transpose = need_transpose;
 		break;
 	}
 
@@ -4012,11 +4402,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFMul:
+	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
+	{
+		// If the matrix needs transpose, just flip the multiply order.
+		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
+		if (e && e->need_transpose)
+		{
+			e->need_transpose = false;
+			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			e->need_transpose = true;
+		}
+		else
+			BOP(*);
+		break;
+	}
+
+	case OpFMul:
 	case OpMatrixTimesScalar:
 	case OpVectorTimesScalar:
-	case OpVectorTimesMatrix:
 	case OpMatrixTimesMatrix:
 		BOP(*);
 		break;
@@ -4855,7 +5259,8 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 {
 	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix)
+	// Legacy targets do not support row major.
+	if (backend.native_row_major_matrix && !is_legacy())
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
@@ -4876,7 +5281,7 @@ bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
 {
 	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix)
+	if (backend.native_row_major_matrix && !is_legacy())
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
@@ -5329,6 +5734,25 @@ void CompilerGLSL::require_extension(const string &ext)
 		forced_extensions.insert(ext);
 		force_recompile = true;
 	}
+}
+
+void CompilerGLSL::flatten_buffer_block(uint32_t id)
+{
+	auto &var = get<SPIRVariable>(id);
+	auto &type = get<SPIRType>(var.basetype);
+	auto name = to_name(type.self, false);
+	auto flags = meta.at(type.self).decoration.decoration_flags;
+
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW(name + " is an array of UBOs.");
+	if (type.basetype != SPIRType::Struct)
+		SPIRV_CROSS_THROW(name + " is not a struct.");
+	if ((flags & (1ull << DecorationBlock)) == 0)
+		SPIRV_CROSS_THROW(name + " is not a block.");
+	if (type.member_types.empty())
+		SPIRV_CROSS_THROW(name + " is an empty struct.");
+
+	flattened_buffer_blocks.insert(id);
 }
 
 bool CompilerGLSL::check_atomic_image(uint32_t id)
