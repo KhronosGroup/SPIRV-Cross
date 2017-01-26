@@ -83,6 +83,8 @@ def cross_compile_msl(shader):
 
 def validate_shader_hlsl(shader):
     subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '-V', shader])
+    if os.path.exists('fxc'):
+        subprocess.check_call(['fxc', shader])
 
 def cross_compile_hlsl(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
