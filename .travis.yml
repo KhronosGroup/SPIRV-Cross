@@ -25,3 +25,4 @@ script:
   - PATH=./glslang/StandAlone:./SPIRV-Tools/tools:$PATH
   - ./test_shaders.py shaders
   - ./test_shaders.py --metal shaders-msl
+  - ./test_shaders.py --hlsl shaders-hlsl
