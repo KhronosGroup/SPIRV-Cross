@@ -26,7 +26,6 @@ vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _16 [[buffer(0)]]
     main0_out out = {};
     out.gl_Position = _16.uMVP * in.aVertex;
     out.vNormal = in.aNormal;
-    out.gl_Position.y = -(out.gl_Position.y);    // Invert Y-axis for Metal
     return out;
 }
 
