@@ -28,7 +28,7 @@ struct OutputVert
 
 void vert_main()
 {
-    gl_Position = mul(transpose(_16.uMVP), aVertex);
+    gl_Position = mul(aVertex, _16.uMVP);
     vNormal = aNormal;
 }
 
@@ -42,6 +42,5 @@ OutputVert main(InputVert input)
     output.vNormal = vNormal;
     output.gl_Position.x = output.gl_Position.x - gl_HalfPixel.x * output.gl_Position.w;
     output.gl_Position.y = output.gl_Position.y + gl_HalfPixel.y * output.gl_Position.w;
-    output.gl_Position.z = (output.gl_Position.z + output.gl_Position.w) * 0.5;
     return output;
 }
