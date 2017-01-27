@@ -894,48 +894,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	emit_op(result_type, id, expr, forward, false);
 }
 
-void CompilerHLSL::emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0,
-                                                       uint32_t op1, const char *op)
-{
-	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op1), ", ", to_expression(op0), ")"), forward,
-	        false); // switch arguments instead of transposing
-
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
-	}
-}
-
-void CompilerHLSL::emit_binary_func_op_transpose_second(uint32_t result_type, uint32_t result_id, uint32_t op0,
-                                                        uint32_t op1, const char *op)
-{
-	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op1), ", ", to_expression(op0), ")"), forward,
-	        false); // switch arguments instead of transposing
-
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
-	}
-}
-
-void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint32_t result_id, uint32_t op0,
-                                                     uint32_t op1, const char *op)
-{
-	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op1), ", ", to_expression(op0), ")"), forward,
-	        false); // switch arguments instead of double-transposing
-
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
-	}
-}
-
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
@@ -994,17 +952,17 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	{
 	case OpMatrixTimesVector:
 	{
-		emit_binary_func_op_transpose_first(ops[0], ops[1], ops[2], ops[3], "mul");
+		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
 	case OpVectorTimesMatrix:
 	{
-		emit_binary_func_op_transpose_second(ops[0], ops[1], ops[2], ops[3], "mul");
+		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
 	case OpMatrixTimesMatrix:
 	{
-		emit_binary_func_op_transpose_all(ops[0], ops[1], ops[2], ops[3], "mul");
+		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
 	case OpFMod:

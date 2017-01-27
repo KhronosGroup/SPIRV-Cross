@@ -60,12 +60,6 @@ private:
 	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number, bool builtins);
 	void emit_texture_op(const Instruction &i) override;
 	void emit_instruction(const Instruction &instruction) override;
-	void emit_binary_func_op_transpose_first(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-	                                         const char *op);
-	void emit_binary_func_op_transpose_second(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-	                                          const char *op);
-	void emit_binary_func_op_transpose_all(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-	                                       const char *op);
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
 	void emit_buffer_block(const SPIRVariable &type) override;
