@@ -97,11 +97,11 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 		switch (type.basetype)
 		{
 		case SPIRType::Boolean:
-			return join("bvec", type.vecsize);
+			return join("bool", type.vecsize);
 		case SPIRType::Int:
-			return join("ivec", type.vecsize);
+			return join("int", type.vecsize);
 		case SPIRType::UInt:
-			return join("uvec", type.vecsize);
+			return join("uint", type.vecsize);
 		case SPIRType::Float:
 			return join("float", type.vecsize);
 		case SPIRType::Double:
