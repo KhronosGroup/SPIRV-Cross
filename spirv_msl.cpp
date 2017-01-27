@@ -16,7 +16,9 @@
 
 #include "spirv_msl.hpp"
 #include "GLSL.std.450.h"
+
 #include <algorithm>
+#include <cassert>
 #include <numeric>
 
 using namespace spv;
@@ -666,22 +668,16 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	{
 		add_local_variable_name(arg.id);
 
-		bool is_uniform_struct = false;
+		string address_space = "thread";
+
 		auto *var = maybe_get<SPIRVariable>(arg.id);
 		if (var)
 		{
 			var->parameter = &arg; // Hold a pointer to the parameter so we can invalidate the readonly field if needed.
-
-			// Check if this arg is one of the synthetic uniform args
-			// created to handle uniform access inside the function
-			auto &var_type = get<SPIRType>(var->basetype);
-			is_uniform_struct =
-			    ((var_type.basetype == SPIRType::Struct) &&
-			     (var_type.storage == StorageClassUniform || var_type.storage == StorageClassUniformConstant ||
-			      var_type.storage == StorageClassPushConstant));
+			address_space = get_argument_address_space(*var);
 		}
 
-		decl += (is_uniform_struct ? "constant " : "thread ");
+		decl += address_space + " ";
 		decl += argument_decl(arg);
 
 		// Manufacture automatic sampler arg for SampledImage texture
@@ -1222,6 +1218,29 @@ string CompilerMSL::clean_func_name(string func_name)
 	return (iter != func_name_overrides.end()) ? iter->second : func_name;
 }
 
+// In MSL address space qualifiers are required for all pointer or reference arguments
+string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
+{
+	const auto &type = get<SPIRType>(argument.basetype);
+
+	if ((type.basetype == SPIRType::Struct) &&
+	    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
+	     type.storage == StorageClassPushConstant))
+	{
+		if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
+		    (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0)
+		{
+			return "device";
+		}
+		else
+		{
+			return "constant";
+		}
+	}
+
+	return "thread";
+}
+
 // Returns a string containing a comma-delimited list of args for the entry point function
 string CompilerMSL::entry_point_args(bool append_comma)
 {
@@ -1256,16 +1275,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				case SPIRType::Struct:
 					if (!ep_args.empty())
 						ep_args += ", ";
-					if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
-					    (meta[var.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0)
-					{
-						ep_args += "device ";
-					}
-					else
-					{
-						ep_args += "constant ";
-					}
-					ep_args += type_to_glsl(type) + "& " + to_name(var.self);
+					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(var.self);
 					ep_args += " [[buffer(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
 					break;
 				case SPIRType::Sampler:
@@ -1626,7 +1636,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			return "depth(any)";
 	}
 
-    // Fragment function in
+	// Compute function in
 	case BuiltInGlobalInvocationId:
 		return "thread_position_in_grid";
 
