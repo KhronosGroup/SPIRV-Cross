@@ -610,6 +610,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			statement("output.gl_Position.x = output.gl_Position.x - gl_HalfPixel.x * output.gl_Position.w;");
 			statement("output.gl_Position.y = output.gl_Position.y + gl_HalfPixel.y * output.gl_Position.w;");
 		}
+		if (options.flip_vert_y)
+		{
+			statement("output.gl_Position.y = -output.gl_Position.y;");
+		}
 		if (options.fixup_clipspace)
 		{
 			statement("output.gl_Position.z = (output.gl_Position.z + output.gl_Position.w) * 0.5;");
