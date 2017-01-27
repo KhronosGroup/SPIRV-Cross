@@ -1108,6 +1108,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			switch (builtin)
 			{
 			case BuiltInGlobalInvocationId:
+			case BuiltInLocalInvocationId:
+			case BuiltInLocalInvocationIndex:
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
 			default:
@@ -1640,6 +1642,12 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInGlobalInvocationId:
 		return "thread_position_in_grid";
 
+	case BuiltInLocalInvocationId:
+		return "thread_position_in_threadgroup";
+
+	case BuiltInLocalInvocationIndex:
+		return "thread_index_in_threadgroup";
+
 	default:
 		return "unsupported-built-in";
 	}
@@ -1683,6 +1691,10 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 	// Compute function in
 	case BuiltInGlobalInvocationId:
 		return "uint3";
+	case BuiltInLocalInvocationId:
+		return "uint3";
+	case BuiltInLocalInvocationIndex:
+		return "uint";
 
 	default:
 		return "unsupported-built-in-type";
