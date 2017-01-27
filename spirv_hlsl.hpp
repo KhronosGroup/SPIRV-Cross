@@ -29,6 +29,7 @@ public:
 	struct Options
 	{
 		uint32_t shader_model = 30; // TODO: map ps_4_0_level_9_0,... somehow
+		bool fixup_clipspace = false;
 	};
 
 	CompilerHLSL(std::vector<uint32_t> spirv_)
