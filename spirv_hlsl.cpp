@@ -898,8 +898,8 @@ void CompilerHLSL::emit_binary_func_op_transpose_first(uint32_t result_type, uin
                                                        uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(transpose(", to_expression(op0), "), ", to_expression(op1), ")"),
-	        forward, false);
+	emit_op(result_type, result_id, join(op, "(", to_expression(op1), ", ", to_expression(op0), ")"), forward,
+	        false); // switch arguments instead of transposing
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{
@@ -912,8 +912,8 @@ void CompilerHLSL::emit_binary_func_op_transpose_second(uint32_t result_type, ui
                                                         uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", transpose(", to_expression(op1), "))"),
-	        forward, false);
+	emit_op(result_type, result_id, join(op, "(", to_expression(op1), ", ", to_expression(op0), ")"), forward,
+	        false); // switch arguments instead of transposing
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{
@@ -926,9 +926,8 @@ void CompilerHLSL::emit_binary_func_op_transpose_all(uint32_t result_type, uint3
                                                      uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id,
-	        join("transpose(", op, "(transpose(", to_expression(op0), "), transpose(", to_expression(op1), ")))"),
-	        forward, false);
+	emit_op(result_type, result_id, join(op, "(", to_expression(op1), ", ", to_expression(op0), ")"), forward,
+	        false); // switch arguments instead of double-transposing
 
 	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
 	{
