@@ -29,9 +29,10 @@ namespace spirv_cross
 // Options for compiling to Metal Shading Language
 struct MSLConfiguration
 {
-	bool flip_vert_y = true;
-	bool flip_frag_y = true;
+	bool flip_vert_y = false;
+	bool flip_frag_y = false;
 	bool is_rendering_points = false;
+	std::string entry_point_name;
 };
 
 // Defines MSL characteristics of a vertex attribute at a particular location.
@@ -115,22 +116,26 @@ protected:
 	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
-	std::string clean_func_name(std::string func_name) override;
 
 	void preprocess_op_codes();
 	void emit_custom_functions();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
+
+	std::unordered_map<uint32_t, std::unordered_set<uint32_t>> function_global_vars;
 	void extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
 	                                            std::unordered_set<uint32_t> &global_var_ids,
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	uint32_t add_interface_block(spv::StorageClass storage);
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
+
 	void emit_resources();
 	void emit_interface_block(uint32_t ib_var_id);
 	void populate_func_name_overrides();
+	void populate_var_name_overrides();
 
 	std::string func_type_decl(SPIRType &type);
+	std::string clean_func_name(std::string func_name) override;
 	std::string entry_point_args(bool append_comma);
 	std::string get_entry_point_name();
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
@@ -148,15 +153,18 @@ protected:
 
 	MSLConfiguration msl_config;
 	std::unordered_map<std::string, std::string> func_name_overrides;
+	std::unordered_map<std::string, std::string> var_name_overrides;
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
+	uint32_t stage_uniforms_var_id = 0;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
+	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
@@ -184,6 +192,7 @@ protected:
 			LocationReverse,
 			Offset,
 			OffsetThenLocationReverse,
+			Alphabetical
 		};
 
 		void sort();
