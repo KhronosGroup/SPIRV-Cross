@@ -29,6 +29,7 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
 	options.vertex.fixup_clipspace = false;
 
 	populate_func_name_overrides();
+	populate_var_name_overrides();
 }
 
 // Populate the collection of function names that need to be overridden
@@ -36,6 +37,12 @@ void CompilerMSL::populate_func_name_overrides()
 {
 	func_name_overrides["main"] = "main0";
 	func_name_overrides["saturate"] = "saturate0";
+}
+
+void CompilerMSL::populate_var_name_overrides()
+{
+	var_name_overrides["kernel"] = "kernel0";
+	var_name_overrides["bias"] = "bias0";
 }
 
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
@@ -46,6 +53,10 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 
 	// Remember the input parameters
 	msl_config = msl_cfg;
+
+	// Set main function name if it was explicitly set
+	if (!msl_config.entry_point_name.empty())
+		set_name(entry_point, msl_config.entry_point_name);
 
 	vtx_attrs_by_location.clear();
 	if (p_vtx_attrs)
@@ -61,10 +72,11 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 	set_enabled_interface_variables(get_active_interface_variables());
 	preprocess_op_codes();
 
-	// Create structs to hold input and output variables
+	// Create structs to hold input, output and uniform variables
 	qual_pos_var_name = "";
 	stage_in_var_id = add_interface_block(StorageClassInput);
 	stage_out_var_id = add_interface_block(StorageClassOutput);
+	stage_uniforms_var_id = add_interface_block(StorageClassUniformConstant);
 
 	// Convert the use of global variables to recursively-passed function parameters
 	localize_global_variables();
@@ -158,9 +170,16 @@ void CompilerMSL::extract_global_variables_from_functions()
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassInput || var.storage == StorageClassUniform ||
 			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant)
+			{
 				global_var_ids.insert(var.self);
+			}
 		}
 	}
+
+	// Local vars that are declared in the main function and accessed directy by a function
+	auto &entry_func = get<SPIRFunction>(entry_point);
+	for (auto &var : entry_func.local_variables)
+		global_var_ids.insert(var);
 
 	std::unordered_set<uint32_t> added_arg_ids;
 	std::unordered_set<uint32_t> processed_func_ids;
@@ -176,7 +195,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 {
 	// Avoid processing a function more than once
 	if (processed_func_ids.find(func_id) != processed_func_ids.end())
+	{
+		// Return function global variables
+		added_arg_ids = function_global_vars[func_id];
 		return;
+	}
 
 	processed_func_ids.insert(func_id);
 
@@ -199,6 +222,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+
 				break;
 			}
 			case OpFunctionCall:
@@ -216,6 +240,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			}
 		}
 	}
+
+	function_global_vars[func_id] = added_arg_ids;
 
 	// Add the global variables as arguments to the function
 	if (func_id != entry_point)
@@ -312,6 +338,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		break;
 	}
 
+	case StorageClassUniformConstant:
+	{
+		ib_var_ref = stage_uniform_var_name;
+		break;
+	}
+
 	default:
 		break;
 	}
@@ -358,7 +390,11 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				mbr_idx++;
 			}
 		}
-		else
+		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char ||
+		         type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
+		         type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
+		         type.basetype == SPIRType::Float || type.basetype == SPIRType::Double ||
+		         type.basetype == SPIRType::Boolean)
 		{
 			// Add a reference to the variable type to the interface struct.
 			uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -375,7 +411,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			// Copy the variable location from the original variable to the member
 			auto &dec = meta[p_var->self].decoration;
 			uint32_t locn = dec.location;
-			set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
+			if (get_decoration_mask(p_var->self) & (1ull << DecorationLocation))
+			{
+				set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
+			}
 			mark_location_as_used_by_shader(locn, storage);
 
 			// Mark the member as builtin if needed
@@ -395,6 +434,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	    (storage == StorageClassInput) ? MemberSorter::LocationReverse : MemberSorter::Location;
 	MemberSorter memberSorter(ib_type, meta[ib_type_id], sort_aspect);
 	memberSorter.sort();
+
+	// Sort input or output variables alphabetical
+	auto &execution = get_entry_point();
+	if ((execution.model == ExecutionModelFragment && storage == StorageClassInput) ||
+	    (execution.model == ExecutionModelVertex && storage == StorageClassOutput))
+	{
+		MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Alphabetical);
+		memberSorter.sort();
+	}
 
 	return ib_var_id;
 }
@@ -481,6 +529,7 @@ void CompilerMSL::emit_resources()
 	// Output interface blocks.
 	emit_interface_block(stage_in_var_id);
 	emit_interface_block(stage_out_var_id);
+	emit_interface_block(stage_uniforms_var_id);
 }
 
 // Override for MSL-specific syntax instructions
@@ -627,7 +676,9 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 	{
 		auto &ib_var = get<SPIRVariable>(ib_var_id);
 		auto &ib_type = get<SPIRType>(ib_var.basetype);
-		emit_struct(ib_type);
+		auto &m = meta.at(ib_type.self);
+		if (m.members.size() > 0)
+			emit_struct(ib_type);
 	}
 }
 
@@ -1069,9 +1120,8 @@ void CompilerMSL::emit_fixup()
 	{
 		if (options.vertex.fixup_clipspace)
 		{
-			const char *suffix = backend.float_literal_suffix ? "f" : "";
-			statement(qual_pos_var_name, ".z = 2.0", suffix, " * ", qual_pos_var_name, ".z - ", qual_pos_var_name,
-			          ".w;", "    // Adjust clip-space for Metal");
+			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
+			          ".w) * 0.5;       // Adjust clip-space for Metal");
 		}
 
 		if (msl_config.flip_vert_y)
@@ -1310,12 +1360,15 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			auto &type = get<SPIRType>(var.basetype);
 
 			if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-			     var.storage == StorageClassPushConstant) &&
-			    !is_hidden_variable(var))
+			     var.storage == StorageClassPushConstant))
 			{
 				switch (type.basetype)
 				{
 				case SPIRType::Struct:
+				{
+					auto &m = meta.at(type.self);
+					if (m.members.size() == 0)
+						break;
 					if (!ep_args.empty())
 						ep_args += ", ";
 					if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
@@ -1330,6 +1383,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 					ep_args += type_to_glsl(type) + "& " + to_name(var.self);
 					ep_args += " [[buffer(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
 					break;
+				}
 				case SPIRType::Sampler:
 					if (!ep_args.empty())
 						ep_args += ", ";
@@ -1431,8 +1485,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &type = expression_type(arg.id);
 	bool constref = !type.pointer || arg.write_count == 0;
 
+	// TODO: Check if this arg is an uniform pointer
+	bool pointer = type.storage == StorageClassUniformConstant;
+
 	auto &var = get<SPIRVariable>(arg.id);
-	return join(constref ? "const " : "", type_to_glsl(type), "& ", to_name(var.self), type_to_array_glsl(type));
+	return join(constref ? "const " : "", type_to_glsl(type), pointer ? " " : "& ", to_name(var.self),
+	            type_to_array_glsl(type));
 }
 
 // If we're currently in the entry point function, and the object
@@ -1468,9 +1526,14 @@ string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t inde
 string CompilerMSL::ensure_valid_name(string name, string pfx)
 {
 	if (name.size() >= 2 && name[0] == '_' && isdigit(name[1]))
+	{
 		return join(pfx, name);
+	}
 	else
-		return name;
+	{
+		auto iter = var_name_overrides.find(name);
+		return (iter != var_name_overrides.end()) ? iter->second : name;
+	}
 }
 
 // Returns an MSL string describing  the SPIR-V type
@@ -1861,6 +1924,8 @@ bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 		case OffsetThenLocationReverse:
 			return (mbr_meta1.offset < mbr_meta2.offset) ||
 			       ((mbr_meta1.offset == mbr_meta2.offset) && (mbr_meta1.location > mbr_meta2.location));
+		case Alphabetical:
+			return mbr_meta1.alias > mbr_meta2.alias;
 		default:
 			return false;
 		}
