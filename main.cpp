@@ -16,6 +16,7 @@
 
 #include "spirv_cpp.hpp"
 #include "spirv_msl.hpp"
+#include "spirv_hlsl.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -430,6 +431,7 @@ struct CLIArguments
 	uint32_t iterations = 1;
 	bool cpp = false;
 	bool metal = false;
+	bool hlsl = false;
 	bool vulkan_semantics = false;
 	bool remove_unused = false;
 	bool cfg_analysis = true;
@@ -440,9 +442,9 @@ static void print_help()
 	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
 	                "[--version <GLSL "
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
-	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
-	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext] [--entry name] [--remove-unused-variables] "
+	                "[--metal] [--hlsl] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
+	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
+	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
 }
 
@@ -561,6 +563,7 @@ int main(int argc, char *argv[])
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.metal = true; });
+	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
@@ -622,6 +625,8 @@ int main(int argc, char *argv[])
 	}
 	else if (args.metal)
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
+	else if (args.hlsl)
+		compiler = unique_ptr<CompilerHLSL>(new CompilerHLSL(read_spirv_file(args.input)));
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;

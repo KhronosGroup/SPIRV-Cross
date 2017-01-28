@@ -1889,7 +1889,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	if (c.vector_size() > 1)
 		res += type_to_glsl(type) + "(";
 
-	bool splat = c.vector_size() > 1;
+	bool splat = backend.use_constructor_splatting && c.vector_size() > 1;
 	if (splat)
 	{
 		if (type_to_std430_base_size(type) == 8)
@@ -4125,7 +4125,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Only splat if we have vector constructors.
 		// Arrays and structs must be initialized properly in full.
 		bool composite = !out_type.array.empty() || out_type.basetype == SPIRType::Struct;
-		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite;
+		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
 
 		if (splat)
 		{
