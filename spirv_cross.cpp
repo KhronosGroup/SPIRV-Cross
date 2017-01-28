@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 ARM Limited
+ * Copyright 2015-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -815,6 +815,11 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 const SPIRType &Compiler::get_type(uint32_t id) const
 {
 	return get<SPIRType>(id);
+}
+
+const SPIRType &Compiler::get_type_from_variable(uint32_t id) const
+{
+	return get<SPIRType>(get<SPIRVariable>(id).basetype);
 }
 
 void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration decoration, uint32_t argument)

@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 ARM Limited
+ * Copyright 2015-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,6 +176,9 @@ protected:
 	                                     uint32_t offset, uint32_t bias, uint32_t comp, uint32_t sample,
 	                                     bool *p_forward);
 	virtual std::string clean_func_name(std::string func_name);
+	virtual void emit_buffer_block(const SPIRVariable &type);
+	virtual void emit_push_constant_block(const SPIRVariable &var);
+	virtual void emit_uniform(const SPIRVariable &var);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -266,15 +269,14 @@ protected:
 		bool explicit_struct_type = false;
 		bool use_initializer_list = false;
 		bool native_row_major_matrix = true;
+		bool use_constructor_splatting = true;
 	} backend;
 
 	void emit_struct(SPIRType &type);
 	void emit_resources();
-	void emit_buffer_block(const SPIRVariable &type);
 	void emit_buffer_block_native(const SPIRVariable &var);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
 	void emit_buffer_block_flattened(const SPIRVariable &type);
-	void emit_push_constant_block(const SPIRVariable &var);
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);
@@ -282,7 +284,6 @@ protected:
 	void emit_specialization_constant(const SPIRConstant &constant);
 	std::string emit_continue_block(uint32_t continue_block);
 	bool attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method);
-	void emit_uniform(const SPIRVariable &var);
 	void propagate_loop_dominators(const SPIRBlock &block);
 
 	void branch(uint32_t from, uint32_t to);

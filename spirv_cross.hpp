@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 ARM Limited
+ * Copyright 2015-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -150,6 +150,8 @@ public:
 	// Gets the SPIR-V associated with ID.
 	// Mostly used with Resource::type_id and Resource::base_type_id to parse the underlying type of a resource.
 	const SPIRType &get_type(uint32_t id) const;
+
+	const SPIRType &get_type_from_variable(uint32_t id) const;
 
 	// Gets the underlying storage class for an OpVariable.
 	spv::StorageClass get_storage_class(uint32_t id) const;

@@ -45,11 +45,16 @@ add_library(spirv-cross-msl STATIC
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.cpp)
 
+add_library(spirv-cross-hlsl STATIC
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.cpp)
+
 add_executable(spirv-cross main.cpp)
-target_link_libraries(spirv-cross spirv-cross-glsl spirv-cross-cpp spirv-cross-msl spirv-cross-core)
+target_link_libraries(spirv-cross spirv-cross-glsl spirv-cross-cpp spirv-cross-msl spirv-cross-hlsl spirv-cross-core)
 target_link_libraries(spirv-cross-glsl spirv-cross-core)
 target_link_libraries(spirv-cross-msl spirv-cross-glsl)
 target_link_libraries(spirv-cross-cpp spirv-cross-glsl)
+target_link_libraries(spirv-cross-hlsl spirv-cross-glsl)
 target_include_directories(spirv-cross-core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 set(spirv-compiler-options "")
@@ -75,11 +80,13 @@ target_compile_options(spirv-cross-core PRIVATE ${spirv-compiler-options})
 target_compile_options(spirv-cross-glsl PRIVATE ${spirv-compiler-options})
 target_compile_options(spirv-cross-msl PRIVATE ${spirv-compiler-options})
 target_compile_options(spirv-cross-cpp PRIVATE ${spirv-compiler-options})
+target_compile_options(spirv-cross-hlsl PRIVATE ${spirv-compiler-options})
 target_compile_options(spirv-cross PRIVATE ${spirv-compiler-options})
 target_compile_definitions(spirv-cross-core PRIVATE ${spirv-compiler-defines})
 target_compile_definitions(spirv-cross-glsl PRIVATE ${spirv-compiler-defines})
 target_compile_definitions(spirv-cross-msl PRIVATE ${spirv-compiler-defines})
 target_compile_definitions(spirv-cross-cpp PRIVATE ${spirv-compiler-defines})
+target_compile_definitions(spirv-cross-hlsl PRIVATE ${spirv-compiler-defines})
 target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines})
 
 # Set up tests, using only the simplest modes of the test_shaders
@@ -96,6 +103,9 @@ if (${PYTHONINTERP_FOUND})
 	add_test(NAME spirv-cross-test-metal
 		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal
 			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl)
+	add_test(NAME spirv-cross-test-hlsl
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl)
   endif()
 else()
   message(WARNING "Testing disabled. Could not find python3. If you have python3 installed try running "
