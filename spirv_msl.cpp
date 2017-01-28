@@ -432,16 +432,16 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	// particularly if the offsets are all equal.
 	MemberSorter::SortAspect sort_aspect =
 	    (storage == StorageClassInput) ? MemberSorter::LocationReverse : MemberSorter::Location;
-	MemberSorter memberSorter(ib_type, meta[ib_type_id], sort_aspect);
-	memberSorter.sort();
+	MemberSorter member_sorter(ib_type, meta[ib_type_id], sort_aspect);
+	member_sorter.sort();
 
 	// Sort input or output variables alphabetical
 	auto &execution = get_entry_point();
 	if ((execution.model == ExecutionModelFragment && storage == StorageClassInput) ||
 	    (execution.model == ExecutionModelVertex && storage == StorageClassOutput))
 	{
-		MemberSorter memberSorter(ib_type, meta[ib_type.self], MemberSorter::Alphabetical);
-		memberSorter.sort();
+		MemberSorter member_sorter_io(ib_type, meta[ib_type.self], MemberSorter::Alphabetical);
+		member_sorter_io.sort();
 	}
 
 	return ib_var_id;
