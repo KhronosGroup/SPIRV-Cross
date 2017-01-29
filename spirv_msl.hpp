@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
+#include <map>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
@@ -41,6 +42,10 @@ struct MSLConfiguration
 struct MSLVertexAttr
 {
 	uint32_t location = 0;
+	uint32_t msl_buffer = 0;
+	uint32_t msl_offset = 0;
+	uint32_t msl_stride = 0;
+	bool per_instance = false;
 	bool used_by_shader = false;
 };
 
@@ -143,6 +148,7 @@ protected:
 	std::string to_sampler_expression(uint32_t id);
 	std::string builtin_qualifier(spv::BuiltIn builtin);
 	std::string builtin_type_decl(spv::BuiltIn builtin);
+	std::string built_in_func_arg(spv::BuiltIn builtin, bool prefix_comma);
 	std::string member_attribute_qualifier(const SPIRType &type, uint32_t index);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
@@ -150,17 +156,27 @@ protected:
 	size_t get_declared_type_size(uint32_t type_id) const;
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 	std::string to_component_argument(uint32_t id);
+	void exclude_from_stage_in(SPIRVariable &var);
+	void exclude_member_from_stage_in(const SPIRType &type, uint32_t index);
+	std::string add_input_buffer_block_member(uint32_t mbr_type_id, std::string mbr_name, uint32_t mbr_locn);
+	uint32_t get_input_buffer_block_var_id(uint32_t msl_buffer);
+	void pad_input_buffer_block(uint32_t ib_type_id);
+	SPIRType &get_pad_type(uint32_t pad_len);
 
 	MSLConfiguration msl_config;
 	std::unordered_map<std::string, std::string> func_name_overrides;
 	std::unordered_map<std::string, std::string> var_name_overrides;
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
+	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
+	std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
 	uint32_t stage_uniforms_var_id = 0;
+	bool needs_vertex_idx_arg = false;
+	bool needs_instance_idx_arg = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
