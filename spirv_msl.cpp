@@ -186,7 +186,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 	for (auto &var : entry_func.local_variables)
 		global_var_ids.insert(var);
 
-	std::unordered_set<uint32_t> added_arg_ids;
+	std::set<uint32_t> added_arg_ids;
 	std::unordered_set<uint32_t> processed_func_ids;
 	extract_global_variables_from_function(entry_point, added_arg_ids, global_var_ids, processed_func_ids);
 }
@@ -194,7 +194,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 // MSL does not support the use of global variables for shader input content.
 // For any global variable accessed directly by the specified function, extract that variable,
 // add it as an argument to that function, and the arg to the added_arg_ids collection.
-void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::unordered_set<uint32_t> &added_arg_ids,
+void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
                                                          std::unordered_set<uint32_t> &global_var_ids,
                                                          std::unordered_set<uint32_t> &processed_func_ids)
 {
@@ -233,7 +233,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			case OpFunctionCall:
 			{
 				uint32_t inner_func_id = ops[2];
-				std::unordered_set<uint32_t> inner_func_args;
+				std::set<uint32_t> inner_func_args;
 				extract_global_variables_from_function(inner_func_id, inner_func_args, global_var_ids,
 				                                       processed_func_ids);
 				added_arg_ids.insert(inner_func_args.begin(), inner_func_args.end());
@@ -620,16 +620,16 @@ SPIRType &CompilerMSL::get_pad_type(uint32_t pad_len)
 		return get<SPIRType>(pad_type_id);
 
 	pad_type_id = increase_bound_by(1);
-	auto &ib_type = set<SPIRType>(pad_type_id);
-	ib_type.storage = StorageClassGeneric;
-	ib_type.basetype = SPIRType::Char;
-	ib_type.width = 8;
-	ib_type.array.push_back(pad_len);
-	ib_type.array_size_literal.push_back(true);
-	set_decoration(ib_type.self, DecorationArrayStride, pad_len);
+	auto &pad_type = set<SPIRType>(pad_type_id);
+	pad_type.storage = StorageClassGeneric;
+	pad_type.basetype = SPIRType::Char;
+	pad_type.width = 8;
+	pad_type.array.push_back(pad_len);
+	pad_type.array_size_literal.push_back(true);
+	set_decoration(pad_type.self, DecorationArrayStride, pad_len);
 
 	pad_type_ids_by_pad_len[pad_len] = pad_type_id;
-	return ib_type;
+	return pad_type;
 }
 
 // Emits the file header info
@@ -2110,11 +2110,11 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t * /*args*
 // then by the required sorting aspect.
 void CompilerMSL::MemberSorter::sort()
 {
-	// Create a temporary array of consecutive member indices and sort it base on how
+	// Create a temporary array of consecutive member indices and sort it based on how
 	// the members should be reordered, based on builtin and sorting aspect meta info.
 	size_t mbr_cnt = type.member_types.size();
 	vector<uint32_t> mbr_idxs(mbr_cnt);
-	iota(mbr_idxs.begin(), mbr_idxs.end(), 0); // Fill with consecutive indices
+	iota(mbr_idxs.begin(), mbr_idxs.end(), 0);          // Fill with consecutive indices
 	std::sort(mbr_idxs.begin(), mbr_idxs.end(), *this); // Sort member indices based on sorting aspect
 
 	// Move type and meta member info to the order defined by the sorted member indices.
