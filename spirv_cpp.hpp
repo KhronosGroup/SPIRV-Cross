@@ -48,11 +48,11 @@ private:
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 
 	void emit_resources();
-	void emit_buffer_block(const SPIRVariable &type);
-	void emit_push_constant_block(const SPIRVariable &var);
+	void emit_buffer_block(const SPIRVariable &type) override;
+	void emit_push_constant_block(const SPIRVariable &var) override;
 	void emit_interface_block(const SPIRVariable &type);
 	void emit_block_chain(SPIRBlock &block);
-	void emit_uniform(const SPIRVariable &var);
+	void emit_uniform(const SPIRVariable &var) override;
 	void emit_shared(const SPIRVariable &var);
 	void emit_block_struct(SPIRType &type);
 	std::string variable_decl(const SPIRType &type, const std::string &name) override;
