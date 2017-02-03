@@ -632,7 +632,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	uint32_t length = i.length;
 
 	if (i.offset + length > spirv.size())
-		throw CompilerError("Compiler::parse() opcode out of range.");
+		SPIRV_CROSS_THROW("Compiler::parse() opcode out of range.");
 
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
@@ -999,7 +999,7 @@ string CompilerHLSL::compile()
 	do
 	{
 		if (pass_count >= 3)
-			throw CompilerError("Over 3 compilation loops detected. Must be a bug!");
+			SPIRV_CROSS_THROW("Over 3 compilation loops detected. Must be a bug!");
 
 		reset();
 
