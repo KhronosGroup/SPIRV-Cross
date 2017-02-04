@@ -10,6 +10,7 @@ import itertools
 import hashlib
 import shutil
 import argparse
+import codecs
 
 METALC = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/usr/bin/metal'
 
@@ -145,10 +146,15 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
 
     return (spirv_path, glsl_path, vulkan_glsl_path if vulkan else None)
 
+def make_unix_newline(buf):
+    decoded = codecs.decode(buf, 'utf-8')
+    decoded = decoded.replace('\r', '')
+    return codecs.encode(decoded, 'utf-8')
+
 def md5_for_file(path):
     md5 = hashlib.md5()
     with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+        for chunk in iter(lambda: make_unix_newline(f.read(8192)), b''):
             md5.update(chunk)
     return md5.digest()
 
