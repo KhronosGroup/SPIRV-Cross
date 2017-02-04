@@ -6227,9 +6227,15 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			switch (continue_type)
 			{
 			case SPIRBlock::ForLoop:
-				statement("for (", emit_for_loop_initializers(block), "; ", to_expression(block.condition), "; ",
-				          emit_continue_block(block.continue_block), ")");
+			{
+				// Important that we do this in this order because
+				// emitting the continue block can invalidate the condition expression.
+				auto initializer = emit_for_loop_initializers(block);
+				auto condition = to_expression(block.condition);
+				auto continue_block = emit_continue_block(block.continue_block);
+				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
 				break;
+			}
 
 			case SPIRBlock::WhileLoop:
 				statement("while (", to_expression(block.condition), ")");
@@ -6274,9 +6280,15 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			switch (continue_type)
 			{
 			case SPIRBlock::ForLoop:
-				statement("for (", emit_for_loop_initializers(block), "; ", to_expression(child.condition), "; ",
-				          emit_continue_block(block.continue_block), ")");
+			{
+				// Important that we do this in this order because
+				// emitting the continue block can invalidate the condition expression.
+				auto initializer = emit_for_loop_initializers(block);
+				auto condition = to_expression(child.condition);
+				auto continue_block = emit_continue_block(block.continue_block);
+				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
 				break;
+			}
 
 			case SPIRBlock::WhileLoop:
 				statement("while (", to_expression(child.condition), ")");
