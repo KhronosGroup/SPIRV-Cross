@@ -18,7 +18,7 @@ Tx mod(Tx x, Ty y)
     return x - y * floor(x / y);
 }
 
-float getB(device const myBlock& myStorage, thread const uint3& gl_GlobalInvocationID)
+float getB(device myBlock& myStorage, thread uint3& gl_GlobalInvocationID)
 {
     return myStorage.b[gl_GlobalInvocationID.x];
 }

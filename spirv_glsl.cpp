@@ -5223,7 +5223,10 @@ void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t in
 	auto &args = func.arguments;
 	uint32_t arg_cnt = uint32_t(args.size());
 	for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++)
+	{
+		assert(args[arg_idx].alias_global_variable);
 		arglist.push_back(to_func_call_arg(args[arg_idx].id));
+	}
 }
 
 string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)

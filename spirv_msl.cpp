@@ -252,7 +252,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 		for (uint32_t arg_id : added_arg_ids)
 		{
 			uint32_t type_id = get<SPIRVariable>(arg_id).basetype;
-			func.add_parameter(type_id, next_id);
+			func.add_parameter(type_id, next_id, true);
 			set<SPIRVariable>(next_id, type_id, StorageClassFunction);
 
 			// Ensure both the existing and new variables have the same name, and the name is valid
@@ -1433,7 +1433,7 @@ string CompilerMSL::get_entry_point_name()
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	auto &type = expression_type(arg.id);
-	bool constref = !type.pointer || arg.write_count == 0;
+	bool constref = !arg.alias_global_variable && (!type.pointer || arg.write_count == 0);
 
 	// TODO: Check if this arg is an uniform pointer
 	bool pointer = type.storage == StorageClassUniformConstant;
@@ -1540,7 +1540,6 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 			return join("bool", type.vecsize);
 		case SPIRType::Char:
 			return join("char", type.vecsize);
-			;
 		case SPIRType::Int:
 			return join((type.width == 16 ? "short" : "int"), type.vecsize);
 		case SPIRType::UInt:
