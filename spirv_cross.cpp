@@ -839,6 +839,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.location = argument;
 		break;
 
+	case DecorationBinding:
+		dec.binding = argument;
+		break;
+
 	case DecorationOffset:
 		dec.offset = argument;
 		break;
@@ -896,6 +900,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.builtin_type;
 	case DecorationLocation:
 		return dec.location;
+	case DecorationBinding:
+		return dec.binding;
 	case DecorationOffset:
 		return dec.offset;
 	case DecorationSpecId:

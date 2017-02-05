@@ -12,7 +12,6 @@ import shutil
 import argparse
 import codecs
 
-METALC = '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/usr/bin/metal'
 
 def parse_stats(stats):
     m = re.search('([0-9]+) work registers', stats)
@@ -64,8 +63,25 @@ def get_shader_stats(shader):
     returned = stdout.decode('utf-8')
     return parse_stats(returned)
 
+def print_msl_compiler_version():
+    try:
+        subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '--version'])
+        print('...are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
+    except OSError as e:
+        if (e.errno != os.errno.ENOENT):    # Ignore xcrun not found error
+            raise
+
 def validate_shader_msl(shader):
-    subprocess.check_call([METALC, '-x', 'metal', '-std=ios-metal1.0', '-Werror', shader])
+    msl_path = reference_path(shader[0], shader[1])
+    try:
+        subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '-x', 'metal', '-std=ios-metal1.2', '-Werror', msl_path])
+        print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
+    except OSError as oe:
+        if (oe.errno != os.errno.ENOENT):   # Ignore xcrun not found error
+            raise
+    except subprocess.CalledProcessError:
+        print('Error compiling Metal shader: ' + msl_path)
+        sys.exit(1)
 
 def cross_compile_msl(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
@@ -76,10 +92,6 @@ def cross_compile_msl(shader):
     spirv_cross_path = './spirv-cross'
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--metal'])
     subprocess.check_call(['spirv-val', spirv_path])
-
-    if os.path.exists(METALC):
-        validate_shader_msl(msl_path)
-
     return (spirv_path, msl_path)
 
 def validate_shader_hlsl(shader):
@@ -260,10 +272,11 @@ def test_shader(stats, shader, update, keep):
 
 def test_shader_msl(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
-    print('Testing MSL shader:', joined_path)
+    print('\nTesting MSL shader:', joined_path)
     spirv, msl = cross_compile_msl(joined_path)
     regression_check(shader, msl, update, keep)
     os.remove(spirv)
+    validate_shader_msl(shader)
 
 def test_shader_hlsl(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
@@ -274,6 +287,7 @@ def test_shader_hlsl(stats, shader, update, keep):
 
 def test_shaders_helper(stats, shader_dir, update, malisc, keep, backend):
     for root, dirs, files in os.walk(os.path.join(shader_dir)):
+        files = [ f for f in files if not f.startswith(".") ]   #ignore system files (esp OSX)
         for i in files:
             path = os.path.join(root, i)
             relpath = os.path.relpath(path, shader_dir)
@@ -317,8 +331,8 @@ def main():
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
-    if os.path.exists(METALC):
-        subprocess.check_call([METALC, '--version'])
+    if args.metal:
+        print_msl_compiler_version()
 
     test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
