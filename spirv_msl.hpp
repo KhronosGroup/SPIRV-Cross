@@ -117,6 +117,8 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 
+	std::string get_argument_address_space(const SPIRVariable &argument);
+
 	void preprocess_op_codes();
 	void emit_custom_functions();
 	void localize_global_variables();
