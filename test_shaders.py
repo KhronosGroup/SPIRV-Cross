@@ -12,6 +12,7 @@ import shutil
 import argparse
 import codecs
 
+force_no_external_validation = False
 
 def parse_stats(stats):
     m = re.search('([0-9]+) work registers', stats)
@@ -276,7 +277,9 @@ def test_shader_msl(stats, shader, update, keep):
     spirv, msl = cross_compile_msl(joined_path)
     regression_check(shader, msl, update, keep)
     os.remove(spirv)
-    validate_shader_msl(shader)
+
+    if not force_no_external_validation:
+        validate_shader_msl(shader)
 
 def test_shader_hlsl(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
@@ -325,6 +328,9 @@ def main():
     parser.add_argument('--hlsl',
             action = 'store_true',
             help = 'Test HLSL backend.')
+    parser.add_argument('--force-no-external-validation',
+            action = 'store_true',
+            help = 'Disable all external validation.')
     args = parser.parse_args()
 
     if not args.folder:
@@ -333,6 +339,9 @@ def main():
 
     if args.metal:
         print_msl_compiler_version()
+
+    global force_no_external_validation
+    force_no_external_validation = args.force_no_external_validation
 
     test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
