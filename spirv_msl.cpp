@@ -19,6 +19,15 @@
 #include <algorithm>
 #include <numeric>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wunused-macros"
+//#pragma clang diagnostic ignored "-Wunreachable-code-return"
+#pragma clang diagnostic ignored "-Wimplicit-fallthrough"
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
@@ -310,7 +319,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	set_decoration(ib_type_id, DecorationBlock);
 
 	uint32_t ib_var_id = next_id++;
-	auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, storage, 0);
+	auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, storage, 0u);
 	var.initializer = next_id++;
 
 	string ib_var_ref;
@@ -976,7 +985,7 @@ string CompilerMSL::to_component_argument(uint32_t id)
 	if (ids[id].get_type() != TypeConstant)
 	{
 		SPIRV_CROSS_THROW("ID " + to_string(id) + " is not an OpConstant.");
-		return "component::x";
+		//return "component::x";
 	}
 
 	uint32_t component_index = get<SPIRConstant>(id).scalar();
@@ -994,7 +1003,7 @@ string CompilerMSL::to_component_argument(uint32_t id)
 	default:
 		SPIRV_CROSS_THROW("The value (" + to_string(component_index) + ") of OpConstant ID " + to_string(id) +
 		                  " is not a valid Component index, which must be one of 0, 1, 2, or 3.");
-		return "component::x";
+		//return "component::x";
 	}
 }
 

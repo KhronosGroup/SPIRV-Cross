@@ -66,6 +66,7 @@ public:
 		// If true, Vulkan GLSL features are used instead of GL-compatible features.
 		// Mostly useful for debugging SPIR-V files.
 		bool vulkan_semantics = false;
+		uint8_t pad0[3];
 
 		enum Precision
 		{
@@ -247,10 +248,12 @@ protected:
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
 	virtual std::string convert_row_major_matrix(std::string exp_str);
 
+	uint32_t pad0;
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
 
 	bool processing_entry_point = false;
+	uint8_t pad1[7];
 
 	// Can be overriden by subclass backends for trivial things which
 	// shouldn't need polymorphism.
@@ -261,6 +264,7 @@ protected:
 		bool double_literal_suffix = true;
 		bool uint32_t_literal_suffix = true;
 		bool long_long_literal_suffix = false;
+		uint32_t pad0;
 		const char *basic_int_type = "int";
 		const char *basic_uint_type = "uint";
 		bool swizzle_is_function = false;
@@ -270,6 +274,7 @@ protected:
 		bool use_initializer_list = false;
 		bool native_row_major_matrix = true;
 		bool use_constructor_splatting = true;
+		uint8_t pad1;
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -380,6 +385,7 @@ protected:
 	std::string legacy_tex_op(const std::string &op, const SPIRType &imgtype);
 
 	uint32_t indent = 0;
+	uint32_t pad2;
 
 	std::unordered_set<uint32_t> emitted_functions;
 
@@ -416,6 +422,8 @@ protected:
 	void register_call_out_argument(uint32_t id);
 	void register_impure_function_call();
 
+	uint32_t pad3;
+
 	// GL_EXT_shader_pixel_local_storage support.
 	std::vector<PlsRemap> pls_inputs;
 	std::vector<PlsRemap> pls_outputs;
@@ -432,6 +440,8 @@ protected:
 	std::string emit_for_loop_initializers(const SPIRBlock &block);
 	bool optimize_read_modify_write(const std::string &lhs, const std::string &rhs);
 	void fixup_image_load_store_access();
+
+	uint64_t pad4;
 };
 }
 

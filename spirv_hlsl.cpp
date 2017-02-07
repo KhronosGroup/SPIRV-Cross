@@ -18,6 +18,13 @@
 #include "GLSL.std.450.h"
 #include <algorithm>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;

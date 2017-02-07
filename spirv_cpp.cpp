@@ -16,6 +16,10 @@
 
 #include "spirv_cpp.hpp"
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;

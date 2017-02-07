@@ -31,6 +31,7 @@ public:
 		uint32_t shader_model = 30; // TODO: map ps_4_0_level_9_0,... somehow
 		bool fixup_clipspace = false;
 		bool flip_vert_y = false;
+		uint8_t pad0[2];
 	};
 
 	CompilerHLSL(std::vector<uint32_t> spirv_)
@@ -68,6 +69,9 @@ private:
 
 	Options options;
 	bool requires_op_fmod = false;
+
+public:
+	uint8_t pad0[7];
 };
 }
 

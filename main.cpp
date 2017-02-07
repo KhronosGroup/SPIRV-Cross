@@ -15,8 +15,8 @@
  */
 
 #include "spirv_cpp.hpp"
-#include "spirv_msl.hpp"
 #include "spirv_hlsl.hpp"
+#include "spirv_msl.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -29,6 +29,11 @@
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)
+#endif
+
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wswitch-enum"
 #endif
 
 using namespace spv;
@@ -54,6 +59,7 @@ struct CLICallbacks
 		callbacks[cli] = func;
 	}
 	unordered_map<string, function<void(CLIParser &)>> callbacks;
+	uint64_t pad0;
 	function<void()> error_handler;
 	function<void(const char *)> default_handler;
 };
@@ -120,7 +126,7 @@ struct CLIParser
 			THROW("Tried to parse uint, but nothing left in arguments");
 		}
 
-		uint32_t val = stoul(*argv);
+		uint32_t val = static_cast<uint32_t>(stoul(*argv));
 		if (val > numeric_limits<uint32_t>::max())
 		{
 			THROW("next_uint() out of range");
@@ -162,8 +168,10 @@ struct CLIParser
 
 	CLICallbacks cbs;
 	int argc;
+	uint32_t pad0;
 	char **argv;
 	bool ended_state = false;
+	uint8_t pad1[15];
 };
 
 static vector<uint32_t> read_spirv_file(const char *path)
@@ -176,11 +184,11 @@ static vector<uint32_t> read_spirv_file(const char *path)
 	}
 
 	fseek(file, 0, SEEK_END);
-	long len = ftell(file) / sizeof(uint32_t);
+	long len = ftell(file) / static_cast<long>(sizeof(uint32_t));
 	rewind(file);
 
-	vector<uint32_t> spirv(len);
-	if (fread(spirv.data(), sizeof(uint32_t), len, file) != size_t(len))
+	vector<uint32_t> spirv(static_cast<size_t>(len));
+	if (fread(spirv.data(), sizeof(uint32_t), static_cast<size_t>(len), file) != size_t(len))
 		spirv.clear();
 
 	fclose(file);
@@ -392,6 +400,7 @@ static void print_spec_constants(const Compiler &compiler)
 struct PLSArg
 {
 	PlsFormat format;
+	uint32_t pad0;
 	string name;
 };
 
@@ -400,6 +409,7 @@ struct Remap
 	string src_name;
 	string dst_name;
 	unsigned components;
+	uint32_t pad0;
 };
 
 struct VariableTypeRemap
@@ -421,6 +431,7 @@ struct CLIArguments
 	bool force_temporary = false;
 	bool flatten_ubo = false;
 	bool fixup = false;
+	uint8_t pad0[5];
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -435,6 +446,7 @@ struct CLIArguments
 	bool vulkan_semantics = false;
 	bool remove_unused = false;
 	bool cfg_analysis = true;
+	uint8_t pad1[6];
 };
 
 static void print_help()
@@ -571,7 +583,7 @@ int main(int argc, char *argv[])
 		string src = parser.next_string();
 		string dst = parser.next_string();
 		uint32_t components = parser.next_uint();
-		args.remaps.push_back({ move(src), move(dst), components });
+		args.remaps.push_back({ move(src), move(dst), components, /* pad */ 0 });
 	});
 
 	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
@@ -583,12 +595,12 @@ int main(int argc, char *argv[])
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
-		args.pls_in.push_back({ move(fmt), move(name) });
+		args.pls_in.push_back({ move(fmt), /* pad */ 0, move(name) });
 	});
 	cbs.add("--pls-out", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
-		args.pls_out.push_back({ move(fmt), move(name) });
+		args.pls_out.push_back({ move(fmt), /* pad */ 0, move(name) });
 	});
 
 	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
