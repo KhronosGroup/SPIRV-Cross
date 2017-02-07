@@ -858,6 +858,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.location = argument;
 		break;
 
+	case DecorationBinding:
+		dec.binding = argument;
+		break;
+
 	case DecorationOffset:
 		dec.offset = argument;
 		break;
@@ -915,6 +919,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.builtin_type;
 	case DecorationLocation:
 		return dec.location;
+	case DecorationBinding:
+		return dec.binding;
 	case DecorationOffset:
 		return dec.offset;
 	case DecorationSpecId:
@@ -2599,7 +2605,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		                  join("SPIRV_Cross_Combined", compiler.to_name(image_id), compiler.to_name(sampler_id)));
 
 		caller.combined_parameters.push_back(param);
-		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u });
+		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true });
 	}
 }
 
