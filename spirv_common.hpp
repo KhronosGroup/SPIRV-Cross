@@ -540,6 +540,8 @@ struct SPIRFunction : IVariant
 		// read and write counts as access to the function arguments
 		// is not local to the function in question.
 		bool alias_global_variable;
+		uint8_t pad0;
+		uint16_t pad1;
 	};
 
 	// When calling a function, and we're remapping separate image samplers,
@@ -581,7 +583,7 @@ struct SPIRFunction : IVariant
 	void add_parameter(uint32_t parameter_type, uint32_t id, bool alias_global_variable = false)
 	{
 		// Arguments are read-only until proven otherwise.
-		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
+		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable, /* pad0 */ 0, /* pad1 */ 0 });
 	}
 
 	bool active = false;

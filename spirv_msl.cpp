@@ -34,7 +34,7 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-static const uint32_t k_unknown_location = ~0;
+static const uint32_t k_unknown_location = ~0u;
 
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_)
     : CompilerGLSL(move(spirv_))
@@ -573,7 +573,7 @@ uint32_t CompilerMSL::get_input_buffer_block_var_id(uint32_t msl_buffer)
 		set_decoration(ib_type_id, DecorationBlock);
 
 		ib_var_id = next_id++;
-		auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, StorageClassInput, 0);
+		auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, StorageClassInput, 0u);
 		var.initializer = next_id++;
 
 		string ib_var_name = stage_in_var_name + convert_to_string(msl_buffer);
@@ -2168,7 +2168,7 @@ void CompilerMSL::MemberSorter::sort()
 	// the members should be reordered, based on builtin and sorting aspect meta info.
 	size_t mbr_cnt = type.member_types.size();
 	vector<uint32_t> mbr_idxs(mbr_cnt);
-	iota(mbr_idxs.begin(), mbr_idxs.end(), 0);          // Fill with consecutive indices
+	iota(mbr_idxs.begin(), mbr_idxs.end(), 0); // Fill with consecutive indices
 	std::sort(mbr_idxs.begin(), mbr_idxs.end(), *this); // Sort member indices based on sorting aspect
 
 	// Move type and meta member info to the order defined by the sorted member indices.

@@ -2605,7 +2605,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		                  join("SPIRV_Cross_Combined", compiler.to_name(image_id), compiler.to_name(sampler_id)));
 
 		caller.combined_parameters.push_back(param);
-		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true });
+		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true, /* pad0 */ 0, /* pad1 */ 0 });
 	}
 }
 

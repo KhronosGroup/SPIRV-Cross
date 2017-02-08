@@ -48,7 +48,7 @@ struct MSLVertexAttr
 	uint32_t msl_stride = 0;
 	bool per_instance = false;
 	bool used_by_shader = false;
-	uint8_t pad0[3];
+	uint8_t pad0[6];
 };
 
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
@@ -182,11 +182,13 @@ protected:
 	uint32_t stage_uniforms_var_id = 0;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
+	uint8_t pad0[6];
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
+	uint64_t pad1;
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
