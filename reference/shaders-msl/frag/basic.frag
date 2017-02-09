@@ -17,7 +17,7 @@ struct main0_out
 fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> uTex [[texture(0)]], sampler uTexSmplr [[sampler(0)]])
 {
     main0_out out = {};
-    out.FragColor = in.vColor * uTex.sample(uTexSmplr, in.vTex.xy);
+    out.FragColor = in.vColor * uTex.sample(uTexSmplr, in.vTex);
     return out;
 }
 
