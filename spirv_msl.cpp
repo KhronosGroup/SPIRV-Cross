@@ -966,20 +966,36 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	// Texture coordinates
 	bool forward = should_forward(coord);
 	auto coord_expr = to_enclosed_expression(coord);
+	auto &coord_type = expression_type(coord);
+
 	string tex_coords = coord_expr;
 	string face_expr;
 	const char *alt_coord = "";
 
 	switch (imgtype.image.dim)
 	{
+
 	case Dim1D:
-		tex_coords = coord_expr + ".x";
-		remove_duplicate_swizzle(tex_coords);
+		if (coord_type.vecsize > 1)
+		{
+			tex_coords += ".x";
+			alt_coord = ".y";
+		}
 
 		if (is_fetch)
 			tex_coords = "uint(" + tex_coords + ")";
 
-		alt_coord = ".y";
+		break;
+
+	case DimBuffer:
+		if (coord_type.vecsize > 1)
+		{
+			tex_coords += ".x";
+			alt_coord = ".y";
+		}
+
+		if (is_fetch)
+			tex_coords = "uint2(" + tex_coords + ", 0)"; // Metal textures are 2D
 
 		break;
 
@@ -987,9 +1003,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		if (msl_config.flip_frag_y)
 		{
 			string coord_x = coord_expr + ".x";
-			remove_duplicate_swizzle(coord_x);
 			string coord_y = coord_expr + ".y";
-			remove_duplicate_swizzle(coord_y);
 			if (is_fetch)
 				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
 			else
@@ -997,8 +1011,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		}
 		else
 		{
-			tex_coords = coord_expr + ".xy";
-			remove_duplicate_swizzle(tex_coords);
+			if (coord_type.vecsize > 2)
+				tex_coords += ".xy";
 
 			if (is_fetch)
 				tex_coords = "uint2(" + tex_coords + ")";
@@ -1012,11 +1026,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		if (msl_config.flip_frag_y)
 		{
 			string coord_x = coord_expr + ".x";
-			remove_duplicate_swizzle(coord_x);
 			string coord_y = coord_expr + ".y";
-			remove_duplicate_swizzle(coord_y);
 			string coord_z = coord_expr + ".z";
-			remove_duplicate_swizzle(coord_z);
 			if (is_fetch)
 				tex_coords = "uint3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
 			else
@@ -1024,8 +1035,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		}
 		else
 		{
-			tex_coords = coord_expr + ".xyz";
-			remove_duplicate_swizzle(tex_coords);
+			if (coord_type.vecsize > 3)
+				tex_coords += ".xyz";
 
 			if (is_fetch)
 				tex_coords = "uint3(" + tex_coords + ")";
@@ -1039,11 +1050,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		if (msl_config.flip_frag_y)
 		{
 			string coord_x = coord_expr + ".x";
-			remove_duplicate_swizzle(coord_x);
 			string coord_y = coord_expr + ".y";
-			remove_duplicate_swizzle(coord_y);
 			string coord_z = coord_expr + ".z";
-			remove_duplicate_swizzle(coord_z);
 
 			if (is_fetch)
 			{
@@ -1057,17 +1065,13 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		{
 			if (is_fetch)
 			{
-				tex_coords = coord_expr + ".xy";
-				remove_duplicate_swizzle(tex_coords);
-				tex_coords = "uint2(" + tex_coords + ")";
-
+				tex_coords = "uint2(" + tex_coords + ".xy)";
 				face_expr = coord_expr + ".z";
-				remove_duplicate_swizzle(face_expr);
 			}
 			else
 			{
-				tex_coords = coord_expr + ".xyz";
-				remove_duplicate_swizzle(tex_coords);
+				if (coord_type.vecsize > 3)
+					tex_coords += ".xyz";
 			}
 		}
 
@@ -1081,11 +1085,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	// If projection, use alt coord as divisor
 	if (is_proj)
-	{
-		string divisor = coord_expr + alt_coord;
-		remove_duplicate_swizzle(divisor);
-		tex_coords += " / " + divisor;
-	}
+		tex_coords += " / " + coord_expr + alt_coord;
 
 	if (!farg_str.empty())
 		farg_str += ", ";
@@ -1097,11 +1097,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	// If array, use alt coord
 	if (imgtype.image.arrayed)
-	{
-		string array_index = coord_expr + alt_coord;
-		remove_duplicate_swizzle(array_index);
-		farg_str += ", uint(" + array_index + ")";
-	}
+		farg_str += ", uint(" + coord_expr + alt_coord + ")";
 
 	// Depth compare reference value
 	if (dref)
@@ -1175,15 +1171,13 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			if (msl_config.flip_frag_y)
 			{
 				string coord_x = offset_expr + ".x";
-				remove_duplicate_swizzle(coord_x);
 				string coord_y = offset_expr + ".y";
-				remove_duplicate_swizzle(coord_y);
 				offset_expr = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
 			}
 			else
 			{
-				offset_expr = offset_expr + ".xy";
-				remove_duplicate_swizzle(offset_expr);
+				if (coord_type.vecsize > 2)
+					offset_expr += ".xy";
 			}
 
 			farg_str += ", " + offset_expr;
@@ -1193,17 +1187,14 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			if (msl_config.flip_frag_y)
 			{
 				string coord_x = offset_expr + ".x";
-				remove_duplicate_swizzle(coord_x);
 				string coord_y = offset_expr + ".y";
-				remove_duplicate_swizzle(coord_y);
 				string coord_z = offset_expr + ".z";
-				remove_duplicate_swizzle(coord_z);
 				offset_expr = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
 			}
 			else
 			{
-				offset_expr = offset_expr + ".xyz";
-				remove_duplicate_swizzle(offset_expr);
+				if (coord_type.vecsize > 3)
+					offset_expr += ".xyz";
 			}
 
 			farg_str += ", " + offset_expr;
@@ -2159,7 +2150,7 @@ void CompilerMSL::MemberSorter::sort()
 	// the members should be reordered, based on builtin and sorting aspect meta info.
 	size_t mbr_cnt = type.member_types.size();
 	vector<uint32_t> mbr_idxs(mbr_cnt);
-	iota(mbr_idxs.begin(), mbr_idxs.end(), 0);          // Fill with consecutive indices
+	iota(mbr_idxs.begin(), mbr_idxs.end(), 0); // Fill with consecutive indices
 	std::sort(mbr_idxs.begin(), mbr_idxs.end(), *this); // Sort member indices based on sorting aspect
 
 	// Move type and meta member info to the order defined by the sorted member indices.
