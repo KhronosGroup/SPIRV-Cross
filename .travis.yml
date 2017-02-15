@@ -2,6 +2,7 @@ language: cpp
 os:
   - linux
   - osx
+osx_image: xcode8.2
 
 # Use Ubuntu 14.04 LTS (Trusty) as the Linux testing environment.
 sudo: required
@@ -24,5 +25,5 @@ script:
   - make -j2
   - PATH=./glslang/StandAlone:./SPIRV-Tools/tools:$PATH
   - ./test_shaders.py shaders
-  - ./test_shaders.py --metal shaders-msl --force-no-external-validation
+  - ./test_shaders.py --metal shaders-msl
   - ./test_shaders.py --hlsl shaders-hlsl
