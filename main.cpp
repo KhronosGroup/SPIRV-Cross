@@ -43,7 +43,7 @@ using namespace std;
 		exit(1);                   \
 	} while (0)
 #else
-#define THROW(x) runtime_error(x)
+#define THROW(x) throw runtime_error(x)
 #endif
 
 struct CLIParser;
