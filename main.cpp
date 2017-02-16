@@ -414,8 +414,10 @@ struct CLIArguments
 	const char *output = nullptr;
 	const char *cpp_interface_name = nullptr;
 	uint32_t version = 0;
+	uint32_t shader_model = 0;
 	bool es = false;
 	bool set_version = false;
+	bool set_shader_model = false;
 	bool set_es = false;
 	bool dump_resources = false;
 	bool force_temporary = false;
@@ -442,7 +444,7 @@ static void print_help()
 	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
 	                "[--version <GLSL "
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
-	                "[--metal] [--hlsl] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
+	                "[--metal] [--hlsl] [--shader-model] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
@@ -590,6 +592,10 @@ int main(int argc, char *argv[])
 		auto name = parser.next_string();
 		args.pls_out.push_back({ move(fmt), move(name) });
 	});
+	cbs.add("--shader-model", [&args](CLIParser &parser) {
+		args.shader_model = parser.next_uint();
+		args.set_shader_model = true;
+	});
 
 	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
 
@@ -664,6 +670,24 @@ int main(int argc, char *argv[])
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.cfg_analysis = args.cfg_analysis;
 	compiler->set_options(opts);
+
+	// Set HLSL specific options.
+	if (args.hlsl)
+	{
+		auto *hlsl = static_cast<CompilerHLSL *>(compiler.get());
+		auto hlsl_opts = hlsl->get_options();
+		if (args.set_shader_model)
+		{
+			if (args.shader_model < 30)
+			{
+				fprintf(stderr, "Shader model earlier than 30 (3.0) not supported.\n");
+				return EXIT_FAILURE;
+			}
+
+			hlsl_opts.shader_model = args.shader_model;
+		}
+		hlsl->set_options(hlsl_opts);
+	}
 
 	ShaderResources res;
 	if (args.remove_unused)
