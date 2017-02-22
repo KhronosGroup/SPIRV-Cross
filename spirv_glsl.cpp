@@ -24,6 +24,32 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+// Sanitizes underscores for GLSL where multiple underscores in a row are not allowed.
+static string sanitize_underscores(const string &str)
+{
+	string res;
+	res.reserve(str.size());
+
+	bool last_underscore = false;
+	for (auto c : str)
+	{
+		if (c == '_')
+		{
+			if (last_underscore)
+				continue;
+
+			res += c;
+			last_underscore = true;
+		}
+		else
+		{
+			res += c;
+			last_underscore = false;
+		}
+	}
+	return res;
+}
+
 // Returns true if an arithmetic operation does not change behavior depending on signedness.
 static bool opcode_is_sign_invariant(Op opcode)
 {
@@ -1112,6 +1138,7 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
 }
 
+
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
 	auto &execution = get_entry_point();
@@ -1165,8 +1192,59 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 	}
 	else
 	{
-		add_resource_name(var.self);
-		statement(layout_for_variable(var), qual, variable_decl(var), ";");
+		// ESSL earlier than 310 and GLSL earlier than 150 did not support
+		// I/O variables which are struct types.
+		// To support this, flatten the struct into separate varyings instead.
+		if (type.basetype == SPIRType::Struct &&
+			((options.es && options.version < 310) || (!options.es && options.version < 150)))
+		{
+			if (!type.array.empty())
+				SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
+
+			// Block names should never alias.
+			auto block_name = to_name(type.self, false);
+
+			// Shaders never use the block by interface name, so we don't
+			// have to track this other than updating name caches.
+			if (resource_names.find(block_name) != end(resource_names))
+				block_name = get_fallback_name(type.self);
+			else
+				resource_names.insert(block_name);
+
+			// Emit the members as if they are part of a block to get all qualifiers.
+			meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
+
+			uint32_t i = 0;
+			for (auto &member : type.member_types)
+			{
+				add_member_name(type, i);
+				auto &membertype = get<SPIRType>(member);
+
+				if (membertype.basetype == SPIRType::Struct)
+					SPIRV_CROSS_THROW("Cannot flatten struct inside structs in I/O variables.");
+
+				// Pass in the varying qualifier here so it will appear in the correct declaration order.
+				// Replace member name while emitting it so it encodes both struct name and member name.
+				// Sanitize underscores because joining the two identifiers might create more than 1 underscore in a row,
+				// which is not allowed.
+				auto member_name = get_member_name(type.self, i);
+				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+				statement(member_decl(type, membertype, i, qual), ";");
+				// Restore member name.
+				set_member_name(type.self, i, member_name);
+				i++;
+			}
+
+			meta[type.self].decoration.decoration_flags &= ~(1ull << DecorationBlock);
+
+			// Treat this variable as flattened from now on.
+			flattened_structs.insert(var.self);
+		}
+		else
+		{
+			add_resource_name(var.self);
+			statement(layout_for_variable(var), qual, variable_decl(var), ";");
+		}
 	}
 }
 
@@ -3328,6 +3406,31 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 }
 
+void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
+{
+	// We're trying to store a structure which has been flattened.
+	// Need to copy members one by one.
+	auto rhs = to_expression(value);
+
+	// Store result locally.
+	// Since we're declaring a variable potentially multiple times here,
+	// store the variable in an isolated scope.
+	begin_scope();
+	statement(variable_decl(var), " = ", rhs, ";");
+
+	auto &type = get<SPIRType>(var.basetype);
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+	{
+		// Flatten the varyings.
+		// Apply name transformation for flattened I/O blocks.
+		auto chain = access_chain(var.self, &i, 1, true, true).substr(1);
+		auto lhs = sanitize_underscores(join(to_name(type.self), "_", chain));
+		rhs = access_chain(var.self, &i, 1, true);
+		statement(lhs, " = ", rhs, ";");
+	}
+	end_scope();
+}
+
 std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
                                                  const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
                                                  bool need_transpose)
@@ -3983,6 +4086,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			var->static_expression = ops[1];
 		else if (var && var->loop_variable && !var->loop_variable_enable)
 			var->static_expression = ops[1];
+		else if (var && flattened_structs.count(ops[0]))
+			store_flattened_struct(*var, ops[1]);
 		else
 		{
 			auto lhs = to_expression(ops[0]);
@@ -5323,7 +5428,8 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
-string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index)
+string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index,
+                                 const string &qualifier)
 {
 	uint64_t memberflags = 0;
 	auto &memb = meta[type.self].members;
@@ -5337,7 +5443,7 @@ string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertyp
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
 	return join(layout_for_member(type, index), flags_to_precision_qualifiers_glsl(membertype, memberflags), qualifiers,
-	            variable_decl(membertype, to_member_name(type, index)));
+	            qualifier, variable_decl(membertype, to_member_name(type, index)));
 }
 
 const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags)

@@ -159,7 +159,8 @@ protected:
 	virtual void emit_texture_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type);
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
-	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member);
+	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member,
+	                                const std::string &qualifier = "");
 	virtual std::string image_type_glsl(const SPIRType &type);
 	virtual std::string constant_expression(const SPIRConstant &c);
 	std::string constant_op_expression(const SPIRConstantOp &cop);
@@ -384,6 +385,9 @@ protected:
 	std::unordered_set<uint32_t> emitted_functions;
 
 	std::unordered_set<uint32_t> flattened_buffer_blocks;
+	std::unordered_set<uint32_t> flattened_structs;
+
+	void store_flattened_struct(SPIRVariable &var, uint32_t value);
 
 	// Usage tracking. If a temporary is used more than once, use the temporary instead to
 	// avoid AST explosion when SPIRV is generated with pure SSA and doesn't write stuff to variables.
