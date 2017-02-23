@@ -3259,8 +3259,8 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 	}
 }
 
-string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-                                  bool chain_only, bool *need_transpose)
+string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
+                                           bool chain_only, bool *need_transpose)
 {
 	string expr;
 	if (!chain_only)
@@ -3400,9 +3400,15 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 
 		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, need_transpose);
 	}
+	else if (flattened_structs.count(base) && count > 0)
+	{
+		auto chain = access_chain_internal(base, indices, count, false, true).substr(1);
+		auto &type = get<SPIRType>(get<SPIRVariable>(base).basetype);
+		return sanitize_underscores(join(to_name(type.self), "_", chain));
+	}
 	else
 	{
-		return access_chain(base, indices, count, false, false, out_need_transpose);
+		return access_chain_internal(base, indices, count, false, false, out_need_transpose);
 	}
 }
 
@@ -3423,9 +3429,9 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 	{
 		// Flatten the varyings.
 		// Apply name transformation for flattened I/O blocks.
-		auto chain = access_chain(var.self, &i, 1, true, true).substr(1);
-		auto lhs = sanitize_underscores(join(to_name(type.self), "_", chain));
-		rhs = access_chain(var.self, &i, 1, true);
+
+		auto lhs = sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, i)));
+		rhs = access_chain_internal(var.self, &i, 1, true);
 		statement(lhs, " = ", rhs, ";");
 	}
 	end_scope();
@@ -4087,7 +4093,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (var && var->loop_variable && !var->loop_variable_enable)
 			var->static_expression = ops[1];
 		else if (var && flattened_structs.count(ops[0]))
+		{
 			store_flattened_struct(*var, ops[1]);
+			register_write(ops[0]);
+		}
 		else
 		{
 			auto lhs = to_expression(ops[0]);
@@ -4113,7 +4122,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		auto e = access_chain(ops[2], &ops[3], length - 3, true);
+		auto e = access_chain_internal(ops[2], &ops[3], length - 3, true);
 		set<SPIRExpression>(id, e + ".length()", result_type, true);
 		break;
 	}
@@ -4284,7 +4293,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Make a copy, then use access chain to store the variable.
 		statement(declare_temporary(result_type, id), to_expression(vec), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
-		auto chain = access_chain(id, &index, 1, false);
+		auto chain = access_chain_internal(id, &index, 1, false);
 		statement(chain, " = ", to_expression(comp), ";");
 		break;
 	}
@@ -4294,7 +4303,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto expr = access_chain(ops[2], &ops[3], 1, false);
+		auto expr = access_chain_internal(ops[2], &ops[3], 1, false);
 		emit_op(result_type, id, expr, should_forward(ops[2]));
 		break;
 	}
@@ -4325,13 +4334,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			//
 			// Including the base will prevent this and would trigger multiple reads
 			// from expression causing it to be forced to an actual temporary in GLSL.
-			auto expr = access_chain(ops[2], &ops[3], length, true, true);
+			auto expr = access_chain_internal(ops[2], &ops[3], length, true, true);
 			auto &e = emit_op(result_type, id, expr, true, !expression_is_forwarded(ops[2]));
 			e.base_expression = ops[2];
 		}
 		else
 		{
-			auto expr = access_chain(ops[2], &ops[3], length, true);
+			auto expr = access_chain_internal(ops[2], &ops[3], length, true);
 			emit_op(result_type, id, expr, should_forward(ops[2]), !expression_is_forwarded(ops[2]));
 		}
 		break;
@@ -4354,12 +4363,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// Make a copy, then use access chain to store the variable.
 			statement(declare_temporary(result_type, id), to_expression(composite), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
-			auto chain = access_chain(id, elems, length, true);
+			auto chain = access_chain_internal(id, elems, length, true);
 			statement(chain, " = ", to_expression(obj), ";");
 		}
 		else
 		{
-			auto chain = access_chain(composite, elems, length, true);
+			auto chain = access_chain_internal(composite, elems, length, true);
 			statement(chain, " = ", to_expression(obj), ";");
 			set<SPIRExpression>(id, to_expression(composite), result_type, true);
 
