@@ -1138,7 +1138,6 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
 }
 
-
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
 	auto &execution = get_entry_point();
@@ -1196,7 +1195,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		// I/O variables which are struct types.
 		// To support this, flatten the struct into separate varyings instead.
 		if (type.basetype == SPIRType::Struct &&
-			((options.es && options.version < 310) || (!options.es && options.version < 150)))
+		    ((options.es && options.version < 310) || (!options.es && options.version < 150)))
 		{
 			if (!type.array.empty())
 				SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
@@ -3263,8 +3262,8 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 	}
 }
 
-string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-                                           bool chain_only, bool *need_transpose)
+string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
+                                           bool index_is_literal, bool chain_only, bool *need_transpose)
 {
 	string expr;
 	if (!chain_only)

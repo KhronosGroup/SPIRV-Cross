@@ -444,7 +444,8 @@ static void print_help()
 	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
 	                "[--version <GLSL "
 	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
-	                "[--metal] [--hlsl] [--shader-model] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
+	                "[--metal] [--hlsl] [--shader-model] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] "
+	                "[--iterations iter] "
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
