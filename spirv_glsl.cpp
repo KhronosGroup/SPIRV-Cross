@@ -1760,6 +1760,10 @@ string CompilerGLSL::to_expression(uint32_t id)
 			var.deferred_declaration = false;
 			return variable_decl(var);
 		}
+		else if (flattened_structs.count(id))
+		{
+			return load_flattened_struct(var);
+		}
 		else
 		{
 			auto &dec = meta[var.self].decoration;
@@ -3386,6 +3390,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	return expr;
 }
 
+string CompilerGLSL::to_flattened_struct_member(const SPIRType &type, uint32_t index)
+{
+	return sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, index)));
+}
+
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
                                   bool *out_need_transpose)
 {
@@ -3404,12 +3413,33 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	{
 		auto chain = access_chain_internal(base, indices, count, false, true).substr(1);
 		auto &type = get<SPIRType>(get<SPIRVariable>(base).basetype);
+		if (out_need_transpose)
+			*out_need_transpose = false;
 		return sanitize_underscores(join(to_name(type.self), "_", chain));
 	}
 	else
 	{
 		return access_chain_internal(base, indices, count, false, false, out_need_transpose);
 	}
+}
+
+string CompilerGLSL::load_flattened_struct(SPIRVariable &var)
+{
+	auto expr = type_to_glsl_constructor(get<SPIRType>(var.basetype));
+	expr += '(';
+
+	auto &type = get<SPIRType>(var.basetype);
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+	{
+		if (i)
+			expr += ", ";
+
+		// Flatten the varyings.
+		// Apply name transformation for flattened I/O blocks.
+		expr += to_flattened_struct_member(type, i);
+	}
+	expr += ')';
+	return expr;
 }
 
 void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
@@ -3431,7 +3461,7 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 		// Apply name transformation for flattened I/O blocks.
 
 		auto lhs = sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, i)));
-		rhs = access_chain_internal(var.self, &i, 1, true);
+		rhs = join(to_name(var.self), ".", to_member_name(type, i));
 		statement(lhs, " = ", rhs, ";");
 	}
 	end_scope();

@@ -17,7 +17,17 @@ void main()
    // Write whole struct again, checks for scoping.
    vout = s;
 
+   // Read it back.
+   Output tmp = vout;
+
    // Write elements individually.
-   vout.a = s.a;
-   vout.b = s.b;
+   vout.a = tmp.a;
+   vout.b = tmp.b;
+
+   // Write individual elements.
+   vout.a.x = 1.0;
+   vout.b.y = 1.0;
+
+   // Read individual elements.
+   float c = vout.a.x;
 }

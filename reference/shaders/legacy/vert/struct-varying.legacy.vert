@@ -22,7 +22,11 @@ void main()
         Output_a = vout.a;
         Output_b = vout.b;
     }
-    Output_a = s.a;
-    Output_b = s.b;
+    Output tmp = Output(Output_a, Output_b);
+    Output_a = tmp.a;
+    Output_b = tmp.b;
+    Output_a.x = 1.0;
+    Output_b.y = 1.0;
+    float c = Output_a.x;
 }
 
