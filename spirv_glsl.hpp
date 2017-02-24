@@ -159,7 +159,8 @@ protected:
 	virtual void emit_texture_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type);
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
-	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member);
+	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member,
+	                                const std::string &qualifier = "");
 	virtual std::string image_type_glsl(const SPIRType &type);
 	virtual std::string constant_expression(const SPIRConstant &c);
 	std::string constant_op_expression(const SPIRConstantOp &cop);
@@ -238,6 +239,7 @@ protected:
 	std::string to_array_size(const SPIRType &type, uint32_t index);
 	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
 	std::string variable_decl(const SPIRVariable &variable);
+	std::string variable_decl_function_local(SPIRVariable &variable);
 
 	void add_local_variable_name(uint32_t id);
 	void add_resource_name(uint32_t id);
@@ -315,8 +317,8 @@ protected:
 	bool expression_is_forwarded(uint32_t id);
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
-	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-	                         bool chain_only = false, bool *need_transpose = nullptr);
+	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
+	                                  bool chain_only = false, bool *need_transpose = nullptr);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
 	                         bool *need_transpose = nullptr);
 
@@ -348,6 +350,7 @@ protected:
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	std::string to_qualifiers_glsl(uint32_t id);
 	const char *to_precision_qualifiers_glsl(uint32_t id);
+	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
 	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags);
 	const char *format_to_glsl(spv::ImageFormat format);
 	std::string layout_for_member(const SPIRType &type, uint32_t index);
@@ -384,6 +387,11 @@ protected:
 	std::unordered_set<uint32_t> emitted_functions;
 
 	std::unordered_set<uint32_t> flattened_buffer_blocks;
+	std::unordered_set<uint32_t> flattened_structs;
+
+	std::string load_flattened_struct(SPIRVariable &var);
+	std::string to_flattened_struct_member(const SPIRType &type, uint32_t index);
+	void store_flattened_struct(SPIRVariable &var, uint32_t value);
 
 	// Usage tracking. If a temporary is used more than once, use the temporary instead to
 	// avoid AST explosion when SPIRV is generated with pure SSA and doesn't write stuff to variables.

@@ -1305,9 +1305,10 @@ void CompilerMSL::emit_fixup()
 }
 
 // Returns a declaration for a structure member.
-string CompilerMSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index)
+string CompilerMSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index,
+                                const string &qualifier)
 {
-	return join(type_to_glsl(membertype), " ", to_member_name(type, index), type_to_array_glsl(membertype),
+	return join(type_to_glsl(membertype), " ", qualifier, to_member_name(type, index), type_to_array_glsl(membertype),
 	            member_attribute_qualifier(type, index));
 }
 

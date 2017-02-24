@@ -14,8 +14,8 @@ layout(binding = 1, std140) uniform UBO
 
 layout(binding = 0) uniform mediump sampler2D uHeightmapDisplacement;
 
-in patch vec2 vOutPatchPosBase;
-in patch vec4 vPatchLods;
+patch in vec2 vOutPatchPosBase;
+patch in vec4 vPatchLods;
 out vec4 vGradNormalTex;
 out vec3 vWorld;
 
