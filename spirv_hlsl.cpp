@@ -165,6 +165,19 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	}
 }
 
+const char *CompilerHLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
+{
+	// Input and output variables are handled specially in HLSL backend.
+	// The variables are declared as global, private variables, and do not need any qualifiers.
+	if (var.storage == StorageClassUniformConstant || var.storage == StorageClassUniform ||
+	    var.storage == StorageClassPushConstant)
+	{
+		return "uniform ";
+	}
+
+	return "";
+}
+
 void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number, bool builtins)
 {
 	auto &execution = get_entry_point();
@@ -897,7 +910,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
-	statement("uniform ", variable_decl(var), ";");
+	statement(variable_decl(var), ";");
 }
 
 void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)

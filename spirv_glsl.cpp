@@ -3466,12 +3466,7 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 	// Since we're declaring a variable potentially multiple times here,
 	// store the variable in an isolated scope.
 	begin_scope();
-
-	// Emit variable without storage qualifiers because it's a local variable here.
-	auto old_storage = var.storage;
-	var.storage = StorageClassFunction;
-	statement(variable_decl(var), " = ", rhs, ";");
-	var.storage = old_storage;
+	statement(variable_decl_function_local(var), " = ", rhs, ";");
 
 	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
@@ -3828,12 +3823,25 @@ void CompilerGLSL::register_call_out_argument(uint32_t id)
 		flush_variable_declaration(var->self);
 }
 
+string CompilerGLSL::variable_decl_function_local(SPIRVariable &var)
+{
+	// These variables are always function local,
+	// so make sure we emit the variable without storage qualifiers.
+	// Some backends will inject custom variables locally in a function
+	// with a storage qualifier which is not function-local.
+	auto old_storage = var.storage;
+	var.storage = StorageClassFunction;
+	auto expr = variable_decl(var);
+	var.storage = old_storage;
+	return expr;
+}
+
 void CompilerGLSL::flush_variable_declaration(uint32_t id)
 {
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->deferred_declaration)
 	{
-		statement(variable_decl(*var), ";");
+		statement(variable_decl_function_local(*var), ";");
 		var->deferred_declaration = false;
 	}
 }
@@ -6099,7 +6107,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 			add_local_variable_name(var.self);
 
 			if (var.initializer)
-				statement(variable_decl(var), ";");
+				statement(variable_decl_function_local(var), ";");
 			else
 			{
 				// Don't declare variable until first use to declutter the GLSL output quite a lot.

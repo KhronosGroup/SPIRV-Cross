@@ -66,6 +66,8 @@ private:
 	void emit_push_constant_block(const SPIRVariable &var) override;
 	void emit_uniform(const SPIRVariable &var) override;
 
+	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
+
 	Options options;
 	bool requires_op_fmod = false;
 };
