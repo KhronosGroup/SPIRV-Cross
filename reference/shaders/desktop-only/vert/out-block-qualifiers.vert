@@ -8,9 +8,9 @@ out VertexData
     layout(location = 3) float i;
 } vout;
 
-layout(location = 4) out flat float f;
-layout(location = 5) out centroid vec4 g;
-layout(location = 6) out flat int h;
+layout(location = 4) flat out float f;
+layout(location = 5) centroid out vec4 g;
+layout(location = 6) flat out int h;
 layout(location = 7) out float i;
 
 void main()

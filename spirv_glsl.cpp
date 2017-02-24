@@ -1138,21 +1138,36 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 		SPIRV_CROSS_THROW("All basic types in a flattened block must be the same.");
 }
 
-void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
+const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 {
 	auto &execution = get_entry_point();
+
+	if (var.storage == StorageClassInput || var.storage == StorageClassOutput)
+	{
+		if (is_legacy() && execution.model == ExecutionModelVertex)
+			return var.storage == StorageClassInput ? "attribute " : "varying ";
+		else if (is_legacy() && execution.model == ExecutionModelFragment)
+			return "varying "; // Fragment outputs are renamed so they never hit this case.
+		else
+			return var.storage == StorageClassInput ? "in " : "out ";
+	}
+	else if (var.storage == StorageClassUniformConstant || var.storage == StorageClassUniform ||
+	         var.storage == StorageClassPushConstant)
+	{
+		return "uniform ";
+	}
+
+	return "";
+}
+
+void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
+{
 	auto &type = get<SPIRType>(var.basetype);
 
 	// Either make it plain in/out or in/out blocks depending on what shader is doing ...
 	bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
 
-	const char *qual = nullptr;
-	if (is_legacy() && execution.model == ExecutionModelVertex)
-		qual = var.storage == StorageClassInput ? "attribute " : "varying ";
-	else if (is_legacy() && execution.model == ExecutionModelFragment)
-		qual = "varying "; // Fragment outputs are renamed so they never hit this case.
-	else
-		qual = var.storage == StorageClassInput ? "in " : "out ";
+	const char *qual = to_storage_qualifiers_glsl(var);
 
 	if (block)
 	{
@@ -1242,7 +1257,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		else
 		{
 			add_resource_name(var.self);
-			statement(layout_for_variable(var), qual, variable_decl(var), ";");
+			statement(layout_for_variable(var), variable_decl(var), ";");
 		}
 	}
 }
@@ -1259,7 +1274,7 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	}
 
 	add_resource_name(var.self);
-	statement(layout_for_variable(var), "uniform ", variable_decl(var), ";");
+	statement(layout_for_variable(var), variable_decl(var), ";");
 }
 
 void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
@@ -3451,7 +3466,12 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 	// Since we're declaring a variable potentially multiple times here,
 	// store the variable in an isolated scope.
 	begin_scope();
+
+	// Emit variable without storage qualifiers because it's a local variable here.
+	auto old_storage = var.storage;
+	var.storage = StorageClassFunction;
 	statement(variable_decl(var), " = ", rhs, ";");
+	var.storage = old_storage;
 
 	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
@@ -5480,8 +5500,9 @@ string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertyp
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
-	return join(layout_for_member(type, index), flags_to_precision_qualifiers_glsl(membertype, memberflags), qualifiers,
-	            qualifier, variable_decl(membertype, to_member_name(type, index)));
+	return join(layout_for_member(type, index), qualifiers, qualifier,
+	            flags_to_precision_qualifiers_glsl(membertype, memberflags),
+	            variable_decl(membertype, to_member_name(type, index)));
 }
 
 const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags)
@@ -5542,9 +5563,12 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 	if (var && var->storage == StorageClassWorkgroup && !backend.shared_is_implied)
 		res += "shared ";
 
-	res += to_precision_qualifiers_glsl(id);
 	res += to_interpolation_qualifiers(flags);
+	if (var)
+		res += to_storage_qualifiers_glsl(*var);
+	res += to_precision_qualifiers_glsl(id);
 	auto &type = expression_type(id);
+
 	if (type.image.dim != DimSubpassData && type.image.sampled == 2)
 	{
 		if (flags & (1ull << DecorationNonWritable))
