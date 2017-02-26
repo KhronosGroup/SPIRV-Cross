@@ -1594,7 +1594,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			auto &type = get<SPIRType>(var.basetype);
 
 			if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-			     var.storage == StorageClassPushConstant))
+			     var.storage == StorageClassPushConstant) && !is_hidden_variable(var))
 			{
 				switch (type.basetype)
 				{
