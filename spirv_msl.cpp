@@ -623,6 +623,13 @@ MSLStructMemberKey CompilerMSL::get_struct_member_key(uint32_t type_id, uint32_t
 	return k;
 }
 
+// Converts the format of the current expression from packed to unpacked,
+// by wrapping the expression in a constructor of the appropriate type.
+string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type)
+{
+	return join(type_to_glsl(type), "(", expr_str, ")");
+}
+
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
@@ -1308,7 +1315,7 @@ void CompilerMSL::emit_stuct_member(const SPIRType &type, const uint32_t member_
 		statement("char pad", to_string(index), "[", to_string(pad_len), "];");
 
 	// If this member is packed, mark it as so.
-	string pack_pfx = has_member_decoration(type.self, index, DecorationCPacked) ? "packed_" : "";
+	string pack_pfx = member_is_packed_type(type, index) ? "packed_" : "";
 
 	statement(pack_pfx, type_to_glsl(membertype), " ", qualifier, to_member_name(type, index),
 	          type_to_array_glsl(membertype), member_attribute_qualifier(type, index), ";");

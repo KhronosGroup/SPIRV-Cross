@@ -1646,6 +1646,15 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 	force_recompile = true;
 }
 
+// Converts the format of the current expression from packed to unpacked,
+// by wrapping the expression in a constructor of the appropriate type.
+// GLSL does not support packed formats, so simply return the expression.
+// Subclasses that do will override
+string CompilerGLSL::unpack_expression_type(string expr_str, const SPIRType &)
+{
+	return expr_str;
+}
+
 // Sometimes we proactively enclosed an expression where it turns out we might have not needed it after all.
 void CompilerGLSL::strip_enclosed_expression(string &expr)
 {
@@ -3337,6 +3346,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += ".";
 				expr += to_member_name(*type, index);
 			}
+
+			if (member_is_packed_type(*type, index))
+			{
+				auto &membertype = get<SPIRType>(type->member_types[index]);
+				expr = unpack_expression_type(expr, membertype);
+			}
+
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
 		}
@@ -5428,7 +5444,7 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 	}
 }
 
-// Checks whether the member is a row_major matrix that requires conversion before use
+// Checks whether the ID is a row_major matrix that requires conversion before use
 bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 {
 	// Natively supported row-major matrices do not need to be converted.
@@ -5469,6 +5485,13 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 		SPIRV_CROSS_THROW("Row-major matrices must be square on this platform.");
 
 	return true;
+}
+
+// Checks whether the member is in packed data type, that might need to be unpacked.
+// GLSL does not define packed data types, but certain subclasses do.
+bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index)
+{
+	return has_member_decoration(type.self, index, DecorationCPacked);
 }
 
 // Wraps the expression string in a function call that converts the

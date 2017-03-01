@@ -126,6 +126,7 @@ protected:
 	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
+	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
 
 	std::string get_argument_address_space(const SPIRVariable &argument);
 
