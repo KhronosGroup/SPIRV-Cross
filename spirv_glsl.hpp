@@ -159,8 +159,8 @@ protected:
 	virtual void emit_texture_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type);
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
-	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member,
-	                                const std::string &qualifier = "");
+	virtual void emit_stuct_member(const SPIRType &type, const uint32_t member_type_id, uint32_t index,
+	                               const std::string &qualifier = "");
 	virtual std::string image_type_glsl(const SPIRType &type);
 	virtual std::string constant_expression(const SPIRConstant &c);
 	std::string constant_op_expression(const SPIRConstantOp &cop);

@@ -471,9 +471,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-
-		auto &membertype = get<SPIRType>(member);
-		statement(member_decl(type, membertype, i), ";");
+		emit_stuct_member(type, member, i);
 		i++;
 	}
 	end_scope_decl();

@@ -33,6 +33,7 @@ struct MSLConfiguration
 	bool flip_vert_y = false;
 	bool flip_frag_y = false;
 	bool is_rendering_points = false;
+	bool pad_and_pack_uniform_structs = false;
 	std::string entry_point_name;
 };
 
@@ -66,6 +67,9 @@ struct MSLResourceBinding
 
 	bool used_by_shader = false;
 };
+
+// Tracks the type ID and member index of a struct member
+typedef uint64_t MSLStructMemberKey;
 
 // Special constant used in a MSLResourceBinding desc_set
 // element to indicate the bindings for the push constants.
@@ -106,11 +110,11 @@ protected:
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_fixup() override;
+	void emit_stuct_member(const SPIRType &type, const uint32_t member_type_id, uint32_t index,
+	                       const std::string &qualifier = "") override;
 	std::string type_to_glsl(const SPIRType &type) override;
 	std::string image_type_glsl(const SPIRType &type) override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin) override;
-	std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member,
-	                        const std::string &qualifier) override;
 	std::string constant_expression(const SPIRConstant &c) override;
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 	std::string to_func_call_arg(uint32_t id) override;
@@ -163,8 +167,8 @@ protected:
 	void exclude_member_from_stage_in(const SPIRType &type, uint32_t index);
 	std::string add_input_buffer_block_member(uint32_t mbr_type_id, std::string mbr_name, uint32_t mbr_locn);
 	uint32_t get_input_buffer_block_var_id(uint32_t msl_buffer);
-	void pad_input_buffer_block(uint32_t ib_type_id);
-	SPIRType &get_pad_type(uint32_t pad_len);
+	void align_struct(SPIRType &ib_type);
+	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
 
 	MSLConfiguration msl_config;
 	std::unordered_map<std::string, std::string> func_name_overrides;
@@ -172,7 +176,7 @@ protected:
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
-	std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
+	std::unordered_map<MSLStructMemberKey, uint32_t> struct_member_padding;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
@@ -216,12 +220,8 @@ protected:
 
 		void sort();
 		bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
-		MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
-		    : type(t)
-		    , meta(m)
-		    , sort_aspect(sa)
-		{
-		}
+		MemberSorter(SPIRType &t, Meta &m, SortAspect sa);
+
 		SPIRType &type;
 		Meta &meta;
 		SortAspect sort_aspect;

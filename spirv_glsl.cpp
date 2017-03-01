@@ -504,9 +504,7 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-
-		auto &membertype = get<SPIRType>(member);
-		statement(member_decl(type, membertype, i), ";");
+		emit_stuct_member(type, member, i);
 		i++;
 		emitted = true;
 	}
@@ -1103,9 +1101,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-
-		auto &membertype = get<SPIRType>(member);
-		statement(member_decl(type, membertype, i), ";");
+		emit_stuct_member(type, member, i);
 		i++;
 	}
 
@@ -1195,9 +1191,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		for (auto &member : type.member_types)
 		{
 			add_member_name(type, i);
-
-			auto &membertype = get<SPIRType>(member);
-			statement(member_decl(type, membertype, i), ";");
+			emit_stuct_member(type, member, i);
 			i++;
 		}
 
@@ -1243,7 +1237,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 				// which is not allowed.
 				auto member_name = get_member_name(type.self, i);
 				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
-				statement(member_decl(type, membertype, i, qual), ";");
+				emit_stuct_member(type, member, i, qual);
 				// Restore member name.
 				set_member_name(type.self, i, member_name);
 				i++;
@@ -5494,9 +5488,13 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
-string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index,
-                                 const string &qualifier)
+// Emit a structure member. Subclasses may override to modify output,
+// or to dynamically add a padding member if needed.
+void CompilerGLSL::emit_stuct_member(const SPIRType &type, const uint32_t member_type_id, uint32_t index,
+                                     const string &qualifier)
 {
+	auto &membertype = get<SPIRType>(member_type_id);
+
 	uint64_t memberflags = 0;
 	auto &memb = meta[type.self].members;
 	if (index < memb.size())
@@ -5508,9 +5506,9 @@ string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertyp
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
-	return join(layout_for_member(type, index), qualifiers, qualifier,
-	            flags_to_precision_qualifiers_glsl(membertype, memberflags),
-	            variable_decl(membertype, to_member_name(type, index)));
+	statement(layout_for_member(type, index), qualifiers, qualifier,
+	          flags_to_precision_qualifiers_glsl(membertype, memberflags),
+	          variable_decl(membertype, to_member_name(type, index)), ";");
 }
 
 const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags)
