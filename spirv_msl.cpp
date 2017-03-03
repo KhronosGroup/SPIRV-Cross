@@ -596,22 +596,39 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 		int32_t gap = mbr_offset - curr_offset;
 		if (gap > 0)
 		{
-			// Since MSL and SPIR-V have slightly different struct member alignment and size rules,
-			// we'll pad to standard C-packing rules. If the member is farther away than C-packing,
-			// expects, add an inert padding member before the the member.
+			// Since MSL and SPIR-V have slightly different struct member alignment and
+			// size rules, we'll pad to standard C-packing rules. If the member is farther
+			// away than C-packing, expects, add an inert padding member before the the member.
 			MSLStructMemberKey key = get_struct_member_key(ib_type_id, mbr_idx);
 			struct_member_padding[key] = gap;
 		}
-
-		// If the member consumes less space in SPIR-V than it does in Metal, mark it as packed.
-		//   - Applies to any 3-element vector.
-		uint32_t mbr_type_id = ib_type.member_types[mbr_idx];
-		auto &mbr_type = get<SPIRType>(mbr_type_id);
-		if (mbr_type.vecsize == 3 && mbr_type.columns == 1)
-			set_member_decoration(ib_type_id, mbr_idx, DecorationCPacked);
+		else if (gap < 0)
+		{
+			// If this member should be closer to the previous member than the default
+			// spacing expects, it is likely that the previous member is in a packed format.
+			// If so, and the previous member is packable, pack it.
+			// For example...this applies to any 3-element packed vector.
+			uint32_t prev_mbr_idx = mbr_idx - 1;
+			if (is_member_packable(ib_type, prev_mbr_idx))
+				set_member_decoration(ib_type_id, prev_mbr_idx, DecorationCPacked);
+		}
 
 		curr_offset = mbr_offset + uint32_t(get_declared_struct_member_size(ib_type, mbr_idx));
 	}
+}
+
+// Returns whether the specified struct member supports a packable type
+// variation that is smaller than the unpacked variation of that type.
+bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
+{
+	uint32_t mbr_type_id = ib_type.member_types[index];
+	auto &mbr_type = get<SPIRType>(mbr_type_id);
+
+	// 3-element vectors (char3, uchar3, short3, ushort3, int3, uint3, half3, float3)
+	if (mbr_type.vecsize == 3 && mbr_type.columns == 1)
+		return true;
+
+	return false;
 }
 
 // Simple combination of type ID and member index for use as hash key
