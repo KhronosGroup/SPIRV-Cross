@@ -3203,6 +3203,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 		return "gl_PointSize";
 	case BuiltInClipDistance:
 		return "gl_ClipDistance";
+	case BuiltInCullDistance:
+		return "gl_CullDistance";
 	case BuiltInVertexId:
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW(
