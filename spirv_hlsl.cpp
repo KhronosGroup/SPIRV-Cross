@@ -1006,6 +1006,8 @@ string CompilerHLSL::compile()
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
 
+	update_active_builtins();
+
 	uint32_t pass_count = 0;
 	do
 	{

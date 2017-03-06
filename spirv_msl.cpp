@@ -68,6 +68,8 @@ string CompilerMSL::compile()
 	non_stage_in_input_var_ids.clear();
 	struct_member_padding.clear();
 
+	update_active_builtins();
+
 	// Preprocess OpCodes to extract the need to output additional header content
 	set_enabled_interface_variables(get_active_interface_variables());
 	preprocess_op_codes();

@@ -491,7 +491,7 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 
 	case OpCopyMemory:
 	{
-		if (length < 3)
+		if (length < 2)
 			return false;
 
 		auto *var = compiler.maybe_get<SPIRVariable>(args[0]);
@@ -2865,7 +2865,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 			case OpCopyMemory:
 			{
-				if (length < 3)
+				if (length < 2)
 					return false;
 
 				uint32_t lhs = args[0];
@@ -3115,4 +3115,118 @@ bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &b
 		base_type = type.basetype;
 		return true;
 	}
+}
+
+bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
+{
+	const auto add_if_builtin = [&](uint32_t id) {
+		// Only handles variables here.
+		// Builtins which are part of a block are handled in AccessChain.
+		auto *var = compiler.maybe_get<SPIRVariable>(id);
+		if (var && compiler.meta[id].decoration.builtin)
+			compiler.active_builtins |= 1ull << compiler.meta[id].decoration.builtin_type;
+	};
+
+	switch (opcode)
+	{
+	case OpStore:
+		if (length < 1)
+			return false;
+
+		add_if_builtin(args[0]);
+		break;
+
+	case OpCopyMemory:
+		if (length < 2)
+			return false;
+
+		add_if_builtin(args[0]);
+		add_if_builtin(args[1]);
+		break;
+
+	case OpCopyObject:
+	case OpLoad:
+		if (length < 3)
+			return false;
+
+		add_if_builtin(args[2]);
+		break;
+
+	case OpFunctionCall:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t count = length - 3;
+		args += 3;
+		for (uint32_t i = 0; i < count; i++)
+			add_if_builtin(args[i]);
+		break;
+	}
+
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
+	{
+		if (length < 4)
+			return false;
+
+		// Only consider global variables, cannot consider variables in functions yet, or other
+		// access chains as they have not been created yet.
+		auto *var = compiler.maybe_get<SPIRVariable>(args[2]);
+		if (!var)
+			break;
+
+		auto *type = &compiler.get<SPIRType>(var->basetype);
+
+		// Start traversing type hierarchy at the proper non-pointer types.
+		while (type->pointer)
+		{
+			assert(type->parent_type);
+			type = &compiler.get<SPIRType>(type->parent_type);
+		}
+
+		uint32_t count = length - 3;
+		args += 3;
+		for (uint32_t i = 0; i < count; i++)
+		{
+			// Arrays
+			if (!type->array.empty())
+			{
+				type = &compiler.get<SPIRType>(type->parent_type);
+			}
+			// Structs
+			else if (type->basetype == SPIRType::Struct)
+			{
+				uint32_t index = compiler.get<SPIRConstant>(args[i]).scalar();
+
+				if (index < uint32_t(compiler.meta[type->self].members.size()))
+				{
+					auto &decorations = compiler.meta[type->self].members[index];
+					if (decorations.builtin)
+						compiler.active_builtins |= 1ull << decorations.builtin_type;
+				}
+
+				type = &compiler.get<SPIRType>(type->member_types[index]);
+			}
+			else
+			{
+				// No point in traversing further. We won't find any extra builtins.
+				break;
+			}
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	return true;
+}
+
+void Compiler::update_active_builtins()
+{
+	active_builtins = 0;
+	ActiveBuiltinHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 }

@@ -310,6 +310,7 @@ string CompilerGLSL::compile()
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
 	fixup_image_load_store_access();
+	update_active_builtins();
 
 	uint32_t pass_count = 0;
 	do
@@ -3331,8 +3332,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	const auto *type = &expression_type(base);
 
-	// For resolving array accesses, etc, keep a local copy for poking.
-	SPIRType temp;
+	// Start traversing type hierarchy at the proper non-pointer types.
+	while (type->pointer)
+	{
+		assert(type->parent_type);
+		type = &get<SPIRType>(type->parent_type);
+	}
 
 	bool access_chain_is_arrayed = false;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
@@ -3351,11 +3356,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += to_expression(index);
 			expr += "]";
 
-			// We have to modify the type, so keep a local copy.
-			if (&temp != type)
-				temp = *type;
-			type = &temp;
-			temp.array.pop_back();
+			assert(type->parent_type);
+			type = &get<SPIRType>(type->parent_type);
 
 			access_chain_is_arrayed = true;
 		}
@@ -3414,11 +3416,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += to_expression(index);
 			expr += "]";
 
-			// We have to modify the type, so keep a local copy.
-			if (&temp != type)
-				temp = *type;
-			type = &temp;
-			temp.columns = 1;
+			type = &get<SPIRType>(type->parent_type);
 		}
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
@@ -3441,11 +3439,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
-			// We have to modify the type, so keep a local copy.
-			if (&temp != type)
-				temp = *type;
-			type = &temp;
-			temp.vecsize = 1;
+			type = &get<SPIRType>(type->parent_type);
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
@@ -3685,6 +3679,13 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
                                                                              uint32_t *out_matrix_stride)
 {
 	const auto *type = &expression_type(base);
+
+	// Start traversing type hierarchy at the proper non-pointer types.
+	while (type->pointer)
+	{
+		assert(type->parent_type);
+		type = &get<SPIRType>(type->parent_type);
+	}
 
 	// This holds the type of the current pointer which we are traversing through.
 	// We always start out from a struct type which is the block.
