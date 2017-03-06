@@ -228,6 +228,13 @@ The command line client calls `Compiler::build_combined_image_samplers` automati
 Descriptor sets are unique to Vulkan, so make sure that descriptor set + binding is remapped to a flat binding scheme (set always 0), so that other APIs can make sense of the bindings.
 This can be done with `Compiler::set_decoration(id, spv::DecorationDescriptorSet)`.
 
+#### Linking by name for targets which do not support explicit locations (legacy GLSL/ESSL)
+
+Modern GLSL and HLSL sources will rely on explicit layout(location) qualifiers to guide the linking process,
+but legacy GLSL relies on symbol names to perform the linking. When emitting legacy shaders, these layout statements will be dropped,
+so it is important that the API user ensures that the names of I/O variables are sanitized to ensure that linking will work properly.
+The reflection API can rename variables, struct types and struct members to deal with these scenarios using `Compiler::set_name` and friends.
+
 ## Contributing
 
 Contributions to SPIRV-Cross are welcome. See Testing and Licensing sections for details.
