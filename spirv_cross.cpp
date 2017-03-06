@@ -3124,7 +3124,12 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		// Builtins which are part of a block are handled in AccessChain.
 		auto *var = compiler.maybe_get<SPIRVariable>(id);
 		if (var && compiler.meta[id].decoration.builtin)
-			compiler.active_builtins |= 1ull << compiler.meta[id].decoration.builtin_type;
+		{
+			auto &type = compiler.get<SPIRType>(var->basetype);
+			auto &flags =
+				type.storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
+			flags |= 1ull << compiler.meta[id].decoration.builtin_type;
+		}
 	};
 
 	switch (opcode)
@@ -3185,6 +3190,8 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 			type = &compiler.get<SPIRType>(type->parent_type);
 		}
 
+		auto &flags = type->storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
+
 		uint32_t count = length - 3;
 		args += 3;
 		for (uint32_t i = 0; i < count; i++)
@@ -3203,7 +3210,7 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 				{
 					auto &decorations = compiler.meta[type->self].members[index];
 					if (decorations.builtin)
-						compiler.active_builtins |= 1ull << decorations.builtin_type;
+						flags |= 1ull << decorations.builtin_type;
 				}
 
 				type = &compiler.get<SPIRType>(type->member_types[index]);
@@ -3226,7 +3233,8 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 
 void Compiler::update_active_builtins()
 {
-	active_builtins = 0;
+	active_input_builtins = 0;
+	active_output_builtins = 0;
 	ActiveBuiltinHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 }

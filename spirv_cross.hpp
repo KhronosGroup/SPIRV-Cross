@@ -603,7 +603,8 @@ protected:
 	std::unordered_set<uint32_t> forced_temporaries;
 	std::unordered_set<uint32_t> forwarded_temporaries;
 
-	uint64_t active_builtins = 0;
+	uint64_t active_input_builtins = 0;
+	uint64_t active_output_builtins = 0;
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.
 	void update_active_builtins();
 };

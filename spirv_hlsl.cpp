@@ -26,17 +26,30 @@ namespace
 {
 struct VariableComparator
 {
-	VariableComparator(const std::vector<Meta> &m)
-	    : meta(m)
+	VariableComparator(const CompilerHLSL &compiler_)
+		: compiler(compiler_)
 	{
 	}
 
 	bool operator()(SPIRVariable *var1, SPIRVariable *var2)
 	{
-		return meta[var1->self].decoration.alias.compare(meta[var2->self].decoration.alias) < 0;
+		if (compiler.get_decoration_mask(var1->self) & compiler.get_decoration_mask(var2->self) & (1ull << DecorationLocation))
+			return compiler.get_decoration(var1->self, DecorationLocation) < compiler.get_decoration(var2->self, DecorationLocation);
+
+		auto &name1 = compiler.get_name(var1->self);
+		auto &name2 = compiler.get_name(var2->self);
+
+		if (name1.empty() && name2.empty())
+			return var1->self < var2->self;
+		if (name1.empty())
+			return true;
+		else if (name2.empty())
+			return false;
+
+		return name1.compare(name2) < 0;
 	}
 
-	const std::vector<Meta> &meta;
+	const CompilerHLSL &compiler;
 };
 }
 
@@ -178,81 +191,130 @@ const char *CompilerHLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	return "";
 }
 
-void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number, bool builtins)
+void CompilerHLSL::emit_builtin_outputs_in_struct()
+{
+	bool legacy = options.shader_model <= 30;
+	for (uint32_t i = 0; i < 64; i++)
+	{
+		if (!(active_output_builtins & (1ull << i)))
+			continue;
+
+		const char *type = nullptr;
+		const char *semantic = nullptr;
+		auto builtin = static_cast<BuiltIn>(i);
+		switch (builtin)
+		{
+		case BuiltInPosition:
+			type = "float4";
+			semantic = legacy ? "POSITION" : "SV_Position";
+			break;
+
+		default:
+			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
+			break;
+		}
+
+		if (type && semantic)
+			statement(type, " ", builtin_to_glsl(builtin), " : ", semantic, ";");
+	}
+}
+
+void CompilerHLSL::emit_builtin_inputs_in_struct()
+{
+	bool legacy = options.shader_model <= 30;
+	for (uint32_t i = 0; i < 64; i++)
+	{
+		if (!(active_input_builtins & (1ull << i)))
+			continue;
+
+		const char *type = nullptr;
+		const char *semantic = nullptr;
+		auto builtin = static_cast<BuiltIn>(i);
+		switch (builtin)
+		{
+		case BuiltInFragCoord:
+			type = "float4";
+			semantic = legacy ? "POSITION" : "SV_Position";
+			break;
+
+		default:
+			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
+			break;
+		}
+
+		if (type && semantic)
+			statement(type, " ", builtin_to_glsl(builtin), " : ", semantic, ";");
+	}
+}
+
+void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number)
 {
 	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
 
-	const char *binding = "TEXCOORD";
+	string binding = "TEXCOORD";
 	bool use_binding_number = true;
+	bool legacy = options.shader_model <= 30;
 	if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
 	{
-		binding = "COLOR";
-		use_binding_number = false;
-	}
-	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var))
-	{
-		if (options.shader_model <= 30)
-		{
-			binding = "POSITION";
-		}
-		else
-		{
-			binding = "SV_POSITION";
-		}
+		binding = join(legacy ? "COLOR" : "SV_Target", get_decoration(var.self, DecorationLocation));
 		use_binding_number = false;
 	}
 
-	bool is_no_builtin = !is_builtin_variable(var) && !var.remapped_variable;
-
-	if ((is_no_builtin && !builtins) || (!is_no_builtin && builtins))
+	auto &m = meta[var.self].decoration;
+	if (use_binding_number)
 	{
-		auto &m = meta[var.self].decoration;
-		if (use_binding_number)
+		if (type.columns > 1)
 		{
-			if (type.vecsize == 4 && type.columns == 4)
+			for (uint32_t i = 0; i < type.columns; i++)
 			{
-				for (int i = 0; i < 4; ++i)
-				{
-					std::stringstream name;
-					name << m.alias << "_" << i;
-					SPIRType newtype = type;
-					newtype.columns = 1;
-					statement(variable_decl(newtype, name.str()), " : ", binding, binding_number++, ";");
-				}
-				--binding_number;
+				SPIRType newtype = type;
+				newtype.columns = 1;
+				statement(variable_decl(newtype, join(m.alias, "_", i)), " : ", binding, binding_number++, ";");
 			}
-			else
-			{
-				statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
-			}
+			--binding_number;
 		}
 		else
-		{
-			if (execution.model == ExecutionModelVertex)
-			{
-				statement("float4 gl_Position", " : ", binding, ";");
-			}
-			else
-			{
-				statement(variable_decl(type, m.alias), " : ", binding, ";");
-			}
-		}
+			statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
 	}
+	else
+		statement(variable_decl(type, m.alias), " : ", binding, ";");
 
-	if (is_no_builtin)
+	if (use_binding_number)
+		binding_number++;
+}
+
+void CompilerHLSL::emit_builtin_variables()
+{
+	// Emit global variables for the interface variables which are statically used by the shader.
+	for (uint32_t i = 0; i < 64; i++)
 	{
-		++binding_number;
+		if (!((active_input_builtins | active_output_builtins) & (1ull << i)))
+			continue;
+
+		const char *type = nullptr;
+		auto builtin = static_cast<BuiltIn>(i);
+
+		switch (builtin)
+		{
+		case BuiltInFragCoord:
+		case BuiltInPosition:
+			type = "float4";
+			break;
+
+		default:
+			SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
+			break;
+		}
+
+		if (type)
+			statement("static ", type, " ", builtin_to_glsl(builtin), ";");
 	}
 }
 
 void CompilerHLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
-
-	// Emit PLS blocks if we have such variables.
-	if (!pls_inputs.empty() || !pls_outputs.empty())
-		emit_pls();
 
 	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
 	// when such variables are instantiated.
@@ -334,6 +396,9 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	emitted = false;
 
+	// Emit builtin input and output variables here.
+	emit_builtin_variables();
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -343,8 +408,10 @@ void CompilerHLSL::emit_resources()
 
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+				!is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
+				// Only emit non-builtins here. Builtin variables are handled separately.
 				emit_interface_block_globally(var);
 				emitted = true;
 			}
@@ -355,17 +422,9 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	emitted = false;
 
-	if (execution.model == ExecutionModelVertex)
-	{
-		statement("struct InputVert");
-	}
-	else
-	{
-		statement("struct InputFrag");
-	}
-	begin_scope();
 	uint32_t binding_number = 0;
-	std::vector<SPIRVariable *> variables;
+	vector<SPIRVariable *> input_variables;
+	vector<SPIRVariable *> output_variables;
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -373,63 +432,52 @@ void CompilerHLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
+			if (!var.remapped_variable && type.pointer &&
+				(var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+				!is_builtin_variable(var) &&
+				interface_variable_exists_in_entry_point(var.self))
 			{
-				if (execution.model == ExecutionModelVertex && is_builtin_variable(var))
-					continue;
-				variables.push_back(&var);
+				if (var.storage == StorageClassInput)
+					input_variables.push_back(&var);
+				else
+					output_variables.push_back(&var);
 			}
 		}
 	}
-	sort(variables.begin(), variables.end(), VariableComparator(meta));
-	for (auto var : variables)
-	{
-		emit_interface_block_in_struct(*var, binding_number, false);
-	}
-	for (auto var : variables)
-	{
-		emit_interface_block_in_struct(*var, binding_number, true);
-	}
-	end_scope_decl();
-	statement("");
 
-	if (execution.model == ExecutionModelVertex)
+	if (!input_variables.empty() || active_input_builtins)
 	{
-		statement("struct OutputVert");
+		require_input = true;
+		statement("struct SPIRV_Cross_Input");
+
+		begin_scope();
+		// FIXME: Use locations properly if they exist.
+		sort(input_variables.begin(), input_variables.end(), VariableComparator(*this));
+		emit_builtin_inputs_in_struct();
+		for (auto var : input_variables)
+			emit_interface_block_in_struct(*var, binding_number);
+		end_scope_decl();
+		statement("");
 	}
 	else
-	{
-		statement("struct OutputFrag");
-	}
-	begin_scope();
-	binding_number = 0;
-	variables.clear();
-	for (auto &id : ids)
-	{
-		if (id.get_type() == TypeVariable)
-		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
+		require_input = false;
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			    var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
-			{
-				variables.push_back(&var);
-			}
-		}
-	}
-	sort(variables.begin(), variables.end(), VariableComparator(meta));
-	for (auto var : variables)
+	if (!output_variables.empty() || active_output_builtins)
 	{
-		emit_interface_block_in_struct(*var, binding_number, false);
+		require_output = true;
+		statement("struct SPIRV_Cross_Output");
+
+		begin_scope();
+		// FIXME: Use locations properly if they exist.
+		sort(output_variables.begin(), output_variables.end(), VariableComparator(*this));
+		emit_builtin_outputs_in_struct();
+		for (auto var : output_variables)
+			emit_interface_block_in_struct(*var, binding_number);
+		end_scope_decl();
+		statement("");
 	}
-	for (auto var : variables)
-	{
-		emit_interface_block_in_struct(*var, binding_number, true);
-	}
-	end_scope_decl();
-	statement("");
+	else
+		require_output = false;
 
 	// Global variables.
 	for (auto global : global_variables)
@@ -542,96 +590,107 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 void CompilerHLSL::emit_hlsl_entry_point()
 {
 	auto &execution = get_entry_point();
-	const char *post = "Frag";
-	if (execution.model == ExecutionModelVertex)
-	{
-		post = "Vert";
-	}
-
-	statement("Output", post, " main(Input", post, " input)");
+	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", require_input ? "SPIRV_Cross_Input stage_input)" : ")");
 	begin_scope();
 
-	for (auto &id : ids)
+	if (require_input)
 	{
-		if (id.get_type() == TypeVariable)
+		for (auto &id : ids)
 		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
-
-			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			    var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
+			// Copy builtins from entry point arguments to globals.
+			for (uint32_t i = 0; i < 64; i++)
 			{
-				if (execution.model == ExecutionModelVertex && is_builtin_variable(var))
+				if (!(active_input_builtins & (1ull << i)))
 					continue;
 
-				auto &m = meta[var.self].decoration;
-				auto &mtype = get<SPIRType>(var.basetype);
-				if (mtype.vecsize == 4 && mtype.columns == 4)
-				{
-					statement(m.alias, "[0] = input.", m.alias, "_0;");
-					statement(m.alias, "[1] = input.", m.alias, "_1;");
-					statement(m.alias, "[2] = input.", m.alias, "_2;");
-					statement(m.alias, "[3] = input.", m.alias, "_3;");
-				}
-				else
-				{
-					statement(m.alias, " = input.", m.alias, ";");
-				}
+				auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+				statement(builtin, " = stage_input.", builtin, ";");
 			}
-		}
-	}
 
-	if (execution.model == ExecutionModelVertex)
-	{
-		statement("vert_main();");
-	}
-	else
-	{
-		statement("frag_main();");
-	}
-
-	statement("Output", post, " output;");
-
-	for (auto &id : ids)
-	{
-		if (id.get_type() == TypeVariable)
-		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
-
-			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			    var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
+			if (id.get_type() == TypeVariable)
 			{
-				auto &m = meta[var.self].decoration;
-				bool is_no_builtin = !is_builtin_variable(var) && !var.remapped_variable;
-				if (is_no_builtin)
-					statement("output.", m.alias, " = ", m.alias, ";");
-				else if (execution.model == ExecutionModelVertex)
+				auto &var = id.get<SPIRVariable>();
+				auto &type = get<SPIRType>(var.basetype);
+
+				if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+				    var.storage == StorageClassInput && !is_builtin_variable(var) &&
+				    interface_variable_exists_in_entry_point(var.self))
 				{
-					statement("output.gl_Position = gl_Position;");
+					auto name = to_name(var.self);
+					auto &mtype = get<SPIRType>(var.basetype);
+					if (mtype.vecsize == 4 && mtype.columns == 4)
+					{
+						statement(name, "[0] = stage_input.", name, "_0;");
+						statement(name, "[1] = stage_input.", name, "_1;");
+						statement(name, "[2] = stage_input.", name, "_2;");
+						statement(name, "[3] = stage_input.", name, "_3;");
+					}
+					else
+					{
+						statement(name, " = stage_input.", name, ";");
+					}
 				}
 			}
 		}
 	}
 
 	if (execution.model == ExecutionModelVertex)
-	{
-		if (options.shader_model <= 30)
-		{
-			statement("output.gl_Position.x = output.gl_Position.x - gl_HalfPixel.x * output.gl_Position.w;");
-			statement("output.gl_Position.y = output.gl_Position.y + gl_HalfPixel.y * output.gl_Position.w;");
-		}
-		if (options.flip_vert_y)
-		{
-			statement("output.gl_Position.y = -output.gl_Position.y;");
-		}
-		if (options.fixup_clipspace)
-		{
-			statement("output.gl_Position.z = (output.gl_Position.z + output.gl_Position.w) * 0.5;");
-		}
-	}
+		statement("vert_main();");
+	else if (execution.model == ExecutionModelFragment)
+		statement("frag_main();");
+	else
+		SPIRV_CROSS_THROW("Unsupported shader stage.");
 
-	statement("return output;");
+	if (require_output)
+	{
+		statement("SPIRV_Cross_Output stage_output;");
+
+		// Copy builtins from globals to return struct.
+		for (uint32_t i = 0; i < 64; i++)
+		{
+			if (!(active_output_builtins & (1ull << i)))
+				continue;
+
+			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+			statement("stage_output.", builtin, " = ", builtin, ";");
+		}
+
+		for (auto &id : ids)
+		{
+			if (id.get_type() == TypeVariable)
+			{
+				auto &var = id.get<SPIRVariable>();
+				auto &type = get<SPIRType>(var.basetype);
+
+				if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+				    var.storage == StorageClassOutput && !is_builtin_variable(var) &&
+					interface_variable_exists_in_entry_point(var.self))
+				{
+					auto name = to_name(var.self);
+					statement("stage_output.", name, " = ", name, ";");
+				}
+			}
+		}
+
+		if (execution.model == ExecutionModelVertex)
+		{
+			if (options.shader_model <= 30)
+			{
+				statement("stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * stage_output.gl_Position.w;");
+				statement("stage_output.gl_Position.y = stage_output.gl_Position.y + gl_HalfPixel.y * stage_output.gl_Position.w;");
+			}
+			if (options.flip_vert_y)
+			{
+				statement("stage_output.gl_Position.y = -stage_output.gl_Position.y;");
+			}
+			if (options.fixup_clipspace)
+			{
+				statement("stage_output.gl_Position.z = (stage_output.gl_Position.z + stage_output.gl_Position.w) * 0.5;");
+			}
+		}
+
+		statement("return stage_output;");
+	}
 
 	end_scope();
 }
@@ -1002,7 +1061,7 @@ string CompilerHLSL::compile()
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = true;
 	backend.flexible_member_array_supported = false;
-	backend.explicit_struct_type = true;
+	backend.explicit_struct_type = false;
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
 

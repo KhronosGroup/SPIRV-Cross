@@ -57,7 +57,9 @@ private:
 	void emit_header() override;
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
-	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number, bool builtins);
+	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
+	void emit_builtin_inputs_in_struct();
+	void emit_builtin_outputs_in_struct();
 	void emit_texture_op(const Instruction &i) override;
 	void emit_instruction(const Instruction &instruction) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
@@ -70,6 +72,10 @@ private:
 
 	Options options;
 	bool requires_op_fmod = false;
+
+	void emit_builtin_variables();
+	bool require_output = false;
+	bool require_input = false;
 };
 }
 
