@@ -282,6 +282,7 @@ protected:
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);
+	void emit_flattened_io_block(const SPIRVariable &var, const char *qual);
 	void emit_block_chain(SPIRBlock &block);
 	void emit_specialization_constant(const SPIRConstant &constant);
 	std::string emit_continue_block(uint32_t continue_block);

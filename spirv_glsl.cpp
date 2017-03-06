@@ -555,6 +555,9 @@ string CompilerGLSL::to_interpolation_qualifiers(uint64_t flags)
 
 string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 {
+	if (is_legacy())
+		return "";
+
 	bool is_block = (meta[type.self].decoration.decoration_flags &
 	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
 	if (!is_block)
@@ -1160,60 +1163,83 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	return "";
 }
 
+void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *qual)
+{
+	auto &type = get<SPIRType>(var.basetype);
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
+
+	// Block names should never alias.
+	auto block_name = to_name(type.self, false);
+
+	// Shaders never use the block by interface name, so we don't
+	// have to track this other than updating name caches.
+	if (resource_names.find(block_name) != end(resource_names))
+		block_name = get_fallback_name(type.self);
+	else
+		resource_names.insert(block_name);
+
+	auto old_flags = meta[type.self].decoration.decoration_flags;
+	// Emit the members as if they are part of a block to get all qualifiers.
+	meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
+
+	uint32_t i = 0;
+	for (auto &member : type.member_types)
+	{
+		add_member_name(type, i);
+		auto &membertype = get<SPIRType>(member);
+
+		if (membertype.basetype == SPIRType::Struct)
+			SPIRV_CROSS_THROW("Cannot flatten struct inside structs in I/O variables.");
+
+		// Pass in the varying qualifier here so it will appear in the correct declaration order.
+		// Replace member name while emitting it so it encodes both struct name and member name.
+		// Sanitize underscores because joining the two identifiers might create more than 1 underscore in a row,
+		// which is not allowed.
+		auto member_name = get_member_name(type.self, i);
+		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+		statement(member_decl(type, membertype, i, qual), ";");
+		// Restore member name.
+		set_member_name(type.self, i, member_name);
+		i++;
+	}
+
+	meta[type.self].decoration.decoration_flags = old_flags;
+
+	// Treat this variable as flattened from now on.
+	flattened_structs.insert(var.self);
+}
+
 void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
 	// Either make it plain in/out or in/out blocks depending on what shader is doing ...
 	bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
-
 	const char *qual = to_storage_qualifiers_glsl(var);
 
 	if (block)
 	{
-		if (is_legacy())
-			SPIRV_CROSS_THROW("IO blocks are not supported in legacy targets.");
-
-		add_resource_name(var.self);
-
-		// Block names should never alias.
-		auto block_name = to_name(type.self, false);
-
-		// Shaders never use the block by interface name, so we don't
-		// have to track this other than updating name caches.
-		if (resource_names.find(block_name) != end(resource_names))
-			block_name = get_fallback_name(type.self);
-		else
-			resource_names.insert(block_name);
-
-		statement(layout_for_variable(var), qual, block_name);
-		begin_scope();
-
-		type.member_name_cache.clear();
-
-		uint32_t i = 0;
-		for (auto &member : type.member_types)
-		{
-			add_member_name(type, i);
-
-			auto &membertype = get<SPIRType>(member);
-			statement(member_decl(type, membertype, i), ";");
-			i++;
-		}
-
-		end_scope_decl(join(to_name(var.self), type_to_array_glsl(type)));
-		statement("");
-	}
-	else
-	{
 		// ESSL earlier than 310 and GLSL earlier than 150 did not support
 		// I/O variables which are struct types.
 		// To support this, flatten the struct into separate varyings instead.
-		if (type.basetype == SPIRType::Struct &&
-		    ((options.es && options.version < 310) || (!options.es && options.version < 150)))
+		if ((options.es && options.version < 310) || (!options.es && options.version < 150))
 		{
-			if (!type.array.empty())
-				SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
+			// I/O blocks on ES require version 310 with Android Extension Pack extensions, or core version 320.
+			// On desktop, I/O blocks were introduced with geometry shaders in GL 3.2 (GLSL 150).
+			emit_flattened_io_block(var, qual);
+		}
+		else
+		{
+			if (options.es && options.version < 320)
+			{
+				// Geometry and tessellation extensions imply this extension.
+				if (!forced_extensions.count("GL_EXT_geometry_shader") &&
+				    !forced_extensions.count("GL_EXT_tessellation_shader"))
+					require_extension("GL_EXT_shader_io_blocks");
+			}
+
+			add_resource_name(var.self);
 
 			// Block names should never alias.
 			auto block_name = to_name(type.self, false);
@@ -1225,34 +1251,34 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			else
 				resource_names.insert(block_name);
 
-			// Emit the members as if they are part of a block to get all qualifiers.
-			meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
+			statement(layout_for_variable(var), qual, block_name);
+			begin_scope();
+
+			type.member_name_cache.clear();
 
 			uint32_t i = 0;
 			for (auto &member : type.member_types)
 			{
 				add_member_name(type, i);
+
 				auto &membertype = get<SPIRType>(member);
-
-				if (membertype.basetype == SPIRType::Struct)
-					SPIRV_CROSS_THROW("Cannot flatten struct inside structs in I/O variables.");
-
-				// Pass in the varying qualifier here so it will appear in the correct declaration order.
-				// Replace member name while emitting it so it encodes both struct name and member name.
-				// Sanitize underscores because joining the two identifiers might create more than 1 underscore in a row,
-				// which is not allowed.
-				auto member_name = get_member_name(type.self, i);
-				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
-				statement(member_decl(type, membertype, i, qual), ";");
-				// Restore member name.
-				set_member_name(type.self, i, member_name);
+				statement(member_decl(type, membertype, i), ";");
 				i++;
 			}
 
-			meta[type.self].decoration.decoration_flags &= ~(1ull << DecorationBlock);
-
-			// Treat this variable as flattened from now on.
-			flattened_structs.insert(var.self);
+			end_scope_decl(join(to_name(var.self), type_to_array_glsl(type)));
+			statement("");
+		}
+	}
+	else
+	{
+		// ESSL earlier than 310 and GLSL earlier than 150 did not support
+		// I/O variables which are struct types.
+		// To support this, flatten the struct into separate varyings instead.
+		if (type.basetype == SPIRType::Struct &&
+		    ((options.es && options.version < 310) || (!options.es && options.version < 150)))
+		{
+			emit_flattened_io_block(var, qual);
 		}
 		else
 		{
