@@ -163,6 +163,8 @@ protected:
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	size_t get_declared_type_size(uint32_t type_id) const;
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
+	size_t get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const;
+	size_t get_declared_type_alignment(uint32_t type_id, uint64_t dec_mask) const;
 	std::string to_component_argument(uint32_t id);
 	void exclude_from_stage_in(SPIRVariable &var);
 	void exclude_member_from_stage_in(const SPIRType &type, uint32_t index);

@@ -592,6 +592,19 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 	uint32_t mbr_cnt = uint32_t(ib_type.member_types.size());
 	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
 	{
+		// Align current offset to the current member's default alignment.
+		size_t align_mask = get_declared_struct_member_alignment(ib_type, mbr_idx) - 1;
+		curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
+
+		// Test member alignment and, if it needs to be adjusted, depending on which direction,
+		// either pad the current member by adding a dummy padding member that will be declared
+		// before the current member, or mark the previous member as packed, so that it will
+		// consume less space, and the current member can move forward.
+		// There is a situation where, in packing the previous member, the alignment of
+		// that member will change, necessitating the addition of a padding member before it.
+		// This is taken care of automatically because this compiler is multipass. The first
+		// pass will mark the packed member, and the second pass will insert a padding member.
+		// If we ever move to a single-pass design, this will break.
 		uint32_t mbr_offset = get_member_decoration(ib_type_id, mbr_idx, DecorationOffset);
 		int32_t gap = mbr_offset - curr_offset;
 		if (gap > 0)
@@ -2084,7 +2097,7 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 	return bi_arg;
 }
 
-// Returns the effective size of a buffer block struct member.
+// Returns the byte size of a struct member.
 size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
 	uint32_t type_id = struct_type.member_types[index];
@@ -2104,8 +2117,75 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 {
 	auto &type = get<SPIRType>(type_id);
 
-	if (type.basetype == SPIRType::Struct)
+	switch (type.basetype)
+	{
+	case SPIRType::Unknown:
+	case SPIRType::Void:
+	case SPIRType::AtomicCounter:
+	case SPIRType::Image:
+	case SPIRType::SampledImage:
+	case SPIRType::Sampler:
+		SPIRV_CROSS_THROW("Querying size of opaque object.");
+		return 4; // A pointer
+
+	case SPIRType::Struct:
 		return get_declared_struct_size(type);
+
+	default:
+	{
+		size_t component_size = type.width / 8;
+		unsigned vecsize = type.vecsize;
+		unsigned columns = type.columns;
+
+		if (!type.array.empty())
+		{
+			// For arrays, we can use ArrayStride to get an easy check if it has been populated.
+			// ArrayStride is part of the array type not OpMemberDecorate.
+			auto &dec = meta[type_id].decoration;
+			if (dec.decoration_flags & (1ull << DecorationArrayStride))
+				return dec.array_stride * to_array_size_literal(type, uint32_t(type.array.size()) - 1);
+		}
+
+		if (columns == 1) // An unpacked 3-element vector is the same size as a 4-element vector.
+		{
+			if (!(dec_mask & (1ull << DecorationCPacked)))
+			{
+				if (vecsize == 3)
+					vecsize = 4;
+			}
+		}
+		else // For matrices, a 3-element column is the same size as a 4-element column.
+		{
+			if (dec_mask & (1ull << DecorationColMajor))
+			{
+				if (vecsize == 3)
+					vecsize = 4;
+			}
+			else if (dec_mask & (1ull << DecorationRowMajor))
+			{
+				if (columns == 3)
+					columns = 4;
+			}
+		}
+
+		return vecsize * columns * component_size;
+	}
+	}
+}
+
+// Returns the byte alignment of a struct member.
+size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const
+{
+	uint32_t type_id = struct_type.member_types[index];
+	auto dec_mask = get_member_decoration_mask(struct_type.self, index);
+	return get_declared_type_alignment(type_id, dec_mask);
+}
+
+// Returns the effective alignment in bytes of a variable type
+// or member type, taking into consideration the decorations mask.
+size_t CompilerMSL::get_declared_type_alignment(uint32_t type_id, uint64_t dec_mask) const
+{
+	auto &type = get<SPIRType>(type_id);
 
 	switch (type.basetype)
 	{
@@ -2115,39 +2195,22 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
 	case SPIRType::Sampler:
-		SPIRV_CROSS_THROW("Querying size of object with opaque size.");
+		SPIRV_CROSS_THROW("Querying alignment of opaque object.");
+		return 4; // A pointer
+
+	case SPIRType::Struct:
+		return 16; // Per Vulkan spec section 14.5.4
+
 	default:
-		break;
-	}
-
-	size_t component_size = type.width / 8;
-	unsigned vecsize = type.vecsize;
-	unsigned columns = type.columns;
-
-	if (!type.array.empty())
 	{
-		// For arrays, we can use ArrayStride to get an easy check if it has been populated.
-		// ArrayStride is part of the array type not OpMemberDecorate.
-		auto &dec = meta[type_id].decoration;
-		if (dec.decoration_flags & (1ull << DecorationArrayStride))
-			return dec.array_stride * to_array_size_literal(type, uint32_t(type.array.size()) - 1);
+		// Alignment of packed type is the same as the underlying component size.
+		// Alignment of unpacked type is the same as the type size (or one matrix column).
+		if (dec_mask & (1ull << DecorationCPacked))
+			return type.width / 8;
+		else
+			return get_declared_type_size(type_id, dec_mask) / type.columns;
 	}
-
-	if (columns == 1) // Vector
-	{
-		if (vecsize == 3 && !(dec_mask & (1ull << DecorationCPacked)))
-			vecsize = 4;
 	}
-	else // Matrix
-	{
-		// Per SPIR-V spec, matrices must be tightly packed and aligned up for vec3 accesses.
-		if (columns == 3 && (dec_mask & (1ull << DecorationRowMajor)))
-			columns = 4;
-		else if (vecsize == 3 && (dec_mask & (1ull << DecorationColMajor)))
-			vecsize = 4;
-	}
-
-	return vecsize * columns * component_size;
 }
 
 bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t * /*args*/, uint32_t /*length*/)
