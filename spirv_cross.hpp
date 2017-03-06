@@ -580,7 +580,7 @@ protected:
 	struct ActiveBuiltinHandler : OpcodeHandler
 	{
 		ActiveBuiltinHandler(Compiler &compiler_)
-			: compiler(compiler_)
+		    : compiler(compiler_)
 		{
 		}
 

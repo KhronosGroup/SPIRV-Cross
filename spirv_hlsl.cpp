@@ -27,14 +27,16 @@ namespace
 struct VariableComparator
 {
 	VariableComparator(const CompilerHLSL &compiler_)
-		: compiler(compiler_)
+	    : compiler(compiler_)
 	{
 	}
 
 	bool operator()(SPIRVariable *var1, SPIRVariable *var2)
 	{
-		if (compiler.get_decoration_mask(var1->self) & compiler.get_decoration_mask(var2->self) & (1ull << DecorationLocation))
-			return compiler.get_decoration(var1->self, DecorationLocation) < compiler.get_decoration(var2->self, DecorationLocation);
+		if (compiler.get_decoration_mask(var1->self) & compiler.get_decoration_mask(var2->self) &
+		    (1ull << DecorationLocation))
+			return compiler.get_decoration(var1->self, DecorationLocation) <
+			       compiler.get_decoration(var2->self, DecorationLocation);
 
 		auto &name1 = compiler.get_name(var1->self);
 		auto &name2 = compiler.get_name(var2->self);
@@ -407,8 +409,7 @@ void CompilerHLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-				!is_builtin_variable(var) &&
+			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				// Only emit non-builtins here. Builtin variables are handled separately.
@@ -433,9 +434,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (!var.remapped_variable && type.pointer &&
-				(var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-				!is_builtin_variable(var) &&
-				interface_variable_exists_in_entry_point(var.self))
+			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
 				if (var.storage == StorageClassInput)
 					input_variables.push_back(&var);
@@ -590,7 +590,8 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 void CompilerHLSL::emit_hlsl_entry_point()
 {
 	auto &execution = get_entry_point();
-	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", require_input ? "SPIRV_Cross_Input stage_input)" : ")");
+	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(",
+	          require_input ? "SPIRV_Cross_Input stage_input)" : ")");
 	begin_scope();
 
 	if (require_input)
@@ -664,7 +665,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 				if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 				    var.storage == StorageClassOutput && !is_builtin_variable(var) &&
-					interface_variable_exists_in_entry_point(var.self))
+				    interface_variable_exists_in_entry_point(var.self))
 				{
 					auto name = to_name(var.self);
 					statement("stage_output.", name, " = ", name, ";");
@@ -676,8 +677,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		{
 			if (options.shader_model <= 30)
 			{
-				statement("stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * stage_output.gl_Position.w;");
-				statement("stage_output.gl_Position.y = stage_output.gl_Position.y + gl_HalfPixel.y * stage_output.gl_Position.w;");
+				statement("stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * "
+				          "stage_output.gl_Position.w;");
+				statement("stage_output.gl_Position.y = stage_output.gl_Position.y + gl_HalfPixel.y * "
+				          "stage_output.gl_Position.w;");
 			}
 			if (options.flip_vert_y)
 			{
@@ -685,7 +688,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			}
 			if (options.fixup_clipspace)
 			{
-				statement("stage_output.gl_Position.z = (stage_output.gl_Position.z + stage_output.gl_Position.w) * 0.5;");
+				statement(
+				    "stage_output.gl_Position.z = (stage_output.gl_Position.z + stage_output.gl_Position.w) * 0.5;");
 			}
 		}
 
