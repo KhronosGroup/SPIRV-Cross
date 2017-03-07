@@ -165,6 +165,11 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 			semantic = legacy ? "POSITION" : "SV_Position";
 			break;
 
+		case BuiltInFragDepth:
+			type = "float";
+			semantic = legacy ? "DEPTH" : "SV_Depth";
+			break;
+
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 			break;
@@ -190,7 +195,21 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 		{
 		case BuiltInFragCoord:
 			type = "float4";
-			semantic = legacy ? "POSITION" : "SV_Position";
+			semantic = legacy ? "VPOS" : "SV_Position";
+			break;
+
+		case BuiltInVertexIndex:
+			if (legacy)
+				SPIRV_CROSS_THROW("Vertex index not supported in SM 3.0 or lower.");
+			type = "uint";
+			semantic = "SV_VertexID";
+			break;
+
+		case BuiltInInstanceIndex:
+			if (legacy)
+				SPIRV_CROSS_THROW("Vertex index not supported in SM 3.0 or lower.");
+			type = "uint";
+			semantic = "SV_InstanceID";
 			break;
 
 		default:
@@ -306,6 +325,15 @@ void CompilerHLSL::emit_builtin_variables()
 		case BuiltInFragCoord:
 		case BuiltInPosition:
 			type = "float4";
+			break;
+
+		case BuiltInFragDepth:
+			type = "float";
+			break;
+
+		case BuiltInVertexIndex:
+		case BuiltInInstanceIndex:
+			type = "int";
 			break;
 
 		default:
@@ -630,21 +658,43 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(",
 	          require_input ? "SPIRV_Cross_Input stage_input)" : ")");
 	begin_scope();
+	bool legacy = options.shader_model <= 30;
 
 	if (require_input)
 	{
+		// Copy builtins from entry point arguments to globals.
+		for (uint32_t i = 0; i < 64; i++)
+		{
+			if (!(active_input_builtins & (1ull << i)))
+				continue;
+
+			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+			switch (static_cast<BuiltIn>(i))
+			{
+			case BuiltInFragCoord:
+				// VPOS in D3D9 is sampled at integer locations, apply half-pixel offset to be consistent.
+				// TODO: Do we need an option here? Any reason why a D3D9 shader would be used
+				// on a D3D10+ system?
+				if (legacy)
+					statement(builtin, " = stage_input.", builtin, " + float4(0.5f, 0.5f, 0.0f, 0.0f);");
+				else
+					statement(builtin, " = stage_input.", builtin, ";");
+				break;
+
+			case BuiltInVertexIndex:
+			case BuiltInInstanceIndex:
+				// D3D semantics are uint, but shader wants int.
+				statement(builtin, " = int(stage_input.", builtin, ");");
+				break;
+
+			default:
+				statement(builtin, " = stage_input.", builtin, ";");
+				break;
+			}
+		}
+
 		for (auto &id : ids)
 		{
-			// Copy builtins from entry point arguments to globals.
-			for (uint32_t i = 0; i < 64; i++)
-			{
-				if (!(active_input_builtins & (1ull << i)))
-					continue;
-
-				auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
-				statement(builtin, " = stage_input.", builtin, ";");
-			}
-
 			if (id.get_type() == TypeVariable)
 			{
 				auto &var = id.get<SPIRVariable>();
@@ -656,12 +706,11 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				{
 					auto name = to_name(var.self);
 					auto &mtype = get<SPIRType>(var.basetype);
-					if (mtype.vecsize == 4 && mtype.columns == 4)
+					if (mtype.columns > 1)
 					{
-						statement(name, "[0] = stage_input.", name, "_0;");
-						statement(name, "[1] = stage_input.", name, "_1;");
-						statement(name, "[2] = stage_input.", name, "_2;");
-						statement(name, "[3] = stage_input.", name, "_3;");
+						// Unroll matrices.
+						for (uint32_t col = 0; col < mtype.columns; col++)
+							statement(name, "[", col, "] = stage_input.", name, "_0;");
 					}
 					else
 					{
