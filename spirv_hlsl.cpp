@@ -508,8 +508,7 @@ void CompilerHLSL::emit_resources()
 			// Do not emit I/O blocks here.
 			// I/O blocks can be arrayed, so we must deal with them separately to support geometry shaders
 			// and tessellation down the line.
-			if (!block && !var.remapped_variable && type.pointer &&
-			    !is_builtin_variable(var) &&
+			if (!block && !var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				if (var.storage == StorageClassInput)
@@ -549,8 +548,7 @@ void CompilerHLSL::emit_resources()
 
 		if (has_location_a && has_location_b)
 		{
-			return get_decoration(a->self, DecorationLocation) <
-			       get_decoration(b->self, DecorationLocation);
+			return get_decoration(a->self, DecorationLocation) < get_decoration(b->self, DecorationLocation);
 		}
 		else if (has_location_a && !has_location_b)
 			return true;
@@ -731,8 +729,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 				continue;
 
-			if (block && !is_builtin_variable(var) &&
-			    interface_variable_exists_in_entry_point(var.self))
+			if (block && !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self))
 			{
 				if (var.storage == StorageClassInput)
 				{
@@ -794,8 +791,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (var.storage != StorageClassInput)
 				continue;
 
-			if (!block && !var.remapped_variable && type.pointer &&
-			    !is_builtin_variable(var) &&
+			if (!block && !var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				auto name = to_name(var.self);
@@ -813,8 +809,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			}
 
 			// I/O blocks don't use the common stage input/output struct, but separate outputs.
-			if (block && !is_builtin_variable(var) &&
-			    interface_variable_exists_in_entry_point(var.self))
+			if (block && !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self))
 			{
 				auto name = to_name(var.self);
 				statement(name, " = stage_input", name, ";");
@@ -843,8 +838,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				continue;
 
 			// I/O blocks don't use the common stage input/output struct, but separate outputs.
-			if (block && !is_builtin_variable(var) &&
-			    interface_variable_exists_in_entry_point(var.self))
+			if (block && !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self))
 			{
 				auto name = to_name(var.self);
 				statement("stage_output", name, " = ", name, ";");
@@ -879,8 +873,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					continue;
 
 				if (!block && var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-				    !is_builtin_variable(var) &&
-				    interface_variable_exists_in_entry_point(var.self))
+				    !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self))
 				{
 					auto name = to_name(var.self);
 					statement("stage_output.", name, " = ", name, ";");
