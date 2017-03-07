@@ -5,8 +5,6 @@ struct Foo
     float3 c;
 };
 
-uniform float4 gl_HalfPixel;
-
 static float4 gl_Position;
 static float4 Input2;
 static float4 Input4;
@@ -26,7 +24,7 @@ struct SPIRV_Cross_Input
 
 struct SPIRV_Cross_Output
 {
-    float4 gl_Position : POSITION;
+    float4 gl_Position : SV_Position;
     float vLocation0 : TEXCOORD0;
     float vLocation1 : TEXCOORD1;
     float vLocation2[2] : TEXCOORD2;
@@ -62,7 +60,5 @@ SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
     stage_output.vLocation2 = vLocation2;
     stage_output.vLocation4 = vLocation4;
     stage_output.vLocation7 = vLocation7;
-    stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * stage_output.gl_Position.w;
-    stage_output.gl_Position.y = stage_output.gl_Position.y + gl_HalfPixel.y * stage_output.gl_Position.w;
     return stage_output;
 }

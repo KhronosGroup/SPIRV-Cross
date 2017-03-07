@@ -7,7 +7,6 @@ cbuffer UBO
 {
     _UBO _16;
 };
-uniform float4 gl_HalfPixel;
 
 static float4 gl_Position;
 static float4 aVertex;
@@ -22,7 +21,7 @@ struct SPIRV_Cross_Input
 
 struct SPIRV_Cross_Output
 {
-    float4 gl_Position : POSITION;
+    float4 gl_Position : SV_Position;
     float3 vNormal : TEXCOORD0;
 };
 
@@ -40,7 +39,5 @@ SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
     SPIRV_Cross_Output stage_output;
     stage_output.gl_Position = gl_Position;
     stage_output.vNormal = vNormal;
-    stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * stage_output.gl_Position.w;
-    stage_output.gl_Position.y = stage_output.gl_Position.y + gl_HalfPixel.y * stage_output.gl_Position.w;
     return stage_output;
 }

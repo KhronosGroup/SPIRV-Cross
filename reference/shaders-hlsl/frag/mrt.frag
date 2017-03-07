@@ -5,10 +5,10 @@ static float4 RT3;
 
 struct SPIRV_Cross_Output
 {
-    float4 RT0 : COLOR0;
-    float4 RT1 : COLOR1;
-    float4 RT2 : COLOR2;
-    float4 RT3 : COLOR3;
+    float4 RT0 : SV_Target0;
+    float4 RT1 : SV_Target1;
+    float4 RT2 : SV_Target2;
+    float4 RT3 : SV_Target3;
 };
 
 void frag_main()

@@ -1142,6 +1142,7 @@ string CompilerHLSL::compile()
 	// Do not deal with ES-isms like precision, older extensions and such.
 	CompilerGLSL::options.es = false;
 	CompilerGLSL::options.version = 450;
+	CompilerGLSL::options.vulkan_semantics = true;
 	backend.float_literal_suffix = true;
 	backend.double_literal_suffix = false;
 	backend.long_long_literal_suffix = true;

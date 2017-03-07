@@ -5,14 +5,14 @@ static float4 vColor;
 
 struct SPIRV_Cross_Input
 {
-    float4 gl_FragCoord : VPOS;
+    float4 gl_FragCoord : SV_Position;
     float4 vColor : TEXCOORD0;
 };
 
 struct SPIRV_Cross_Output
 {
-    float gl_FragDepth : DEPTH;
-    float4 FragColor : COLOR0;
+    float gl_FragDepth : SV_Depth;
+    float4 FragColor : SV_Target0;
 };
 
 void frag_main()
@@ -23,7 +23,7 @@ void frag_main()
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
 {
-    gl_FragCoord = stage_input.gl_FragCoord + float4(0.5f, 0.5f, 0.0f, 0.0f);
+    gl_FragCoord = stage_input.gl_FragCoord;
     vColor = stage_input.vColor;
     frag_main();
     SPIRV_Cross_Output stage_output;

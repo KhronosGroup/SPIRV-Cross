@@ -12,7 +12,7 @@ struct SPIRV_Cross_Input
 
 struct SPIRV_Cross_Output
 {
-    float4 FragColor : COLOR0;
+    float4 FragColor : SV_Target0;
 };
 
 void frag_main()
