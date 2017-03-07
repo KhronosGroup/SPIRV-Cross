@@ -357,7 +357,7 @@ protected:
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
 	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags);
 	const char *format_to_glsl(spv::ImageFormat format);
-	std::string layout_for_member(const SPIRType &type, uint32_t index);
+	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	std::string to_interpolation_qualifiers(uint64_t flags);
 	uint64_t combined_decoration_for_member(const SPIRType &type, uint32_t index);
 	std::string layout_for_variable(const SPIRVariable &variable);

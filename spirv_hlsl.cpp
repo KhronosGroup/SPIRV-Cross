@@ -207,7 +207,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 		case BuiltInInstanceIndex:
 			if (legacy)
-				SPIRV_CROSS_THROW("Vertex index not supported in SM 3.0 or lower.");
+				SPIRV_CROSS_THROW("Instance index not supported in SM 3.0 or lower.");
 			type = "uint";
 			semantic = "SV_InstanceID";
 			break;
@@ -245,6 +245,35 @@ uint32_t CompilerHLSL::type_to_consumed_locations(const SPIRType &type) const
 		elements += array_multiplier * type.columns;
 	}
 	return elements;
+}
+
+void CompilerHLSL::emit_io_block(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+	add_resource_name(type.self);
+
+	statement("struct ", to_name(type.self));
+	begin_scope();
+	type.member_name_cache.clear();
+
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+	{
+		string semantic;
+		if (get_member_decoration_mask(type.self, i) & (1ull << DecorationLocation))
+		{
+			uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
+			semantic = join(" : TEXCOORD", location);
+		}
+
+		add_member_name(type, i);
+		statement(member_decl(type, get<SPIRType>(type.member_types[i]), i), semantic, ";");
+	}
+
+	end_scope_decl();
+	statement("");
+
+	statement("static ", variable_decl(var), ";");
+	statement("");
 }
 
 void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unordered_set<uint32_t> &active_locations)
@@ -439,12 +468,16 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
 
-			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+			// Do not emit I/O blocks here.
+			// I/O blocks can be arrayed, so we must deal with them separately to support geometry shaders
+			// and tessellation down the line.
+			if (!block && var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
-				// Only emit non-builtins here. Builtin variables are handled separately.
+				// Only emit non-builtins which are not blocks here. Builtin variables are handled separately.
 				emit_interface_block_globally(var);
 				emitted = true;
 			}
@@ -455,6 +488,8 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	emitted = false;
 
+	require_input = false;
+	require_output = false;
 	unordered_set<uint32_t> active_inputs;
 	unordered_set<uint32_t> active_outputs;
 	vector<SPIRVariable *> input_variables;
@@ -465,15 +500,39 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
 
-			if (!var.remapped_variable && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
+			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+				continue;
+
+			// Do not emit I/O blocks here.
+			// I/O blocks can be arrayed, so we must deal with them separately to support geometry shaders
+			// and tessellation down the line.
+			if (!block && !var.remapped_variable && type.pointer &&
+			    !is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				if (var.storage == StorageClassInput)
 					input_variables.push_back(&var);
 				else
 					output_variables.push_back(&var);
+			}
+
+			// Reserve input and output locations for block variables as necessary.
+			if (block && !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self))
+			{
+				auto &active = var.storage == StorageClassInput ? active_inputs : active_outputs;
+				for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+				{
+					if (get_member_decoration_mask(type.self, i) & (1ull << DecorationLocation))
+					{
+						uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
+						active.insert(location);
+					}
+				}
+
+				// Emit the block struct and a global variable here.
+				emit_io_block(var);
 			}
 		}
 	}
@@ -524,8 +583,6 @@ void CompilerHLSL::emit_resources()
 		end_scope_decl();
 		statement("");
 	}
-	else
-		require_input = false;
 
 	if (!output_variables.empty() || active_output_builtins)
 	{
@@ -541,8 +598,6 @@ void CompilerHLSL::emit_resources()
 		end_scope_decl();
 		statement("");
 	}
-	else
-		require_output = false;
 
 	// Global variables.
 	for (auto global : global_variables)
@@ -567,6 +622,11 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+}
+
+string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
+{
+	return "";
 }
 
 void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
@@ -654,73 +714,115 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 
 void CompilerHLSL::emit_hlsl_entry_point()
 {
-	auto &execution = get_entry_point();
-	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(",
-	          require_input ? "SPIRV_Cross_Input stage_input)" : ")");
-	begin_scope();
-	bool legacy = options.shader_model <= 30;
+	vector<string> arguments;
 
 	if (require_input)
+		arguments.push_back("SPIRV_Cross_Input stage_input");
+
+	// Add I/O blocks as separate arguments with appropriate storage qualifier.
+	for (auto &id : ids)
 	{
-		// Copy builtins from entry point arguments to globals.
-		for (uint32_t i = 0; i < 64; i++)
+		if (id.get_type() == TypeVariable)
 		{
-			if (!(active_input_builtins & (1ull << i)))
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+
+			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 				continue;
 
-			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
-			switch (static_cast<BuiltIn>(i))
+			if (block && !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
-			case BuiltInFragCoord:
-				// VPOS in D3D9 is sampled at integer locations, apply half-pixel offset to be consistent.
-				// TODO: Do we need an option here? Any reason why a D3D9 shader would be used
-				// on a D3D10+ system?
-				if (legacy)
-					statement(builtin, " = stage_input.", builtin, " + float4(0.5f, 0.5f, 0.0f, 0.0f);");
-				else
-					statement(builtin, " = stage_input.", builtin, ";");
-				break;
-
-			case BuiltInVertexIndex:
-			case BuiltInInstanceIndex:
-				// D3D semantics are uint, but shader wants int.
-				statement(builtin, " = int(stage_input.", builtin, ");");
-				break;
-
-			default:
-				statement(builtin, " = stage_input.", builtin, ";");
-				break;
-			}
-		}
-
-		for (auto &id : ids)
-		{
-			if (id.get_type() == TypeVariable)
-			{
-				auto &var = id.get<SPIRVariable>();
-				auto &type = get<SPIRType>(var.basetype);
-
-				if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-				    var.storage == StorageClassInput && !is_builtin_variable(var) &&
-				    interface_variable_exists_in_entry_point(var.self))
+				if (var.storage == StorageClassInput)
 				{
-					auto name = to_name(var.self);
-					auto &mtype = get<SPIRType>(var.basetype);
-					if (mtype.columns > 1)
-					{
-						// Unroll matrices.
-						for (uint32_t col = 0; col < mtype.columns; col++)
-							statement(name, "[", col, "] = stage_input.", name, "_0;");
-					}
-					else
-					{
-						statement(name, " = stage_input.", name, ";");
-					}
+					arguments.push_back(join("in ", variable_decl(type, join("stage_input", to_name(var.self)))));
+				}
+				else if (var.storage == StorageClassOutput)
+				{
+					arguments.push_back(join("out ", variable_decl(type, join("stage_output", to_name(var.self)))));
 				}
 			}
 		}
 	}
 
+	auto &execution = get_entry_point();
+	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", merge(arguments), ")");
+	begin_scope();
+	bool legacy = options.shader_model <= 30;
+
+	// Copy builtins from entry point arguments to globals.
+	for (uint32_t i = 0; i < 64; i++)
+	{
+		if (!(active_input_builtins & (1ull << i)))
+			continue;
+
+		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+		switch (static_cast<BuiltIn>(i))
+		{
+		case BuiltInFragCoord:
+			// VPOS in D3D9 is sampled at integer locations, apply half-pixel offset to be consistent.
+			// TODO: Do we need an option here? Any reason why a D3D9 shader would be used
+			// on a D3D10+ system with a different rasterization config?
+			if (legacy)
+				statement(builtin, " = stage_input.", builtin, " + float4(0.5f, 0.5f, 0.0f, 0.0f);");
+			else
+				statement(builtin, " = stage_input.", builtin, ";");
+			break;
+
+		case BuiltInVertexIndex:
+		case BuiltInInstanceIndex:
+			// D3D semantics are uint, but shader wants int.
+			statement(builtin, " = int(stage_input.", builtin, ");");
+			break;
+
+		default:
+			statement(builtin, " = stage_input.", builtin, ";");
+			break;
+		}
+	}
+
+	// Copy from stage input struct to globals.
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+
+			if (var.storage != StorageClassInput)
+				continue;
+
+			if (!block && !var.remapped_variable && type.pointer &&
+			    !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
+			{
+				auto name = to_name(var.self);
+				auto &mtype = get<SPIRType>(var.basetype);
+				if (mtype.columns > 1)
+				{
+					// Unroll matrices.
+					for (uint32_t col = 0; col < mtype.columns; col++)
+						statement(name, "[", col, "] = stage_input.", name, "_0;");
+				}
+				else
+				{
+					statement(name, " = stage_input.", name, ";");
+				}
+			}
+
+			// I/O blocks don't use the common stage input/output struct, but separate outputs.
+			if (block && !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
+			{
+				auto name = to_name(var.self);
+				statement(name, " = stage_input", name, ";");
+			}
+		}
+	}
+
+	// Run the shader.
 	if (execution.model == ExecutionModelVertex)
 		statement("vert_main();");
 	else if (execution.model == ExecutionModelFragment)
@@ -728,6 +830,29 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	else
 		SPIRV_CROSS_THROW("Unsupported shader stage.");
 
+	// Copy block outputs.
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			auto &type = get<SPIRType>(var.basetype);
+			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+
+			if (var.storage != StorageClassOutput)
+				continue;
+
+			// I/O blocks don't use the common stage input/output struct, but separate outputs.
+			if (block && !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
+			{
+				auto name = to_name(var.self);
+				statement("stage_output", name, " = ", name, ";");
+			}
+		}
+	}
+
+	// Copy stage outputs.
 	if (require_output)
 	{
 		statement("SPIRV_Cross_Output stage_output;");
@@ -748,9 +873,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			{
 				auto &var = id.get<SPIRVariable>();
 				auto &type = get<SPIRType>(var.basetype);
+				bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
 
-				if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-				    var.storage == StorageClassOutput && !is_builtin_variable(var) &&
+				if (var.storage != StorageClassOutput)
+					continue;
+
+				if (!block && var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
+				    !is_builtin_variable(var) &&
 				    interface_variable_exists_in_entry_point(var.self))
 				{
 					auto name = to_name(var.self);
@@ -761,6 +890,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		if (execution.model == ExecutionModelVertex)
 		{
+			// Do various mangling on the gl_Position.
 			if (options.shader_model <= 30)
 			{
 				statement("stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * "
