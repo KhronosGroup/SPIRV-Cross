@@ -22,39 +22,6 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-namespace
-{
-struct VariableComparator
-{
-	VariableComparator(const CompilerHLSL &compiler_)
-	    : compiler(compiler_)
-	{
-	}
-
-	bool operator()(SPIRVariable *var1, SPIRVariable *var2)
-	{
-		if (compiler.get_decoration_mask(var1->self) & compiler.get_decoration_mask(var2->self) &
-		    (1ull << DecorationLocation))
-			return compiler.get_decoration(var1->self, DecorationLocation) <
-			       compiler.get_decoration(var2->self, DecorationLocation);
-
-		auto &name1 = compiler.get_name(var1->self);
-		auto &name2 = compiler.get_name(var2->self);
-
-		if (name1.empty() && name2.empty())
-			return var1->self < var2->self;
-		if (name1.empty())
-			return true;
-		else if (name2.empty())
-			return false;
-
-		return name1.compare(name2) < 0;
-	}
-
-	const CompilerHLSL &compiler;
-};
-}
-
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
@@ -163,21 +130,8 @@ void CompilerHLSL::emit_header()
 
 void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 {
-	auto &execution = get_entry_point();
-
 	add_resource_name(var.self);
-
-	if (execution.model == ExecutionModelVertex && var.storage == StorageClassInput && is_builtin_variable(var))
-	{
-	}
-	else if (execution.model == ExecutionModelVertex && var.storage == StorageClassOutput && is_builtin_variable(var))
-	{
-		statement("static float4 gl_Position;");
-	}
-	else
-	{
-		statement("static ", variable_decl(var), ";");
-	}
+	statement("static ", variable_decl(var), ";");
 }
 
 const char *CompilerHLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
@@ -249,12 +203,37 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 	}
 }
 
-void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint32_t &binding_number)
+uint32_t CompilerHLSL::type_to_consumed_locations(const SPIRType &type) const
+{
+	// TODO: Need to verify correctness.
+	uint32_t elements = 0;
+
+	if (type.basetype == SPIRType::Struct)
+	{
+		for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+			elements += type_to_consumed_locations(get<SPIRType>(type.member_types[i]));
+	}
+	else
+	{
+		uint32_t array_multiplier = 1;
+		for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
+		{
+			if (type.array_size_literal[i])
+				array_multiplier *= type.array[i];
+			else
+				array_multiplier *= get<SPIRConstant>(type.array[i]).scalar();
+		}
+		elements += array_multiplier * type.columns;
+	}
+	return elements;
+}
+
+void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unordered_set<uint32_t> &active_locations)
 {
 	auto &execution = get_entry_point();
 	auto &type = get<SPIRType>(var.basetype);
 
-	string binding = "TEXCOORD";
+	string binding;
 	bool use_binding_number = true;
 	bool legacy = options.shader_model <= 30;
 	if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
@@ -263,27 +242,52 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, uint3
 		use_binding_number = false;
 	}
 
+	const auto get_vacant_location = [&]() -> uint32_t {
+		for (uint32_t i = 0; i < 64; i++)
+			if (!active_locations.count(i))
+				return i;
+		SPIRV_CROSS_THROW("All locations from 0 to 63 are exhausted.");
+	};
+
 	auto &m = meta[var.self].decoration;
+	auto name = to_name(var.self);
 	if (use_binding_number)
 	{
+		uint32_t binding_number;
+
+		// If an explicit location exists, use it with TEXCOORD[N] semantic.
+		// Otherwise, pick a vacant location.
+		if (m.decoration_flags & (1ull << DecorationLocation))
+			binding_number = m.location;
+		else
+			binding_number = get_vacant_location();
+
 		if (type.columns > 1)
 		{
+			if (!type.array.empty())
+				SPIRV_CROSS_THROW("Arrays of matrices used as input/output. This is not supported.");
+
+			// Unroll matrices.
 			for (uint32_t i = 0; i < type.columns; i++)
 			{
 				SPIRType newtype = type;
 				newtype.columns = 1;
-				statement(variable_decl(newtype, join(m.alias, "_", i)), " : ", binding, binding_number++, ";");
+				statement(variable_decl(newtype, join(name, "_", i)), " : TEXCOORD", binding_number, ";");
+				active_locations.insert(binding_number++);
 			}
-			--binding_number;
 		}
 		else
-			statement(variable_decl(type, m.alias), " : ", binding, binding_number, ";");
+		{
+			statement(variable_decl(type, name), " : TEXCOORD", binding_number, ";");
+
+			// Structs and arrays should consume more locations.
+			uint32_t consumed_locations = type_to_consumed_locations(type);
+			for (uint32_t i = 0; i < consumed_locations; i++)
+				active_locations.insert(binding_number + i);
+		}
 	}
 	else
-		statement(variable_decl(type, m.alias), " : ", binding, ";");
-
-	if (use_binding_number)
-		binding_number++;
+		statement(variable_decl(type, name), " : ", binding, ";");
 }
 
 void CompilerHLSL::emit_builtin_variables()
@@ -423,7 +427,8 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	emitted = false;
 
-	uint32_t binding_number = 0;
+	unordered_set<uint32_t> active_inputs;
+	unordered_set<uint32_t> active_outputs;
 	vector<SPIRVariable *> input_variables;
 	vector<SPIRVariable *> output_variables;
 	for (auto &id : ids)
@@ -445,17 +450,49 @@ void CompilerHLSL::emit_resources()
 		}
 	}
 
+	const auto variable_compare = [&](const SPIRVariable *a, const SPIRVariable *b) -> bool {
+		// Sort input and output variables based on, from more robust to less robust:
+		// - Location
+		// - Variable has a location
+		// - Name comparison
+		// - Variable has a name
+		// - Fallback: ID
+		bool has_location_a = (get_decoration_mask(a->self) & (1ull << DecorationLocation)) != 0;
+		bool has_location_b = (get_decoration_mask(b->self) & (1ull << DecorationLocation)) != 0;
+
+		if (has_location_a && has_location_b)
+		{
+			return get_decoration(a->self, DecorationLocation) <
+			       get_decoration(b->self, DecorationLocation);
+		}
+		else if (has_location_a && !has_location_b)
+			return true;
+		else if (!has_location_a && has_location_b)
+			return false;
+
+		const auto &name1 = to_name(a->self);
+		const auto &name2 = to_name(b->self);
+
+		if (name1.empty() && name2.empty())
+			return a->self < b->self;
+		else if (name1.empty())
+			return true;
+		else if (name2.empty())
+			return false;
+
+		return name1.compare(name2) < 0;
+	};
+
 	if (!input_variables.empty() || active_input_builtins)
 	{
 		require_input = true;
 		statement("struct SPIRV_Cross_Input");
 
 		begin_scope();
-		// FIXME: Use locations properly if they exist.
-		sort(input_variables.begin(), input_variables.end(), VariableComparator(*this));
+		sort(input_variables.begin(), input_variables.end(), variable_compare);
 		emit_builtin_inputs_in_struct();
 		for (auto var : input_variables)
-			emit_interface_block_in_struct(*var, binding_number);
+			emit_interface_block_in_struct(*var, active_inputs);
 		end_scope_decl();
 		statement("");
 	}
@@ -469,10 +506,10 @@ void CompilerHLSL::emit_resources()
 
 		begin_scope();
 		// FIXME: Use locations properly if they exist.
-		sort(output_variables.begin(), output_variables.end(), VariableComparator(*this));
+		sort(output_variables.begin(), output_variables.end(), variable_compare);
 		emit_builtin_outputs_in_struct();
 		for (auto var : output_variables)
-			emit_interface_block_in_struct(*var, binding_number);
+			emit_interface_block_in_struct(*var, active_outputs);
 		end_scope_decl();
 		statement("");
 	}

@@ -1794,7 +1794,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 // If we're currently in the entry point function, and the object
 // has a qualified name, use it, otherwise use the standard name.
-string CompilerMSL::to_name(uint32_t id, bool allow_alias)
+string CompilerMSL::to_name(uint32_t id, bool allow_alias) const
 {
 	if (current_function && (current_function->self == entry_point))
 	{

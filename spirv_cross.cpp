@@ -136,7 +136,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 	return true;
 }
 
-string Compiler::to_name(uint32_t id, bool allow_alias)
+string Compiler::to_name(uint32_t id, bool allow_alias) const
 {
 	if (allow_alias && ids.at(id).get_type() == TypeType)
 	{

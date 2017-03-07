@@ -57,7 +57,7 @@ private:
 	void emit_header() override;
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
-	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number);
+	void emit_interface_block_in_struct(const SPIRVariable &type, std::unordered_set<uint32_t> &active_locations);
 	void emit_builtin_inputs_in_struct();
 	void emit_builtin_outputs_in_struct();
 	void emit_texture_op(const Instruction &i) override;
@@ -76,6 +76,8 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
+
+	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 };
 }
 
