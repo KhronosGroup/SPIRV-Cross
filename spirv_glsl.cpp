@@ -3531,7 +3531,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 	expr += type_to_glsl_constructor(target_type);
 	expr += "(";
 
-	for (size_t i = 0; i < target_type.member_types.size(); ++i)
+	for (uint32_t i = 0; i < uint32_t(target_type.member_types.size()); ++i)
 	{
 		if (i != 0)
 			expr += ", ";
