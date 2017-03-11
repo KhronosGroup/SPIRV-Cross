@@ -69,7 +69,7 @@ struct MSLResourceBinding
 };
 
 // Tracks the type ID and member index of a struct member
-typedef uint64_t MSLStructMemberKey;
+using MSLStructMemberKey = uint64_t;
 
 // Special constant used in a MSLResourceBinding desc_set
 // element to indicate the bindings for the push constants.
@@ -110,8 +110,8 @@ protected:
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_fixup() override;
-	void emit_stuct_member(const SPIRType &type, const uint32_t member_type_id, uint32_t index,
-	                       const std::string &qualifier = "") override;
+	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+	                        const std::string &qualifier = "") override;
 	std::string type_to_glsl(const SPIRType &type) override;
 	std::string image_type_glsl(const SPIRType &type) override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin) override;

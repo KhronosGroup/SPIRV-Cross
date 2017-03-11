@@ -606,7 +606,7 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 		// pass will mark the packed member, and the second pass will insert a padding member.
 		// If we ever move to a single-pass design, this will break.
 		uint32_t mbr_offset = get_member_decoration(ib_type_id, mbr_idx, DecorationOffset);
-		int32_t gap = mbr_offset - curr_offset;
+		int32_t gap = (int32_t)mbr_offset - (int32_t)curr_offset;
 		if (gap > 0)
 		{
 			// Since MSL and SPIR-V have slightly different struct member alignment and
@@ -1333,8 +1333,8 @@ void CompilerMSL::emit_fixup()
 }
 
 // Emit a structure member, padding and packing to maintain the correct memeber alignments.
-void CompilerMSL::emit_stuct_member(const SPIRType &type, const uint32_t member_type_id, uint32_t index,
-                                    const string &qualifier)
+void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+                                     const string &qualifier)
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 
@@ -2126,7 +2126,6 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 	case SPIRType::SampledImage:
 	case SPIRType::Sampler:
 		SPIRV_CROSS_THROW("Querying size of opaque object.");
-		return 4; // A pointer
 
 	case SPIRType::Struct:
 		return get_declared_struct_size(type);
@@ -2196,7 +2195,6 @@ size_t CompilerMSL::get_declared_type_alignment(uint32_t type_id, uint64_t dec_m
 	case SPIRType::SampledImage:
 	case SPIRType::Sampler:
 		SPIRV_CROSS_THROW("Querying alignment of opaque object.");
-		return 4; // A pointer
 
 	case SPIRType::Struct:
 		return 16; // Per Vulkan spec section 14.5.4

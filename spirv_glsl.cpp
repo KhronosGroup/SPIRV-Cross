@@ -504,7 +504,7 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-		emit_stuct_member(type, member, i);
+		emit_struct_member(type, member, i);
 		i++;
 		emitted = true;
 	}
@@ -1104,7 +1104,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-		emit_stuct_member(type, member, i);
+		emit_struct_member(type, member, i);
 		i++;
 	}
 
@@ -1194,7 +1194,7 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 		// which is not allowed.
 		auto member_name = get_member_name(type.self, i);
 		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
-		emit_stuct_member(type, member, i, qual);
+		emit_struct_member(type, member, i, qual);
 		// Restore member name.
 		set_member_name(type.self, i, member_name);
 		i++;
@@ -1256,7 +1256,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			for (auto &member : type.member_types)
 			{
 				add_member_name(type, i);
-				emit_stuct_member(type, member, i);
+				emit_struct_member(type, member, i);
 				i++;
 			}
 
@@ -5541,8 +5541,8 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
 
 // Emit a structure member. Subclasses may override to modify output,
 // or to dynamically add a padding member if needed.
-void CompilerGLSL::emit_stuct_member(const SPIRType &type, const uint32_t member_type_id, uint32_t index,
-                                     const string &qualifier)
+void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+                                      const string &qualifier)
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 
