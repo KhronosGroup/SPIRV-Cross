@@ -433,6 +433,7 @@ struct CLIArguments
 	uint32_t iterations = 1;
 	bool cpp = false;
 	bool metal = false;
+	bool msl_pack_ubos = true;
 	bool hlsl = false;
 	bool vulkan_semantics = false;
 	bool remove_unused = false;
@@ -566,6 +567,7 @@ int main(int argc, char *argv[])
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.metal = true; });
+	cbs.add("--msl-no-pack-ubos", [&args](CLIParser &) { args.msl_pack_ubos = false; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
@@ -631,7 +633,14 @@ int main(int argc, char *argv[])
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
 	}
 	else if (args.metal)
+	{
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
+
+		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
+		auto msl_opts = msl_comp->get_options();
+		msl_opts.pad_and_pack_uniform_structs = args.msl_pack_ubos;
+		msl_comp->set_options(msl_opts);
+	}
 	else if (args.hlsl)
 		compiler = unique_ptr<CompilerHLSL>(new CompilerHLSL(read_spirv_file(args.input)));
 	else

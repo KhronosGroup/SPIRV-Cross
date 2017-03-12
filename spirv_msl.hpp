@@ -27,15 +27,8 @@
 namespace spirv_cross
 {
 
-// Options for compiling to Metal Shading Language
-struct MSLConfiguration
-{
-	bool flip_vert_y = false;
-	bool flip_frag_y = false;
-	bool is_rendering_points = false;
-	bool pad_and_pack_uniform_structs = false;
-	std::string entry_point_name;
-};
+// Deprecated legacy syntax
+#define MSLConfiguration CompilerMSL::Options
 
 // Defines MSL characteristics of a vertex attribute at a particular location.
 // The used_by_shader flag is set to true during compilation of SPIR-V to MSL
@@ -83,11 +76,28 @@ static const uint32_t kPushConstBinding = 0;
 class CompilerMSL : public CompilerGLSL
 {
 public:
-	// Constructs an instance to compile the SPIR-V code into Metal Shading Language.
-	CompilerMSL(std::vector<uint32_t> spirv);
+	// Options for compiling to Metal Shading Language
+	struct Options
+	{
+		bool flip_vert_y = false;
+		bool flip_frag_y = false;
+		bool is_rendering_points = false;
+		bool pad_and_pack_uniform_structs = false;
+		std::string entry_point_name;
+	};
 
-	// Compiles the SPIR-V code into Metal Shading Language using the specified configuration parameters.
-	//  - msl_cfg indicates some general configuration for directing the compilation.
+	const Options &get_options() const
+	{
+		return options;
+	}
+
+	void set_options(Options &opts)
+	{
+		options = opts;
+	}
+
+	// Constructs an instance to compile the SPIR-V code into Metal Shading Language,
+	// using the configuration parameters, if provided:
 	//  - p_vtx_attrs is an optional list of vertex attribute bindings used to match
 	//    vertex content locations to MSL attributes. If vertex attributes are provided,
 	//    the compiler will set the used_by_shader flag to true in any vertex attribute
@@ -96,11 +106,21 @@ public:
 	//    texture or sampler index to use for a particular SPIR-V description set
 	//    and binding. If resource bindings are provided, the compiler will set the
 	//    used_by_shader flag to true in any resource binding actually used by the MSL code.
+	CompilerMSL(std::vector<uint32_t> spirv, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
+	            std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
+
+	// Compiles the SPIR-V code into Metal Shading Language.
+	std::string compile() override;
+
+	// Compiles the SPIR-V code into Metal Shading Language, overriding configuration parameters.
+	// Any of the parameters here may be null to indicate that the configuration provided in the
+	// constructor should be used. They are not declared as optional to avoid a conflict with the
+	// inherited and overridden zero-parameter compile() function.
+	std::string compile(std::vector<MSLVertexAttr> *p_vtx_attrs, std::vector<MSLResourceBinding> *p_res_bindings);
+
+	// This legacy method is deprecated.
 	std::string compile(MSLConfiguration &msl_cfg, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	                    std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
-
-	// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
-	std::string compile() override;
 
 protected:
 	void emit_instruction(const Instruction &instr) override;
@@ -174,7 +194,7 @@ protected:
 	bool is_member_packable(SPIRType &ib_type, uint32_t index);
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
 
-	MSLConfiguration msl_config;
+	Options options;
 	std::unordered_map<std::string, std::string> func_name_overrides;
 	std::unordered_map<std::string, std::string> var_name_overrides;
 	std::set<uint32_t> custom_function_ops;

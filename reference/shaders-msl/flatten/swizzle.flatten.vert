@@ -10,7 +10,7 @@ struct UBO
     float2 B1;
     float C0;
     float3 C1;
-    float3 D0;
+    packed_float3 D0;
     float D1;
     float E0;
     float E1;
@@ -40,7 +40,7 @@ vertex main0_out main0(constant UBO& _22 [[buffer(0)]])
     out.oA = _22.A;
     out.oB = float4(_22.B0, _22.B1);
     out.oC = float4(_22.C0, _22.C1);
-    out.oD = float4(_22.D0, _22.D1);
+    out.oD = float4(float3(_22.D0), _22.D1);
     out.oE = float4(_22.E0, _22.E1, _22.E2, _22.E3);
     out.oF = float4(_22.F0, _22.F1, _22.F2);
     return out;
