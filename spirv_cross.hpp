@@ -29,6 +29,11 @@
 
 #include "spirv_common.hpp"
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wweak-vtables"
+#endif
+
 namespace spirv_cross
 {
 struct Resource
@@ -47,6 +52,8 @@ struct Resource
 	// This is mostly useful to parse decorations of the underlying type.
 	// base_type_id can also be obtained with get_type(get_type(type_id).self).
 	uint32_t base_type_id;
+
+	uint32_t pad0;
 
 	// The declared name (OpName) of the resource.
 	// For Buffer blocks, the name actually reflects the externally
@@ -102,6 +109,7 @@ struct SpecializationConstant
 struct BufferRange
 {
 	unsigned index;
+	uint32_t pad0;
 	size_t offset;
 	size_t range;
 };
@@ -383,6 +391,7 @@ protected:
 			return nullptr;
 	}
 
+	uint8_t pad0[3];
 	uint32_t entry_point = 0;
 	// Normally, we'd stick SPIREntryPoint in ids array, but it conflicts with SPIRFunction.
 	// Entry points can therefore be seen as some sort of meta structure.
@@ -395,6 +404,7 @@ protected:
 		uint32_t version = 0;
 		bool es = false;
 		bool known = false;
+		uint16_t pad0;
 
 		Source() = default;
 	} source;
@@ -474,6 +484,7 @@ protected:
 	// variable is part of that entry points interface.
 	bool interface_variable_exists_in_entry_point(uint32_t id) const;
 
+	uint8_t pad1[7];
 	std::vector<CombinedImageSampler> combined_image_samplers;
 
 	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
@@ -531,6 +542,7 @@ protected:
 		const Compiler &compiler;
 		std::vector<BufferRange> &ranges;
 		uint32_t id;
+		uint32_t pad0;
 
 		std::unordered_set<uint32_t> seen;
 	};
@@ -584,5 +596,9 @@ protected:
 	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type);
 };
 }
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #endif

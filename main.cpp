@@ -31,6 +31,11 @@
 #pragma warning(disable : 4996)
 #endif
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wpadded"
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
@@ -120,7 +125,7 @@ struct CLIParser
 			THROW("Tried to parse uint, but nothing left in arguments");
 		}
 
-		uint32_t val = stoul(*argv);
+		uint32_t val = static_cast<uint32_t>(stoul(*argv));
 		if (val > numeric_limits<uint32_t>::max())
 		{
 			THROW("next_uint() out of range");
@@ -176,11 +181,11 @@ static vector<uint32_t> read_spirv_file(const char *path)
 	}
 
 	fseek(file, 0, SEEK_END);
-	long len = ftell(file) / sizeof(uint32_t);
+	long len = ftell(file) / static_cast<long>(sizeof(uint32_t));
 	rewind(file);
 
-	vector<uint32_t> spirv(len);
-	if (fread(spirv.data(), sizeof(uint32_t), len, file) != size_t(len))
+	vector<uint32_t> spirv(static_cast<size_t>(len));
+	if (fread(spirv.data(), sizeof(uint32_t), static_cast<size_t>(len), file) != size_t(len))
 		spirv.clear();
 
 	fclose(file);
@@ -339,8 +344,6 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 			CHECK_MODE(VecTypeHint);
 			CHECK_MODE(ContractionOff);
 
-		default:
-			break;
 		}
 	}
 	fprintf(stderr, "\n");

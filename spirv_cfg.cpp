@@ -18,6 +18,10 @@
 #include <algorithm>
 #include <assert.h>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#endif
+
 using namespace std;
 
 namespace spirv_cross
@@ -130,7 +134,7 @@ bool CFG::post_order_visit(uint32_t block_id)
 	}
 
 	// Then visit ourselves. Start counting at one, to let 0 be a magic value for testing back vs. crossing edges.
-	visit_order[block_id] = ++visit_count;
+	visit_order[block_id] = static_cast<int>(++visit_count);
 	post_order.push_back(block_id);
 	return true;
 }

@@ -83,6 +83,9 @@ private:
 	std::vector<int> visit_order;
 	std::vector<uint32_t> post_order;
 
+public:
+	uint32_t pad0;
+
 	void add_branch(uint32_t from, uint32_t to);
 	void build_post_order_visit_order();
 	void build_immediate_dominators();
@@ -109,6 +112,9 @@ public:
 private:
 	const CFG &cfg;
 	uint32_t dominator = 0;
+
+public:
+	uint32_t pad0;
 };
 }
 

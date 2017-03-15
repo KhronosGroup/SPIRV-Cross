@@ -64,7 +64,10 @@ private:
 	std::string resource_type;
 	uint32_t shared_counter = 0;
 
+	uint32_t pad0;
 	std::string interface_name;
+
+	uint64_t pad1;
 };
 }
 

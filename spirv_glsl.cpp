@@ -20,6 +20,14 @@
 #include <assert.h>
 #include <utility>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wcovered-switch-default"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wpadded"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#endif
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
@@ -3537,7 +3545,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 			expr += ", ";
 
 		const SPIRType &member_type = get<SPIRType>(target_type.member_types[i]);
-		uint32_t member_offset = type_struct_member_offset(target_type, i);
+		uint32_t member_offset = type_struct_member_offset(target_type, static_cast<uint32_t>(i));
 
 		// The access chain terminates at the struct, so we need to find matrix strides and row-major information
 		// ahead of time.
@@ -3545,8 +3553,9 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 		uint32_t matrix_stride = 0;
 		if (member_type.columns > 1)
 		{
-			need_transpose = (combined_decoration_for_member(target_type, i) & (1ull << DecorationRowMajor)) != 0;
-			matrix_stride = type_struct_member_matrix_stride(target_type, i);
+			need_transpose = (combined_decoration_for_member(target_type, static_cast<uint32_t>(i)) &
+			                  (1ull << DecorationRowMajor)) != 0;
+			matrix_stride = type_struct_member_matrix_stride(target_type, static_cast<uint32_t>(i));
 		}
 
 		auto tmp = flattened_access_chain(base, indices, count, member_type, offset + member_offset, matrix_stride,
@@ -3649,7 +3658,7 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 		expr += convert_to_string(index / 4);
 		expr += "]";
 
-		expr += vector_swizzle(target_type.vecsize, index % 4);
+		expr += vector_swizzle(static_cast<int>(target_type.vecsize), index % 4);
 
 		return expr;
 	}

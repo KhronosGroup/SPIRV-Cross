@@ -21,6 +21,12 @@
 #include <cstring>
 #include <utility>
 
+#ifdef __clang__
+#pragma clang diagnostic ignored "-Wswitch-enum"
+#pragma clang diagnostic ignored "-Wexit-time-destructors"
+#pragma clang diagnostic ignored "-Wunused-macros"
+#endif
+
 using namespace std;
 using namespace spv;
 using namespace spirv_cross;
@@ -578,68 +584,81 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+				res.stage_inputs.push_back(
+				    { var.self, var.basetype, type.self, /* pad */ 0, meta[type.self].decoration.alias });
 			else
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+				res.stage_inputs.push_back(
+				    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Subpass inputs
 		else if (var.storage == StorageClassUniformConstant && type.image.dim == DimSubpassData)
 		{
-			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.subpass_inputs.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Outputs
 		else if (var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+				res.stage_outputs.push_back(
+				    { var.self, var.basetype, type.self, /* pad */ 0, meta[type.self].decoration.alias });
 			else
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+				res.stage_outputs.push_back(
+				    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// UBOs
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)))
 		{
-			res.uniform_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			res.uniform_buffers.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[type.self].decoration.alias });
 		}
 		// SSBOs
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
 		{
-			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			res.storage_buffers.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[type.self].decoration.alias });
 		}
 		// Push constant blocks
 		else if (type.storage == StorageClassPushConstant)
 		{
 			// There can only be one push constant block, but keep the vector in case this restriction is lifted
 			// in the future.
-			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.push_constant_buffers.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 2)
 		{
-			res.storage_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.storage_images.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Separate images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 1)
 		{
-			res.separate_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.separate_images.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Separate samplers
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Sampler)
 		{
-			res.separate_samplers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.separate_samplers.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Textures
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::SampledImage)
 		{
-			res.sampled_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.sampled_images.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 		// Atomic counters
 		else if (type.storage == StorageClassAtomicCounter)
 		{
-			res.atomic_counters.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.atomic_counters.push_back(
+			    { var.self, var.basetype, type.self, /* pad */ 0, meta[var.self].decoration.alias });
 		}
 	}
 
@@ -660,7 +679,7 @@ static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
 
 		for (uint32_t j = 0; j < 4; j++, w >>= 8)
 		{
-			char c = w & 0xff;
+			char c = static_cast<char>(w & 0xff);
 			if (c == '\0')
 				return ret;
 			ret += c;
@@ -2188,7 +2207,7 @@ bool Compiler::BufferAccessHandler::handle(Op opcode, const uint32_t *args, uint
 		range = compiler.get_declared_struct_member_size(type, index);
 	}
 
-	ranges.push_back({ index, offset, range });
+	ranges.push_back({ index, /* pad */ 0, offset, range });
 	return true;
 }
 
@@ -2524,9 +2543,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	// We now have a texture ID and a sampler ID which will either be found as a global
 	// or a parameter in our own function. If both are global, they will not need a parameter,
 	// otherwise, add it to our list.
-	SPIRFunction::CombinedImageSamplerParameter param = {
-		0u, image_id, sampler_id, true, true,
-	};
+	SPIRFunction::CombinedImageSamplerParameter param = { 0u, image_id, sampler_id, true, true, /* pad */ 0 };
 
 	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
 	                           [image_id](const SPIRFunction::Parameter &p) { return p.id == image_id; });
@@ -2575,7 +2592,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		ptr_type.storage = StorageClassUniformConstant;
 
 		// Build new variable.
-		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0);
+		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0u);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
 		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
@@ -2588,7 +2605,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		                  join("SPIRV_Cross_Combined", compiler.to_name(image_id), compiler.to_name(sampler_id)));
 
 		caller.combined_parameters.push_back(param);
-		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true });
+		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true, /* pad0 */ 0, /* pad1 */ 0 });
 	}
 }
 
@@ -2704,7 +2721,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		type.storage = StorageClassUniformConstant;
 
 		// Build new variable.
-		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
+		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0u);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
 		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
