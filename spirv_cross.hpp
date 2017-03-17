@@ -210,7 +210,7 @@ public:
 	virtual size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const;
 
 	// Legacy GLSL compatibility method. Deprecated in favor of CompilerGLSL::flatten_buffer_block
-	void flatten_interface_block(uint32_t id);
+	SPIRV_CROSS_DEPRECATED("Please use flatten_buffer_block instead.") void flatten_interface_block(uint32_t id);
 
 	// Returns a set of all global variables which are statically accessed
 	// by the control flow graph from the current entry point.

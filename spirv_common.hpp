@@ -55,6 +55,16 @@ public:
 #define SPIRV_CROSS_THROW(x) throw CompilerError(x)
 #endif
 
+#if __cplusplus >= 201402l
+#define SPIRV_CROSS_DEPRECATED(reason) [[deprecated(reason)]]
+#elif defined(__GNUC__)
+#define SPIRV_CROSS_DEPRECATED(reason) __attribute__((deprecated))
+#elif defined(_MSC_VER)
+#define SPIRV_CROSS_DEPRECATED(reason) __declspec(deprecated(reason))
+#else
+#define SPIRV_CROSS_DEPRECATED(reason)
+#endif
+
 namespace inner
 {
 template <typename T>
