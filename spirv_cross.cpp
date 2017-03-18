@@ -1042,9 +1042,8 @@ uint64_t Compiler::get_decoration_mask(uint32_t id) const
 		if (get_decoration_mask(type.self) & ((1ull << DecorationBufferBlock) | (1ull << DecorationBlock)))
 		{
 			inherit_flags = get_buffer_block_flags(*var);
-			inherit_flags &=
-				(1ull << DecorationNonWritable) | (1ull << DecorationNonReadable) | (1ull << DecorationAliased) |
-				(1ull << DecorationRestrict);
+			inherit_flags &= (1ull << DecorationNonWritable) | (1ull << DecorationNonReadable) |
+			                 (1ull << DecorationAliased) | (1ull << DecorationRestrict);
 		}
 
 		return dec.decoration_flags | inherit_flags;
