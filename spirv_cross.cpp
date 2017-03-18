@@ -1013,14 +1013,36 @@ const std::string &Compiler::get_name(uint32_t id) const
 
 uint64_t Compiler::get_decoration_mask(uint32_t id) const
 {
+	auto *var = maybe_get<SPIRVariable>(id);
 	auto &dec = meta.at(id).decoration;
-	return dec.decoration_flags;
+	if (var)
+	{
+		auto &type = get<SPIRType>(var->basetype);
+		uint64_t inherit_flags = 0;
+
+		// If we are reflecting an SSBO, we need to look at the members of the block as well.
+		// Useful decorations like readonly, writeonly, restrict and aliased are declared as member decorations.
+		// Avoid propagating decorations which we don't explicitly care about here.
+		if (get_decoration_mask(type.self) & (1ull << DecorationBufferBlock))
+		{
+			inherit_flags = get_buffer_block_flags(*var);
+			inherit_flags &=
+				(1ull << DecorationNonWritable) | (1ull << DecorationNonReadable) | (1ull << DecorationAliased) |
+				(1ull << DecorationRestrict);
+		}
+
+		return dec.decoration_flags | inherit_flags;
+	}
+	else
+	{
+		return dec.decoration_flags;
+	}
 }
 
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 {
 	auto &dec = meta.at(id).decoration;
-	if (!(dec.decoration_flags & (1ull << decoration)))
+	if (!(get_decoration_mask(id) & (1ull << decoration)))
 		return 0;
 
 	switch (decoration)
@@ -3054,7 +3076,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	}
 }
 
-uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
+uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var) const
 {
 	auto &type = get<SPIRType>(var.basetype);
 	assert(type.basetype == SPIRType::Struct);
@@ -3074,7 +3096,7 @@ uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
 	return base_flags | all_members_flag_mask;
 }
 
-bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
+bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type) const
 {
 	if (type.basetype == SPIRType::Struct)
 	{
