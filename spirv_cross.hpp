@@ -586,8 +586,8 @@ protected:
 
 	VariableTypeRemapCallback variable_remap_callback;
 
-	uint64_t get_buffer_block_flags(const SPIRVariable &var);
-	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type);
+	uint64_t get_buffer_block_flags(const SPIRVariable &var) const;
+	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type) const;
 };
 }
 

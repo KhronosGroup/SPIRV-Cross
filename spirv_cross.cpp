@@ -27,6 +27,26 @@ using namespace spirv_cross;
 
 #define log(...) fprintf(stderr, __VA_ARGS__)
 
+static string ensure_valid_identifier(const string &name)
+{
+	// Functions in glslangValidator are mangled with name(<mangled> stuff.
+	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
+	auto str = name.substr(0, name.find('('));
+
+	for (uint32_t i = 0; i < str.size(); i++)
+	{
+		auto &c = str[i];
+
+		// _<num> variables are reserved by the internal implementation,
+		// otherwise, make sure the name is a valid identifier.
+		if (i == 0 || (str[0] == '_' && i == 1))
+			c = isalpha(c) ? c : '_';
+		else
+			c = isalnum(c) ? c : '_';
+	}
+	return str;
+}
+
 Instruction::Instruction(const vector<uint32_t> &spirv, uint32_t &index)
 {
 	op = spirv[index] & 0xffff;
@@ -795,21 +815,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
 
-	// Functions in glslangValidator are mangled with name(<mangled> stuff.
-	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
-	str = name.substr(0, name.find('('));
-
-	for (uint32_t i = 0; i < str.size(); i++)
-	{
-		auto &c = str[i];
-
-		// _<num> variables are reserved by the internal implementation,
-		// otherwise, make sure the name is a valid identifier.
-		if (i == 0 || (str[0] == '_' && i == 1))
-			c = isalpha(c) ? c : '_';
-		else
-			c = isalnum(c) ? c : '_';
-	}
+	str = ensure_valid_identifier(name);
 }
 
 const SPIRType &Compiler::get_type(uint32_t id) const
@@ -863,7 +869,17 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 void Compiler::set_member_name(uint32_t id, uint32_t index, const std::string &name)
 {
 	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
-	meta.at(id).members[index].alias = name;
+
+	auto &str = meta.at(id).members[index].alias;
+	str.clear();
+	if (name.empty())
+		return;
+
+	// Reserved for unnamed members.
+	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
+		return;
+
+	str = ensure_valid_identifier(name);
 }
 
 const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
@@ -1018,8 +1034,29 @@ const std::string &Compiler::get_name(uint32_t id) const
 
 uint64_t Compiler::get_decoration_mask(uint32_t id) const
 {
+	auto *var = maybe_get<SPIRVariable>(id);
 	auto &dec = meta.at(id).decoration;
-	return dec.decoration_flags;
+	if (var)
+	{
+		auto &type = get<SPIRType>(var->basetype);
+		uint64_t inherit_flags = 0;
+
+		// If we are reflecting a block, we need to look at the members of the block as well.
+		// Useful decorations like readonly, writeonly, restrict and aliased are declared as member decorations.
+		// Avoid propagating decorations which we don't explicitly care about here.
+		if (get_decoration_mask(type.self) & ((1ull << DecorationBufferBlock) | (1ull << DecorationBlock)))
+		{
+			inherit_flags = get_buffer_block_flags(*var);
+			inherit_flags &= (1ull << DecorationNonWritable) | (1ull << DecorationNonReadable) |
+			                 (1ull << DecorationAliased) | (1ull << DecorationRestrict);
+		}
+
+		return dec.decoration_flags | inherit_flags;
+	}
+	else
+	{
+		return dec.decoration_flags;
+	}
 }
 
 bool Compiler::has_decoration(uint32_t id, Decoration decoration) const
@@ -1030,7 +1067,7 @@ bool Compiler::has_decoration(uint32_t id, Decoration decoration) const
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 {
 	auto &dec = meta.at(id).decoration;
-	if (!(dec.decoration_flags & (1ull << decoration)))
+	if (!(get_decoration_mask(id) & (1ull << decoration)))
 		return 0;
 
 	switch (decoration)
@@ -3064,7 +3101,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	}
 }
 
-uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
+uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var) const
 {
 	auto &type = get<SPIRType>(var.basetype);
 	assert(type.basetype == SPIRType::Struct);
@@ -3084,7 +3121,7 @@ uint64_t Compiler::get_buffer_block_flags(const SPIRVariable &var)
 	return base_flags | all_members_flag_mask;
 }
 
-bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
+bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type) const
 {
 	if (type.basetype == SPIRType::Struct)
 	{
