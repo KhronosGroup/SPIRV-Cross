@@ -2238,9 +2238,7 @@ void CompilerGLSL::emit_unary_op(uint32_t result_type, uint32_t result_id, uint3
 {
 	bool forward = should_forward(op0);
 	emit_op(result_type, result_id, join(op, to_enclosed_expression(op0)), forward);
-
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-		inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op0);
 }
 
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
@@ -2249,11 +2247,38 @@ void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint
 	emit_op(result_type, result_id, join(to_enclosed_expression(op0), " ", op, " ", to_enclosed_expression(op1)),
 	        forward);
 
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
+void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                           const char *op)
+{
+	auto &type = get<SPIRType>(result_type);
+	auto expr = type_to_glsl_constructor(type);
+	expr += '(';
+	for (uint32_t i = 0; i < type.vecsize; i++)
 	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
+		// Make sure to call to_expression multiple times to ensure
+		// that these expressions are properly flushed to temporaries if needed.
+		expr += to_enclosed_expression(op0);
+		expr += '.';
+		expr += index_to_swizzle(i);
+		expr += ' ';
+		expr += op;
+		expr += ' ';
+		expr += to_enclosed_expression(op1);
+		expr += '.';
+		expr += index_to_swizzle(i);
+
+		if (i + 1 < type.vecsize)
+			expr += ", ";
 	}
+	expr += ')';
+	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1));
+
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
 }
 
 SPIRType CompilerGLSL::binary_op_bitcast_helper(string &cast_op0, string &cast_op1, SPIRType::BaseType &input_type,
@@ -2320,8 +2345,7 @@ void CompilerGLSL::emit_unary_func_op(uint32_t result_type, uint32_t result_id, 
 {
 	bool forward = should_forward(op0);
 	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ")"), forward);
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-		inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op0);
 }
 
 void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
@@ -2329,12 +2353,8 @@ void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id,
 {
 	bool forward = should_forward(op0) && should_forward(op1);
 	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ")"), forward);
-
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
-	}
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
 }
 
 void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
@@ -2369,12 +2389,9 @@ void CompilerGLSL::emit_trinary_func_op(uint32_t result_type, uint32_t result_id
 	emit_op(result_type, result_id,
 	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ")"), forward);
 
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
-		inherit_expression_dependencies(result_id, op2);
-	}
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+	inherit_expression_dependencies(result_id, op2);
 }
 
 void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
@@ -2385,13 +2402,10 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 	                                     to_expression(op2), ", ", to_expression(op3), ")"),
 	        forward);
 
-	if (forward && forced_temporaries.find(result_id) == end(forced_temporaries))
-	{
-		inherit_expression_dependencies(result_id, op0);
-		inherit_expression_dependencies(result_id, op1);
-		inherit_expression_dependencies(result_id, op2);
-		inherit_expression_dependencies(result_id, op3);
-	}
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+	inherit_expression_dependencies(result_id, op2);
+	inherit_expression_dependencies(result_id, op3);
 }
 
 string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype)
@@ -4729,16 +4743,42 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpLogicalOr:
-		BOP(||);
+	{
+		// No vector variant in GLSL for logical OR.
+		auto result_type = ops[0];
+		auto id = ops[1];
+		auto &type = get<SPIRType>(result_type);
+
+		if (type.vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "||");
+		else
+			BOP(||);
 		break;
+	}
 
 	case OpLogicalAnd:
-		BOP(&&);
+	{
+		// No vector variant in GLSL for logical AND.
+		auto result_type = ops[0];
+		auto id = ops[1];
+		auto &type = get<SPIRType>(result_type);
+
+		if (type.vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "&&");
+		else
+			BOP(&&);
 		break;
+	}
 
 	case OpLogicalNot:
-		UOP(!);
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		if (type.vecsize > 1)
+			UFOP(not);
+		else
+			UOP(!);
 		break;
+	}
 
 	case OpIEqual:
 	{

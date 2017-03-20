@@ -310,6 +310,7 @@ protected:
 	                              SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
 	void emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	void emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
 	                         SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
 
@@ -399,8 +400,6 @@ protected:
 	// Usage tracking. If a temporary is used more than once, use the temporary instead to
 	// avoid AST explosion when SPIRV is generated with pure SSA and doesn't write stuff to variables.
 	std::unordered_map<uint32_t, uint32_t> expression_usage_counts;
-	std::unordered_set<uint32_t> forced_temporaries;
-	std::unordered_set<uint32_t> forwarded_temporaries;
 	void track_expression_read(uint32_t id);
 
 	std::unordered_set<std::string> forced_extensions;
