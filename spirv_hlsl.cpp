@@ -247,6 +247,27 @@ uint32_t CompilerHLSL::type_to_consumed_locations(const SPIRType &type) const
 	return elements;
 }
 
+string CompilerHLSL::to_interpolation_qualifiers(uint64_t flags)
+{
+	string res;
+	//if (flags & (1ull << DecorationSmooth))
+	//    res += "linear ";
+	if (flags & (1ull << DecorationFlat))
+		res += "nointerpolation ";
+	if (flags & (1ull << DecorationNoPerspective))
+		res += "noperspective ";
+	if (flags & (1ull << DecorationCentroid))
+		res += "centroid ";
+	if (flags & (1ull << DecorationPatch))
+		res += "patch "; // Seems to be different in actual HLSL.
+	if (flags & (1ull << DecorationSample))
+		res += "sample ";
+	if (flags & (1ull << DecorationInvariant))
+		res += "invariant "; // Not supported?
+
+	return res;
+}
+
 void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
@@ -259,14 +280,17 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
 	{
 		string semantic;
-		if (get_member_decoration_mask(type.self, i) & (1ull << DecorationLocation))
+		if (has_member_decoration(type.self, i, DecorationLocation))
 		{
 			uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
 			semantic = join(" : TEXCOORD", location);
 		}
 
 		add_member_name(type, i);
-		statement(member_decl(type, get<SPIRType>(type.member_types[i]), i), semantic, ";");
+
+		auto &membertype = get<SPIRType>(type.member_types[i]);
+		statement(to_interpolation_qualifiers(get_member_decoration_mask(type.self, i)),
+		          variable_decl(membertype, to_member_name(type, i)), semantic, ";");
 	}
 
 	end_scope_decl();
@@ -320,13 +344,15 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			{
 				SPIRType newtype = type;
 				newtype.columns = 1;
-				statement(variable_decl(newtype, join(name, "_", i)), " : TEXCOORD", binding_number, ";");
+				statement(to_interpolation_qualifiers(get_decoration_mask(var.self)),
+				          variable_decl(newtype, join(name, "_", i)), " : TEXCOORD", binding_number, ";");
 				active_locations.insert(binding_number++);
 			}
 		}
 		else
 		{
-			statement(variable_decl(type, name), " : TEXCOORD", binding_number, ";");
+			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)),
+			          variable_decl(type, name), " : TEXCOORD", binding_number, ";");
 
 			// Structs and arrays should consume more locations.
 			uint32_t consumed_locations = type_to_consumed_locations(type);
@@ -523,7 +549,7 @@ void CompilerHLSL::emit_resources()
 				auto &active = var.storage == StorageClassInput ? active_inputs : active_outputs;
 				for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
 				{
-					if (get_member_decoration_mask(type.self, i) & (1ull << DecorationLocation))
+					if (has_member_decoration(type.self, i, DecorationLocation))
 					{
 						uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
 						active.insert(location);
@@ -543,8 +569,8 @@ void CompilerHLSL::emit_resources()
 		// - Name comparison
 		// - Variable has a name
 		// - Fallback: ID
-		bool has_location_a = (get_decoration_mask(a->self) & (1ull << DecorationLocation)) != 0;
-		bool has_location_b = (get_decoration_mask(b->self) & (1ull << DecorationLocation)) != 0;
+		bool has_location_a = has_decoration(a->self, DecorationLocation);
+		bool has_location_b = has_decoration(b->self, DecorationLocation);
 
 		if (has_location_a && has_location_b)
 		{

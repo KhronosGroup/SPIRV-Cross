@@ -68,6 +68,7 @@ private:
 	void emit_push_constant_block(const SPIRVariable &var) override;
 	void emit_uniform(const SPIRVariable &var) override;
 	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
+	std::string to_interpolation_qualifiers(uint64_t flags) override;
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 

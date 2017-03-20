@@ -358,7 +358,7 @@ protected:
 	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags);
 	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
-	std::string to_interpolation_qualifiers(uint64_t flags);
+	virtual std::string to_interpolation_qualifiers(uint64_t flags);
 	uint64_t combined_decoration_for_member(const SPIRType &type, uint32_t index);
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
