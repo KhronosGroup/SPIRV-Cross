@@ -2351,6 +2351,14 @@ uint32_t Compiler::get_subpass_input_remapped_components(uint32_t id) const
 
 void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_expression)
 {
+	// Don't inherit any expression dependencies if the expression in dst
+	// is not a forwarded temporary.
+	if (forwarded_temporaries.find(dst) == end(forwarded_temporaries) ||
+	    forced_temporaries.find(dst) != end(forced_temporaries))
+	{
+		return;
+	}
+
 	auto &e = get<SPIRExpression>(dst);
 	auto *s = maybe_get<SPIRExpression>(source_expression);
 	if (!s)
