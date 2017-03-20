@@ -358,8 +358,8 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		}
 		else
 		{
-			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)),
-			          variable_decl(type, name), " : TEXCOORD", binding_number, ";");
+			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name),
+			          " : TEXCOORD", binding_number, ";");
 
 			// Structs and arrays should consume more locations.
 			uint32_t consumed_locations = type_to_consumed_locations(type);
