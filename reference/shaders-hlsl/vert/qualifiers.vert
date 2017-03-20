@@ -1,8 +1,8 @@
 static float4 gl_Position;
-static nointerpolation float vFlat;
-static centroid float vCentroid;
-static sample float vSample;
-static noperspective float vNoperspective;
+static float vFlat;
+static float vCentroid;
+static float vSample;
+static float vNoperspective;
 
 struct Block
 {

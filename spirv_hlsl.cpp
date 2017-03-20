@@ -131,7 +131,14 @@ void CompilerHLSL::emit_header()
 void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
+
+	// The global copies of I/O variables should not contain interpolation qualifiers.
+	// These are emitted inside the interface structs.
+	auto &flags = meta[var.self].decoration.decoration_flags;
+	auto old_flags = flags;
+	flags = 0;
 	statement("static ", variable_decl(var), ";");
+	flags = old_flags;
 }
 
 const char *CompilerHLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
