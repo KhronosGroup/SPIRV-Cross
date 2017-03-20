@@ -91,7 +91,7 @@ def cross_compile_msl(shader):
     os.close(msl_f)
     subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--metal'])
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl'])
     subprocess.check_call(['spirv-val', spirv_path])
     return (spirv_path, msl_path)
 
@@ -294,7 +294,7 @@ def test_shaders_helper(stats, shader_dir, update, malisc, keep, backend):
         for i in files:
             path = os.path.join(root, i)
             relpath = os.path.relpath(path, shader_dir)
-            if backend == 'metal':
+            if backend == 'msl':
                 test_shader_msl(stats, (shader_dir, relpath), update, keep)
             elif backend == 'hlsl':
                 test_shader_hlsl(stats, (shader_dir, relpath), update, keep)
@@ -322,7 +322,7 @@ def main():
     parser.add_argument('--malisc',
             action = 'store_true',
             help = 'Use malisc offline compiler to determine static cycle counts before and after spirv-cross.')
-    parser.add_argument('--metal',
+    parser.add_argument('--msl',
             action = 'store_true',
             help = 'Test Metal backend.')
     parser.add_argument('--hlsl',
@@ -337,13 +337,13 @@ def main():
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
-    if args.metal:
+    if args.msl:
         print_msl_compiler_version()
 
     global force_no_external_validation
     force_no_external_validation = args.force_no_external_validation
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep, 'metal' if args.metal else ('hlsl' if args.hlsl else 'glsl'))
+    test_shaders(args.folder, args.update, args.malisc, args.keep, 'msl' if args.msl else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')

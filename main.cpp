@@ -432,7 +432,7 @@ struct CLIArguments
 
 	uint32_t iterations = 1;
 	bool cpp = false;
-	bool metal = false;
+	bool msl = false;
 	bool msl_pack_ubos = true;
 	bool hlsl = false;
 	bool vulkan_semantics = false;
@@ -443,10 +443,11 @@ struct CLIArguments
 static void print_help()
 {
 	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
-	                "[--version <GLSL "
-	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
-	                "[--metal] [--hlsl] [--shader-model] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] "
-	                "[--iterations iter] "
+	                "[--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] "
+	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
+	                "[--cpp] [--cpp-interface-name <name>] "
+	                "[--msl] [--msl-no-pack-ubos] "
+	                "[--hlsl] [--shader-model] "
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
@@ -566,7 +567,8 @@ int main(int argc, char *argv[])
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
-	cbs.add("--metal", [&args](CLIParser &) { args.metal = true; });
+	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
+	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--msl-no-pack-ubos", [&args](CLIParser &) { args.msl_pack_ubos = false; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
@@ -632,7 +634,7 @@ int main(int argc, char *argv[])
 		if (args.cpp_interface_name)
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
 	}
-	else if (args.metal)
+	else if (args.msl)
 	{
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
 

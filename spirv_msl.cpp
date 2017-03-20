@@ -28,7 +28,7 @@ using namespace std;
 static const uint32_t k_unknown_location = ~0;
 
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_attrs,
-                         std::vector<MSLResourceBinding> *p_res_bindings)
+                         vector<MSLResourceBinding> *p_res_bindings)
     : CompilerGLSL(move(spirv_))
 {
 	populate_func_name_overrides();
@@ -119,7 +119,7 @@ string CompilerMSL::compile()
 	return buffer->str();
 }
 
-string CompilerMSL::compile(vector<MSLVertexAttr> *p_vtx_attrs, std::vector<MSLResourceBinding> *p_res_bindings)
+string CompilerMSL::compile(vector<MSLVertexAttr> *p_vtx_attrs, vector<MSLResourceBinding> *p_res_bindings)
 {
 	if (p_vtx_attrs)
 	{
@@ -139,7 +139,7 @@ string CompilerMSL::compile(vector<MSLVertexAttr> *p_vtx_attrs, std::vector<MSLR
 }
 
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
-                            std::vector<MSLResourceBinding> *p_res_bindings)
+                            vector<MSLResourceBinding> *p_res_bindings)
 {
 	options = msl_cfg;
 	return compile(p_vtx_attrs, p_res_bindings);
@@ -183,7 +183,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 {
 
 	// Uniforms
-	std::unordered_set<uint32_t> global_var_ids;
+	unordered_set<uint32_t> global_var_ids;
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -203,7 +203,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 		global_var_ids.insert(var);
 
 	std::set<uint32_t> added_arg_ids;
-	std::unordered_set<uint32_t> processed_func_ids;
+	unordered_set<uint32_t> processed_func_ids;
 	extract_global_variables_from_function(entry_point, added_arg_ids, global_var_ids, processed_func_ids);
 }
 
@@ -211,8 +211,8 @@ void CompilerMSL::extract_global_variables_from_functions()
 // For any global variable accessed directly by the specified function, extract that variable,
 // add it as an argument to that function, and the arg to the added_arg_ids collection.
 void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
-                                                         std::unordered_set<uint32_t> &global_var_ids,
-                                                         std::unordered_set<uint32_t> &processed_func_ids)
+                                                         unordered_set<uint32_t> &global_var_ids,
+                                                         unordered_set<uint32_t> &processed_func_ids)
 {
 	// Avoid processing a function more than once
 	if (processed_func_ids.find(func_id) != processed_func_ids.end())
@@ -1814,7 +1814,7 @@ string CompilerMSL::to_qualified_member_name(const SPIRType &type, uint32_t inde
 	// Strip any underscore prefix from member name
 	string mbr_name = to_member_name(type, index);
 	size_t startPos = mbr_name.find_first_not_of("_");
-	mbr_name = (startPos != std::string::npos) ? mbr_name.substr(startPos) : "";
+	mbr_name = (startPos != string::npos) ? mbr_name.substr(startPos) : "";
 	return join(to_name(type.self), "_", mbr_name);
 }
 

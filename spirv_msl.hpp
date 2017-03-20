@@ -27,9 +27,6 @@
 namespace spirv_cross
 {
 
-// Deprecated legacy syntax
-#define MSLConfiguration CompilerMSL::Options
-
 // Defines MSL characteristics of a vertex attribute at a particular location.
 // The used_by_shader flag is set to true during compilation of SPIR-V to MSL
 // if the shader makes use of this vertex attribute.
@@ -119,6 +116,7 @@ public:
 	std::string compile(std::vector<MSLVertexAttr> *p_vtx_attrs, std::vector<MSLResourceBinding> *p_res_bindings);
 
 	// This legacy method is deprecated.
+	typedef Options MSLConfiguration;
 	std::string compile(MSLConfiguration &msl_cfg, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	                    std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
 
