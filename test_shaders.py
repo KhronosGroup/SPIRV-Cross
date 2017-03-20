@@ -325,6 +325,9 @@ def main():
     parser.add_argument('--msl',
             action = 'store_true',
             help = 'Test Metal backend.')
+    parser.add_argument('--metal',
+            action = 'store_true',
+            help = 'Deprecated Metal option. Use --msl instead.')
     parser.add_argument('--hlsl',
             action = 'store_true',
             help = 'Test HLSL backend.')
@@ -343,7 +346,7 @@ def main():
     global force_no_external_validation
     force_no_external_validation = args.force_no_external_validation
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep, 'msl' if args.msl else ('hlsl' if args.hlsl else 'glsl'))
+    test_shaders(args.folder, args.update, args.malisc, args.keep, 'msl' if (args.msl or args.metal) else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')
