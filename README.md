@@ -288,7 +288,7 @@ See `./test_shaders.py --help` for more.
 
 ### Metal backend
 
-To test the roundtrip path GLSL -> SPIR-V -> MSL, `--metal` can be added, e.g. `./test_shaders.py --metal shaders-msl`.
+To test the roundtrip path GLSL -> SPIR-V -> MSL, `--msl` can be added, e.g. `./test_shaders.py --msl shaders-msl`.
 
 ### HLSL backend
 

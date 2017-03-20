@@ -137,6 +137,9 @@ public:
 	// I.e. (1ull << spv::DecorationFoo) | (1ull << spv::DecorationBar)
 	uint64_t get_decoration_mask(uint32_t id) const;
 
+	// Returns whether the decoration has been applied to the ID.
+	bool has_decoration(uint32_t id, spv::Decoration decoration) const;
+
 	// Gets the value for decorations which take arguments.
 	// If the decoration is a boolean (i.e. spv::DecorationNonWritable),
 	// 1 will be returned.
@@ -178,6 +181,9 @@ public:
 
 	// Gets the decoration mask for a member of a struct, similar to get_decoration_mask.
 	uint64_t get_member_decoration_mask(uint32_t id, uint32_t index) const;
+
+	// Returns whether the decoration has been applied to a member of a struct.
+	bool has_member_decoration(uint32_t id, uint32_t index, spv::Decoration decoration) const;
 
 	// Similar to set_decoration, but for struct members.
 	void set_member_decoration(uint32_t id, uint32_t index, spv::Decoration decoration, uint32_t argument = 0);

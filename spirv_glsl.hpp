@@ -159,7 +159,7 @@ protected:
 	virtual void emit_texture_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type);
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
-	virtual std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member,
+	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                                const std::string &qualifier = "");
 	virtual std::string image_type_glsl(const SPIRType &type);
 	virtual std::string constant_expression(const SPIRConstant &c);
@@ -180,6 +180,7 @@ protected:
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);
 	virtual void emit_uniform(const SPIRVariable &var);
+	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type);
 
 	std::unique_ptr<std::ostringstream> buffer;
 
@@ -247,6 +248,7 @@ protected:
 
 	bool is_non_native_row_major_matrix(uint32_t id);
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
+	bool member_is_packed_type(const SPIRType &type, uint32_t index);
 	virtual std::string convert_row_major_matrix(std::string exp_str);
 
 	std::unordered_set<std::string> local_variable_names;

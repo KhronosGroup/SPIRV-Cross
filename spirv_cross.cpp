@@ -920,6 +920,11 @@ uint64_t Compiler::get_member_decoration_mask(uint32_t id, uint32_t index) const
 	return m.members[index].decoration_flags;
 }
 
+bool Compiler::has_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
+{
+	return get_member_decoration_mask(id, index) & (1ull << decoration);
+}
+
 void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration decoration)
 {
 	auto &m = meta.at(id);
@@ -1015,6 +1020,11 @@ uint64_t Compiler::get_decoration_mask(uint32_t id) const
 {
 	auto &dec = meta.at(id).decoration;
 	return dec.decoration_flags;
+}
+
+bool Compiler::has_decoration(uint32_t id, Decoration decoration) const
+{
+	return get_decoration_mask(id) & (1ull << decoration);
 }
 
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const

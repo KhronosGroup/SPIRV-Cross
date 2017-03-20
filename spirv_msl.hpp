@@ -27,15 +27,6 @@
 namespace spirv_cross
 {
 
-// Options for compiling to Metal Shading Language
-struct MSLConfiguration
-{
-	bool flip_vert_y = false;
-	bool flip_frag_y = false;
-	bool is_rendering_points = false;
-	std::string entry_point_name;
-};
-
 // Defines MSL characteristics of a vertex attribute at a particular location.
 // The used_by_shader flag is set to true during compilation of SPIR-V to MSL
 // if the shader makes use of this vertex attribute.
@@ -67,6 +58,9 @@ struct MSLResourceBinding
 	bool used_by_shader = false;
 };
 
+// Tracks the type ID and member index of a struct member
+using MSLStructMemberKey = uint64_t;
+
 // Special constant used in a MSLResourceBinding desc_set
 // element to indicate the bindings for the push constants.
 static const uint32_t kPushConstDescSet = UINT32_MAX;
@@ -79,11 +73,28 @@ static const uint32_t kPushConstBinding = 0;
 class CompilerMSL : public CompilerGLSL
 {
 public:
-	// Constructs an instance to compile the SPIR-V code into Metal Shading Language.
-	CompilerMSL(std::vector<uint32_t> spirv);
+	// Options for compiling to Metal Shading Language
+	struct Options
+	{
+		bool flip_vert_y = false;
+		bool flip_frag_y = false;
+		bool is_rendering_points = false;
+		bool pad_and_pack_uniform_structs = false;
+		std::string entry_point_name;
+	};
 
-	// Compiles the SPIR-V code into Metal Shading Language using the specified configuration parameters.
-	//  - msl_cfg indicates some general configuration for directing the compilation.
+	const Options &get_options() const
+	{
+		return options;
+	}
+
+	void set_options(Options &opts)
+	{
+		options = opts;
+	}
+
+	// Constructs an instance to compile the SPIR-V code into Metal Shading Language,
+	// using the configuration parameters, if provided:
 	//  - p_vtx_attrs is an optional list of vertex attribute bindings used to match
 	//    vertex content locations to MSL attributes. If vertex attributes are provided,
 	//    the compiler will set the used_by_shader flag to true in any vertex attribute
@@ -92,11 +103,22 @@ public:
 	//    texture or sampler index to use for a particular SPIR-V description set
 	//    and binding. If resource bindings are provided, the compiler will set the
 	//    used_by_shader flag to true in any resource binding actually used by the MSL code.
+	CompilerMSL(std::vector<uint32_t> spirv, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
+	            std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
+
+	// Compiles the SPIR-V code into Metal Shading Language.
+	std::string compile() override;
+
+	// Compiles the SPIR-V code into Metal Shading Language, overriding configuration parameters.
+	// Any of the parameters here may be null to indicate that the configuration provided in the
+	// constructor should be used. They are not declared as optional to avoid a conflict with the
+	// inherited and overridden zero-parameter compile() function.
+	std::string compile(std::vector<MSLVertexAttr> *p_vtx_attrs, std::vector<MSLResourceBinding> *p_res_bindings);
+
+	// This legacy method is deprecated.
+	typedef Options MSLConfiguration;
 	std::string compile(MSLConfiguration &msl_cfg, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	                    std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
-
-	// Compiles the SPIR-V code into Metal Shading Language using default configuration parameters.
-	std::string compile() override;
 
 protected:
 	void emit_instruction(const Instruction &instr) override;
@@ -106,11 +128,11 @@ protected:
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_fixup() override;
+	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+	                        const std::string &qualifier = "") override;
 	std::string type_to_glsl(const SPIRType &type) override;
 	std::string image_type_glsl(const SPIRType &type) override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin) override;
-	std::string member_decl(const SPIRType &type, const SPIRType &member_type, uint32_t member,
-	                        const std::string &qualifier) override;
 	std::string constant_expression(const SPIRConstant &c) override;
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 	std::string to_func_call_arg(uint32_t id) override;
@@ -122,6 +144,7 @@ protected:
 	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
+	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
 
 	std::string get_argument_address_space(const SPIRVariable &argument);
 
@@ -158,21 +181,24 @@ protected:
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	size_t get_declared_type_size(uint32_t type_id) const;
 	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
+	size_t get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const;
+	size_t get_declared_type_alignment(uint32_t type_id, uint64_t dec_mask) const;
 	std::string to_component_argument(uint32_t id);
 	void exclude_from_stage_in(SPIRVariable &var);
 	void exclude_member_from_stage_in(const SPIRType &type, uint32_t index);
 	std::string add_input_buffer_block_member(uint32_t mbr_type_id, std::string mbr_name, uint32_t mbr_locn);
 	uint32_t get_input_buffer_block_var_id(uint32_t msl_buffer);
-	void pad_input_buffer_block(uint32_t ib_type_id);
-	SPIRType &get_pad_type(uint32_t pad_len);
+	void align_struct(SPIRType &ib_type);
+	bool is_member_packable(SPIRType &ib_type, uint32_t index);
+	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
 
-	MSLConfiguration msl_config;
+	Options options;
 	std::unordered_map<std::string, std::string> func_name_overrides;
 	std::unordered_map<std::string, std::string> var_name_overrides;
 	std::set<uint32_t> custom_function_ops;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
-	std::unordered_map<uint32_t, uint32_t> pad_type_ids_by_pad_len;
+	std::unordered_map<MSLStructMemberKey, uint32_t> struct_member_padding;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
@@ -216,12 +242,8 @@ protected:
 
 		void sort();
 		bool operator()(uint32_t mbr_idx1, uint32_t mbr_idx2);
-		MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
-		    : type(t)
-		    , meta(m)
-		    , sort_aspect(sa)
-		{
-		}
+		MemberSorter(SPIRType &t, Meta &m, SortAspect sa);
+
 		SPIRType &type;
 		Meta &meta;
 		SortAspect sort_aspect;

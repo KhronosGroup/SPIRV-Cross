@@ -504,9 +504,7 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-
-		auto &membertype = get<SPIRType>(member);
-		statement(member_decl(type, membertype, i), ";");
+		emit_struct_member(type, member, i);
 		i++;
 		emitted = true;
 	}
@@ -1106,9 +1104,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	for (auto &member : type.member_types)
 	{
 		add_member_name(type, i);
-
-		auto &membertype = get<SPIRType>(member);
-		statement(member_decl(type, membertype, i), ";");
+		emit_struct_member(type, member, i);
 		i++;
 	}
 
@@ -1198,7 +1194,7 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 		// which is not allowed.
 		auto member_name = get_member_name(type.self, i);
 		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
-		statement(member_decl(type, membertype, i, qual), ";");
+		emit_struct_member(type, member, i, qual);
 		// Restore member name.
 		set_member_name(type.self, i, member_name);
 		i++;
@@ -1260,9 +1256,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			for (auto &member : type.member_types)
 			{
 				add_member_name(type, i);
-
-				auto &membertype = get<SPIRType>(member);
-				statement(member_decl(type, membertype, i), ";");
+				emit_struct_member(type, member, i);
 				i++;
 			}
 
@@ -1676,6 +1670,15 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 	// This means we need another pass at compilation, but next time, force temporary variables so that they cannot be invalidated.
 	forced_temporaries.insert(id);
 	force_recompile = true;
+}
+
+// Converts the format of the current expression from packed to unpacked,
+// by wrapping the expression in a constructor of the appropriate type.
+// GLSL does not support packed formats, so simply return the expression.
+// Subclasses that do will override
+string CompilerGLSL::unpack_expression_type(string expr_str, const SPIRType &)
+{
+	return expr_str;
 }
 
 // Sometimes we proactively enclosed an expression where it turns out we might have not needed it after all.
@@ -3371,6 +3374,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += ".";
 				expr += to_member_name(*type, index);
 			}
+
+			if (member_is_packed_type(*type, index))
+			{
+				auto &membertype = get<SPIRType>(type->member_types[index]);
+				expr = unpack_expression_type(expr, membertype);
+			}
+
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
 		}
@@ -5462,7 +5472,7 @@ void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 	}
 }
 
-// Checks whether the member is a row_major matrix that requires conversion before use
+// Checks whether the ID is a row_major matrix that requires conversion before use
 bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 {
 	// Natively supported row-major matrices do not need to be converted.
@@ -5505,6 +5515,13 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 	return true;
 }
 
+// Checks whether the member is in packed data type, that might need to be unpacked.
+// GLSL does not define packed data types, but certain subclasses do.
+bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index)
+{
+	return has_member_decoration(type.self, index, DecorationCPacked);
+}
+
 // Wraps the expression string in a function call that converts the
 // row_major matrix result of the expression to a column_major matrix.
 // Base implementation uses the standard library transpose() function.
@@ -5522,9 +5539,13 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
-string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertype, uint32_t index,
-                                 const string &qualifier)
+// Emit a structure member. Subclasses may override to modify output,
+// or to dynamically add a padding member if needed.
+void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+                                      const string &qualifier)
 {
+	auto &membertype = get<SPIRType>(member_type_id);
+
 	uint64_t memberflags = 0;
 	auto &memb = meta[type.self].members;
 	if (index < memb.size())
@@ -5536,9 +5557,9 @@ string CompilerGLSL::member_decl(const SPIRType &type, const SPIRType &membertyp
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
-	return join(layout_for_member(type, index), qualifiers, qualifier,
-	            flags_to_precision_qualifiers_glsl(membertype, memberflags),
-	            variable_decl(membertype, to_member_name(type, index)));
+	statement(layout_for_member(type, index), qualifiers, qualifier,
+	          flags_to_precision_qualifiers_glsl(membertype, memberflags),
+	          variable_decl(membertype, to_member_name(type, index)), ";");
 }
 
 const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags)
