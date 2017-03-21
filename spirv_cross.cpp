@@ -1151,6 +1151,10 @@ void Compiler::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpExtension:
+		// Ignore extensions
+		break;
+
 	case OpExtInstImport:
 	{
 		uint32_t id = ops[0];
@@ -1158,7 +1162,9 @@ void Compiler::parse(const Instruction &instruction)
 		if (ext == "GLSL.std.450")
 			set<SPIRExtension>(id, SPIRExtension::GLSL);
 		else
-			SPIRV_CROSS_THROW("Only GLSL.std.450 extension interface supported.");
+			set<SPIRExtension>(id, SPIRExtension::Unsupported);
+
+		// Other SPIR-V extensions currently not supported.
 
 		break;
 	}

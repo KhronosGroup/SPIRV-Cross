@@ -292,6 +292,7 @@ struct SPIRExtension : IVariant
 
 	enum Extension
 	{
+		Unsupported,
 		GLSL
 	};
 
