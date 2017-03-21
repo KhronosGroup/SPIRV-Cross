@@ -68,6 +68,8 @@ string CompilerMSL::compile()
 	non_stage_in_input_var_ids.clear();
 	struct_member_padding.clear();
 
+	update_active_builtins();
+
 	// Preprocess OpCodes to extract the need to output additional header content
 	set_enabled_interface_variables(get_active_interface_variables());
 	preprocess_op_codes();
@@ -1792,7 +1794,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 // If we're currently in the entry point function, and the object
 // has a qualified name, use it, otherwise use the standard name.
-string CompilerMSL::to_name(uint32_t id, bool allow_alias)
+string CompilerMSL::to_name(uint32_t id, bool allow_alias) const
 {
 	if (current_function && (current_function->self == entry_point))
 	{

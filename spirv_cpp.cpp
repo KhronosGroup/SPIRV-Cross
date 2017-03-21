@@ -297,6 +297,8 @@ string CompilerCPP::compile()
 	backend.explicit_struct_type = true;
 	backend.use_initializer_list = true;
 
+	update_active_builtins();
+
 	uint32_t pass_count = 0;
 	do
 	{

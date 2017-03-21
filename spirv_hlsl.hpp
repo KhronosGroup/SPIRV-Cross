@@ -57,7 +57,9 @@ private:
 	void emit_header() override;
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
-	void emit_interface_block_in_struct(const SPIRVariable &type, uint32_t &binding_number, bool builtins);
+	void emit_interface_block_in_struct(const SPIRVariable &type, std::unordered_set<uint32_t> &active_locations);
+	void emit_builtin_inputs_in_struct();
+	void emit_builtin_outputs_in_struct();
 	void emit_texture_op(const Instruction &i) override;
 	void emit_instruction(const Instruction &instruction) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
@@ -65,11 +67,21 @@ private:
 	void emit_buffer_block(const SPIRVariable &type) override;
 	void emit_push_constant_block(const SPIRVariable &var) override;
 	void emit_uniform(const SPIRVariable &var) override;
+	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
+	std::string to_interpolation_qualifiers(uint64_t flags) override;
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 
 	Options options;
 	bool requires_op_fmod = false;
+
+	void emit_builtin_variables();
+	bool require_output = false;
+	bool require_input = false;
+
+	uint32_t type_to_consumed_locations(const SPIRType &type) const;
+
+	void emit_io_block(const SPIRVariable &var);
 };
 }
 
