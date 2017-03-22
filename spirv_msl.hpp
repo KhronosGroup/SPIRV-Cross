@@ -117,6 +117,7 @@ public:
 
 	// This legacy method is deprecated.
 	typedef Options MSLConfiguration;
+	SPIRV_CROSS_DEPRECATED("Please use get_options() and set_options() instead.")
 	std::string compile(MSLConfiguration &msl_cfg, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	                    std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
 
