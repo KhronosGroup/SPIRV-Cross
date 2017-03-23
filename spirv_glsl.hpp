@@ -384,7 +384,7 @@ protected:
 
 	void replace_fragment_output(SPIRVariable &var);
 	void replace_fragment_outputs();
-	bool check_lod_allowed(uint32_t lod);
+	bool check_explicit_lod_allowed(uint32_t lod);
 	std::string legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod);
 
 	uint32_t indent = 0;

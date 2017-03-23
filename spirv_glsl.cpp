@@ -2413,11 +2413,19 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 // are not allowed in ES 2 vertex shaders. But SPIR-V only supports lod tex
 // functions in vertex shaders so we revert those back to plain calls when
 // the lod is a constant value of zero.
-bool CompilerGLSL::check_lod_allowed(uint32_t lod)
+bool CompilerGLSL::check_explicit_lod_allowed(uint32_t lod)
 {
 	auto &execution = get_entry_point();
-	auto *lod_constant = maybe_get<SPIRConstant>(lod);
-	return is_legacy_es() && execution.model == ExecutionModelVertex && lod_constant && lod_constant->scalar_f32() == 0.0f;
+	bool allowed = !is_legacy_es() || execution.model == ExecutionModelFragment;
+	if (!allowed)
+	{
+		auto *lod_constant = maybe_get<SPIRConstant>(lod);
+		if (!lod_constant || lod_constant->scalar_f32() != 0.0f)
+		{
+			SPIRV_CROSS_THROW("Explicit lod not allowed in legacy ES non-fragment shaders.");
+		}
+	}
+	return allowed;
 }
 
 string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod)
@@ -2448,13 +2456,13 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
-	bool avoid_lod = check_lod_allowed(lod);
+	bool use_explicit_lod = check_explicit_lod_allowed(lod);
 
 	if (op == "textureLod" || op == "textureProjLod")
 	{
 		if (is_legacy_es())
 		{
-			if (!avoid_lod)
+			if (use_explicit_lod)
 				require_extension("GL_EXT_shader_texture_lod");
 		}
 		else if (is_legacy())
@@ -2465,18 +2473,20 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		return join("texture", type);
 	else if (op == "textureLod")
 	{
-		if (avoid_lod)
-			return join("texture", type);
-		else
+		if (use_explicit_lod)
 			return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+		else
+			return join("texture", type);
 	}
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		if (avoid_lod)
-			return join("texture", type);
-		else
+	{
+		if (use_explicit_lod)
 			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
+		else
+			return join("texture", type);
+	}
 	else
 	{
 		SPIRV_CROSS_THROW(join("Unsupported legacy texture op: ", op));
@@ -2918,7 +2928,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 
 	if (lod)
 	{
-		if (check_lod_allowed(lod))
+		if (check_explicit_lod_allowed(lod))
 		{
 			forward = forward && should_forward(lod);
 			farg_str += ", ";
