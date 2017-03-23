@@ -2409,6 +2409,17 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 	inherit_expression_dependencies(result_id, op3);
 }
 
+// EXT_shader_texture_lod only concerns fragment shaders so lod tex functions
+// are not allowed in ES 2 vertex shaders. But SPIR-V only supports lod tex
+// functions in vertex shaders so we revert those back to plain calls when
+// the lod is a constant value of zero.
+bool CompilerGLSL::check_lod_allowed(uint32_t lod)
+{
+	auto &execution = get_entry_point();
+	auto *lod_constant = maybe_get<SPIRConstant>(lod);
+	return is_legacy_es() && execution.model == ExecutionModelVertex && lod_constant && lod_constant->scalar_f32() == 0.0f;
+}
+
 string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod)
 {
 	const char *type;
@@ -2437,21 +2448,24 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
-	auto *lod_constant = maybe_get<SPIRConstant>(lod);
-	bool zero_lod = lod_constant && lod_constant->scalar_f32() == 0.0f;
+	bool avoid_lod = check_lod_allowed(lod);
 
 	if (op == "textureLod" || op == "textureProjLod")
 	{
-		if (is_legacy_es() && !zero_lod)
-			require_extension("GL_EXT_shader_texture_lod");
-		else if (is_legacy() && !is_legacy_es())
+		if (is_legacy_es())
+		{
+			if (!avoid_lod)
+				require_extension("GL_EXT_shader_texture_lod");
+		}
+		else if (is_legacy())
 			require_extension("GL_ARB_shader_texture_lod");
 	}
 
 	if (op == "texture")
 		return join("texture", type);
-	else if (op == "textureLod") {
-		if (is_legacy_es() && zero_lod)
+	else if (op == "textureLod")
+	{
+		if (avoid_lod)
 			return join("texture", type);
 		else
 			return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
@@ -2459,7 +2473,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		if (is_legacy_es() && zero_lod)
+		if (avoid_lod)
 			return join("texture", type);
 		else
 			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
@@ -2904,9 +2918,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 
 	if (lod)
 	{
-		auto *lod_constant = maybe_get<SPIRConstant>(lod);
-		bool zero_lod = lod_constant && lod_constant->scalar_f32() == 0.0f;
-		if (!is_legacy_es() || !zero_lod)
+		if (check_lod_allowed(lod))
 		{
 			forward = forward && should_forward(lod);
 			farg_str += ", ";
