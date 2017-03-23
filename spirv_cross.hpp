@@ -150,10 +150,11 @@ public:
 	// Removes the decoration for a an ID.
 	void unset_decoration(uint32_t id, spv::Decoration decoration);
 
-	// Gets the SPIR-V associated with ID.
+	// Gets the SPIR-V type associated with ID.
 	// Mostly used with Resource::type_id and Resource::base_type_id to parse the underlying type of a resource.
 	const SPIRType &get_type(uint32_t id) const;
 
+	// Gets the SPIR-V type of a variable.
 	const SPIRType &get_type_from_variable(uint32_t id) const;
 
 	// Gets the underlying storage class for an OpVariable.
@@ -323,6 +324,16 @@ public:
 		return uint32_t(ids.size());
 	}
 
+	// API for querying buffer objects.
+	// The type passed in here should be the base type of a resource, i.e.
+	// get_type(resource.base_type_id)
+	// as decorations are set in the basic Block type.
+	// The type passed in here must have these decorations set, or an exception is raised.
+	// Only UBOs and SSBOs or sub-structs which are part of these buffer types will have these decorations set.
+	uint32_t type_struct_member_offset(const SPIRType &type, uint32_t index) const;
+	uint32_t type_struct_member_array_stride(const SPIRType &type, uint32_t index) const;
+	uint32_t type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -464,10 +475,6 @@ protected:
 	SPIRBlock::ContinueBlockType continue_block_type(const SPIRBlock &continue_block) const;
 
 	bool force_recompile = false;
-
-	uint32_t type_struct_member_offset(const SPIRType &type, uint32_t index) const;
-	uint32_t type_struct_member_array_stride(const SPIRType &type, uint32_t index) const;
-	uint32_t type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const;
 
 	bool block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const;
 
