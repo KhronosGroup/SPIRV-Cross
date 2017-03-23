@@ -1091,9 +1091,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	if (coffset || offset)
 		texop += "Offset";
 
-	if (is_legacy())
-		texop = legacy_tex_op(texop, imgtype);
-
 	expr += texop;
 	expr += "(";
 	expr += to_expression(img);

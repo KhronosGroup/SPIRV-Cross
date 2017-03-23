@@ -2409,7 +2409,7 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 	inherit_expression_dependencies(result_id, op3);
 }
 
-string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype)
+string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod)
 {
 	const char *type;
 	switch (imgtype.image.dim)
@@ -2437,22 +2437,32 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
+	auto *lod_constant = maybe_get<SPIRConstant>(lod);
+	bool zero_lod = lod_constant && lod_constant->scalar_f32() == 0.0f;
+
 	if (op == "textureLod" || op == "textureProjLod")
 	{
-		if (is_legacy_es())
+		if (is_legacy_es() && !zero_lod)
 			require_extension("GL_EXT_shader_texture_lod");
-		else if (is_legacy())
+		else if (is_legacy() && !is_legacy_es())
 			require_extension("GL_ARB_shader_texture_lod");
 	}
 
 	if (op == "texture")
 		return join("texture", type);
-	else if (op == "textureLod")
-		return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+	else if (op == "textureLod") {
+		if (is_legacy_es() && zero_lod)
+			return join("texture", type);
+		else
+			return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+	}
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
+		if (is_legacy_es() && zero_lod)
+			return join("texture", type);
+		else
+			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 	else
 	{
 		SPIRV_CROSS_THROW(join("Unsupported legacy texture op: ", op));
@@ -2775,7 +2785,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	string expr;
 	bool forward = false;
 	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
-	                         (!!grad_x || !!grad_y), !!lod, !!dref);
+	                         (!!grad_x || !!grad_y), !!lod, !!dref, lod);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
@@ -2787,7 +2797,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
 string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                      bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod, bool)
+                                      bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod, bool, uint32_t lod)
 {
 	string fname;
 
@@ -2812,7 +2822,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 	if (has_offset)
 		fname += "Offset";
 
-	return is_legacy() ? legacy_tex_op(fname, imgtype) : fname;
+	return is_legacy() ? legacy_tex_op(fname, imgtype, lod) : fname;
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
@@ -2894,9 +2904,14 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 
 	if (lod)
 	{
-		forward = forward && should_forward(lod);
-		farg_str += ", ";
-		farg_str += to_expression(lod);
+		auto *lod_constant = maybe_get<SPIRConstant>(lod);
+		bool zero_lod = lod_constant && lod_constant->scalar_f32() == 0.0f;
+		if (!is_legacy_es() || !zero_lod)
+		{
+			forward = forward && should_forward(lod);
+			farg_str += ", ";
+			farg_str += to_expression(lod);
+		}
 	}
 
 	if (coffset)

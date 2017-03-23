@@ -989,7 +989,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
 string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fetch, bool is_gather, bool, bool, bool,
-                                     bool, bool, bool has_dref)
+                                     bool, bool, bool has_dref, uint32_t)
 {
 	// Texture reference
 	string fname = to_expression(img) + ".";
