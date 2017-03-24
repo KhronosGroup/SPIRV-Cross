@@ -1390,7 +1390,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto &type = get<SPIRType>(result_type);
 
 		if (type.vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "&&"); //**
+			emit_unrolled_unary_op(result_type, id, ops[2], "!");
 		else
 			UOP(!);
 		break;

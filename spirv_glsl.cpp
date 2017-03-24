@@ -2252,6 +2252,29 @@ void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint
 	inherit_expression_dependencies(result_id, op1);
 }
 
+void CompilerGLSL::emit_unrolled_unary_op(uint32_t result_type, uint32_t result_id, uint32_t operand, const char *op)
+{
+	auto &type = get<SPIRType>(result_type);
+	auto expr = type_to_glsl_constructor(type);
+	expr += '(';
+	for (uint32_t i = 0; i < type.vecsize; i++)
+	{
+		// Make sure to call to_expression multiple times to ensure
+		// that these expressions are properly flushed to temporaries if needed.
+		expr += op;
+		expr += to_enclosed_expression(operand);
+		expr += '.';
+		expr += index_to_swizzle(i);
+
+		if (i + 1 < type.vecsize)
+			expr += ", ";
+	}
+	expr += ')';
+	emit_op(result_type, result_id, expr, should_forward(operand));
+
+	inherit_expression_dependencies(result_id, operand);
+}
+
 void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                            const char *op)
 {
