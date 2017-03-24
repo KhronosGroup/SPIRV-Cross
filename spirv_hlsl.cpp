@@ -1242,6 +1242,36 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 	statement(variable_decl(var), ";");
 }
 
+string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
+{
+	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float)
+		return "asuint";
+	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float)
+		return "asint";
+	else if (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::UInt)
+		return "asfloat";
+	else if (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::Int)
+		return "asfloat";
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double)
+		SPIRV_CROSS_THROW("Double to Int64 is not supported in HLSL.");
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double)
+		SPIRV_CROSS_THROW("Double to UInt64 is not supported in HLSL.");
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64)
+		return "asdouble";
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
+		return "asdouble";
+	else
+		return "";
+}
+
 void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
 {
 	GLSLstd450 op = static_cast<GLSLstd450>(eop);
