@@ -483,6 +483,11 @@ void CompilerGLSL::emit_header()
 	statement("");
 }
 
+bool CompilerGLSL::type_is_empty(const SPIRType &type)
+{
+	return type.basetype == SPIRType::Struct && type.member_types.empty();
+}
+
 void CompilerGLSL::emit_struct(SPIRType &type)
 {
 	// Struct types can be stamped out multiple times
@@ -490,6 +495,12 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	// Type-punning with these types is legal, which complicates things
 	// when we are storing struct and array types in an SSBO for example.
 	if (type.type_alias != 0)
+		return;
+
+	// Don't declare empty structs in GLSL, this is not allowed.
+	// Empty structs is a corner case of HLSL output, and only sensible thing to do is avoiding to declare
+	// these types.
+	if (type_is_empty(type))
 		return;
 
 	add_resource_name(type.self);
@@ -1613,6 +1624,11 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+
+			// HLSL output from glslang may emit interface variables which are "empty".
+			// Just avoid declaring them.
+			if (type_is_empty(type))
+				continue;
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
