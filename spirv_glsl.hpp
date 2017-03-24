@@ -170,7 +170,7 @@ protected:
 	virtual std::string to_func_call_arg(uint32_t id);
 	virtual std::string to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
 	                                     bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad,
-	                                     bool has_lod, bool has_dref, uint32_t lod);
+	                                     bool has_dref, uint32_t lod);
 	virtual std::string to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
 	                                     bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
 	                                     uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset,

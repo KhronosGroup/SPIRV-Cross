@@ -2417,7 +2417,7 @@ bool CompilerGLSL::check_explicit_lod_allowed(uint32_t lod)
 {
 	auto &execution = get_entry_point();
 	bool allowed = !is_legacy_es() || execution.model == ExecutionModelFragment;
-	if (!allowed)
+	if (!allowed && lod != 0)
 	{
 		auto *lod_constant = maybe_get<SPIRConstant>(lod);
 		if (!lod_constant || lod_constant->scalar_f32() != 0.0f)
@@ -2809,7 +2809,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	string expr;
 	bool forward = false;
 	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
-	                         (!!grad_x || !!grad_y), !!lod, !!dref, lod);
+	                         (!!grad_x || !!grad_y), !!dref, lod);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
@@ -2821,7 +2821,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
 string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                      bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod, bool, uint32_t lod)
+                                      bool has_array_offsets, bool has_offset, bool has_grad, bool, uint32_t lod)
 {
 	string fname;
 
@@ -2839,7 +2839,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 			fname += "Proj";
 		if (has_grad)
 			fname += "Grad";
-		if (has_lod)
+		if (!!lod)
 			fname += "Lod";
 	}
 
