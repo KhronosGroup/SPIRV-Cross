@@ -2409,7 +2409,26 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 	inherit_expression_dependencies(result_id, op3);
 }
 
-string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype)
+// EXT_shader_texture_lod only concerns fragment shaders so lod tex functions
+// are not allowed in ES 2 vertex shaders. But SPIR-V only supports lod tex
+// functions in vertex shaders so we revert those back to plain calls when
+// the lod is a constant value of zero.
+bool CompilerGLSL::check_explicit_lod_allowed(uint32_t lod)
+{
+	auto &execution = get_entry_point();
+	bool allowed = !is_legacy_es() || execution.model == ExecutionModelFragment;
+	if (!allowed && lod != 0)
+	{
+		auto *lod_constant = maybe_get<SPIRConstant>(lod);
+		if (!lod_constant || lod_constant->scalar_f32() != 0.0f)
+		{
+			SPIRV_CROSS_THROW("Explicit lod not allowed in legacy ES non-fragment shaders.");
+		}
+	}
+	return allowed;
+}
+
+string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod)
 {
 	const char *type;
 	switch (imgtype.image.dim)
@@ -2437,10 +2456,15 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
+	bool use_explicit_lod = check_explicit_lod_allowed(lod);
+
 	if (op == "textureLod" || op == "textureProjLod")
 	{
 		if (is_legacy_es())
-			require_extension("GL_EXT_shader_texture_lod");
+		{
+			if (use_explicit_lod)
+				require_extension("GL_EXT_shader_texture_lod");
+		}
 		else if (is_legacy())
 			require_extension("GL_ARB_shader_texture_lod");
 	}
@@ -2448,11 +2472,21 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	if (op == "texture")
 		return join("texture", type);
 	else if (op == "textureLod")
-		return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+	{
+		if (use_explicit_lod)
+			return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+		else
+			return join("texture", type);
+	}
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureProjLod")
-		return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
+	{
+		if (use_explicit_lod)
+			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
+		else
+			return join("texture", type);
+	}
 	else
 	{
 		SPIRV_CROSS_THROW(join("Unsupported legacy texture op: ", op));
@@ -2775,7 +2809,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	string expr;
 	bool forward = false;
 	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
-	                         (!!grad_x || !!grad_y), !!lod, !!dref);
+	                         (!!grad_x || !!grad_y), !!dref, lod);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
@@ -2787,7 +2821,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
 string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                      bool has_array_offsets, bool has_offset, bool has_grad, bool has_lod, bool)
+                                      bool has_array_offsets, bool has_offset, bool has_grad, bool, uint32_t lod)
 {
 	string fname;
 
@@ -2805,14 +2839,14 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 			fname += "Proj";
 		if (has_grad)
 			fname += "Grad";
-		if (has_lod)
+		if (!!lod)
 			fname += "Lod";
 	}
 
 	if (has_offset)
 		fname += "Offset";
 
-	return is_legacy() ? legacy_tex_op(fname, imgtype) : fname;
+	return is_legacy() ? legacy_tex_op(fname, imgtype, lod) : fname;
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
@@ -2894,9 +2928,12 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 
 	if (lod)
 	{
-		forward = forward && should_forward(lod);
-		farg_str += ", ";
-		farg_str += to_expression(lod);
+		if (check_explicit_lod_allowed(lod))
+		{
+			forward = forward && should_forward(lod);
+			farg_str += ", ";
+			farg_str += to_expression(lod);
+		}
 	}
 
 	if (coffset)
