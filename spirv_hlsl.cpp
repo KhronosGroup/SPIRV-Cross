@@ -22,6 +22,27 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+// Returns true if an arithmetic operation does not change behavior depending on signedness.
+static bool opcode_is_sign_invariant(Op opcode)
+{
+	switch (opcode)
+	{
+	case OpIEqual:
+	case OpINotEqual:
+	case OpISub:
+	case OpIAdd:
+	case OpIMul:
+	case OpShiftLeftLogical:
+	case OpBitwiseOr:
+	case OpBitwiseXor:
+	case OpBitwiseAnd:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
@@ -219,6 +240,13 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_InstanceID";
 			break;
 
+		case BuiltInSampleId:
+			if (legacy)
+				SPIRV_CROSS_THROW("Sample ID not supported in SM 3.0 or lower.");
+			type = "uint";
+			semantic = "SV_SampleIndex";
+			break;
+
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 			break;
@@ -395,6 +423,7 @@ void CompilerHLSL::emit_builtin_variables()
 
 		case BuiltInVertexIndex:
 		case BuiltInInstanceIndex:
+		case BuiltInSampleId:
 			type = "int";
 			break;
 
@@ -608,9 +637,9 @@ void CompilerHLSL::emit_resources()
 
 		begin_scope();
 		sort(input_variables.begin(), input_variables.end(), variable_compare);
-		emit_builtin_inputs_in_struct();
 		for (auto var : input_variables)
 			emit_interface_block_in_struct(*var, active_inputs);
+		emit_builtin_inputs_in_struct();
 		end_scope_decl();
 		statement("");
 	}
@@ -623,9 +652,9 @@ void CompilerHLSL::emit_resources()
 		begin_scope();
 		// FIXME: Use locations properly if they exist.
 		sort(output_variables.begin(), output_variables.end(), variable_compare);
-		emit_builtin_outputs_in_struct();
 		for (auto var : output_variables)
 			emit_interface_block_in_struct(*var, active_outputs);
+		emit_builtin_outputs_in_struct();
 		end_scope_decl();
 		statement("");
 	}
@@ -1213,6 +1242,36 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 	statement(variable_decl(var), ";");
 }
 
+string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
+{
+	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float)
+		return "asuint";
+	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64)
+		return type_to_glsl(out_type);
+	else if (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float)
+		return "asint";
+	else if (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::UInt)
+		return "asfloat";
+	else if (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::Int)
+		return "asfloat";
+	else if (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double)
+		SPIRV_CROSS_THROW("Double to Int64 is not supported in HLSL.");
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double)
+		SPIRV_CROSS_THROW("Double to UInt64 is not supported in HLSL.");
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64)
+		return "asdouble";
+	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
+		return "asdouble";
+	else
+		return "";
+}
+
 void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
 {
 	GLSLstd450 op = static_cast<GLSLstd450>(eop);
@@ -1220,26 +1279,36 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	switch (op)
 	{
 	case GLSLstd450InverseSqrt:
-	{
 		emit_unary_func_op(result_type, id, args[0], "rsqrt");
 		break;
-	}
+
 	case GLSLstd450Fract:
-	{
 		emit_unary_func_op(result_type, id, args[0], "frac");
 		break;
-	}
+
 	case GLSLstd450FMix:
 	case GLSLstd450IMix:
-	{
 		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "lerp");
 		break;
-	}
+
 	case GLSLstd450Atan2:
-	{
 		emit_binary_func_op(result_type, id, args[1], args[0], "atan2");
 		break;
-	}
+
+	case GLSLstd450Fma:
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "mad");
+		break;
+
+	case GLSLstd450InterpolateAtCentroid:
+		emit_unary_func_op(result_type, id, args[0], "EvaluateAttributeAtCentroid");
+		break;
+	case GLSLstd450InterpolateAtSample:
+		emit_binary_func_op(result_type, id, args[0], args[1], "EvaluateAttributeAtSample");
+		break;
+	case GLSLstd450InterpolateAtOffset:
+		emit_binary_func_op(result_type, id, args[0], args[1], "EvaluateAttributeSnapped");
+		break;
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
@@ -1252,12 +1321,14 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	auto opcode = static_cast<Op>(instruction.op);
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BOP_CAST(op, type, skip_cast) emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
+#define BOP_CAST(op, type) \
+	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
 #define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
 #define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BFOP_CAST(op, type, skip_cast) emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, skip_cast)
+#define BFOP_CAST(op, type) \
+	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 
@@ -1268,22 +1339,217 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
+
 	case OpVectorTimesMatrix:
 	{
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
+
 	case OpMatrixTimesMatrix:
 	{
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
+
 	case OpFMod:
 	{
 		requires_op_fmod = true;
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
+
+	case OpDPdx:
+		UFOP(ddx);
+		break;
+
+	case OpDPdy:
+		UFOP(ddy);
+		break;
+
+	case OpDPdxFine:
+		UFOP(ddx_fine);
+		break;
+
+	case OpDPdyFine:
+		UFOP(ddy_fine);
+		break;
+
+	case OpDPdxCoarse:
+		UFOP(ddx_coarse);
+		break;
+
+	case OpDPdyCoarse:
+		UFOP(ddy_coarse);
+		break;
+
+	case OpLogicalNot:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+		auto &type = get<SPIRType>(result_type);
+
+		if (type.vecsize > 1)
+			emit_unrolled_unary_op(result_type, id, ops[2], "!");
+		else
+			UOP(!);
+		break;
+	}
+
+	case OpIEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==");
+		else
+			BOP_CAST(== , SPIRType::Int);
+		break;
+	}
+
+	case OpLogicalEqual:
+	case OpFOrdEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==");
+		else
+			BOP(== );
+		break;
+	}
+
+	case OpINotEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=");
+		else
+			BOP_CAST(!= , SPIRType::Int);
+		break;
+	}
+
+	case OpLogicalNotEqual:
+	case OpFOrdNotEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=");
+		else
+			BOP(!= );
+		break;
+	}
+
+	case OpUGreaterThan:
+	case OpSGreaterThan:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+		auto type = opcode == OpUGreaterThan ? SPIRType::UInt : SPIRType::Int;
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">");
+		else
+			BOP_CAST(>, type);
+		break;
+	}
+
+	case OpFOrdGreaterThan:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">");
+		else
+			BOP(>);
+		break;
+	}
+
+	case OpUGreaterThanEqual:
+	case OpSGreaterThanEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		auto type = opcode == OpUGreaterThanEqual ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=");
+		else
+			BOP_CAST(>= , type);
+		break;
+	}
+
+	case OpFOrdGreaterThanEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=");
+		else
+			BOP(>= );
+		break;
+	}
+
+	case OpULessThan:
+	case OpSLessThan:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		auto type = opcode == OpULessThan ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<");
+		else
+			BOP_CAST(<, type);
+		break;
+	}
+
+	case OpFOrdLessThan:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<");
+		else
+			BOP(<);
+		break;
+	}
+
+	case OpULessThanEqual:
+	case OpSLessThanEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		auto type = opcode == OpULessThanEqual ? SPIRType::UInt : SPIRType::Int;
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
+		else
+			BOP_CAST(<= , type);
+		break;
+	}
+
+	case OpFOrdLessThanEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
+		else
+			BOP(<= );
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;

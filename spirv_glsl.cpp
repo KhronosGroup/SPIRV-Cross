@@ -2268,6 +2268,29 @@ void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint
 	inherit_expression_dependencies(result_id, op1);
 }
 
+void CompilerGLSL::emit_unrolled_unary_op(uint32_t result_type, uint32_t result_id, uint32_t operand, const char *op)
+{
+	auto &type = get<SPIRType>(result_type);
+	auto expr = type_to_glsl_constructor(type);
+	expr += '(';
+	for (uint32_t i = 0; i < type.vecsize; i++)
+	{
+		// Make sure to call to_expression multiple times to ensure
+		// that these expressions are properly flushed to temporaries if needed.
+		expr += op;
+		expr += to_enclosed_expression(operand);
+		expr += '.';
+		expr += index_to_swizzle(i);
+
+		if (i + 1 < type.vecsize)
+			expr += ", ";
+	}
+	expr += ')';
+	emit_op(result_type, result_id, expr, should_forward(operand));
+
+	inherit_expression_dependencies(result_id, operand);
+}
+
 void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                            const char *op)
 {
@@ -5030,6 +5053,46 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		UFOP(dFdy);
 		if (is_legacy_es())
 			require_extension("GL_OES_standard_derivatives");
+		break;
+
+	case OpDPdxFine:
+		UFOP(dFdxFine);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
+		break;
+
+	case OpDPdyFine:
+		UFOP(dFdyFine);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
+		break;
+
+	case OpDPdxCoarse:
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		UFOP(dFdxCoarse);
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
+		break;
+
+	case OpDPdyCoarse:
+		UFOP(dFdyCoarse);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
 		break;
 
 	case OpFwidth:

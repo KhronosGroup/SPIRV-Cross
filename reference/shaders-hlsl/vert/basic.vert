@@ -21,8 +21,8 @@ struct SPIRV_Cross_Input
 
 struct SPIRV_Cross_Output
 {
-    float4 gl_Position : SV_Position;
     float3 vNormal : TEXCOORD0;
+    float4 gl_Position : SV_Position;
 };
 
 void vert_main()

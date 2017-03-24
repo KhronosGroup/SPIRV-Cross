@@ -309,6 +309,7 @@ protected:
 	void emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
 	                              SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
 	void emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
+	void emit_unrolled_unary_op(uint32_t result_type, uint32_t result_id, uint32_t operand, const char *op);
 	void emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
@@ -371,7 +372,7 @@ protected:
 	uint32_t type_to_std430_size(const SPIRType &type, uint64_t flags);
 
 	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
-	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
+	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
 	std::string build_composite_combiner(const uint32_t *elems, uint32_t length);
 	bool remove_duplicate_swizzle(std::string &op);
 	bool remove_unity_swizzle(uint32_t base, std::string &op);

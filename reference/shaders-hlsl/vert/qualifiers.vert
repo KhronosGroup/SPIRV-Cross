@@ -16,11 +16,11 @@ static Block vout;
 
 struct SPIRV_Cross_Output
 {
-    float4 gl_Position : SV_Position;
     nointerpolation float vFlat : TEXCOORD0;
     centroid float vCentroid : TEXCOORD1;
     sample float vSample : TEXCOORD2;
     noperspective float vNoperspective : TEXCOORD3;
+    float4 gl_Position : SV_Position;
 };
 
 void vert_main()
