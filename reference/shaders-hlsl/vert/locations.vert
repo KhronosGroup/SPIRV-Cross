@@ -32,12 +32,12 @@ struct SPIRV_Cross_Input
 
 struct SPIRV_Cross_Output
 {
-    float4 gl_Position : SV_Position;
     float vLocation0 : TEXCOORD0;
     float vLocation1 : TEXCOORD1;
     float vLocation2[2] : TEXCOORD2;
     Foo vLocation4 : TEXCOORD4;
     float vLocation9 : TEXCOORD9;
+    float4 gl_Position : SV_Position;
 };
 
 void vert_main()
