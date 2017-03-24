@@ -5016,6 +5016,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			require_extension("GL_OES_standard_derivatives");
 		break;
 
+	case OpDPdxFine:
+		UFOP(dFdxFine);
+		break;
+
+	case OpDPdyFine:
+		UFOP(dFdyFine);
+		break;
+
+	case OpDPdxCoarse:
+		UFOP(dFdxCoarse);
+		break;
+
+	case OpDPdyCoarse:
+		UFOP(dFdyCoarse);
+		break;
+
 	case OpFwidth:
 		UFOP(fwidth);
 		if (is_legacy_es())
