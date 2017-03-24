@@ -5041,18 +5041,42 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpDPdxFine:
 		UFOP(dFdxFine);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
 		break;
 
 	case OpDPdyFine:
 		UFOP(dFdyFine);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
 		break;
 
 	case OpDPdxCoarse:
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
 		UFOP(dFdxCoarse);
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
 		break;
 
 	case OpDPdyCoarse:
 		UFOP(dFdyCoarse);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
 		break;
 
 	case OpFwidth:
