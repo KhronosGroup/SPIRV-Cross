@@ -17,5 +17,5 @@ void main()
    int v1 = bitCount(s);
 
    int v2 = findMSB(u);
-   int v3 = findMSB(s);
+   int v3 = findLSB(s);
 }
