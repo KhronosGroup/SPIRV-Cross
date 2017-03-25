@@ -5103,12 +5103,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	// Bitfield
 	case OpBitFieldInsert:
+		// TODO: The signedness of inputs is strict in GLSL, but not in SPIR-V, bitcast if necessary.
 		QFOP(bitfieldInsert);
 		break;
 
 	case OpBitFieldSExtract:
 	case OpBitFieldUExtract:
-		QFOP(bitfieldExtract);
+		// TODO: The signedness of inputs is strict in GLSL, but not in SPIR-V, bitcast if necessary.
+		TFOP(bitfieldExtract);
 		break;
 
 	case OpBitReverse:
