@@ -18,19 +18,11 @@
 #define SPIRV_CROSS_HPP
 
 #include "spirv.hpp"
-#include <memory>
-#include <stack>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
-#include <vector>
-
 #include "spirv_common.hpp"
 
 namespace spirv_cross
 {
+class CFG;
 struct Resource
 {
 	// Resources are identified with their SPIR-V ID.
@@ -614,6 +606,10 @@ protected:
 	uint64_t active_output_builtins = 0;
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.
 	void update_active_builtins();
+
+	void analyze_parameter_preservation(
+	    SPIRFunction &entry, const CFG &cfg,
+	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks);
 };
 }
 
