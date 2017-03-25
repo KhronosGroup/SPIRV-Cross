@@ -22,6 +22,9 @@
 #include <functional>
 #include <locale>
 #include <sstream>
+#include <vector>
+#include <unordered_set>
+#include "spirv.hpp"
 
 namespace spirv_cross
 {

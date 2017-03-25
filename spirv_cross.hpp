@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "spirv_common.hpp"
+#include "spirv_cfg.hpp"
 
 namespace spirv_cross
 {
@@ -614,6 +615,8 @@ protected:
 	uint64_t active_output_builtins = 0;
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.
 	void update_active_builtins();
+
+	void analyze_parameter_preservation(SPIRFunction &entry, const CFG &cfg, const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks);
 };
 }
 
