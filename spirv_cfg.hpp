@@ -17,8 +17,8 @@
 #ifndef SPIRV_CROSS_CFG_HPP
 #define SPIRV_CROSS_CFG_HPP
 
-#include <assert.h>
 #include "spirv_common.hpp"
+#include <assert.h>
 
 namespace spirv_cross
 {

@@ -1404,7 +1404,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==");
 		else
-			BOP_CAST(== , SPIRType::Int);
+			BOP_CAST(==, SPIRType::Int);
 		break;
 	}
 
@@ -1417,7 +1417,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==");
 		else
-			BOP(== );
+			BOP(==);
 		break;
 	}
 
@@ -1429,7 +1429,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=");
 		else
-			BOP_CAST(!= , SPIRType::Int);
+			BOP_CAST(!=, SPIRType::Int);
 		break;
 	}
 
@@ -1442,7 +1442,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=");
 		else
-			BOP(!= );
+			BOP(!=);
 		break;
 	}
 
@@ -1482,7 +1482,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=");
 		else
-			BOP_CAST(>= , type);
+			BOP_CAST(>=, type);
 		break;
 	}
 
@@ -1494,7 +1494,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=");
 		else
-			BOP(>= );
+			BOP(>=);
 		break;
 	}
 
@@ -1534,7 +1534,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
 		else
-			BOP_CAST(<= , type);
+			BOP_CAST(<=, type);
 		break;
 	}
 
@@ -1546,7 +1546,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		if (expression_type(ops[2]).vecsize > 1)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
 		else
-			BOP(<= );
+			BOP(<=);
 		break;
 	}
 

@@ -2802,8 +2802,7 @@ const SPIRConstant &Compiler::get_constant(uint32_t id) const
 	return get<SPIRConstant>(id);
 }
 
-static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block,
-                                             const unordered_set<uint32_t> &blocks)
+static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block, const unordered_set<uint32_t> &blocks)
 {
 	// This block accesses the variable.
 	if (blocks.find(block) != end(blocks))
@@ -2821,8 +2820,8 @@ static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block,
 	return false;
 }
 
-void Compiler::analyze_parameter_preservation(SPIRFunction &entry, const CFG &cfg,
-                                              const unordered_map<uint32_t, unordered_set<uint32_t>> &variable_to_blocks)
+void Compiler::analyze_parameter_preservation(
+    SPIRFunction &entry, const CFG &cfg, const unordered_map<uint32_t, unordered_set<uint32_t>> &variable_to_blocks)
 {
 	for (auto &arg : entry.arguments)
 	{
