@@ -30,6 +30,12 @@ public:
 	    : CompilerGLSL(move(spirv_))
 	{
 	}
+
+	CompilerCPP(const uint32_t *ir, size_t word_count)
+	    : CompilerGLSL(ir, word_count)
+	{
+	}
+
 	std::string compile() override;
 
 	// Sets a custom symbol name that can override

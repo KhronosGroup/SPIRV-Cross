@@ -38,6 +38,11 @@ public:
 	{
 	}
 
+	CompilerHLSL(const uint32_t *ir, size_t size)
+	    : CompilerGLSL(ir, size)
+	{
+	}
+
 	const Options &get_options() const
 	{
 		return options;

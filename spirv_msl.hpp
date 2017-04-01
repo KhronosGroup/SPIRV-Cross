@@ -106,6 +106,9 @@ public:
 	CompilerMSL(std::vector<uint32_t> spirv, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	            std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
 
+	CompilerMSL(const uint32_t *ir, size_t word_count, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
+	            std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
+
 	// Compiles the SPIR-V code into Metal Shading Language.
 	std::string compile() override;
 
@@ -249,6 +252,9 @@ protected:
 		Meta &meta;
 		SortAspect sort_aspect;
 	};
+
+private:
+	void init(std::vector<MSLVertexAttr> *p_vtx_attrs, std::vector<MSLResourceBinding> *p_res_bindings);
 };
 }
 
