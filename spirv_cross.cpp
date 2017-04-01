@@ -70,6 +70,12 @@ Compiler::Compiler(vector<uint32_t> ir)
 	parse();
 }
 
+Compiler::Compiler(const uint32_t *ir, size_t word_count)
+    : spirv(ir, ir + word_count)
+{
+	parse();
+}
+
 string Compiler::compile()
 {
 	// Force a classic "C" locale, reverts when function returns

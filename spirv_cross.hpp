@@ -106,6 +106,7 @@ public:
 
 	// The constructor takes a buffer of SPIR-V words and parses it.
 	Compiler(std::vector<uint32_t> ir);
+	Compiler(const uint32_t *ir, size_t word_count);
 
 	virtual ~Compiler() = default;
 
