@@ -1411,7 +1411,6 @@ void Compiler::parse(const Instruction &instruction)
 		break;
 	}
 
-	// Not really used.
 	case OpTypeSampler:
 	{
 		uint32_t id = ops[0];

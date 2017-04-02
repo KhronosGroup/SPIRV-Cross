@@ -61,7 +61,6 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 		return image_type_glsl(type);
 
 	case SPIRType::Sampler:
-		// Not really used.
 		return "sampler";
 
 	case SPIRType::Void:
