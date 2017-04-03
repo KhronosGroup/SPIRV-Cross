@@ -483,6 +483,11 @@ void CompilerGLSL::emit_header()
 	statement("");
 }
 
+bool CompilerGLSL::type_is_empty(const SPIRType &type)
+{
+	return type.basetype == SPIRType::Struct && type.member_types.empty();
+}
+
 void CompilerGLSL::emit_struct(SPIRType &type)
 {
 	// Struct types can be stamped out multiple times
@@ -490,6 +495,12 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	// Type-punning with these types is legal, which complicates things
 	// when we are storing struct and array types in an SSBO for example.
 	if (type.type_alias != 0)
+		return;
+
+	// Don't declare empty structs in GLSL, this is not allowed.
+	// Empty structs is a corner case of HLSL output, and only sensible thing to do is avoiding to declare
+	// these types.
+	if (type_is_empty(type))
 		return;
 
 	add_resource_name(type.self);
@@ -985,7 +996,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
 
 	// For images, the type itself adds a layout qualifer.
-	if (type.basetype == SPIRType::Image)
+	// Only emit the format for storage images.
+	if (type.basetype == SPIRType::Image && type.image.sampled == 2)
 	{
 		const char *fmt = format_to_glsl(type.image.format);
 		if (fmt)
@@ -1586,9 +1598,11 @@ void CompilerGLSL::emit_resources()
 			// If we're remapping separate samplers and images, only emit the combined samplers.
 			if (skip_separate_image_sampler)
 			{
+				// Sampler buffers are always used without a sampler, and they will also work in regular GL.
+				bool sampler_buffer = type.basetype == SPIRType::Image && type.image.dim == DimBuffer;
 				bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
 				bool separate_sampler = type.basetype == SPIRType::Sampler;
-				if (separate_image || separate_sampler)
+				if (!sampler_buffer && (separate_image || separate_sampler))
 					continue;
 			}
 
@@ -1613,6 +1627,11 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+
+			// HLSL output from glslang may emit interface variables which are "empty".
+			// Just avoid declaring them.
+			if (type_is_empty(type))
+				continue;
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
@@ -5087,12 +5106,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	// Bitfield
 	case OpBitFieldInsert:
+		// TODO: The signedness of inputs is strict in GLSL, but not in SPIR-V, bitcast if necessary.
 		QFOP(bitfieldInsert);
 		break;
 
 	case OpBitFieldSExtract:
 	case OpBitFieldUExtract:
-		QFOP(bitfieldExtract);
+		// TODO: The signedness of inputs is strict in GLSL, but not in SPIR-V, bitcast if necessary.
+		TFOP(bitfieldExtract);
 		break;
 
 	case OpBitReverse:
@@ -5900,7 +5921,13 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 	// If we're emulating subpassInput with samplers, force sampler2D
 	// so we don't have to specify format.
 	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
-		res += type.image.sampled == 2 ? "image" : "texture";
+	{
+		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
+		if (type.image.dim == DimBuffer && type.image.sampled == 1)
+			res += "sampler";
+		else
+			res += type.image.sampled == 2 ? "image" : "texture";
+	}
 	else
 		res += "sampler";
 
@@ -5974,7 +6001,6 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 		return image_type_glsl(type);
 
 	case SPIRType::Sampler:
-		// Not really used.
 		return "sampler";
 
 	case SPIRType::Void:

@@ -70,6 +70,12 @@ Compiler::Compiler(vector<uint32_t> ir)
 	parse();
 }
 
+Compiler::Compiler(const uint32_t *ir, size_t word_count)
+    : spirv(ir, ir + word_count)
+{
+	parse();
+}
+
 string Compiler::compile()
 {
 	// Force a classic "C" locale, reverts when function returns
@@ -1405,7 +1411,6 @@ void Compiler::parse(const Instruction &instruction)
 		break;
 	}
 
-	// Not really used.
 	case OpTypeSampler:
 	{
 		uint32_t id = ops[0];
@@ -2802,6 +2807,71 @@ const SPIRConstant &Compiler::get_constant(uint32_t id) const
 	return get<SPIRConstant>(id);
 }
 
+static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block, const unordered_set<uint32_t> &blocks)
+{
+	// This block accesses the variable.
+	if (blocks.find(block) != end(blocks))
+		return false;
+
+	// We are at the end of the CFG.
+	if (cfg.get_succeeding_edges(block).empty())
+		return true;
+
+	// If any of our successors have a path to the end, there exists a path from block.
+	for (auto &succ : cfg.get_succeeding_edges(block))
+		if (exists_unaccessed_path_to_return(cfg, succ, blocks))
+			return true;
+
+	return false;
+}
+
+void Compiler::analyze_parameter_preservation(
+    SPIRFunction &entry, const CFG &cfg, const unordered_map<uint32_t, unordered_set<uint32_t>> &variable_to_blocks)
+{
+	for (auto &arg : entry.arguments)
+	{
+		// Non-pointers are always inputs.
+		auto &type = get<SPIRType>(arg.type);
+		if (!type.pointer)
+			continue;
+
+		// Opaque argument types are always in
+		bool potential_preserve;
+		switch (type.basetype)
+		{
+		case SPIRType::Sampler:
+		case SPIRType::Image:
+		case SPIRType::SampledImage:
+		case SPIRType::AtomicCounter:
+			potential_preserve = false;
+			break;
+
+		default:
+			potential_preserve = true;
+			break;
+		}
+
+		if (!potential_preserve)
+			continue;
+
+		auto itr = variable_to_blocks.find(arg.id);
+		if (itr == end(variable_to_blocks))
+		{
+			// Variable is never accessed.
+			continue;
+		}
+
+		// If there is a path through the CFG where no block writes to the variable, the variable will be in an undefined state
+		// when the function returns. We therefore need to implicitly preserve the variable in case there are writers in the function.
+		// Major case here is if a function is
+		// void foo(int &var) { if (cond) var = 10; }
+		// Using read/write counts, we will think it's just an out variable, but it really needs to be inout,
+		// because if we don't write anything whatever we put into the function must return back to the caller.
+		if (exists_unaccessed_path_to_return(cfg, entry.entry_block, itr->second))
+			arg.read_count++;
+	}
+}
+
 void Compiler::analyze_variable_scope(SPIRFunction &entry)
 {
 	struct AccessHandler : OpcodeHandler
@@ -2970,6 +3040,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 	// Compute the control flow graph for this function.
 	CFG cfg(*this, entry);
+
+	// Analyze if there are parameters which need to be implicitly preserved with an "in" qualifier.
+	analyze_parameter_preservation(entry, cfg, handler.accessed_variables_to_block);
 
 	unordered_map<uint32_t, uint32_t> potential_loop_variables;
 

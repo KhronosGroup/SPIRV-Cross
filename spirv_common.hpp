@@ -17,11 +17,21 @@
 #ifndef SPIRV_CROSS_COMMON_HPP
 #define SPIRV_CROSS_COMMON_HPP
 
+#include "spirv.hpp"
+
 #include <cstdio>
 #include <cstring>
 #include <functional>
 #include <locale>
+#include <memory>
 #include <sstream>
+#include <stack>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace spirv_cross
 {

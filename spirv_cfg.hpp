@@ -17,11 +17,12 @@
 #ifndef SPIRV_CROSS_CFG_HPP
 #define SPIRV_CROSS_CFG_HPP
 
-#include "spirv_cross.hpp"
+#include "spirv_common.hpp"
 #include <assert.h>
 
 namespace spirv_cross
 {
+class Compiler;
 class CFG
 {
 public:
