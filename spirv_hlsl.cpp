@@ -862,7 +862,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				{
 					// Unroll matrices.
 					for (uint32_t col = 0; col < mtype.columns; col++)
-						statement(name, "[", col, "] = stage_input.", name, "_0;");
+						statement(name, "[", col, "] = stage_input.", name, "_", col, ";");
 				}
 				else
 				{
