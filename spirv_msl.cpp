@@ -43,6 +43,22 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_a
 			resource_bindings.push_back(&rb);
 }
 
+CompilerMSL::CompilerMSL(const uint32_t *ir, size_t word_count, MSLVertexAttr *p_vtx_attrs, size_t vtx_attrs_count,
+                         MSLResourceBinding *p_res_bindings, size_t res_bindings_count)
+    : CompilerGLSL(ir, word_count)
+{
+	populate_func_name_overrides();
+	populate_var_name_overrides();
+
+	if (p_vtx_attrs)
+		for (size_t i = 0; i < vtx_attrs_count; i++)
+			vtx_attrs_by_location[p_vtx_attrs[i].location] = &p_vtx_attrs[i];
+
+	if (p_res_bindings)
+		for (size_t i = 0; i < res_bindings_count; i++)
+			resource_bindings.push_back(&p_res_bindings[i]);
+}
+
 // Populate the collection of function names that need to be overridden
 void CompilerMSL::populate_func_name_overrides()
 {
