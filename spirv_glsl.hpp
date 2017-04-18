@@ -100,11 +100,13 @@ public:
 	CompilerGLSL(std::vector<uint32_t> spirv_)
 	    : Compiler(move(spirv_))
 	{
-		if (source.known)
-		{
-			options.es = source.es;
-			options.version = source.version;
-		}
+		init();
+	}
+
+	CompilerGLSL(const uint32_t *ir, size_t word_count)
+	    : Compiler(ir, word_count)
+	{
+		init();
 	}
 
 	const Options &get_options() const
@@ -446,6 +448,16 @@ protected:
 	void fixup_image_load_store_access();
 
 	bool type_is_empty(const SPIRType &type);
+
+private:
+	void init()
+	{
+		if (source.known)
+		{
+			options.es = source.es;
+			options.version = source.version;
+		}
+	}
 };
 }
 
