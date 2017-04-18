@@ -1105,22 +1105,36 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		if (options.shader_model >= 40)
 		{
 			texop += to_expression(img);
-			texop += "_tex.Sample";
+
+			if (gather)
+				texop += ".Gather";
+			else if (offset || coffsets || bias)
+				texop += ".SampleBias";
+			else if (proj)
+				SPIRV_CROSS_THROW("textureProj is not supported in HLSL shader model 4/5.");
+			else if (grad_x || grad_y)
+				texop += ".SampleGrad";
+			else if (lod)
+				texop += ".SampleLevel";
+			else
+				texop += ".Sample";
 		}
 		else
 		{
 			texop += "tex2D";
 
 			if (gather)
-				texop += "Gather";
-			if (coffsets)
-				texop += "Offsets";
+				SPIRV_CROSS_THROW("textureGather is not supported in HLSL shader model 2/3.");
+			if (offset || coffsets)
+				SPIRV_CROSS_THROW("textureOffset is not supported in HLSL shader model 2/3.");
 			if (proj)
-				texop += "Proj";
+				texop += "proj";
 			if (grad_x || grad_y)
-				texop += "Grad";
+				texop += "grad";
 			if (lod)
-				texop += "Lod";
+				texop += "lod";
+			if (bias)
+				texop += "bias";
 		}
 	}
 
@@ -1128,11 +1142,11 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		texop += "Offset";
 
 	expr += texop;
-	expr += "(";
+	expr += "(_";
 	expr += to_expression(img);
 	if (options.shader_model >= 40)
 	{
-		expr += "_samp";
+		expr += "_sample";
 	}
 
 	bool swizz_func = backend.swizzle_is_function;
@@ -1209,24 +1223,32 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(lod);
 	}
 
+	if (bias)
+	{
+		forward = forward && should_forward(bias);
+		expr += ", ";
+		expr += to_expression(bias);
+	}
+
 	if (coffset)
 	{
+		if (!bias)
+		{
+			expr += ", 0";
+		}
 		forward = forward && should_forward(coffset);
 		expr += ", ";
 		expr += to_expression(coffset);
 	}
 	else if (offset)
 	{
+		if (!bias)
+		{
+			expr += ", 0";
+		}
 		forward = forward && should_forward(offset);
 		expr += ", ";
 		expr += to_expression(offset);
-	}
-
-	if (bias)
-	{
-		forward = forward && should_forward(bias);
-		expr += ", ";
-		expr += to_expression(bias);
 	}
 
 	if (comp)
@@ -1253,8 +1275,8 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 	if (options.shader_model >= 40 && (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage))
 	{
-		statement("Texture2D<float4> ", to_name(var.self), "_tex;");
-		statement("SamplerState ", to_name(var.self), "_samp;");
+		statement("Texture2D<float4> ", to_name(var.self), ";");
+		statement("SamplerState _", to_name(var.self), "_sample;");
 	}
 	else
 	{
