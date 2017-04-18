@@ -1,4 +1,5 @@
-uniform sampler2D uTex;
+Texture2D<float4> uTex;
+SamplerState _uTex_sampler;
 
 static float4 FragColor;
 static float4 vColor;
@@ -17,7 +18,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    FragColor = vColor * tex2D(uTex, vTex);
+    FragColor = vColor * uTex.Sample(_uTex_sampler, vTex);
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

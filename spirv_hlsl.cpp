@@ -1146,7 +1146,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	expr += to_expression(img);
 	if (options.shader_model >= 40)
 	{
-		expr += "_sample";
+		expr += "_sampler";
 	}
 
 	bool swizz_func = backend.swizzle_is_function;
@@ -1276,7 +1276,7 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 	if (options.shader_model >= 40 && (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage))
 	{
 		statement("Texture2D<float4> ", to_name(var.self), ";");
-		statement("SamplerState _", to_name(var.self), "_sample;");
+		statement("SamplerState _", to_name(var.self), "_sampler;");
 	}
 	else
 	{
