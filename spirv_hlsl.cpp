@@ -1102,18 +1102,26 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		texop += "texelFetch";
 	else
 	{
-		texop += "tex2D";
+		if (options.shader_model >= 40)
+		{
+			texop += to_expression(img);
+			texop += "_tex.Sample";
+		}
+		else
+		{
+			texop += "tex2D";
 
-		if (gather)
-			texop += "Gather";
-		if (coffsets)
-			texop += "Offsets";
-		if (proj)
-			texop += "Proj";
-		if (grad_x || grad_y)
-			texop += "Grad";
-		if (lod)
-			texop += "Lod";
+			if (gather)
+				texop += "Gather";
+			if (coffsets)
+				texop += "Offsets";
+			if (proj)
+				texop += "Proj";
+			if (grad_x || grad_y)
+				texop += "Grad";
+			if (lod)
+				texop += "Lod";
+		}
 	}
 
 	if (coffset || offset)
@@ -1122,6 +1130,10 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	expr += texop;
 	expr += "(";
 	expr += to_expression(img);
+	if (options.shader_model >= 40)
+	{
+		expr += "_samp";
+	}
 
 	bool swizz_func = backend.swizzle_is_function;
 	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
@@ -1238,7 +1250,16 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
-	statement(variable_decl(var), ";");
+	auto &type = get<SPIRType>(var.basetype);
+	if (options.shader_model >= 40 && (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage))
+	{
+		statement("Texture2D<float4> ", to_name(var.self), "_tex;");
+		statement("SamplerState ", to_name(var.self), "_samp;");
+	}
+	else
+	{
+		statement(variable_decl(var), ";");
+	}
 }
 
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
