@@ -205,10 +205,15 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 {
 	fprintf(stderr, "%s\n", tag);
 	fprintf(stderr, "=============\n\n");
+	bool print_ssbo = !strcmp(tag, "ssbos");
+
 	for (auto &res : resources)
 	{
 		auto &type = compiler.get_type(res.type_id);
 		auto mask = compiler.get_decoration_mask(res.id);
+
+		if (print_ssbo && compiler.buffer_is_hlsl_counter_buffer(res.id))
+			continue;
 
 		// If we don't have a name, use the fallback for the type instead of the variable
 		// for SSBOs and UBOs since those are the only meaningful names to use externally.
@@ -245,6 +250,10 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 			fprintf(stderr, " readonly");
 		if (is_sized_block)
 			fprintf(stderr, " (BlockSize : %u bytes)", block_size);
+
+		uint32_t counter_id = 0;
+		if (print_ssbo && compiler.buffer_get_hlsl_counter_buffer(res.id, counter_id))
+			fprintf(stderr, " (HLSL counter buffer ID: %u)", counter_id);
 		fprintf(stderr, "\n");
 	}
 	fprintf(stderr, "=============\n\n");

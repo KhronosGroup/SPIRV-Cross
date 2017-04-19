@@ -820,6 +820,21 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 
 	if (name.empty())
 		return;
+
+	// glslang uses identifiers to pass along meaningful information
+	// about HLSL reflection.
+	auto &m = meta.at(id);
+	if (source.hlsl && name.find("@count") == name.size() - 6)
+	{
+		m.hlsl_magic_counter_buffer_candidate = true;
+		m.hlsl_magic_counter_buffer_name = name.substr(0, name.find("@count"));
+	}
+	else
+	{
+		m.hlsl_magic_counter_buffer_candidate = false;
+		m.hlsl_magic_counter_buffer_name.clear();
+	}
+
 	// Reserved for temporaries.
 	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
@@ -1156,13 +1171,22 @@ void Compiler::parse(const Instruction &instruction)
 			source.es = true;
 			source.version = ops[1];
 			source.known = true;
+			source.hlsl = false;
 			break;
 
 		case SourceLanguageGLSL:
 			source.es = false;
 			source.version = ops[1];
 			source.known = true;
+			source.hlsl = false;
 			break;
+
+		case SourceLanguageHLSL:
+			// For purposes of cross-compiling, this is GLSL 450.
+			source.es = false;
+			source.version = 450;
+			source.known = true;
+			source.hlsl = true;
 
 		default:
 			source.known = false;
@@ -3423,4 +3447,36 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 	}
 
 	return true;
+}
+
+bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
+{
+	if (meta.at(id).hlsl_magic_counter_buffer_candidate)
+	{
+		auto *var = maybe_get<SPIRVariable>(id);
+		// Ensure that this actually a buffer object.
+		return var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock);
+	}
+	else
+		return false;
+}
+
+bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const
+{
+	auto &name = get_name(id);
+	uint32_t id_bound = get_current_id_bound();
+	for (uint32_t i = 0; i < id_bound; i++)
+	{
+		if (meta[i].hlsl_magic_counter_buffer_candidate && meta[i].hlsl_magic_counter_buffer_name == name)
+		{
+			auto *var = maybe_get<SPIRVariable>(i);
+			// Ensure that this actually a buffer object.
+			if (var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			{
+				counter_id = i;
+				return true;
+			}
+		}
+	}
+	return false;
 }
