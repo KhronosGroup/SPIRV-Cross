@@ -1195,7 +1195,11 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	if (options.shader_model >= 40 && proj)
 	{
-		requires_textureProj = true;
+		if (!requires_textureProj)
+		{
+			requires_textureProj = true;
+			force_recompile = true;
+		}
 		coord_expr = "SPIRV_Cross_projectTextureCoordinate(" + coord_expr + ")";
 	}
 
@@ -1424,7 +1428,11 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	case OpFMod:
 	{
-		requires_op_fmod = true;
+		if (!requires_op_fmod)
+		{
+			requires_op_fmod = true;
+			force_recompile = true;
+		}
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
