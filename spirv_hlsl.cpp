@@ -1129,7 +1129,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 			if (gather)
 				texop += ".Gather";
-			else if (offset || coffsets || bias)
+			else if (bias)
 				texop += ".SampleBias";
 			else if (proj)
 				texop += ".Sample";
@@ -1158,9 +1158,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 				texop += "bias";
 		}
 	}
-
-	if (coffset || offset)
-		texop += "Offset";
 
 	expr += texop;
 	expr += "(_";
@@ -1263,20 +1260,12 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	if (coffset)
 	{
-		if (!bias)
-		{
-			expr += ", 0";
-		}
 		forward = forward && should_forward(coffset);
 		expr += ", ";
 		expr += to_expression(coffset);
 	}
 	else if (offset)
 	{
-		if (!bias)
-		{
-			expr += ", 0";
-		}
 		forward = forward && should_forward(offset);
 		expr += ", ";
 		expr += to_expression(offset);
