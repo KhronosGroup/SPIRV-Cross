@@ -1273,9 +1273,119 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
 	auto &type = get<SPIRType>(var.basetype);
-	if (options.shader_model >= 40 && (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage))
+	if (options.shader_model >= 40 && type.basetype == SPIRType::SampledImage)
 	{
-		statement("Texture2D<float4> ", to_name(var.self), ";");
+		string format = "float4";
+		
+		switch (type.image.format) {
+		case ImageFormatUnknown:
+			format = "float4";
+			break;
+
+		case ImageFormatRgba32f:
+			format = "float4";
+			break;
+
+		case ImageFormatRgba16f:
+			format = "half4";
+			break;
+
+		case ImageFormatR32f:
+			format = "float";
+			break;
+
+		case ImageFormatRgba8:
+			format = "uint4";
+			break;
+		
+		case ImageFormatRg32f:
+			format = "float2";
+			break;
+
+		case ImageFormatRg16f:
+			format = "half2";
+			break;
+
+		case ImageFormatR11fG11fB10f:
+			format = "half3";
+			break;
+
+		case ImageFormatR16f:
+			format = "half";
+			break;
+
+		case ImageFormatRgba16:
+		case ImageFormatRgb10A2:
+			format = "uint4";
+			break;
+		
+		case ImageFormatRg16:
+		case ImageFormatRg8:
+			format = "uint";
+			break;
+
+		case ImageFormatR16:
+		case ImageFormatR8:
+			format = "uint";
+			break;
+
+		case ImageFormatRgba8Snorm:
+		case ImageFormatRgba16Snorm:
+			format = "snorm float4";
+			break;
+
+		case ImageFormatRg16Snorm:
+		case ImageFormatRg8Snorm:
+			format = "snorm float2";
+			break;
+
+		case ImageFormatR16Snorm:
+		case ImageFormatR8Snorm:
+			format = "snorm float";
+			break;
+
+		case ImageFormatRgba32i:
+		case ImageFormatRgba16i:
+		case ImageFormatRgba8i:
+			format = "int4";
+			break;
+
+		case ImageFormatRg32i:
+		case ImageFormatRg16i:
+		case ImageFormatRg8i:
+			format = "int2";
+			break;
+
+		case ImageFormatR32i:
+		case ImageFormatR16i:
+		case ImageFormatR8i:
+			format = "int";
+			break;
+
+		case ImageFormatRgba32ui:
+		case ImageFormatRgba16ui:
+		case ImageFormatRgba8ui:
+			format = "uint4";
+			break;
+
+		case ImageFormatRgb10a2ui:
+			format = "uint4";
+			break;
+		
+		case ImageFormatRg32ui:
+		case ImageFormatRg16ui:
+		case ImageFormatRg8ui:
+			format = "uint2";
+			break;
+
+		case ImageFormatR32ui:
+		case ImageFormatR16ui:
+		case ImageFormatR8ui:
+			format = "uint";
+			break;
+		}
+
+		statement("Texture2D<", format, "> ", to_name(var.self), ";");
 		statement("SamplerState _", to_name(var.self), "_sampler;");
 	}
 	else
