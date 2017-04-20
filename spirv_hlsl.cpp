@@ -1146,7 +1146,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 			if (gather)
 				SPIRV_CROSS_THROW("textureGather is not supported in HLSL shader model 2/3.");
-			if (offset || coffsets)
+			if (offset || coffset)
 				SPIRV_CROSS_THROW("textureOffset is not supported in HLSL shader model 2/3.");
 			if (proj)
 				texop += "proj";
@@ -1160,7 +1160,11 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	}
 
 	expr += texop;
-	expr += "(_";
+	expr += "(";
+	if (options.shader_model >= 40)
+	{
+		expr += "_";
+	}
 	expr += to_expression(img);
 	if (options.shader_model >= 40)
 	{
