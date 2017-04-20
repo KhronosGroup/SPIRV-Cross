@@ -80,6 +80,7 @@ private:
 
 	Options options;
 	bool requires_op_fmod = false;
+	bool requires_textureProj = false;
 
 	void emit_builtin_variables();
 	bool require_output = false;

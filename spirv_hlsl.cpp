@@ -681,6 +681,27 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+
+	if (requires_textureProj)
+	{
+		statement("float SPIRV_Cross_projectTextureCoordinate(float2 coord)");
+		begin_scope();
+		statement("return coord.x / coord.y;");
+		end_scope();
+		statement("");
+
+		statement("float2 SPIRV_Cross_projectTextureCoordinate(float3 coord)");
+		begin_scope();
+		statement("return float2(coord.x, coord.y) / coord.z;");
+		end_scope();
+		statement("");
+
+		statement("float3 SPIRV_Cross_projectTextureCoordinate(float4 coord)");
+		begin_scope();
+		statement("return float3(coord.x, coord.y, coord.z) / coord.w;");
+		end_scope();
+		statement("");
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
@@ -1111,7 +1132,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			else if (offset || coffsets || bias)
 				texop += ".SampleBias";
 			else if (proj)
-				SPIRV_CROSS_THROW("textureProj is not supported in HLSL shader model 4/5.");
+				texop += ".Sample";  // SPIRV_CROSS_THROW("textureProj is not supported in HLSL shader model 4/5.");
 			else if (grad_x || grad_y)
 				texop += ".SampleGrad";
 			else if (lod)
@@ -1171,6 +1192,12 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	// The IR can give us more components than we need, so chop them off as needed.
 	auto coord_expr = to_expression(coord) + swizzle(coord_components, expression_type(coord).vecsize);
+
+	if (options.shader_model >= 40 && proj)
+	{
+		requires_textureProj = true;
+		coord_expr = "SPIRV_Cross_projectTextureCoordinate(" + coord_expr + ")";
+	}
 
 	// TODO: implement rest ... A bit intensive.
 
