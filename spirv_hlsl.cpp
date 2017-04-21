@@ -684,23 +684,46 @@ void CompilerHLSL::emit_resources()
 
 	if (requires_textureProj)
 	{
-		statement("float SPIRV_Cross_projectTextureCoordinate(float2 coord)");
-		begin_scope();
-		statement("return coord.x / coord.y;");
-		end_scope();
-		statement("");
+		if (options.shader_model >= 40)
+		{
+			statement("float SPIRV_Cross_projectTextureCoordinate(float2 coord)");
+			begin_scope();
+			statement("return coord.x / coord.y;");
+			end_scope();
+			statement("");
 
-		statement("float2 SPIRV_Cross_projectTextureCoordinate(float3 coord)");
-		begin_scope();
-		statement("return float2(coord.x, coord.y) / coord.z;");
-		end_scope();
-		statement("");
+			statement("float2 SPIRV_Cross_projectTextureCoordinate(float3 coord)");
+			begin_scope();
+			statement("return float2(coord.x, coord.y) / coord.z;");
+			end_scope();
+			statement("");
 
-		statement("float3 SPIRV_Cross_projectTextureCoordinate(float4 coord)");
-		begin_scope();
-		statement("return float3(coord.x, coord.y, coord.z) / coord.w;");
-		end_scope();
-		statement("");
+			statement("float3 SPIRV_Cross_projectTextureCoordinate(float4 coord)");
+			begin_scope();
+			statement("return float3(coord.x, coord.y, coord.z) / coord.w;");
+			end_scope();
+			statement("");
+		}
+		else
+		{
+			statement("float4 SPIRV_Cross_projectTextureCoordinate(float2 coord)");
+			begin_scope();
+			statement("return float4(coord.x, 0.0, 0.0, coord.y);");
+			end_scope();
+			statement("");
+
+			statement("float4 SPIRV_Cross_projectTextureCoordinate(float3 coord)");
+			begin_scope();
+			statement("return float4(coord.x, coord.y, 0.0, coord.z);");
+			end_scope();
+			statement("");
+
+			statement("float4 SPIRV_Cross_projectTextureCoordinate(float4 coord)");
+			begin_scope();
+			statement("return coord;");
+			end_scope();
+			statement("");
+		}
 	}
 }
 
@@ -1131,8 +1154,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 				texop += ".Gather";
 			else if (bias)
 				texop += ".SampleBias";
-			else if (proj)
-				texop += ".Sample";
 			else if (grad_x || grad_y)
 				texop += ".SampleGrad";
 			else if (lod)
@@ -1194,7 +1215,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	// The IR can give us more components than we need, so chop them off as needed.
 	auto coord_expr = to_expression(coord) + swizzle(coord_components, expression_type(coord).vecsize);
 
-	if (options.shader_model >= 40 && proj)
+	if (proj)
 	{
 		if (!requires_textureProj)
 		{
@@ -1202,6 +1223,16 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			force_recompile = true;
 		}
 		coord_expr = "SPIRV_Cross_projectTextureCoordinate(" + coord_expr + ")";
+	}
+
+	if (options.shader_model < 40 && lod)
+	{
+		coord_expr = "float4(" + coord_expr + ", 0.0, " + to_expression(lod) + ")";
+	}
+
+	if (options.shader_model < 40 && bias)
+	{
+		coord_expr = "float4(" + coord_expr + ", 0.0, " + to_expression(bias) + ")";
 	}
 
 	// TODO: implement rest ... A bit intensive.
@@ -1248,14 +1279,14 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(grad_y);
 	}
 
-	if (lod)
+	if (lod && options.shader_model >= 40)
 	{
 		forward = forward && should_forward(lod);
 		expr += ", ";
 		expr += to_expression(lod);
 	}
 
-	if (bias)
+	if (bias && options.shader_model >= 40)
 	{
 		forward = forward && should_forward(bias);
 		expr += ", ";
@@ -1307,6 +1338,8 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 	{
 		statement(variable_decl(var), ";");
 	}
+
+	// TODO: Separate samplers/images
 }
 
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
