@@ -43,6 +43,79 @@ static bool opcode_is_sign_invariant(Op opcode)
 	}
 }
 
+string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+{
+	auto &imagetype = get<SPIRType>(type.image.type);
+	string res;
+
+	switch (imagetype.basetype)
+	{
+	case SPIRType::Int:
+		res = "i";
+		break;
+	case SPIRType::UInt:
+		res = "u";
+		break;
+	default:
+		break;
+	}
+
+	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+		return res + "subpassInput" + (type.image.ms ? "MS" : "");
+
+	// If we're emulating subpassInput with samplers, force sampler2D
+	// so we don't have to specify format.
+	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+	{
+		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
+		if (type.image.dim == DimBuffer && type.image.sampled == 1)
+			res += "sampler";
+		else
+			res += type.image.sampled == 2 ? "image" : "texture";
+	}
+	else
+		res += "sampler";
+
+	switch (type.image.dim)
+	{
+	case Dim1D:
+		res += "1D";
+		break;
+	case Dim2D:
+		res += "2D";
+		break;
+	case Dim3D:
+		res += "3D";
+		break;
+	case DimCube:
+		res += "CUBE";
+		break;
+
+	case DimBuffer:
+		res += "Buffer";
+		break;
+
+	case DimSubpassData:
+		res += "2D";
+		break;
+	default:
+		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+	}
+
+	if (type.image.ms)
+		res += "MS";
+	if (type.image.arrayed)
+	{
+		if (is_legacy_desktop())
+			require_extension("GL_EXT_texture_array");
+		res += "Array";
+	}
+	if (type.image.depth)
+		res += "Shadow";
+
+	return res;
+}
+
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
@@ -58,7 +131,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
-		return image_type_glsl(type);
+		return image_type_hlsl(type);
 
 	case SPIRType::Sampler:
 		return "sampler";
@@ -1181,10 +1254,12 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 				texop += "tex3D";
 				break;
 			case DimCube:
+				texop += "texCUBE";
+				break;
 			case DimRect:
 			case DimBuffer:
 			case DimSubpassData:
-				SPIRV_CROSS_THROW("Cube/Buffer texture support is not yet implemented for HLSL"); // TODO
+				SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 			}
 
 			if (gather)
@@ -1378,10 +1453,12 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 			dim = "3D";
 			break;
 		case DimCube:
+			dim = "Cube";
+			break;
 		case DimRect:
 		case DimBuffer:
 		case DimSubpassData:
-			SPIRV_CROSS_THROW("Cube/Buffer texture support is not yet implemented for HLSL"); // TODO
+			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 		}
 		statement("Texture", dim, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
 		statement("SamplerState _", to_name(var.self), "_sampler;");
