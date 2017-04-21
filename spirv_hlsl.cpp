@@ -1169,7 +1169,23 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		}
 		else
 		{
-			texop += "tex2D";
+			switch (imgtype.image.dim)
+			{
+			case Dim1D:
+				texop += "tex1D";
+				break;
+			case Dim2D:
+				texop += "tex2D";
+				break;
+			case Dim3D:
+				texop += "tex3D";
+				break;
+			case DimCube:
+			case DimRect:
+			case DimBuffer:
+			case DimSubpassData:
+				SPIRV_CROSS_THROW("Cube/Buffer texture support is not yet implemented for HLSL"); // TODO
+			}
 
 			if (gather)
 				SPIRV_CROSS_THROW("textureGather is not supported in HLSL shader model 2/3.");
@@ -1233,12 +1249,24 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	if (options.shader_model < 40 && lod)
 	{
-		coord_expr = "float4(" + coord_expr + ", 0.0, " + to_expression(lod) + ")";
+		auto &coordtype = expression_type(coord);
+		string coord_filler;
+		for (uint32_t size = coordtype.vecsize; size < 3; ++size)
+		{
+			coord_filler += ", 0.0";
+		}
+		coord_expr = "float4(" + coord_expr + coord_filler + ", " + to_expression(lod) + ")";
 	}
 
 	if (options.shader_model < 40 && bias)
 	{
-		coord_expr = "float4(" + coord_expr + ", 0.0, " + to_expression(bias) + ")";
+		auto &coordtype = expression_type(coord);
+		string coord_filler;
+		for (uint32_t size = coordtype.vecsize; size < 3; ++size)
+		{
+			coord_filler += ", 0.0";
+		}
+		coord_expr = "float4(" + coord_expr + coord_filler + ", " + to_expression(bias) + ")";
 	}
 
 	// TODO: implement rest ... A bit intensive.
