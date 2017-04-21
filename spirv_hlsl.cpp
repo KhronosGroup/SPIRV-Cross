@@ -1337,7 +1337,25 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 	if (options.shader_model >= 40 && type.basetype == SPIRType::SampledImage)
 	{
 		auto &imagetype = get<SPIRType>(type.image.type);
-		statement("Texture2D<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
+		string dim;
+		switch (type.image.dim)
+		{
+		case Dim1D:
+			dim = "1D";
+			break;
+		case Dim2D:
+			dim = "2D";
+			break;
+		case Dim3D:
+			dim = "3D";
+			break;
+		case DimCube:
+		case DimRect:
+		case DimBuffer:
+		case DimSubpassData:
+			SPIRV_CROSS_THROW("Cube/Buffer texture support is not yet implemented for HLSL"); // TODO
+		}
+		statement("Texture", dim, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
 		statement("SamplerState _", to_name(var.self), "_sampler;");
 	}
 	else
