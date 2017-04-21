@@ -5,13 +5,18 @@ uniform sampler2D tex2d;
 uniform sampler3D tex3d;
 uniform samplerCube texCube;
 
+uniform sampler1DShadow tex1dShadow;
+uniform sampler2DShadow tex2dShadow;
+uniform samplerCubeShadow texCubeShadow;
+
 in float texCoord1d;
 in vec2 texCoord2d;
 in vec3 texCoord3d;
 
 out vec4 FragColor;
 
-void main() {
+void main()
+{
 	vec4 texcolor = texture(tex1d, texCoord1d);
 	texcolor += textureOffset(tex1d, texCoord1d, 1);
 	texcolor += textureLod(tex1d, texCoord1d, 2);
@@ -36,6 +41,10 @@ void main() {
 	texcolor += texture(texCube, texCoord3d);
 	texcolor += textureLod(texCube, texCoord3d, 2);
 	texcolor += texture(texCube, texCoord3d, 1.0);
+
+	texcolor.a += texture(tex1dShadow, vec3(texCoord1d, 0.0, 0.0));
+	texcolor.a += texture(tex2dShadow, vec3(texCoord2d, 0.0));
+	texcolor.a += texture(texCubeShadow, vec4(texCoord3d, 0.0));
 
 	FragColor = texcolor;
 }

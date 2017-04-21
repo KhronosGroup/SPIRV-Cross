@@ -1229,7 +1229,9 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		{
 			texop += to_expression(img);
 
-			if (gather)
+			if (imgtype.image.depth)
+				texop += ".SampleCmp";
+			else if (gather)
 				texop += ".Gather";
 			else if (bias)
 				texop += ".SampleBias";
@@ -1344,38 +1346,14 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		coord_expr = "float4(" + coord_expr + coord_filler + ", " + to_expression(bias) + ")";
 	}
 
-	// TODO: implement rest ... A bit intensive.
-
+	expr += ", ";
+	expr += coord_expr;
+	
 	if (dref)
 	{
 		forward = forward && should_forward(dref);
-
-		// SPIR-V splits dref and coordinate.
-		if (coord_components == 4) // GLSL also splits the arguments in two.
-		{
-			expr += ", ";
-			expr += to_expression(coord);
-			expr += ", ";
-			expr += to_expression(dref);
-		}
-		else
-		{
-			// Create a composite which merges coord/dref into a single vector.
-			auto type = expression_type(coord);
-			type.vecsize = coord_components + 1;
-			expr += ", ";
-			expr += type_to_glsl_constructor(type);
-			expr += "(";
-			expr += coord_expr;
-			expr += ", ";
-			expr += to_expression(dref);
-			expr += ")";
-		}
-	}
-	else
-	{
 		expr += ", ";
-		expr += coord_expr;
+		expr += to_expression(dref);
 	}
 
 	if (grad_x || grad_y)
@@ -1461,7 +1439,10 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 		}
 		statement("Texture", dim, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
-		statement("SamplerState _", to_name(var.self), "_sampler;");
+		if (type.image.depth)
+			statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
+		else
+			statement("SamplerState _", to_name(var.self), "_sampler;");
 	}
 	else
 	{

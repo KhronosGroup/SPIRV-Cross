@@ -6,6 +6,12 @@ Texture3D<float4> tex3d;
 SamplerState _tex3d_sampler;
 TextureCube<float4> texCube;
 SamplerState _texCube_sampler;
+Texture1D<float4> tex1dShadow;
+SamplerComparisonState _tex1dShadow_sampler;
+Texture2D<float4> tex2dShadow;
+SamplerComparisonState _tex2dShadow_sampler;
+TextureCube<float4> texCubeShadow;
+SamplerComparisonState _texCubeShadow_sampler;
 
 static float texCoord1d;
 static float2 texCoord2d;
@@ -62,6 +68,12 @@ void frag_main()
     texcolor += texCube.Sample(_texCube_sampler, texCoord3d);
     texcolor += texCube.SampleLevel(_texCube_sampler, texCoord3d, 2.0f);
     texcolor += texCube.SampleBias(_texCube_sampler, texCoord3d, 1.0f);
+    float3 _170 = float3(texCoord1d, 0.0f, 0.0f);
+    texcolor.w += tex1dShadow.SampleCmp(_tex1dShadow_sampler, _170.x, _170.z);
+    float3 _188 = float3(texCoord2d, 0.0f);
+    texcolor.w += tex2dShadow.SampleCmp(_tex2dShadow_sampler, _188.xy, _188.z);
+    float4 _204 = float4(texCoord3d, 0.0f);
+    texcolor.w += texCubeShadow.SampleCmp(_texCubeShadow_sampler, _204.xyz, _204.w);
     FragColor = texcolor;
 }
 
