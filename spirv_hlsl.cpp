@@ -1146,6 +1146,12 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		texop += "texelFetch";
 	else
 	{
+		auto &imgformat = get<SPIRType>(imgtype.image.type);
+		if (imgformat.basetype != SPIRType::Float)
+		{
+			SPIRV_CROSS_THROW("Sampling non-float textures is not supported in HLSL.");
+		}
+
 		if (options.shader_model >= 40)
 		{
 			texop += to_expression(img);
