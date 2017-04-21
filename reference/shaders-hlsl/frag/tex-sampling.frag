@@ -4,6 +4,8 @@ Texture2D<float4> tex2d;
 SamplerState _tex2d_sampler;
 Texture3D<float4> tex3d;
 SamplerState _tex3d_sampler;
+TextureCube<float4> texCube;
+SamplerState _texCube_sampler;
 
 static float texCoord1d;
 static float2 texCoord2d;
@@ -57,6 +59,9 @@ void frag_main()
     texcolor += tex3d.SampleGrad(_tex3d_sampler, texCoord3d, float3(1.0f, 2.0f, 3.0f), float3(4.0f, 5.0f, 6.0f));
     texcolor += tex3d.Sample(_tex3d_sampler, SPIRV_Cross_projectTextureCoordinate(float4(texCoord3d, 2.0f)));
     texcolor += tex3d.SampleBias(_tex3d_sampler, texCoord3d, 1.0f);
+    texcolor += texCube.Sample(_texCube_sampler, texCoord3d);
+    texcolor += texCube.SampleLevel(_texCube_sampler, texCoord3d, 2.0f);
+    texcolor += texCube.SampleBias(_texCube_sampler, texCoord3d, 1.0f);
     FragColor = texcolor;
 }
 

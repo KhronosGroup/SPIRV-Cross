@@ -3,6 +3,7 @@
 uniform sampler1D tex1d;
 uniform sampler2D tex2d;
 uniform sampler3D tex3d;
+uniform samplerCube texCube;
 
 in float texCoord1d;
 in vec2 texCoord2d;
@@ -31,6 +32,10 @@ void main() {
 	texcolor += textureGrad(tex3d, texCoord3d, vec3(1.0, 2.0, 3.0), vec3(4.0, 5.0, 6.0));
 	texcolor += textureProj(tex3d, vec4(texCoord3d, 2.0));
 	texcolor += texture(tex3d, texCoord3d, 1.0);
+
+	texcolor += texture(texCube, texCoord3d);
+	texcolor += textureLod(texCube, texCoord3d, 2);
+	texcolor += texture(texCube, texCoord3d, 1.0);
 
 	FragColor = texcolor;
 }
