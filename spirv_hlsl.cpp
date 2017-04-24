@@ -1216,7 +1216,14 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	string texop;
 
 	if (op == OpImageFetch)
-		texop += "texelFetch";
+	{
+		if (options.shader_model < 40)
+		{
+			SPIRV_CROSS_THROW("texelFetch is not supported in HLSL shader model 2/3.");
+		}
+		texop += to_expression(img);
+		texop += ".Load";
+	}
 	else
 	{
 		auto &imgformat = get<SPIRType>(imgtype.image.type);
@@ -1281,14 +1288,17 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	expr += texop;
 	expr += "(";
-	if (options.shader_model >= 40)
+	if (op != OpImageFetch)
 	{
-		expr += "_";
-	}
-	expr += to_expression(img);
-	if (options.shader_model >= 40)
-	{
-		expr += "_sampler";
+		if (options.shader_model >= 40)
+		{
+			expr += "_";
+		}
+		expr += to_expression(img);
+		if (options.shader_model >= 40)
+		{
+			expr += "_sampler";
+		}
 	}
 
 	bool swizz_func = backend.swizzle_is_function;
@@ -1346,7 +1356,18 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		coord_expr = "float4(" + coord_expr + coord_filler + ", " + to_expression(bias) + ")";
 	}
 
-	expr += ", ";
+	if (op == OpImageFetch)
+	{
+		auto &coordtype = expression_type(coord);
+		stringstream str;
+		str << coordtype.vecsize + 1;
+		coord_expr = "int" + str.str() + "(" + coord_expr + ", " + to_expression(lod) + ")";
+	}
+
+	if (op != OpImageFetch)
+	{
+		expr += ", ";
+	}
 	expr += coord_expr;
 	
 	if (dref)
@@ -1366,7 +1387,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(grad_y);
 	}
 
-	if (lod && options.shader_model >= 40)
+	if (lod && options.shader_model >= 40 && op != OpImageFetch)
 	{
 		forward = forward && should_forward(lod);
 		expr += ", ";
@@ -1571,6 +1592,15 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			force_recompile = true;
 		}
 		CompilerGLSL::emit_instruction(instruction);
+		break;
+	}
+
+	case OpImage:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_op(result_type, id, to_expression(ops[2]), true, true);
+		// TODO: Maybe change this when separate samplers/images are supported
 		break;
 	}
 

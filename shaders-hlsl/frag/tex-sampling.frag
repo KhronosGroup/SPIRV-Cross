@@ -9,9 +9,14 @@ uniform sampler1DShadow tex1dShadow;
 uniform sampler2DShadow tex2dShadow;
 uniform samplerCubeShadow texCubeShadow;
 
+uniform sampler1DArray tex1dArray;
+uniform sampler2DArray tex2dArray;
+uniform samplerCubeArray texCubeArray;
+
 in float texCoord1d;
 in vec2 texCoord2d;
 in vec3 texCoord3d;
+in vec4 texCoord4d;
 
 out vec4 FragColor;
 
@@ -45,6 +50,14 @@ void main()
 	texcolor.a += texture(tex1dShadow, vec3(texCoord1d, 0.0, 0.0));
 	texcolor.a += texture(tex2dShadow, vec3(texCoord2d, 0.0));
 	texcolor.a += texture(texCubeShadow, vec4(texCoord3d, 0.0));
+
+	texcolor += texture(tex1dArray, texCoord2d);
+	texcolor += texture(tex2dArray, texCoord3d);
+	texcolor += texture(texCubeArray, texCoord4d);
+
+	texcolor += textureGather(tex2d, texCoord2d);
+
+	texcolor += texelFetch(tex2d, ivec2(1, 2), 0);
 
 	FragColor = texcolor;
 }
