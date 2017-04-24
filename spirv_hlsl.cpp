@@ -1438,7 +1438,8 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		case DimSubpassData:
 			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 		}
-		statement("Texture", dim, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
+		string arrayed = type.image.arrayed ? "Array" : "";
+		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
 		if (type.image.depth)
 			statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
 		else
