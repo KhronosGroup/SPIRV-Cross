@@ -43,6 +43,79 @@ static bool opcode_is_sign_invariant(Op opcode)
 	}
 }
 
+string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+{
+	auto &imagetype = get<SPIRType>(type.image.type);
+	string res;
+
+	switch (imagetype.basetype)
+	{
+	case SPIRType::Int:
+		res = "i";
+		break;
+	case SPIRType::UInt:
+		res = "u";
+		break;
+	default:
+		break;
+	}
+
+	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+		return res + "subpassInput" + (type.image.ms ? "MS" : "");
+
+	// If we're emulating subpassInput with samplers, force sampler2D
+	// so we don't have to specify format.
+	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+	{
+		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
+		if (type.image.dim == DimBuffer && type.image.sampled == 1)
+			res += "sampler";
+		else
+			res += type.image.sampled == 2 ? "image" : "texture";
+	}
+	else
+		res += "sampler";
+
+	switch (type.image.dim)
+	{
+	case Dim1D:
+		res += "1D";
+		break;
+	case Dim2D:
+		res += "2D";
+		break;
+	case Dim3D:
+		res += "3D";
+		break;
+	case DimCube:
+		res += "CUBE";
+		break;
+
+	case DimBuffer:
+		res += "Buffer";
+		break;
+
+	case DimSubpassData:
+		res += "2D";
+		break;
+	default:
+		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+	}
+
+	if (type.image.ms)
+		res += "MS";
+	if (type.image.arrayed)
+	{
+		if (is_legacy_desktop())
+			require_extension("GL_EXT_texture_array");
+		res += "Array";
+	}
+	if (type.image.depth)
+		res += "Shadow";
+
+	return res;
+}
+
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
@@ -58,7 +131,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
-		return image_type_glsl(type);
+		return image_type_hlsl(type);
 
 	case SPIRType::Sampler:
 		return "sampler";
@@ -681,6 +754,50 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+
+	if (requires_textureProj)
+	{
+		if (options.shader_model >= 40)
+		{
+			statement("float SPIRV_Cross_projectTextureCoordinate(float2 coord)");
+			begin_scope();
+			statement("return coord.x / coord.y;");
+			end_scope();
+			statement("");
+
+			statement("float2 SPIRV_Cross_projectTextureCoordinate(float3 coord)");
+			begin_scope();
+			statement("return float2(coord.x, coord.y) / coord.z;");
+			end_scope();
+			statement("");
+
+			statement("float3 SPIRV_Cross_projectTextureCoordinate(float4 coord)");
+			begin_scope();
+			statement("return float3(coord.x, coord.y, coord.z) / coord.w;");
+			end_scope();
+			statement("");
+		}
+		else
+		{
+			statement("float4 SPIRV_Cross_projectTextureCoordinate(float2 coord)");
+			begin_scope();
+			statement("return float4(coord.x, 0.0, 0.0, coord.y);");
+			end_scope();
+			statement("");
+
+			statement("float4 SPIRV_Cross_projectTextureCoordinate(float3 coord)");
+			begin_scope();
+			statement("return float4(coord.x, coord.y, 0.0, coord.z);");
+			end_scope();
+			statement("");
+
+			statement("float4 SPIRV_Cross_projectTextureCoordinate(float4 coord)");
+			begin_scope();
+			statement("return coord;");
+			end_scope();
+			statement("");
+		}
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
@@ -1099,29 +1216,90 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	string texop;
 
 	if (op == OpImageFetch)
-		texop += "texelFetch";
+	{
+		if (options.shader_model < 40)
+		{
+			SPIRV_CROSS_THROW("texelFetch is not supported in HLSL shader model 2/3.");
+		}
+		texop += to_expression(img);
+		texop += ".Load";
+	}
 	else
 	{
-		texop += "tex2D";
+		auto &imgformat = get<SPIRType>(imgtype.image.type);
+		if (imgformat.basetype != SPIRType::Float)
+		{
+			SPIRV_CROSS_THROW("Sampling non-float textures is not supported in HLSL.");
+		}
 
-		if (gather)
-			texop += "Gather";
-		if (coffsets)
-			texop += "Offsets";
-		if (proj)
-			texop += "Proj";
-		if (grad_x || grad_y)
-			texop += "Grad";
-		if (lod)
-			texop += "Lod";
+		if (options.shader_model >= 40)
+		{
+			texop += to_expression(img);
+
+			if (imgtype.image.depth)
+				texop += ".SampleCmp";
+			else if (gather)
+				texop += ".Gather";
+			else if (bias)
+				texop += ".SampleBias";
+			else if (grad_x || grad_y)
+				texop += ".SampleGrad";
+			else if (lod)
+				texop += ".SampleLevel";
+			else
+				texop += ".Sample";
+		}
+		else
+		{
+			switch (imgtype.image.dim)
+			{
+			case Dim1D:
+				texop += "tex1D";
+				break;
+			case Dim2D:
+				texop += "tex2D";
+				break;
+			case Dim3D:
+				texop += "tex3D";
+				break;
+			case DimCube:
+				texop += "texCUBE";
+				break;
+			case DimRect:
+			case DimBuffer:
+			case DimSubpassData:
+				SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
+			}
+
+			if (gather)
+				SPIRV_CROSS_THROW("textureGather is not supported in HLSL shader model 2/3.");
+			if (offset || coffset)
+				SPIRV_CROSS_THROW("textureOffset is not supported in HLSL shader model 2/3.");
+			if (proj)
+				texop += "proj";
+			if (grad_x || grad_y)
+				texop += "grad";
+			if (lod)
+				texop += "lod";
+			if (bias)
+				texop += "bias";
+		}
 	}
-
-	if (coffset || offset)
-		texop += "Offset";
 
 	expr += texop;
 	expr += "(";
-	expr += to_expression(img);
+	if (op != OpImageFetch)
+	{
+		if (options.shader_model >= 40)
+		{
+			expr += "_";
+		}
+		expr += to_expression(img);
+		if (options.shader_model >= 40)
+		{
+			expr += "_sampler";
+		}
+	}
 
 	bool swizz_func = backend.swizzle_is_function;
 	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
@@ -1146,38 +1324,57 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	// The IR can give us more components than we need, so chop them off as needed.
 	auto coord_expr = to_expression(coord) + swizzle(coord_components, expression_type(coord).vecsize);
 
-	// TODO: implement rest ... A bit intensive.
+	if (proj)
+	{
+		if (!requires_textureProj)
+		{
+			requires_textureProj = true;
+			force_recompile = true;
+		}
+		coord_expr = "SPIRV_Cross_projectTextureCoordinate(" + coord_expr + ")";
+	}
 
+	if (options.shader_model < 40 && lod)
+	{
+		auto &coordtype = expression_type(coord);
+		string coord_filler;
+		for (uint32_t size = coordtype.vecsize; size < 3; ++size)
+		{
+			coord_filler += ", 0.0";
+		}
+		coord_expr = "float4(" + coord_expr + coord_filler + ", " + to_expression(lod) + ")";
+	}
+
+	if (options.shader_model < 40 && bias)
+	{
+		auto &coordtype = expression_type(coord);
+		string coord_filler;
+		for (uint32_t size = coordtype.vecsize; size < 3; ++size)
+		{
+			coord_filler += ", 0.0";
+		}
+		coord_expr = "float4(" + coord_expr + coord_filler + ", " + to_expression(bias) + ")";
+	}
+
+	if (op == OpImageFetch)
+	{
+		auto &coordtype = expression_type(coord);
+		stringstream str;
+		str << coordtype.vecsize + 1;
+		coord_expr = "int" + str.str() + "(" + coord_expr + ", " + to_expression(lod) + ")";
+	}
+
+	if (op != OpImageFetch)
+	{
+		expr += ", ";
+	}
+	expr += coord_expr;
+	
 	if (dref)
 	{
 		forward = forward && should_forward(dref);
-
-		// SPIR-V splits dref and coordinate.
-		if (coord_components == 4) // GLSL also splits the arguments in two.
-		{
-			expr += ", ";
-			expr += to_expression(coord);
-			expr += ", ";
-			expr += to_expression(dref);
-		}
-		else
-		{
-			// Create a composite which merges coord/dref into a single vector.
-			auto type = expression_type(coord);
-			type.vecsize = coord_components + 1;
-			expr += ", ";
-			expr += type_to_glsl_constructor(type);
-			expr += "(";
-			expr += coord_expr;
-			expr += ", ";
-			expr += to_expression(dref);
-			expr += ")";
-		}
-	}
-	else
-	{
 		expr += ", ";
-		expr += coord_expr;
+		expr += to_expression(dref);
 	}
 
 	if (grad_x || grad_y)
@@ -1190,11 +1387,18 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(grad_y);
 	}
 
-	if (lod)
+	if (lod && options.shader_model >= 40 && op != OpImageFetch)
 	{
 		forward = forward && should_forward(lod);
 		expr += ", ";
 		expr += to_expression(lod);
+	}
+
+	if (bias && options.shader_model >= 40)
+	{
+		forward = forward && should_forward(bias);
+		expr += ", ";
+		expr += to_expression(bias);
 	}
 
 	if (coffset)
@@ -1208,13 +1412,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		forward = forward && should_forward(offset);
 		expr += ", ";
 		expr += to_expression(offset);
-	}
-
-	if (bias)
-	{
-		forward = forward && should_forward(bias);
-		expr += ", ";
-		expr += to_expression(bias);
 	}
 
 	if (comp)
@@ -1238,7 +1435,43 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
-	statement(variable_decl(var), ";");
+	auto &type = get<SPIRType>(var.basetype);
+	if (options.shader_model >= 40 && type.basetype == SPIRType::SampledImage)
+	{
+		auto &imagetype = get<SPIRType>(type.image.type);
+		string dim;
+		switch (type.image.dim)
+		{
+		case Dim1D:
+			dim = "1D";
+			break;
+		case Dim2D:
+			dim = "2D";
+			break;
+		case Dim3D:
+			dim = "3D";
+			break;
+		case DimCube:
+			dim = "Cube";
+			break;
+		case DimRect:
+		case DimBuffer:
+		case DimSubpassData:
+			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
+		}
+		string arrayed = type.image.arrayed ? "Array" : "";
+		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
+		if (type.image.depth)
+			statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
+		else
+			statement("SamplerState _", to_name(var.self), "_sampler;");
+	}
+	else
+	{
+		statement(variable_decl(var), ";");
+	}
+
+	// TODO: Separate samplers/images
 }
 
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
@@ -1353,8 +1586,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	case OpFMod:
 	{
-		requires_op_fmod = true;
+		if (!requires_op_fmod)
+		{
+			requires_op_fmod = true;
+			force_recompile = true;
+		}
 		CompilerGLSL::emit_instruction(instruction);
+		break;
+	}
+
+	case OpImage:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_op(result_type, id, to_expression(ops[2]), true, true);
+		// TODO: Maybe change this when separate samplers/images are supported
 		break;
 	}
 

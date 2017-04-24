@@ -57,6 +57,7 @@ public:
 
 private:
 	std::string type_to_glsl(const SPIRType &type) override;
+	std::string image_type_hlsl(const SPIRType &type);
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;
@@ -80,6 +81,7 @@ private:
 
 	Options options;
 	bool requires_op_fmod = false;
+	bool requires_textureProj = false;
 
 	void emit_builtin_variables();
 	bool require_output = false;
