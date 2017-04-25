@@ -18,6 +18,10 @@ Texture2DArray<float4> tex2dArray;
 SamplerState _tex2dArray_sampler;
 TextureCubeArray<float4> texCubeArray;
 SamplerState _texCubeArray_sampler;
+Texture2D<float4> separateTex2d;
+SamplerState samplerNonDepth;
+Texture2D<float4> separateTex2dDepth;
+SamplerComparisonState samplerDepth;
 
 static float texCoord1d;
 static float2 texCoord2d;
@@ -87,6 +91,8 @@ void frag_main()
     texcolor += texCubeArray.Sample(_texCubeArray_sampler, texCoord4d);
     texcolor += tex2d.Gather(_tex2d_sampler, texCoord2d, 0);
     texcolor += tex2d.Load(int3(int2(1, 2), 0));
+    texcolor += separateTex2d.Sample(samplerNonDepth, texCoord2d);
+    texcolor.w += separateTex2dDepth.SampleCmp(samplerDepth, texCoord3d.xy, texCoord3d.z);
     FragColor = texcolor;
 }
 

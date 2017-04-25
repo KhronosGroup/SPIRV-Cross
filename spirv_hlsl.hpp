@@ -76,6 +76,8 @@ private:
 	void emit_buffer_block(const SPIRVariable &type) override;
 	void emit_push_constant_block(const SPIRVariable &var) override;
 	void emit_uniform(const SPIRVariable &var) override;
+	void emit_modern_uniform(const SPIRVariable &var);
+	void emit_legacy_uniform(const SPIRVariable &var);
 	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
 	std::string to_interpolation_qualifiers(uint64_t flags) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
@@ -93,6 +95,25 @@ private:
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
 	void emit_io_block(const SPIRVariable &var);
+	std::unordered_set<uint32_t> comparison_samplers;
+	void analyze_sampler_comparison_states();
+
+	struct CombinedImageSamplerUsageHandler : OpcodeHandler
+	{
+		CombinedImageSamplerUsageHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		Compiler &compiler;
+
+		std::unordered_map<uint32_t, uint32_t> to_variable_map;
+		std::unordered_map<uint32_t, uint32_t> param_to_global;
+		std::unordered_set<uint32_t> comparison_samplers;
+		uint32_t map_to_global_variable(uint32_t id) const;
+	};
 };
 }
 

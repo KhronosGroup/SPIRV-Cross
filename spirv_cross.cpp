@@ -355,6 +355,9 @@ const SPIRType &Compiler::expression_type(uint32_t id) const
 	case TypeUndef:
 		return get<SPIRType>(get<SPIRUndef>(id).basetype);
 
+	case TypeCombinedImageSampler:
+		return get<SPIRType>(get<SPIRCombinedImageSampler>(id).combined_type);
+
 	default:
 		SPIRV_CROSS_THROW("Cannot resolve expression type.");
 	}

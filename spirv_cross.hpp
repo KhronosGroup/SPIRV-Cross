@@ -499,6 +499,11 @@ protected:
 	void analyze_variable_scope(SPIRFunction &function);
 
 protected:
+	friend class CompilerGLSL;
+	friend class CompilerMSL;
+	friend class CompilerHLSL;
+	friend class CompilerCPP;
+
 	void parse();
 	void parse(const Instruction &i);
 

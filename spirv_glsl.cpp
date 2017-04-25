@@ -1837,6 +1837,14 @@ string CompilerGLSL::to_expression(uint32_t id)
 		}
 	}
 
+	case TypeCombinedImageSampler:
+		// This type should never be taken the expression of directly.
+		// The intention is that texture sampling functions will extract the image and samplers
+		// separately and take their expressions as needed.
+		// GLSL does not use this type because OpSampledImage immediately creates a combined image sampler
+		// expression ala sampler2D(texture, sampler).
+		SPIRV_CROSS_THROW("Combined image samplers have no default expression representation.");
+
 	default:
 		return to_name(id);
 	}

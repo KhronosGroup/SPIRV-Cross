@@ -186,6 +186,7 @@ enum Types
 	TypeExtension,
 	TypeExpression,
 	TypeConstantOp,
+	TypeCombinedImageSampler,
 	TypeUndef
 };
 
@@ -200,6 +201,25 @@ struct SPIRUndef : IVariant
 	{
 	}
 	uint32_t basetype;
+};
+
+// This type is only used by backends which need to access the combined image and sampler IDs separately after
+// the OpSampledImage opcode.
+struct SPIRCombinedImageSampler : IVariant
+{
+	enum
+	{
+		type = TypeCombinedImageSampler
+	};
+	SPIRCombinedImageSampler(uint32_t type_, uint32_t image_, uint32_t sampler_)
+	    : combined_type(type_)
+	    , image(image_)
+	    , sampler(sampler_)
+	{
+	}
+	uint32_t combined_type;
+	uint32_t image;
+	uint32_t sampler;
 };
 
 struct SPIRConstantOp : IVariant
