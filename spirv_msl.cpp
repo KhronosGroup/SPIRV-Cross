@@ -1071,79 +1071,37 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		break;
 
 	case Dim2D:
-		if (options.flip_frag_y)
-		{
-			string coord_x = coord_expr + ".x";
-			string coord_y = coord_expr + ".y";
-			if (is_fetch)
-				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
-			else
-				tex_coords = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
-		}
-		else
-		{
-			if (coord_type.vecsize > 2)
-				tex_coords += ".xy";
+		if (coord_type.vecsize > 2)
+			tex_coords += ".xy";
 
-			if (is_fetch)
-				tex_coords = "uint2(" + tex_coords + ")";
-		}
+		if (is_fetch)
+			tex_coords = "uint2(" + tex_coords + ")";
 
 		alt_coord = ".z";
 
 		break;
 
 	case Dim3D:
-		if (options.flip_frag_y)
-		{
-			string coord_x = coord_expr + ".x";
-			string coord_y = coord_expr + ".y";
-			string coord_z = coord_expr + ".z";
-			if (is_fetch)
-				tex_coords = "uint3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
-			else
-				tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
-		}
-		else
-		{
-			if (coord_type.vecsize > 3)
-				tex_coords += ".xyz";
+		if (coord_type.vecsize > 3)
+			tex_coords += ".xyz";
 
-			if (is_fetch)
-				tex_coords = "uint3(" + tex_coords + ")";
-		}
+		if (is_fetch)
+			tex_coords = "uint3(" + tex_coords + ")";
 
 		alt_coord = ".w";
 
 		break;
 
 	case DimCube:
-		if (options.flip_frag_y)
+		if (is_fetch)
 		{
-			string coord_x = coord_expr + ".x";
-			string coord_y = coord_expr + ".y";
-			string coord_z = coord_expr + ".z";
-
-			if (is_fetch)
-			{
-				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
-				face_expr = coord_z;
-			}
-			else
-				tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
+			tex_coords = "uint2(" + tex_coords + ".xy)";
+			face_expr = coord_expr + ".z";
 		}
 		else
 		{
-			if (is_fetch)
-			{
-				tex_coords = "uint2(" + tex_coords + ".xy)";
-				face_expr = coord_expr + ".z";
-			}
-			else
-			{
-				if (coord_type.vecsize > 3)
-					tex_coords += ".xyz";
-			}
+			if (coord_type.vecsize > 3)
+				tex_coords += ".xyz";
 		}
 
 		alt_coord = ".w";
@@ -1239,34 +1197,15 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		switch (imgtype.image.dim)
 		{
 		case Dim2D:
-			if (options.flip_frag_y)
-			{
-				string coord_x = offset_expr + ".x";
-				string coord_y = offset_expr + ".y";
-				offset_expr = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
-			}
-			else
-			{
-				if (coord_type.vecsize > 2)
-					offset_expr += ".xy";
-			}
+			if (coord_type.vecsize > 2)
+				offset_expr += ".xy";
 
 			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
-			if (options.flip_frag_y)
-			{
-				string coord_x = offset_expr + ".x";
-				string coord_y = offset_expr + ".y";
-				string coord_z = offset_expr + ".z";
-				offset_expr = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
-			}
-			else
-			{
-				if (coord_type.vecsize > 3)
-					offset_expr += ".xyz";
-			}
+			if (coord_type.vecsize > 3)
+				offset_expr += ".xyz";
 
 			farg_str += ", " + offset_expr;
 			break;
