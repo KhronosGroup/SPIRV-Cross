@@ -327,6 +327,14 @@ public:
 	uint32_t type_struct_member_array_stride(const SPIRType &type, uint32_t index) const;
 	uint32_t type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const;
 
+	// Gets the offset in SPIR-V words (uint32_t) for a decoration which was originally declared in the SPIR-V binary.
+	// The offset will point to one or more uint32_t literals which can be modified in-place before using the SPIR-V binary.
+	// Note that adding or removing decorations using the reflection API will not change the behavior of this function.
+	// If the decoration was declared, sets the word_offset to an offset into the provided SPIR-V binary buffer and returns true,
+	// otherwise, returns false.
+	// If the decoration does not have any value attached to it (e.g. DecorationRelaxedPrecision), this function will also return false.
+	bool get_binary_offset_for_decoration(uint32_t id, spv::Decoration decoration, uint32_t &word_offset) const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{

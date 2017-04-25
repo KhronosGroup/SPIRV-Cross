@@ -946,6 +946,8 @@ struct Meta
 	Decoration decoration;
 	std::vector<Decoration> members;
 	uint32_t sampler = 0;
+
+	std::unordered_map<spv::Decoration, uint32_t> decoration_word_offset;
 };
 
 // A user callback that remaps the type of any variable.
