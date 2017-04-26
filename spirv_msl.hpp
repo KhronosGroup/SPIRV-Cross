@@ -77,7 +77,6 @@ public:
 	struct Options
 	{
 		bool flip_vert_y = false;
-		bool flip_frag_y = false;
 		bool is_rendering_points = false;
 		bool pad_and_pack_uniform_structs = false;
 		std::string entry_point_name;
@@ -182,6 +181,7 @@ protected:
 	std::string built_in_func_arg(spv::BuiltIn builtin, bool prefix_comma);
 	std::string member_attribute_qualifier(const SPIRType &type, uint32_t index);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
+	std::string round_fp_tex_coords(std::string tex_coords, bool coord_is_fp);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	size_t get_declared_type_size(uint32_t type_id) const;

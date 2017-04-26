@@ -1369,7 +1369,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += ", ";
 	}
 	expr += coord_expr;
-	
+
 	if (dref)
 	{
 		forward = forward && should_forward(dref);

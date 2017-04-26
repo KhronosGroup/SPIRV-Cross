@@ -1038,9 +1038,10 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	bool forward = should_forward(coord);
 	auto coord_expr = to_enclosed_expression(coord);
 	auto &coord_type = expression_type(coord);
+	bool coord_is_fp = (coord_type.basetype == SPIRType::Float) || (coord_type.basetype == SPIRType::Double);
+	bool is_cube_fetch = false;
 
 	string tex_coords = coord_expr;
-	string face_expr;
 	const char *alt_coord = "";
 
 	switch (imgtype.image.dim)
@@ -1048,102 +1049,59 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	case Dim1D:
 		if (coord_type.vecsize > 1)
-		{
 			tex_coords += ".x";
-			alt_coord = ".y";
-		}
 
 		if (is_fetch)
-			tex_coords = "uint(" + tex_coords + ")";
+			tex_coords = "uint(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
+
+		alt_coord = ".y";
 
 		break;
 
 	case DimBuffer:
 		if (coord_type.vecsize > 1)
-		{
 			tex_coords += ".x";
-			alt_coord = ".y";
-		}
 
 		if (is_fetch)
-			tex_coords = "uint2(" + tex_coords + ", 0)"; // Metal textures are 2D
+			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ", 0)"; // Metal textures are 2D
+
+		alt_coord = ".y";
 
 		break;
 
 	case Dim2D:
-		if (options.flip_frag_y)
-		{
-			string coord_x = coord_expr + ".x";
-			string coord_y = coord_expr + ".y";
-			if (is_fetch)
-				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
-			else
-				tex_coords = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
-		}
-		else
-		{
-			if (coord_type.vecsize > 2)
-				tex_coords += ".xy";
+		if (coord_type.vecsize > 2)
+			tex_coords += ".xy";
 
-			if (is_fetch)
-				tex_coords = "uint2(" + tex_coords + ")";
-		}
+		if (is_fetch)
+			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
 		alt_coord = ".z";
 
 		break;
 
 	case Dim3D:
-		if (options.flip_frag_y)
-		{
-			string coord_x = coord_expr + ".x";
-			string coord_y = coord_expr + ".y";
-			string coord_z = coord_expr + ".z";
-			if (is_fetch)
-				tex_coords = "uint3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
-			else
-				tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
-		}
-		else
-		{
-			if (coord_type.vecsize > 3)
-				tex_coords += ".xyz";
+		if (coord_type.vecsize > 3)
+			tex_coords += ".xyz";
 
-			if (is_fetch)
-				tex_coords = "uint3(" + tex_coords + ")";
-		}
+		if (is_fetch)
+			tex_coords = "uint3(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
 		alt_coord = ".w";
 
 		break;
 
 	case DimCube:
-		if (options.flip_frag_y)
+		if (is_fetch)
 		{
-			string coord_x = coord_expr + ".x";
-			string coord_y = coord_expr + ".y";
-			string coord_z = coord_expr + ".z";
-
-			if (is_fetch)
-			{
-				tex_coords = "uint2(" + coord_x + ", (1.0 - " + coord_y + "))";
-				face_expr = coord_z;
-			}
-			else
-				tex_coords = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
+			is_cube_fetch = true;
+			tex_coords += ".xy";
+			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 		}
 		else
 		{
-			if (is_fetch)
-			{
-				tex_coords = "uint2(" + tex_coords + ".xy)";
-				face_expr = coord_expr + ".z";
-			}
-			else
-			{
-				if (coord_type.vecsize > 3)
-					tex_coords += ".xyz";
-			}
+			if (coord_type.vecsize > 3)
+				tex_coords += ".xyz";
 		}
 
 		alt_coord = ".w";
@@ -1163,12 +1121,12 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	farg_str += tex_coords;
 
 	// If fetch from cube, add face explicitly
-	if (!face_expr.empty())
-		farg_str += ", uint(" + face_expr + ")";
+	if (is_cube_fetch)
+		farg_str += ", uint(" + round_fp_tex_coords(coord_expr + ".z", coord_is_fp) + ")";
 
 	// If array, use alt coord
 	if (imgtype.image.arrayed)
-		farg_str += ", uint(" + coord_expr + alt_coord + ")";
+		farg_str += ", uint(" + round_fp_tex_coords(coord_expr + alt_coord, coord_is_fp) + ")";
 
 	// Depth compare reference value
 	if (dref)
@@ -1239,34 +1197,15 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		switch (imgtype.image.dim)
 		{
 		case Dim2D:
-			if (options.flip_frag_y)
-			{
-				string coord_x = offset_expr + ".x";
-				string coord_y = offset_expr + ".y";
-				offset_expr = "float2(" + coord_x + ", (1.0 - " + coord_y + "))";
-			}
-			else
-			{
-				if (coord_type.vecsize > 2)
-					offset_expr += ".xy";
-			}
+			if (coord_type.vecsize > 2)
+				offset_expr += ".xy";
 
 			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
-			if (options.flip_frag_y)
-			{
-				string coord_x = offset_expr + ".x";
-				string coord_y = offset_expr + ".y";
-				string coord_z = offset_expr + ".z";
-				offset_expr = "float3(" + coord_x + ", (1.0 - " + coord_y + "), " + coord_z + ")";
-			}
-			else
-			{
-				if (coord_type.vecsize > 3)
-					offset_expr += ".xyz";
-			}
+			if (coord_type.vecsize > 3)
+				offset_expr += ".xyz";
 
 			farg_str += ", " + offset_expr;
 			break;
@@ -1291,6 +1230,12 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	*p_forward = forward;
 
 	return farg_str;
+}
+
+// If the texture coordinates are floating point, invokes MSL round() function to round them.
+string CompilerMSL::round_fp_tex_coords(string tex_coords, bool coord_is_fp)
+{
+	return coord_is_fp ? ("round(" + tex_coords + ")") : tex_coords;
 }
 
 // Returns a string to use in an image sampling function argument.
