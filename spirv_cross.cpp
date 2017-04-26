@@ -1119,6 +1119,17 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 	}
 }
 
+bool Compiler::get_binary_offset_for_decoration(uint32_t id, spv::Decoration decoration, uint32_t &word_offset) const
+{
+	auto &word_offsets = meta.at(id).decoration_word_offset;
+	auto itr = word_offsets.find(decoration);
+	if (itr == end(word_offsets))
+		return false;
+
+	word_offset = itr->second;
+	return true;
+}
+
 void Compiler::parse(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -1260,7 +1271,10 @@ void Compiler::parse(const Instruction &instruction)
 
 		auto decoration = static_cast<Decoration>(ops[1]);
 		if (length >= 3)
+		{
+			meta[id].decoration_word_offset[decoration] = uint32_t(&ops[2] - spirv.data());
 			set_decoration(id, decoration, ops[2]);
+		}
 		else
 			set_decoration(id, decoration);
 
