@@ -99,7 +99,7 @@ spirv_cross_add_library(spirv-cross-msl spirv_cross_msl STATIC
 
 spirv_cross_add_library(spirv-cross-hlsl spirv_cross_hlsl STATIC
     ${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.hpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.cpp)
 
 add_executable(spirv-cross main.cpp)
 install(TARGETS spirv-cross RUNTIME DESTINATION bin)
