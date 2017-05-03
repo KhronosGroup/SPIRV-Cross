@@ -9,10 +9,10 @@ in VertexData
     layout(location = 3) float i;
 } vin;
 
-layout(location = 4) in flat float f;
-layout(location = 5) in centroid vec4 g;
-layout(location = 6) in flat int h;
-layout(location = 7) in sample float i;
+layout(location = 4) flat in float f;
+layout(location = 5) centroid in vec4 g;
+layout(location = 6) flat in int h;
+layout(location = 7) sample in float i;
 
 void main()
 {

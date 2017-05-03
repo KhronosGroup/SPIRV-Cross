@@ -1,5 +1,5 @@
 /*
- * Copyright 2016 ARM Limited
+ * Copyright 2016-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,12 @@
 #ifndef SPIRV_CROSS_CFG_HPP
 #define SPIRV_CROSS_CFG_HPP
 
-#include "spirv_cross.hpp"
+#include "spirv_common.hpp"
 #include <assert.h>
 
 namespace spirv_cross
 {
+class Compiler;
 class CFG
 {
 public:

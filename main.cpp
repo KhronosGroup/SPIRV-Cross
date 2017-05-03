@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 ARM Limited
+ * Copyright 2015-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include "spirv_cpp.hpp"
+#include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -42,7 +43,7 @@ using namespace std;
 		exit(1);                   \
 	} while (0)
 #else
-#define THROW(x) runtime_error(x)
+#define THROW(x) throw runtime_error(x)
 #endif
 
 struct CLIParser;
@@ -413,8 +414,10 @@ struct CLIArguments
 	const char *output = nullptr;
 	const char *cpp_interface_name = nullptr;
 	uint32_t version = 0;
+	uint32_t shader_model = 0;
 	bool es = false;
 	bool set_version = false;
+	bool set_shader_model = false;
 	bool set_es = false;
 	bool dump_resources = false;
 	bool force_temporary = false;
@@ -429,7 +432,9 @@ struct CLIArguments
 
 	uint32_t iterations = 1;
 	bool cpp = false;
-	bool metal = false;
+	bool msl = false;
+	bool msl_pack_ubos = true;
+	bool hlsl = false;
 	bool vulkan_semantics = false;
 	bool remove_unused = false;
 	bool cfg_analysis = true;
@@ -438,11 +443,13 @@ struct CLIArguments
 static void print_help()
 {
 	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
-	                "[--version <GLSL "
-	                "version>] [--dump-resources] [--help] [--force-temporary] [--cpp] [--cpp-interface-name <name>] "
-	                "[--metal] [--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] [--pls-in "
-	                "format input-name] [--pls-out format output-name] [--remap source_name target_name components] "
-	                "[--extension ext] [--entry name] [--remove-unused-variables] "
+	                "[--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] "
+	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
+	                "[--cpp] [--cpp-interface-name <name>] "
+	                "[--msl] [--msl-no-pack-ubos] "
+	                "[--hlsl] [--shader-model] "
+	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
+	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
 }
 
@@ -560,7 +567,10 @@ int main(int argc, char *argv[])
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
-	cbs.add("--metal", [&args](CLIParser &) { args.metal = true; });
+	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
+	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
+	cbs.add("--msl-no-pack-ubos", [&args](CLIParser &) { args.msl_pack_ubos = false; });
+	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
@@ -586,6 +596,10 @@ int main(int argc, char *argv[])
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
 		args.pls_out.push_back({ move(fmt), move(name) });
+	});
+	cbs.add("--shader-model", [&args](CLIParser &parser) {
+		args.shader_model = parser.next_uint();
+		args.set_shader_model = true;
 	});
 
 	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
@@ -620,8 +634,17 @@ int main(int argc, char *argv[])
 		if (args.cpp_interface_name)
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
 	}
-	else if (args.metal)
+	else if (args.msl)
+	{
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
+
+		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
+		auto msl_opts = msl_comp->get_options();
+		msl_opts.pad_and_pack_uniform_structs = args.msl_pack_ubos;
+		msl_comp->set_options(msl_opts);
+	}
+	else if (args.hlsl)
+		compiler = unique_ptr<CompilerHLSL>(new CompilerHLSL(read_spirv_file(args.input)));
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
@@ -659,6 +682,24 @@ int main(int argc, char *argv[])
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.cfg_analysis = args.cfg_analysis;
 	compiler->set_options(opts);
+
+	// Set HLSL specific options.
+	if (args.hlsl)
+	{
+		auto *hlsl = static_cast<CompilerHLSL *>(compiler.get());
+		auto hlsl_opts = hlsl->get_options();
+		if (args.set_shader_model)
+		{
+			if (args.shader_model < 30)
+			{
+				fprintf(stderr, "Shader model earlier than 30 (3.0) not supported.\n");
+				return EXIT_FAILURE;
+			}
+
+			hlsl_opts.shader_model = args.shader_model;
+		}
+		hlsl->set_options(hlsl_opts);
+	}
 
 	ShaderResources res;
 	if (args.remove_unused)

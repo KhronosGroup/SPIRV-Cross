@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 ARM Limited
+ * Copyright 2015-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -296,6 +296,8 @@ string CompilerCPP::compile()
 	backend.flexible_member_array_supported = false;
 	backend.explicit_struct_type = true;
 	backend.use_initializer_list = true;
+
+	update_active_builtins();
 
 	uint32_t pass_count = 0;
 	do

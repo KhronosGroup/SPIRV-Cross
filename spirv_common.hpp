@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2016 ARM Limited
+ * Copyright 2015-2017 ARM Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,21 @@
 #ifndef SPIRV_CROSS_COMMON_HPP
 #define SPIRV_CROSS_COMMON_HPP
 
+#include "spirv.hpp"
+
 #include <cstdio>
 #include <cstring>
 #include <functional>
 #include <locale>
+#include <memory>
 #include <sstream>
+#include <stack>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 namespace spirv_cross
 {
@@ -53,6 +63,16 @@ public:
 };
 
 #define SPIRV_CROSS_THROW(x) throw CompilerError(x)
+#endif
+
+#if __cplusplus >= 201402l
+#define SPIRV_CROSS_DEPRECATED(reason) [[deprecated(reason)]]
+#elif defined(__GNUC__)
+#define SPIRV_CROSS_DEPRECATED(reason) __attribute__((deprecated))
+#elif defined(_MSC_VER)
+#define SPIRV_CROSS_DEPRECATED(reason) __declspec(deprecated(reason))
+#else
+#define SPIRV_CROSS_DEPRECATED(reason)
 #endif
 
 namespace inner
@@ -282,6 +302,7 @@ struct SPIRExtension : IVariant
 
 	enum Extension
 	{
+		Unsupported,
 		GLSL
 	};
 
@@ -510,6 +531,14 @@ struct SPIRFunction : IVariant
 		uint32_t id;
 		uint32_t read_count;
 		uint32_t write_count;
+
+		// Set to true if this parameter aliases a global variable,
+		// used mostly in Metal where global variables
+		// have to be passed down to functions as regular arguments.
+		// However, for this kind of variable, we should not care about
+		// read and write counts as access to the function arguments
+		// is not local to the function in question.
+		bool alias_global_variable;
 	};
 
 	// When calling a function, and we're remapping separate image samplers,
@@ -546,10 +575,10 @@ struct SPIRFunction : IVariant
 		local_variables.push_back(id);
 	}
 
-	void add_parameter(uint32_t parameter_type, uint32_t id)
+	void add_parameter(uint32_t parameter_type, uint32_t id, bool alias_global_variable = false)
 	{
 		// Arguments are read-only until proven otherwise.
-		arguments.push_back({ parameter_type, id, 0u, 0u });
+		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
 	}
 
 	bool active = false;
@@ -917,6 +946,8 @@ struct Meta
 	Decoration decoration;
 	std::vector<Decoration> members;
 	uint32_t sampler = 0;
+
+	std::unordered_map<uint32_t, uint32_t> decoration_word_offset;
 };
 
 // A user callback that remaps the type of any variable.

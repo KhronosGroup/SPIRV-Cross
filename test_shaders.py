@@ -2,6 +2,7 @@
 
 import sys
 import os
+import os.path
 import subprocess
 import tempfile
 import re
@@ -9,6 +10,9 @@ import itertools
 import hashlib
 import shutil
 import argparse
+import codecs
+
+force_no_external_validation = False
 
 def parse_stats(stats):
     m = re.search('([0-9]+) work registers', stats)
@@ -60,6 +64,56 @@ def get_shader_stats(shader):
     returned = stdout.decode('utf-8')
     return parse_stats(returned)
 
+def print_msl_compiler_version():
+    try:
+        subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '--version'])
+        print('...are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
+    except OSError as e:
+        if (e.errno != os.errno.ENOENT):    # Ignore xcrun not found error
+            raise
+
+def validate_shader_msl(shader):
+    msl_path = reference_path(shader[0], shader[1])
+    try:
+        subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '-x', 'metal', '-std=ios-metal1.2', '-Werror', msl_path])
+        print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
+    except OSError as oe:
+        if (oe.errno != os.errno.ENOENT):   # Ignore xcrun not found error
+            raise
+    except subprocess.CalledProcessError:
+        print('Error compiling Metal shader: ' + msl_path)
+        sys.exit(1)
+
+def cross_compile_msl(shader):
+    spirv_f, spirv_path = tempfile.mkstemp()
+    msl_f, msl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
+    os.close(spirv_f)
+    os.close(msl_f)
+    subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+    spirv_cross_path = './spirv-cross'
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl'])
+    subprocess.check_call(['spirv-val', spirv_path])
+    return (spirv_path, msl_path)
+
+def validate_shader_hlsl(shader):
+    subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '-V', shader])
+    if (not force_no_external_validation) and os.path.exists('fxc'):
+        subprocess.check_call(['fxc', shader])
+
+def cross_compile_hlsl(shader):
+    spirv_f, spirv_path = tempfile.mkstemp()
+    hlsl_f, hlsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
+    os.close(spirv_f)
+    os.close(hlsl_f)
+    subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+    spirv_cross_path = './spirv-cross'
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl', '--shader-model', '50'])
+    subprocess.check_call(['spirv-val', spirv_path])
+
+    validate_shader_hlsl(hlsl_path)
+    
+    return (spirv_path, hlsl_path)
+
 def validate_shader(shader, vulkan):
     if vulkan:
         subprocess.check_call(['glslangValidator', '-V', shader])
@@ -105,10 +159,15 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
 
     return (spirv_path, glsl_path, vulkan_glsl_path if vulkan else None)
 
+def make_unix_newline(buf):
+    decoded = codecs.decode(buf, 'utf-8')
+    decoded = decoded.replace('\r', '')
+    return codecs.encode(decoded, 'utf-8')
+
 def md5_for_file(path):
     md5 = hashlib.md5()
     with open(path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+        for chunk in iter(lambda: make_unix_newline(f.read(8192)), b''):
             md5.update(chunk)
     return md5.digest()
 
@@ -212,20 +271,43 @@ def test_shader(stats, shader, update, keep):
             a.append(str(i))
         print(','.join(a), file = stats)
 
-def test_shaders_helper(stats, shader_dir, update, malisc, keep):
+def test_shader_msl(stats, shader, update, keep):
+    joined_path = os.path.join(shader[0], shader[1])
+    print('\nTesting MSL shader:', joined_path)
+    spirv, msl = cross_compile_msl(joined_path)
+    regression_check(shader, msl, update, keep)
+    os.remove(spirv)
+
+    if not force_no_external_validation:
+        validate_shader_msl(shader)
+
+def test_shader_hlsl(stats, shader, update, keep):
+    joined_path = os.path.join(shader[0], shader[1])
+    print('Testing HLSL shader:', joined_path)
+    spirv, msl = cross_compile_hlsl(joined_path)
+    regression_check(shader, msl, update, keep)
+    os.remove(spirv)
+
+def test_shaders_helper(stats, shader_dir, update, malisc, keep, backend):
     for root, dirs, files in os.walk(os.path.join(shader_dir)):
+        files = [ f for f in files if not f.startswith(".") ]   #ignore system files (esp OSX)
         for i in files:
             path = os.path.join(root, i)
             relpath = os.path.relpath(path, shader_dir)
-            test_shader(stats, (shader_dir, relpath), update, keep)
+            if backend == 'msl':
+                test_shader_msl(stats, (shader_dir, relpath), update, keep)
+            elif backend == 'hlsl':
+                test_shader_hlsl(stats, (shader_dir, relpath), update, keep)
+            else:
+                test_shader(stats, (shader_dir, relpath), update, keep)
 
-def test_shaders(shader_dir, update, malisc, keep):
+def test_shaders(shader_dir, update, malisc, keep, backend):
     if malisc:
         with open('stats.csv', 'w') as stats:
             print('Shader,OrigRegs,OrigUniRegs,OrigALUShort,OrigLSShort,OrigTEXShort,OrigALULong,OrigLSLong,OrigTEXLong,CrossRegs,CrossUniRegs,CrossALUShort,CrossLSShort,CrossTEXShort,CrossALULong,CrossLSLong,CrossTEXLong', file = stats)
-            test_shaders_helper(stats, shader_dir, update, malisc, keep)
+            test_shaders_helper(stats, shader_dir, update, malisc, keep, backend)
     else:
-        test_shaders_helper(None, shader_dir, update, malisc, keep)
+        test_shaders_helper(None, shader_dir, update, malisc, keep, backend)
 
 def main():
     parser = argparse.ArgumentParser(description = 'Script for regression testing.')
@@ -240,13 +322,31 @@ def main():
     parser.add_argument('--malisc',
             action = 'store_true',
             help = 'Use malisc offline compiler to determine static cycle counts before and after spirv-cross.')
+    parser.add_argument('--msl',
+            action = 'store_true',
+            help = 'Test Metal backend.')
+    parser.add_argument('--metal',
+            action = 'store_true',
+            help = 'Deprecated Metal option. Use --msl instead.')
+    parser.add_argument('--hlsl',
+            action = 'store_true',
+            help = 'Test HLSL backend.')
+    parser.add_argument('--force-no-external-validation',
+            action = 'store_true',
+            help = 'Disable all external validation.')
     args = parser.parse_args()
 
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep)
+    if args.msl:
+        print_msl_compiler_version()
+
+    global force_no_external_validation
+    force_no_external_validation = args.force_no_external_validation
+
+    test_shaders(args.folder, args.update, args.malisc, args.keep, 'msl' if (args.msl or args.metal) else ('hlsl' if args.hlsl else 'glsl'))
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')
