@@ -1222,7 +1222,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			SPIRV_CROSS_THROW("texelFetch is not supported in HLSL shader model 2/3.");
 		}
 		texop += to_expression(img);
-		texop += ".Load";
+		texop += ".img.Load";
 	}
 	else
 	{
@@ -1235,6 +1235,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		if (options.shader_model >= 40)
 		{
 			texop += to_expression(img);
+			texop += ".img";
 
 			if (imgtype.image.depth)
 				texop += ".SampleCmp";
@@ -1290,14 +1291,10 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	expr += "(";
 	if (op != OpImageFetch)
 	{
-		if (options.shader_model >= 40)
-		{
-			expr += "_";
-		}
 		expr += to_expression(img);
 		if (options.shader_model >= 40)
 		{
-			expr += "_sampler";
+			expr += ".smpl";
 		}
 	}
 
@@ -1459,12 +1456,17 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		case DimSubpassData:
 			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 		}
+		statement("struct ", to_name(var.self), "_type");
+		begin_scope();
 		string arrayed = type.image.arrayed ? "Array" : "";
-		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
+		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> img;");
 		if (type.image.depth)
-			statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
+			statement("SamplerComparisonState smpl;");
 		else
-			statement("SamplerState _", to_name(var.self), "_sampler;");
+			statement("SamplerState smpl;");
+		end_scope();
+		statement(to_name(var.self), ";");
+		statement("");
 	}
 	else
 	{
