@@ -1842,6 +1842,7 @@ string CompilerHLSL::compile()
 	backend.explicit_struct_type = false;
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
+	backend.boolean_mix_support = false;
 
 	update_active_builtins();
 
