@@ -14,7 +14,7 @@ void main()
     FragColor = mix(vIn0, vIn1, l);
     bool f = true;
     FragColor = vec4(f ? vIn3 : vIn2);
-    FragColor = f ? vIn0 : vIn1;
+    FragColor = mix(vIn1, vIn0, bvec4(f));
     FragColor = vec4(f ? vIn2 : vIn3);
 }
 

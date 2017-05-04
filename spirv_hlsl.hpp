@@ -31,6 +31,9 @@ public:
 		uint32_t shader_model = 30; // TODO: map ps_4_0_level_9_0,... somehow
 		bool fixup_clipspace = false;
 		bool flip_vert_y = false;
+
+		// Allows the PointSize builtin, and ignores it, as PointSize is not supported in HLSL.
+		bool point_size_compat = false;
 	};
 
 	CompilerHLSL(std::vector<uint32_t> spirv_)

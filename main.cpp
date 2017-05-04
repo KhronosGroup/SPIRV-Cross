@@ -435,6 +435,7 @@ struct CLIArguments
 	bool msl = false;
 	bool msl_pack_ubos = true;
 	bool hlsl = false;
+	bool hlsl_compat = false;
 	bool vulkan_semantics = false;
 	bool remove_unused = false;
 	bool cfg_analysis = true;
@@ -447,7 +448,7 @@ static void print_help()
 	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
 	                "[--cpp] [--cpp-interface-name <name>] "
 	                "[--msl] [--msl-no-pack-ubos] "
-	                "[--hlsl] [--shader-model] "
+	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
@@ -571,6 +572,7 @@ int main(int argc, char *argv[])
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--msl-no-pack-ubos", [&args](CLIParser &) { args.msl_pack_ubos = false; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
+	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
@@ -697,6 +699,12 @@ int main(int argc, char *argv[])
 			}
 
 			hlsl_opts.shader_model = args.shader_model;
+		}
+
+		if (args.hlsl_compat)
+		{
+			// Enable all compat options.
+			hlsl_opts.point_size_compat = true;
 		}
 		hlsl->set_options(hlsl_opts);
 	}

@@ -270,6 +270,15 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 			semantic = legacy ? "DEPTH" : "SV_Depth";
 			break;
 
+		case BuiltInPointSize:
+			// If point_size_compat is enabled, just ignore PointSize.
+			// PointSize does not exist in HLSL, but some code bases might want to be able to use these shaders,
+			// even if it means working around the missing feature.
+			if (options.point_size_compat)
+				break;
+			else
+				SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
+
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 			break;
@@ -498,6 +507,16 @@ void CompilerHLSL::emit_builtin_variables()
 		case BuiltInSampleId:
 			type = "int";
 			break;
+
+		case BuiltInPointSize:
+			if (options.point_size_compat)
+			{
+				// Just emit the global variable, it will be ignored.
+				type = "float";
+				break;
+			}
+			else
+				SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
 
 		default:
 			SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
@@ -1033,6 +1052,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		for (uint32_t i = 0; i < 64; i++)
 		{
 			if (!(active_output_builtins & (1ull << i)))
+				continue;
+
+			// PointSize doesn't exist in HLSL.
+			if (i == BuiltInPointSize)
 				continue;
 
 			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
@@ -1819,6 +1842,7 @@ string CompilerHLSL::compile()
 	backend.explicit_struct_type = false;
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
+	backend.boolean_mix_support = false;
 
 	update_active_builtins();
 

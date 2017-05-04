@@ -107,7 +107,7 @@ def cross_compile_hlsl(shader):
     os.close(hlsl_f)
     subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl', '--shader-model', '50'])
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', '50'])
     subprocess.check_call(['spirv-val', spirv_path])
 
     validate_shader_hlsl(hlsl_path)

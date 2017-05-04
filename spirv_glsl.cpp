@@ -2591,7 +2591,8 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 	auto &restype = get<SPIRType>(result_type);
 
 	string mix_op;
-	bool has_boolean_mix = (options.es && options.version >= 310) || (!options.es && options.version >= 450);
+	bool has_boolean_mix = backend.boolean_mix_support &&
+	                       ((options.es && options.version >= 310) || (!options.es && options.version >= 450));
 	bool trivial_mix = to_trivial_mix_op(restype, mix_op, left, right, lerp);
 
 	// Cannot use boolean mix when the lerp argument is just one boolean,
