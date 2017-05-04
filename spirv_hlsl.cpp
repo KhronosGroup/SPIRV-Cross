@@ -46,74 +46,105 @@ static bool opcode_is_sign_invariant(Op opcode)
 string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
-	string res;
-
-	switch (imagetype.basetype)
+	if (options.shader_model < 40)
 	{
-	case SPIRType::Int:
-		res = "i";
-		break;
-	case SPIRType::UInt:
-		res = "u";
-		break;
-	default:
-		break;
-	}
+		string res;
 
-	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
-		return res + "subpassInput" + (type.image.ms ? "MS" : "");
+		switch (imagetype.basetype)
+		{
+		case SPIRType::Int:
+			res = "i";
+			break;
+		case SPIRType::UInt:
+			res = "u";
+			break;
+		default:
+			break;
+		}
 
-	// If we're emulating subpassInput with samplers, force sampler2D
-	// so we don't have to specify format.
-	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
-	{
-		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
-		if (type.image.dim == DimBuffer && type.image.sampled == 1)
-			res += "sampler";
+		if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+			return res + "subpassInput" + (type.image.ms ? "MS" : "");
+
+		// If we're emulating subpassInput with samplers, force sampler2D
+		// so we don't have to specify format.
+		if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+		{
+			// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
+			if (type.image.dim == DimBuffer && type.image.sampled == 1)
+				res += "sampler";
+			else
+				res += type.image.sampled == 2 ? "image" : "texture";
+		}
 		else
-			res += type.image.sampled == 2 ? "image" : "texture";
+			res += "sampler";
+
+		switch (type.image.dim)
+		{
+		case Dim1D:
+			res += "1D";
+			break;
+		case Dim2D:
+			res += "2D";
+			break;
+		case Dim3D:
+			res += "3D";
+			break;
+		case DimCube:
+			res += "CUBE";
+			break;
+
+		case DimBuffer:
+			res += "Buffer";
+			break;
+
+		case DimSubpassData:
+			res += "2D";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+		}
+
+		if (type.image.ms)
+			res += "MS";
+		if (type.image.arrayed)
+		{
+			res += "Array";
+		}
+		if (type.image.depth)
+			res += "Shadow";
+
+		return res;
 	}
 	else
-		res += "sampler";
-
-	switch (type.image.dim)
 	{
-	case Dim1D:
-		res += "1D";
-		break;
-	case Dim2D:
-		res += "2D";
-		break;
-	case Dim3D:
-		res += "3D";
-		break;
-	case DimCube:
-		res += "CUBE";
-		break;
+		string dim;
+		switch (type.image.dim)
+		{
+		case Dim1D:
+			dim = "1D";
+			break;
+		case Dim2D:
+			dim = "2D";
+			break;
+		case Dim3D:
+			dim = "3D";
+			break;
+		case DimCube:
+			dim = "Cube";
+			break;
+		case DimRect:
+		case DimBuffer:
+		case DimSubpassData:
+			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
+		}
 
-	case DimBuffer:
-		res += "Buffer";
-		break;
+		stringstream type_string;
+		type_string << "SPIRV_Cross_Texture" << dim << (type.image.arrayed ? "Array" : "");
+		type_string << "_" << type_to_glsl(imagetype) << "4_";
+		type_string << (type.image.depth ? "SamplerComparisonState" : "SamplerState");
 
-	case DimSubpassData:
-		res += "2D";
-		break;
-	default:
-		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+		return type_string.str();
 	}
-
-	if (type.image.ms)
-		res += "MS";
-	if (type.image.arrayed)
-	{
-		if (is_legacy_desktop())
-			require_extension("GL_EXT_texture_array");
-		res += "Array";
-	}
-	if (type.image.depth)
-		res += "Shadow";
-
-	return res;
 }
 
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
