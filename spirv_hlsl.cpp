@@ -565,6 +565,17 @@ void CompilerHLSL::emit_resources()
 		}
 	}
 
+	for (auto &sampled_image_type : sampled_image_types)
+	{
+		statement("struct SPIRV_Cross_", sampled_image_type.texture_type, "_", sampled_image_type.texture_type_parameter, "_", sampled_image_type.sampler_type);
+		begin_scope();
+		statement(sampled_image_type.texture_type, "<", sampled_image_type.texture_type_parameter, "> img;");
+		statement(sampled_image_type.sampler_type, " smpl;");
+		end_scope_decl();
+		statement("");
+		emitted = true;
+	}
+
 	if (execution.model == ExecutionModelVertex && options.shader_model <= 30)
 	{
 		statement("uniform float4 gl_HalfPixel;");
@@ -1456,17 +1467,20 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		case DimSubpassData:
 			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 		}
-		statement("struct ", to_name(var.self), "_type");
-		begin_scope();
-		string arrayed = type.image.arrayed ? "Array" : "";
-		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> img;");
-		if (type.image.depth)
-			statement("SamplerComparisonState smpl;");
-		else
-			statement("SamplerState smpl;");
-		end_scope();
-		statement(to_name(var.self), ";");
-		statement("");
+
+		stringstream texture_type;
+		texture_type << "Texture" << dim << (type.image.arrayed ? "Array" : "");
+		SampledImageHLSL sampled_image_type;
+		sampled_image_type.texture_type = texture_type.str();
+		sampled_image_type.texture_type_parameter = type_to_glsl(imagetype) + "4";
+		sampled_image_type.sampler_type = type.image.depth ? "SamplerComparisonState" : "SamplerState";
+
+		statement("SPIRV_Cross_", sampled_image_type.texture_type, "_", sampled_image_type.texture_type_parameter, "_", sampled_image_type.sampler_type, " ", to_name(var.self), ";");
+		if (sampled_image_types.find(sampled_image_type) == sampled_image_types.end())
+		{
+			sampled_image_types.insert(sampled_image_type);
+			force_recompile = true;
+		}
 	}
 	else
 	{

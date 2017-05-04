@@ -23,6 +23,32 @@
 
 namespace spirv_cross
 {
+struct SampledImageHLSL
+{
+	std::string texture_type;
+	std::string texture_type_parameter;
+	std::string sampler_type;
+
+	bool operator==(const SampledImageHLSL &si) const
+	{
+		return texture_type == si.texture_type && texture_type_parameter == si.texture_type_parameter && sampler_type == si.sampler_type;
+	}
+};
+}
+
+namespace std
+{
+template<> struct hash<spirv_cross::SampledImageHLSL>
+{
+	std::size_t operator()(const spirv_cross::SampledImageHLSL &si) const
+	{
+		return hash<string>()(si.texture_type) ^ (hash<string>()(si.texture_type_parameter) << 1) ^ (hash<string>()(si.sampler_type) << 2);
+	}
+};
+}
+
+namespace spirv_cross
+{
 class CompilerHLSL : public CompilerGLSL
 {
 public:
@@ -86,6 +112,8 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
+
+	std::unordered_set<SampledImageHLSL> sampled_image_types;
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
