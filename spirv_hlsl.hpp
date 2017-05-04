@@ -33,7 +33,7 @@ public:
 		bool flip_vert_y = false;
 
 		// Allows the PointSize builtin, and ignores it, as PointSize is not supported in HLSL.
-		bool point_size_compat = true;
+		bool point_size_compat = false;
 	};
 
 	CompilerHLSL(std::vector<uint32_t> spirv_)
