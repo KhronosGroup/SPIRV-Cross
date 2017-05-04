@@ -31,18 +31,21 @@ struct SampledImageHLSL
 
 	bool operator==(const SampledImageHLSL &si) const
 	{
-		return texture_type == si.texture_type && texture_type_parameter == si.texture_type_parameter && sampler_type == si.sampler_type;
+		return texture_type == si.texture_type && texture_type_parameter == si.texture_type_parameter &&
+		       sampler_type == si.sampler_type;
 	}
 };
 }
 
 namespace std
 {
-template<> struct hash<spirv_cross::SampledImageHLSL>
+template <>
+struct hash<spirv_cross::SampledImageHLSL>
 {
 	std::size_t operator()(const spirv_cross::SampledImageHLSL &si) const
 	{
-		return hash<string>()(si.texture_type) ^ (hash<string>()(si.texture_type_parameter) << 1) ^ (hash<string>()(si.sampler_type) << 2);
+		return hash<string>()(si.texture_type) ^ (hash<string>()(si.texture_type_parameter) << 1) ^
+		       (hash<string>()(si.sampler_type) << 2);
 	}
 };
 }

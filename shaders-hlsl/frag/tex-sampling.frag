@@ -20,6 +20,11 @@ in vec4 texCoord4d;
 
 out vec4 FragColor;
 
+vec4 pass_to_function(sampler2D t2d)
+{
+	return texture(t2d, texCoord2d);
+}
+
 void main()
 {
 	vec4 texcolor = texture(tex1d, texCoord1d);
@@ -35,6 +40,8 @@ void main()
 	texcolor += textureGrad(tex2d, texCoord2d, vec2(1.0, 2.0), vec2(3.0, 4.0));
 	texcolor += textureProj(tex2d, vec3(texCoord2d, 2.0));
 	texcolor += texture(tex2d, texCoord2d, 1.0);
+
+	texcolor += pass_to_function(tex2d);
 
 	texcolor += texture(tex3d, texCoord3d);
 	texcolor += textureOffset(tex3d, texCoord3d, ivec3(1, 2, 3));

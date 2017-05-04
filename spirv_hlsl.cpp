@@ -598,7 +598,8 @@ void CompilerHLSL::emit_resources()
 
 	for (auto &sampled_image_type : sampled_image_types)
 	{
-		statement("struct SPIRV_Cross_", sampled_image_type.texture_type, "_", sampled_image_type.texture_type_parameter, "_", sampled_image_type.sampler_type);
+		statement("struct SPIRV_Cross_", sampled_image_type.texture_type, "_",
+		          sampled_image_type.texture_type_parameter, "_", sampled_image_type.sampler_type);
 		begin_scope();
 		statement(sampled_image_type.texture_type, "<", sampled_image_type.texture_type_parameter, "> img;");
 		statement(sampled_image_type.sampler_type, " smpl;");
@@ -1408,7 +1409,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += ", ";
 	}
 	expr += coord_expr;
-	
+
 	if (dref)
 	{
 		forward = forward && should_forward(dref);
@@ -1506,7 +1507,8 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		sampled_image_type.texture_type_parameter = type_to_glsl(imagetype) + "4";
 		sampled_image_type.sampler_type = type.image.depth ? "SamplerComparisonState" : "SamplerState";
 
-		statement("SPIRV_Cross_", sampled_image_type.texture_type, "_", sampled_image_type.texture_type_parameter, "_", sampled_image_type.sampler_type, " ", to_name(var.self), ";");
+		statement("SPIRV_Cross_", sampled_image_type.texture_type, "_", sampled_image_type.texture_type_parameter, "_",
+		          sampled_image_type.sampler_type, " ", to_name(var.self), ";");
 		if (sampled_image_types.find(sampled_image_type) == sampled_image_types.end())
 		{
 			sampled_image_types.insert(sampled_image_type);
