@@ -2698,11 +2698,12 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
 		bool separate_sampler = type.basetype == SPIRType::Sampler;
 		if (separate_image)
-			SPIRV_CROSS_THROW(
-			    "Attempting to use arrays or structs of separate images. This is not possible to statically remap to plain GLSL.");
+			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate images. This is not possible to "
+			                  "statically remap to plain GLSL.");
 		if (separate_sampler)
-			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate samplers. This is not possible to statically "
-			                  "remap to plain GLSL.");
+			SPIRV_CROSS_THROW(
+			    "Attempting to use arrays or structs of separate samplers. This is not possible to statically "
+			    "remap to plain GLSL.");
 		return true;
 	}
 
@@ -3423,4 +3424,3 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 
 	return true;
 }
-

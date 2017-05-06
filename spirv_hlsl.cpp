@@ -1873,7 +1873,6 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 }
 
-
 string CompilerHLSL::compile()
 {
 	// Do not deal with ES-isms like precision, older extensions and such.
