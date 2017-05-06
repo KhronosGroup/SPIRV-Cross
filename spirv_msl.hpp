@@ -77,7 +77,7 @@ public:
 	struct Options
 	{
 		bool flip_vert_y = false;
-		bool is_rendering_points = true;
+		bool enable_point_size_builtin = true;
 		bool pad_and_pack_uniform_structs = false;
 		std::string entry_point_name;
 	};

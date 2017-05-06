@@ -20,7 +20,7 @@ struct main0_out
 {
     float2 vRot [[user(locn0)]];
     float4 gl_Position [[position]];
-    float gl_PointSize [[point_size]];
+    float gl_PointSize;
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant PushMe& registers [[buffer(0)]])
