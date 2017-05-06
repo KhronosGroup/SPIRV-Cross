@@ -311,6 +311,7 @@ string CompilerGLSL::compile()
 	find_static_extensions();
 	fixup_image_load_store_access();
 	update_active_builtins();
+	analyze_sampler_comparison_states();
 
 	uint32_t pass_count = 0;
 	do
@@ -6010,7 +6011,11 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 		return image_type_glsl(type);
 
 	case SPIRType::Sampler:
-		return "sampler";
+		// This is a hacky workaround. The sampler type in SPIR-V doesn't actually signal this distinction,
+		// but in higher level code we need it.
+		// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
+		// this distinction into the type system.
+		return type.image.depth ? "samplerShadow" : "sampler";
 
 	case SPIRType::Void:
 		return "void";

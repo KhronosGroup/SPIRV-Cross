@@ -95,25 +95,6 @@ private:
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
 	void emit_io_block(const SPIRVariable &var);
-	std::unordered_set<uint32_t> comparison_samplers;
-	void analyze_sampler_comparison_states();
-
-	struct CombinedImageSamplerUsageHandler : OpcodeHandler
-	{
-		CombinedImageSamplerUsageHandler(Compiler &compiler_)
-		    : compiler(compiler_)
-		{
-		}
-
-		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
-		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
-		Compiler &compiler;
-
-		std::unordered_map<uint32_t, uint32_t> to_variable_map;
-		std::unordered_map<uint32_t, uint32_t> param_to_global;
-		std::unordered_set<uint32_t> comparison_samplers;
-		uint32_t map_to_global_variable(uint32_t id) const;
-	};
 };
 }
 

@@ -499,10 +499,6 @@ protected:
 	void analyze_variable_scope(SPIRFunction &function);
 
 protected:
-	friend class CompilerGLSL;
-	friend class CompilerMSL;
-	friend class CompilerHLSL;
-	friend class CompilerCPP;
 
 	void parse();
 	void parse(const Instruction &i);
@@ -587,7 +583,7 @@ protected:
 		uint32_t remap_parameter(uint32_t id);
 		void push_remap_parameters(const SPIRFunction &func, const uint32_t *args, uint32_t length);
 		void pop_remap_parameters();
-		void register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id, uint32_t sampler_id);
+		void register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id, uint32_t sampler_id, bool depth);
 	};
 
 	struct ActiveBuiltinHandler : OpcodeHandler
@@ -624,6 +620,25 @@ protected:
 	void analyze_parameter_preservation(
 	    SPIRFunction &entry, const CFG &cfg,
 	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks);
+
+	std::unordered_set<uint32_t> comparison_samplers;
+	void analyze_sampler_comparison_states();
+	struct CombinedImageSamplerUsageHandler : OpcodeHandler
+	{
+		CombinedImageSamplerUsageHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		Compiler &compiler;
+
+		std::unordered_map<uint32_t, uint32_t> to_variable_map;
+		std::unordered_map<uint32_t, uint32_t> param_to_global;
+		std::unordered_set<uint32_t> comparison_samplers;
+		uint32_t map_to_global_variable(uint32_t id, bool map_parameter) const;
+	};
 };
 }
 
