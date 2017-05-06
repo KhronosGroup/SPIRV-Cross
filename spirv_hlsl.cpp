@@ -46,74 +46,105 @@ static bool opcode_is_sign_invariant(Op opcode)
 string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
-	string res;
-
-	switch (imagetype.basetype)
+	if (options.shader_model < 40)
 	{
-	case SPIRType::Int:
-		res = "i";
-		break;
-	case SPIRType::UInt:
-		res = "u";
-		break;
-	default:
-		break;
-	}
+		string res;
 
-	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
-		return res + "subpassInput" + (type.image.ms ? "MS" : "");
+		switch (imagetype.basetype)
+		{
+		case SPIRType::Int:
+			res = "i";
+			break;
+		case SPIRType::UInt:
+			res = "u";
+			break;
+		default:
+			break;
+		}
 
-	// If we're emulating subpassInput with samplers, force sampler2D
-	// so we don't have to specify format.
-	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
-	{
-		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
-		if (type.image.dim == DimBuffer && type.image.sampled == 1)
-			res += "sampler";
+		if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+			return res + "subpassInput" + (type.image.ms ? "MS" : "");
+
+		// If we're emulating subpassInput with samplers, force sampler2D
+		// so we don't have to specify format.
+		if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+		{
+			// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
+			if (type.image.dim == DimBuffer && type.image.sampled == 1)
+				res += "sampler";
+			else
+				res += type.image.sampled == 2 ? "image" : "texture";
+		}
 		else
-			res += type.image.sampled == 2 ? "image" : "texture";
+			res += "sampler";
+
+		switch (type.image.dim)
+		{
+		case Dim1D:
+			res += "1D";
+			break;
+		case Dim2D:
+			res += "2D";
+			break;
+		case Dim3D:
+			res += "3D";
+			break;
+		case DimCube:
+			res += "CUBE";
+			break;
+
+		case DimBuffer:
+			res += "Buffer";
+			break;
+
+		case DimSubpassData:
+			res += "2D";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+		}
+
+		if (type.image.ms)
+			res += "MS";
+		if (type.image.arrayed)
+		{
+			res += "Array";
+		}
+		if (type.image.depth)
+			res += "Shadow";
+
+		return res;
 	}
 	else
-		res += "sampler";
-
-	switch (type.image.dim)
 	{
-	case Dim1D:
-		res += "1D";
-		break;
-	case Dim2D:
-		res += "2D";
-		break;
-	case Dim3D:
-		res += "3D";
-		break;
-	case DimCube:
-		res += "CUBE";
-		break;
+		string dim;
+		switch (type.image.dim)
+		{
+		case Dim1D:
+			dim = "1D";
+			break;
+		case Dim2D:
+			dim = "2D";
+			break;
+		case Dim3D:
+			dim = "3D";
+			break;
+		case DimCube:
+			dim = "Cube";
+			break;
+		case DimRect:
+		case DimBuffer:
+		case DimSubpassData:
+			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
+		}
 
-	case DimBuffer:
-		res += "Buffer";
-		break;
+		stringstream type_string;
+		type_string << "SPIRV_Cross_Texture" << dim << (type.image.arrayed ? "Array" : "");
+		type_string << "_" << type_to_glsl(imagetype) << "4_";
+		type_string << (type.image.depth ? "SamplerComparisonState" : "SamplerState");
 
-	case DimSubpassData:
-		res += "2D";
-		break;
-	default:
-		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+		return type_string.str();
 	}
-
-	if (type.image.ms)
-		res += "MS";
-	if (type.image.arrayed)
-	{
-		if (is_legacy_desktop())
-			require_extension("GL_EXT_texture_array");
-		res += "Array";
-	}
-	if (type.image.depth)
-		res += "Shadow";
-
-	return res;
 }
 
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
@@ -582,6 +613,18 @@ void CompilerHLSL::emit_resources()
 				emitted = true;
 			}
 		}
+	}
+
+	for (auto &sampled_image_type : sampled_image_types)
+	{
+		statement("struct SPIRV_Cross_", sampled_image_type.texture_type, "_",
+		          sampled_image_type.texture_type_parameter, "_", sampled_image_type.sampler_type);
+		begin_scope();
+		statement(sampled_image_type.texture_type, "<", sampled_image_type.texture_type_parameter, "> img;");
+		statement(sampled_image_type.sampler_type, " smpl;");
+		end_scope_decl();
+		statement("");
+		emitted = true;
 	}
 
 	if (execution.model == ExecutionModelVertex && options.shader_model <= 30)
@@ -1245,7 +1288,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			SPIRV_CROSS_THROW("texelFetch is not supported in HLSL shader model 2/3.");
 		}
 		texop += to_expression(img);
-		texop += ".Load";
+		texop += ".img.Load";
 	}
 	else
 	{
@@ -1258,6 +1301,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		if (options.shader_model >= 40)
 		{
 			texop += to_expression(img);
+			texop += ".img";
 
 			if (imgtype.image.depth)
 				texop += ".SampleCmp";
@@ -1313,14 +1357,10 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	expr += "(";
 	if (op != OpImageFetch)
 	{
-		if (options.shader_model >= 40)
-		{
-			expr += "_";
-		}
 		expr += to_expression(img);
 		if (options.shader_model >= 40)
 		{
-			expr += "_sampler";
+			expr += ".smpl";
 		}
 	}
 
@@ -1482,12 +1522,21 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		case DimSubpassData:
 			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
 		}
-		string arrayed = type.image.arrayed ? "Array" : "";
-		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
-		if (type.image.depth)
-			statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
-		else
-			statement("SamplerState _", to_name(var.self), "_sampler;");
+
+		stringstream texture_type;
+		texture_type << "Texture" << dim << (type.image.arrayed ? "Array" : "");
+		SampledImageHLSL sampled_image_type;
+		sampled_image_type.texture_type = texture_type.str();
+		sampled_image_type.texture_type_parameter = type_to_glsl(imagetype) + "4";
+		sampled_image_type.sampler_type = type.image.depth ? "SamplerComparisonState" : "SamplerState";
+
+		statement("SPIRV_Cross_", sampled_image_type.texture_type, "_", sampled_image_type.texture_type_parameter, "_",
+		          sampled_image_type.sampler_type, " ", to_name(var.self), ";");
+		if (sampled_image_types.find(sampled_image_type) == sampled_image_types.end())
+		{
+			sampled_image_types.insert(sampled_image_type);
+			force_recompile = true;
+		}
 	}
 	else
 	{

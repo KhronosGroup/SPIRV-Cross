@@ -1,26 +1,76 @@
-Texture1D<float4> tex1d;
-SamplerState _tex1d_sampler;
-Texture2D<float4> tex2d;
-SamplerState _tex2d_sampler;
-Texture3D<float4> tex3d;
-SamplerState _tex3d_sampler;
-TextureCube<float4> texCube;
-SamplerState _texCube_sampler;
-Texture1D<float4> tex1dShadow;
-SamplerComparisonState _tex1dShadow_sampler;
-Texture2D<float4> tex2dShadow;
-SamplerComparisonState _tex2dShadow_sampler;
-TextureCube<float4> texCubeShadow;
-SamplerComparisonState _texCubeShadow_sampler;
-Texture1DArray<float4> tex1dArray;
-SamplerState _tex1dArray_sampler;
-Texture2DArray<float4> tex2dArray;
-SamplerState _tex2dArray_sampler;
-TextureCubeArray<float4> texCubeArray;
-SamplerState _texCubeArray_sampler;
+struct SPIRV_Cross_Texture2DArray_float4_SamplerState
+{
+    Texture2DArray<float4> img;
+    SamplerState smpl;
+};
 
-static float texCoord1d;
+struct SPIRV_Cross_Texture1DArray_float4_SamplerState
+{
+    Texture1DArray<float4> img;
+    SamplerState smpl;
+};
+
+struct SPIRV_Cross_Texture1D_float4_SamplerComparisonState
+{
+    Texture1D<float4> img;
+    SamplerComparisonState smpl;
+};
+
+struct SPIRV_Cross_Texture1D_float4_SamplerState
+{
+    Texture1D<float4> img;
+    SamplerState smpl;
+};
+
+struct SPIRV_Cross_Texture2D_float4_SamplerState
+{
+    Texture2D<float4> img;
+    SamplerState smpl;
+};
+
+struct SPIRV_Cross_TextureCubeArray_float4_SamplerState
+{
+    TextureCubeArray<float4> img;
+    SamplerState smpl;
+};
+
+struct SPIRV_Cross_Texture2D_float4_SamplerComparisonState
+{
+    Texture2D<float4> img;
+    SamplerComparisonState smpl;
+};
+
+struct SPIRV_Cross_TextureCube_float4_SamplerState
+{
+    TextureCube<float4> img;
+    SamplerState smpl;
+};
+
+struct SPIRV_Cross_TextureCube_float4_SamplerComparisonState
+{
+    TextureCube<float4> img;
+    SamplerComparisonState smpl;
+};
+
+struct SPIRV_Cross_Texture3D_float4_SamplerState
+{
+    Texture3D<float4> img;
+    SamplerState smpl;
+};
+
+SPIRV_Cross_Texture1D_float4_SamplerState tex1d;
+SPIRV_Cross_Texture2D_float4_SamplerState tex2d;
+SPIRV_Cross_Texture3D_float4_SamplerState tex3d;
+SPIRV_Cross_TextureCube_float4_SamplerState texCube;
+SPIRV_Cross_Texture1D_float4_SamplerComparisonState tex1dShadow;
+SPIRV_Cross_Texture2D_float4_SamplerComparisonState tex2dShadow;
+SPIRV_Cross_TextureCube_float4_SamplerComparisonState texCubeShadow;
+SPIRV_Cross_Texture1DArray_float4_SamplerState tex1dArray;
+SPIRV_Cross_Texture2DArray_float4_SamplerState tex2dArray;
+SPIRV_Cross_TextureCubeArray_float4_SamplerState texCubeArray;
+
 static float2 texCoord2d;
+static float texCoord1d;
 static float3 texCoord3d;
 static float4 texCoord4d;
 static float4 FragColor;
@@ -53,47 +103,53 @@ float3 SPIRV_Cross_projectTextureCoordinate(float4 coord)
     return float3(coord.x, coord.y, coord.z) / coord.w;
 }
 
+float4 pass_to_function(SPIRV_Cross_Texture2D_float4_SamplerState t2d)
+{
+    return t2d.img.Sample(t2d.smpl, texCoord2d);
+}
+
 void frag_main()
 {
-    float4 texcolor = tex1d.Sample(_tex1d_sampler, texCoord1d);
-    texcolor += tex1d.Sample(_tex1d_sampler, texCoord1d, 1);
-    texcolor += tex1d.SampleLevel(_tex1d_sampler, texCoord1d, 2.0f);
-    texcolor += tex1d.SampleGrad(_tex1d_sampler, texCoord1d, 1.0f, 2.0f);
-    texcolor += tex1d.Sample(_tex1d_sampler, SPIRV_Cross_projectTextureCoordinate(float2(texCoord1d, 2.0f)));
-    texcolor += tex1d.SampleBias(_tex1d_sampler, texCoord1d, 1.0f);
-    texcolor += tex2d.Sample(_tex2d_sampler, texCoord2d);
-    texcolor += tex2d.Sample(_tex2d_sampler, texCoord2d, int2(1, 2));
-    texcolor += tex2d.SampleLevel(_tex2d_sampler, texCoord2d, 2.0f);
-    texcolor += tex2d.SampleGrad(_tex2d_sampler, texCoord2d, float2(1.0f, 2.0f), float2(3.0f, 4.0f));
-    texcolor += tex2d.Sample(_tex2d_sampler, SPIRV_Cross_projectTextureCoordinate(float3(texCoord2d, 2.0f)));
-    texcolor += tex2d.SampleBias(_tex2d_sampler, texCoord2d, 1.0f);
-    texcolor += tex3d.Sample(_tex3d_sampler, texCoord3d);
-    texcolor += tex3d.Sample(_tex3d_sampler, texCoord3d, int3(1, 2, 3));
-    texcolor += tex3d.SampleLevel(_tex3d_sampler, texCoord3d, 2.0f);
-    texcolor += tex3d.SampleGrad(_tex3d_sampler, texCoord3d, float3(1.0f, 2.0f, 3.0f), float3(4.0f, 5.0f, 6.0f));
-    texcolor += tex3d.Sample(_tex3d_sampler, SPIRV_Cross_projectTextureCoordinate(float4(texCoord3d, 2.0f)));
-    texcolor += tex3d.SampleBias(_tex3d_sampler, texCoord3d, 1.0f);
-    texcolor += texCube.Sample(_texCube_sampler, texCoord3d);
-    texcolor += texCube.SampleLevel(_texCube_sampler, texCoord3d, 2.0f);
-    texcolor += texCube.SampleBias(_texCube_sampler, texCoord3d, 1.0f);
-    float3 _170 = float3(texCoord1d, 0.0f, 0.0f);
-    texcolor.w += tex1dShadow.SampleCmp(_tex1dShadow_sampler, _170.x, _170.z);
-    float3 _188 = float3(texCoord2d, 0.0f);
-    texcolor.w += tex2dShadow.SampleCmp(_tex2dShadow_sampler, _188.xy, _188.z);
-    float4 _204 = float4(texCoord3d, 0.0f);
-    texcolor.w += texCubeShadow.SampleCmp(_texCubeShadow_sampler, _204.xyz, _204.w);
-    texcolor += tex1dArray.Sample(_tex1dArray_sampler, texCoord2d);
-    texcolor += tex2dArray.Sample(_tex2dArray_sampler, texCoord3d);
-    texcolor += texCubeArray.Sample(_texCubeArray_sampler, texCoord4d);
-    texcolor += tex2d.Gather(_tex2d_sampler, texCoord2d, 0);
-    texcolor += tex2d.Load(int3(int2(1, 2), 0));
+    float4 texcolor = tex1d.img.Sample(tex1d.smpl, texCoord1d);
+    texcolor += tex1d.img.Sample(tex1d.smpl, texCoord1d, 1);
+    texcolor += tex1d.img.SampleLevel(tex1d.smpl, texCoord1d, 2.0f);
+    texcolor += tex1d.img.SampleGrad(tex1d.smpl, texCoord1d, 1.0f, 2.0f);
+    texcolor += tex1d.img.Sample(tex1d.smpl, SPIRV_Cross_projectTextureCoordinate(float2(texCoord1d, 2.0f)));
+    texcolor += tex1d.img.SampleBias(tex1d.smpl, texCoord1d, 1.0f);
+    texcolor += tex2d.img.Sample(tex2d.smpl, texCoord2d);
+    texcolor += tex2d.img.Sample(tex2d.smpl, texCoord2d, int2(1, 2));
+    texcolor += tex2d.img.SampleLevel(tex2d.smpl, texCoord2d, 2.0f);
+    texcolor += tex2d.img.SampleGrad(tex2d.smpl, texCoord2d, float2(1.0f, 2.0f), float2(3.0f, 4.0f));
+    texcolor += tex2d.img.Sample(tex2d.smpl, SPIRV_Cross_projectTextureCoordinate(float3(texCoord2d, 2.0f)));
+    texcolor += tex2d.img.SampleBias(tex2d.smpl, texCoord2d, 1.0f);
+    texcolor += pass_to_function(tex2d);
+    texcolor += tex3d.img.Sample(tex3d.smpl, texCoord3d);
+    texcolor += tex3d.img.Sample(tex3d.smpl, texCoord3d, int3(1, 2, 3));
+    texcolor += tex3d.img.SampleLevel(tex3d.smpl, texCoord3d, 2.0f);
+    texcolor += tex3d.img.SampleGrad(tex3d.smpl, texCoord3d, float3(1.0f, 2.0f, 3.0f), float3(4.0f, 5.0f, 6.0f));
+    texcolor += tex3d.img.Sample(tex3d.smpl, SPIRV_Cross_projectTextureCoordinate(float4(texCoord3d, 2.0f)));
+    texcolor += tex3d.img.SampleBias(tex3d.smpl, texCoord3d, 1.0f);
+    texcolor += texCube.img.Sample(texCube.smpl, texCoord3d);
+    texcolor += texCube.img.SampleLevel(texCube.smpl, texCoord3d, 2.0f);
+    texcolor += texCube.img.SampleBias(texCube.smpl, texCoord3d, 1.0f);
+    float3 _182 = float3(texCoord1d, 0.0f, 0.0f);
+    texcolor.w += tex1dShadow.img.SampleCmp(tex1dShadow.smpl, _182.x, _182.z);
+    float3 _200 = float3(texCoord2d, 0.0f);
+    texcolor.w += tex2dShadow.img.SampleCmp(tex2dShadow.smpl, _200.xy, _200.z);
+    float4 _216 = float4(texCoord3d, 0.0f);
+    texcolor.w += texCubeShadow.img.SampleCmp(texCubeShadow.smpl, _216.xyz, _216.w);
+    texcolor += tex1dArray.img.Sample(tex1dArray.smpl, texCoord2d);
+    texcolor += tex2dArray.img.Sample(tex2dArray.smpl, texCoord3d);
+    texcolor += texCubeArray.img.Sample(texCubeArray.smpl, texCoord4d);
+    texcolor += tex2d.img.Gather(tex2d.smpl, texCoord2d, 0);
+    texcolor += tex2d.img.Load(int3(int2(1, 2), 0));
     FragColor = texcolor;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
 {
-    texCoord1d = stage_input.texCoord1d;
     texCoord2d = stage_input.texCoord2d;
+    texCoord1d = stage_input.texCoord1d;
     texCoord3d = stage_input.texCoord3d;
     texCoord4d = stage_input.texCoord4d;
     frag_main();
