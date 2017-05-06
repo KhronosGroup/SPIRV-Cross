@@ -5830,7 +5830,7 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (type.basetype == SPIRType::Sampler)
 	{
 		tmp_type = &fake_type;
-		fake_type.basetype = SPIRType::Sampler;
+		fake_type = type;
 		fake_type.image.depth = comparison_samplers.count(arg.id) != 0;
 	}
 
@@ -5849,7 +5849,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	if (type.basetype == SPIRType::Sampler)
 	{
 		tmp_type = &fake_type;
-		fake_type.basetype = SPIRType::Sampler;
+		fake_type = type;
 		fake_type.image.depth = comparison_samplers.count(variable.self) != 0;
 	}
 

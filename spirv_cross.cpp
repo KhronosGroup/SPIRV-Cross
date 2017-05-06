@@ -3361,26 +3361,6 @@ void Compiler::analyze_sampler_comparison_states()
 	comparison_samplers = move(handler.comparison_samplers);
 }
 
-uint32_t Compiler::CombinedImageSamplerUsageHandler::map_to_global_variable(uint32_t id, bool map_parameter) const
-{
-	const auto remap = [](const unordered_map<uint32_t, uint32_t> &map, uint32_t variable_id) -> uint32_t {
-		auto itr = map.find(variable_id);
-		if (itr != end(map))
-			return itr->second;
-		else
-			return variable_id;
-	};
-
-	// Attempt to remap an ID to a variable if it was loaded by OpLoad.
-	id = remap(to_variable_map, id);
-	if (map_parameter)
-	{
-		// Attempt to remap a variable ID to a global ID if the variable ID is a function parameter.
-		id = remap(param_to_global, id);
-	}
-	return id;
-}
-
 bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
 {
 	if (length < 3)
@@ -3390,31 +3370,36 @@ bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint
 	const auto *arg = &args[3];
 	length -= 3;
 
-	// Do not need a stack for param_to_global since we cannot recurse, and parameter IDs for different functions
-	// must be different.
 	for (uint32_t i = 0; i < length; i++)
 	{
 		auto &argument = func.arguments[i];
-		param_to_global[argument.id] = map_to_global_variable(arg[i], true);
+		dependency_hierarchy[argument.id].insert(arg[i]);
 	}
 
 	return true;
+}
+
+void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_samplers(uint32_t sampler)
+{
+	// Traverse the variable dependency hierarchy and tag everything in its path with comparison samplers.
+	comparison_samplers.insert(sampler);
+	for (auto &samp : dependency_hierarchy[sampler])
+		add_hierarchy_to_comparison_samplers(samp);
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
 	switch (opcode)
 	{
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
 	case OpLoad:
 	{
 		if (length < 3)
 			return false;
-		// Needed so we are able to map the loaded OpSampler to its original variable.
-		to_variable_map[args[1]] = args[2];
+		dependency_hierarchy[args[1]].insert(args[2]);
 		break;
 	}
-
-	// TODO: Deal with arrays of images and samplers?
 
 	case OpSampledImage:
 	{
@@ -3427,12 +3412,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		{
 			// This sampler must be a SamplerComparisionState, and not a regular SamplerState.
 			uint32_t sampler = args[3];
-
-			// Make sure we tag both parameters and global variables here.
-			uint32_t sampler_variable = map_to_global_variable(sampler, false);
-			comparison_samplers.insert(sampler_variable);
-			sampler_variable = map_to_global_variable(sampler, true);
-			comparison_samplers.insert(sampler_variable);
+			add_hierarchy_to_comparison_samplers(sampler);
 		}
 		return true;
 	}

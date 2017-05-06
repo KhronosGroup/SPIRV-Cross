@@ -621,6 +621,10 @@ protected:
 	    SPIRFunction &entry, const CFG &cfg,
 	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks);
 
+	// If a variable ID or parameter ID is found in this set, a sampler is actually a shadow/comparison sampler.
+	// SPIR-V does not support this distinction, so we must keep track of this information outside the type system.
+	// There might be unrelated IDs found in this set which do not correspond to actual variables.
+	// This set should only be queried for the existence of samplers which are already known to be variables or parameter IDs.
 	std::unordered_set<uint32_t> comparison_samplers;
 	void analyze_sampler_comparison_states();
 	struct CombinedImageSamplerUsageHandler : OpcodeHandler
@@ -634,10 +638,10 @@ protected:
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 		Compiler &compiler;
 
-		std::unordered_map<uint32_t, uint32_t> to_variable_map;
-		std::unordered_map<uint32_t, uint32_t> param_to_global;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> dependency_hierarchy;
 		std::unordered_set<uint32_t> comparison_samplers;
-		uint32_t map_to_global_variable(uint32_t id, bool map_parameter) const;
+
+		void add_hierarchy_to_comparison_samplers(uint32_t sampler);
 	};
 };
 }
