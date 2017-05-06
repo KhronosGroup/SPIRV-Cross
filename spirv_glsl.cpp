@@ -5812,7 +5812,6 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	// glslangValidator seems to make all arguments pointer no matter what which is rather bizarre ...
-	// Not sure if argument being pointer type should make the argument inout.
 	auto &type = expression_type(arg.id);
 	const char *direction = "";
 
@@ -5824,14 +5823,37 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 			direction = "out ";
 	}
 
-	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id)));
+	// We need some special consideration for samplers.
+	// The shadow qualifier for a sampler does not exist in SPIR-V, so the type might depend on which variable this is.
+	SPIRType fake_type;
+	const auto *tmp_type = &type;
+	if (type.basetype == SPIRType::Sampler)
+	{
+		tmp_type = &fake_type;
+		fake_type.basetype = SPIRType::Sampler;
+		fake_type.image.depth = comparison_samplers.count(arg.id) != 0;
+	}
+
+	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(*tmp_type, to_name(arg.id)));
 }
 
 string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get<SPIRType>(variable.basetype);
-	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self)));
+
+	// We need some special consideration for samplers.
+	// The shadow qualifier for a sampler does not exist in SPIR-V, so the type might depend on which variable this is.
+	SPIRType fake_type;
+	const auto *tmp_type = &type;
+	if (type.basetype == SPIRType::Sampler)
+	{
+		tmp_type = &fake_type;
+		fake_type.basetype = SPIRType::Sampler;
+		fake_type.image.depth = comparison_samplers.count(variable.self) != 0;
+	}
+
+	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(*tmp_type, to_name(variable.self)));
 	if (variable.loop_variable)
 		res += join(" = ", to_expression(variable.static_expression));
 	else if (variable.initializer)
