@@ -892,6 +892,34 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &)
 	statement("constant block");
 }
 
+string CompilerHLSL::to_sampler_expression(uint32_t id)
+{
+	return join("_", to_expression(id), "_sampler");
+}
+
+string CompilerHLSL::to_func_call_arg(uint32_t id)
+{
+	string arg_str = CompilerGLSL::to_func_call_arg(id);
+
+	if (options.shader_model <= 30)
+		return arg_str;
+
+	// Manufacture automatic sampler arg if the arg is a SampledImage texture and we're in modern HLSL.
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (var)
+	{
+		auto &type = get<SPIRType>(var->basetype);
+
+		// We don't have to consider combined image samplers here via OpSampledImage because
+		// those variables cannot be passed as arguments to functions.
+		// Only global SampledImage variables may be used as arguments.
+		if (type.basetype == SPIRType::SampledImage)
+			arg_str += ", " + to_sampler_expression(id);
+	}
+
+	return arg_str;
+}
+
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
 {
 	auto &execution = get_entry_point();
@@ -930,6 +958,17 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		add_local_variable_name(arg.id);
 
 		decl += argument_decl(arg);
+
+		// Flatten a combined sampler to two separate arguments in modern HLSL.
+		auto &arg_type = get<SPIRType>(arg.type);
+		if (options.shader_model > 30 && arg_type.basetype == SPIRType::SampledImage)
+		{
+			// Manufacture automatic sampler arg for SampledImage texture
+			decl += ", ";
+			if (arg_type.basetype == SPIRType::SampledImage)
+				decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ", to_sampler_expression(arg.id));
+		}
+
 		if (&arg != &func.arguments.back())
 			decl += ", ";
 
@@ -1355,7 +1394,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		if (combined_image)
 			sampler_expr = to_expression(combined_image->sampler);
 		else
-			sampler_expr = join("_", img_expr, "_sampler");
+			sampler_expr = to_sampler_expression(img);
 		expr += sampler_expr;
 	}
 
@@ -1501,9 +1540,9 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 		{
 			// For combined image samplers, also emit a combined image sampler.
 			if (type.image.depth)
-				statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
+				statement("SamplerComparisonState ", to_sampler_expression(var.self), ";");
 			else
-				statement("SamplerState _", to_name(var.self), "_sampler;");
+				statement("SamplerState ", to_sampler_expression(var.self), ";");
 		}
 		break;
 	}
