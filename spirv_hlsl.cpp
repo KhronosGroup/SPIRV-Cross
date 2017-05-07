@@ -43,7 +43,39 @@ static bool opcode_is_sign_invariant(Op opcode)
 	}
 }
 
-string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
+{
+	auto &imagetype = get<SPIRType>(type.image.type);
+	const char *dim = nullptr;
+	switch (type.image.dim)
+	{
+	case Dim1D:
+		dim = "1D";
+		break;
+	case Dim2D:
+		dim = "2D";
+		break;
+	case Dim3D:
+		dim = "3D";
+		break;
+	case DimCube:
+		dim = "Cube";
+		break;
+	case DimRect:
+		SPIRV_CROSS_THROW("Rectangle texture support is not yet implemented for HLSL"); // TODO
+	case DimBuffer:
+		// Buffer/RWBuffer.
+		SPIRV_CROSS_THROW("Buffer/RWBuffer support is not yet implemented for HLSL"); // TODO
+	case DimSubpassData:
+		// This should be implemented same way as desktop GL. Fetch on a 2D texture based on int2(SV_Position).
+		SPIRV_CROSS_THROW("Subpass data support is not yet implemented for HLSL"); // TODO
+	}
+	uint32_t components = 4;
+	const char *arrayed = type.image.arrayed ? "Array" : "";
+	return join("Texture", dim, arrayed, "<", type_to_glsl(imagetype), components, ">");
+}
+
+string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	string res;
@@ -105,15 +137,19 @@ string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 	if (type.image.ms)
 		res += "MS";
 	if (type.image.arrayed)
-	{
-		if (is_legacy_desktop())
-			require_extension("GL_EXT_texture_array");
 		res += "Array";
-	}
 	if (type.image.depth)
 		res += "Shadow";
 
 	return res;
+}
+
+string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+{
+	if (options.shader_model <= 30)
+		return image_type_hlsl_legacy(type);
+	else
+		return image_type_hlsl_modern(type);
 }
 
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
@@ -134,7 +170,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 		return image_type_hlsl(type);
 
 	case SPIRType::Sampler:
-		return "sampler";
+		return type.image.depth ? "SamplerComparisonState" : "SamplerState";
 
 	case SPIRType::Void:
 		return "void";
@@ -856,6 +892,39 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &)
 	statement("constant block");
 }
 
+string CompilerHLSL::to_sampler_expression(uint32_t id)
+{
+	return join("_", to_expression(id), "_sampler");
+}
+
+void CompilerHLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
+{
+	set<SPIRCombinedImageSampler>(result_id, result_type, image_id, samp_id);
+}
+
+string CompilerHLSL::to_func_call_arg(uint32_t id)
+{
+	string arg_str = CompilerGLSL::to_func_call_arg(id);
+
+	if (options.shader_model <= 30)
+		return arg_str;
+
+	// Manufacture automatic sampler arg if the arg is a SampledImage texture and we're in modern HLSL.
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (var)
+	{
+		auto &type = get<SPIRType>(var->basetype);
+
+		// We don't have to consider combined image samplers here via OpSampledImage because
+		// those variables cannot be passed as arguments to functions.
+		// Only global SampledImage variables may be used as arguments.
+		if (type.basetype == SPIRType::SampledImage)
+			arg_str += ", " + to_sampler_expression(id);
+	}
+
+	return arg_str;
+}
+
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
 {
 	auto &execution = get_entry_point();
@@ -894,6 +963,18 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		add_local_variable_name(arg.id);
 
 		decl += argument_decl(arg);
+
+		// Flatten a combined sampler to two separate arguments in modern HLSL.
+		auto &arg_type = get<SPIRType>(arg.type);
+		if (options.shader_model > 30 && arg_type.basetype == SPIRType::SampledImage)
+		{
+			// Manufacture automatic sampler arg for SampledImage texture
+			decl += ", ";
+			if (arg_type.basetype == SPIRType::SampledImage)
+				decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ",
+				             to_sampler_expression(arg.id));
+		}
+
 		if (&arg != &func.arguments.back())
 			decl += ", ";
 
@@ -1127,6 +1208,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	bool gather = false;
 	bool proj = false;
 	const uint32_t *opt = nullptr;
+	auto *combined_image = maybe_get<SPIRCombinedImageSampler>(img);
+	auto img_expr = to_expression(combined_image ? combined_image->image : img);
 
 	switch (op)
 	{
@@ -1244,7 +1327,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		{
 			SPIRV_CROSS_THROW("texelFetch is not supported in HLSL shader model 2/3.");
 		}
-		texop += to_expression(img);
+		texop += img_expr;
 		texop += ".Load";
 	}
 	else
@@ -1257,7 +1340,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 		if (options.shader_model >= 40)
 		{
-			texop += to_expression(img);
+			texop += img_expr;
 
 			if (imgtype.image.depth)
 				texop += ".SampleCmp";
@@ -1311,21 +1394,17 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	expr += texop;
 	expr += "(";
-	if (op != OpImageFetch)
+	if (op != OpImageFetch && (options.shader_model >= 40))
 	{
-		if (options.shader_model >= 40)
-		{
-			expr += "_";
-		}
-		expr += to_expression(img);
-		if (options.shader_model >= 40)
-		{
-			expr += "_sampler";
-		}
+		string sampler_expr;
+		if (combined_image)
+			sampler_expr = to_expression(combined_image->sampler);
+		else
+			sampler_expr = to_sampler_expression(img);
+		expr += sampler_expr;
 	}
 
-	bool swizz_func = backend.swizzle_is_function;
-	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
+	auto swizzle = [](uint32_t comps, uint32_t in_comps) -> const char * {
 		if (comps == in_comps)
 			return "";
 
@@ -1334,9 +1413,9 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		case 1:
 			return ".x";
 		case 2:
-			return swizz_func ? ".xy()" : ".xy";
+			return ".xy";
 		case 3:
-			return swizz_func ? ".xyz()" : ".xyz";
+			return ".xyz";
 		default:
 			return "";
 		}
@@ -1382,9 +1461,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	if (op == OpImageFetch)
 	{
 		auto &coordtype = expression_type(coord);
-		stringstream str;
-		str << coordtype.vecsize + 1;
-		coord_expr = "int" + str.str() + "(" + coord_expr + ", " + to_expression(lod) + ")";
+		coord_expr = join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", to_expression(lod), ")");
 	}
 
 	if (op != OpImageFetch)
@@ -1455,46 +1532,62 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	emit_op(result_type, id, expr, forward, false);
 }
 
+void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+	switch (type.basetype)
+	{
+	case SPIRType::SampledImage:
+	case SPIRType::Image:
+	{
+		statement(image_type_hlsl_modern(type), " ", to_name(var.self), ";");
+
+		if (type.basetype == SPIRType::SampledImage)
+		{
+			// For combined image samplers, also emit a combined image sampler.
+			if (type.image.depth)
+				statement("SamplerComparisonState ", to_sampler_expression(var.self), ";");
+			else
+				statement("SamplerState ", to_sampler_expression(var.self), ";");
+		}
+		break;
+	}
+
+	case SPIRType::Sampler:
+		if (comparison_samplers.count(var.self))
+			statement("SamplerComparisonState ", to_name(var.self), ";");
+		else
+			statement("SamplerState ", to_name(var.self), ";");
+		break;
+
+	default:
+		statement(variable_decl(var), ";");
+		break;
+	}
+}
+
+void CompilerHLSL::emit_legacy_uniform(const SPIRVariable &var)
+{
+	auto &type = get<SPIRType>(var.basetype);
+	switch (type.basetype)
+	{
+	case SPIRType::Sampler:
+	case SPIRType::Image:
+		SPIRV_CROSS_THROW("Separate image and samplers not supported in legacy HLSL.");
+
+	default:
+		statement(variable_decl(var), ";");
+		break;
+	}
+}
+
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
 	add_resource_name(var.self);
-	auto &type = get<SPIRType>(var.basetype);
-	if (options.shader_model >= 40 && type.basetype == SPIRType::SampledImage)
-	{
-		auto &imagetype = get<SPIRType>(type.image.type);
-		string dim;
-		switch (type.image.dim)
-		{
-		case Dim1D:
-			dim = "1D";
-			break;
-		case Dim2D:
-			dim = "2D";
-			break;
-		case Dim3D:
-			dim = "3D";
-			break;
-		case DimCube:
-			dim = "Cube";
-			break;
-		case DimRect:
-		case DimBuffer:
-		case DimSubpassData:
-			SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
-		}
-		string arrayed = type.image.arrayed ? "Array" : "";
-		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), "4> ", to_name(var.self), ";");
-		if (type.image.depth)
-			statement("SamplerComparisonState _", to_name(var.self), "_sampler;");
-		else
-			statement("SamplerState _", to_name(var.self), "_sampler;");
-	}
+	if (options.shader_model >= 40)
+		emit_modern_uniform(var);
 	else
-	{
-		statement(variable_decl(var), ";");
-	}
-
-	// TODO: Separate samplers/images
+		emit_legacy_uniform(var);
 }
 
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
@@ -1845,6 +1938,7 @@ string CompilerHLSL::compile()
 	backend.boolean_mix_support = false;
 
 	update_active_builtins();
+	analyze_sampler_comparison_states();
 
 	uint32_t pass_count = 0;
 	do

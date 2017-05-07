@@ -2198,6 +2198,11 @@ size_t CompilerMSL::get_declared_type_alignment(uint32_t type_id, uint64_t dec_m
 	}
 }
 
+bool CompilerMSL::skip_argument(uint32_t) const
+{
+	return false;
+}
+
 bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t * /*args*/, uint32_t /*length*/)
 {
 	switch (opcode)

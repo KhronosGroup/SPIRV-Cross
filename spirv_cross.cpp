@@ -355,6 +355,9 @@ const SPIRType &Compiler::expression_type(uint32_t id) const
 	case TypeUndef:
 		return get<SPIRType>(get<SPIRUndef>(id).basetype);
 
+	case TypeCombinedImageSampler:
+		return get<SPIRType>(get<SPIRCombinedImageSampler>(id).combined_type);
+
 	default:
 		SPIRV_CROSS_THROW("Cannot resolve expression type.");
 	}
@@ -2570,7 +2573,7 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 			if (s)
 				sampler_id = s->self;
 
-			register_combined_image_sampler(caller, image_id, sampler_id);
+			register_combined_image_sampler(caller, image_id, sampler_id, param.depth);
 		}
 	}
 
@@ -2578,13 +2581,13 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 }
 
 void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t image_id,
-                                                                            uint32_t sampler_id)
+                                                                            uint32_t sampler_id, bool depth)
 {
 	// We now have a texture ID and a sampler ID which will either be found as a global
 	// or a parameter in our own function. If both are global, they will not need a parameter,
 	// otherwise, add it to our list.
 	SPIRFunction::CombinedImageSamplerParameter param = {
-		0u, image_id, sampler_id, true, true,
+		0u, image_id, sampler_id, true, true, depth,
 	};
 
 	auto texture_itr = find_if(begin(caller.arguments), end(caller.arguments),
@@ -2628,6 +2631,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		type.basetype = SPIRType::SampledImage;
 		type.pointer = false;
 		type.storage = StorageClassGeneric;
+		type.image.depth = depth;
 
 		ptr_type = type;
 		ptr_type.pointer = true;
@@ -2694,11 +2698,12 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
 		bool separate_sampler = type.basetype == SPIRType::Sampler;
 		if (separate_image)
-			SPIRV_CROSS_THROW(
-			    "Attempting to use arrays of separate images. This is not possible to statically remap to plain GLSL.");
+			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate images. This is not possible to "
+			                  "statically remap to plain GLSL.");
 		if (separate_sampler)
-			SPIRV_CROSS_THROW("Attempting to use arrays of separate samplers. This is not possible to statically "
-			                  "remap to plain GLSL.");
+			SPIRV_CROSS_THROW(
+			    "Attempting to use arrays or structs of separate samplers. This is not possible to statically "
+			    "remap to plain GLSL.");
 		return true;
 	}
 
@@ -2731,7 +2736,8 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 			if (sampler)
 				sampler_id = sampler->self;
 
-			register_combined_image_sampler(callee, image_id, sampler_id);
+			auto &combined_type = compiler.get<SPIRType>(args[0]);
+			register_combined_image_sampler(callee, image_id, sampler_id, combined_type.image.depth);
 		}
 	}
 
@@ -3347,4 +3353,74 @@ void Compiler::update_active_builtins()
 	active_output_builtins = 0;
 	ActiveBuiltinHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+}
+
+void Compiler::analyze_sampler_comparison_states()
+{
+	CombinedImageSamplerUsageHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	comparison_samplers = move(handler.comparison_samplers);
+}
+
+bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 3)
+		return false;
+
+	auto &func = compiler.get<SPIRFunction>(args[2]);
+	const auto *arg = &args[3];
+	length -= 3;
+
+	for (uint32_t i = 0; i < length; i++)
+	{
+		auto &argument = func.arguments[i];
+		dependency_hierarchy[argument.id].insert(arg[i]);
+	}
+
+	return true;
+}
+
+void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_samplers(uint32_t sampler)
+{
+	// Traverse the variable dependency hierarchy and tag everything in its path with comparison samplers.
+	comparison_samplers.insert(sampler);
+	for (auto &samp : dependency_hierarchy[sampler])
+		add_hierarchy_to_comparison_samplers(samp);
+}
+
+bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	switch (opcode)
+	{
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
+	case OpLoad:
+	{
+		if (length < 3)
+			return false;
+		dependency_hierarchy[args[1]].insert(args[2]);
+		break;
+	}
+
+	case OpSampledImage:
+	{
+		if (length < 4)
+			return false;
+
+		uint32_t result_type = args[0];
+		auto &type = compiler.get<SPIRType>(result_type);
+		if (type.image.depth)
+		{
+			// This sampler must be a SamplerComparisionState, and not a regular SamplerState.
+			uint32_t sampler = args[3];
+			add_hierarchy_to_comparison_samplers(sampler);
+		}
+		return true;
+	}
+
+	default:
+		break;
+	}
+
+	return true;
 }

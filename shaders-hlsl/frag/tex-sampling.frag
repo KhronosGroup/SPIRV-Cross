@@ -13,6 +13,11 @@ uniform sampler1DArray tex1dArray;
 uniform sampler2DArray tex2dArray;
 uniform samplerCubeArray texCubeArray;
 
+uniform samplerShadow samplerDepth;
+uniform sampler samplerNonDepth;
+uniform texture2D separateTex2d;
+uniform texture2D separateTex2dDepth;
+
 in float texCoord1d;
 in vec2 texCoord2d;
 in vec3 texCoord3d;
@@ -58,6 +63,9 @@ void main()
 	texcolor += textureGather(tex2d, texCoord2d);
 
 	texcolor += texelFetch(tex2d, ivec2(1, 2), 0);
+
+	texcolor += texture(sampler2D(separateTex2d, samplerNonDepth), texCoord2d);
+	texcolor.a += texture(sampler2DShadow(separateTex2dDepth, samplerDepth), texCoord3d);
 
 	FragColor = texcolor;
 }

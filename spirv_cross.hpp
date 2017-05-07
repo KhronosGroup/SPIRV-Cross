@@ -582,7 +582,8 @@ protected:
 		uint32_t remap_parameter(uint32_t id);
 		void push_remap_parameters(const SPIRFunction &func, const uint32_t *args, uint32_t length);
 		void pop_remap_parameters();
-		void register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id, uint32_t sampler_id);
+		void register_combined_image_sampler(SPIRFunction &caller, uint32_t texture_id, uint32_t sampler_id,
+		                                     bool depth);
 	};
 
 	struct ActiveBuiltinHandler : OpcodeHandler
@@ -619,6 +620,29 @@ protected:
 	void analyze_parameter_preservation(
 	    SPIRFunction &entry, const CFG &cfg,
 	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks);
+
+	// If a variable ID or parameter ID is found in this set, a sampler is actually a shadow/comparison sampler.
+	// SPIR-V does not support this distinction, so we must keep track of this information outside the type system.
+	// There might be unrelated IDs found in this set which do not correspond to actual variables.
+	// This set should only be queried for the existence of samplers which are already known to be variables or parameter IDs.
+	std::unordered_set<uint32_t> comparison_samplers;
+	void analyze_sampler_comparison_states();
+	struct CombinedImageSamplerUsageHandler : OpcodeHandler
+	{
+		CombinedImageSamplerUsageHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		Compiler &compiler;
+
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> dependency_hierarchy;
+		std::unordered_set<uint32_t> comparison_samplers;
+
+		void add_hierarchy_to_comparison_samplers(uint32_t sampler);
+	};
 };
 }
 
