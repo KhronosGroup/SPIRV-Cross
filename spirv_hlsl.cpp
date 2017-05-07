@@ -897,6 +897,11 @@ string CompilerHLSL::to_sampler_expression(uint32_t id)
 	return join("_", to_expression(id), "_sampler");
 }
 
+void CompilerHLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
+{
+	set<SPIRCombinedImageSampler>(result_id, result_type, image_id, samp_id);
+}
+
 string CompilerHLSL::to_func_call_arg(uint32_t id)
 {
 	string arg_str = CompilerGLSL::to_func_call_arg(id);
@@ -1711,16 +1716,6 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_op(result_type, id, to_expression(ops[2]), true, true);
 		// TODO: Maybe change this when separate samplers/images are supported
-		break;
-	}
-
-	case OpSampledImage:
-	{
-		uint32_t result_type = ops[0];
-		uint32_t id = ops[1];
-		uint32_t image = ops[2];
-		uint32_t sampler = ops[3];
-		set<SPIRCombinedImageSampler>(id, result_type, image, sampler);
 		break;
 	}
 
