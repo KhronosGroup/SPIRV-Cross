@@ -971,7 +971,8 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 			// Manufacture automatic sampler arg for SampledImage texture
 			decl += ", ";
 			if (arg_type.basetype == SPIRType::SampledImage)
-				decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ", to_sampler_expression(arg.id));
+				decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ",
+				             to_sampler_expression(arg.id));
 		}
 
 		if (&arg != &func.arguments.back())

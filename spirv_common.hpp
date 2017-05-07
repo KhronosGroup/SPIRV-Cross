@@ -291,13 +291,13 @@ struct SPIRType : IVariant
 
 	struct Image
 	{
-		uint32_t type = 0;
-		spv::Dim dim = spv::Dim1D;
-		bool depth = false;
-		bool arrayed = false;
-		bool ms = false;
-		uint32_t sampled = 0;
-		spv::ImageFormat format = spv::ImageFormatUnknown;
+		uint32_t type;
+		spv::Dim dim;
+		bool depth;
+		bool arrayed;
+		bool ms;
+		uint32_t sampled;
+		spv::ImageFormat format;
 	} image;
 
 	// Structs can be declared multiple times if they are used as part of interface blocks.
