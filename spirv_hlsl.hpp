@@ -61,6 +61,8 @@ public:
 private:
 	std::string type_to_glsl(const SPIRType &type) override;
 	std::string image_type_hlsl(const SPIRType &type);
+	std::string image_type_hlsl_modern(const SPIRType &type);
+	std::string image_type_hlsl_legacy(const SPIRType &type);
 	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;

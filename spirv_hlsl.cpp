@@ -43,7 +43,39 @@ static bool opcode_is_sign_invariant(Op opcode)
 	}
 }
 
-string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
+{
+	auto &imagetype = get<SPIRType>(type.image.type);
+	const char *dim = nullptr;
+	switch (type.image.dim)
+	{
+	case Dim1D:
+		dim = "1D";
+		break;
+	case Dim2D:
+		dim = "2D";
+		break;
+	case Dim3D:
+		dim = "3D";
+		break;
+	case DimCube:
+		dim = "Cube";
+		break;
+	case DimRect:
+		SPIRV_CROSS_THROW("Rectangle texture support is not yet implemented for HLSL"); // TODO
+	case DimBuffer:
+		// Buffer/RWBuffer.
+		SPIRV_CROSS_THROW("Buffer/RWBuffer support is not yet implemented for HLSL"); // TODO
+	case DimSubpassData:
+		// This should be implemented same way as desktop GL. Fetch on a 2D texture based on int2(SV_Position).
+		SPIRV_CROSS_THROW("Subpass data support is not yet implemented for HLSL"); // TODO
+	}
+	uint32_t components = 4;
+	const char *arrayed = type.image.arrayed ? "Array" : "";
+	return join("Texture", dim, arrayed, "<", type_to_glsl(imagetype), components, ">");
+}
+
+string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	string res;
@@ -105,15 +137,19 @@ string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 	if (type.image.ms)
 		res += "MS";
 	if (type.image.arrayed)
-	{
-		if (is_legacy_desktop())
-			require_extension("GL_EXT_texture_array");
 		res += "Array";
-	}
 	if (type.image.depth)
 		res += "Shadow";
 
 	return res;
+}
+
+string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+{
+	if (options.shader_model <= 30)
+		return image_type_hlsl_legacy(type);
+	else
+		return image_type_hlsl_modern(type);
 }
 
 string CompilerHLSL::type_to_glsl(const SPIRType &type)
@@ -134,7 +170,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type)
 		return image_type_hlsl(type);
 
 	case SPIRType::Sampler:
-		return "sampler";
+		return type.image.depth ? "SamplerComparisonState" : "SamplerState";
 
 	case SPIRType::Void:
 		return "void";
@@ -1459,34 +1495,7 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	case SPIRType::SampledImage:
 	case SPIRType::Image:
 	{
-		auto &imagetype = get<SPIRType>(type.image.type);
-		string dim;
-		switch (type.image.dim)
-		{
-		case Dim1D:
-			dim = "1D";
-			break;
-		case Dim2D:
-			dim = "2D";
-			break;
-		case Dim3D:
-			dim = "3D";
-			break;
-		case DimCube:
-			dim = "Cube";
-			break;
-		case DimRect:
-			SPIRV_CROSS_THROW("Rectangle texture support is not yet implemented for HLSL"); // TODO
-		case DimBuffer:
-			// Buffer/RWBuffer.
-			SPIRV_CROSS_THROW("Buffer/RWBuffer support is not yet implemented for HLSL"); // TODO
-		case DimSubpassData:
-			// This should be implemented same way as desktop GL. Fetch on a 2D texture based on int2(SV_Position).
-			SPIRV_CROSS_THROW("Subpass data support is not yet implemented for HLSL"); // TODO
-		}
-		string arrayed = type.image.arrayed ? "Array" : "";
-		uint32_t components = imagetype.image.depth ? 1 : 4;
-		statement("Texture", dim, arrayed, "<", type_to_glsl(imagetype), components, "> ", to_name(var.self), ";");
+		statement(image_type_hlsl_modern(type), " ", to_name(var.self), ";");
 
 		if (type.basetype == SPIRType::SampledImage)
 		{
