@@ -196,6 +196,7 @@ protected:
 	void align_struct(SPIRType &ib_type);
 	bool is_member_packable(SPIRType &ib_type, uint32_t index);
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
+	bool skip_argument(uint32_t id) const override;
 
 	Options options;
 	std::unordered_map<std::string, std::string> func_name_overrides;
