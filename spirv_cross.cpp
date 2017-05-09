@@ -1187,6 +1187,7 @@ void Compiler::parse(const Instruction &instruction)
 			source.version = 450;
 			source.known = true;
 			source.hlsl = true;
+			break;
 
 		default:
 			source.known = false;
