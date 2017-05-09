@@ -3454,7 +3454,7 @@ bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 	if (meta.at(id).hlsl_magic_counter_buffer_candidate)
 	{
 		auto *var = maybe_get<SPIRVariable>(id);
-		// Ensure that this actually a buffer object.
+		// Ensure that this is actually a buffer object.
 		return var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock);
 	}
 	else
@@ -3470,7 +3470,7 @@ bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id)
 		if (meta[i].hlsl_magic_counter_buffer_candidate && meta[i].hlsl_magic_counter_buffer_name == name)
 		{
 			auto *var = maybe_get<SPIRVariable>(i);
-			// Ensure that this actually a buffer object.
+			// Ensure that this is actually a buffer object.
 			if (var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
 			{
 				counter_id = i;
