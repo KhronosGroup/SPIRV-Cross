@@ -69,6 +69,8 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 	case DimSubpassData:
 		// This should be implemented same way as desktop GL. Fetch on a 2D texture based on int2(SV_Position).
 		SPIRV_CROSS_THROW("Subpass data support is not yet implemented for HLSL"); // TODO
+	default:
+		SPIRV_CROSS_THROW("Invalid dimension.");
 	}
 	uint32_t components = 4;
 	const char *arrayed = type.image.arrayed ? "Array" : "";
@@ -1375,6 +1377,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			case DimBuffer:
 			case DimSubpassData:
 				SPIRV_CROSS_THROW("Buffer texture support is not yet implemented for HLSL"); // TODO
+			default:
+				SPIRV_CROSS_THROW("Invalid dimension.");
 			}
 
 			if (gather)

@@ -824,7 +824,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 	// glslang uses identifiers to pass along meaningful information
 	// about HLSL reflection.
 	auto &m = meta.at(id);
-	if (source.hlsl && name.find("@count") == name.size() - 6)
+	if (source.hlsl && name.size() >= 6 && name.find("@count") == name.size() - 6)
 	{
 		m.hlsl_magic_counter_buffer_candidate = true;
 		m.hlsl_magic_counter_buffer_name = name.substr(0, name.find("@count"));
