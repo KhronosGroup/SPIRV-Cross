@@ -335,6 +335,25 @@ public:
 	// If the decoration does not have any value attached to it (e.g. DecorationRelaxedPrecision), this function will also return false.
 	bool get_binary_offset_for_decoration(uint32_t id, spv::Decoration decoration, uint32_t &word_offset) const;
 
+	// HLSL counter buffer reflection interface.
+	// Append/Consume/Increment/Decrement in HLSL is implemented as two "neighbor" buffer objects where
+	// one buffer implements the storage, and a single buffer containing just a lone "int" implements the counter.
+	// To SPIR-V these will be exposed as two separate buffers, but glslang HLSL frontend emits a special indentifier
+	// which lets us link the two buffers together.
+
+	// Queries if a variable ID is a counter buffer which "belongs" to a regular buffer object.
+	// NOTE: This query is purely based on OpName identifiers as found in the SPIR-V module, and will
+	// only return true if OpSource was reported HLSL.
+	// To rely on this functionality, ensure that the SPIR-V module is not stripped.
+	bool buffer_is_hlsl_counter_buffer(uint32_t id) const;
+
+	// Queries if a buffer object has a neighbor "counter" buffer.
+	// If so, the ID of that counter buffer will be returned in counter_id.
+	// NOTE: This query is purely based on OpName identifiers as found in the SPIR-V module, and will
+	// only return true if OpSource was reported HLSL.
+	// To rely on this functionality, ensure that the SPIR-V module is not stripped.
+	bool buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -413,6 +432,7 @@ protected:
 		uint32_t version = 0;
 		bool es = false;
 		bool known = false;
+		bool hlsl = false;
 
 		Source() = default;
 	} source;
