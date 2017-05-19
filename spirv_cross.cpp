@@ -127,6 +127,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpAtomicStore:
 		case OpAtomicExchange:
 		case OpAtomicCompareExchange:
+		case OpAtomicCompareExchangeWeak:
 		case OpAtomicIIncrement:
 		case OpAtomicIDecrement:
 		case OpAtomicIAdd:
@@ -538,6 +539,7 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 	case OpAtomicLoad:
 	case OpAtomicExchange:
 	case OpAtomicCompareExchange:
+	case OpAtomicCompareExchangeWeak:
 	case OpAtomicIIncrement:
 	case OpAtomicIDecrement:
 	case OpAtomicIAdd:

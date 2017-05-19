@@ -2769,6 +2769,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		break;
 
 	case OpImageFetch:
+	case OpImageRead: // Reads == fetches in Metal (other langs will not get here)
 		opt = &ops[4];
 		length -= 4;
 		fetch = true;
@@ -2787,7 +2788,13 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		break;
 	}
 
-	auto &imgtype = expression_type(img);
+	// Bypass pointers because we need the real image struct
+	auto &type = expression_type(img);
+	auto &imgtype = get<SPIRType>(type.self);
+
+	// Mark that this shader reads from this image
+	((SPIRType &)imgtype).image.is_read = true;
+
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
 	{

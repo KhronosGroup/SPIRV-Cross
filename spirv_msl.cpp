@@ -87,7 +87,6 @@ string CompilerMSL::compile()
 	update_active_builtins();
 
 	// Preprocess OpCodes to extract the need to output additional header content
-	set_enabled_interface_variables(get_active_interface_variables());
 	preprocess_op_codes();
 
 	// Create structs to hold input, output and uniform variables
@@ -166,13 +165,20 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 // Register the need to output any custom functions.
 void CompilerMSL::preprocess_op_codes()
 {
-	custom_function_ops.clear();
+	set_enabled_interface_variables(get_active_interface_variables());
+	spv_function_implementations.clear();
 
 	OpCodePreprocessor preproc(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), preproc);
 
 	if (preproc.suppress_missing_prototypes)
-		add_header_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+
+	if (preproc.uses_atomics)
+	{
+		add_header_line("#include <metal_atomic>");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"");
+	}
 }
 
 // Move the Private global variables to the entry function.
@@ -687,7 +693,7 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 	return false;
 }
 
-// Simple combination of type ID and member index for use as hash key
+// Returns a combination of type ID and member index for use as hash key
 MSLStructMemberKey CompilerMSL::get_struct_member_key(uint32_t type_id, uint32_t index)
 {
 	MSLStructMemberKey k = type_id;
@@ -706,34 +712,221 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
-	if (!header_lines.empty())
-	{
-		for (auto &header : header_lines)
-			statement(header);
+	for (auto &header : pragma_lines)
+		statement(header);
 
+	if (!pragma_lines.empty())
 		statement("");
-	}
 
 	statement("#include <metal_stdlib>");
 	statement("#include <simd/simd.h>");
+
+	for (auto &header : header_lines)
+		statement(header);
+
 	statement("");
 	statement("using namespace metal;");
 	statement("");
 }
 
+void CompilerMSL::add_pragma_line(const string &line)
+{
+	pragma_lines.push_back(line);
+}
+
 // Emits any needed custom function bodies.
 void CompilerMSL::emit_custom_functions()
 {
-	for (auto &op : custom_function_ops)
+	for (auto &spv_func : spv_function_implementations)
 	{
-		switch (op)
+		switch (spv_func)
 		{
-		case OpFMod:
-			statement("// Support GLSL mod(), which is slightly different than Metal fmod()");
+		case SPVFuncImplMod:
+			statement("// Implementation of the GLSL mod() function, which is slightly different than Metal fmod()");
 			statement("template<typename Tx, typename Ty>");
 			statement("Tx mod(Tx x, Ty y)");
 			begin_scope();
 			statement("return x - y * floor(x / y);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRadians:
+			statement("// Implementation of the GLSL radians() function");
+			statement("template<typename T>");
+			statement("T radians(T d)");
+			begin_scope();
+			statement("return d * 0.01745329251;");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplDegrees:
+			statement("// Implementation of the GLSL degrees() function");
+			statement("template<typename T>");
+			statement("T degrees(T r)");
+			begin_scope();
+			statement("return r * 57.2957795131;");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplFindILsb:
+			statement("// Implementation of the GLSL findLSB() function");
+			statement("template<typename T>");
+			statement("T findLSB(T x)");
+			begin_scope();
+			statement("return select(ctz(x), -1, x == 0);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplFindUMsb:
+			statement("// Implementation of the unsigned GLSL findMSB() function");
+			statement("template<typename T>");
+			statement("T findUMSB(T x)");
+			begin_scope();
+			statement("return select(clz(0) - (clz(x) + 1), -1, x == 0);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplFindSMsb:
+			statement("// Implementation of the signed GLSL findMSB() function");
+			statement("template<typename T>");
+			statement("T findSMSB(T x)");
+			begin_scope();
+			statement("T v = select(x, -1 - x, x < 0);");
+			statement("return select(clz(0) - (clz(v) + 1), -1, v == 0);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplInverse4x4:
+			statement("// Returns the determinant of a 2x2 matrix.");
+			statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
+			begin_scope();
+			statement("return a1 * b2 - b1 * a2;");
+			end_scope();
+			statement("");
+			statement("// Returns the determinant of a 3x3 matrix.");
+			statement("inline float spvDet3x3(float a1, float a2, float a3, float b1, float b2, float b3, float c1, "
+			          "float c2, float c3)");
+			begin_scope();
+			statement("return a1 * spvDet2x2(b2, b3, c2, c3) - b1 * spvDet2x2(a2, a3, c2, c3) + c1 * spvDet2x2(a2, a3, "
+			          "b2, b3);");
+			end_scope();
+			statement("");
+			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
+			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
+			statement("float4x4 spvInverse4x4(float4x4 m)");
+			begin_scope();
+			statement("float4x4 adj;	// The adjoint matrix (inverse after dividing by determinant)");
+			statement("");
+			statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
+			statement("adj[0][0] =  spvDet3x3(m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
+			          "m[3][3]);");
+			statement("adj[0][1] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
+			          "m[3][3]);");
+			statement("adj[0][2] =  spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[3][1], m[3][2], "
+			          "m[3][3]);");
+			statement("adj[0][3] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], "
+			          "m[2][3]);");
+			statement("");
+			statement("adj[1][0] = -spvDet3x3(m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
+			          "m[3][3]);");
+			statement("adj[1][1] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
+			          "m[3][3]);");
+			statement("adj[1][2] = -spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[3][0], m[3][2], "
+			          "m[3][3]);");
+			statement("adj[1][3] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], "
+			          "m[2][3]);");
+			statement("");
+			statement("adj[2][0] =  spvDet3x3(m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
+			          "m[3][3]);");
+			statement("adj[2][1] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
+			          "m[3][3]);");
+			statement("adj[2][2] =  spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[3][0], m[3][1], "
+			          "m[3][3]);");
+			statement("adj[2][3] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], "
+			          "m[2][3]);");
+			statement("");
+			statement("adj[3][0] = -spvDet3x3(m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
+			          "m[3][2]);");
+			statement("adj[3][1] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
+			          "m[3][2]);");
+			statement("adj[3][2] = -spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[3][0], m[3][1], "
+			          "m[3][2]);");
+			statement("adj[3][3] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], "
+			          "m[2][2]);");
+			statement("");
+			statement("// Calculate the determinant as a combination of the cofactors of the first row.");
+			statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]) + (adj[0][3] "
+			          "* m[3][0]);");
+			statement("");
+			statement("// Divide the classical adjoint matrix by the determinant.");
+			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
+			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplInverse3x3:
+			statement("// Returns the determinant of a 2x2 matrix.");
+			statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
+			begin_scope();
+			statement("return a1 * b2 - b1 * a2;");
+			end_scope();
+			statement("");
+			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
+			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
+			statement("float3x3 spvInverse3x3(float3x3 m)");
+			begin_scope();
+			statement("float3x3 adj;	// The adjoint matrix (inverse after dividing by determinant)");
+			statement("");
+			statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
+			statement("adj[0][0] =  spvDet2x2(m[1][1], m[1][2], m[2][1], m[2][2]);");
+			statement("adj[0][1] = -spvDet2x2(m[0][1], m[0][2], m[2][1], m[2][2]);");
+			statement("adj[0][2] =  spvDet2x2(m[0][1], m[0][2], m[1][1], m[1][2]);");
+			statement("");
+			statement("adj[1][0] = -spvDet2x2(m[1][0], m[1][2], m[2][0], m[2][2]);");
+			statement("adj[1][1] =  spvDet2x2(m[0][0], m[0][2], m[2][0], m[2][2]);");
+			statement("adj[1][2] = -spvDet2x2(m[0][0], m[0][2], m[1][0], m[1][2]);");
+			statement("");
+			statement("adj[2][0] =  spvDet2x2(m[1][0], m[1][1], m[2][0], m[2][1]);");
+			statement("adj[2][1] = -spvDet2x2(m[0][0], m[0][1], m[2][0], m[2][1]);");
+			statement("adj[2][2] =  spvDet2x2(m[0][0], m[0][1], m[1][0], m[1][1]);");
+			statement("");
+			statement("// Calculate the determinant as a combination of the cofactors of the first row.");
+			statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]);");
+			statement("");
+			statement("// Divide the classical adjoint matrix by the determinant.");
+			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
+			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplInverse2x2:
+			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
+			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
+			statement("float2x2 spvInverse2x2(float2x2 m)");
+			begin_scope();
+			statement("float2x2 adj;	// The adjoint matrix (inverse after dividing by determinant)");
+			statement("");
+			statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
+			statement("adj[0][0] =  m[1][1];");
+			statement("adj[0][1] = -m[0][1];");
+			statement("");
+			statement("adj[1][0] = -m[1][0];");
+			statement("adj[1][1] =  m[0][0];");
+			statement("");
+			statement("// Calculate the determinant as a combination of the cofactors of the first row.");
+			statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]);");
+			statement("");
+			statement("// Divide the classical adjoint matrix by the determinant.");
+			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
+			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
 			end_scope();
 			statement("");
 			break;
@@ -854,63 +1047,368 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	// Derivatives
 	case OpDPdx:
+	case OpDPdxFine:
+	case OpDPdxCoarse:
 		UFOP(dfdx);
 		break;
 
 	case OpDPdy:
+	case OpDPdyFine:
+	case OpDPdyCoarse:
 		UFOP(dfdy);
 		break;
 
-	case OpImageQuerySize:
+	// Bitfield
+	case OpBitFieldInsert:
+		QFOP(insert_bits);
+		break;
+
+	case OpBitFieldSExtract:
+	case OpBitFieldUExtract:
+		TFOP(extract_bits);
+		break;
+
+	case OpBitReverse:
+		UFOP(reverse_bits);
+		break;
+
+	case OpBitCount:
+		UFOP(popcount);
+		break;
+
+	// Atomics
+	case OpAtomicExchange:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-
-		if (type.basetype == SPIRType::Image)
-		{
-			string img_exp = to_expression(ops[2]);
-			auto &img_type = type.image;
-			switch (img_type.dim)
-			{
-			case Dim1D:
-				if (img_type.arrayed)
-					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_array_size())"),
-					        false);
-				else
-					emit_op(result_type, id, join(img_exp, ".get_width()"), true);
-				break;
-
-			case Dim2D:
-			case DimCube:
-				if (img_type.arrayed)
-					emit_op(result_type, id, join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ",
-					                              img_exp, ".get_array_size())"),
-					        false);
-				else
-					emit_op(result_type, id, join("uint2(", img_exp, ".get_width(), ", img_exp, ".get_height())"),
-					        false);
-				break;
-
-			case Dim3D:
-				emit_op(result_type, id,
-				        join("uint3(", img_exp, ".get_width(), ", img_exp, ".get_height(), ", img_exp, ".get_depth())"),
-				        false);
-				break;
-
-			default:
-				break;
-			}
-		}
-		else
-			SPIRV_CROSS_THROW("Invalid type for OpImageQuerySize.");
+		uint32_t ptr = ops[2];
+		uint32_t mem_sem = ops[4];
+		uint32_t val = ops[5];
+		emit_atomic_func_op(result_type, id, "atomic_exchange_explicit", mem_sem, mem_sem, false, ptr, val);
 		break;
 	}
+
+	case OpAtomicCompareExchange:
+	case OpAtomicCompareExchangeWeak:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t ptr = ops[2];
+		uint32_t mem_sem_pass = ops[4];
+		uint32_t mem_sem_fail = ops[5];
+		uint32_t val = ops[6];
+		uint32_t comp = ops[7];
+		emit_atomic_func_op(result_type, id, "atomic_compare_exchange_weak_explicit", mem_sem_pass, mem_sem_fail, true,
+		                    ptr, comp, true, val);
+		break;
+	}
+
+	case OpAtomicLoad:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t ptr = ops[2];
+		uint32_t mem_sem = ops[4];
+		emit_atomic_func_op(result_type, id, "atomic_load_explicit", mem_sem, mem_sem, false, ptr, 0);
+		break;
+	}
+
+	case OpAtomicStore:
+	{
+		uint32_t result_type = expression_type(ops[0]).self;
+		uint32_t id = ops[0];
+		uint32_t ptr = ops[0];
+		uint32_t mem_sem = ops[2];
+		uint32_t val = ops[3];
+		emit_atomic_func_op(result_type, id, "atomic_store_explicit", mem_sem, mem_sem, false, ptr, val);
+		break;
+	}
+
+#define AFMOImpl(op, valsrc)                                                                                      \
+	{                                                                                                             \
+		uint32_t result_type = ops[0];                                                                            \
+		uint32_t id = ops[1];                                                                                     \
+		uint32_t ptr = ops[2];                                                                                    \
+		uint32_t mem_sem = ops[4];                                                                                \
+		uint32_t val = valsrc;                                                                                    \
+		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op "_explicit", mem_sem, mem_sem, false, ptr, val); \
+		break;                                                                                                    \
+	}
+
+#define AFMO(op) AFMOImpl(op, ops[5])
+#define AFMIO(op) AFMOImpl(op, 1)
+
+	case OpAtomicIIncrement:
+		AFMIO(add)
+
+	case OpAtomicIDecrement:
+		AFMIO(sub)
+
+	case OpAtomicIAdd:
+		AFMO(add)
+
+	case OpAtomicISub:
+		AFMO(sub)
+
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+		AFMO(min)
+
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+		AFMO(max)
+
+	case OpAtomicAnd:
+		AFMO(and)
+
+	case OpAtomicOr:
+		AFMO(or)
+
+	case OpAtomicXor:
+		AFMO (xor)
+
+	// Images
+
+	// Reads == fetches in Metal
+	case OpImageRead:
+		emit_texture_op(instruction);
+		break;
+
+	case OpImageWrite:
+	{
+		uint32_t img_id = ops[0];
+		uint32_t coord_id = ops[1];
+		uint32_t texel_id = ops[2];
+		const uint32_t *opt = &ops[3];
+		uint32_t length = instruction.length - 4;
+
+		// Bypass pointers because we need the real image struct
+		auto &type = expression_type(img_id);
+		auto &img_type = get<SPIRType>(type.self);
+
+		// Ensure this image has been marked as being written to and force a
+		// recommpile so that the image type output will include write access
+		if (!img_type.image.is_written)
+		{
+			((SPIRType &)img_type).image.is_written = true;
+			force_recompile = true;
+		}
+
+		// We added Nonwritable speculatively to the OpImage variable due to glslangValidator
+		// not adding the proper qualifiers.
+		// If it turns out we need to write to the image after all, remove the qualifier and recompile.
+		auto *var = maybe_get_backing_variable(img_id);
+		if (var)
+		{
+			auto &flags = meta.at(var->self).decoration.decoration_flags;
+			if (flags & (1ull << DecorationNonWritable))
+			{
+				flags &= ~(1ull << DecorationNonWritable);
+				force_recompile = true;
+			}
+		}
+
+		bool forward = false;
+		uint32_t bias = 0;
+		uint32_t lod = 0;
+		uint32_t flags = 0;
+
+		if (length)
+		{
+			flags = *opt++;
+			length--;
+		}
+
+		auto test = [&](uint32_t &v, uint32_t flag) {
+			if (length && (flags & flag))
+			{
+				v = *opt++;
+				length--;
+			}
+		};
+
+		test(bias, ImageOperandsBiasMask);
+		test(lod, ImageOperandsLodMask);
+
+		statement(join(
+		    to_expression(img_id), ".write(", to_expression(texel_id), ", ",
+		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, &forward),
+		    ");"));
+
+		if (var && variable_storage_is_aliased(*var))
+			flush_all_aliased_variables();
+
+		break;
+	}
+
+	case OpImageQuerySize:
+	case OpImageQuerySizeLod:
+	{
+		uint32_t rslt_type_id = ops[0];
+		auto &rslt_type = get<SPIRType>(rslt_type_id);
+
+		uint32_t id = ops[1];
+
+		uint32_t img_id = ops[2];
+		string img_exp = to_expression(img_id);
+		auto &img_type = expression_type(img_id);
+		Dim img_dim = img_type.image.dim;
+		bool is_array = img_type.image.arrayed;
+
+		if (img_type.basetype != SPIRType::Image)
+			SPIRV_CROSS_THROW("Invalid type for OpImageQuerySize.");
+
+		string lod;
+		if (opcode == OpImageQuerySizeLod)
+		{
+			// LOD index defaults to zero, so don't bother outputing level zero index
+			string decl_lod = to_expression(ops[3]);
+			if (decl_lod != "0")
+				lod = decl_lod;
+		}
+
+		string expr = type_to_glsl(rslt_type) + "(";
+		expr += img_exp + ".get_width(" + lod + ")";
+
+		if (img_dim == Dim2D || img_dim == DimCube || img_dim == Dim3D)
+			expr += ", " + img_exp + ".get_height(" + lod + ")";
+
+		if (img_dim == Dim3D)
+			expr += ", " + img_exp + ".get_depth(" + lod + ")";
+
+		if (is_array)
+			expr += ", " + img_exp + ".get_array_size()";
+
+		expr += ")";
+
+		emit_op(rslt_type_id, id, expr, should_forward(img_id));
+
+		break;
+	}
+
+#define ImgQry(qrytype)                                                                     \
+	{                                                                                       \
+		uint32_t rslt_type_id = ops[0];                                                     \
+		auto &rslt_type = get<SPIRType>(rslt_type_id);                                      \
+		uint32_t id = ops[1];                                                               \
+		uint32_t img_id = ops[2];                                                           \
+		string img_exp = to_expression(img_id);                                             \
+		string expr = type_to_glsl(rslt_type) + "(" + img_exp + ".get_num_" #qrytype "())"; \
+		emit_op(rslt_type_id, id, expr, should_forward(img_id));                            \
+		break;                                                                              \
+	}
+
+	case OpImageQueryLevels:
+		ImgQry(mip_levels)
+
+		    case OpImageQuerySamples : ImgQry(samples)
+
+		                               // Casting
+		                               case OpQuantizeToF16:
+		{
+			uint32_t result_type = ops[0];
+			uint32_t id = ops[1];
+			uint32_t arg = ops[2];
+
+			string exp;
+			auto &type = get<SPIRType>(result_type);
+
+			switch (type.vecsize)
+			{
+			case 1:
+				exp = join("float(half(", to_expression(arg), "))");
+				break;
+			case 2:
+				exp = join("float2(half2(", to_expression(arg), "))");
+				break;
+			case 3:
+				exp = join("float3(half3(", to_expression(arg), "))");
+				break;
+			case 4:
+				exp = join("float4(half4(", to_expression(arg), "))");
+				break;
+			default:
+				SPIRV_CROSS_THROW("Illegal argument to OpQuantizeToF16.");
+			}
+
+			emit_op(result_type, id, exp, should_forward(arg));
+			break;
+		}
+
+	// OpOuterProduct
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
+}
+
+void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
+                         uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
+                         bool op1_is_pointer = false, uint32_t op2 = 0);
+
+// Emits one of the atomic functions. In MSL, the atomic functions operate on pointers
+void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
+                                      uint32_t mem_order_2, bool has_mem_order_2, uint32_t obj, uint32_t op1,
+                                      bool op1_is_pointer, uint32_t op2)
+{
+	forced_temporaries.insert(result_id);
+
+	bool fwd_obj = should_forward(obj);
+	bool fwd_op1 = op1 ? should_forward(op1) : true;
+	bool fwd_op2 = op2 ? should_forward(op2) : true;
+
+	bool forward = fwd_obj && fwd_op1 && fwd_op2;
+
+	string exp = string(op) + "(";
+
+	auto &type = expression_type(obj);
+	exp += "(volatile ";
+	exp += "device";
+	//    exp += get_argument_address_space(obj);
+	exp += " atomic_";
+	exp += type_to_glsl(type);
+	exp += "*)";
+
+	exp += "&(";
+	exp += to_expression(obj);
+	exp += ")";
+
+	if (op1)
+	{
+		if (op1_is_pointer)
+		{
+			statement(declare_temporary(expression_type(op2).self, op1), to_expression(op1), ";");
+			exp += ", &(" + to_name(op1) + ")";
+		}
+		else
+			exp += ", " + to_expression(op1);
+	}
+
+	if (op2)
+		exp += ", " + to_expression(op2);
+
+	exp += string(", ") + get_memory_order(mem_order_1);
+
+	if (has_mem_order_2)
+		exp += string(", ") + get_memory_order(mem_order_2);
+
+	exp += ")";
+	emit_op(result_type, result_id, exp, forward);
+
+	inherit_expression_dependencies(result_id, obj);
+	if (op1)
+		inherit_expression_dependencies(result_id, op1);
+	if (op2)
+		inherit_expression_dependencies(result_id, op2);
+
+	flush_all_atomic_capable_variables();
+}
+
+// Metal only supports relaxed memory order for now
+const char *CompilerMSL::get_memory_order(uint32_t)
+{
+	return "memory_order_relaxed";
 }
 
 // Override for MSL-specific extension syntax instructions
@@ -923,6 +1421,83 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	case GLSLstd450Atan2:
 		emit_binary_func_op(result_type, id, args[0], args[1], "atan2");
 		break;
+	case GLSLstd450InverseSqrt:
+		emit_unary_func_op(result_type, id, args[0], "rsqrt");
+		break;
+	case GLSLstd450RoundEven:
+		emit_unary_func_op(result_type, id, args[0], "rint");
+		break;
+
+	case GLSLstd450FindSMsb:
+		emit_unary_func_op(result_type, id, args[0], "findSMSB");
+		break;
+	case GLSLstd450FindUMsb:
+		emit_unary_func_op(result_type, id, args[0], "findUMSB");
+		break;
+
+	case GLSLstd450PackSnorm4x8:
+		emit_unary_func_op(result_type, id, args[0], "pack_float_to_snorm4x8");
+		break;
+	case GLSLstd450PackUnorm4x8:
+		emit_unary_func_op(result_type, id, args[0], "pack_float_to_unorm4x8");
+		break;
+	case GLSLstd450PackSnorm2x16:
+		emit_unary_func_op(result_type, id, args[0], "pack_float_to_snorm2x16");
+		break;
+	case GLSLstd450PackUnorm2x16:
+		emit_unary_func_op(result_type, id, args[0], "pack_float_to_unorm2x16");
+		break;
+	case GLSLstd450PackHalf2x16:
+		emit_unary_func_op(result_type, id, args[0], "pack_half_to_snorm2x16");
+		break;
+
+	case GLSLstd450UnpackSnorm4x8:
+		emit_unary_func_op(result_type, id, args[0], "unpack_snorm4x8_to_float");
+		break;
+	case GLSLstd450UnpackUnorm4x8:
+		emit_unary_func_op(result_type, id, args[0], "unpack_unorm4x8_to_float");
+		break;
+	case GLSLstd450UnpackSnorm2x16:
+		emit_unary_func_op(result_type, id, args[0], "unpack_snorm2x16_to_float");
+		break;
+	case GLSLstd450UnpackUnorm2x16:
+		emit_unary_func_op(result_type, id, args[0], "unpack_unorm2x16_to_float");
+		break;
+	case GLSLstd450UnpackHalf2x16:
+		emit_unary_func_op(result_type, id, args[0], "unpack_snorm2x16_to_half");
+		break;
+
+	case GLSLstd450PackDouble2x32:
+		emit_unary_func_op(result_type, id, args[0], "unsupported_GLSLstd450PackDouble2x32"); // Currently unsupported
+		break;
+	case GLSLstd450UnpackDouble2x32:
+		emit_unary_func_op(result_type, id, args[0], "unsupported_GLSLstd450UnpackDouble2x32"); // Currently unsupported
+		break;
+
+	case GLSLstd450MatrixInverse:
+	{
+		auto &mat_type = get<SPIRType>(result_type);
+		switch (mat_type.columns)
+		{
+		case 2:
+			emit_unary_func_op(result_type, id, args[0], "spvInverse2x2");
+			break;
+		case 3:
+			emit_unary_func_op(result_type, id, args[0], "spvInverse3x3");
+			break;
+		case 4:
+			emit_unary_func_op(result_type, id, args[0], "spvInverse4x4");
+			break;
+		default:
+			break;
+		}
+		break;
+	}
+
+	// TODO:
+	//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
+	//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
+	//        GLSLstd450InterpolateAtOffset
 
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
@@ -1568,15 +2143,10 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 	    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
 	     type.storage == StorageClassPushConstant))
 	{
-		if ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
-		    (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0)
-		{
-			return "device";
-		}
-		else
-		{
-			return "constant";
-		}
+		return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
+		        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
+		           "device" :
+		           "constant";
 	}
 
 	return "thread";
@@ -1801,6 +2371,8 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 
+	string type_name;
+
 	switch (type.basetype)
 	{
 	case SPIRType::Struct:
@@ -1817,61 +2389,48 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 	case SPIRType::Void:
 		return "void";
 
-	default:
+	case SPIRType::AtomicCounter:
+		return "atomic_uint";
+
+	// Scalars
+	case SPIRType::Boolean:
+		type_name = "bool";
 		break;
+	case SPIRType::Char:
+		type_name = "char";
+		break;
+	case SPIRType::Int:
+		type_name = (type.width == 16 ? "short" : "int");
+		break;
+	case SPIRType::UInt:
+		type_name = (type.width == 16 ? "ushort" : "uint");
+		break;
+	case SPIRType::Int64:
+		type_name = "long"; // Currently unsupported
+		break;
+	case SPIRType::UInt64:
+		type_name = "size_t";
+		break;
+	case SPIRType::Float:
+		type_name = (type.width == 16 ? "half" : "float");
+		break;
+	case SPIRType::Double:
+		type_name = "double"; // Currently unsupported
+		break;
+
+	default:
+		return "unknown_type";
 	}
 
-	if (is_scalar(type)) // Scalar builtin
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-			return "bool";
-		case SPIRType::Char:
-			return "char";
-		case SPIRType::Int:
-			return (type.width == 16 ? "short" : "int");
-		case SPIRType::UInt:
-			return (type.width == 16 ? "ushort" : "uint");
-		case SPIRType::AtomicCounter:
-			return "atomic_uint";
-		case SPIRType::Float:
-			return (type.width == 16 ? "half" : "float");
-		default:
-			return "unknown_type";
-		}
-	}
-	else if (is_vector(type)) // Vector builtin
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-			return join("bool", type.vecsize);
-		case SPIRType::Char:
-			return join("char", type.vecsize);
-		case SPIRType::Int:
-			return join((type.width == 16 ? "short" : "int"), type.vecsize);
-		case SPIRType::UInt:
-			return join((type.width == 16 ? "ushort" : "uint"), type.vecsize);
-		case SPIRType::Float:
-			return join((type.width == 16 ? "half" : "float"), type.vecsize);
-		default:
-			return "unknown_type";
-		}
-	}
-	else
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-		case SPIRType::Int:
-		case SPIRType::UInt:
-		case SPIRType::Float:
-			return join((type.width == 16 ? "half" : "float"), type.columns, "x", type.vecsize);
-		default:
-			return "unknown_type";
-		}
-	}
+	// Matrix?
+	if (type.columns > 1)
+		type_name += to_string(type.columns) + "x";
+
+	// Vector or Matrix?
+	if (type.vecsize > 1)
+		type_name += to_string(type.vecsize);
+
+	return type_name;
 }
 
 // Returns an MSL string describing  the SPIR-V image type
@@ -1879,7 +2438,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 {
 	string img_type_name;
 
-	auto &img_type = type.image;
+	// Bypass pointers because we need the real image struct
+	auto &img_type = get<SPIRType>(type.self).image;
+
 	if (img_type.depth)
 	{
 		switch (img_type.dim)
@@ -1920,9 +2481,27 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 
 	// Append the pixel type
 	auto &img_pix_type = get<SPIRType>(img_type.type);
-	img_type_name += "<" + type_to_glsl(img_pix_type) + ">";
+	img_type_name += "<";
+	img_type_name += type_to_glsl(img_pix_type);
+
+	if (img_type.is_written)
+	{
+		img_type_name += ", access::";
+
+		if (img_type.is_read)
+			img_type_name += "read_";
+
+		img_type_name += "write";
+	}
+
+	img_type_name += ">";
 
 	return img_type_name;
+}
+
+string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &)
+{
+	return "as_type<" + type_to_glsl(out_type) + ">";
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin.
@@ -2198,26 +2777,107 @@ size_t CompilerMSL::get_declared_type_alignment(uint32_t type_id, uint64_t dec_m
 	}
 }
 
-bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t * /*args*/, uint32_t /*length*/)
+bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, uint32_t /*length*/)
 {
+	// Since MSL exists in a single execution scope, function prototype declarations are not
+	// needed, and clutter the output. If secondary functions are output (either as a SPIR-V
+	// function implementation or as indicated by the presence of OpFunctionCall), then set
+	// suppress_missing_prototypes to suppress compiler warnings of missing function prototypes.
+
+	// Mark if the input requires the implementation of an SPIR-V function that does not exist in Metal.
+	SPVFuncImpl spv_func = compiler.get_spv_func_impl(opcode, args);
+	if (spv_func != SPVFuncImplNone)
+	{
+		compiler.spv_function_implementations.insert(spv_func);
+		suppress_missing_prototypes = true;
+		return true;
+	}
+
 	switch (opcode)
 	{
-	// If an opcode requires a bespoke custom function be output, remember it.
-	case OpFMod:
-		compiler.custom_function_ops.insert(uint32_t(opcode));
-		break;
 
-	// Since MSL exists in a single execution scope, function prototype declarations are not
-	// needed, and clutter the output. If secondary functions are output (as indicated by the
-	// presence of OpFunctionCall, then suppress compiler warnings of missing function prototypes.
 	case OpFunctionCall:
 		suppress_missing_prototypes = true;
+		break;
+
+	case OpAtomicExchange:
+	case OpAtomicCompareExchange:
+	case OpAtomicCompareExchangeWeak:
+	case OpAtomicLoad:
+	case OpAtomicIIncrement:
+	case OpAtomicIDecrement:
+	case OpAtomicIAdd:
+	case OpAtomicISub:
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+	case OpAtomicAnd:
+	case OpAtomicOr:
+	case OpAtomicXor:
+		uses_atomics = true;
 		break;
 
 	default:
 		break;
 	}
+
 	return true;
+}
+
+// Returns an enumeration of a SPIR-V function that needs to be output for certain Op codes.
+CompilerMSL::SPVFuncImpl CompilerMSL::get_spv_func_impl(Op opcode, const uint32_t *args)
+{
+	switch (opcode)
+	{
+	case OpFMod:
+		return SPVFuncImplMod;
+
+	case OpExtInst:
+	{
+		uint32_t extension_set = args[2];
+		if (get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
+		{
+			GLSLstd450 op_450 = static_cast<GLSLstd450>(args[3]);
+			switch (op_450)
+			{
+			case GLSLstd450Radians:
+				return SPVFuncImplRadians;
+			case GLSLstd450Degrees:
+				return SPVFuncImplDegrees;
+			case GLSLstd450FindILsb:
+				return SPVFuncImplFindILsb;
+			case GLSLstd450FindSMsb:
+				return SPVFuncImplFindSMsb;
+			case GLSLstd450FindUMsb:
+				return SPVFuncImplFindUMsb;
+			case GLSLstd450MatrixInverse:
+			{
+				auto &mat_type = get<SPIRType>(args[0]);
+				switch (mat_type.columns)
+				{
+				case 2:
+					return SPVFuncImplInverse2x2;
+				case 3:
+					return SPVFuncImplInverse3x3;
+				case 4:
+					return SPVFuncImplInverse4x4;
+				default:
+					break;
+				}
+				break;
+			}
+			default:
+				break;
+			}
+		}
+		break;
+	}
+
+	default:
+		break;
+	}
+	return SPVFuncImplNone;
 }
 
 // Sort both type and meta member content based on builtin status (put builtins at end),

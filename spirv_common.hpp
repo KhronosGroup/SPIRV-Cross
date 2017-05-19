@@ -276,6 +276,8 @@ struct SPIRType : IVariant
 		bool depth;
 		bool arrayed;
 		bool ms;
+		bool is_read = false;
+		bool is_written = false;
 		uint32_t sampled;
 		spv::ImageFormat format;
 	} image;
