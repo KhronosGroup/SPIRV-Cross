@@ -218,6 +218,7 @@ protected:
 	                         bool op1_is_pointer = false, uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
+	bool skip_argument(uint32_t id) const override;
 
 	Options options;
 	std::unordered_map<std::string, std::string> func_name_overrides;

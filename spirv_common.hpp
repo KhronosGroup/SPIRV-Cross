@@ -186,6 +186,7 @@ enum Types
 	TypeExtension,
 	TypeExpression,
 	TypeConstantOp,
+	TypeCombinedImageSampler,
 	TypeUndef
 };
 
@@ -200,6 +201,25 @@ struct SPIRUndef : IVariant
 	{
 	}
 	uint32_t basetype;
+};
+
+// This type is only used by backends which need to access the combined image and sampler IDs separately after
+// the OpSampledImage opcode.
+struct SPIRCombinedImageSampler : IVariant
+{
+	enum
+	{
+		type = TypeCombinedImageSampler
+	};
+	SPIRCombinedImageSampler(uint32_t type_, uint32_t image_, uint32_t sampler_)
+	    : combined_type(type_)
+	    , image(image_)
+	    , sampler(sampler_)
+	{
+	}
+	uint32_t combined_type;
+	uint32_t image;
+	uint32_t sampler;
 };
 
 struct SPIRConstantOp : IVariant
@@ -557,6 +577,7 @@ struct SPIRFunction : IVariant
 		uint32_t sampler_id;
 		bool global_image;
 		bool global_sampler;
+		bool depth;
 	};
 
 	uint32_t return_type;
@@ -950,6 +971,14 @@ struct Meta
 	uint32_t sampler = 0;
 
 	std::unordered_map<uint32_t, uint32_t> decoration_word_offset;
+
+	// Used when the parser has detected a candidate identifier which matches
+	// known "magic" counter buffers as emitted by HLSL frontends.
+	// We will need to match the identifiers by name later when reflecting resources.
+	// We could use the regular alias later, but the alias will be mangled when parsing SPIR-V because the identifier
+	// is not a valid identifier in any high-level language.
+	std::string hlsl_magic_counter_buffer_name;
+	bool hlsl_magic_counter_buffer_candidate = false;
 };
 
 // A user callback that remaps the type of any variable.
