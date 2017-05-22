@@ -300,6 +300,9 @@ void CompilerGLSL::find_static_extensions()
 
 	if (!pls_inputs.empty() || !pls_outputs.empty())
 		require_extension("GL_EXT_shader_pixel_local_storage");
+
+	if (options.separate_shader_objects && !options.es && options.version < 410)
+		require_extension("GL_ARB_separate_shader_objects");
 }
 
 string CompilerGLSL::compile()
@@ -1495,6 +1498,64 @@ void CompilerGLSL::fixup_image_load_store_access()
 	}
 }
 
+void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionModel model)
+{
+	bool emitted_block = false;
+	for (auto &id : ids)
+	{
+		if (id.get_type() != TypeVariable)
+			continue;
+
+		auto &var = id.get<SPIRVariable>();
+		auto &type = get<SPIRType>(var.basetype);
+		bool block = has_decoration(type.self, DecorationBlock);
+		uint64_t builtins = 0;
+
+		if (var.storage == storage && block && is_builtin_variable(var))
+		{
+			for (auto &m : meta[type.self].members)
+				if (m.builtin)
+					builtins |= 1ull << m.builtin_type;
+		}
+
+		if (!builtins)
+			continue;
+
+		if (emitted_block)
+			SPIRV_CROSS_THROW("Cannot use more than one builtin I/O block.");
+
+		if (storage == StorageClassOutput)
+			statement("out gl_PerVertex");
+		else
+			statement("in gl_PerVertex");
+
+		begin_scope();
+		if (builtins & (1ull << BuiltInPosition))
+			statement("vec4 gl_Position;");
+		if (builtins & (1ull << BuiltInPointSize))
+			statement("float gl_PointSize;");
+		if (builtins & (1ull << BuiltInClipDistance))
+			statement("float gl_ClipDistance[];"); // TODO: Do we need a fixed array size here?
+		if (builtins & (1ull << BuiltInCullDistance))
+			statement("float gl_CullDistance[];"); // TODO: Do we need a fixed array size here?
+
+		bool builtin_array = !type.array.empty();
+		bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
+		if (builtin_array)
+		{
+			if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
+				end_scope_decl(join(to_name(var.self), "[", get_entry_point().output_vertices, "]"));
+			else
+				end_scope_decl(join(to_name(var.self), tessellation ? "[gl_MaxPatchVertices]" : "[]"));
+		}
+		else
+			end_scope_decl();
+		statement("");
+
+		emitted_block = true;
+	}
+}
+
 void CompilerGLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
@@ -1509,6 +1570,27 @@ void CompilerGLSL::emit_resources()
 	// Emit PLS blocks if we have such variables.
 	if (!pls_inputs.empty() || !pls_outputs.empty())
 		emit_pls();
+
+	// Emit custom gl_PerVertex for SSO compatibility.
+	if (options.separate_shader_objects && !options.es)
+	{
+		switch (execution.model)
+		{
+		case ExecutionModelGeometry:
+		case ExecutionModelTessellationControl:
+		case ExecutionModelTessellationEvaluation:
+			emit_declared_builtin_block(StorageClassInput, execution.model);
+			emit_declared_builtin_block(StorageClassOutput, execution.model);
+			break;
+
+		case ExecutionModelVertex:
+			emit_declared_builtin_block(StorageClassOutput, execution.model);
+			break;
+
+		default:
+			break;
+		}
+	}
 
 	bool emitted = false;
 
