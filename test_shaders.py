@@ -121,7 +121,7 @@ def validate_shader(shader, vulkan):
     else:
         subprocess.check_call(['glslangValidator', shader])
 
-def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo, sso):
+def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo, sso, flatten_dim):
     spirv_f, spirv_path = tempfile.mkstemp()
     glsl_f, glsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
@@ -148,6 +148,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--flatten-ubo']
     if sso:
         extra_args += ['--separate-shader-objects']
+    if flatten_dim:
+        extra_args += ['--flatten-multidimensional-arrays']
 
     spirv_cross_path = './spirv-cross'
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path] + extra_args)
@@ -244,6 +246,9 @@ def shader_is_flatten_ubo(shader):
 def shader_is_sso(shader):
     return '.sso.' in shader
 
+def shader_is_flatten_dimensions(shader):
+    return '.flatten_dim.' in shader
+
 def test_shader(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     vulkan = shader_is_vulkan(shader[1])
@@ -254,9 +259,10 @@ def test_shader(stats, shader, update, keep):
     is_legacy = shader_is_legacy(shader[1])
     flatten_ubo = shader_is_flatten_ubo(shader[1])
     sso = shader_is_sso(shader[1])
+    flatten_dim = shader_is_flatten_dimensions(shader[1])
 
     print('Testing shader:', joined_path)
-    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo, sso)
+    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo, sso, flatten_dim)
 
     # Only test GLSL stats if we have a shader following GL semantics.
     if stats and (not vulkan) and (not is_spirv) and (not desktop):

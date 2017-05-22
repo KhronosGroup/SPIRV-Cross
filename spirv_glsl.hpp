@@ -77,7 +77,7 @@ public:
 		// e.g. float foo[a * b * c].
 		// This function does not change the actual SPIRType of any object.
 		// Only the generated code, including declarations of interface variables are changed to be single array dimension.
-		bool flatten_multidimensional_arrays = true;
+		bool flatten_multidimensional_arrays = false;
 
 		enum Precision
 		{

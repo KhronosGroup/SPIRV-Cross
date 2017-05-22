@@ -3530,6 +3530,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool access_chain_is_arrayed = false;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 	bool pending_array_enclose = false;
+	bool dimension_flatten = false;
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -3542,13 +3543,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			// array index.
 			if (options.flatten_multidimensional_arrays && !pending_array_enclose)
 			{
-				expr += "[";
-				pending_array_enclose = true;
+				dimension_flatten = type->array.size() > 1;
+				pending_array_enclose = dimension_flatten;
+				if (pending_array_enclose)
+					expr += "[";
 			}
 
 			assert(type->parent_type);
 			// If we are flattening multidimensional arrays, do manual stride computation.
-			if (options.flatten_multidimensional_arrays)
+			if (options.flatten_multidimensional_arrays && dimension_flatten)
 			{
 				auto &parent_type = get<SPIRType>(type->parent_type);
 
@@ -3570,6 +3573,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 			else
 			{
+				expr += "[";
 				if (index_is_literal)
 					expr += convert_to_string(index);
 				else
@@ -3676,9 +3680,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	if (pending_array_enclose)
 	{
-		SPIRV_CROSS_THROW("Flattening of multidimension arrays were enabled, "
-						  "but the access chain was terminated in the middle of a multidimension array. "
-						  "This is not supported.");
+		SPIRV_CROSS_THROW("Flattening of multidimensional arrays were enabled, "
+		                  "but the access chain was terminated in the middle of a multidimensional array. "
+		                  "This is not supported.");
 	}
 
 	if (need_transpose)
@@ -6087,7 +6091,9 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 			if (!options.es && options.version < 430)
 				require_extension("GL_ARB_arrays_of_arrays");
 			else if (options.es && options.version < 310)
-				SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310.");
+				SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310. "
+				                  "Try using --flatten-multidimensional-arrays or set "
+				                  "options.flatten_multidimensional_arrays to true.");
 		}
 
 		string res;
@@ -6180,6 +6186,9 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 
 string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 {
+	if (options.flatten_multidimensional_arrays && type.array.size() > 1)
+		SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
+
 	auto e = type_to_glsl(type);
 	for (uint32_t i = 0; i < type.array.size(); i++)
 		e += "[]";
