@@ -6186,8 +6186,15 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 
 string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 {
-	if (options.flatten_multidimensional_arrays && type.array.size() > 1)
-		SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
+	if (type.array.size() > 1)
+	{
+		if (options.flatten_multidimensional_arrays)
+			SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
+		else if (!options.es && options.version < 430)
+			require_extension("GL_ARB_arrays_of_arrays");
+		else if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310.");
+	}
 
 	auto e = type_to_glsl(type);
 	for (uint32_t i = 0; i < type.array.size(); i++)
