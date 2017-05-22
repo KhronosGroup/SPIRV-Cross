@@ -1125,6 +1125,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 
 #define AFMOImpl(op, valsrc)                                                                                      \
+	do                                                                                                            \
 	{                                                                                                             \
 		uint32_t result_type = ops[0];                                                                            \
 		uint32_t id = ops[1];                                                                                     \
@@ -1132,40 +1133,48 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t mem_sem = ops[4];                                                                                \
 		uint32_t val = valsrc;                                                                                    \
 		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op "_explicit", mem_sem, mem_sem, false, ptr, val); \
-		break;                                                                                                    \
-	}
+	} while (false)
 
 #define AFMO(op) AFMOImpl(op, ops[5])
 #define AFMIO(op) AFMOImpl(op, 1)
 
 	case OpAtomicIIncrement:
-		AFMIO(add)
+		AFMIO(add);
+		break;
 
 	case OpAtomicIDecrement:
-		AFMIO(sub)
+		AFMIO(sub);
+		break;
 
 	case OpAtomicIAdd:
-		AFMO(add)
+		AFMO(add);
+		break;
 
 	case OpAtomicISub:
-		AFMO(sub)
+		AFMO(sub);
+		break;
 
 	case OpAtomicSMin:
 	case OpAtomicUMin:
-		AFMO(min)
+		AFMO(min);
+		break;
 
 	case OpAtomicSMax:
 	case OpAtomicUMax:
-		AFMO(max)
+		AFMO(max);
+		break;
 
 	case OpAtomicAnd:
-		AFMO(and)
+		AFMO(and);
+		break;
 
 	case OpAtomicOr:
-		AFMO(or)
+		AFMO(or);
+		break;
 
 	case OpAtomicXor:
-		AFMO (xor)
+		AFMO (xor);
+		break;
 
 	// Images
 
@@ -1190,7 +1199,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		// recommpile so that the image type output will include write access
 		if (!img_type.image.is_written)
 		{
-			((SPIRType &)img_type).image.is_written = true;
+			img_type.image.is_written = true;
 			force_recompile = true;
 		}
 
@@ -1287,6 +1296,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 
 #define ImgQry(qrytype)                                                                     \
+	do                                                                                      \
 	{                                                                                       \
 		uint32_t rslt_type_id = ops[0];                                                     \
 		auto &rslt_type = get<SPIRType>(rslt_type_id);                                      \
@@ -1295,45 +1305,47 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		string img_exp = to_expression(img_id);                                             \
 		string expr = type_to_glsl(rslt_type) + "(" + img_exp + ".get_num_" #qrytype "())"; \
 		emit_op(rslt_type_id, id, expr, should_forward(img_id));                            \
-		break;                                                                              \
-	}
+	} while (false)
 
 	case OpImageQueryLevels:
-		ImgQry(mip_levels)
+		ImgQry(mip_levels);
+		break;
 
-		    case OpImageQuerySamples : ImgQry(samples)
+	case OpImageQuerySamples:
+		ImgQry(samples);
+		break;
 
-		                               // Casting
-		                               case OpQuantizeToF16:
+	// Casting
+	case OpQuantizeToF16:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t arg = ops[2];
+
+		string exp;
+		auto &type = get<SPIRType>(result_type);
+
+		switch (type.vecsize)
 		{
-			uint32_t result_type = ops[0];
-			uint32_t id = ops[1];
-			uint32_t arg = ops[2];
-
-			string exp;
-			auto &type = get<SPIRType>(result_type);
-
-			switch (type.vecsize)
-			{
-			case 1:
-				exp = join("float(half(", to_expression(arg), "))");
-				break;
-			case 2:
-				exp = join("float2(half2(", to_expression(arg), "))");
-				break;
-			case 3:
-				exp = join("float3(half3(", to_expression(arg), "))");
-				break;
-			case 4:
-				exp = join("float4(half4(", to_expression(arg), "))");
-				break;
-			default:
-				SPIRV_CROSS_THROW("Illegal argument to OpQuantizeToF16.");
-			}
-
-			emit_op(result_type, id, exp, should_forward(arg));
+		case 1:
+			exp = join("float(half(", to_expression(arg), "))");
 			break;
+		case 2:
+			exp = join("float2(half2(", to_expression(arg), "))");
+			break;
+		case 3:
+			exp = join("float3(half3(", to_expression(arg), "))");
+			break;
+		case 4:
+			exp = join("float4(half4(", to_expression(arg), "))");
+			break;
+		default:
+			SPIRV_CROSS_THROW("Illegal argument to OpQuantizeToF16.");
 		}
+
+		emit_op(result_type, id, exp, should_forward(arg));
+		break;
+	}
 
 	// OpOuterProduct
 
@@ -1342,10 +1354,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 }
-
-void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
-                         uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
-                         bool op1_is_pointer = false, uint32_t op2 = 0);
 
 // Emits one of the atomic functions. In MSL, the atomic functions operate on pointers
 void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
@@ -1365,7 +1373,6 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	auto &type = expression_type(obj);
 	exp += "(volatile ";
 	exp += "device";
-	//    exp += get_argument_address_space(obj);
 	exp += " atomic_";
 	exp += type_to_glsl(type);
 	exp += "*)";

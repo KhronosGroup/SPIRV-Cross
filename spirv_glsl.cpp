@@ -2802,7 +2802,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	auto &imgtype = get<SPIRType>(type.self);
 
 	// Mark that this shader reads from this image
-	((SPIRType &)imgtype).image.is_read = true;
+	imgtype.image.is_read = true;
 
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
