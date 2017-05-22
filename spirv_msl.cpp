@@ -969,9 +969,7 @@ void CompilerMSL::emit_resources()
 			    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)) &&
 			    !is_hidden_variable(var))
 			{
-				if (options.pad_and_pack_uniform_structs)
-					align_struct(type);
-
+				align_struct(type);
 				emit_struct(type);
 			}
 		}
