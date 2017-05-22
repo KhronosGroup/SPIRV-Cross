@@ -1543,6 +1543,12 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
 		if (builtin_array)
 		{
+			// Make sure the array has a supported name in the code.
+			if (storage == StorageClassOutput)
+				set_name(var.self, "gl_out");
+			else if (storage == StorageClassInput)
+				set_name(var.self, "gl_in");
+
 			if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
 				end_scope_decl(join(to_name(var.self), "[", get_entry_point().output_vertices, "]"));
 			else
