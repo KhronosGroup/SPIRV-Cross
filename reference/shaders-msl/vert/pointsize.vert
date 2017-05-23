@@ -20,7 +20,7 @@ struct main0_out
     float4 color [[user(locn0)]];
     float4 gl_Position [[position]];
     float gl_PointSize [[point_size]];
-    float gl_ClipDistance[1] /* [[clip_distance]] built-in not yet supported under Metal. */;
+    float gl_ClipDistance [[clip_distance]] [1];
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant params& _19 [[buffer(0)]])

@@ -1916,13 +1916,16 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	string pack_pfx = member_is_packed_type(type, index) ? "packed_" : "";
 
 	statement(pack_pfx, type_to_glsl(membertype), " ", qualifier, to_member_name(type, index),
-	          type_to_array_glsl(membertype), member_attribute_qualifier(type, index), ";");
+	          member_attribute_qualifier(type, index), type_to_array_glsl(membertype), ";");
 }
 
 // Return a MSL qualifier for the specified function attribute member
 string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t index)
 {
 	auto &execution = get_entry_point();
+
+	uint32_t mbr_type_id = type.member_types[index];
+	auto &mbr_type = get<SPIRType>(mbr_type_id);
 
 	BuiltIn builtin;
 	bool is_builtin = is_member_builtin(type, index, &builtin);
@@ -1956,9 +1959,6 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		{
 			switch (builtin)
 			{
-			case BuiltInClipDistance:
-				return " /* [[clip_distance]] built-in not yet supported under Metal. */";
-
 			case BuiltInPointSize: // Must output only if really rendering points
 				// SPIR-V might declare PointSize as a builtin even though it's not really used.
 				// In some cases PointSize builtin may be written without Point topology.
@@ -1970,7 +1970,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 
 			case BuiltInPosition:
 			case BuiltInLayer:
-				return string(" [[") + builtin_qualifier(builtin) + "]]";
+			case BuiltInClipDistance:
+				return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
 
 			default:
 				return "";
