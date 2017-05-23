@@ -18,7 +18,7 @@ struct main0_out
 {
     float4 VertexOut_color [[user(locn0)]];
     float4 gl_Position [[position]];
-    float gl_PointSize [[point_size]];
+    float gl_PointSize;
     float gl_ClipDistance[1] /* [[clip_distance]] built-in not yet supported under Metal. */;
 };
 

@@ -16,7 +16,7 @@ struct main0_in
 struct main0_out
 {
     float4 gl_Position [[position]];
-    float gl_PointSize [[point_size]];
+    float gl_PointSize;
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _20 [[buffer(0)]])
