@@ -1384,10 +1384,9 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				// In some cases PointSize builtin may be written without Point topology.
 				// This is not an issue on GL/Vulkan, but it is on Metal, so we also have some way to forcefully disable
 				// this builtin.
-				if (active_output_builtins & (1ull << BuiltInPointSize))
-					return options.enable_point_size_builtin ? (string(" [[") + builtin_qualifier(builtin) + "]]") : "";
-				else
-					return "";
+				return (active_output_builtins & (1ull << BuiltInPointSize)) && options.enable_point_size_builtin ?
+				           (string(" [[") + builtin_qualifier(builtin) + "]]") :
+				           "";
 
 			case BuiltInPosition:
 			case BuiltInLayer:
