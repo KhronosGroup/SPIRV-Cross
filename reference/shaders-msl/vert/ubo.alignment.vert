@@ -24,7 +24,7 @@ struct main0_out
     float3 vNormal [[user(locn1)]];
     float3 vColor [[user(locn2)]];
     float4 gl_Position [[position]];
-    float gl_PointSize [[point_size]];
+    float gl_PointSize;
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _18 [[buffer(0)]])
