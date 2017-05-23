@@ -3483,8 +3483,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 			else
 			{
-				expr += ".";
-				expr += to_member_name(*type, index);
+				// If the member has a qualified name, use it as the entire chain
+				string qual_mbr_name = get_member_qualified_name(type->self, index);
+				if (!qual_mbr_name.empty())
+					expr = qual_mbr_name;
+				else
+				{
+					expr += ".";
+					expr += to_member_name(*type, index);
+				}
 			}
 
 			if (member_is_packed_type(*type, index))

@@ -923,8 +923,34 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 
 void Compiler::set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name)
 {
-	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
-	meta.at(id).members[index].qualified_alias = name;
+	// Tunnel through pointers to get to the base type
+	auto *p_type = &get<SPIRType>(id);
+	while (p_type->pointer)
+		p_type = &get<SPIRType>(p_type->parent_type);
+
+	uint32_t type_id = p_type->self;
+
+	meta.at(type_id).members.resize(max(meta[type_id].members.size(), size_t(index) + 1));
+	meta.at(type_id).members[index].qualified_alias = name;
+}
+
+const std::string &Compiler::get_member_qualified_name(uint32_t id, uint32_t index) const
+{
+	// Tunnel through pointers to get to the base type
+	auto *p_type = &get<SPIRType>(id);
+	while (p_type->pointer)
+		p_type = &get<SPIRType>(p_type->parent_type);
+
+	uint32_t type_id = p_type->self;
+
+	auto &m = meta.at(type_id);
+	if (index >= m.members.size())
+	{
+		static string empty;
+		return empty;
+	}
+
+	return m.members[index].qualified_alias;
 }
 
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
