@@ -170,6 +170,10 @@ public:
 	// Sets the member identifier for OpTypeStruct ID, member number "index".
 	void set_member_name(uint32_t id, uint32_t index, const std::string &name);
 
+	// Returns the qualified member identifier for OpTypeStruct ID, member number "index",
+	// or an empty string if no qualified alias exists
+	const std::string &get_member_qualified_name(uint32_t id, uint32_t index) const;
+
 	// Sets the qualified member identifier for OpTypeStruct ID, member number "index".
 	void set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name);
 

@@ -11,7 +11,7 @@ struct myBlock
     float b[1];
 };
 
-// Support GLSL mod(), which is slightly different than Metal fmod()
+// Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
 template<typename Tx, typename Ty>
 Tx mod(Tx x, Ty y)
 {

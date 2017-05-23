@@ -442,7 +442,6 @@ struct CLIArguments
 	uint32_t iterations = 1;
 	bool cpp = false;
 	bool msl = false;
-	bool msl_pack_ubos = true;
 	bool hlsl = false;
 	bool hlsl_compat = false;
 	bool vulkan_semantics = false;
@@ -456,7 +455,7 @@ static void print_help()
 	                "[--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] "
 	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
 	                "[--cpp] [--cpp-interface-name <name>] "
-	                "[--msl] [--msl-no-pack-ubos] "
+	                "[--msl] "
 	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
@@ -579,7 +578,6 @@ int main(int argc, char *argv[])
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
-	cbs.add("--msl-no-pack-ubos", [&args](CLIParser &) { args.msl_pack_ubos = false; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
@@ -651,7 +649,6 @@ int main(int argc, char *argv[])
 
 		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
 		auto msl_opts = msl_comp->get_options();
-		msl_opts.pad_and_pack_uniform_structs = args.msl_pack_ubos;
 		msl_comp->set_options(msl_opts);
 	}
 	else if (args.hlsl)

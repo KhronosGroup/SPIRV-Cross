@@ -2778,6 +2778,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		break;
 
 	case OpImageFetch:
+	case OpImageRead: // Reads == fetches in Metal (other langs will not get here)
 		opt = &ops[4];
 		length -= 4;
 		fetch = true;
@@ -2796,7 +2797,13 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		break;
 	}
 
-	auto &imgtype = expression_type(img);
+	// Bypass pointers because we need the real image struct
+	auto &type = expression_type(img);
+	auto &imgtype = get<SPIRType>(type.self);
+
+	// Mark that this shader reads from this image
+	imgtype.image.is_read = true;
+
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
 	{
@@ -3476,8 +3483,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 			else
 			{
-				expr += ".";
-				expr += to_member_name(*type, index);
+				// If the member has a qualified name, use it as the entire chain
+				string qual_mbr_name = get_member_qualified_name(type->self, index);
+				if (!qual_mbr_name.empty())
+					expr = qual_mbr_name;
+				else
+				{
+					expr += ".";
+					expr += to_member_name(*type, index);
+				}
 			}
 
 			if (member_is_packed_type(*type, index))

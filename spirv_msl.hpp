@@ -78,7 +78,6 @@ public:
 	{
 		bool flip_vert_y = false;
 		bool enable_point_size_builtin = true;
-		bool pad_and_pack_uniform_structs = false;
 		std::string entry_point_name;
 	};
 
@@ -91,6 +90,22 @@ public:
 	{
 		options = opts;
 	}
+
+	// An enum of SPIR-V functions that are implemented in additional
+	// source code that is added to the shader if necessary.
+	enum SPVFuncImpl
+	{
+		SPVFuncImplNone,
+		SPVFuncImplMod,
+		SPVFuncImplRadians,
+		SPVFuncImplDegrees,
+		SPVFuncImplFindILsb,
+		SPVFuncImplFindSMsb,
+		SPVFuncImplFindUMsb,
+		SPVFuncImplInverse2x2,
+		SPVFuncImplInverse3x3,
+		SPVFuncImplInverse4x4,
+	};
 
 	// Constructs an instance to compile the SPIR-V code into Metal Shading Language,
 	// using the configuration parameters, if provided:
@@ -149,8 +164,7 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
-
-	std::string get_argument_address_space(const SPIRVariable &argument);
+	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 
 	void preprocess_op_codes();
 	void emit_custom_functions();
@@ -196,15 +210,23 @@ protected:
 	void align_struct(SPIRType &ib_type);
 	bool is_member_packable(SPIRType &ib_type, uint32_t index);
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
+	SPVFuncImpl get_spv_func_impl(spv::Op opcode, const uint32_t *args);
+	std::string get_argument_address_space(const SPIRVariable &argument);
+	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
+	                         uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
+	                         bool op1_is_pointer = false, uint32_t op2 = 0);
+	const char *get_memory_order(uint32_t spv_mem_sem);
+	void add_pragma_line(const std::string &line);
 	bool skip_argument(uint32_t id) const override;
 
 	Options options;
 	std::unordered_map<std::string, std::string> func_name_overrides;
 	std::unordered_map<std::string, std::string> var_name_overrides;
-	std::set<uint32_t> custom_function_ops;
+	std::set<SPVFuncImpl> spv_function_implementations;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
 	std::unordered_map<MSLStructMemberKey, uint32_t> struct_member_padding;
+	std::vector<std::string> pragma_lines;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
@@ -230,6 +252,7 @@ protected:
 
 		CompilerMSL &compiler;
 		bool suppress_missing_prototypes = false;
+		bool uses_atomics = false;
 	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
