@@ -406,12 +406,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			uint32_t mbr_idx = 0;
 			for (auto &mbr_type_id : type.member_types)
 			{
+				BuiltIn builtin;
+				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
+
 				auto &mbr_type = get<SPIRType>(mbr_type_id);
 				if (is_matrix(mbr_type))
-				{
 					exclude_member_from_stage_in(type, mbr_idx);
-				}
-				else
+
+				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					// Add a reference to the member to the interface struct.
 					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -434,8 +436,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					}
 
 					// Mark the member as builtin if needed
-					BuiltIn builtin;
-					if (is_member_builtin(type, mbr_idx, &builtin))
+					if (is_builtin)
 					{
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
 						if (builtin == BuiltInPosition)
@@ -451,11 +452,13 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		         type.basetype == SPIRType::Float || type.basetype == SPIRType::Double ||
 		         type.basetype == SPIRType::Boolean)
 		{
+			bool is_builtin = is_builtin_variable(*p_var);
+			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
+
 			if (is_matrix(type))
-			{
 				exclude_from_stage_in(*p_var);
-			}
-			else
+
+			else if (!is_builtin || has_active_builtin(builtin, storage))
 			{
 				// Add a reference to the variable type to the interface struct.
 				uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -478,9 +481,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				}
 
 				// Mark the member as builtin if needed
-				if (is_builtin_variable(*p_var))
+				if (is_builtin)
 				{
-					uint32_t builtin = get_decoration(p_var->self, DecorationBuiltIn);
 					set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
 					if (builtin == BuiltInPosition)
 						qual_pos_var_name = qual_var_name;
@@ -1959,14 +1961,12 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		{
 			switch (builtin)
 			{
-			case BuiltInPointSize: // Must output only if really rendering points
-				// SPIR-V might declare PointSize as a builtin even though it's not really used.
-				// In some cases PointSize builtin may be written without Point topology.
-				// This is not an issue on GL/Vulkan, but it is on Metal, so we also have some way to forcefully disable
-				// this builtin.
-				return (active_output_builtins & (1ull << BuiltInPointSize)) && options.enable_point_size_builtin ?
-				           (string(" [[") + builtin_qualifier(builtin) + "]]") :
-				           "";
+			case BuiltInPointSize:
+				// Only mark the PointSize builtin if really rendering points.
+				// Some shaders may include a PointSize builtin even when used to render
+				// non-point topologies, and Metal will reject this builtin when compiling
+				// the shader into a render pipeline that uses a non-point topology.
+				return options.enable_point_size_builtin ? (string(" [[") + builtin_qualifier(builtin) + "]]") : "";
 
 			case BuiltInPosition:
 			case BuiltInLayer:

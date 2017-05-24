@@ -3409,6 +3409,25 @@ void Compiler::update_active_builtins()
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 }
 
+// Returns whether this shader uses a builtin of the storage class
+bool Compiler::has_active_builtin(BuiltIn builtin, StorageClass storage)
+{
+	uint64_t flags;
+	switch (storage)
+	{
+	case StorageClassInput:
+		flags = active_input_builtins;
+		break;
+	case StorageClassOutput:
+		flags = active_output_builtins;
+		break;
+
+	default:
+		return false;
+	}
+	return flags & (1ull << builtin);
+}
+
 void Compiler::analyze_sampler_comparison_states()
 {
 	CombinedImageSamplerUsageHandler handler(*this);

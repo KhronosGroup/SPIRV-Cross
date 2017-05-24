@@ -640,6 +640,7 @@ protected:
 	uint64_t active_output_builtins = 0;
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.
 	void update_active_builtins();
+	bool has_active_builtin(spv::BuiltIn builtin, spv::StorageClass storage);
 
 	void analyze_parameter_preservation(
 	    SPIRFunction &entry, const CFG &cfg,

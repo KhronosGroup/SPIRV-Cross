@@ -27,7 +27,6 @@ struct main0_out
     int2 vMSB [[user(locn3)]];
     int2 vLSB [[user(locn4)]];
     float4 gl_Position [[position]];
-    float gl_PointSize;
 };
 
 // Implementation of the GLSL radians() function

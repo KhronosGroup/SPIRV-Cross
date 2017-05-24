@@ -26,7 +26,6 @@ struct main0_out
 {
     float4 vColor [[user(locn0)]];
     float4 gl_Position [[position]];
-    float gl_PointSize;
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _21 [[buffer(0)]])

@@ -30,7 +30,6 @@ struct main0_out
     float4 oB [[user(locn4)]];
     float4 oA [[user(locn5)]];
     float4 gl_Position [[position]];
-    float gl_PointSize;
 };
 
 vertex main0_out main0(constant UBO& _22 [[buffer(0)]])
