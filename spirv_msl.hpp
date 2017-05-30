@@ -149,8 +149,8 @@ protected:
 	void emit_fixup() override;
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "") override;
-	std::string type_to_glsl(const SPIRType &type) override;
-	std::string image_type_glsl(const SPIRType &type) override;
+	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
+	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin) override;
 	std::string constant_expression(const SPIRConstant &c) override;
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
@@ -165,6 +165,7 @@ protected:
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
+	bool skip_argument(uint32_t id) const override;
 
 	void preprocess_op_codes();
 	void emit_custom_functions();
@@ -217,7 +218,6 @@ protected:
 	                         bool op1_is_pointer = false, uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
-	bool skip_argument(uint32_t id) const override;
 
 	Options options;
 	std::unordered_map<std::string, std::string> func_name_overrides;
