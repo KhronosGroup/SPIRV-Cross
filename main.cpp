@@ -192,7 +192,7 @@ static bool write_string_to_file(const char *path, const char *string)
 	FILE *file = fopen(path, "w");
 	if (!file)
 	{
-		fprintf(file, "Failed to write file: %s\n", path);
+		fprintf(stderr, "Failed to write file: %s\n", path);
 		return false;
 	}
 
