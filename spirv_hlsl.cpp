@@ -1398,7 +1398,13 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	expr += texop;
 	expr += "(";
-	if (op != OpImageFetch && (options.shader_model >= 40))
+	if (options.shader_model < 40)
+	{
+		if (combined_image)
+			SPIRV_CROSS_THROW("Separate images/samplers are not supported in HLSL shader model 2/3.");
+		expr += to_expression(img);
+	}
+	else if (op != OpImageFetch)
 	{
 		string sampler_expr;
 		if (combined_image)
