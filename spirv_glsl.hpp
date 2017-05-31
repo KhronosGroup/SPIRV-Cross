@@ -73,6 +73,12 @@ public:
 		// (EXT_shader_io_blocks) which makes things a bit more fuzzy.
 		bool separate_shader_objects = false;
 
+		// Flattens multidimensional arrays, e.g. float foo[a][b][c] into single-dimensional arrays,
+		// e.g. float foo[a * b * c].
+		// This function does not change the actual SPIRType of any object.
+		// Only the generated code, including declarations of interface variables are changed to be single array dimension.
+		bool flatten_multidimensional_arrays = false;
+
 		enum Precision
 		{
 			DontCare,
@@ -359,6 +365,7 @@ protected:
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id);
 	std::string to_enclosed_expression(uint32_t id);
+	std::string enclose_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);

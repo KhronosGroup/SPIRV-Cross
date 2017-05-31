@@ -1816,10 +1816,8 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 	expr.erase(begin(expr));
 }
 
-// Just like to_expression except that we enclose the expression inside parentheses if needed.
-string CompilerGLSL::to_enclosed_expression(uint32_t id)
+string CompilerGLSL::enclose_expression(const string &expr)
 {
-	auto expr = to_expression(id);
 	bool need_parens = false;
 	uint32_t paren_count = 0;
 	for (auto c : expr)
@@ -1846,6 +1844,12 @@ string CompilerGLSL::to_enclosed_expression(uint32_t id)
 		return join('(', expr, ')');
 	else
 		return expr;
+}
+
+// Just like to_expression except that we enclose the expression inside parentheses if needed.
+string CompilerGLSL::to_enclosed_expression(uint32_t id)
+{
+	return enclose_expression(to_expression(id));
 }
 
 string CompilerGLSL::to_expression(uint32_t id)
@@ -3525,6 +3529,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	bool access_chain_is_arrayed = false;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
+	bool pending_array_enclose = false;
+	bool dimension_flatten = false;
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -3533,14 +3539,50 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Arrays
 		if (!type->array.empty())
 		{
-			expr += "[";
-			if (index_is_literal)
-				expr += convert_to_string(index);
-			else
-				expr += to_expression(index);
-			expr += "]";
+			// If we are flattening multidimensional arrays, only create opening bracket on first
+			// array index.
+			if (options.flatten_multidimensional_arrays && !pending_array_enclose)
+			{
+				dimension_flatten = type->array.size() > 1;
+				pending_array_enclose = dimension_flatten;
+				if (pending_array_enclose)
+					expr += "[";
+			}
 
 			assert(type->parent_type);
+			// If we are flattening multidimensional arrays, do manual stride computation.
+			if (options.flatten_multidimensional_arrays && dimension_flatten)
+			{
+				auto &parent_type = get<SPIRType>(type->parent_type);
+
+				if (index_is_literal)
+					expr += convert_to_string(index);
+				else
+					expr += to_enclosed_expression(index);
+
+				for (auto j = uint32_t(parent_type.array.size()); j; j--)
+				{
+					expr += " * ";
+					expr += enclose_expression(to_array_size(parent_type, j - 1));
+				}
+
+				if (parent_type.array.empty())
+					pending_array_enclose = false;
+				else
+					expr += " + ";
+			}
+			else
+			{
+				expr += "[";
+				if (index_is_literal)
+					expr += convert_to_string(index);
+				else
+					expr += to_expression(index);
+			}
+
+			if (!pending_array_enclose)
+				expr += "]";
+
 			type = &get<SPIRType>(type->parent_type);
 
 			access_chain_is_arrayed = true;
@@ -3634,6 +3676,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
+	}
+
+	if (pending_array_enclose)
+	{
+		SPIRV_CROSS_THROW("Flattening of multidimensional arrays were enabled, "
+		                  "but the access chain was terminated in the middle of a multidimensional array. "
+		                  "This is not supported.");
 	}
 
 	if (need_transpose)
@@ -6022,14 +6071,40 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 	if (type.array.empty())
 		return "";
 
-	string res;
-	for (auto i = uint32_t(type.array.size()); i; i--)
+	if (options.flatten_multidimensional_arrays)
 	{
+		string res;
 		res += "[";
-		res += to_array_size(type, i - 1);
+		for (auto i = uint32_t(type.array.size()); i; i--)
+		{
+			res += enclose_expression(to_array_size(type, i - 1));
+			if (i > 1)
+				res += " * ";
+		}
 		res += "]";
+		return res;
 	}
-	return res;
+	else
+	{
+		if (type.array.size() > 1)
+		{
+			if (!options.es && options.version < 430)
+				require_extension("GL_ARB_arrays_of_arrays");
+			else if (options.es && options.version < 310)
+				SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310. "
+				                  "Try using --flatten-multidimensional-arrays or set "
+				                  "options.flatten_multidimensional_arrays to true.");
+		}
+
+		string res;
+		for (auto i = uint32_t(type.array.size()); i; i--)
+		{
+			res += "[";
+			res += to_array_size(type, i - 1);
+			res += "]";
+		}
+		return res;
+	}
 }
 
 string CompilerGLSL::image_type_glsl(const SPIRType &type)
@@ -6111,6 +6186,16 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type)
 
 string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 {
+	if (type.array.size() > 1)
+	{
+		if (options.flatten_multidimensional_arrays)
+			SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
+		else if (!options.es && options.version < 430)
+			require_extension("GL_ARB_arrays_of_arrays");
+		else if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310.");
+	}
+
 	auto e = type_to_glsl(type);
 	for (uint32_t i = 0; i < type.array.size(); i++)
 		e += "[]";
