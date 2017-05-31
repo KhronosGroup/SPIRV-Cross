@@ -67,6 +67,12 @@ public:
 		// Mostly useful for debugging SPIR-V files.
 		bool vulkan_semantics = false;
 
+		// If true, gl_PerVertex is explicitly redeclared in vertex, geometry and tessellation shaders.
+		// The members of gl_PerVertex is determined by which built-ins are declared by the shader.
+		// This option is ignored in ES versions, as redeclaration in ES is not required, and it depends on a different extension
+		// (EXT_shader_io_blocks) which makes things a bit more fuzzy.
+		bool separate_shader_objects = false;
+
 		enum Precision
 		{
 			DontCare,
@@ -284,6 +290,7 @@ protected:
 	void emit_buffer_block_native(const SPIRVariable &var);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
 	void emit_buffer_block_flattened(const SPIRVariable &type);
+	void emit_declared_builtin_block(spv::StorageClass storage, spv::ExecutionModel model);
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);

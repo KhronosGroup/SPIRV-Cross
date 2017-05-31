@@ -432,6 +432,7 @@ struct CLIArguments
 	bool force_temporary = false;
 	bool flatten_ubo = false;
 	bool fixup = false;
+	bool sso = false;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -457,6 +458,7 @@ static void print_help()
 	                "[--cpp] [--cpp-interface-name <name>] "
 	                "[--msl] "
 	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
+	                "[--separate-shader-objects]"
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
@@ -583,6 +585,7 @@ int main(int argc, char *argv[])
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
+	cbs.add("--separate-shader-objects", [&args](CLIParser &) { args.sso = true; });
 	cbs.add("--remap", [&args](CLIParser &parser) {
 		string src = parser.next_string();
 		string dst = parser.next_string();
@@ -686,6 +689,7 @@ int main(int argc, char *argv[])
 	if (args.set_es)
 		opts.es = args.es;
 	opts.force_temporary = args.force_temporary;
+	opts.separate_shader_objects = args.sso;
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.cfg_analysis = args.cfg_analysis;
