@@ -1179,10 +1179,18 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	// Images
 
-	// Reads == fetches in Metal
+	// Reads == Fetches in Metal
 	case OpImageRead:
+	{
+		// Mark that this shader reads from this image
+		uint32_t img_id = ops[2];
+		auto *p_var = maybe_get_backing_variable(img_id);
+		if (p_var)
+			unset_decoration(p_var->self, DecorationNonReadable);
+
 		emit_texture_op(instruction);
 		break;
+	}
 
 	case OpImageWrite:
 	{
@@ -2490,7 +2498,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	// For unsampled images, append the sample/read/write access qualifier.
 	// For kernel images, the access qualifier my be supplied directly by SPIR-V.
 	// Otherwise it may be set based on whether the image is read from or written to within the shader.
-	if (type.basetype == SPIRType::Image)
+	if (type.basetype == SPIRType::Image && type.image.sampled == 2)
 	{
 		switch (img_type.access)
 		{

@@ -2893,11 +2893,6 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	auto &type = expression_type(img);
 	auto &imgtype = get<SPIRType>(type.self);
 
-	// Mark that this shader reads from this image
-	auto *p_var = maybe_get_backing_variable(img);
-	if (p_var)
-		unset_decoration(p_var->self, DecorationNonReadable);
-
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
 	{
