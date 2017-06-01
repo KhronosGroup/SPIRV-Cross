@@ -67,6 +67,18 @@ public:
 		// Mostly useful for debugging SPIR-V files.
 		bool vulkan_semantics = false;
 
+		// If true, gl_PerVertex is explicitly redeclared in vertex, geometry and tessellation shaders.
+		// The members of gl_PerVertex is determined by which built-ins are declared by the shader.
+		// This option is ignored in ES versions, as redeclaration in ES is not required, and it depends on a different extension
+		// (EXT_shader_io_blocks) which makes things a bit more fuzzy.
+		bool separate_shader_objects = false;
+
+		// Flattens multidimensional arrays, e.g. float foo[a][b][c] into single-dimensional arrays,
+		// e.g. float foo[a * b * c].
+		// This function does not change the actual SPIRType of any object.
+		// Only the generated code, including declarations of interface variables are changed to be single array dimension.
+		bool flatten_multidimensional_arrays = false;
+
 		enum Precision
 		{
 			DontCare,
@@ -284,6 +296,7 @@ protected:
 	void emit_buffer_block_native(const SPIRVariable &var);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
 	void emit_buffer_block_flattened(const SPIRVariable &type);
+	void emit_declared_builtin_block(spv::StorageClass storage, spv::ExecutionModel model);
 	void emit_push_constant_block_vulkan(const SPIRVariable &var);
 	void emit_push_constant_block_glsl(const SPIRVariable &var);
 	void emit_interface_block(const SPIRVariable &type);
@@ -352,6 +365,7 @@ protected:
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id);
 	std::string to_enclosed_expression(uint32_t id);
+	std::string enclose_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);

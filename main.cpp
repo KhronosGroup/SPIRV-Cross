@@ -192,7 +192,7 @@ static bool write_string_to_file(const char *path, const char *string)
 	FILE *file = fopen(path, "w");
 	if (!file)
 	{
-		fprintf(file, "Failed to write file: %s\n", path);
+		fprintf(stderr, "Failed to write file: %s\n", path);
 		return false;
 	}
 
@@ -432,6 +432,7 @@ struct CLIArguments
 	bool force_temporary = false;
 	bool flatten_ubo = false;
 	bool fixup = false;
+	bool sso = false;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -445,6 +446,7 @@ struct CLIArguments
 	bool hlsl = false;
 	bool hlsl_compat = false;
 	bool vulkan_semantics = false;
+	bool flatten_multidimensional_arrays = false;
 	bool remove_unused = false;
 	bool cfg_analysis = true;
 };
@@ -457,8 +459,10 @@ static void print_help()
 	                "[--cpp] [--cpp-interface-name <name>] "
 	                "[--msl] "
 	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
+	                "[--separate-shader-objects]"
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
+	                "[--flatten-multidimensional-arrays] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
 }
 
@@ -581,8 +585,10 @@ int main(int argc, char *argv[])
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
+	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
+	cbs.add("--separate-shader-objects", [&args](CLIParser &) { args.sso = true; });
 	cbs.add("--remap", [&args](CLIParser &parser) {
 		string src = parser.next_string();
 		string dst = parser.next_string();
@@ -686,6 +692,8 @@ int main(int argc, char *argv[])
 	if (args.set_es)
 		opts.es = args.es;
 	opts.force_temporary = args.force_temporary;
+	opts.separate_shader_objects = args.sso;
+	opts.flatten_multidimensional_arrays = args.flatten_multidimensional_arrays;
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.cfg_analysis = args.cfg_analysis;
