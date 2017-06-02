@@ -2893,9 +2893,6 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	auto &type = expression_type(img);
 	auto &imgtype = get<SPIRType>(type.self);
 
-	// Mark that this shader reads from this image
-	imgtype.image.is_read = true;
-
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
 	{
@@ -6107,7 +6104,7 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
-string CompilerGLSL::image_type_glsl(const SPIRType &type)
+string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	string res;
@@ -6202,7 +6199,10 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 	return e;
 }
 
-string CompilerGLSL::type_to_glsl(const SPIRType &type)
+// The optional id parameter indicates the object whose type we are trying
+// to find the description for. It is optional. Most type descriptions do not
+// depend on a specific object's use of that type.
+string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 
@@ -6217,7 +6217,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type)
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
-		return image_type_glsl(type);
+		return image_type_glsl(type, id);
 
 	case SPIRType::Sampler:
 		// This is a hacky workaround. The sampler type in SPIR-V doesn't actually signal this distinction,

@@ -296,10 +296,9 @@ struct SPIRType : IVariant
 		bool depth;
 		bool arrayed;
 		bool ms;
-		bool is_read = false;       // TODO: temp hack to be replaced with var-based type output
-		bool is_written = false;    // TODO: temp hack to be replaced with var-based type output
 		uint32_t sampled;
 		spv::ImageFormat format;
+		spv::AccessQualifier access;
 	} image;
 
 	// Structs can be declared multiple times if they are used as part of interface blocks.

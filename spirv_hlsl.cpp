@@ -154,7 +154,10 @@ string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 		return image_type_hlsl_modern(type);
 }
 
-string CompilerHLSL::type_to_glsl(const SPIRType &type)
+// The optional id parameter indicates the object whose type we are trying
+// to find the description for. It is optional. Most type descriptions do not
+// depend on a specific object's use of that type.
+string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t /* id */)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 

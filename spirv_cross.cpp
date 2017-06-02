@@ -1468,6 +1468,11 @@ void Compiler::parse(const Instruction &instruction)
 		type.image.ms = ops[5] != 0;
 		type.image.sampled = ops[6];
 		type.image.format = static_cast<ImageFormat>(ops[7]);
+		type.image.access = (length >= 9) ? static_cast<AccessQualifier>(ops[8]) : AccessQualifierMax;
+
+		if (type.image.sampled == 0)
+			SPIRV_CROSS_THROW("OpTypeImage Sampled parameter must not be zero.");
+
 		break;
 	}
 
@@ -3407,6 +3412,25 @@ void Compiler::update_active_builtins()
 	active_output_builtins = 0;
 	ActiveBuiltinHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+}
+
+// Returns whether this shader uses a builtin of the storage class
+bool Compiler::has_active_builtin(BuiltIn builtin, StorageClass storage)
+{
+	uint64_t flags;
+	switch (storage)
+	{
+	case StorageClassInput:
+		flags = active_input_builtins;
+		break;
+	case StorageClassOutput:
+		flags = active_output_builtins;
+		break;
+
+	default:
+		return false;
+	}
+	return flags & (1ull << builtin);
 }
 
 void Compiler::analyze_sampler_comparison_states()

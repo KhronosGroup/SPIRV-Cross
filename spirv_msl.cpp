@@ -85,6 +85,7 @@ string CompilerMSL::compile()
 	struct_member_padding.clear();
 
 	update_active_builtins();
+	fixup_image_load_store_access();
 
 	// Preprocess OpCodes to extract the need to output additional header content
 	preprocess_op_codes();
@@ -406,12 +407,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			uint32_t mbr_idx = 0;
 			for (auto &mbr_type_id : type.member_types)
 			{
+				BuiltIn builtin;
+				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
+
 				auto &mbr_type = get<SPIRType>(mbr_type_id);
 				if (is_matrix(mbr_type))
-				{
 					exclude_member_from_stage_in(type, mbr_idx);
-				}
-				else
+
+				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					// Add a reference to the member to the interface struct.
 					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -434,8 +437,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					}
 
 					// Mark the member as builtin if needed
-					BuiltIn builtin;
-					if (is_member_builtin(type, mbr_idx, &builtin))
+					if (is_builtin)
 					{
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
 						if (builtin == BuiltInPosition)
@@ -451,11 +453,13 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		         type.basetype == SPIRType::Float || type.basetype == SPIRType::Double ||
 		         type.basetype == SPIRType::Boolean)
 		{
+			bool is_builtin = is_builtin_variable(*p_var);
+			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
+
 			if (is_matrix(type))
-			{
 				exclude_from_stage_in(*p_var);
-			}
-			else
+
+			else if (!is_builtin || has_active_builtin(builtin, storage))
 			{
 				// Add a reference to the variable type to the interface struct.
 				uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -478,9 +482,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				}
 
 				// Mark the member as builtin if needed
-				if (is_builtin_variable(*p_var))
+				if (is_builtin)
 				{
-					uint32_t builtin = get_decoration(p_var->self, DecorationBuiltIn);
 					set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
 					if (builtin == BuiltInPosition)
 						qual_pos_var_name = qual_var_name;
@@ -1176,10 +1179,18 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	// Images
 
-	// Reads == fetches in Metal
+	// Reads == Fetches in Metal
 	case OpImageRead:
+	{
+		// Mark that this shader reads from this image
+		uint32_t img_id = ops[2];
+		auto *p_var = maybe_get_backing_variable(img_id);
+		if (p_var)
+			unset_decoration(p_var->self, DecorationNonReadable);
+
 		emit_texture_op(instruction);
 		break;
+	}
 
 	case OpImageWrite:
 	{
@@ -1195,24 +1206,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 		// Ensure this image has been marked as being written to and force a
 		// recommpile so that the image type output will include write access
-		if (!img_type.image.is_written)
+		auto *p_var = maybe_get_backing_variable(img_id);
+		if (p_var && has_decoration(p_var->self, DecorationNonWritable))
 		{
-			img_type.image.is_written = true;
+			unset_decoration(p_var->self, DecorationNonWritable);
 			force_recompile = true;
-		}
-
-		// We added Nonwritable speculatively to the OpImage variable due to glslangValidator
-		// not adding the proper qualifiers.
-		// If it turns out we need to write to the image after all, remove the qualifier and recompile.
-		auto *var = maybe_get_backing_variable(img_id);
-		if (var)
-		{
-			auto &flags = meta.at(var->self).decoration.decoration_flags;
-			if (flags & (1ull << DecorationNonWritable))
-			{
-				flags &= ~(1ull << DecorationNonWritable);
-				force_recompile = true;
-			}
 		}
 
 		bool forward = false;
@@ -1242,7 +1240,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, &forward),
 		    ");"));
 
-		if (var && variable_storage_is_aliased(*var))
+		if (p_var && variable_storage_is_aliased(*p_var))
 			flush_all_aliased_variables();
 
 		break;
@@ -1916,13 +1914,16 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	string pack_pfx = member_is_packed_type(type, index) ? "packed_" : "";
 
 	statement(pack_pfx, type_to_glsl(membertype), " ", qualifier, to_member_name(type, index),
-	          type_to_array_glsl(membertype), member_attribute_qualifier(type, index), ";");
+	          member_attribute_qualifier(type, index), type_to_array_glsl(membertype), ";");
 }
 
 // Return a MSL qualifier for the specified function attribute member
 string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t index)
 {
 	auto &execution = get_entry_point();
+
+	uint32_t mbr_type_id = type.member_types[index];
+	auto &mbr_type = get<SPIRType>(mbr_type_id);
 
 	BuiltIn builtin;
 	bool is_builtin = is_member_builtin(type, index, &builtin);
@@ -1956,21 +1957,17 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		{
 			switch (builtin)
 			{
-			case BuiltInClipDistance:
-				return " /* [[clip_distance]] built-in not yet supported under Metal. */";
-
-			case BuiltInPointSize: // Must output only if really rendering points
-				// SPIR-V might declare PointSize as a builtin even though it's not really used.
-				// In some cases PointSize builtin may be written without Point topology.
-				// This is not an issue on GL/Vulkan, but it is on Metal, so we also have some way to forcefully disable
-				// this builtin.
-				return (active_output_builtins & (1ull << BuiltInPointSize)) && options.enable_point_size_builtin ?
-				           (string(" [[") + builtin_qualifier(builtin) + "]]") :
-				           "";
+			case BuiltInPointSize:
+				// Only mark the PointSize builtin if really rendering points.
+				// Some shaders may include a PointSize builtin even when used to render
+				// non-point topologies, and Metal will reject this builtin when compiling
+				// the shader into a render pipeline that uses a non-point topology.
+				return options.enable_point_size_builtin ? (string(" [[") + builtin_qualifier(builtin) + "]]") : "";
 
 			case BuiltInPosition:
 			case BuiltInLayer:
-				return string(" [[") + builtin_qualifier(builtin) + "]]";
+			case BuiltInClipDistance:
+				return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
 
 			default:
 				return "";
@@ -2201,6 +2198,8 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
+			uint32_t var_id = var.self;
+
 			if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 			     var.storage == StorageClassPushConstant) &&
 			    !is_hidden_variable(var))
@@ -2214,31 +2213,31 @@ string CompilerMSL::entry_point_args(bool append_comma)
 						break;
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(var.self);
+					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(var_id);
 					ep_args += " [[buffer(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
 					break;
 				}
 				case SPIRType::Sampler:
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += type_to_glsl(type) + " " + to_name(var.self);
+					ep_args += type_to_glsl(type) + " " + to_name(var_id);
 					ep_args += " [[sampler(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
 					break;
 				case SPIRType::Image:
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += type_to_glsl(type) + " " + to_name(var.self);
+					ep_args += type_to_glsl(type, var_id) + " " + to_name(var_id);
 					ep_args += " [[texture(" + convert_to_string(get_metal_resource_index(var, type.basetype)) + ")]]";
 					break;
 				case SPIRType::SampledImage:
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += type_to_glsl(type) + " " + to_name(var.self);
+					ep_args += type_to_glsl(type, var_id) + " " + to_name(var_id);
 					ep_args +=
 					    " [[texture(" + convert_to_string(get_metal_resource_index(var, SPIRType::Image)) + ")]]";
 					if (type.image.dim != DimBuffer)
 					{
-						ep_args += ", sampler " + to_sampler_expression(var.self);
+						ep_args += ", sampler " + to_sampler_expression(var_id);
 						ep_args +=
 						    " [[sampler(" + convert_to_string(get_metal_resource_index(var, SPIRType::Sampler)) + ")]]";
 					}
@@ -2251,8 +2250,8 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
-				BuiltIn bi_type = meta[var.self].decoration.builtin_type;
-				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var.self);
+				BuiltIn bi_type = meta[var_id].decoration.builtin_type;
+				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
 			}
 		}
@@ -2377,8 +2376,10 @@ string CompilerMSL::ensure_valid_name(string name, string pfx)
 	}
 }
 
-// Returns an MSL string describing  the SPIR-V type
-string CompilerMSL::type_to_glsl(const SPIRType &type)
+// The optional id parameter indicates the object whose type we are trying
+// to find the description for. It is optional. Most type descriptions do not
+// depend on a specific object's use of that type.
+string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 
@@ -2392,7 +2393,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
-		return image_type_glsl(type);
+		return image_type_glsl(type, id);
 
 	case SPIRType::Sampler:
 		return "sampler";
@@ -2445,7 +2446,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type)
 }
 
 // Returns an MSL string describing  the SPIR-V image type
-string CompilerMSL::image_type_glsl(const SPIRType &type)
+string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
 	string img_type_name;
 
@@ -2456,10 +2457,10 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 	{
 		switch (img_type.dim)
 		{
-		case spv::Dim2D:
+		case Dim2D:
 			img_type_name += (img_type.ms ? "depth2d_ms" : (img_type.arrayed ? "depth2d_array" : "depth2d"));
 			break;
-		case spv::DimCube:
+		case DimCube:
 			img_type_name += (img_type.arrayed ? "depthcube_array" : "depthcube");
 			break;
 		default:
@@ -2471,17 +2472,17 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 	{
 		switch (img_type.dim)
 		{
-		case spv::Dim1D:
+		case Dim1D:
 			img_type_name += (img_type.arrayed ? "texture1d_array" : "texture1d");
 			break;
-		case spv::DimBuffer:
-		case spv::Dim2D:
+		case DimBuffer:
+		case Dim2D:
 			img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
 			break;
-		case spv::Dim3D:
+		case Dim3D:
 			img_type_name += "texture3d";
 			break;
-		case spv::DimCube:
+		case DimCube:
 			img_type_name += (img_type.arrayed ? "texturecube_array" : "texturecube");
 			break;
 		default:
@@ -2491,18 +2492,43 @@ string CompilerMSL::image_type_glsl(const SPIRType &type)
 	}
 
 	// Append the pixel type
-	auto &img_pix_type = get<SPIRType>(img_type.type);
 	img_type_name += "<";
-	img_type_name += type_to_glsl(img_pix_type);
+	img_type_name += type_to_glsl(get<SPIRType>(img_type.type));
 
-	if (img_type.is_written)
+	// For unsampled images, append the sample/read/write access qualifier.
+	// For kernel images, the access qualifier my be supplied directly by SPIR-V.
+	// Otherwise it may be set based on whether the image is read from or written to within the shader.
+	if (type.basetype == SPIRType::Image && type.image.sampled == 2)
 	{
-		img_type_name += ", access::";
+		switch (img_type.access)
+		{
+		case AccessQualifierReadOnly:
+			img_type_name += ", access::read";
+			break;
 
-		if (img_type.is_read)
-			img_type_name += "read_";
+		case AccessQualifierWriteOnly:
+			img_type_name += ", access::write";
+			break;
 
-		img_type_name += "write";
+		case AccessQualifierReadWrite:
+			img_type_name += ", access::read_write";
+			break;
+
+		default:
+		{
+			auto *p_var = maybe_get_backing_variable(id);
+			if (p_var && !has_decoration(p_var->self, DecorationNonWritable))
+			{
+				img_type_name += ", access::";
+
+				if (!has_decoration(p_var->self, DecorationNonReadable))
+					img_type_name += "read_";
+
+				img_type_name += "write";
+			}
+			break;
+		}
+		}
 	}
 
 	img_type_name += ">";

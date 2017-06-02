@@ -59,7 +59,7 @@ public:
 	std::string compile() override;
 
 private:
-	std::string type_to_glsl(const SPIRType &type) override;
+	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string image_type_hlsl(const SPIRType &type);
 	std::string image_type_hlsl_modern(const SPIRType &type);
 	std::string image_type_hlsl_legacy(const SPIRType &type);
