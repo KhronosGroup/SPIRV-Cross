@@ -33,7 +33,7 @@ template <typename T>
 struct image2DBase
 {
 	virtual ~image2DBase() = default;
-	inline virtual T load(glm::ivec2 coord)
+	inline virtual T load(glm::ivec2 coord) const
 	{
 		return T(0, 0, 0, 1);
 	}
