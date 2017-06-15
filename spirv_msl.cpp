@@ -101,6 +101,7 @@ string CompilerMSL::compile()
 	extract_global_variables_from_functions();
 
 	// Do not deal with GLES-isms like precision, older extensions and such.
+	CompilerGLSL::options.vulkan_semantics = true;
 	CompilerGLSL::options.es = false;
 	CompilerGLSL::options.version = 120;
 	CompilerGLSL::options.vertex.fixup_clipspace = false;
@@ -127,6 +128,7 @@ string CompilerMSL::compile()
 		buffer = unique_ptr<ostringstream>(new ostringstream());
 
 		emit_header();
+		emit_specialization_constants();
 		emit_resources();
 		emit_custom_functions();
 		emit_function(get<SPIRFunction>(entry_point), 0);
@@ -985,6 +987,28 @@ void CompilerMSL::emit_resources()
 
 	emit_interface_block(stage_out_var_id);
 	emit_interface_block(stage_uniforms_var_id);
+}
+
+// Emit declarations for the specialization Metal function constants
+void CompilerMSL::emit_specialization_constants()
+{
+	const vector<SpecializationConstant> spec_consts = get_specialization_constants();
+
+	if (spec_consts.empty())
+		return;
+
+	for (auto &sc : spec_consts)
+	{
+		string sc_type_name = type_to_glsl(expression_type(sc.id));
+		string sc_name = to_name(sc.id);
+		string sc_tmp_name = to_name(sc.id) + "_tmp";
+
+		statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
+		          convert_to_string(sc.constant_id), ")]];");
+		statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name, ") ? ",
+		          sc_tmp_name, " : ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+	}
+	statement("");
 }
 
 // Override for MSL-specific syntax instructions
@@ -2536,9 +2560,25 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	return img_type_name;
 }
 
-string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &)
+string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
-	return "as_type<" + type_to_glsl(out_type) + ">";
+	if ((out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int) ||
+	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt) ||
+	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64) ||
+	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64))
+		return type_to_glsl(out_type);
+
+	if ((out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float) ||
+	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float) ||
+	    (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::UInt) ||
+	    (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::Int) ||
+	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double) ||
+	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double) ||
+	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64) ||
+	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64))
+		return "as_type<" + type_to_glsl(out_type) + ">";
+
+	return "";
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin.
@@ -2703,22 +2743,8 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 // Returns the byte size of a struct member.
 size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
-	uint32_t type_id = struct_type.member_types[index];
 	auto dec_mask = get_member_decoration_mask(struct_type.self, index);
-	return get_declared_type_size(type_id, dec_mask);
-}
-
-// Returns the effective size of a variable type.
-size_t CompilerMSL::get_declared_type_size(uint32_t type_id) const
-{
-	return get_declared_type_size(type_id, get_decoration_mask(type_id));
-}
-
-// Returns the effective size in bytes of a variable type
-// or member type, taking into consideration the decorations mask.
-size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const
-{
-	auto &type = get<SPIRType>(type_id);
+	auto &type = get<SPIRType>(struct_type.member_types[index]);
 
 	switch (type.basetype)
 	{
@@ -2739,14 +2765,9 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 		unsigned vecsize = type.vecsize;
 		unsigned columns = type.columns;
 
+		// For arrays, we can use ArrayStride to get an easy check.
 		if (!type.array.empty())
-		{
-			// For arrays, we can use ArrayStride to get an easy check if it has been populated.
-			// ArrayStride is part of the array type not OpMemberDecorate.
-			auto &dec = meta[type_id].decoration;
-			if (dec.decoration_flags & (1ull << DecorationArrayStride))
-				return dec.array_stride * to_array_size_literal(type, uint32_t(type.array.size()) - 1);
-		}
+			return type_struct_member_array_stride(struct_type, index) * type.array.back();
 
 		if (columns == 1) // An unpacked 3-element vector is the same size as a 4-element vector.
 		{
@@ -2778,16 +2799,7 @@ size_t CompilerMSL::get_declared_type_size(uint32_t type_id, uint64_t dec_mask) 
 // Returns the byte alignment of a struct member.
 size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const
 {
-	uint32_t type_id = struct_type.member_types[index];
-	auto dec_mask = get_member_decoration_mask(struct_type.self, index);
-	return get_declared_type_alignment(type_id, dec_mask);
-}
-
-// Returns the effective alignment in bytes of a variable type
-// or member type, taking into consideration the decorations mask.
-size_t CompilerMSL::get_declared_type_alignment(uint32_t type_id, uint64_t dec_mask) const
-{
-	auto &type = get<SPIRType>(type_id);
+	auto &type = get<SPIRType>(struct_type.member_types[index]);
 
 	switch (type.basetype)
 	{
@@ -2806,10 +2818,11 @@ size_t CompilerMSL::get_declared_type_alignment(uint32_t type_id, uint64_t dec_m
 	{
 		// Alignment of packed type is the same as the underlying component size.
 		// Alignment of unpacked type is the same as the type size (or one matrix column).
+		auto dec_mask = get_member_decoration_mask(struct_type.self, index);
 		if (dec_mask & (1ull << DecorationCPacked))
 			return type.width / 8;
 		else
-			return get_declared_type_size(type_id, dec_mask) / type.columns;
+			return get_declared_struct_member_size(struct_type, index) / type.columns;
 	}
 	}
 }
