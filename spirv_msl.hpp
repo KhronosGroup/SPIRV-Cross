@@ -168,7 +168,6 @@ protected:
 	bool skip_argument(uint32_t id) const override;
 
 	void preprocess_op_codes();
-	void emit_custom_functions();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
 
@@ -179,7 +178,9 @@ protected:
 	uint32_t add_interface_block(spv::StorageClass storage);
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
 
+	void emit_custom_functions();
 	void emit_resources();
+	void emit_specialization_constants();
 	void emit_interface_block(uint32_t ib_var_id);
 	void populate_func_name_overrides();
 	void populate_var_name_overrides();
@@ -199,10 +200,7 @@ protected:
 	std::string round_fp_tex_coords(std::string tex_coords, bool coord_is_fp);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
-	size_t get_declared_type_size(uint32_t type_id) const;
-	size_t get_declared_type_size(uint32_t type_id, uint64_t dec_mask) const;
 	size_t get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const;
-	size_t get_declared_type_alignment(uint32_t type_id, uint64_t dec_mask) const;
 	std::string to_component_argument(uint32_t id);
 	void exclude_from_stage_in(SPIRVariable &var);
 	void exclude_member_from_stage_in(const SPIRType &type, uint32_t index);
