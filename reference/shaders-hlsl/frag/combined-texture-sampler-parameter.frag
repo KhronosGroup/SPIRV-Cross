@@ -1,7 +1,7 @@
-Texture2D<float4> uSampler;
-SamplerState _uSampler_sampler;
-Texture2D<float4> uSamplerShadow;
-SamplerComparisonState _uSamplerShadow_sampler;
+Texture2D<float4> uSampler : register(t1);
+SamplerState _uSampler_sampler : register(s1);
+Texture2D<float4> uSamplerShadow : register(t1);
+SamplerComparisonState _uSamplerShadow_sampler : register(s1);
 
 static float FragColor;
 

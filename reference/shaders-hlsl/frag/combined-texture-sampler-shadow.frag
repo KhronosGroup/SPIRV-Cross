@@ -1,6 +1,6 @@
-Texture2D<float4> uDepth;
-SamplerComparisonState uSampler;
-SamplerState uSampler1;
+Texture2D<float4> uDepth : register(t2);
+SamplerComparisonState uSampler : register(s0);
+SamplerState uSampler1 : register(s1);
 
 static float FragColor;
 
