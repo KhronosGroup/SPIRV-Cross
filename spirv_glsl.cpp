@@ -275,7 +275,7 @@ void CompilerGLSL::find_static_extensions()
 	case ExecutionModelGeometry:
 		if (options.es && options.version < 320)
 			require_extension("GL_EXT_geometry_shader");
-		if (!options.es && options.version < 320)
+		if (!options.es && options.version < 150)
 			require_extension("GL_ARB_geometry_shader4");
 
 		if ((execution.flags & (1ull << ExecutionModeInvocations)) && execution.invocations != 1)
