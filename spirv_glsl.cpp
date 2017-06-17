@@ -5979,8 +5979,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get<SPIRType>(variable.basetype);
 
-	auto res = join(to_qualifiers_glsl(variable.self),
-	                variable_decl(type, to_name(variable.self), variable.self));
+	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self), variable.self));
 
 	if (variable.loop_variable)
 		res += join(" = ", to_expression(variable.static_expression));

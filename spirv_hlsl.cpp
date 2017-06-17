@@ -1615,7 +1615,8 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 		{
 			// For combined image samplers, also emit a combined image sampler.
 			if (type.image.depth)
-				statement("SamplerComparisonState ", to_sampler_expression(var.self), to_resource_binding_sampler(var), ";");
+				statement("SamplerComparisonState ", to_sampler_expression(var.self), to_resource_binding_sampler(var),
+				          ";");
 			else
 				statement("SamplerState ", to_sampler_expression(var.self), to_resource_binding_sampler(var), ";");
 		}
