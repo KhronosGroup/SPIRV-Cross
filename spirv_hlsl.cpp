@@ -157,7 +157,7 @@ string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 // The optional id parameter indicates the object whose type we are trying
 // to find the description for. It is optional. Most type descriptions do not
 // depend on a specific object's use of that type.
-string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t /* id */)
+string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 
@@ -175,7 +175,7 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t /* id */)
 		return image_type_hlsl(type);
 
 	case SPIRType::Sampler:
-		return type.image.depth ? "SamplerComparisonState" : "SamplerState";
+		return comparison_samplers.count(id) ? "SamplerComparisonState" : "SamplerState";
 
 	case SPIRType::Void:
 		return "void";

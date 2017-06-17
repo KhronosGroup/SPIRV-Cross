@@ -5852,9 +5852,9 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str)
 	return join("transpose(", exp_str, ")");
 }
 
-string CompilerGLSL::variable_decl(const SPIRType &type, const string &name)
+string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uint32_t id)
 {
-	string type_name = type_to_glsl(type);
+	string type_name = type_to_glsl(type, id);
 	remap_variable_type_name(type, name, type_name);
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
@@ -5971,18 +5971,7 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 			direction = "out ";
 	}
 
-	// We need some special consideration for samplers.
-	// The shadow qualifier for a sampler does not exist in SPIR-V, so the type might depend on which variable this is.
-	SPIRType fake_type;
-	const auto *tmp_type = &type;
-	if (type.basetype == SPIRType::Sampler)
-	{
-		tmp_type = &fake_type;
-		fake_type = type;
-		fake_type.image.depth = comparison_samplers.count(arg.id) != 0;
-	}
-
-	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(*tmp_type, to_name(arg.id)));
+	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id), arg.id));
 }
 
 string CompilerGLSL::variable_decl(const SPIRVariable &variable)
@@ -5990,18 +5979,9 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get<SPIRType>(variable.basetype);
 
-	// We need some special consideration for samplers.
-	// The shadow qualifier for a sampler does not exist in SPIR-V, so the type might depend on which variable this is.
-	SPIRType fake_type;
-	const auto *tmp_type = &type;
-	if (type.basetype == SPIRType::Sampler)
-	{
-		tmp_type = &fake_type;
-		fake_type = type;
-		fake_type.image.depth = comparison_samplers.count(variable.self) != 0;
-	}
+	auto res = join(to_qualifiers_glsl(variable.self),
+	                variable_decl(type, to_name(variable.self), variable.self));
 
-	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(*tmp_type, to_name(variable.self)));
 	if (variable.loop_variable)
 		res += join(" = ", to_expression(variable.static_expression));
 	else if (variable.initializer)
@@ -6220,11 +6200,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return image_type_glsl(type, id);
 
 	case SPIRType::Sampler:
-		// This is a hacky workaround. The sampler type in SPIR-V doesn't actually signal this distinction,
-		// but in higher level code we need it.
 		// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
 		// this distinction into the type system.
-		return type.image.depth ? "samplerShadow" : "sampler";
+		return comparison_samplers.count(id) ? "samplerShadow" : "sampler";
 
 	case SPIRType::Void:
 		return "void";
