@@ -2657,11 +2657,11 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	{
 		if (execution.flags & (1ull << ExecutionModeDepthGreater))
 			return "depth(greater)";
-
-		if (execution.flags & (1ull << ExecutionModeDepthLess))
+		else if (execution.flags & (1ull << ExecutionModeDepthLess))
 			return "depth(less)";
-
-		if (execution.flags & (1ull << ExecutionModeDepthUnchanged))
+		else if (execution.flags & (1ull << ExecutionModeDepthUnchanged))
+			return "depth(any)";
+		else
 			return "depth(any)";
 	}
 
