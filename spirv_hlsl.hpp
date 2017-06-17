@@ -85,6 +85,8 @@ private:
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_sampler_expression(uint32_t id);
+	std::string to_resource_binding(const SPIRVariable &var);
+	std::string to_resource_binding_sampler(const SPIRVariable &var);
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;

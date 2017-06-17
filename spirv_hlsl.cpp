@@ -886,15 +886,16 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	end_scope_decl();
 	statement("");
 
-	statement("cbuffer ", to_name(type.self));
+	// TODO: UAV?
+	statement("cbuffer ", to_name(type.self), to_resource_binding(var));
 	begin_scope();
 	statement("_", to_name(type.self), " ", to_name(var.self), ";");
 	end_scope_decl();
 }
 
-void CompilerHLSL::emit_push_constant_block(const SPIRVariable &)
+void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 {
-	statement("constant block");
+	emit_buffer_block(var);
 }
 
 string CompilerHLSL::to_sampler_expression(uint32_t id)
@@ -1545,6 +1546,61 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	emit_op(result_type, id, expr, forward, false);
 }
 
+string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
+{
+	// TODO: Basic implementation, might need special consideration for RW/RO structured buffers,
+	// RW/RO images, and so on.
+
+	if (!has_decoration(var.self, DecorationBinding))
+		return "";
+
+	auto &type = get<SPIRType>(var.basetype);
+	const char *space = nullptr;
+
+	switch (type.basetype)
+	{
+	case SPIRType::SampledImage:
+	case SPIRType::Image:
+		space = "t"; // SRV
+		break;
+
+	case SPIRType::Sampler:
+		space = "s";
+		break;
+
+	case SPIRType::Struct:
+	{
+		auto storage = type.storage;
+		if (storage == StorageClassUniform)
+		{
+			if (has_decoration(type.self, DecorationBufferBlock))
+				space = "u"; // UAV
+			else if (has_decoration(type.self, DecorationBlock))
+				space = "c"; // Constant buffers
+		}
+		else if (storage == StorageClassPushConstant)
+			space = "c"; // Constant buffers
+
+		break;
+	}
+	default:
+		break;
+	}
+
+	if (!space)
+		return "";
+
+	return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
+}
+
+string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
+{
+	// For combined image samplers.
+	if (!has_decoration(var.self, DecorationBinding))
+		return "";
+	return join(" : register(s", get_decoration(var.self, DecorationBinding), ")");
+}
+
 void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
@@ -1553,28 +1609,28 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	case SPIRType::SampledImage:
 	case SPIRType::Image:
 	{
-		statement(image_type_hlsl_modern(type), " ", to_name(var.self), ";");
+		statement(image_type_hlsl_modern(type), " ", to_name(var.self), to_resource_binding(var), ";");
 
 		if (type.basetype == SPIRType::SampledImage)
 		{
 			// For combined image samplers, also emit a combined image sampler.
 			if (type.image.depth)
-				statement("SamplerComparisonState ", to_sampler_expression(var.self), ";");
+				statement("SamplerComparisonState ", to_sampler_expression(var.self), to_resource_binding_sampler(var), ";");
 			else
-				statement("SamplerState ", to_sampler_expression(var.self), ";");
+				statement("SamplerState ", to_sampler_expression(var.self), to_resource_binding_sampler(var), ";");
 		}
 		break;
 	}
 
 	case SPIRType::Sampler:
 		if (comparison_samplers.count(var.self))
-			statement("SamplerComparisonState ", to_name(var.self), ";");
+			statement("SamplerComparisonState ", to_name(var.self), to_resource_binding(var), ";");
 		else
-			statement("SamplerState ", to_name(var.self), ";");
+			statement("SamplerState ", to_name(var.self), to_resource_binding(var), ";");
 		break;
 
 	default:
-		statement(variable_decl(var), ";");
+		statement(variable_decl(var), to_resource_binding(var), ";");
 		break;
 	}
 }

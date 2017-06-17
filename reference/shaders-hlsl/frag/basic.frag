@@ -1,5 +1,5 @@
-Texture2D<float4> uTex;
-SamplerState _uTex_sampler;
+Texture2D<float4> uTex : register(t0);
+SamplerState _uTex_sampler : register(s0);
 
 static float4 FragColor;
 static float4 vColor;
