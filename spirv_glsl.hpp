@@ -180,7 +180,7 @@ protected:
 	std::string constant_op_expression(const SPIRConstantOp &cop);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
-	virtual std::string variable_decl(const SPIRType &type, const std::string &name);
+	virtual std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0);
 	virtual std::string to_func_call_arg(uint32_t id);
 	virtual std::string to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
 	                                     bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad,

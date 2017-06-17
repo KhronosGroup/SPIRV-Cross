@@ -61,7 +61,7 @@ private:
 	void emit_uniform(const SPIRVariable &var) override;
 	void emit_shared(const SPIRVariable &var);
 	void emit_block_struct(SPIRType &type);
-	std::string variable_decl(const SPIRType &type, const std::string &name) override;
+	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id) override;
 
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 

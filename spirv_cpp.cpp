@@ -421,7 +421,7 @@ string CompilerCPP::argument_decl(const SPIRFunction::Parameter &arg)
 	return join(constref ? "const " : "", base, " &", variable_name);
 }
 
-string CompilerCPP::variable_decl(const SPIRType &type, const string &name)
+string CompilerCPP::variable_decl(const SPIRType &type, const string &name, uint32_t /* id */)
 {
 	string base = type_to_glsl(type);
 	remap_variable_type_name(type, name, base);
