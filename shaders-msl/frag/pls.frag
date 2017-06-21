@@ -3,8 +3,8 @@ precision mediump float;
 
 layout(location = 0) in vec4 PLSIn0;
 layout(location = 1) in vec4 PLSIn1;
-in vec4 PLSIn2;
-in vec4 PLSIn3;
+layout(location = 2) in vec4 PLSIn2;
+layout(location = 3) in vec4 PLSIn3;
 
 layout(location = 0) out vec4 PLSOut0;
 layout(location = 1) out vec4 PLSOut1;

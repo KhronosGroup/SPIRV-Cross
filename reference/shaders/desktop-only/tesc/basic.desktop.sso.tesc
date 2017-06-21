@@ -11,7 +11,7 @@ out gl_PerVertex
     vec4 gl_Position;
 } gl_out[1];
 
-patch out vec3 vFoo;
+layout(location = 0) patch out vec3 vFoo;
 
 void main()
 {

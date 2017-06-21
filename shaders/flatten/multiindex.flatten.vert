@@ -5,7 +5,7 @@ layout(std140) uniform UBO
     vec4 Data[3][5];
 };
 
-in ivec2 aIndex;
+layout(location = 0) in ivec2 aIndex;
 
 void main()
 {

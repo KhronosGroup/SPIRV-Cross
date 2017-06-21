@@ -25,9 +25,9 @@ static VertexOut vout;
 
 struct SPIRV_Cross_Input
 {
+    float4 Input0 : TEXCOORD0;
     float4 Input2 : TEXCOORD2;
     float4 Input4 : TEXCOORD4;
-    float4 Input0 : TEXCOORD0;
 };
 
 struct SPIRV_Cross_Output

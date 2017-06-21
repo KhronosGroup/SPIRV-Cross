@@ -5,8 +5,8 @@ using namespace metal;
 
 struct main0_in
 {
-    float4 PLSIn3 [[user(locn0)]];
-    float4 PLSIn2 [[user(locn1)]];
+    float4 PLSIn3 [[user(locn3)]];
+    float4 PLSIn2 [[user(locn2)]];
     float4 PLSIn1 [[user(locn1)]];
     float4 PLSIn0 [[user(locn0)]];
 };

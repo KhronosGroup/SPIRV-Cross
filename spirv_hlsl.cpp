@@ -434,12 +434,22 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 	begin_scope();
 	type.member_name_cache.clear();
 
+	uint32_t base_location = get_decoration(var.self, DecorationLocation);
+
 	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
 	{
 		string semantic;
 		if (has_member_decoration(type.self, i, DecorationLocation))
 		{
 			uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
+			semantic = join(" : TEXCOORD", location);
+		}
+		else
+		{
+			// If the block itself has a location, but not its members, use the implicit location.
+			// There could be a conflict if the block members partially specialize the locations.
+			// It is unclear how SPIR-V deals with this. Assume this does not happen for now.
+			uint32_t location = base_location + i;
 			semantic = join(" : TEXCOORD", location);
 		}
 

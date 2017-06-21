@@ -7,9 +7,9 @@ layout(location = 0) in vec4 PLSIn0;
 layout(location = 1) out vec4 PLSOut1;
 layout(location = 1) in vec4 PLSIn1;
 layout(location = 2) out vec4 PLSOut2;
-in vec4 PLSIn2;
+layout(location = 2) in vec4 PLSIn2;
 layout(location = 3) out vec4 PLSOut3;
-in vec4 PLSIn3;
+layout(location = 3) in vec4 PLSIn3;
 
 void main()
 {

@@ -2,7 +2,7 @@
 #extension GL_EXT_tessellation_shader : require
 layout(vertices = 1) out;
 
-patch out vec3 vFoo;
+layout(location = 0) patch out vec3 vFoo;
 
 void main()
 {

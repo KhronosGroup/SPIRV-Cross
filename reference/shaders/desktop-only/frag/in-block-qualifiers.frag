@@ -1,12 +1,12 @@
 #version 450
 
 layout(location = 0) out vec4 FragColor;
-in VertexData
+layout(location = 0) in VertexData
 {
-    layout(location = 0) flat float f;
-    layout(location = 1) centroid vec4 g;
-    layout(location = 2) flat int h;
-    layout(location = 3) float i;
+    flat float f;
+    centroid vec4 g;
+    flat int h;
+    float i;
 } vin;
 
 layout(location = 4) flat in float f;

@@ -8,7 +8,7 @@ layout(std140) uniform UBO
 layout(location = 0) in vec4 aVertex;
 layout(location = 1) in vec3 aNormal;
 
-out vec3 vNormal;
+layout(location = 0) out vec3 vNormal;
 
 void main()
 {

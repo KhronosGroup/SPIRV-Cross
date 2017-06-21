@@ -1,7 +1,7 @@
 #version 310 es
 
 // comments note the 16b alignment boundaries (see GL spec 7.6.2.2 Standard Uniform Block Layout)
-layout(std140) uniform UBO
+layout(std140, binding = 0) uniform UBO
 {
     // 16b boundary
     vec4 A;
@@ -27,7 +27,12 @@ layout(std140) uniform UBO
     float F2;
 };
 
-out vec4 oA, oB, oC, oD, oE, oF;
+layout(location = 0) out vec4 oA;
+layout(location = 1) out vec4 oB;
+layout(location = 2) out vec4 oC;
+layout(location = 3) out vec4 oD;
+layout(location = 4) out vec4 oE;
+layout(location = 5) out vec4 oF;
 
 void main()
 {

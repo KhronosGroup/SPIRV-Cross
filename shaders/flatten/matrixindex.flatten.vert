@@ -8,11 +8,11 @@ layout(std140) uniform UBO
     layout(row_major) mat2x4 M2R;
 };
 
-out vec4 oA;
-out vec4 oB;
-out vec4 oC;
-out vec4 oD;
-out vec4 oE;
+layout(location = 0) out vec4 oA;
+layout(location = 1) out vec4 oB;
+layout(location = 2) out vec4 oC;
+layout(location = 3) out vec4 oD;
+layout(location = 4) out vec4 oE;
 
 void main()
 {

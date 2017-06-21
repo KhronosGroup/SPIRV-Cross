@@ -14,15 +14,15 @@ struct UBO
 
 struct main0_in
 {
-    float4 aVertex [[attribute(0)]];
     float3 aNormal [[attribute(1)]];
+    float4 aVertex [[attribute(0)]];
 };
 
 struct main0_out
 {
-    float2 vSize [[user(locn0)]];
-    float3 vNormal [[user(locn1)]];
-    float3 vColor [[user(locn2)]];
+    float2 vSize [[user(locn2)]];
+    float3 vNormal [[user(locn0)]];
+    float3 vColor [[user(locn1)]];
     float4 gl_Position [[position]];
 };
 

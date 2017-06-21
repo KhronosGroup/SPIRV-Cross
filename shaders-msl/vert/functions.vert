@@ -11,11 +11,11 @@ layout(std140) uniform UBO
 layout(location = 0) in vec4 aVertex;
 layout(location = 1) in vec3 aNormal;
 
-out vec3 vNormal;
-out vec3 vRotDeg;
-out vec3 vRotRad;
-out ivec2 vLSB;
-out ivec2 vMSB;
+layout(location = 0) out vec3 vNormal;
+layout(location = 1) out vec3 vRotDeg;
+layout(location = 2) out vec3 vRotRad;
+layout(location = 3) out ivec2 vLSB;
+layout(location = 4) out ivec2 vMSB;
 
 void main()
 {

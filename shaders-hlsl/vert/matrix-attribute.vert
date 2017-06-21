@@ -1,7 +1,7 @@
 #version 310 es
 
-in vec3 pos;
-in mat4 m;
+layout(location = 0) in vec3 pos;
+layout(location = 1) in mat4 m;
 
 void main()
 {

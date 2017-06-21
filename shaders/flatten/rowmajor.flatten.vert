@@ -7,7 +7,7 @@ layout(std140) uniform UBO
     layout(row_major) mat2x4 uMVP;
 };
 
-in vec4 aVertex;
+layout(location = 0) in vec4 aVertex;
 
 void main()
 {

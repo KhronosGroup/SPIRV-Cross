@@ -1,8 +1,8 @@
 #version 450
 
-in vec2 interpolant;
+layout(location = 0) in vec2 interpolant;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
 
 void main()
 {

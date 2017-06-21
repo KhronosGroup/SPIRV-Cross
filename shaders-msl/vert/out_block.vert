@@ -1,14 +1,14 @@
-#version 330
+#version 450
 
 uniform Transform
 {
     mat4 transform;
 } block;
 
-in vec3 position;
-in vec4 color;
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec4 color;
 
-out VertexOut
+layout(location = 0) out VertexOut
 {
     vec4 color;
 } outputs;

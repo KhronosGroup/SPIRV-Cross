@@ -12,8 +12,8 @@ out gl_PerVertex
     vec4 gl_Position;
 };
 
-out vec3 vNormal;
-in VertexData
+layout(location = 0) out vec3 vNormal;
+layout(location = 0) in VertexData
 {
     vec3 normal;
 } vin[3];

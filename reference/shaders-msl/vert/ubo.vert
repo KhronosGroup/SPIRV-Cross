@@ -10,8 +10,8 @@ struct UBO
 
 struct main0_in
 {
-    float4 aVertex [[attribute(0)]];
     float3 aNormal [[attribute(1)]];
+    float4 aVertex [[attribute(0)]];
 };
 
 struct main0_out
