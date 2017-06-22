@@ -414,8 +414,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 
 				auto &mbr_type = get<SPIRType>(mbr_type_id);
 				if (is_matrix(mbr_type))
+				{
 					exclude_member_from_stage_in(type, mbr_idx);
-
+				}
 				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					// Add a reference to the member to the interface struct.
@@ -434,6 +435,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					if (has_member_decoration(type_id, mbr_idx, DecorationLocation))
 					{
 						uint32_t locn = get_member_decoration(type_id, mbr_idx, DecorationLocation);
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
+						mark_location_as_used_by_shader(locn, storage);
+					}
+					else if (has_decoration(p_var->self, DecorationLocation))
+					{
+						// The block itself might have a location and in this case, all members of the block
+						// receive incrementing locations.
+						uint32_t locn = get_decoration(p_var->self, DecorationLocation) + mbr_idx;
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
 					}

@@ -15,8 +15,8 @@ static float3 aNormal;
 
 struct SPIRV_Cross_Input
 {
-    float3 aNormal : TEXCOORD0;
-    float4 aVertex : TEXCOORD1;
+    float4 aVertex : TEXCOORD0;
+    float3 aNormal : TEXCOORD1;
 };
 
 struct SPIRV_Cross_Output

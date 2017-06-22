@@ -9,7 +9,7 @@ layout(std140) uniform UBO
     float A3[3];
     vec4 Offset;
 };
-in vec4 aVertex;
+layout(location = 0) in vec4 aVertex;
 
 void main()
 {

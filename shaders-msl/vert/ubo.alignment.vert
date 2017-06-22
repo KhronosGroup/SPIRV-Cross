@@ -8,11 +8,11 @@ layout(binding = 0, std140) uniform UBO
    float opacity;   // Single float following vec3 should cause MSL float3 to pack
 };
 
-in vec4 aVertex;
-in vec3 aNormal;
-out vec3 vNormal;
-out vec3 vColor;
-out vec2 vSize;
+layout(location = 0) in vec4 aVertex;
+layout(location = 1) in vec3 aNormal;
+layout(location = 0) out vec3 vNormal;
+layout(location = 1) out vec3 vColor;
+layout(location = 2) out vec2 vSize;
 
 void main()
 {

@@ -11,8 +11,8 @@ struct params
 
 struct main0_in
 {
-    float4 position [[attribute(0)]];
     float4 color0 [[attribute(1)]];
+    float4 position [[attribute(0)]];
 };
 
 struct main0_out

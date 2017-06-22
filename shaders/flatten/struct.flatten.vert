@@ -15,9 +15,9 @@ layout(std140) uniform UBO
     Light light;
 };
 
-in vec4 aVertex;
-in vec3 aNormal;
-out vec4 vColor;
+layout(location = 0) in vec4 aVertex;
+layout(location = 1) in vec3 aNormal;
+layout(location = 0) out vec4 vColor;
 
 void main()
 {

@@ -7,8 +7,8 @@ using namespace metal;
 
 struct main0_in
 {
-    float2 vTex [[user(locn0)]];
-    float4 vColor [[user(locn1)]];
+    float2 vTex [[user(locn1)]];
+    float4 vColor [[user(locn0)]];
 };
 
 struct main0_out

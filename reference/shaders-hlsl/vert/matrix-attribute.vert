@@ -4,11 +4,11 @@ static float3 pos;
 
 struct SPIRV_Cross_Input
 {
-    float4 m_0 : TEXCOORD0;
-    float4 m_1 : TEXCOORD1;
-    float4 m_2 : TEXCOORD2;
-    float4 m_3 : TEXCOORD3;
-    float3 pos : TEXCOORD4;
+    float3 pos : TEXCOORD0;
+    float4 m_0 : TEXCOORD1;
+    float4 m_1 : TEXCOORD2;
+    float4 m_2 : TEXCOORD3;
+    float4 m_3 : TEXCOORD4;
 };
 
 struct SPIRV_Cross_Output

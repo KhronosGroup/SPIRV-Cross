@@ -1,11 +1,11 @@
 #version 450
 
-out VertexData
+layout(location = 0) out VertexData
 {
-    layout(location = 0) flat float f;
-    layout(location = 1) centroid vec4 g;
-    layout(location = 2) flat int h;
-    layout(location = 3) float i;
+    flat float f;
+    centroid vec4 g;
+    flat int h;
+    float i;
 } vout;
 
 layout(location = 4) flat out float f;

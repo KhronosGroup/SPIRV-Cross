@@ -60,9 +60,9 @@ void main()
     mediump int c35 = int(g);
     mediump uint c36 = uint(g);
     float c37 = float(g);
-    float vec0[d][(c + 3)];
-    float vec1[(c + 2)][(d + 5)];
+    float vec0[(c + 3)][8];
+    float vec1[(c + 2)];
     Foo foo;
-    FragColor = ((vec4(t0 + t1) + vec4(vec0[0][0])) + vec4(vec1[0][0])) + vec4(foo.elems[c]);
+    FragColor = ((vec4(t0 + t1) + vec4(vec0[0][0])) + vec4(vec1[0])) + vec4(foo.elems[c]);
 }
 

@@ -10,7 +10,7 @@ dist: trusty
 
 # We check out glslang at a specific revision to avoid test output mismatches
 env:
-  - GLSLANG_REV=de1cc06c1d1c1eeae31aa5cae686ccf24064730f
+  - GLSLANG_REV=f0bc598dd7871689f25514b22a82f7455d762bef
 
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python3; fi

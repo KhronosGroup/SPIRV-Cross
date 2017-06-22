@@ -8,9 +8,9 @@ struct Light
 };
 
 uniform vec4 UBO[12];
-in vec4 aVertex;
-out vec4 vColor;
-in vec3 aNormal;
+layout(location = 0) in vec4 aVertex;
+layout(location = 0) out vec4 vColor;
+layout(location = 1) in vec3 aNormal;
 
 void main()
 {
