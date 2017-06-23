@@ -248,7 +248,6 @@ void CompilerGLSL::rename_interface_variable(const vector<Resource> &resources, 
 		if (loc != rename.location)
 			continue;
 
-		printf("rename %s %d %s", rename.in_or_out.c_str(), rename.location, rename.variable_name.c_str());
 		set_name(v.id, rename.variable_name);
 	}
 }
