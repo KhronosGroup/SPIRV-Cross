@@ -161,7 +161,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
 
     if vulkan or spirv:
         subprocess.check_call([spirv_cross_path, '--entry', 'main', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path] + extra_args)
-        validate_shader(vulkan_glsl_path, vulkan)
+        validate_shader(vulkan_glsl_path, True)
 
     return (spirv_path, glsl_path, vulkan_glsl_path if vulkan else None)
 
