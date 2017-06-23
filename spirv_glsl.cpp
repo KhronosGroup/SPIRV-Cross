@@ -2973,6 +2973,19 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 {
 	string fname;
 
+	// textureLod on sampler2DArrayShadow does not exist in GLSL for some reason.
+	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
+	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
+	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
+	bool workaround_lod_array_shadow_as_grad = false;
+	if (imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod)
+	{
+		auto *constant_lod = maybe_get<SPIRConstant>(lod);
+		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
+			SPIRV_CROSS_THROW("textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
+		workaround_lod_array_shadow_as_grad = true;
+	}
+
 	if (is_fetch)
 		fname += "texelFetch";
 	else
@@ -2985,9 +2998,9 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 			fname += "Offsets";
 		if (is_proj)
 			fname += "Proj";
-		if (has_grad)
+		if (has_grad || workaround_lod_array_shadow_as_grad)
 			fname += "Grad";
-		if (!!lod)
+		if (!!lod && !workaround_lod_array_shadow_as_grad)
 			fname += "Lod";
 	}
 
@@ -2998,7 +3011,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool, bool, uint32_t coord,
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool, bool, bool, uint32_t coord,
                                       uint32_t coord_components, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
                                       uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
                                       uint32_t sample, bool *p_forward)
@@ -3030,7 +3043,18 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 	// Only enclose the UV expression if needed.
 	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(coord) : (to_enclosed_expression(coord) + swizzle_expr);
 
-	// TODO: implement rest ... A bit intensive.
+	// textureLod on sampler2DArrayShadow does not exist in GLSL for some reason.
+	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
+	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
+	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
+	bool workaround_lod_array_shadow_as_grad = false;
+	if (imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod)
+	{
+		auto *constant_lod = maybe_get<SPIRConstant>(lod);
+		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
+			SPIRV_CROSS_THROW("textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
+		workaround_lod_array_shadow_as_grad = true;
+	}
 
 	if (dref)
 	{
@@ -3076,11 +3100,20 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &, bool, bool
 
 	if (lod)
 	{
-		if (check_explicit_lod_allowed(lod))
+		if (workaround_lod_array_shadow_as_grad)
 		{
-			forward = forward && should_forward(lod);
-			farg_str += ", ";
-			farg_str += to_expression(lod);
+			// Implement textureGrad() instead. LOD == 0.0 is implemented as gradient of 0.0.
+			// Implementing this as plain texture() is not safe on some implementations.
+			farg_str += ", vec2(0.0), vec2(0.0)";
+		}
+		else
+		{
+			if (check_explicit_lod_allowed(lod))
+			{
+				forward = forward && should_forward(lod);
+				farg_str += ", ";
+				farg_str += to_expression(lod);
+			}
 		}
 	}
 
