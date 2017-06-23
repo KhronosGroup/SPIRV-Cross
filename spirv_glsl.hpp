@@ -51,6 +51,13 @@ struct PlsRemap
 	PlsFormat format;
 };
 
+struct InterfaceVariableRename
+{
+	std::string in_or_out;
+	uint32_t location;
+	std::string variable_name;
+};
+
 class CompilerGLSL : public Compiler
 {
 public:
@@ -108,6 +115,8 @@ public:
 		pls_outputs = std::move(outputs);
 		remap_pls_variables();
 	}
+
+	void rename_interface_variable(const std::vector<Resource> &resources, const InterfaceVariableRename &rename);
 
 	CompilerGLSL(std::vector<uint32_t> spirv_)
 	    : Compiler(move(spirv_))

@@ -438,6 +438,7 @@ struct CLIArguments
 	vector<Remap> remaps;
 	vector<string> extensions;
 	vector<VariableTypeRemap> variable_type_remaps;
+	vector<InterfaceVariableRename> interface_variable_renames;
 	string entry;
 
 	uint32_t iterations = 1;
@@ -463,7 +464,9 @@ static void print_help()
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--flatten-multidimensional-arrays] "
-	                "[--remap-variable-type <variable_name> <new_variable_type>]\n");
+	                "[--remap-variable-type <variable_name> <new_variable_type>]"
+					"[--rename-interface-variable <in|out> <location> <new_variable_name>]"
+					"\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -600,6 +603,13 @@ int main(int argc, char *argv[])
 		string var_name = parser.next_string();
 		string new_type = parser.next_string();
 		args.variable_type_remaps.push_back({ move(var_name), move(new_type) });
+	});
+
+	cbs.add("--rename-interface-variable", [&args](CLIParser &parser) {
+		string in_or_out = parser.next_string();
+		uint32_t loc = parser.next_uint();
+		string var_name = parser.next_string();
+		args.interface_variable_renames.push_back({ move(in_or_out), loc, move(var_name) });
 	});
 
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
@@ -756,6 +766,19 @@ int main(int argc, char *argv[])
 			continue;
 		if (remap_generic(*compiler, res.subpass_inputs, remap))
 			continue;
+	}
+
+	for (auto &rename : args.interface_variable_renames) 
+	{
+		if (rename.in_or_out == "in")
+			compiler->rename_interface_variable(res.stage_inputs, rename);
+		else if (rename.in_or_out == "out")
+			compiler->rename_interface_variable(res.stage_outputs, rename);
+		else
+		{
+			fprintf(stderr, "error at --rename-interface-variable %s, acceptable options are [in,out]\n", rename.in_or_out.c_str());
+			return EXIT_FAILURE;
+		}
 	}
 
 	if (args.dump_resources)
