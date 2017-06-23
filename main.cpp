@@ -465,7 +465,7 @@ static void print_help()
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--flatten-multidimensional-arrays] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>]"
-					"[--rename-interface-variable <in|out> <location> <new_variable_name>]"
+	                "[--rename-interface-variable <in|out> <location> <new_variable_name>]"
 					"\n");
 }
 
