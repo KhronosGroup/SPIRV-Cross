@@ -2982,7 +2982,8 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 	{
 		auto *constant_lod = maybe_get<SPIRConstant>(lod);
 		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
-			SPIRV_CROSS_THROW("textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
+			SPIRV_CROSS_THROW(
+			    "textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
 		workaround_lod_array_shadow_as_grad = true;
 	}
 
@@ -3052,7 +3053,8 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	{
 		auto *constant_lod = maybe_get<SPIRConstant>(lod);
 		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
-			SPIRV_CROSS_THROW("textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
+			SPIRV_CROSS_THROW(
+			    "textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
 		workaround_lod_array_shadow_as_grad = true;
 	}
 
