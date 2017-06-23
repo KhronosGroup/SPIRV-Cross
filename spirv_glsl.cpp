@@ -2983,7 +2983,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 		auto *constant_lod = maybe_get<SPIRConstant>(lod);
 		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
 			SPIRV_CROSS_THROW(
-			    "textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
+			    "textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
 		workaround_lod_array_shadow_as_grad = true;
 	}
 
@@ -3048,15 +3048,8 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
-	bool workaround_lod_array_shadow_as_grad = false;
-	if (imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod)
-	{
-		auto *constant_lod = maybe_get<SPIRConstant>(lod);
-		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
-			SPIRV_CROSS_THROW(
-			    "textureLod on sampler2DArraySahdow is not constant 0.0. This cannot be expressed in GLSL.");
-		workaround_lod_array_shadow_as_grad = true;
-	}
+	bool workaround_lod_array_shadow_as_grad =
+	    imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod;
 
 	if (dref)
 	{
