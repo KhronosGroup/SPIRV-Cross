@@ -417,6 +417,13 @@ struct VariableTypeRemap
 	string new_variable_type;
 };
 
+struct InterfaceVariableRename
+{
+	StorageClass storageClass;
+	uint32_t location;
+	string variable_name;
+};
+
 struct CLIArguments
 {
 	const char *input = nullptr;
@@ -464,8 +471,8 @@ static void print_help()
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
 	                "components] [--extension ext] [--entry name] [--remove-unused-variables] "
 	                "[--flatten-multidimensional-arrays] "
-	                "[--remap-variable-type <variable_name> <new_variable_type>]"
-	                "[--rename-interface-variable <in|out> <location> <new_variable_name>]"
+	                "[--remap-variable-type <variable_name> <new_variable_type>] "
+	                "[--rename-interface-variable <in|out> <location> <new_variable_name>] "
 					"\n");
 }
 
@@ -553,6 +560,21 @@ static PlsFormat pls_format(const char *str)
 		return PlsNone;
 }
 
+void rename_interface_variable(Compiler &compiler, const vector<Resource> &resources, const InterfaceVariableRename &rename)
+{
+	for (auto &v : resources)
+	{
+		if (!compiler.has_decoration(v.id, spv::DecorationLocation))
+			continue;
+
+		auto loc = compiler.get_decoration(v.id, spv::DecorationLocation);
+		if (loc != rename.location)
+			continue;
+
+		compiler.set_name(v.id, rename.variable_name);
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	CLIArguments args;
@@ -606,10 +628,16 @@ int main(int argc, char *argv[])
 	});
 
 	cbs.add("--rename-interface-variable", [&args](CLIParser &parser) {
-		string in_or_out = parser.next_string();
+		StorageClass cls = StorageClassMax;
+		string clsStr = parser.next_string();
+		if (clsStr == "in")
+			cls = StorageClassInput;
+		else if (clsStr == "out")
+			cls = StorageClassOutput;
+
 		uint32_t loc = parser.next_uint();
 		string var_name = parser.next_string();
-		args.interface_variable_renames.push_back({ move(in_or_out), loc, move(var_name) });
+		args.interface_variable_renames.push_back({ cls, loc, move(var_name) });
 	});
 
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
@@ -770,13 +798,13 @@ int main(int argc, char *argv[])
 
 	for (auto &rename : args.interface_variable_renames) 
 	{
-		if (rename.in_or_out == "in")
-			compiler->rename_interface_variable(res.stage_inputs, rename);
-		else if (rename.in_or_out == "out")
-			compiler->rename_interface_variable(res.stage_outputs, rename);
+		if (rename.storageClass == StorageClassInput)
+			rename_interface_variable(*compiler, res.stage_inputs, rename);
+		else if (rename.storageClass == StorageClassOutput)
+			rename_interface_variable(*compiler, res.stage_outputs, rename);
 		else
 		{
-			fprintf(stderr, "error at --rename-interface-variable %s, acceptable options are [in,out]\n", rename.in_or_out.c_str());
+			fprintf(stderr, "error at --rename-interface-variable <in|out> ...\n");
 			return EXIT_FAILURE;
 		}
 	}

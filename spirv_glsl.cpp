@@ -237,21 +237,6 @@ void CompilerGLSL::remap_pls_variables()
 	}
 }
 
-void CompilerGLSL::rename_interface_variable(const vector<Resource> &resources, const InterfaceVariableRename &rename)
-{
-	for (auto &v : resources)
-	{
-		if (!has_decoration(v.id, spv::DecorationLocation))
-			continue;
-
-		auto loc = meta[v.id].decoration.location;
-		if (loc != rename.location)
-			continue;
-
-		set_name(v.id, rename.variable_name);
-	}
-}
-
 void CompilerGLSL::find_static_extensions()
 {
 	for (auto &id : ids)
