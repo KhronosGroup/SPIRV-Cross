@@ -173,6 +173,12 @@ You can make use of the reflection interface to force the name of the struct typ
 compiler.set_name(varying_resource.base_type_id, "VertexFragmentLinkage");
 ```
 
+Some platform may require identical variable name for both vertex outputs and fragment inputs. (for example MacOSX)
+to rename varaible base on location, please add
+```
+--rename-interface-variable <in|out> <location> <new_variable_name>
+```
+
 #### HLSL source to legacy GLSL/ESSL
 
 HLSL tends to emit varying struct types to pass data between vertex and fragment.
