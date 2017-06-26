@@ -4732,26 +4732,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		flush_variable_declaration(composite);
 
-		auto *expr = maybe_get<SPIRExpression>(id);
-		if ((expr && expr->used_while_invalidated) || !should_forward(composite))
-		{
-			// Make a copy, then use access chain to store the variable.
-			statement(declare_temporary(result_type, id), to_expression(composite), ";");
-			set<SPIRExpression>(id, to_name(id), result_type, true);
-			auto chain = access_chain_internal(id, elems, length, true);
-			statement(chain, " = ", to_expression(obj), ";");
-		}
-		else
-		{
-			auto chain = access_chain_internal(composite, elems, length, true);
-			statement(chain, " = ", to_expression(obj), ";");
-			set<SPIRExpression>(id, to_expression(composite), result_type, true);
+		// Make a copy, then use access chain to store the variable.
+		statement(declare_temporary(result_type, id), to_expression(composite), ";");
+		set<SPIRExpression>(id, to_name(id), result_type, true);
+		auto chain = access_chain_internal(id, elems, length, true);
+		statement(chain, " = ", to_expression(obj), ";");
 
-			register_write(composite);
-			register_read(id, composite, true);
-			// Invalidate the old expression we inserted into.
-			invalid_expressions.insert(composite);
-		}
 		break;
 	}
 
