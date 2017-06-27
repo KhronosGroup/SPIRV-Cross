@@ -1768,13 +1768,6 @@ string CompilerGLSL::to_func_call_arg(uint32_t id)
 
 void CompilerGLSL::handle_invalid_expression(uint32_t id)
 {
-	auto &expr = get<SPIRExpression>(id);
-
-	// This expression has been invalidated in the past.
-	// Be careful with this expression next pass ...
-	// Used for OpCompositeInsert forwarding atm.
-	expr.used_while_invalidated = true;
-
 	// We tried to read an invalidated expression.
 	// This means we need another pass at compilation, but next time, force temporary variables so that they cannot be invalidated.
 	forced_temporaries.insert(id);
@@ -4477,18 +4470,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			auto lhs = to_expression(ops[0]);
 			auto rhs = to_expression(ops[1]);
 
-			// It is possible with OpLoad/OpCompositeInsert/OpStore that we get <expr> = <same-expr>.
-			// For this case, we don't need to invalidate anything and emit any opcode.
-			if (lhs != rhs)
-			{
-				// Tries to optimize assignments like "<lhs> = <lhs> op expr".
-				// While this is purely cosmetic, this is important for legacy ESSL where loop
-				// variable increments must be in either i++ or i += const-expr.
-				// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
-				if (!optimize_read_modify_write(lhs, rhs))
-					statement(lhs, " = ", rhs, ";");
-				register_write(ops[0]);
-			}
+			// Tries to optimize assignments like "<lhs> = <lhs> op expr".
+			// While this is purely cosmetic, this is important for legacy ESSL where loop
+			// variable increments must be in either i++ or i += const-expr.
+			// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
+			if (!optimize_read_modify_write(lhs, rhs))
+				statement(lhs, " = ", rhs, ";");
+			register_write(ops[0]);
 		}
 		break;
 	}
