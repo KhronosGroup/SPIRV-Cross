@@ -5,10 +5,10 @@ using namespace metal;
 
 struct main0_out
 {
-    float4 FragColor [[color(0)]];
+    half4 FragColor [[color(0)]];
 };
 
-fragment main0_out main0(float4 gl_FragCoord [[position]], texture2d_ms<float> uSampler [[texture(0)]], sampler uSamplerSmplr [[sampler(0)]])
+fragment main0_out main0(float4 gl_FragCoord [[position]], texture2d_ms<half> uSampler [[texture(0)]], sampler uSamplerSmplr [[sampler(0)]])
 {
     main0_out out = {};
     int2 coord = int2(gl_FragCoord.xy);

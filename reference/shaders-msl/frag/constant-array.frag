@@ -7,23 +7,23 @@ using namespace metal;
 
 struct Foobar
 {
-    float a;
-    float b;
+    half a;
+    half b;
 };
 
 struct main0_in
 {
-    int index [[user(locn0)]];
+    short index [[user(locn0)]];
 };
 
 struct main0_out
 {
-    float4 FragColor [[color(0)]];
+    half4 FragColor [[color(0)]];
 };
 
-float4 resolve(thread const Foobar& f)
+half4 resolve(thread const Foobar& f)
 {
-    return float4(f.a + f.b);
+    return half4(f.a + f.b);
 }
 
 fragment main0_out main0(main0_in in [[stage_in]])

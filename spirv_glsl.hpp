@@ -171,7 +171,7 @@ protected:
 	virtual void emit_header();
 	virtual void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id);
 	virtual void emit_texture_op(const Instruction &i);
-	virtual std::string type_to_glsl(const SPIRType &type, uint32_t id = 0);
+	virtual std::string type_to_glsl(const SPIRType &type, uint32_t id = 0, uint32_t member_index = 0);
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
 	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                                const std::string &qualifier = "");
@@ -368,7 +368,7 @@ protected:
 	std::string enclose_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
-	std::string type_to_glsl_constructor(const SPIRType &type);
+	std::string type_to_glsl_constructor(const SPIRType &type, uint32_t id = 0, uint32_t member_index = 0);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	std::string to_qualifiers_glsl(uint32_t id);
 	const char *to_precision_qualifiers_glsl(uint32_t id);
@@ -389,7 +389,7 @@ protected:
 	uint32_t type_to_std430_size(const SPIRType &type, uint64_t flags);
 
 	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
-	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
+	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type, uint32_t id = 0);
 	std::string build_composite_combiner(const uint32_t *elems, uint32_t length);
 	bool remove_duplicate_swizzle(std::string &op);
 	bool remove_unity_swizzle(uint32_t base, std::string &op);

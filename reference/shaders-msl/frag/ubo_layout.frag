@@ -5,7 +5,7 @@ using namespace metal;
 
 struct Str
 {
-    float4x4 foo;
+    half4x4 foo;
 };
 
 struct UBO1
@@ -20,7 +20,7 @@ struct UBO2
 
 struct main0_out
 {
-    float4 FragColor [[color(0)]];
+    half4 FragColor [[color(0)]];
 };
 
 fragment main0_out main0(constant UBO1& ubo1 [[buffer(0)]], constant UBO2& ubo0 [[buffer(1)]])

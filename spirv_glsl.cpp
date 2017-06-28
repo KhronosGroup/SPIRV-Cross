@@ -1949,7 +1949,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	case OpSConvert:
 	case OpUConvert:
 	case OpFConvert:
-		op = type_to_glsl_constructor(type);
+		op = type_to_glsl_constructor(type, cop.arguments[0]);
 		break;
 
 #define BOP(opname, x) \
@@ -2084,7 +2084,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		if (backend.use_initializer_list)
 			res = "{ ";
 		else
-			res = type_to_glsl_constructor(get<SPIRType>(c.constant_type)) + "(";
+			res = type_to_glsl_constructor(get<SPIRType>(c.constant_type), c.self) + "(";
 
 		for (auto &elem : c.subconstants)
 		{
@@ -2107,7 +2107,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	}
 	else
 	{
-		string res = type_to_glsl(get<SPIRType>(c.constant_type)) + "(";
+		string res = type_to_glsl(get<SPIRType>(c.constant_type), c.self) + "(";
 		for (uint32_t col = 0; col < c.columns(); col++)
 		{
 			res += constant_expression_vector(c, col);
@@ -2368,7 +2368,7 @@ void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint
 void CompilerGLSL::emit_unrolled_unary_op(uint32_t result_type, uint32_t result_id, uint32_t operand, const char *op)
 {
 	auto &type = get<SPIRType>(result_type);
-	auto expr = type_to_glsl_constructor(type);
+	auto expr = type_to_glsl_constructor(type, operand);
 	expr += '(';
 	for (uint32_t i = 0; i < type.vecsize; i++)
 	{
@@ -2392,7 +2392,7 @@ void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result
                                            const char *op)
 {
 	auto &type = get<SPIRType>(result_type);
-	auto expr = type_to_glsl_constructor(type);
+	auto expr = type_to_glsl_constructor(type, op0);
 	expr += '(';
 	for (uint32_t i = 0; i < type.vecsize; i++)
 	{
@@ -2675,7 +2675,7 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 	}
 
 	if (ret)
-		op = type_to_glsl_constructor(type);
+		op = type_to_glsl_constructor(type, left);
 	return ret;
 }
 
@@ -2719,7 +2719,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 				return join(to_enclosed_expression(expression), ".", index_to_swizzle(i));
 			};
 
-			expr = type_to_glsl_constructor(restype);
+			expr = type_to_glsl_constructor(restype, left);
 			expr += "(";
 			for (uint32_t i = 0; i < restype.vecsize; i++)
 			{
@@ -3062,7 +3062,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 			auto type = expression_type(coord);
 			type.vecsize = coord_components + 1;
 			farg_str += ", ";
-			farg_str += type_to_glsl_constructor(type);
+			farg_str += type_to_glsl_constructor(type, coord);
 			farg_str += "(";
 			farg_str += coord_expr;
 			farg_str += ", ";
@@ -3404,7 +3404,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 }
 
-string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
+string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type, uint32_t)
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
 		return type_to_glsl(out_type);
@@ -3436,7 +3436,7 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 
 string CompilerGLSL::bitcast_glsl(const SPIRType &result_type, uint32_t argument)
 {
-	auto op = bitcast_glsl_op(result_type, expression_type(argument));
+	auto op = bitcast_glsl_op(result_type, expression_type(argument), argument);
 	if (op.empty())
 		return to_enclosed_expression(argument);
 	else
@@ -3743,7 +3743,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 
 string CompilerGLSL::load_flattened_struct(SPIRVariable &var)
 {
-	auto expr = type_to_glsl_constructor(get<SPIRType>(var.basetype));
+	auto expr = type_to_glsl_constructor(get<SPIRType>(var.basetype), var.self);
 	expr += '(';
 
 	auto &type = get<SPIRType>(var.basetype);
@@ -3804,7 +3804,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 {
 	std::string expr;
 
-	expr += type_to_glsl_constructor(target_type);
+	expr += type_to_glsl_constructor(target_type, base);
 	expr += "(";
 
 	for (uint32_t i = 0; i < uint32_t(target_type.member_types.size()); ++i)
@@ -3851,7 +3851,7 @@ std::string CompilerGLSL::flattened_access_chain_matrix(uint32_t base, const uin
 
 	std::string expr;
 
-	expr += type_to_glsl_constructor(tmp_type);
+	expr += type_to_glsl_constructor(tmp_type, base);
 	expr += "(";
 
 	for (uint32_t i = 0; i < tmp_type.columns; i++)
@@ -3882,7 +3882,7 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 
 		if (target_type.vecsize > 1)
 		{
-			expr += type_to_glsl_constructor(target_type);
+			expr += type_to_glsl_constructor(target_type, base);
 			expr += "(";
 		}
 
@@ -4631,7 +4631,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
+			constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type), elems[0]) + "(";
 			if (splat)
 				constructor_op += to_expression(elems[0]);
 			else
@@ -4804,7 +4804,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				else
 					args.push_back(join(to_enclosed_expression(vec0), ".", index_to_swizzle(elems[i])));
 			}
-			expr += join(type_to_glsl_constructor(get<SPIRType>(result_type)), "(", merge(args), ")");
+			expr += join(type_to_glsl_constructor(get<SPIRType>(result_type), id), "(", merge(args), ")");
 		}
 		else
 		{
@@ -5150,7 +5150,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto func = type_to_glsl_constructor(get<SPIRType>(result_type));
+		auto func = type_to_glsl_constructor(get<SPIRType>(result_type), ops[2]);
 		emit_unary_func_op(result_type, id, ops[2], func.c_str());
 		break;
 	}
@@ -5161,7 +5161,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		uint32_t arg = ops[2];
 
-		auto op = bitcast_glsl_op(get<SPIRType>(result_type), expression_type(arg));
+		auto op = bitcast_glsl_op(get<SPIRType>(result_type), expression_type(arg), arg);
 		emit_unary_func_op(result_type, id, arg, op.c_str());
 		break;
 	}
@@ -6162,7 +6162,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 	return res;
 }
 
-string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
+string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type, uint32_t id, uint32_t member_index)
 {
 	if (type.array.size() > 1)
 	{
@@ -6174,16 +6174,17 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 			SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310.");
 	}
 
-	auto e = type_to_glsl(type);
+	auto e = type_to_glsl(type, id, member_index);
 	for (uint32_t i = 0; i < type.array.size(); i++)
 		e += "[]";
 	return e;
 }
 
-// The optional id parameter indicates the object whose type we are trying
-// to find the description for. It is optional. Most type descriptions do not
-// depend on a specific object's use of that type.
-string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
+// The optional id parameter indicates the object whose type we are trying to find the description for.
+// It is optional. Most type descriptions do not depend on a specific object's use of that type.
+// If the id parameter references a type, the optional member_index parameter is used to reference
+// a member within the type if it is a struct.
+string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id, uint32_t)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 

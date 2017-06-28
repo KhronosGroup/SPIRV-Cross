@@ -5,18 +5,18 @@ using namespace metal;
 
 struct main0_in
 {
-    float4 PLSIn3 [[user(locn3)]];
-    float4 PLSIn2 [[user(locn2)]];
-    float4 PLSIn1 [[user(locn1)]];
-    float4 PLSIn0 [[user(locn0)]];
+    half4 PLSIn3 [[user(locn3)]];
+    half4 PLSIn2 [[user(locn2)]];
+    half4 PLSIn1 [[user(locn1)]];
+    half4 PLSIn0 [[user(locn0)]];
 };
 
 struct main0_out
 {
-    float4 PLSOut0 [[color(0)]];
-    float4 PLSOut1 [[color(1)]];
-    float4 PLSOut2 [[color(2)]];
-    float4 PLSOut3 [[color(3)]];
+    half4 PLSOut0 [[color(0)]];
+    half4 PLSOut1 [[color(1)]];
+    half4 PLSOut2 [[color(2)]];
+    half4 PLSOut3 [[color(3)]];
 };
 
 fragment main0_out main0(main0_in in [[stage_in]])
