@@ -23,12 +23,12 @@ struct UBO
 
 struct main0_out
 {
-    float4 oF [[user(locn5)]];
-    float4 oE [[user(locn4)]];
-    float4 oD [[user(locn3)]];
-    float4 oC [[user(locn2)]];
-    float4 oB [[user(locn1)]];
     float4 oA [[user(locn0)]];
+    float4 oB [[user(locn1)]];
+    float4 oC [[user(locn2)]];
+    float4 oD [[user(locn3)]];
+    float4 oE [[user(locn4)]];
+    float4 oF [[user(locn5)]];
     float4 gl_Position [[position]];
 };
 

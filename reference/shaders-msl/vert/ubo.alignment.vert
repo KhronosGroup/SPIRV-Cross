@@ -20,9 +20,9 @@ struct main0_in
 
 struct main0_out
 {
-    float2 vSize [[user(locn2)]];
     float3 vNormal [[user(locn0)]];
     float3 vColor [[user(locn1)]];
+    float2 vSize [[user(locn2)]];
     float4 gl_Position [[position]];
 };
 
