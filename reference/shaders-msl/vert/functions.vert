@@ -21,11 +21,11 @@ struct main0_in
 
 struct main0_out
 {
-    float3 vRotRad [[user(locn2)]];
-    float3 vRotDeg [[user(locn1)]];
     float3 vNormal [[user(locn0)]];
-    int2 vMSB [[user(locn4)]];
+    float3 vRotDeg [[user(locn1)]];
+    float3 vRotRad [[user(locn2)]];
     int2 vLSB [[user(locn3)]];
+    int2 vMSB [[user(locn4)]];
     float4 gl_Position [[position]];
 };
 

@@ -154,10 +154,11 @@ string CompilerHLSL::image_type_hlsl(const SPIRType &type)
 		return image_type_hlsl_modern(type);
 }
 
-// The optional id parameter indicates the object whose type we are trying
-// to find the description for. It is optional. Most type descriptions do not
-// depend on a specific object's use of that type.
-string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
+// The optional id parameter indicates the object whose type we are trying to find the description for.
+// It is optional. Most type descriptions do not depend on a specific object's use of that type.
+// If the id parameter references a type, the optional member_index parameter is used to reference
+// a member within the type if it is a struct.
+string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id, uint32_t)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 
@@ -1697,7 +1698,7 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		emit_legacy_uniform(var);
 }
 
-string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
+string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type, uint32_t)
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
 		return type_to_glsl(out_type);

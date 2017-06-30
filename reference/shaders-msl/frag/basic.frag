@@ -5,19 +5,19 @@ using namespace metal;
 
 struct main0_in
 {
-    float2 vTex [[user(locn1)]];
-    float4 vColor [[user(locn0)]];
+    half2 vTex [[user(locn1)]];
+    half4 vColor [[user(locn0)]];
 };
 
 struct main0_out
 {
-    float4 FragColor [[color(0)]];
+    half4 FragColor [[color(0)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> uTex [[texture(0)]], sampler uTexSmplr [[sampler(0)]])
+fragment main0_out main0(main0_in in [[stage_in]], texture2d<half> uTex [[texture(0)]], sampler uTexSmplr [[sampler(0)]])
 {
     main0_out out = {};
-    out.FragColor = in.vColor * uTex.sample(uTexSmplr, in.vTex);
+    out.FragColor = in.vColor * uTex.sample(uTexSmplr, float2(in.vTex));
     return out;
 }
 

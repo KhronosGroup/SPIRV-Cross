@@ -59,7 +59,7 @@ public:
 	std::string compile() override;
 
 private:
-	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
+	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0, uint32_t member_index = 0) override;
 	std::string image_type_hlsl(const SPIRType &type);
 	std::string image_type_hlsl_modern(const SPIRType &type);
 	std::string image_type_hlsl_legacy(const SPIRType &type);
@@ -82,7 +82,7 @@ private:
 	void emit_legacy_uniform(const SPIRVariable &var);
 	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
 	std::string to_interpolation_qualifiers(uint64_t flags) override;
-	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
+	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type, uint32_t id = 0) override;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_sampler_expression(uint32_t id);
 	std::string to_resource_binding(const SPIRVariable &var);

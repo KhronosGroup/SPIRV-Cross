@@ -7,12 +7,12 @@ using namespace metal;
 
 struct Structy
 {
-    float4 c;
+    half4 c;
 };
 
 struct main0_out
 {
-    float4 FragColor [[color(0)]];
+    half4 FragColor [[color(0)]];
 };
 
 void foo2(thread Structy& f)

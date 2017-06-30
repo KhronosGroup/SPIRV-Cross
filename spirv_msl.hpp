@@ -149,7 +149,7 @@ protected:
 	void emit_fixup() override;
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "") override;
-	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
+	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0, uint32_t member_index = 0) override;
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin) override;
 	std::string constant_expression(const SPIRConstant &c) override;
@@ -164,7 +164,7 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, bool *p_forward) override;
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
-	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
+	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type, uint32_t id = 0) override;
 	bool skip_argument(uint32_t id) const override;
 
 	void preprocess_op_codes();
@@ -185,7 +185,7 @@ protected:
 	void populate_func_name_overrides();
 	void populate_var_name_overrides();
 
-	std::string func_type_decl(SPIRType &type);
+	std::string func_type_decl(SPIRType &type, uint32_t id);
 	std::string clean_func_name(std::string func_name) override;
 	std::string entry_point_args(bool append_comma);
 	std::string get_entry_point_name();
@@ -208,6 +208,7 @@ protected:
 	uint32_t get_input_buffer_block_var_id(uint32_t msl_buffer);
 	void align_struct(SPIRType &ib_type);
 	bool is_member_packable(SPIRType &ib_type, uint32_t index);
+    bool is_medium_precision(const SPIRType &type, uint32_t id, uint32_t member_index = 0);
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
 	SPVFuncImpl get_spv_func_impl(spv::Op opcode, const uint32_t *args);
 	std::string get_argument_address_space(const SPIRVariable &argument);

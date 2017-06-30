@@ -16,8 +16,8 @@ struct main0_in
 
 struct main0_out
 {
-    float4 VertexOut_color2 [[user(locn3)]];
     float4 VertexOut_color [[user(locn2)]];
+    float4 VertexOut_color2 [[user(locn3)]];
     float4 gl_Position [[position]];
 };
 

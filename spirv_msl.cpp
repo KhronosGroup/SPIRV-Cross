@@ -87,6 +87,8 @@ string CompilerMSL::compile()
 	update_active_builtins();
 	fixup_image_load_store_access();
 
+    set_enabled_interface_variables(get_active_interface_variables());
+
 	// Preprocess OpCodes to extract the need to output additional header content
 	preprocess_op_codes();
 
@@ -168,7 +170,6 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 // Register the need to output any custom functions.
 void CompilerMSL::preprocess_op_codes()
 {
-	set_enabled_interface_variables(get_active_interface_variables());
 	spv_function_implementations.clear();
 
 	OpCodePreprocessor preproc(*this);
@@ -389,6 +390,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	case StorageClassUniformConstant:
 	{
 		ib_var_ref = stage_uniform_var_name;
+        active_interface_variables.insert(ib_var_id);   // Ensure will be emitted
 		break;
 	}
 
@@ -447,6 +449,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						mark_location_as_used_by_shader(locn, storage);
 					}
 
+                    // Migrate whether this member should use half precision
+                    if (has_member_decoration(type_id, mbr_idx, DecorationRelaxedPrecision))
+                        set_member_decoration(ib_type_id, ib_mbr_idx, DecorationRelaxedPrecision);
+
 					// Mark the member as builtin if needed
 					if (is_builtin)
 					{
@@ -492,6 +498,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					mark_location_as_used_by_shader(locn, storage);
 				}
 
+                // Migrate whether this member should use half precision
+                if (has_decoration(p_var->self, DecorationRelaxedPrecision))
+                    set_member_decoration(ib_type_id, ib_mbr_idx, DecorationRelaxedPrecision);
+
 				// Mark the member as builtin if needed
 				if (is_builtin)
 				{
@@ -503,22 +513,13 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		}
 	}
 
-	// Sort the members of the interface structure by their attribute numbers.
+	// Sort the members of the structure by their locations.
 	// Oddly, Metal handles inputs better if they are sorted in reverse order,
 	// particularly if the offsets are all equal.
 	MemberSorter::SortAspect sort_aspect =
 	    (storage == StorageClassInput) ? MemberSorter::LocationReverse : MemberSorter::Location;
 	MemberSorter member_sorter(ib_type, meta[ib_type_id], sort_aspect);
 	member_sorter.sort();
-
-	// Sort input or output variables alphabetical
-	auto &execution = get_entry_point();
-	if ((execution.model == ExecutionModelFragment && storage == StorageClassInput) ||
-	    (execution.model == ExecutionModelVertex && storage == StorageClassOutput))
-	{
-		MemberSorter member_sorter_io(ib_type, meta[ib_type.self], MemberSorter::Alphabetical);
-		member_sorter_io.sort();
-	}
 
 	return ib_var_id;
 }
@@ -1564,7 +1565,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	processing_entry_point = (func.self == entry_point);
 
 	auto &type = get<SPIRType>(func.return_type);
-	decl += func_type_decl(type);
+	decl += func_type_decl(type, func.self);
 	decl += " ";
 	decl += clean_func_name(to_name(func.self));
 
@@ -1654,6 +1655,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	string tex_coords = coord_expr;
 	const char *alt_coord = "";
+    const char *coord_cast = "";
 
 	switch (imgtype.image.dim)
 	{
@@ -1666,6 +1668,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			tex_coords = "uint(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
 		alt_coord = ".y";
+        coord_cast = "float";
 
 		break;
 
@@ -1677,6 +1680,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ", 0)"; // Metal textures are 2D
 
 		alt_coord = ".y";
+        coord_cast = "float";
 
 		break;
 
@@ -1688,6 +1692,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
 		alt_coord = ".z";
+        coord_cast = "float2";
 
 		break;
 
@@ -1699,6 +1704,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			tex_coords = "uint3(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
 		alt_coord = ".w";
+        coord_cast = "float3";
 
 		break;
 
@@ -1716,6 +1722,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		}
 
 		alt_coord = ".w";
+        coord_cast = "float3";
 
 		break;
 
@@ -1726,6 +1733,10 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	// If projection, use alt coord as divisor
 	if (is_proj)
 		tex_coords += " / " + coord_expr + alt_coord;
+
+    // If the coords are half precision, cast them to full precision.
+    if (!is_fetch && has_decoration(coord, DecorationRelaxedPrecision))
+        tex_coords = string(coord_cast) + "(" + tex_coords + ")";
 
 	if (!farg_str.empty())
 		farg_str += ", ";
@@ -1946,7 +1957,7 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	// If this member is packed, mark it as so.
 	string pack_pfx = member_is_packed_type(type, index) ? "packed_" : "";
 
-	statement(pack_pfx, type_to_glsl(membertype), " ", qualifier, to_member_name(type, index),
+	statement(pack_pfx, type_to_glsl(membertype, type.self, index), " ", qualifier, to_member_name(type, index),
 	          member_attribute_qualifier(type, index), type_to_array_glsl(membertype), ";");
 }
 
@@ -2128,11 +2139,11 @@ string CompilerMSL::constant_expression(const SPIRConstant &c)
 
 // Returns the type declaration for a function, including the
 // entry type if the current function is the entry point function
-string CompilerMSL::func_type_decl(SPIRType &type)
+string CompilerMSL::func_type_decl(SPIRType &type, uint32_t id)
 {
 	auto &execution = get_entry_point();
 	// The regular function return type. If not processing the entry point function, that's all we need
-	string return_type = type_to_glsl(type);
+	string return_type = type_to_glsl(type, id);
 	if (!processing_entry_point)
 		return return_type;
 
@@ -2412,7 +2423,7 @@ string CompilerMSL::ensure_valid_name(string name, string pfx)
 // The optional id parameter indicates the object whose type we are trying
 // to find the description for. It is optional. Most type descriptions do not
 // depend on a specific object's use of that type.
-string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
+string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, uint32_t member_index)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
 
@@ -2445,10 +2456,10 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "char";
 		break;
 	case SPIRType::Int:
-		type_name = (type.width == 16 ? "short" : "int");
+		type_name = is_medium_precision(type, id, member_index) ? "short" : "int";
 		break;
 	case SPIRType::UInt:
-		type_name = (type.width == 16 ? "ushort" : "uint");
+		type_name = is_medium_precision(type, id, member_index) ? "ushort" : "uint";
 		break;
 	case SPIRType::Int64:
 		type_name = "long"; // Currently unsupported
@@ -2457,7 +2468,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "size_t";
 		break;
 	case SPIRType::Float:
-		type_name = (type.width == 16 ? "half" : "float");
+		type_name = is_medium_precision(type, id, member_index) ? "half" : "float";
 		break;
 	case SPIRType::Double:
 		type_name = "double"; // Currently unsupported
@@ -2476,6 +2487,26 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name += to_string(type.vecsize);
 
 	return type_name;
+}
+
+// Returns whether the type, as applied to an object, should use half-precision (short/half)
+// instead of high precision (int/float). If id references a SPIRType, then member_index is
+// used to reference the member.
+bool CompilerMSL::is_medium_precision(const SPIRType &type, uint32_t id, uint32_t member_index)
+{
+    // If the type width is explicitely 16 bits, it defines a half-precision type.
+    if (type.width == 16 && (type.basetype == SPIRType::Int ||
+                             type.basetype == SPIRType::UInt ||
+                             type.basetype == SPIRType::Float))
+        return true;
+
+    // If the object whose type is being
+    auto *var_type = maybe_get<SPIRType>(id);
+    if (var_type)
+        return has_member_decoration(var_type->self, member_index, DecorationRelaxedPrecision);
+    else
+        return has_decoration(id, DecorationRelaxedPrecision);
+
 }
 
 // Returns an MSL string describing  the SPIR-V image type
@@ -2526,7 +2557,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	// Append the pixel type
 	img_type_name += "<";
-	img_type_name += type_to_glsl(get<SPIRType>(img_type.type));
+	img_type_name += type_to_glsl(get<SPIRType>(img_type.type), id);
 
 	// For unsampled images, append the sample/read/write access qualifier.
 	// For kernel images, the access qualifier my be supplied directly by SPIR-V.
@@ -2569,13 +2600,13 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	return img_type_name;
 }
 
-string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
+string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type, uint32_t id)
 {
 	if ((out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int) ||
 	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt) ||
 	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64) ||
 	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64))
-		return type_to_glsl(out_type);
+		return type_to_glsl(out_type, id);
 
 	if ((out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float) ||
 	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float) ||
@@ -2585,7 +2616,7 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double) ||
 	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64) ||
 	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64))
-		return "as_type<" + type_to_glsl(out_type) + ">";
+		return "as_type<" + type_to_glsl(out_type, id) + ">";
 
 	return "";
 }
