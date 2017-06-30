@@ -1611,7 +1611,12 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			}
 		}
 		else if (storage == StorageClassPushConstant)
-			space = "c"; // Constant buffers
+		{
+			if (options.shader_model >= 51)
+				space = "b"; // Constant buffers
+			else
+				space = "c"; // Constant buffers
+		}
 
 		break;
 	}
