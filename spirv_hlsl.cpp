@@ -879,9 +879,20 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
+	bool is_uav = has_decoration(type.self, DecorationBufferBlock);
+	if (is_uav)
+		SPIRV_CROSS_THROW("Buffer is SSBO (UAV). This is currently unsupported.");
+
 	add_resource_name(type.self);
 
-	statement("struct _", to_name(type.self));
+	string struct_name;
+	if (options.shader_model >= 51)
+		struct_name = to_name(type.self);
+	else
+		struct_name = join("_", to_name(type.self));
+
+	// First, declare the struct of the UBO.
+	statement("struct ", struct_name);
 	begin_scope();
 
 	type.member_name_cache.clear();
@@ -896,11 +907,17 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	end_scope_decl();
 	statement("");
 
-	// TODO: UAV?
-	statement("cbuffer ", to_name(type.self), to_resource_binding(var));
-	begin_scope();
-	statement("_", to_name(type.self), " ", to_name(var.self), ";");
-	end_scope_decl();
+	if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
+	{
+		statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
+	}
+	else
+	{
+		statement("cbuffer ", to_name(type.self), to_resource_binding(var));
+		begin_scope();
+		statement(struct_name, " ", to_name(var.self), type_to_array_glsl(type), ";");
+		end_scope_decl();
+	}
 }
 
 void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
@@ -1586,10 +1603,20 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			if (has_decoration(type.self, DecorationBufferBlock))
 				space = "u"; // UAV
 			else if (has_decoration(type.self, DecorationBlock))
-				space = "c"; // Constant buffers
+			{
+				if (options.shader_model >= 51)
+					space = "b"; // Constant buffers
+				else
+					space = "c"; // Constant buffers
+			}
 		}
 		else if (storage == StorageClassPushConstant)
-			space = "c"; // Constant buffers
+		{
+			if (options.shader_model >= 51)
+				space = "b"; // Constant buffers
+			else
+				space = "c"; // Constant buffers
+		}
 
 		break;
 	}

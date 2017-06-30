@@ -1,11 +1,6 @@
 #version 310 es
 precision mediump float;
 
-layout(binding = 1, std430) readonly buffer UAV0
-{
-   vec4 a;
-} uav0;
-
 layout(binding = 3, std140) uniform CBuffer
 {
    vec4 a;
@@ -27,6 +22,6 @@ void main()
 {
    vec4 c0 = texture(uSampledImage, vTex);
    vec4 c1 = texture(sampler2D(uTexture, uSampler), vTex);
-   vec4 c2 = cbuf.a + uav0.a + registers.d;
+   vec4 c2 = cbuf.a + registers.d;
    FragColor = c0 + c1 + c2;
 }

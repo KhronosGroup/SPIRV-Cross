@@ -102,6 +102,14 @@ def validate_shader_hlsl(shader):
     if (not force_no_external_validation) and os.path.exists('fxc'):
         subprocess.check_call(['fxc', shader])
 
+def shader_to_sm(shader):
+    if '.sm51.' in shader:
+        return '51'
+    elif '.sm20.' in shader:
+        return '20'
+    else:
+        return '50'
+
 def cross_compile_hlsl(shader):
     spirv_f, spirv_path = tempfile.mkstemp()
     hlsl_f, hlsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
@@ -109,7 +117,9 @@ def cross_compile_hlsl(shader):
     os.close(hlsl_f)
     subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', '50'])
+
+    sm = shader_to_sm(shader)
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm])
     subprocess.check_call(['spirv-val', spirv_path])
 
     validate_shader_hlsl(hlsl_path)
