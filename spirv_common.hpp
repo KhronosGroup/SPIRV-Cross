@@ -394,9 +394,6 @@ struct SPIRExpression : IVariant
 	// it is assumed that this is true almost always.
 	bool immutable = false;
 
-	// If this expression has been used while invalidated.
-	bool used_while_invalidated = false;
-
 	// Before use, this expression must be transposed.
 	// This is needed for targets which don't support row_major layouts.
 	bool need_transpose = false;

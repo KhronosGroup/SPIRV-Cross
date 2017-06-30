@@ -1194,6 +1194,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpSourceExtension:
 	case OpNop:
 	case OpLine:
+	case OpString:
 		break;
 
 	case OpSource:
