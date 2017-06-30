@@ -7,15 +7,6 @@ cbuffer CBuffer : register(c3)
 {
     _CBuffer cbuf;
 };
-struct _UAV0
-{
-    float4 a;
-};
-
-cbuffer UAV0 : register(u1)
-{
-    _UAV0 uav0;
-};
 struct _PushMe
 {
     float4 d;
@@ -47,7 +38,7 @@ void frag_main()
 {
     float4 c0 = uSampledImage.Sample(_uSampledImage_sampler, vTex);
     float4 c1 = uTexture.Sample(uSampler, vTex);
-    float4 c2 = (cbuf.a + uav0.a) + registers.d;
+    float4 c2 = cbuf.a + registers.d;
     FragColor = (c0 + c1) + c2;
 }
 
