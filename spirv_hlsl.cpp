@@ -942,7 +942,14 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	if (is_uav)
 	{
 		// type_to_array_glsl is excluded because RWStructuredBuffer<T> must always be accessed as an array but not declared as one
-		statement("RWStructuredBuffer<", struct_name, "> ", to_name(var.self), to_resource_binding(var), ";");
+		if (has_decoration(type.self, DecorationNonWritable))
+		{
+			statement("StructuredBuffer<", struct_name, "> ", to_name(var.self), to_resource_binding(var), ";");
+		}
+		else
+		{
+			statement("RWStructuredBuffer<", struct_name, "> ", to_name(var.self), to_resource_binding(var), ";");
+		}
 	}
 	else if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
 	{
@@ -1008,7 +1015,7 @@ string CompilerHLSL::to_name(uint32_t id, bool allow_alias) const
 		auto &type = get<SPIRType>(var->basetype);
 		if (type.basetype == SPIRType::BaseType::Struct && var->storage != StorageClassFunction && type.pointer &&
 		    type.storage == StorageClassUniform && !is_hidden_variable(*var) && type.array.size() == 0 &&
-		    (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
+		    has_decoration(type.self, DecorationBufferBlock))
 		{
 			name += "[0]";
 		}
