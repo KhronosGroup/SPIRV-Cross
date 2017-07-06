@@ -996,6 +996,27 @@ string CompilerHLSL::to_func_call_arg(uint32_t id)
 	return arg_str;
 }
 
+string CompilerHLSL::to_name(uint32_t id, bool allow_alias) const
+{
+	string name = Compiler::to_name(id, allow_alias);
+
+	// RWStructuredBuffer<T> and StructuredBuffer<T> require an array access.
+	// Replace usages of SSBOs declared as structs with an array access to element 0
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (current_function && var)
+	{
+		auto &type = get<SPIRType>(var->basetype);
+		if (type.basetype == SPIRType::BaseType::Struct && var->storage != StorageClassFunction && type.pointer &&
+		    type.storage == StorageClassUniform && !is_hidden_variable(*var) && type.array.size() == 0 &&
+		    (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
+		{
+			name += "[0]";
+		}
+	}
+
+	return name;
+}
+
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
 {
 	auto &execution = get_entry_point();
