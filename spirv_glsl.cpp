@@ -2966,12 +2966,13 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 {
 	string fname;
 
-	// textureLod on sampler2DArrayShadow does not exist in GLSL for some reason.
+	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
-	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
+	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
-	if (imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod)
+	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
+	    imgtype.image.depth && lod)
 	{
 		auto *constant_lod = maybe_get<SPIRConstant>(lod);
 		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
@@ -3037,12 +3038,13 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	// Only enclose the UV expression if needed.
 	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(coord) : (to_enclosed_expression(coord) + swizzle_expr);
 
-	// textureLod on sampler2DArrayShadow does not exist in GLSL for some reason.
+	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
-	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
+	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad =
-	    imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod;
+	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
+	    imgtype.image.depth && lod;
 
 	if (dref)
 	{
@@ -3092,7 +3094,10 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 		{
 			// Implement textureGrad() instead. LOD == 0.0 is implemented as gradient of 0.0.
 			// Implementing this as plain texture() is not safe on some implementations.
-			farg_str += ", vec2(0.0), vec2(0.0)";
+			if (imgtype.image.dim == Dim2D)
+				farg_str += ", vec2(0.0), vec2(0.0)";
+			else if (imgtype.image.dim == DimCube)
+				farg_str += ", vec3(0.0), vec3(0.0)";
 		}
 		else
 		{
