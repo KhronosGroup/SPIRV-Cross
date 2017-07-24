@@ -1812,6 +1812,16 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 string CompilerGLSL::enclose_expression(const string &expr)
 {
 	bool need_parens = false;
+
+	// If the expression starts with a unary we need to enclose to deal with cases where we have back-to-back
+	// unary expressions.
+	if (!expr.empty())
+	{
+		auto c = expr.front();
+		if (c == '-' || c == '+' || c == '!' || c == '~')
+			need_parens = true;
+	}
+
 	uint32_t paren_count = 0;
 	for (auto c : expr)
 	{
