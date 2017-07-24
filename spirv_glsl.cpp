@@ -1812,6 +1812,16 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 string CompilerGLSL::enclose_expression(const string &expr)
 {
 	bool need_parens = false;
+
+	// If the expression starts with a unary we need to enclose to deal with cases where we have back-to-back
+	// unary expressions.
+	if (!expr.empty())
+	{
+		auto c = expr.front();
+		if (c == '-' || c == '+' || c == '!' || c == '~')
+			need_parens = true;
+	}
+
 	uint32_t paren_count = 0;
 	for (auto c : expr)
 	{
@@ -1917,7 +1927,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 		{
 			auto &dec = meta[var.self].decoration;
 			if (dec.builtin)
-				return builtin_to_glsl(dec.builtin_type);
+				return builtin_to_glsl(dec.builtin_type, var.storage);
 			else
 				return to_name(id);
 		}
@@ -2966,12 +2976,13 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 {
 	string fname;
 
-	// textureLod on sampler2DArrayShadow does not exist in GLSL for some reason.
+	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
-	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
+	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
-	if (imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod)
+	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
+	    imgtype.image.depth && lod)
 	{
 		auto *constant_lod = maybe_get<SPIRConstant>(lod);
 		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
@@ -3037,12 +3048,13 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	// Only enclose the UV expression if needed.
 	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(coord) : (to_enclosed_expression(coord) + swizzle_expr);
 
-	// textureLod on sampler2DArrayShadow does not exist in GLSL for some reason.
+	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
-	// This happens for HLSL SampleCmpLevelZero on Texture2DArray.
+	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad =
-	    imgtype.image.arrayed && imgtype.image.dim == Dim2D && imgtype.image.depth && lod;
+	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
+	    imgtype.image.depth && lod;
 
 	if (dref)
 	{
@@ -3092,7 +3104,10 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 		{
 			// Implement textureGrad() instead. LOD == 0.0 is implemented as gradient of 0.0.
 			// Implementing this as plain texture() is not safe on some implementations.
-			farg_str += ", vec2(0.0), vec2(0.0)";
+			if (imgtype.image.dim == Dim2D)
+				farg_str += ", vec2(0.0), vec2(0.0)";
+			else if (imgtype.image.dim == DimCube)
+				farg_str += ", vec3(0.0), vec3(0.0)";
 		}
 		else
 		{
@@ -3443,7 +3458,7 @@ string CompilerGLSL::bitcast_glsl(const SPIRType &result_type, uint32_t argument
 		return join(op, "(", to_expression(argument), ")");
 }
 
-string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
+string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
 	switch (builtin)
 	{
@@ -3507,6 +3522,32 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 		return "gl_GlobalInvocationID";
 	case BuiltInLocalInvocationIndex:
 		return "gl_LocalInvocationIndex";
+
+	case BuiltInSampleId:
+		if (options.es && options.version < 320)
+			require_extension("GL_OES_sample_variables");
+		if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("gl_SampleID not supported before GLSL 400.");
+		return "gl_SampleID";
+
+	case BuiltInSampleMask:
+		if (options.es && options.version < 320)
+			require_extension("GL_OES_sample_variables");
+		if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("gl_SampleMask/gl_SampleMaskIn not supported before GLSL 400.");
+
+		if (storage == StorageClassInput)
+			return "gl_SampleMaskIn";
+		else
+			return "gl_SampleMask";
+
+	case BuiltInSamplePosition:
+		if (options.es && options.version < 320)
+			require_extension("GL_OES_sample_variables");
+		if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("gl_SamplePosition not supported before GLSL 400.");
+		return "gl_SamplePosition";
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
@@ -3624,10 +3665,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (access_chain_is_arrayed)
 				{
 					expr += ".";
-					expr += builtin_to_glsl(builtin);
+					expr += builtin_to_glsl(builtin, type->storage);
 				}
 				else
-					expr = builtin_to_glsl(builtin);
+					expr = builtin_to_glsl(builtin, type->storage);
 			}
 			else
 			{

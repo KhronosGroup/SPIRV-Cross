@@ -473,7 +473,7 @@ static void print_help()
 	                "[--flatten-multidimensional-arrays] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>] "
 	                "[--rename-interface-variable <in|out> <location> <new_variable_name>] "
-					"\n");
+	                "\n");
 }
 
 static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
@@ -560,7 +560,8 @@ static PlsFormat pls_format(const char *str)
 		return PlsNone;
 }
 
-void rename_interface_variable(Compiler &compiler, const vector<Resource> &resources, const InterfaceVariableRename &rename)
+void rename_interface_variable(Compiler &compiler, const vector<Resource> &resources,
+                               const InterfaceVariableRename &rename)
 {
 	for (auto &v : resources)
 	{
@@ -796,7 +797,7 @@ int main(int argc, char *argv[])
 			continue;
 	}
 
-	for (auto &rename : args.interface_variable_renames) 
+	for (auto &rename : args.interface_variable_renames)
 	{
 		if (rename.storageClass == StorageClassInput)
 			rename_interface_variable(*compiler, res.stage_inputs, rename);
