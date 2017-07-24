@@ -909,7 +909,8 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 	if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
 	{
-		statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
+		statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type),
+		          to_resource_binding(var), ";");
 	}
 	else
 	{
