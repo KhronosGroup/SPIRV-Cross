@@ -326,7 +326,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 		}
 
 		if (type && semantic)
-			statement(type, " ", builtin_to_glsl(builtin), " : ", semantic, ";");
+			statement(type, " ", builtin_to_glsl(builtin, StorageClassOutput), " : ", semantic, ";");
 	}
 }
 
@@ -375,7 +375,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 		}
 
 		if (type && semantic)
-			statement(type, " ", builtin_to_glsl(builtin), " : ", semantic, ";");
+			statement(type, " ", builtin_to_glsl(builtin, StorageClassInput), " : ", semantic, ";");
 	}
 }
 
@@ -574,8 +574,12 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 		}
 
+		StorageClass storage = (active_input_builtins & (1ull << i)) != 0 ? StorageClassInput : StorageClassOutput;
+		// FIXME: SampleMask can be both in and out with sample builtin,
+		// need to distinguish that when we add support for that.
+
 		if (type)
-			statement("static ", type, " ", builtin_to_glsl(builtin), ";");
+			statement("static ", type, " ", builtin_to_glsl(builtin, storage), ";");
 	}
 }
 
@@ -1066,7 +1070,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		if (!(active_input_builtins & (1ull << i)))
 			continue;
 
-		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
 		switch (static_cast<BuiltIn>(i))
 		{
 		case BuiltInFragCoord:
@@ -1173,7 +1177,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (i == BuiltInPointSize)
 				continue;
 
-			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassOutput);
 			statement("stage_output.", builtin, " = ", builtin, ";");
 		}
 

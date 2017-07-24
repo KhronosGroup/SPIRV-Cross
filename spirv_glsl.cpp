@@ -1917,7 +1917,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 		{
 			auto &dec = meta[var.self].decoration;
 			if (dec.builtin)
-				return builtin_to_glsl(dec.builtin_type);
+				return builtin_to_glsl(dec.builtin_type, var.storage);
 			else
 				return to_name(id);
 		}
@@ -3448,7 +3448,7 @@ string CompilerGLSL::bitcast_glsl(const SPIRType &result_type, uint32_t argument
 		return join(op, "(", to_expression(argument), ")");
 }
 
-string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
+string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
 	switch (builtin)
 	{
@@ -3512,6 +3512,32 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin)
 		return "gl_GlobalInvocationID";
 	case BuiltInLocalInvocationIndex:
 		return "gl_LocalInvocationIndex";
+
+	case BuiltInSampleId:
+		if (options.es && options.version < 320)
+			require_extension("GL_OES_sample_variables");
+		if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("gl_SampleID not supported before GLSL 400.");
+		return "gl_SampleID";
+
+	case BuiltInSampleMask:
+		if (options.es && options.version < 320)
+			require_extension("GL_OES_sample_variables");
+		if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("gl_SampleMask/gl_SampleMaskIn not supported before GLSL 400.");
+
+		if (storage == StorageClassInput)
+			return "gl_SampleMaskIn";
+		else
+			return "gl_SampleMask";
+
+	case BuiltInSamplePosition:
+		if (options.es && options.version < 320)
+			require_extension("GL_OES_sample_variables");
+		if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("gl_SamplePosition not supported before GLSL 400.");
+		return "gl_SamplePosition";
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
@@ -3629,10 +3655,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (access_chain_is_arrayed)
 				{
 					expr += ".";
-					expr += builtin_to_glsl(builtin);
+					expr += builtin_to_glsl(builtin, type->storage);
 				}
 				else
-					expr = builtin_to_glsl(builtin);
+					expr = builtin_to_glsl(builtin, type->storage);
 			}
 			else
 			{
