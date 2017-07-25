@@ -3166,6 +3166,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		}
 	}
 
+	unordered_set<uint32_t> seen_blocks;
+
 	// Now, try to analyze whether or not these variables are actually loop variables.
 	for (auto &loop_variable : potential_loop_variables)
 	{
@@ -3229,7 +3231,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		// The second condition we need to meet is that no access after the loop
 		// merge can occur. Walk the CFG to see if we find anything.
 		auto &blocks = handler.accessed_variables_to_block[loop_variable.first];
-		cfg.walk_from(header_block.merge_block, [&](uint32_t walk_block) {
+
+		seen_blocks.clear();
+		cfg.walk_from(seen_blocks, header_block.merge_block, [&](uint32_t walk_block) {
 			// We found a block which accesses the variable outside the loop.
 			if (blocks.find(walk_block) != end(blocks))
 				static_loop_init = false;
