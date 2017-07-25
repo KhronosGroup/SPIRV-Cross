@@ -91,6 +91,8 @@ public:
 		{
 			// In vertex shaders, rewrite [0, w] depth (Vulkan/D3D style) to [-w, w] depth (GL style).
 			bool fixup_clipspace = true;
+			// Inverts the Y coordinate so that the [-1, -1] pixel corresponds to texture coordinate [0, 0]
+			bool flip_y = false;
 		} vertex;
 
 		struct

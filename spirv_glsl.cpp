@@ -6567,6 +6567,10 @@ void CompilerGLSL::emit_fixup()
 		const char *suffix = backend.float_literal_suffix ? "f" : "";
 		statement("gl_Position.z = 2.0", suffix, " * gl_Position.z - gl_Position.w;");
 	}
+	if (execution.model == ExecutionModelVertex && options.vertex.flip_y)
+	{
+		statement("gl_Position.y = -gl_Position.y;");
+	}
 }
 
 bool CompilerGLSL::flush_phi_required(uint32_t from, uint32_t to)
