@@ -1822,23 +1822,26 @@ string CompilerGLSL::enclose_expression(const string &expr)
 			need_parens = true;
 	}
 
-	uint32_t paren_count = 0;
-	for (auto c : expr)
+	if (!need_parens)
 	{
-		if (c == '(')
-			paren_count++;
-		else if (c == ')')
+		uint32_t paren_count = 0;
+		for (auto c : expr)
 		{
-			assert(paren_count);
-			paren_count--;
+			if (c == '(')
+				paren_count++;
+			else if (c == ')')
+			{
+				assert(paren_count);
+				paren_count--;
+			}
+			else if (c == ' ' && paren_count == 0)
+			{
+				need_parens = true;
+				break;
+			}
 		}
-		else if (c == ' ' && paren_count == 0)
-		{
-			need_parens = true;
-			break;
-		}
+		assert(paren_count == 0);
 	}
-	assert(paren_count == 0);
 
 	// If this expression contains any spaces which are not enclosed by parentheses,
 	// we need to enclose it so we can treat the whole string as an expression.
