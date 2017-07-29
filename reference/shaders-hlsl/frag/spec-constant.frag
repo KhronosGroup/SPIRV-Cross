@@ -1,0 +1,77 @@
+const float a = 1.0f;
+const float b = 2.0f;
+const int c = 3;
+const int d = 4;
+const uint e = 5u;
+const uint f = 6u;
+const bool g = false;
+const bool h = true;
+
+struct Foo
+{
+    float elems[(d + 2)];
+};
+
+static float4 FragColor;
+
+struct SPIRV_Cross_Output
+{
+    float4 FragColor : SV_Target0;
+};
+
+void frag_main()
+{
+    float t0 = a;
+    float t1 = b;
+    uint c0 = (uint(c) + 0u);
+    int c1 = (-c);
+    int c2 = (~c);
+    int c3 = (c + d);
+    int c4 = (c - d);
+    int c5 = (c * d);
+    int c6 = (c / d);
+    uint c7 = (e / f);
+    int c8 = (c % d);
+    uint c9 = (e % f);
+    int c10 = (c >> d);
+    uint c11 = (e >> f);
+    int c12 = (c << d);
+    int c13 = (c | d);
+    int c14 = (c ^ d);
+    int c15 = (c & d);
+    bool c16 = (g || h);
+    bool c17 = (g && h);
+    bool c18 = (!g);
+    bool c19 = (g == h);
+    bool c20 = (g != h);
+    bool c21 = (c == d);
+    bool c22 = (c != d);
+    bool c23 = (c < d);
+    bool c24 = (e < f);
+    bool c25 = (c > d);
+    bool c26 = (e > f);
+    bool c27 = (c <= d);
+    bool c28 = (e <= f);
+    bool c29 = (c >= d);
+    bool c30 = (e >= f);
+    int c31 = c8 + c3;
+    int c32 = int(e + 0u);
+    bool c33 = (c != int(0u));
+    bool c34 = (e != 0u);
+    int c35 = int(g);
+    uint c36 = uint(g);
+    float c37 = float(g);
+    float _113 = t0 + t1;
+    float vec0[(c + 3)][8];
+    float vec1[(c + 2)];
+    Foo foo;
+    FragColor = ((float4(_113, _113, _113, _113) + float4(vec0[0][0], vec0[0][0], vec0[0][0], vec0[0][0])) + float4(vec1[0], vec1[0], vec1[0], vec1[0])) + float4(foo.elems[c], foo.elems[c], foo.elems[c], foo.elems[c]);
+}
+
+SPIRV_Cross_Output main()
+{
+    frag_main();
+    SPIRV_Cross_Output stage_output;
+    stage_output.FragColor = FragColor;
+    return stage_output;
+}
