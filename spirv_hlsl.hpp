@@ -80,6 +80,7 @@ private:
 	void emit_uniform(const SPIRVariable &var) override;
 	void emit_modern_uniform(const SPIRVariable &var);
 	void emit_legacy_uniform(const SPIRVariable &var);
+	void emit_specialization_constants();
 	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
 	std::string to_interpolation_qualifiers(uint64_t flags) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;

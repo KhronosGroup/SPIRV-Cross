@@ -583,9 +583,34 @@ void CompilerHLSL::emit_builtin_variables()
 	}
 }
 
+void CompilerHLSL::emit_specialization_constants()
+{
+	bool emitted = false;
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (!c.specialization)
+				continue;
+
+			auto &type = get<SPIRType>(c.constant_type);
+			auto name = to_name(c.self);
+
+			statement("const ", variable_decl(type, name), " = ", constant_expression(c), ";");
+			emitted = true;
+		}
+	}
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerHLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
+
+	emit_specialization_constants();
 
 	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
 	// when such variables are instantiated.
