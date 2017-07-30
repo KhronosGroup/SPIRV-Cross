@@ -5815,7 +5815,7 @@ string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
 	if (index < memb.size() && !memb[index].alias.empty())
 		return memb[index].alias;
 	else
-		return join("_", index);
+		return join("_m", index);
 }
 
 void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
