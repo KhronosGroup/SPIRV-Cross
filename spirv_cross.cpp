@@ -1533,17 +1533,26 @@ void Compiler::parse(const Instruction &instruction)
 		// types, which we shouldn't normally do.
 		// We should not normally have to consider type aliases like this to begin with
 		// however ... glslang issues #304, #307 cover this.
-		for (auto &other : global_struct_cache)
-		{
-			if (get_name(type.self) == get_name(other) && types_are_logically_equivalent(type, get<SPIRType>(other)))
-			{
-				type.type_alias = other;
-				break;
-			}
-		}
 
-		if (type.type_alias == 0)
-			global_struct_cache.push_back(id);
+		// For stripped names, never consider struct type aliasing.
+		// We risk declaring the same struct multiple times, but type-punning is not allowed
+		// so this is safe.
+		bool consider_aliasing = !get_name(type.self).empty();
+		if (consider_aliasing)
+		{
+			for (auto &other : global_struct_cache)
+			{
+				if (get_name(type.self) == get_name(other) &&
+				    types_are_logically_equivalent(type, get<SPIRType>(other)))
+				{
+					type.type_alias = other;
+					break;
+				}
+			}
+
+			if (type.type_alias == 0)
+				global_struct_cache.push_back(id);
+		}
 		break;
 	}
 
