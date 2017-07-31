@@ -965,14 +965,30 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	if (flags & (1ull << DecorationLocation))
 	{
-		uint64_t combined_decoration = 0;
-		for (uint32_t i = 0; i < meta[type.self].members.size(); i++)
-			combined_decoration |= combined_decoration_for_member(type, i);
+		bool can_use_varying_location = true;
 
-		// If our members have location decorations, we don't need to
-		// emit location decorations at the top as well (looks weird).
-		if ((combined_decoration & (1ull << DecorationLocation)) == 0)
-			attr.push_back(join("location = ", dec.location));
+		// Location specifiers are must have in SPIR-V, but they aren't really supported in earlier versions of GLSL.
+		// Be very explicit here about how to solve the issue.
+		if ((get_execution_model() != ExecutionModelVertex && var.storage == StorageClassInput) ||
+		    (get_execution_model() != ExecutionModelFragment && var.storage == StorageClassOutput))
+		{
+			if (!options.es && options.version < 410 && !options.separate_shader_objects)
+				can_use_varying_location = false;
+			else if (options.es && options.version < 310)
+				can_use_varying_location = false;
+		}
+
+		if (can_use_varying_location)
+		{
+			uint64_t combined_decoration = 0;
+			for (uint32_t i = 0; i < meta[type.self].members.size(); i++)
+				combined_decoration |= combined_decoration_for_member(type, i);
+
+			// If our members have location decorations, we don't need to
+			// emit location decorations at the top as well (looks weird).
+			if ((combined_decoration & (1ull << DecorationLocation)) == 0)
+				attr.push_back(join("location = ", dec.location));
+		}
 	}
 
 	// set = 0 is the default. Do not emit set = decoration in regular GLSL output, but
