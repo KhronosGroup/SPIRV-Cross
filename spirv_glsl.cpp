@@ -3019,7 +3019,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool, bool, bool, uint32_t coord,
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool, bool, bool is_proj, uint32_t coord,
                                       uint32_t coord_components, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
                                       uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
                                       uint32_t sample, bool *p_forward)
@@ -3070,6 +3070,35 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 			farg_str += to_expression(coord);
 			farg_str += ", ";
 			farg_str += to_expression(dref);
+		}
+		else if (is_proj)
+		{
+			// Have to reshuffle so we get vec4(coord, dref, proj), special case.
+			// Other shading languages splits up the arguments for coord and compare value like SPIR-V.
+			// The coordinate type for textureProj shadow is always vec4 even for sampler1DShadow.
+			farg_str += ", vec4(";
+
+			if (imgtype.image.dim == Dim1D)
+			{
+				// Could reuse coord_expr, but we will mess up the temporary usage checking.
+				farg_str += to_enclosed_expression(coord) + ".x";
+				farg_str += ", ";
+				farg_str += "0.0, ";
+				farg_str += to_expression(dref);
+				farg_str += ", ";
+				farg_str += to_enclosed_expression(coord) + ".y)";
+			}
+			else if (imgtype.image.dim == Dim2D)
+			{
+				// Could reuse coord_expr, but we will mess up the temporary usage checking.
+				farg_str += to_enclosed_expression(coord) + (swizz_func ? ".xy()" : ".xy");
+				farg_str += ", ";
+				farg_str += to_expression(dref);
+				farg_str += ", ";
+				farg_str += to_enclosed_expression(coord) + ".z)";
+			}
+			else
+				SPIRV_CROSS_THROW("Invalid type for textureProj with shadow.");
 		}
 		else
 		{
