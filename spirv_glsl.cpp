@@ -1578,6 +1578,23 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	}
 }
 
+void CompilerGLSL::declare_undefined_values()
+{
+	bool emitted = false;
+	for (auto &id : ids)
+	{
+		if (id.get_type() != TypeUndef)
+			continue;
+
+		auto &undef = id.get<SPIRUndef>();
+		statement(variable_decl(get<SPIRType>(undef.basetype), to_name(undef.self), undef.self), ";");
+		emitted = true;
+	}
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerGLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
@@ -1772,6 +1789,8 @@ void CompilerGLSL::emit_resources()
 
 	if (emitted)
 		statement("");
+
+	declare_undefined_values();
 }
 
 // Returns a string representation of the ID, usable as a function arg.

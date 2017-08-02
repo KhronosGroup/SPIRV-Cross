@@ -1650,6 +1650,14 @@ void Compiler::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpConstantNull:
+	{
+		uint32_t id = ops[1];
+		uint32_t type = ops[0];
+		set<SPIRConstant>(id, type);
+		break;
+	}
+
 	case OpSpecConstantComposite:
 	case OpConstantComposite:
 	{

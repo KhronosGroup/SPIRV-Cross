@@ -990,6 +990,8 @@ void CompilerMSL::emit_resources()
 		}
 	}
 
+	declare_undefined_values();
+
 	// Output interface blocks.
 	emit_interface_block(stage_in_var_id);
 	for (auto &nsi_var : non_stage_in_input_var_ids)

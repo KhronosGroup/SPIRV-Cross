@@ -845,6 +845,8 @@ void CompilerHLSL::emit_resources()
 	if (emitted)
 		statement("");
 
+	declare_undefined_values();
+
 	if (requires_op_fmod)
 	{
 		statement("float mod(float x, float y)");
