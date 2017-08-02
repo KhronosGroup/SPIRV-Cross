@@ -464,6 +464,8 @@ protected:
 
 	bool type_is_empty(const SPIRType &type);
 
+	void declare_undefined_values();
+
 private:
 	void init()
 	{
