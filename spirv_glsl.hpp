@@ -89,8 +89,13 @@ public:
 
 		struct
 		{
-			// In vertex shaders, rewrite [0, w] depth (Vulkan/D3D style) to [-w, w] depth (GL style).
-			bool fixup_clipspace = true;
+			// GLSL: In vertex shaders, rewrite [0, w] depth (Vulkan/D3D style) to [-w, w] depth (GL style).
+			// MSL: In vertex shaders, rewrite [-w, w] depth (GL style) to [0, w] depth.
+			// HLSL: In vertex shaders, rewrite [-w, w] depth (GL style) to [0, w] depth.
+			bool fixup_clipspace = false;
+
+			// Inverts gl_Position.y or equivalent.
+			bool flip_vert_y = false;
 		} vertex;
 
 		struct

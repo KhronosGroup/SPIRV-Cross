@@ -29,8 +29,6 @@ public:
 	struct Options
 	{
 		uint32_t shader_model = 30; // TODO: map ps_4_0_level_9_0,... somehow
-		bool fixup_clipspace = false;
-		bool flip_vert_y = false;
 
 		// Allows the PointSize builtin, and ignores it, as PointSize is not supported in HLSL.
 		bool point_size_compat = false;
@@ -81,6 +79,7 @@ private:
 	void emit_modern_uniform(const SPIRVariable &var);
 	void emit_legacy_uniform(const SPIRVariable &var);
 	void emit_specialization_constants();
+	void emit_fixup() override;
 	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
 	std::string to_interpolation_qualifiers(uint64_t flags) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
