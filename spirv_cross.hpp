@@ -668,6 +668,8 @@ protected:
 
 		void add_hierarchy_to_comparison_samplers(uint32_t sampler);
 	};
+
+	void make_constant_null(uint32_t id, uint32_t type);
 };
 }
 

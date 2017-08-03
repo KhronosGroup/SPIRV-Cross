@@ -2140,7 +2140,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 			if (subc.specialization && options.vulkan_semantics)
 				res += to_name(elem);
 			else
-				res += constant_expression(get<SPIRConstant>(elem));
+				res += constant_expression(subc);
 
 			if (&elem != &c.subconstants.back())
 				res += ", ";
