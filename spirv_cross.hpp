@@ -644,7 +644,8 @@ protected:
 
 	void analyze_parameter_preservation(
 	    SPIRFunction &entry, const CFG &cfg,
-	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks);
+	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &variable_to_blocks,
+	    const std::unordered_map<uint32_t, std::unordered_set<uint32_t>> &complete_write_blocks);
 
 	// If a variable ID or parameter ID is found in this set, a sampler is actually a shadow/comparison sampler.
 	// SPIR-V does not support this distinction, so we must keep track of this information outside the type system.
