@@ -910,45 +910,55 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
-	//bool is_uav = has_decoration(type.self, DecorationBufferBlock);
-	//if (is_uav)
-	//	SPIRV_CROSS_THROW("Buffer is SSBO (UAV). This is currently unsupported.");
+	bool is_uav = has_decoration(type.self, DecorationBufferBlock);
 
-	add_resource_name(type.self);
-
-	string struct_name;
-	if (options.shader_model >= 51)
-		struct_name = to_name(type.self);
-	else
-		struct_name = join("_", to_name(type.self));
-
-	// First, declare the struct of the UBO.
-	statement("struct ", struct_name);
-	begin_scope();
-
-	type.member_name_cache.clear();
-
-	uint32_t i = 0;
-	for (auto &member : type.member_types)
+	if (is_uav)
 	{
-		add_member_name(type, i);
-		emit_struct_member(type, member, i);
-		i++;
-	}
-	end_scope_decl();
-	statement("");
-
-	if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
-	{
-		statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type),
-		          to_resource_binding(var), ";");
+		uint64_t flags = get_buffer_block_flags(var);
+		bool is_readonly = (flags & (1ull << DecorationNonWritable)) != 0;
+		add_resource_name(var.self);
+		statement(is_readonly ? "ByteAddressBuffer " : "RWByteAddressBuffer ",
+		          to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 	}
 	else
 	{
-		statement("cbuffer ", to_name(type.self), to_resource_binding(var));
+		add_resource_name(type.self);
+		add_resource_name(var.self);
+
+		string struct_name;
+		if (options.shader_model >= 51)
+			struct_name = to_name(type.self);
+		else
+			struct_name = join("_", to_name(type.self));
+
+		// First, declare the struct of the UBO.
+		statement("struct ", struct_name);
 		begin_scope();
-		statement(struct_name, " ", to_name(var.self), type_to_array_glsl(type), ";");
+
+		type.member_name_cache.clear();
+
+		uint32_t i = 0;
+		for (auto &member : type.member_types)
+		{
+			add_member_name(type, i);
+			emit_struct_member(type, member, i);
+			i++;
+		}
 		end_scope_decl();
+		statement("");
+
+		if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
+		{
+			statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type),
+			          to_resource_binding(var), ";");
+		}
+		else
+		{
+			statement("cbuffer ", to_name(type.self), to_resource_binding(var));
+			begin_scope();
+			statement(struct_name, " ", to_name(var.self), type_to_array_glsl(type), ";");
+			end_scope_decl();
+		}
 	}
 }
 
