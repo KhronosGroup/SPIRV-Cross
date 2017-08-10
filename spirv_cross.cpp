@@ -1538,17 +1538,26 @@ void Compiler::parse(const Instruction &instruction)
 		// types, which we shouldn't normally do.
 		// We should not normally have to consider type aliases like this to begin with
 		// however ... glslang issues #304, #307 cover this.
-		for (auto &other : global_struct_cache)
-		{
-			if (get_name(type.self) == get_name(other) && types_are_logically_equivalent(type, get<SPIRType>(other)))
-			{
-				type.type_alias = other;
-				break;
-			}
-		}
 
-		if (type.type_alias == 0)
-			global_struct_cache.push_back(id);
+		// For stripped names, never consider struct type aliasing.
+		// We risk declaring the same struct multiple times, but type-punning is not allowed
+		// so this is safe.
+		bool consider_aliasing = !get_name(type.self).empty();
+		if (consider_aliasing)
+		{
+			for (auto &other : global_struct_cache)
+			{
+				if (get_name(type.self) == get_name(other) &&
+				    types_are_logically_equivalent(type, get<SPIRType>(other)))
+				{
+					type.type_alias = other;
+					break;
+				}
+			}
+
+			if (type.type_alias == 0)
+				global_struct_cache.push_back(id);
+		}
 		break;
 	}
 
@@ -1643,6 +1652,14 @@ void Compiler::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		set<SPIRConstant>(id, ops[0], uint32_t(1)).specialization = op == OpSpecConstantTrue;
+		break;
+	}
+
+	case OpConstantNull:
+	{
+		uint32_t id = ops[1];
+		uint32_t type = ops[0];
+		make_constant_null(id, type);
 		break;
 	}
 
@@ -2911,7 +2928,8 @@ static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block, con
 }
 
 void Compiler::analyze_parameter_preservation(
-    SPIRFunction &entry, const CFG &cfg, const unordered_map<uint32_t, unordered_set<uint32_t>> &variable_to_blocks)
+    SPIRFunction &entry, const CFG &cfg, const unordered_map<uint32_t, unordered_set<uint32_t>> &variable_to_blocks,
+    const unordered_map<uint32_t, unordered_set<uint32_t>> &complete_write_blocks)
 {
 	for (auto &arg : entry.arguments)
 	{
@@ -2946,7 +2964,16 @@ void Compiler::analyze_parameter_preservation(
 			continue;
 		}
 
-		// If there is a path through the CFG where no block writes to the variable, the variable will be in an undefined state
+		// We have accessed a variable, but there was no complete writes to that variable.
+		// We deduce that we must preserve the argument.
+		itr = complete_write_blocks.find(arg.id);
+		if (itr == end(complete_write_blocks))
+		{
+			arg.read_count++;
+			continue;
+		}
+
+		// If there is a path through the CFG where no block completely writes to the variable, the variable will be in an undefined state
 		// when the function returns. We therefore need to implicitly preserve the variable in case there are writers in the function.
 		// Major case here is if a function is
 		// void foo(int &var) { if (cond) var = 10; }
@@ -3024,6 +3051,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto *var = compiler.maybe_get_backing_variable(ptr);
 				if (var && var->storage == StorageClassFunction)
 					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				// If we store through an access chain, we have a partial write.
+				if (var && var->self == ptr && var->storage == StorageClassFunction)
+					complete_write_variables_to_block[var->self].insert(current_block->self);
 				break;
 			}
 
@@ -3050,6 +3081,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto *var = compiler.maybe_get_backing_variable(lhs);
 				if (var && var->storage == StorageClassFunction)
 					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				// If we store through an access chain, we have a partial write.
+				if (var->self == lhs)
+					complete_write_variables_to_block[var->self].insert(current_block->self);
 
 				var = compiler.maybe_get_backing_variable(rhs);
 				if (var && var->storage == StorageClassFunction)
@@ -3091,6 +3126,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					auto *var = compiler.maybe_get_backing_variable(args[i]);
 					if (var && var->storage == StorageClassFunction)
 						accessed_variables_to_block[var->self].insert(current_block->self);
+
+					// Cannot easily prove if argument we pass to a function is completely written.
+					// Usually, functions write to a dummy variable,
+					// which is then copied to in full to the real argument.
 				}
 				break;
 			}
@@ -3116,6 +3155,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 		Compiler &compiler;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
 		const SPIRBlock *current_block = nullptr;
 	} handler(*this);
 
@@ -3127,7 +3167,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	CFG cfg(*this, entry);
 
 	// Analyze if there are parameters which need to be implicitly preserved with an "in" qualifier.
-	analyze_parameter_preservation(entry, cfg, handler.accessed_variables_to_block);
+	analyze_parameter_preservation(entry, cfg, handler.accessed_variables_to_block,
+	                               handler.complete_write_variables_to_block);
 
 	unordered_map<uint32_t, uint32_t> potential_loop_variables;
 
@@ -3170,6 +3211,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			this->get<SPIRVariable>(var.first).dominator = dominating_block;
 		}
 	}
+
+	unordered_set<uint32_t> seen_blocks;
 
 	// Now, try to analyze whether or not these variables are actually loop variables.
 	for (auto &loop_variable : potential_loop_variables)
@@ -3234,7 +3277,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		// The second condition we need to meet is that no access after the loop
 		// merge can occur. Walk the CFG to see if we find anything.
 		auto &blocks = handler.accessed_variables_to_block[loop_variable.first];
-		cfg.walk_from(header_block.merge_block, [&](uint32_t walk_block) {
+
+		seen_blocks.clear();
+		cfg.walk_from(seen_blocks, header_block.merge_block, [&](uint32_t walk_block) {
 			// We found a block which accesses the variable outside the loop.
 			if (blocks.find(walk_block) != end(blocks))
 				static_loop_init = false;
@@ -3539,4 +3584,40 @@ bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id)
 		}
 	}
 	return false;
+}
+
+void Compiler::make_constant_null(uint32_t id, uint32_t type)
+{
+	auto &constant_type = get<SPIRType>(type);
+
+	if (!constant_type.array.empty())
+	{
+		assert(constant_type.parent_type);
+		uint32_t parent_id = increase_bound_by(1);
+		make_constant_null(parent_id, constant_type.parent_type);
+
+		if (!constant_type.array_size_literal.back())
+			SPIRV_CROSS_THROW("Array size of OpConstantNull must be a literal.");
+
+		vector<uint32_t> elements(constant_type.array.back());
+		for (uint32_t i = 0; i < constant_type.array.back(); i++)
+			elements[i] = parent_id;
+		set<SPIRConstant>(id, type, elements.data(), elements.size());
+	}
+	else if (!constant_type.member_types.empty())
+	{
+		uint32_t member_ids = increase_bound_by(constant_type.member_types.size());
+		vector<uint32_t> elements(constant_type.member_types.size());
+		for (uint32_t i = 0; i < constant_type.member_types.size(); i++)
+		{
+			make_constant_null(member_ids + i, constant_type.member_types[i]);
+			elements[i] = member_ids + i;
+		}
+		set<SPIRConstant>(id, type, elements.data(), elements.size());
+	}
+	else
+	{
+		auto &constant = set<SPIRConstant>(id, type);
+		constant.make_null(constant_type);
+	}
 }

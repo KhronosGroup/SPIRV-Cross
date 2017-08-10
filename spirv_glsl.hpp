@@ -172,7 +172,7 @@ protected:
 	virtual void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id);
 	virtual void emit_texture_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type, uint32_t id = 0);
-	virtual std::string builtin_to_glsl(spv::BuiltIn builtin);
+	virtual std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage);
 	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                                const std::string &qualifier = "");
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0);
@@ -463,6 +463,8 @@ protected:
 	void fixup_image_load_store_access();
 
 	bool type_is_empty(const SPIRType &type);
+
+	void declare_undefined_values();
 
 private:
 	void init()

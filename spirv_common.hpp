@@ -729,6 +729,19 @@ struct SPIRConstant : IVariant
 		return m.columns;
 	}
 
+	inline void make_null(const SPIRType &constant_type_)
+	{
+		std::memset(&m, 0, sizeof(m));
+		m.columns = constant_type_.columns;
+		for (auto &c : m.c)
+			c.vecsize = constant_type_.vecsize;
+	}
+
+	SPIRConstant(uint32_t constant_type_)
+	    : constant_type(constant_type_)
+	{
+	}
+
 	SPIRConstant(uint32_t constant_type_, const uint32_t *elements, uint32_t num_elements)
 	    : constant_type(constant_type_)
 	{

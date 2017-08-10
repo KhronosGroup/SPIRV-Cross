@@ -326,7 +326,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 		}
 
 		if (type && semantic)
-			statement(type, " ", builtin_to_glsl(builtin), " : ", semantic, ";");
+			statement(type, " ", builtin_to_glsl(builtin, StorageClassOutput), " : ", semantic, ";");
 	}
 }
 
@@ -375,7 +375,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 		}
 
 		if (type && semantic)
-			statement(type, " ", builtin_to_glsl(builtin), " : ", semantic, ";");
+			statement(type, " ", builtin_to_glsl(builtin, StorageClassInput), " : ", semantic, ";");
 	}
 }
 
@@ -574,14 +574,43 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 		}
 
+		StorageClass storage = (active_input_builtins & (1ull << i)) != 0 ? StorageClassInput : StorageClassOutput;
+		// FIXME: SampleMask can be both in and out with sample builtin,
+		// need to distinguish that when we add support for that.
+
 		if (type)
-			statement("static ", type, " ", builtin_to_glsl(builtin), ";");
+			statement("static ", type, " ", builtin_to_glsl(builtin, storage), ";");
 	}
+}
+
+void CompilerHLSL::emit_specialization_constants()
+{
+	bool emitted = false;
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (!c.specialization)
+				continue;
+
+			auto &type = get<SPIRType>(c.constant_type);
+			auto name = to_name(c.self);
+
+			statement("const ", variable_decl(type, name), " = ", constant_expression(c), ";");
+			emitted = true;
+		}
+	}
+
+	if (emitted)
+		statement("");
 }
 
 void CompilerHLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
+
+	emit_specialization_constants();
 
 	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
 	// when such variables are instantiated.
@@ -816,6 +845,8 @@ void CompilerHLSL::emit_resources()
 	if (emitted)
 		statement("");
 
+	declare_undefined_values();
+
 	if (requires_op_fmod)
 	{
 		statement("float mod(float x, float y)");
@@ -909,7 +940,8 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 	if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
 	{
-		statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
+		statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type),
+		          to_resource_binding(var), ";");
 	}
 	else
 	{
@@ -1065,7 +1097,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		if (!(active_input_builtins & (1ull << i)))
 			continue;
 
-		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
 		switch (static_cast<BuiltIn>(i))
 		{
 		case BuiltInFragCoord:
@@ -1172,7 +1204,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (i == BuiltInPointSize)
 				continue;
 
-			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i));
+			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassOutput);
 			statement("stage_output.", builtin, " = ", builtin, ";");
 		}
 

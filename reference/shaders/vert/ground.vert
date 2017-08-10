@@ -78,7 +78,7 @@ vec2 warp_position()
         _117 = 0u;
     }
     uvec2 rounding = uvec2(_116, _117);
-    vec4 lower_upper_snapped = vec4((uPosition + rounding).xyxy & ~mask.xxyy);
+    vec4 lower_upper_snapped = vec4((uPosition + rounding).xyxy & (~mask).xxyy);
     return mix(lower_upper_snapped.xy, lower_upper_snapped.zw, vec2(fract_lod));
 }
 
