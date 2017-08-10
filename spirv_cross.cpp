@@ -359,6 +359,9 @@ uint32_t Compiler::expression_type_id(uint32_t id) const
 	case TypeCombinedImageSampler:
 		return get<SPIRCombinedImageSampler>(id).combined_type;
 
+	case TypeAccessChain:
+		return get<SPIRType>(get<SPIRAccessChain>(id).basetype);
+
 	default:
 		SPIRV_CROSS_THROW("Cannot resolve expression type.");
 	}

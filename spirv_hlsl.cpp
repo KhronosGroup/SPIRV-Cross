@@ -910,9 +910,9 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
-	bool is_uav = has_decoration(type.self, DecorationBufferBlock);
-	if (is_uav)
-		SPIRV_CROSS_THROW("Buffer is SSBO (UAV). This is currently unsupported.");
+	//bool is_uav = has_decoration(type.self, DecorationBufferBlock);
+	//if (is_uav)
+	//	SPIRV_CROSS_THROW("Buffer is SSBO (UAV). This is currently unsupported.");
 
 	add_resource_name(type.self);
 
@@ -1802,6 +1802,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
+	uint32_t length = instruction.length;
 
 #define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define BOP_CAST(op, type) \
@@ -1817,6 +1818,66 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
+	{
+		bool need_byte_access_chain = false;
+		auto &type = expression_type(ops[2]);
+		const SPIRAccessChain *chain = nullptr;
+		if (has_decoration(type.self, DecorationBufferBlock))
+		{
+			// If we are starting to poke into an SSBO, we are dealing with ByteAddressBuffers, and we need
+			// to emit SPIRAccessChain rather than a plain SPIRExpression.
+			uint32_t chain_arguments = length - 3;
+			if (chain_arguments > type.array.size())
+				need_byte_access_chain = true;
+		}
+		else
+		{
+			// Keep tacking on an existing access chain.
+			chain = maybe_get<SPIRAccessChain>(ops[2]);
+			if (chain)
+				need_byte_access_chain = true;
+		}
+
+		if (need_byte_access_chain)
+		{
+			uint32_t to_plain_buffer_length = type.array.size();
+
+			string base;
+			if (to_plain_buffer_length != 0)
+			{
+				bool need_transpose;
+				base = access_chain(ops[2], &ops[3], to_plain_buffer_length, get<SPIRType>(ops[0]), &need_transpose);
+			}
+			else
+				base = to_expression(ops[2]);
+
+			auto *basetype = &type;
+			for (uint32_t i = 0; i < to_plain_buffer_length; i++)
+				basetype = &get<SPIRType>(type.parent_type);
+
+			uint32_t matrix_stride = 0;
+			bool need_transpose = false;
+			auto offsets = flattened_access_chain_offset(*basetype,
+			                                             &ops[3 + to_plain_buffer_length], length - 3 - to_plain_buffer_length,
+			                                             0, 1, &need_transpose, &matrix_stride);
+
+
+			auto &e = set<SPIRAccessChain>(ops[1], ops[0], type.storage, base, offsets.first, offsets.second);
+			if (chain)
+			{
+				e.dynamic_index += chain->dynamic_index;
+				e.static_index += chain->static_index;
+			}
+		}
+		else
+		{
+			CompilerGLSL::emit_instruction(instruction);
+		}
+		break;
+	}
+
 	case OpMatrixTimesVector:
 	{
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");

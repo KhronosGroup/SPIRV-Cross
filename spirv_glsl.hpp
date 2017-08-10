@@ -359,8 +359,9 @@ protected:
 	std::string flattened_access_chain_vector(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                          const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
 	                                          bool need_transpose);
-	std::pair<std::string, uint32_t> flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
+	std::pair<std::string, uint32_t> flattened_access_chain_offset(const SPIRType &basetype, const uint32_t *indices,
 	                                                               uint32_t count, uint32_t offset,
+	                                                               uint32_t word_stride,
 	                                                               bool *need_transpose = nullptr,
 	                                                               uint32_t *matrix_stride = nullptr);
 

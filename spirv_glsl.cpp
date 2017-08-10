@@ -3833,7 +3833,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	{
 		uint32_t matrix_stride;
 		bool need_transpose;
-		flattened_access_chain_offset(base, indices, count, 0, &need_transpose, &matrix_stride);
+		flattened_access_chain_offset(expression_type(base), indices, count, 0, 16, &need_transpose, &matrix_stride);
 
 		if (out_need_transpose)
 			*out_need_transpose = target_type.columns > 1 && need_transpose;
@@ -3985,7 +3985,7 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
                                                         const SPIRType &target_type, uint32_t offset,
                                                         uint32_t matrix_stride, bool need_transpose)
 {
-	auto result = flattened_access_chain_offset(base, indices, count, offset);
+	auto result = flattened_access_chain_offset(expression_type(base), indices, count, offset, 16);
 
 	auto buffer_name = to_name(expression_type(base).self);
 
@@ -4044,12 +4044,13 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 	}
 }
 
-std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uint32_t base, const uint32_t *indices,
+std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(const SPIRType &basetype, const uint32_t *indices,
                                                                              uint32_t count, uint32_t offset,
+                                                                             uint32_t word_stride,
                                                                              bool *need_transpose,
                                                                              uint32_t *out_matrix_stride)
 {
-	const auto *type = &expression_type(base);
+	const auto *type = &basetype;
 
 	// Start traversing type hierarchy at the proper non-pointer types.
 	while (type->pointer)
@@ -4092,8 +4093,6 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 			else
 			{
 				// Dynamic array access.
-				// FIXME: This will need to change if we support other flattening types than 32-bit.
-				const uint32_t word_stride = 16;
 				if (array_stride % word_stride)
 				{
 					SPIRV_CROSS_THROW(
@@ -4102,7 +4101,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(uin
 					    "This cannot be flattened. Try using std140 layout instead.");
 				}
 
-				expr += to_expression(index);
+				expr += to_enclosed_expression(index);
 				expr += " * ";
 				expr += convert_to_string(array_stride / word_stride);
 				expr += " + ";
