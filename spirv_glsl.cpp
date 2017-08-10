@@ -1979,6 +1979,10 @@ string CompilerGLSL::to_expression(uint32_t id)
 		// expression ala sampler2D(texture, sampler).
 		SPIRV_CROSS_THROW("Combined image samplers have no default expression representation.");
 
+	case TypeAccessChain:
+		// We cannot express this type. They only have meaning in other OpAccessChains, OpStore or OpLoad.
+		SPIRV_CROSS_THROW("Access chains have no default expression representation.");
+
 	default:
 		return to_name(id);
 	}

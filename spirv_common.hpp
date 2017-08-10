@@ -637,6 +637,7 @@ struct SPIRAccessChain : IVariant
 
 	uint32_t loaded_from = 0;
 	bool need_transpose = false;
+	bool immutable = false;
 };
 
 struct SPIRVariable : IVariant
