@@ -202,8 +202,9 @@ protected:
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	size_t get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const;
 	std::string to_component_argument(uint32_t id);
-	void exclude_from_stage_in(SPIRVariable &var);
-	void exclude_member_from_stage_in(const SPIRType &type, uint32_t index);
+	bool should_move_to_input_buffer(SPIRType &type, bool is_builtin, spv::StorageClass storage);
+	void move_to_input_buffer(SPIRVariable &var);
+	void move_member_to_input_buffer(const SPIRType &type, uint32_t index);
 	std::string add_input_buffer_block_member(uint32_t mbr_type_id, std::string mbr_name, uint32_t mbr_locn);
 	uint32_t get_input_buffer_block_var_id(uint32_t msl_buffer);
 	void align_struct(SPIRType &ib_type);

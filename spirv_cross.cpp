@@ -475,6 +475,11 @@ bool Compiler::is_matrix(const SPIRType &type) const
 	return type.vecsize > 1 && type.columns > 1;
 }
 
+bool Compiler::is_array(const SPIRType &type) const
+{
+	return !type.array.empty();
+}
+
 ShaderResources Compiler::get_shader_resources() const
 {
 	return get_shader_resources(nullptr);

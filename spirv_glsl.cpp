@@ -340,7 +340,7 @@ string CompilerGLSL::compile()
 
 std::string CompilerGLSL::get_partial_source()
 {
-	return buffer->str();
+	return buffer ? buffer->str() : "No compiled source available yet.";
 }
 
 void CompilerGLSL::emit_header()

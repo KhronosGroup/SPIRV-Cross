@@ -455,6 +455,7 @@ protected:
 	bool is_scalar(const SPIRType &type) const;
 	bool is_vector(const SPIRType &type) const;
 	bool is_matrix(const SPIRType &type) const;
+	bool is_array(const SPIRType &type) const;
 	const SPIRType &expression_type(uint32_t id) const;
 	bool expression_is_lvalue(uint32_t id) const;
 	bool variable_storage_is_aliased(const SPIRVariable &var);
