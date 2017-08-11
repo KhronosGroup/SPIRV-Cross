@@ -106,7 +106,6 @@ string CompilerMSL::compile()
 	CompilerGLSL::options.vulkan_semantics = true;
 	CompilerGLSL::options.es = false;
 	CompilerGLSL::options.version = 120;
-	CompilerGLSL::options.vertex.fixup_clipspace = false;
 	backend.float_literal_suffix = false;
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
@@ -1954,7 +1953,7 @@ void CompilerMSL::emit_fixup()
 			          ".w) * 0.5;       // Adjust clip-space for Metal");
 		}
 
-		if (options.flip_vert_y)
+		if (CompilerGLSL::options.vertex.flip_vert_y)
 			statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
 	}
 }

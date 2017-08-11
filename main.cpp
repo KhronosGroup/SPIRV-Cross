@@ -17,6 +17,7 @@
 #include "spirv_cpp.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
+#include "spirv_glsl.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -439,6 +440,7 @@ struct CLIArguments
 	bool force_temporary = false;
 	bool flatten_ubo = false;
 	bool fixup = false;
+	bool yflip = false;
 	bool sso = false;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
@@ -463,7 +465,7 @@ static void print_help()
 {
 	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
 	                "[--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] "
-	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--iterations iter] "
+	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--flip-vert-y] [--iterations iter] "
 	                "[--cpp] [--cpp-interface-name <name>] "
 	                "[--msl] "
 	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
@@ -603,6 +605,7 @@ int main(int argc, char *argv[])
 	cbs.add("--force-temporary", [&args](CLIParser &) { args.force_temporary = true; });
 	cbs.add("--flatten-ubo", [&args](CLIParser &) { args.flatten_ubo = true; });
 	cbs.add("--fixup-clipspace", [&args](CLIParser &) { args.fixup = true; });
+	cbs.add("--flip-vert-y", [&args](CLIParser &) { args.yflip = true; });
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
@@ -735,6 +738,7 @@ int main(int argc, char *argv[])
 	opts.flatten_multidimensional_arrays = args.flatten_multidimensional_arrays;
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
+	opts.vertex.flip_vert_y = args.yflip;
 	opts.cfg_analysis = args.cfg_analysis;
 	compiler->set_options(opts);
 

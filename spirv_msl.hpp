@@ -76,7 +76,6 @@ public:
 	// Options for compiling to Metal Shading Language
 	struct Options
 	{
-		bool flip_vert_y = false;
 		bool enable_point_size_builtin = true;
 		std::string entry_point_name;
 	};

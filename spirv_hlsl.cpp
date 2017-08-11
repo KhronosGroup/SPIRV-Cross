@@ -1228,31 +1228,27 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			}
 		}
 
-		if (execution.model == ExecutionModelVertex)
-		{
-			// Do various mangling on the gl_Position.
-			if (options.shader_model <= 30)
-			{
-				statement("stage_output.gl_Position.x = stage_output.gl_Position.x - gl_HalfPixel.x * "
-				          "stage_output.gl_Position.w;");
-				statement("stage_output.gl_Position.y = stage_output.gl_Position.y + gl_HalfPixel.y * "
-				          "stage_output.gl_Position.w;");
-			}
-			if (options.flip_vert_y)
-			{
-				statement("stage_output.gl_Position.y = -stage_output.gl_Position.y;");
-			}
-			if (options.fixup_clipspace)
-			{
-				statement(
-				    "stage_output.gl_Position.z = (stage_output.gl_Position.z + stage_output.gl_Position.w) * 0.5;");
-			}
-		}
-
 		statement("return stage_output;");
 	}
 
 	end_scope();
+}
+
+void CompilerHLSL::emit_fixup()
+{
+	// Do various mangling on the gl_Position.
+	if (options.shader_model <= 30)
+	{
+		statement("gl_Position.x = gl_Position.x - gl_HalfPixel.x * "
+				          "gl_Position.w;");
+		statement("gl_Position.y = gl_Position.y + gl_HalfPixel.y * "
+				          "gl_Position.w;");
+	}
+
+	if (CompilerGLSL::options.vertex.flip_vert_y)
+		statement("gl_Position.y = -gl_Position.y;");
+	if (CompilerGLSL::options.vertex.fixup_clipspace)
+		statement("gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;");
 }
 
 void CompilerHLSL::emit_texture_op(const Instruction &i)

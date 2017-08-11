@@ -6670,10 +6670,16 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 void CompilerGLSL::emit_fixup()
 {
 	auto &execution = get_entry_point();
-	if (execution.model == ExecutionModelVertex && options.vertex.fixup_clipspace)
+	if (execution.model == ExecutionModelVertex)
 	{
-		const char *suffix = backend.float_literal_suffix ? "f" : "";
-		statement("gl_Position.z = 2.0", suffix, " * gl_Position.z - gl_Position.w;");
+		if (options.vertex.fixup_clipspace)
+		{
+			const char *suffix = backend.float_literal_suffix ? "f" : "";
+			statement("gl_Position.z = 2.0", suffix, " * gl_Position.z - gl_Position.w;");
+		}
+
+		if (options.vertex.flip_vert_y)
+			statement("gl_Position.y = -gl_Position.y;");
 	}
 }
 
