@@ -15,9 +15,9 @@
  */
 
 #include "spirv_cpp.hpp"
+#include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
-#include "spirv_glsl.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>

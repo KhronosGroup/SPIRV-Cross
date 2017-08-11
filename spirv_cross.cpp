@@ -3602,18 +3602,18 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 		vector<uint32_t> elements(constant_type.array.back());
 		for (uint32_t i = 0; i < constant_type.array.back(); i++)
 			elements[i] = parent_id;
-		set<SPIRConstant>(id, type, elements.data(), elements.size());
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
 	}
 	else if (!constant_type.member_types.empty())
 	{
-		uint32_t member_ids = increase_bound_by(constant_type.member_types.size());
+		uint32_t member_ids = increase_bound_by(uint32_t(constant_type.member_types.size()));
 		vector<uint32_t> elements(constant_type.member_types.size());
 		for (uint32_t i = 0; i < constant_type.member_types.size(); i++)
 		{
 			make_constant_null(member_ids + i, constant_type.member_types[i]);
 			elements[i] = member_ids + i;
 		}
-		set<SPIRConstant>(id, type, elements.data(), elements.size());
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
 	}
 	else
 	{

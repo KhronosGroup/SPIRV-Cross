@@ -206,14 +206,14 @@ def regression_check(shader, glsl, update, keep):
     if os.path.exists(reference):
         if md5_for_file(glsl) != md5_for_file(reference):
             if update:
-                print('Generated GLSL has changed for {}!'.format(reference))
+                print('Generated source code has changed for {}!'.format(reference))
                 # If we expect changes, update the reference file.
                 if os.path.exists(reference):
                     os.remove(reference)
                 make_reference_dir(reference)
                 shutil.move(glsl, reference)
             else:
-                print('Generated GLSL in {} does not match reference {}!'.format(glsl, reference))
+                print('Generated source code in {} does not match reference {}!'.format(glsl, reference))
                 with open(glsl, 'r') as f:
                     print('')
                     print('Generated:')
@@ -229,7 +229,7 @@ def regression_check(shader, glsl, update, keep):
         else:
             os.remove(glsl)
     else:
-        print('Found new shader {}. Placing GLSL in {}'.format(joined_path, reference))
+        print('Found new shader {}. Placing generated source code in {}'.format(joined_path, reference))
         make_reference_dir(reference)
         shutil.move(glsl, reference)
 
