@@ -1240,9 +1240,9 @@ void CompilerHLSL::emit_fixup()
 	if (options.shader_model <= 30)
 	{
 		statement("gl_Position.x = gl_Position.x - gl_HalfPixel.x * "
-				          "gl_Position.w;");
+		          "gl_Position.w;");
 		statement("gl_Position.y = gl_Position.y + gl_HalfPixel.y * "
-				          "gl_Position.w;");
+		          "gl_Position.w;");
 	}
 
 	if (CompilerGLSL::options.vertex.flip_vert_y)

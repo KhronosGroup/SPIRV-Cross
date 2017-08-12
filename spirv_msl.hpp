@@ -183,6 +183,7 @@ protected:
 	void emit_interface_block(uint32_t ib_var_id);
 	void populate_func_name_overrides();
 	void populate_var_name_overrides();
+	bool maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs);
 
 	std::string func_type_decl(SPIRType &type);
 	std::string clean_func_name(std::string func_name) override;

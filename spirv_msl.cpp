@@ -1403,12 +1403,75 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpStore:
+	{
+		if (!maybe_emit_input_struct_assignment(ops[0], ops[1]))
+			CompilerGLSL::emit_instruction(instruction);
+
+		break;
+	}
+
 	// OpOuterProduct
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
+}
+
+// Since MSL does not allow structs to be nested within the stage_in struct, the original
+// input structs are flattened into a single stage_in struct by add_interface_block.
+// As a result, if the LHS and RHS represent an assignment of an entire input struct,
+// we must perform this member-by-member, mapping to the flattened stage_in struct.
+// Returns whether the struct assignment was emitted.
+bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs)
+{
+	auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
+	auto *p_v_rhs = maybe_get_backing_variable(id_rhs);
+
+	if (p_v_lhs && p_v_rhs && p_v_rhs->storage == StorageClassInput)
+	{
+		uint32_t tid_lhs = p_v_lhs->basetype;
+		uint32_t tid_rhs = p_v_rhs->basetype;
+
+		auto &t_lhs = get<SPIRType>(tid_lhs);
+		auto &t_rhs = get<SPIRType>(tid_rhs);
+
+		if (t_lhs.basetype == SPIRType::Struct && t_rhs.basetype == SPIRType::Struct)
+		{
+			size_t mbr_cnt = t_rhs.member_types.size();
+			assert(t_lhs.member_types.size() == mbr_cnt);
+
+			flush_variable_declaration(p_v_lhs->self);
+
+			for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
+			{
+				string expr;
+
+				//LHS
+				expr += to_name(id_lhs);
+				expr += ".";
+				expr += to_member_name(t_lhs, mbr_idx);
+
+				expr += " = ";
+
+				//RHS
+				string qual_mbr_name = get_member_qualified_name(tid_rhs, mbr_idx);
+				if (qual_mbr_name.empty())
+				{
+					expr += to_name(id_rhs);
+					expr += ".";
+					expr += to_member_name(t_rhs, mbr_idx);
+				}
+				else
+					expr += qual_mbr_name;
+
+				statement(expr, ";");
+			}
+			return true;
+		}
+	}
+	return false;
 }
 
 // Emits one of the atomic functions. In MSL, the atomic functions operate on pointers
@@ -2517,8 +2580,14 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	{
 		switch (img_type.dim)
 		{
+		case Dim1D:
+			img_type_name += "depth1d_unsupported_by_metal";
+			break;
 		case Dim2D:
 			img_type_name += (img_type.ms ? "depth2d_ms" : (img_type.arrayed ? "depth2d_array" : "depth2d"));
+			break;
+		case Dim3D:
+			img_type_name += "depth3d_unsupported_by_metal";
 			break;
 		case DimCube:
 			img_type_name += (img_type.arrayed ? "depthcube_array" : "depthcube");

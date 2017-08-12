@@ -337,31 +337,36 @@ void Compiler::flush_all_active_variables()
 	flush_all_aliased_variables();
 }
 
-const SPIRType &Compiler::expression_type(uint32_t id) const
+uint32_t Compiler::expression_type_id(uint32_t id) const
 {
 	switch (ids[id].get_type())
 	{
 	case TypeVariable:
-		return get<SPIRType>(get<SPIRVariable>(id).basetype);
+		return get<SPIRVariable>(id).basetype;
 
 	case TypeExpression:
-		return get<SPIRType>(get<SPIRExpression>(id).expression_type);
+		return get<SPIRExpression>(id).expression_type;
 
 	case TypeConstant:
-		return get<SPIRType>(get<SPIRConstant>(id).constant_type);
+		return get<SPIRConstant>(id).constant_type;
 
 	case TypeConstantOp:
-		return get<SPIRType>(get<SPIRConstantOp>(id).basetype);
+		return get<SPIRConstantOp>(id).basetype;
 
 	case TypeUndef:
-		return get<SPIRType>(get<SPIRUndef>(id).basetype);
+		return get<SPIRUndef>(id).basetype;
 
 	case TypeCombinedImageSampler:
-		return get<SPIRType>(get<SPIRCombinedImageSampler>(id).combined_type);
+		return get<SPIRCombinedImageSampler>(id).combined_type;
 
 	default:
 		SPIRV_CROSS_THROW("Cannot resolve expression type.");
 	}
+}
+
+const SPIRType &Compiler::expression_type(uint32_t id) const
+{
+	return get<SPIRType>(expression_type_id(id));
 }
 
 bool Compiler::expression_is_lvalue(uint32_t id) const
@@ -926,36 +931,21 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 	return m.members[index].alias;
 }
 
-void Compiler::set_member_qualified_name(uint32_t id, uint32_t index, const std::string &name)
+void Compiler::set_member_qualified_name(uint32_t type_id, uint32_t index, const std::string &name)
 {
-	// Tunnel through pointers to get to the base type
-	auto *p_type = &get<SPIRType>(id);
-	while (p_type->pointer)
-		p_type = &get<SPIRType>(p_type->parent_type);
-
-	uint32_t type_id = p_type->self;
-
 	meta.at(type_id).members.resize(max(meta[type_id].members.size(), size_t(index) + 1));
 	meta.at(type_id).members[index].qualified_alias = name;
 }
 
-const std::string &Compiler::get_member_qualified_name(uint32_t id, uint32_t index) const
+const std::string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_t index) const
 {
-	// Tunnel through pointers to get to the base type
-	auto *p_type = &get<SPIRType>(id);
-	while (p_type->pointer)
-		p_type = &get<SPIRType>(p_type->parent_type);
-
-	uint32_t type_id = p_type->self;
+	const static string empty;
 
 	auto &m = meta.at(type_id);
-	if (index >= m.members.size())
-	{
-		static string empty;
+	if (index < m.members.size())
+		return m.members[index].qualified_alias;
+	else
 		return empty;
-	}
-
-	return m.members[index].qualified_alias;
 }
 
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
@@ -3602,18 +3592,18 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 		vector<uint32_t> elements(constant_type.array.back());
 		for (uint32_t i = 0; i < constant_type.array.back(); i++)
 			elements[i] = parent_id;
-		set<SPIRConstant>(id, type, elements.data(), elements.size());
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
 	}
 	else if (!constant_type.member_types.empty())
 	{
-		uint32_t member_ids = increase_bound_by(constant_type.member_types.size());
+		uint32_t member_ids = increase_bound_by(uint32_t(constant_type.member_types.size()));
 		vector<uint32_t> elements(constant_type.member_types.size());
 		for (uint32_t i = 0; i < constant_type.member_types.size(); i++)
 		{
 			make_constant_null(member_ids + i, constant_type.member_types[i]);
 			elements[i] = member_ids + i;
 		}
-		set<SPIRConstant>(id, type, elements.data(), elements.size());
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
 	}
 	else
 	{
