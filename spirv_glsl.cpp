@@ -3644,9 +3644,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	if (!chain_only)
 		expr = to_enclosed_expression(base);
 
-	const auto *type = &expression_type(base);
+	uint32_t type_id = expression_type_id(base);
+	const auto *type = &get<SPIRType>(type_id);
 
-	// Start traversing type hierarchy at the proper non-pointer types.
+	// Start traversing type hierarchy at the proper non-pointer types,
+	// but keep type_id referencing the original pointer for use below.
 	while (type->pointer)
 	{
 		assert(type->parent_type);
@@ -3709,7 +3711,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (!pending_array_enclose)
 				expr += "]";
 
-			type = &get<SPIRType>(type->parent_type);
+			type_id = type->parent_type;
+			type = &get<SPIRType>(type_id);
 
 			access_chain_is_arrayed = true;
 		}
@@ -3740,7 +3743,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else
 			{
 				// If the member has a qualified name, use it as the entire chain
-				string qual_mbr_name = get_member_qualified_name(type->self, index);
+				string qual_mbr_name = get_member_qualified_name(type_id, index);
 				if (!qual_mbr_name.empty())
 					expr = qual_mbr_name;
 				else
@@ -3775,7 +3778,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += to_expression(index);
 			expr += "]";
 
-			type = &get<SPIRType>(type->parent_type);
+			type_id = type->parent_type;
+			type = &get<SPIRType>(type_id);
 		}
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
@@ -3798,7 +3802,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
-			type = &get<SPIRType>(type->parent_type);
+			type_id = type->parent_type;
+			type = &get<SPIRType>(type_id);
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
