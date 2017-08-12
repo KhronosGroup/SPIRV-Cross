@@ -1,0 +1,33 @@
+struct SSBO2
+{
+    float4 data4;
+    float4 data5;
+};
+
+RWStructuredBuffer<SSBO2> _10 : register(u2);
+struct SSBO0
+{
+    float4 data0;
+    float4 data1;
+};
+
+RWStructuredBuffer<SSBO0> _15 : register(u0);
+struct SSBO1
+{
+    float4 data2;
+    float4 data3;
+};
+
+RWStructuredBuffer<SSBO1> _21 : register(u1);
+
+void comp_main()
+{
+    _10[0].data4 = _15[0].data0 + _21[0].data2;
+    _10[0].data5 = _15[0].data1 + _21[0].data3;
+}
+
+[numthreads(1, 1, 1)]
+void main()
+{
+    comp_main();
+}

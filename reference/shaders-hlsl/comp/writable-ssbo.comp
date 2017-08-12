@@ -1,0 +1,24 @@
+struct myBlock
+{
+    int a;
+    float b;
+};
+
+RWStructuredBuffer<myBlock> myStorage : register(u0);
+
+float mod(float x, float y)
+{
+    return x - y * floor(x / y);
+}
+
+void comp_main()
+{
+    myStorage[0].a = (myStorage[0].a + 1) % 256;
+    myStorage[0].b = mod(myStorage[0].b + 0.0199999995529651641845703125f, 1.0f);
+}
+
+[numthreads(1, 1, 1)]
+void main()
+{
+    comp_main();
+}

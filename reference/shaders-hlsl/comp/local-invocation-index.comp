@@ -1,0 +1,31 @@
+struct myBlock
+{
+    int a;
+    float b[1];
+};
+
+RWStructuredBuffer<myBlock> myStorage : register(u0);
+
+static uint gl_LocalInvocationIndex;
+struct SPIRV_Cross_Input
+{
+    uint gl_LocalInvocationIndex : SV_GroupIndex;
+};
+
+float mod(float x, float y)
+{
+    return x - y * floor(x / y);
+}
+
+void comp_main()
+{
+    myStorage[0].a = (myStorage[0].a + 1) % 256;
+    myStorage[0].b[gl_LocalInvocationIndex] = mod(myStorage[0].b[gl_LocalInvocationIndex] + 0.0199999995529651641845703125f, 1.0f);
+}
+
+[numthreads(1, 1, 1)]
+void main(SPIRV_Cross_Input stage_input)
+{
+    gl_LocalInvocationIndex = stage_input.gl_LocalInvocationIndex;
+    comp_main();
+}
