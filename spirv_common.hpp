@@ -187,6 +187,7 @@ enum Types
 	TypeExpression,
 	TypeConstantOp,
 	TypeCombinedImageSampler,
+	TypeAccessChain,
 	TypeUndef
 };
 
@@ -604,6 +605,39 @@ struct SPIRFunction : IVariant
 	bool flush_undeclared = true;
 	bool do_combined_parameters = true;
 	bool analyzed_variable_scope = false;
+};
+
+struct SPIRAccessChain : IVariant
+{
+	enum
+	{
+		type = TypeAccessChain
+	};
+
+	SPIRAccessChain(uint32_t basetype_, spv::StorageClass storage_,
+	                std::string base_, std::string dynamic_index_, int32_t static_index_)
+		: basetype(basetype_),
+		  storage(storage_),
+		  base(base_),
+		  dynamic_index(std::move(dynamic_index_)),
+		  static_index(static_index_)
+	{
+	}
+
+	// The access chain represents an offset into a buffer.
+	// Some backends need more complicated handling of access chains to be able to use buffers, like HLSL
+	// which has no usable buffer type ala GLSL SSBOs.
+	// StructuredBuffer is too limited, so our only option is to deal with ByteAddressBuffer which works with raw addresses.
+
+	uint32_t basetype;
+	spv::StorageClass storage;
+	std::string base;
+	std::string dynamic_index;
+	int32_t static_index;
+
+	uint32_t loaded_from = 0;
+	bool need_transpose = false;
+	bool immutable = false;
 };
 
 struct SPIRVariable : IVariant

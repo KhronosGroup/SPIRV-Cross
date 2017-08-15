@@ -88,6 +88,10 @@ private:
 	std::string to_resource_binding(const SPIRVariable &var);
 	std::string to_resource_binding_sampler(const SPIRVariable &var);
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
+	void emit_access_chain(const Instruction &instruction);
+	void emit_load(const Instruction &instruction);
+	std::string read_access_chain(const SPIRAccessChain &chain);
+	void emit_store(const Instruction &instruction);
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 
