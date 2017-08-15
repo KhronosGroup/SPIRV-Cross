@@ -17,6 +17,7 @@
 #include "spirv_hlsl.hpp"
 #include "GLSL.std.450.h"
 #include <algorithm>
+#include <assert.h>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -1849,6 +1850,49 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 }
 
+string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
+{
+	auto &type = get<SPIRType>(chain.basetype);
+
+	SPIRType target_type;
+	target_type.basetype = SPIRType::UInt;
+	target_type.vecsize = type.vecsize;
+	target_type.columns = type.columns;
+
+	if (type.columns != 1)
+		SPIRV_CROSS_THROW("Reading matrices from ByteAddressBuffer not yet supported.");
+	if (type.basetype == SPIRType::Struct)
+		SPIRV_CROSS_THROW("Reading structs from ByteAddressBuffer not yet supported.");
+	if (type.width != 32)
+		SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
+
+	const char *load_op = nullptr;
+	switch (type.vecsize)
+	{
+	case 1:
+		load_op = "Load";
+		break;
+	case 2:
+		load_op = "Load2";
+		break;
+	case 3:
+		load_op = "Load3";
+		break;
+	case 4:
+		load_op = "Load4";
+		break;
+	default:
+		SPIRV_CROSS_THROW("Unknown vector size.");
+	}
+
+	auto load_expr = join(chain.base, ".", load_op, "(", chain.dynamic_index, chain.static_index, ")");
+	auto bitcast_op = bitcast_glsl_op(type, target_type);
+	if (!bitcast_op.empty())
+		load_expr = join(bitcast_op, "(", load_expr, ")");
+
+	return load_expr;
+}
+
 void CompilerHLSL::emit_load(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -1856,46 +1900,11 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 	auto *chain = maybe_get<SPIRAccessChain>(ops[2]);
 	if (chain)
 	{
-		auto &type = get<SPIRType>(chain->basetype);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t ptr = ops[2];
 
-		SPIRType target_type;
-		target_type.basetype = SPIRType::UInt;
-		target_type.vecsize = type.vecsize;
-		target_type.columns = type.columns;
-
-		if (type.columns != 1)
-			SPIRV_CROSS_THROW("Reading matrices from ByteAddressBuffer not yet supported.");
-		if (type.basetype == SPIRType::Struct)
-			SPIRV_CROSS_THROW("Reading structs from ByteAddressBuffer not yet supported.");
-		if (type.width != 32)
-			SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
-
-		const char *load_op = nullptr;
-		switch (type.vecsize)
-		{
-		case 1:
-			load_op = "Load";
-			break;
-		case 2:
-			load_op = "Load2";
-			break;
-		case 3:
-			load_op = "Load3";
-			break;
-		case 4:
-			load_op = "Load4";
-			break;
-		default:
-			SPIRV_CROSS_THROW("Unknown vector size.");
-		}
-
-		auto load_expr = join(chain->base, ".", load_op, "(", chain->dynamic_index, chain->static_index, ")");
-		auto bitcast_op = bitcast_glsl_op(type, target_type);
-		if (!bitcast_op.empty())
-			load_expr = join(bitcast_op, "(", load_expr, ")");
+		auto load_expr = read_access_chain(*chain);
 
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
 		auto &e = emit_op(result_type, id, load_expr, forward, true);
@@ -1994,8 +2003,20 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 			base = to_expression(ops[2]);
 
 		auto *basetype = &type;
+
+		// Start traversing type hierarchy at the proper non-pointer types.
+		while (basetype->pointer)
+		{
+			assert(basetype->parent_type);
+			basetype = &get<SPIRType>(basetype->parent_type);
+		}
+
+		// Traverse the type hierarchy down to the actual buffer types.
 		for (uint32_t i = 0; i < to_plain_buffer_length; i++)
-			basetype = &get<SPIRType>(type.parent_type);
+		{
+			assert(basetype->parent_type);
+			basetype = &get<SPIRType>(basetype->parent_type);
+		}
 
 		uint32_t matrix_stride = 0;
 		bool need_transpose = false;
