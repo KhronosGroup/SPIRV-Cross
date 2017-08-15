@@ -1247,12 +1247,17 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t cap = ops[0];
 		if (cap == CapabilityKernel)
 			SPIRV_CROSS_THROW("Kernel capability not supported.");
+
+		declared_capabilities.push_back(static_cast<Capability>(ops[0]));
 		break;
 	}
 
 	case OpExtension:
-		// Ignore extensions
+	{
+		auto ext = extract_string(spirv, instruction.offset);
+		declared_extensions.push_back(move(ext));
 		break;
+	}
 
 	case OpExtInstImport:
 	{
@@ -3626,4 +3631,14 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 		auto &constant = set<SPIRConstant>(id, type);
 		constant.make_null(constant_type);
 	}
+}
+
+const std::vector<spv::Capability> &Compiler::get_declared_capabilities() const
+{
+	return declared_capabilities;
+}
+
+const std::vector<std::string> &Compiler::get_declared_extensions() const
+{
+	return declared_extensions;
 }
