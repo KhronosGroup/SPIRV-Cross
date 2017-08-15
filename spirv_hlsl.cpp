@@ -1859,10 +1859,13 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 	target_type.vecsize = type.vecsize;
 	target_type.columns = type.columns;
 
+	// FIXME: Transposition?
 	if (type.columns != 1)
 		SPIRV_CROSS_THROW("Reading matrices from ByteAddressBuffer not yet supported.");
+
 	if (type.basetype == SPIRType::Struct)
 		SPIRV_CROSS_THROW("Reading structs from ByteAddressBuffer not yet supported.");
+
 	if (type.width != 32)
 		SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
 

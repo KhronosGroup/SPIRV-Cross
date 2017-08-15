@@ -3409,6 +3409,9 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		if (!var)
 			break;
 
+		// Required if we access chain into builtins like gl_GlobalInvocationID.
+		add_if_builtin(args[2]);
+
 		auto *type = &compiler.get<SPIRType>(var->basetype);
 
 		// Start traversing type hierarchy at the proper non-pointer types.
