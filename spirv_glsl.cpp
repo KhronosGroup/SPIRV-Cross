@@ -3619,6 +3619,18 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("gl_SamplePosition not supported before GLSL 400.");
 		return "gl_SamplePosition";
 
+	case BuiltInViewIndex:
+		if (options.vulkan_semantics)
+		{
+			require_extension("GL_EXT_multiview");
+			return "gl_ViewIndex";
+		}
+		else
+		{
+			require_extension("GL_OVR_multiview2");
+			return "gl_ViewID_OVR";
+		}
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
