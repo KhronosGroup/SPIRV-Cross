@@ -358,6 +358,12 @@ public:
 	// To rely on this functionality, ensure that the SPIR-V module is not stripped.
 	bool buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const;
 
+	// Gets the list of all SPIR-V Capabilities which were declared in the SPIR-V module.
+	const std::vector<spv::Capability> &get_declared_capabilities() const;
+
+	// Gets the list of all SPIR-V extensions which were declared in the SPIR-V module.
+	const std::vector<std::string> &get_declared_extensions() const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -524,7 +530,6 @@ protected:
 
 	void analyze_variable_scope(SPIRFunction &function);
 
-protected:
 	void parse();
 	void parse(const Instruction &i);
 
@@ -673,6 +678,9 @@ protected:
 	};
 
 	void make_constant_null(uint32_t id, uint32_t type);
+
+	std::vector<spv::Capability> declared_capabilities;
+	std::vector<std::string> declared_extensions;
 };
 }
 

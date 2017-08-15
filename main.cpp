@@ -399,6 +399,21 @@ static void print_spec_constants(const Compiler &compiler)
 	fprintf(stderr, "==================\n\n");
 }
 
+static void print_capabilities_and_extensions(const Compiler &compiler)
+{
+	fprintf(stderr, "Capabilities\n");
+	fprintf(stderr, "============\n");
+	for (auto &capability : compiler.get_declared_capabilities())
+		fprintf(stderr, "Capability: %u\n", static_cast<unsigned>(capability));
+	fprintf(stderr, "============\n\n");
+
+	fprintf(stderr, "Extensions\n");
+	fprintf(stderr, "============\n");
+	for (auto &ext : compiler.get_declared_extensions())
+		fprintf(stderr, "Extension: %s\n", ext.c_str());
+	fprintf(stderr, "============\n\n");
+}
+
 struct PLSArg
 {
 	PlsFormat format;
@@ -819,6 +834,7 @@ int main(int argc, char *argv[])
 		print_resources(*compiler, res);
 		print_push_constant_resources(*compiler, res.push_constant_buffers);
 		print_spec_constants(*compiler);
+		print_capabilities_and_extensions(*compiler);
 	}
 
 	if (combined_image_samplers)
