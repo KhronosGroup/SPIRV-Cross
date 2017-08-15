@@ -369,6 +369,26 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_SampleIndex";
 			break;
 
+		case BuiltInGlobalInvocationId:
+			type = "uint3";
+			semantic = "SV_DispatchThreadID";
+			break;
+
+		case BuiltInLocalInvocationId:
+			type = "uint3";
+			semantic = "SV_GroupThreadID";
+			break;
+
+		case BuiltInLocalInvocationIndex:
+			type = "uint";
+			semantic = "SV_GroupIndex";
+			break;
+
+		case BuiltInWorkgroupId:
+			type = "uint3";
+			semantic = "SV_GroupID";
+			break;
+
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 			break;
@@ -568,6 +588,16 @@ void CompilerHLSL::emit_builtin_variables()
 			}
 			else
 				SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
+
+		case BuiltInGlobalInvocationId:
+		case BuiltInLocalInvocationId:
+		case BuiltInWorkgroupId:
+			type = "uint3";
+			break;
+
+		case BuiltInLocalInvocationIndex:
+			type = "uint";
+			break;
 
 		default:
 			SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
@@ -1016,13 +1046,13 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 	if (func.self == entry_point)
 	{
 		if (execution.model == ExecutionModelVertex)
-		{
 			decl += "vert_main";
-		}
-		else
-		{
+		else if (execution.model == ExecutionModelFragment)
 			decl += "frag_main";
-		}
+		else if (execution.model == ExecutionModelGLCompute)
+			decl += "comp_main";
+		else
+			SPIRV_CROSS_THROW("Unsupported execution model.");
 		processing_entry_point = true;
 	}
 	else
@@ -1097,6 +1127,15 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	}
 
 	auto &execution = get_entry_point();
+
+	if (execution.model == ExecutionModelGLCompute)
+	{
+		statement("[numthreads(",
+		          execution.workgroup_size.x, ", ",
+		          execution.workgroup_size.y, ", ",
+		          execution.workgroup_size.z, ")]");
+	}
+
 	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", merge(arguments), ")");
 	begin_scope();
 	bool legacy = options.shader_model <= 30;
@@ -1175,6 +1214,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("vert_main();");
 	else if (execution.model == ExecutionModelFragment)
 		statement("frag_main();");
+	else if (execution.model == ExecutionModelGLCompute)
+		statement("comp_main();");
 	else
 		SPIRV_CROSS_THROW("Unsupported shader stage.");
 
