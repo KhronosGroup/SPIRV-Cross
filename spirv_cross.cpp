@@ -3019,8 +3019,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			const auto test_phi = [this, &block](uint32_t to) {
 				auto &next = compiler.get<SPIRBlock>(to);
 				for (auto &phi : next.phi_variables)
+				{
 					if (phi.parent == block.self)
+					{
 						accessed_variables_to_block[phi.function_variable].insert(block.self);
+						// Phi variables are also accessed in our target branch block.
+						accessed_variables_to_block[phi.function_variable].insert(next.self);
+					}
+				}
 			};
 
 			switch (block.terminator)
