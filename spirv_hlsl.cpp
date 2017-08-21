@@ -1032,7 +1032,7 @@ string CompilerHLSL::to_func_call_arg(uint32_t id)
 		// We don't have to consider combined image samplers here via OpSampledImage because
 		// those variables cannot be passed as arguments to functions.
 		// Only global SampledImage variables may be used as arguments.
-		if (type.basetype == SPIRType::SampledImage)
+		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 			arg_str += ", " + to_sampler_expression(id);
 	}
 
@@ -1080,13 +1080,12 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 
 		// Flatten a combined sampler to two separate arguments in modern HLSL.
 		auto &arg_type = get<SPIRType>(arg.type);
-		if (options.shader_model > 30 && arg_type.basetype == SPIRType::SampledImage)
+		if (options.shader_model > 30 && arg_type.basetype == SPIRType::SampledImage && arg_type.image.dim != DimBuffer)
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
 			decl += ", ";
-			if (arg_type.basetype == SPIRType::SampledImage)
-				decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ",
-				             to_sampler_expression(arg.id));
+			decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ",
+			             to_sampler_expression(arg.id));
 		}
 
 		if (&arg != &func.arguments.back())
