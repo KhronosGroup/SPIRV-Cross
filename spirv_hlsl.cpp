@@ -48,6 +48,8 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	const char *dim = nullptr;
+	uint32_t components = 4;
+
 	switch (type.image.dim)
 	{
 	case Dim1D:
@@ -63,17 +65,23 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 		dim = "Cube";
 		break;
 	case DimRect:
-		SPIRV_CROSS_THROW("Rectangle texture support is not yet implemented for HLSL"); // TODO
+		SPIRV_CROSS_THROW("Rectangle texture support is not yet implemented for HLSL."); // TODO
 	case DimBuffer:
-		// Buffer/RWBuffer.
-		SPIRV_CROSS_THROW("Buffer/RWBuffer support is not yet implemented for HLSL"); // TODO
+		if (type.image.sampled == 1)
+			return join("Buffer<", type_to_glsl(imagetype), components, ">");
+		else if (type.image.sampled == 2)
+		{
+			SPIRV_CROSS_THROW("RWBuffer is not implemented yet for HLSL.");
+			//return join("RWBuffer<", type_to_glsl(imagetype), components, ">");
+		}
+		else
+			SPIRV_CROSS_THROW("Sampler buffers must be either sampled or unsampled. Cannot deduce in runtime.");
 	case DimSubpassData:
 		// This should be implemented same way as desktop GL. Fetch on a 2D texture based on int2(SV_Position).
 		SPIRV_CROSS_THROW("Subpass data support is not yet implemented for HLSL"); // TODO
 	default:
 		SPIRV_CROSS_THROW("Invalid dimension.");
 	}
-	uint32_t components = 4;
 	const char *arrayed = type.image.arrayed ? "Array" : "";
 	return join("Texture", dim, arrayed, "<", type_to_glsl(imagetype), components, ">");
 }
@@ -1582,7 +1590,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	if (op == OpImageFetch)
 	{
 		auto &coordtype = expression_type(coord);
-		coord_expr = join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", to_expression(lod), ")");
+		if (imgtype.image.dim != DimBuffer)
+			coord_expr = join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", to_expression(lod), ")");
 	}
 
 	if (op != OpImageFetch)
@@ -1728,7 +1737,7 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	{
 		statement(image_type_hlsl_modern(type), " ", to_name(var.self), to_resource_binding(var), ";");
 
-		if (type.basetype == SPIRType::SampledImage)
+		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
 			if (type.image.depth)
