@@ -361,8 +361,7 @@ protected:
 	                                          bool need_transpose);
 	std::pair<std::string, uint32_t> flattened_access_chain_offset(const SPIRType &basetype, const uint32_t *indices,
 	                                                               uint32_t count, uint32_t offset,
-	                                                               uint32_t word_stride,
-	                                                               bool *need_transpose = nullptr,
+	                                                               uint32_t word_stride, bool *need_transpose = nullptr,
 	                                                               uint32_t *matrix_stride = nullptr);
 
 	const char *index_to_swizzle(uint32_t index);

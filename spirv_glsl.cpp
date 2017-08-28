@@ -1127,8 +1127,9 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	else
 		resource_names.insert(buffer_name);
 
-	statement(layout_for_variable(var), is_coherent ? "coherent " : "", is_restrict ? "restrict " : "", is_writeonly ? "writeonly " : "",
-	          is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ", buffer_name);
+	statement(layout_for_variable(var), is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
+	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ",
+	          buffer_name);
 
 	begin_scope();
 
@@ -4061,9 +4062,9 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 	}
 }
 
-std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(const SPIRType &basetype, const uint32_t *indices,
-                                                                             uint32_t count, uint32_t offset,
-                                                                             uint32_t word_stride,
+std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(const SPIRType &basetype,
+                                                                             const uint32_t *indices, uint32_t count,
+                                                                             uint32_t offset, uint32_t word_stride,
                                                                              bool *need_transpose,
                                                                              uint32_t *out_matrix_stride)
 {

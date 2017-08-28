@@ -614,13 +614,13 @@ struct SPIRAccessChain : IVariant
 		type = TypeAccessChain
 	};
 
-	SPIRAccessChain(uint32_t basetype_, spv::StorageClass storage_,
-	                std::string base_, std::string dynamic_index_, int32_t static_index_)
-		: basetype(basetype_),
-		  storage(storage_),
-		  base(base_),
-		  dynamic_index(std::move(dynamic_index_)),
-		  static_index(static_index_)
+	SPIRAccessChain(uint32_t basetype_, spv::StorageClass storage_, std::string base_, std::string dynamic_index_,
+	                int32_t static_index_)
+	    : basetype(basetype_)
+	    , storage(storage_)
+	    , base(base_)
+	    , dynamic_index(std::move(dynamic_index_))
+	    , static_index(static_index_)
 	{
 	}
 
