@@ -956,8 +956,8 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 		uint64_t flags = get_buffer_block_flags(var);
 		bool is_readonly = (flags & (1ull << DecorationNonWritable)) != 0;
 		add_resource_name(var.self);
-		statement(is_readonly ? "ByteAddressBuffer " : "RWByteAddressBuffer ",
-		          to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
+		statement(is_readonly ? "ByteAddressBuffer " : "RWByteAddressBuffer ", to_name(var.self),
+		          type_to_array_glsl(type), to_resource_binding(var), ";");
 	}
 	else
 	{
@@ -1084,8 +1084,8 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
 			decl += ", ";
-			decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ",
-			             to_sampler_expression(arg.id));
+			decl +=
+			    join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ", to_sampler_expression(arg.id));
 		}
 
 		if (&arg != &func.arguments.back())
@@ -1138,9 +1138,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	if (execution.model == ExecutionModelGLCompute)
 	{
-		statement("[numthreads(",
-		          execution.workgroup_size.x, ", ",
-		          execution.workgroup_size.y, ", ",
+		statement("[numthreads(", execution.workgroup_size.x, ", ", execution.workgroup_size.y, ", ",
 		          execution.workgroup_size.z, ")]");
 	}
 
@@ -2031,10 +2029,9 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 
 		uint32_t matrix_stride = 0;
 		bool need_transpose = false;
-		auto offsets = flattened_access_chain_offset(*basetype,
-		                                             &ops[3 + to_plain_buffer_length], length - 3 - to_plain_buffer_length,
-		                                             0, 1, &need_transpose, &matrix_stride);
-
+		auto offsets =
+		    flattened_access_chain_offset(*basetype, &ops[3 + to_plain_buffer_length],
+		                                  length - 3 - to_plain_buffer_length, 0, 1, &need_transpose, &matrix_stride);
 
 		auto &e = set<SPIRAccessChain>(ops[1], ops[0], type.storage, base, offsets.first, offsets.second);
 		if (chain)
