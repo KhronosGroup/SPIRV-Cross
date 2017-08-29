@@ -1001,8 +1001,6 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	if (flags & (1ull << DecorationBinding))
 		attr.push_back(join("binding = ", dec.binding));
-	if (flags & (1ull << DecorationCoherent))
-		attr.push_back("coherent");
 	if (flags & (1ull << DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
@@ -6075,16 +6073,19 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 	res += to_interpolation_qualifiers(flags);
 	if (var)
 		res += to_storage_qualifiers_glsl(*var);
-	res += to_precision_qualifiers_glsl(id);
-	auto &type = expression_type(id);
 
+	auto &type = expression_type(id);
 	if (type.image.dim != DimSubpassData && type.image.sampled == 2)
 	{
+		if (flags & (1ull << DecorationCoherent))
+			res += "coherent ";
 		if (flags & (1ull << DecorationNonWritable))
 			res += "readonly ";
 		if (flags & (1ull << DecorationNonReadable))
 			res += "writeonly ";
 	}
+
+	res += to_precision_qualifiers_glsl(id);
 
 	return res;
 }
