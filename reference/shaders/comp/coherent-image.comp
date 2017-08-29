@@ -6,7 +6,7 @@ layout(binding = 1, std430) coherent restrict writeonly buffer SSBO
     ivec4 value;
 } _10;
 
-layout(binding = 3, r32i) uniform coherent readonly mediump iimage2D uImage;
+layout(binding = 3, r32i) uniform coherent restrict readonly mediump iimage2D uImage;
 
 void main()
 {

@@ -6079,6 +6079,8 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 	{
 		if (flags & (1ull << DecorationCoherent))
 			res += "coherent ";
+		if (flags & (1ull << DecorationRestrict))
+			res += "restrict ";
 		if (flags & (1ull << DecorationNonWritable))
 			res += "readonly ";
 		if (flags & (1ull << DecorationNonReadable))
