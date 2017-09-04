@@ -3291,6 +3291,19 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_binary_func_op(result_type, id, args[0], args[1], "modf");
 		break;
 
+	case GLSLstd450ModfStruct:
+	{
+		forced_temporaries.insert(id);
+		auto &type = get<SPIRType>(result_type);
+		auto flags = meta[id].decoration.decoration_flags;
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(id)), ";");
+		set<SPIRExpression>(id, to_name(id), result_type, true);
+
+		statement(to_expression(id), ".", to_member_name(type, 0), " = ", "modf(", to_expression(args[0]), ", ",
+		          to_expression(id), ".", to_member_name(type, 1), ");");
+		break;
+	}
+
 	// Minmax
 	case GLSLstd450FMin:
 	case GLSLstd450UMin:
@@ -3400,6 +3413,20 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		forced_temporaries.insert(id);
 		emit_binary_func_op(result_type, id, args[0], args[1], "frexp");
 		break;
+
+	case GLSLstd450FrexpStruct:
+	{
+		forced_temporaries.insert(id);
+		auto &type = get<SPIRType>(result_type);
+		auto flags = meta[id].decoration.decoration_flags;
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(id)), ";");
+		set<SPIRExpression>(id, to_name(id), result_type, true);
+
+		statement(to_expression(id), ".", to_member_name(type, 0), " = ", "frexp(", to_expression(args[0]), ", ",
+		          to_expression(id), ".", to_member_name(type, 1), ");");
+		break;
+	}
+
 	case GLSLstd450Ldexp:
 		emit_binary_func_op(result_type, id, args[0], args[1], "ldexp");
 		break;
