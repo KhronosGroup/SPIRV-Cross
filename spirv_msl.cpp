@@ -1419,59 +1419,60 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 }
 
-// Since MSL does not allow structs to be nested within the stage_in struct, the original
-// input structs are flattened into a single stage_in struct by add_interface_block.
-// As a result, if the LHS and RHS represent an assignment of an entire input struct,
-// we must perform this member-by-member, mapping to the flattened stage_in struct.
+// Since MSL does not allow structs to be nested within the stage_in struct, the original input
+// structs are flattened into a single stage_in struct by add_interface_block. As a result,
+// if the LHS and RHS represent an assignment of an entire input struct, we must perform this
+// member-by-member, mapping each RHS member to its name in the flattened stage_in struct.
 // Returns whether the struct assignment was emitted.
 bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs)
 {
-	auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
-	auto *p_v_rhs = maybe_get_backing_variable(id_rhs);
+    // We only care about assignments of an entire struct
+    uint32_t type_id = expression_type_id(id_rhs);
+    auto &type = get<SPIRType>(type_id);
+    if (type.basetype != SPIRType::Struct)
+        return false;
 
-	if (p_v_lhs && p_v_rhs && p_v_rhs->storage == StorageClassInput)
-	{
-		uint32_t tid_lhs = p_v_lhs->basetype;
-		uint32_t tid_rhs = p_v_rhs->basetype;
+    // We only care about assignments from Input variables
+    auto *p_v_rhs = maybe_get_backing_variable(id_rhs);
+	if (!(p_v_rhs && p_v_rhs->storage == StorageClassInput))
+        return false;
 
-		auto &t_lhs = get<SPIRType>(tid_lhs);
-		auto &t_rhs = get<SPIRType>(tid_rhs);
+    // Get the ID of the type of the underlying RHS variable.
+    // This will be an Input OpTypePointer containing the qualified member names.
+    uint32_t tid_v_rhs = p_v_rhs->basetype;
 
-		if (t_lhs.basetype == SPIRType::Struct && t_rhs.basetype == SPIRType::Struct)
-		{
-			size_t mbr_cnt = t_rhs.member_types.size();
-			assert(t_lhs.member_types.size() == mbr_cnt);
+    // Ensure the LHS variable has been declared
+    auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
+    if (p_v_lhs)
+        flush_variable_declaration(p_v_lhs->self);
 
-			flush_variable_declaration(p_v_lhs->self);
+    size_t mbr_cnt = type.member_types.size();
+    for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
+    {
+        string expr;
 
-			for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
-			{
-				string expr;
+        //LHS
+        expr += to_name(id_lhs);
+        expr += ".";
+        expr += to_member_name(type, mbr_idx);
 
-				//LHS
-				expr += to_name(id_lhs);
-				expr += ".";
-				expr += to_member_name(t_lhs, mbr_idx);
+        expr += " = ";
 
-				expr += " = ";
+        //RHS
+        string qual_mbr_name = get_member_qualified_name(tid_v_rhs, mbr_idx);
+        if (qual_mbr_name.empty())
+        {
+            expr += to_name(id_rhs);
+            expr += ".";
+            expr += to_member_name(type, mbr_idx);
+        }
+        else
+            expr += qual_mbr_name;
 
-				//RHS
-				string qual_mbr_name = get_member_qualified_name(tid_rhs, mbr_idx);
-				if (qual_mbr_name.empty())
-				{
-					expr += to_name(id_rhs);
-					expr += ".";
-					expr += to_member_name(t_rhs, mbr_idx);
-				}
-				else
-					expr += qual_mbr_name;
+        statement(expr, ";");
+    }
 
-				statement(expr, ";");
-			}
-			return true;
-		}
-	}
-	return false;
+    return true;
 }
 
 // Emits one of the atomic functions. In MSL, the atomic functions operate on pointers
@@ -2836,13 +2837,12 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 	string bi_arg;
 	if (prefix_comma)
 		bi_arg += ", ";
-	bi_arg += builtin_type_decl(builtin);
 
-	assert(builtin == BuiltInVertexIndex || builtin == BuiltInInstanceIndex);
+    bi_arg += builtin_type_decl(builtin);
 	bi_arg += " " + builtin_to_glsl(builtin, StorageClassInput);
-
 	bi_arg += " [[" + builtin_qualifier(builtin) + "]]";
-	return bi_arg;
+
+    return bi_arg;
 }
 
 // Returns the byte size of a struct member.
