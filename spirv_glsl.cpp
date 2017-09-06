@@ -4519,6 +4519,10 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 	if (op != lhs.size() + 1)
 		return false;
 
+	// Check that the op is followed by space. This excludes && and ||.
+	if (rhs[op+1] != ' ')
+		return false;
+
 	char bop = rhs[op];
 	auto expr = rhs.substr(lhs.size() + 3);
 	// Try to find increments and decrements. Makes it look neater as += 1, -= 1 is fairly rare to see in real code.
