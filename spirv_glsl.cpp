@@ -4520,7 +4520,7 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 		return false;
 
 	// Check that the op is followed by space. This excludes && and ||.
-	if (rhs[op+1] != ' ')
+	if (rhs[op + 1] != ' ')
 		return false;
 
 	char bop = rhs[op];
