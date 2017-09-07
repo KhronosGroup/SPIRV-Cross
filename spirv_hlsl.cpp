@@ -1690,7 +1690,7 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 				space = "u"; // UAV
 			else if (has_decoration(type.self, DecorationBlock))
 			{
-				if (options.shader_model >= 51)
+				if (options.shader_model >= 40)
 					space = "b"; // Constant buffers
 				else
 					space = "c"; // Constant buffers
@@ -1698,7 +1698,7 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		}
 		else if (storage == StorageClassPushConstant)
 		{
-			if (options.shader_model >= 51)
+			if (options.shader_model >= 40)
 				space = "b"; // Constant buffers
 			else
 				space = "c"; // Constant buffers
