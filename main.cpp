@@ -37,12 +37,12 @@ using namespace spirv_cross;
 using namespace std;
 
 #ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
-#define THROW(x)                   \
-	do                             \
-	{                              \
-		fprintf(stderr, "%s.", x); \
-		exit(1);                   \
-	} while (0)
+static inline void THROW(const char *str)
+{
+	fprintf(stderr, "SPIRV-Cross will abort: %s\n", str);
+	fflush(stderr);
+	abort();
+}
 #else
 #define THROW(x) throw runtime_error(x)
 #endif
@@ -593,7 +593,7 @@ void rename_interface_variable(Compiler &compiler, const vector<Resource> &resou
 	}
 }
 
-int main(int argc, char *argv[])
+static int main_inner(int argc, char *argv[])
 {
 	CLIArguments args;
 	CLICallbacks cbs;
@@ -856,4 +856,24 @@ int main(int argc, char *argv[])
 		write_string_to_file(args.output, glsl.c_str());
 	else
 		printf("%s", glsl.c_str());
+
+	return EXIT_SUCCESS;
+}
+
+int main(int argc, char *argv[])
+{
+#ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
+	return main_inner(argc, argv);
+#else
+	// Make sure we catch the exception or it just disappears into the aether on Windows.
+	try
+	{
+		return main_inner(argc, argv);
+	}
+	catch (const std::exception &e)
+	{
+		fprintf(stderr, "SPIRV-Cross threw an exception: %s\n", e.what());
+		return EXIT_FAILURE;
+	}
+#endif
 }
