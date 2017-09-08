@@ -349,7 +349,7 @@ void CompilerGLSL::emit_header()
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
 	// Needed for binding = # on UBOs, etc.
-	if (!options.es && options.version < 420)
+	if (!options.es && options.version < 420 && options.enable_420pack_extension)
 	{
 		statement("#ifdef GL_ARB_shading_language_420pack");
 		statement("#extension GL_ARB_shading_language_420pack : require");
@@ -999,8 +999,15 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("set = ", dec.set));
 	}
 
-	if (flags & (1ull << DecorationBinding))
+	bool can_use_binding;
+	if (options.es)
+		can_use_binding = options.version >= 310;
+	else
+		can_use_binding = options.enable_420pack_extension || (options.version >= 420);
+
+	if (can_use_binding && (flags & (1ull << DecorationBinding)))
 		attr.push_back(join("binding = ", dec.binding));
+
 	if (flags & (1ull << DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
