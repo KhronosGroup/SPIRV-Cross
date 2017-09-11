@@ -1463,7 +1463,36 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			if (imgtype.image.depth)
 				texop += ".SampleCmp";
 			else if (gather)
-				texop += ".Gather";
+			{
+				uint32_t comp_num = get<SPIRConstant>(comp).scalar();
+				if (options.shader_model >= 50)
+				{
+					switch (comp_num)
+					{
+					case 0:
+						texop += ".GatherRed";
+						break;
+					case 1:
+						texop += ".GatherGreen";
+						break;
+					case 2:
+						texop += ".GatherBlue";
+						break;
+					case 3:
+						texop += ".GatherAlpha";
+						break;
+					default:
+						SPIRV_CROSS_THROW("Invalid component.");
+					}
+				}
+				else
+				{
+					if (comp_num == 0)
+						texop += ".Gather";
+					else
+						SPIRV_CROSS_THROW("HLSL shader model 4 can only gather from the red component.");
+				}
+			}
 			else if (bias)
 				texop += ".SampleBias";
 			else if (grad_x || grad_y)
@@ -1639,13 +1668,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		forward = forward && should_forward(offset);
 		expr += ", ";
 		expr += to_expression(offset);
-	}
-
-	if (comp)
-	{
-		forward = forward && should_forward(comp);
-		expr += ", ";
-		expr += to_expression(comp);
 	}
 
 	if (sample)
