@@ -89,7 +89,16 @@ void frag_main()
     texcolor += tex1dArray.Sample(_tex1dArray_sampler, texCoord2d);
     texcolor += tex2dArray.Sample(_tex2dArray_sampler, texCoord3d);
     texcolor += texCubeArray.Sample(_texCubeArray_sampler, texCoord4d);
-    texcolor += tex2d.Gather(_tex2d_sampler, texCoord2d, 0);
+    texcolor += tex2d.GatherRed(_tex2d_sampler, texCoord2d);
+    texcolor += tex2d.GatherRed(_tex2d_sampler, texCoord2d);
+    texcolor += tex2d.GatherGreen(_tex2d_sampler, texCoord2d);
+    texcolor += tex2d.GatherBlue(_tex2d_sampler, texCoord2d);
+    texcolor += tex2d.GatherAlpha(_tex2d_sampler, texCoord2d);
+    texcolor += tex2d.GatherRed(_tex2d_sampler, texCoord2d, int2(1, 1));
+    texcolor += tex2d.GatherRed(_tex2d_sampler, texCoord2d, int2(1, 1));
+    texcolor += tex2d.GatherGreen(_tex2d_sampler, texCoord2d, int2(1, 1));
+    texcolor += tex2d.GatherBlue(_tex2d_sampler, texCoord2d, int2(1, 1));
+    texcolor += tex2d.GatherAlpha(_tex2d_sampler, texCoord2d, int2(1, 1));
     texcolor += tex2d.Load(int3(int2(1, 2), 0));
     texcolor += separateTex2d.Sample(samplerNonDepth, texCoord2d);
     texcolor.w += separateTex2dDepth.SampleCmp(samplerDepth, texCoord3d.xy, texCoord3d.z);

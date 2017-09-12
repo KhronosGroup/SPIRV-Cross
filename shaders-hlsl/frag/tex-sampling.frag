@@ -61,6 +61,16 @@ void main()
 	texcolor += texture(texCubeArray, texCoord4d);
 
 	texcolor += textureGather(tex2d, texCoord2d);
+	texcolor += textureGather(tex2d, texCoord2d, 0);
+	texcolor += textureGather(tex2d, texCoord2d, 1);
+	texcolor += textureGather(tex2d, texCoord2d, 2);
+	texcolor += textureGather(tex2d, texCoord2d, 3);
+
+	texcolor += textureGatherOffset(tex2d, texCoord2d, ivec2(1, 1));
+	texcolor += textureGatherOffset(tex2d, texCoord2d, ivec2(1, 1), 0);
+	texcolor += textureGatherOffset(tex2d, texCoord2d, ivec2(1, 1), 1);
+	texcolor += textureGatherOffset(tex2d, texCoord2d, ivec2(1, 1), 2);
+	texcolor += textureGatherOffset(tex2d, texCoord2d, ivec2(1, 1), 3);
 
 	texcolor += texelFetch(tex2d, ivec2(1, 2), 0);
 
