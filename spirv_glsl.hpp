@@ -408,8 +408,7 @@ protected:
 	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
 
 	std::string bitcast_expression(SPIRType::BaseType target_type, uint32_t arg);
-	std::string bitcast_expression(const SPIRType &target_type, SPIRType::BaseType expr_type,
-	                               const std::string &expr);
+	std::string bitcast_expression(const SPIRType &target_type, SPIRType::BaseType expr_type, const std::string &expr);
 
 	std::string build_composite_combiner(const uint32_t *elems, uint32_t length);
 	bool remove_duplicate_swizzle(std::string &op);
