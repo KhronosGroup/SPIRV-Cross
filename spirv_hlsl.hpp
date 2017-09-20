@@ -98,6 +98,31 @@ private:
 	Options options;
 	bool requires_op_fmod = false;
 	bool requires_textureProj = false;
+	uint64_t required_textureSizeVariants = 0;
+	void require_texture_query_variant(const SPIRType &type);
+
+	enum TextureQueryVariantDim
+	{
+		Query1D = 0,
+		Query1DArray,
+		Query2D,
+		Query2DArray,
+		Query3D,
+		QueryBuffer,
+		QueryCube,
+		QueryCubeArray,
+		Query2DMS,
+		Query2DMSArray,
+		QueryDimCount
+	};
+
+	enum TextureQueryVariantType
+	{
+		QueryTypeFloat = 0,
+		QueryTypeInt = 16,
+		QueryTypeUInt = 32,
+		QueryTypeCount = 3
+	};
 
 	void emit_builtin_variables();
 	bool require_output = false;

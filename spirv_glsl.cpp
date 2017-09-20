@@ -3563,6 +3563,31 @@ string CompilerGLSL::bitcast_glsl(const SPIRType &result_type, uint32_t argument
 		return join(op, "(", to_expression(argument), ")");
 }
 
+std::string CompilerGLSL::bitcast_expression(SPIRType::BaseType target_type, uint32_t arg)
+{
+	auto expr = to_expression(arg);
+	auto &src_type = expression_type(arg);
+	if (src_type.basetype != target_type)
+	{
+		auto target = src_type;
+		target.basetype = target_type;
+		expr = join(bitcast_glsl_op(target, src_type), "(", expr, ")");
+	}
+
+	return expr;
+}
+
+std::string CompilerGLSL::bitcast_expression(const SPIRType &target_type, SPIRType::BaseType expr_type,
+                                             const std::string &expr)
+{
+	if (target_type.basetype == expr_type)
+		return expr;
+
+	auto src_type = target_type;
+	src_type.basetype = expr_type;
+	return join(bitcast_glsl_op(target_type, src_type), "(", expr, ")");
+}
+
 string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
 	switch (builtin)
@@ -5641,27 +5666,36 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpImageQueryLevels:
 	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
 		if (!options.es && options.version < 430)
 			require_extension("GL_ARB_texture_query_levels");
 		if (options.es)
 			SPIRV_CROSS_THROW("textureQueryLevels not supported in ES profile.");
-		UFOP(textureQueryLevels);
+
+		auto expr = join("textureQueryLevels(", to_expression(ops[2]), ")");
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
 	}
 
 	case OpImageQuerySamples:
 	{
-		auto *var = maybe_get_backing_variable(ops[2]);
-		if (!var)
-			SPIRV_CROSS_THROW(
-			    "Bug. OpImageQuerySamples must have a backing variable so we know if the image is sampled or not.");
+		auto &type = expression_type(ops[2]);
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
 
-		auto &type = get<SPIRType>(var->basetype);
-		bool image = type.image.sampled == 2;
-		if (image)
-			UFOP(imageSamples);
+		string expr;
+		if (type.image.sampled == 2)
+			expr = join("imageSamples(", to_expression(ops[2]), ")");
 		else
-			UFOP(textureSamples);
+			expr = join("textureSamples(", to_expression(ops[2]), ")");
+
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
 	}
 
@@ -5674,8 +5708,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpImageQuerySizeLod:
-		BFOP(textureSize);
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		auto expr = join("textureSize(", to_expression(ops[2]), ", ", bitcast_expression(SPIRType::Int, ops[3]), ")");
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
+	}
 
 	// Image load/store
 	case OpImageRead:
@@ -5854,8 +5896,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (type.basetype == SPIRType::Image)
 		{
-			// The size of an image is always constant.
-			emit_op(result_type, id, join("imageSize(", to_expression(ops[2]), ")"), true);
+			string expr;
+			if (type.image.sampled == 2)
+			{
+				// The size of an image is always constant.
+				expr = join("imageSize(", to_expression(ops[2]), ")");
+			}
+			else
+			{
+				// This path is hit for samplerBuffers and multisampled images which do not have LOD.
+				expr = join("textureSize(", to_expression(ops[2]), ")");
+			}
+
+			auto &restype = get<SPIRType>(ops[0]);
+			expr = bitcast_expression(restype, SPIRType::Int, expr);
+			emit_op(result_type, id, expr, true);
 		}
 		else
 			SPIRV_CROSS_THROW("Invalid type for OpImageQuerySize.");
