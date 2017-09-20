@@ -5666,11 +5666,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpImageQueryLevels:
 	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
 		if (!options.es && options.version < 430)
 			require_extension("GL_ARB_texture_query_levels");
 		if (options.es)
 			SPIRV_CROSS_THROW("textureQueryLevels not supported in ES profile.");
-		UFOP(textureQueryLevels);
+
+		auto expr = join("textureQueryLevels(", to_expression(ops[2]), ")");
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
 	}
 
@@ -5706,7 +5713,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 
 		auto expr = join("textureSize(", to_expression(ops[2]), ", ", bitcast_expression(SPIRType::Int, ops[3]), ")");
-
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
 		emit_op(result_type, id, expr, true);

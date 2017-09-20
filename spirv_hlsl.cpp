@@ -938,6 +938,62 @@ void CompilerHLSL::emit_resources()
 			statement("");
 		}
 	}
+
+	if (requires_textureSize)
+	{
+		static const char *types[] = { "float4", "int4", "uint4" };
+		static const char *dims[] = { "Texture1D",   "Texture1DArray",  "Texture2D",   "Texture2DArray",
+			                          "Texture3D",   "Buffer",          "TextureCube", "TextureCubeArray",
+			                          "Texture2DMS", "Texture2DMSArray" };
+
+		static const bool has_lod[] = { true, true, true, true, true, false, true, true, false, false };
+
+		static const char *ret_types[] = {
+			"uint", "uint2", "uint2", "uint3", "uint3", "uint", "uint2", "uint3", "uint2", "uint3",
+		};
+
+		static const uint32_t return_arguments[] = {
+			1, 2, 2, 3, 3, 1, 2, 3, 2, 3,
+		};
+
+		for (auto &dim : dims)
+		{
+			uint32_t index = uint32_t(&dim - dims);
+
+			for (auto &type : types)
+			{
+				statement(ret_types[index], " SPIRV_Cross_textureSize(", dim, "<", type,
+				          "> Tex, uint Level, out uint Param)");
+				begin_scope();
+				statement(ret_types[index], " ret;");
+				switch (return_arguments[index])
+				{
+				case 1:
+					if (has_lod[index])
+						statement("Tex.GetDimensions(Level, ret.x, Param);");
+					else
+						statement("Tex.GetDimensions(ret.x);");
+					break;
+				case 2:
+					if (has_lod[index])
+						statement("Tex.GetDimensions(Level, ret.x, ret.y, Param);");
+					else
+						statement("Tex.GetDimensions(ret.x, ret.y, Param);");
+					break;
+				case 3:
+					if (has_lod[index])
+						statement("Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);");
+					else
+						statement("Tex.GetDimensions(ret.x, ret.y, ret.z, Param);");
+					break;
+				}
+
+				statement("return ret;");
+				end_scope();
+				statement("");
+			}
+		}
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
@@ -2334,6 +2390,75 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
 		else
 			BOP(<=);
+		break;
+	}
+
+	case OpImageQuerySizeLod:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (!requires_textureSize)
+		{
+			requires_textureSize = true;
+			force_recompile = true;
+		}
+
+		auto dummy_samples_levels = join(get_fallback_name(id), "_dummy_parameter");
+		statement("uint ", dummy_samples_levels, ";");
+
+		auto expr = join("SPIRV_Cross_textureSize(", to_expression(ops[2]), ", ",
+		                 bitcast_expression(SPIRType::UInt, ops[3]), ", ", dummy_samples_levels, ")");
+
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::UInt, expr);
+		emit_op(result_type, id, expr, true);
+		break;
+	}
+
+	case OpImageQuerySize:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (!requires_textureSize)
+		{
+			requires_textureSize = true;
+			force_recompile = true;
+		}
+
+		auto dummy_samples_levels = join(get_fallback_name(id), "_dummy_parameter");
+		statement("uint ", dummy_samples_levels, ";");
+
+		auto expr = join("SPIRV_Cross_textureSize(", to_expression(ops[2]), ", 0u, ", dummy_samples_levels, ")");
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::UInt, expr);
+		emit_op(result_type, id, expr, true);
+		break;
+	}
+
+	case OpImageQuerySamples:
+	case OpImageQueryLevels:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (!requires_textureSize)
+		{
+			requires_textureSize = true;
+			force_recompile = true;
+		}
+
+		// Keep it simple and do not emit special variants to make this look nicer ...
+		// This stuff is barely, if ever, used.
+		forced_temporaries.insert(id);
+		auto &type = get<SPIRType>(result_type);
+		statement(variable_decl(type, to_name(id)), ";");
+		statement("SPIRV_Cross_textureSize(", to_expression(ops[2]), ", 0u, ", to_name(id), ");");
+
+		auto &restype = get<SPIRType>(ops[0]);
+		auto expr = bitcast_expression(restype, SPIRType::UInt, to_name(id));
+		set<SPIRExpression>(id, expr, result_type, true);
 		break;
 	}
 
