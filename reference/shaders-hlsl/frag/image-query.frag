@@ -11,9 +11,9 @@ SamplerState _uSamplerCube_sampler : register(s4);
 TextureCubeArray<float4> uSamplerCubeArray : register(t5);
 SamplerState _uSamplerCubeArray_sampler : register(s5);
 Buffer<float4> uSamplerBuffer : register(t6);
-Texture2D<float4> uSamplerMS : register(t7);
+Texture2DMS<float4> uSamplerMS : register(t7);
 SamplerState _uSamplerMS_sampler : register(s7);
-Texture2DArray<float4> uSamplerMSArray : register(t8);
+Texture2DMSArray<float4> uSamplerMSArray : register(t8);
 SamplerState _uSamplerMSArray_sampler : register(s8);
 
 uint SPIRV_Cross_textureSize(Texture1D<float4> Tex, uint Level, out uint Param)
@@ -23,56 +23,7 @@ uint SPIRV_Cross_textureSize(Texture1D<float4> Tex, uint Level, out uint Param)
     return ret;
 }
 
-uint SPIRV_Cross_textureSize(Texture1D<int4> Tex, uint Level, out uint Param)
-{
-    uint ret;
-    Tex.GetDimensions(Level, ret.x, Param);
-    return ret;
-}
-
-uint SPIRV_Cross_textureSize(Texture1D<uint4> Tex, uint Level, out uint Param)
-{
-    uint ret;
-    Tex.GetDimensions(Level, ret.x, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(Texture1DArray<float4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(Texture1DArray<int4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(Texture1DArray<uint4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
 uint2 SPIRV_Cross_textureSize(Texture2D<float4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(Texture2D<int4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(Texture2D<uint4> Tex, uint Level, out uint Param)
 {
     uint2 ret;
     Tex.GetDimensions(Level, ret.x, ret.y, Param);
@@ -86,35 +37,7 @@ uint3 SPIRV_Cross_textureSize(Texture2DArray<float4> Tex, uint Level, out uint P
     return ret;
 }
 
-uint3 SPIRV_Cross_textureSize(Texture2DArray<int4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
-uint3 SPIRV_Cross_textureSize(Texture2DArray<uint4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
 uint3 SPIRV_Cross_textureSize(Texture3D<float4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
-uint3 SPIRV_Cross_textureSize(Texture3D<int4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
-uint3 SPIRV_Cross_textureSize(Texture3D<uint4> Tex, uint Level, out uint Param)
 {
     uint3 ret;
     Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
@@ -128,35 +51,7 @@ uint SPIRV_Cross_textureSize(Buffer<float4> Tex, uint Level, out uint Param)
     return ret;
 }
 
-uint SPIRV_Cross_textureSize(Buffer<int4> Tex, uint Level, out uint Param)
-{
-    uint ret;
-    Tex.GetDimensions(ret.x);
-    return ret;
-}
-
-uint SPIRV_Cross_textureSize(Buffer<uint4> Tex, uint Level, out uint Param)
-{
-    uint ret;
-    Tex.GetDimensions(ret.x);
-    return ret;
-}
-
 uint2 SPIRV_Cross_textureSize(TextureCube<float4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(TextureCube<int4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(TextureCube<uint4> Tex, uint Level, out uint Param)
 {
     uint2 ret;
     Tex.GetDimensions(Level, ret.x, ret.y, Param);
@@ -170,20 +65,6 @@ uint3 SPIRV_Cross_textureSize(TextureCubeArray<float4> Tex, uint Level, out uint
     return ret;
 }
 
-uint3 SPIRV_Cross_textureSize(TextureCubeArray<int4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
-uint3 SPIRV_Cross_textureSize(TextureCubeArray<uint4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(Level, ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
 uint2 SPIRV_Cross_textureSize(Texture2DMS<float4> Tex, uint Level, out uint Param)
 {
     uint2 ret;
@@ -191,35 +72,7 @@ uint2 SPIRV_Cross_textureSize(Texture2DMS<float4> Tex, uint Level, out uint Para
     return ret;
 }
 
-uint2 SPIRV_Cross_textureSize(Texture2DMS<int4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(ret.x, ret.y, Param);
-    return ret;
-}
-
-uint2 SPIRV_Cross_textureSize(Texture2DMS<uint4> Tex, uint Level, out uint Param)
-{
-    uint2 ret;
-    Tex.GetDimensions(ret.x, ret.y, Param);
-    return ret;
-}
-
 uint3 SPIRV_Cross_textureSize(Texture2DMSArray<float4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
-uint3 SPIRV_Cross_textureSize(Texture2DMSArray<int4> Tex, uint Level, out uint Param)
-{
-    uint3 ret;
-    Tex.GetDimensions(ret.x, ret.y, ret.z, Param);
-    return ret;
-}
-
-uint3 SPIRV_Cross_textureSize(Texture2DMSArray<uint4> Tex, uint Level, out uint Param)
 {
     uint3 ret;
     Tex.GetDimensions(ret.x, ret.y, ret.z, Param);

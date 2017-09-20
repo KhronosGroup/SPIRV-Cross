@@ -83,7 +83,8 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 		SPIRV_CROSS_THROW("Invalid dimension.");
 	}
 	const char *arrayed = type.image.arrayed ? "Array" : "";
-	return join("Texture", dim, arrayed, "<", type_to_glsl(imagetype), components, ">");
+	const char *ms = type.image.ms ? "MS" : "";
+	return join("Texture", dim, ms, arrayed, "<", type_to_glsl(imagetype), components, ">");
 }
 
 string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
@@ -939,30 +940,34 @@ void CompilerHLSL::emit_resources()
 		}
 	}
 
-	if (requires_textureSize)
+	if (required_textureSizeVariants != 0)
 	{
-		static const char *types[] = { "float4", "int4", "uint4" };
-		static const char *dims[] = { "Texture1D",   "Texture1DArray",  "Texture2D",   "Texture2DArray",
-			                          "Texture3D",   "Buffer",          "TextureCube", "TextureCubeArray",
-			                          "Texture2DMS", "Texture2DMSArray" };
+		static const char *types[QueryTypeCount] = { "float4", "int4", "uint4" };
+		static const char *dims[QueryDimCount] = { "Texture1D",   "Texture1DArray",  "Texture2D",   "Texture2DArray",
+			                                       "Texture3D",   "Buffer",          "TextureCube", "TextureCubeArray",
+			                                       "Texture2DMS", "Texture2DMSArray" };
 
-		static const bool has_lod[] = { true, true, true, true, true, false, true, true, false, false };
+		static const bool has_lod[QueryDimCount] = { true, true, true, true, true, false, true, true, false, false };
 
-		static const char *ret_types[] = {
+		static const char *ret_types[QueryDimCount] = {
 			"uint", "uint2", "uint2", "uint3", "uint3", "uint", "uint2", "uint3", "uint2", "uint3",
 		};
 
-		static const uint32_t return_arguments[] = {
+		static const uint32_t return_arguments[QueryDimCount] = {
 			1, 2, 2, 3, 3, 1, 2, 3, 2, 3,
 		};
 
-		for (auto &dim : dims)
+		for (uint32_t index = 0; index < QueryDimCount; index++)
 		{
-			uint32_t index = uint32_t(&dim - dims);
-
-			for (auto &type : types)
+			for (uint32_t type_index = 0; type_index < QueryTypeCount; type_index++)
 			{
-				statement(ret_types[index], " SPIRV_Cross_textureSize(", dim, "<", type,
+				uint32_t bit = 16 * type_index + index;
+				uint64_t mask = 1ull << bit;
+
+				if ((required_textureSizeVariants & mask) == 0)
+					continue;
+
+				statement(ret_types[index], " SPIRV_Cross_textureSize(", dims[index], "<", types[type_index],
 				          "> Tex, uint Level, out uint Param)");
 				begin_scope();
 				statement(ret_types[index], " ret;");
@@ -2398,11 +2403,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto result_type = ops[0];
 		auto id = ops[1];
 
-		if (!requires_textureSize)
-		{
-			requires_textureSize = true;
-			force_recompile = true;
-		}
+		require_texture_query_variant(expression_type(ops[2]));
 
 		auto dummy_samples_levels = join(get_fallback_name(id), "_dummy_parameter");
 		statement("uint ", dummy_samples_levels, ";");
@@ -2421,11 +2422,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto result_type = ops[0];
 		auto id = ops[1];
 
-		if (!requires_textureSize)
-		{
-			requires_textureSize = true;
-			force_recompile = true;
-		}
+		require_texture_query_variant(expression_type(ops[2]));
 
 		auto dummy_samples_levels = join(get_fallback_name(id), "_dummy_parameter");
 		statement("uint ", dummy_samples_levels, ";");
@@ -2443,11 +2440,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto result_type = ops[0];
 		auto id = ops[1];
 
-		if (!requires_textureSize)
-		{
-			requires_textureSize = true;
-			force_recompile = true;
-		}
+		require_texture_query_variant(expression_type(ops[2]));
 
 		// Keep it simple and do not emit special variants to make this look nicer ...
 		// This stuff is barely, if ever, used.
@@ -2465,6 +2458,64 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
+	}
+}
+
+void CompilerHLSL::require_texture_query_variant(const SPIRType &type)
+{
+	uint32_t bit = 0;
+	switch (type.image.dim)
+	{
+	case Dim1D:
+		bit = type.image.arrayed ? Query1DArray : Query1D;
+		break;
+
+	case Dim2D:
+		if (type.image.ms)
+			bit = type.image.arrayed ? Query2DMSArray : Query2DMS;
+		else
+			bit = type.image.arrayed ? Query2DArray : Query2D;
+		break;
+
+	case Dim3D:
+		bit = Query3D;
+		break;
+
+	case DimCube:
+		bit = type.image.arrayed ? QueryCubeArray : QueryCube;
+		break;
+
+	case DimBuffer:
+		bit = QueryBuffer;
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported query type.");
+	}
+
+	switch (get<SPIRType>(type.image.type).basetype)
+	{
+	case SPIRType::Float:
+		bit += QueryTypeFloat;
+		break;
+
+	case SPIRType::Int:
+		bit += QueryTypeInt;
+		break;
+
+	case SPIRType::UInt:
+		bit += QueryTypeUInt;
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported query type.");
+	}
+
+	uint64_t mask = 1ull << bit;
+	if ((required_textureSizeVariants & mask) == 0)
+	{
+		force_recompile = true;
+		required_textureSizeVariants |= mask;
 	}
 }
 
