@@ -1916,7 +1916,7 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		break;
 
 	case GLSLstd450Atan2:
-		emit_binary_func_op(result_type, id, args[1], args[0], "atan2");
+		emit_binary_func_op(result_type, id, args[0], args[1], "atan2");
 		break;
 
 	case GLSLstd450Fma:
