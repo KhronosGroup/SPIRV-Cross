@@ -6828,7 +6828,7 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 				flush_variable_declaration(phi.function_variable);
 
 				// This might be called in continue block, so make sure we
-				// this to emit ESSL 1.0 compliant increments/decrements.
+				// use this to emit ESSL 1.0 compliant increments/decrements.
 				auto lhs = to_expression(phi.function_variable);
 				auto rhs = to_expression(phi.local_variable);
 				if (!optimize_read_modify_write(lhs, rhs))
