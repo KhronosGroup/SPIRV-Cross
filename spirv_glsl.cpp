@@ -6815,8 +6815,27 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 	auto &child = get<SPIRBlock>(to);
 
 	for (auto &phi : child.phi_variables)
+	{
 		if (phi.parent == from)
-			statement(to_expression(phi.function_variable), " = ", to_expression(phi.local_variable), ";");
+		{
+			auto &var = get<SPIRVariable>(phi.function_variable);
+
+			// A Phi variable might be a loop variable, so flush to static expression.
+			if (var.loop_variable && !var.loop_variable_enable)
+				var.static_expression = phi.local_variable;
+			else
+			{
+				flush_variable_declaration(phi.function_variable);
+
+				// This might be called in continue block, so make sure we
+				// use this to emit ESSL 1.0 compliant increments/decrements.
+				auto lhs = to_expression(phi.function_variable);
+				auto rhs = to_expression(phi.local_variable);
+				if (!optimize_read_modify_write(lhs, rhs))
+					statement(lhs, " = ", rhs, ";");
+			}
+		}
+	}
 }
 
 void CompilerGLSL::branch(uint32_t from, uint32_t to)
