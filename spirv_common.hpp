@@ -712,13 +712,14 @@ struct SPIRConstant : IVariant
 	struct ConstantVector
 	{
 		Constant r[4];
-		uint32_t vecsize;
+		uint32_t id[4] = {}; // If != 0, this is a specialization constant, and we should keep track of it as such.
+		uint32_t vecsize = 1;
 	};
 
 	struct ConstantMatrix
 	{
 		ConstantVector c[4];
-		uint32_t columns;
+		uint32_t columns = 1;
 	};
 
 	inline uint32_t scalar(uint32_t col = 0, uint32_t row = 0) const
@@ -777,127 +778,62 @@ struct SPIRConstant : IVariant
 	{
 	}
 
-	SPIRConstant(uint32_t constant_type_, const uint32_t *elements, uint32_t num_elements)
-	    : constant_type(constant_type_)
+	SPIRConstant(uint32_t constant_type_, const uint32_t *elements, uint32_t num_elements, bool specialized)
+		: constant_type(constant_type_), specialization(specialized)
 	{
 		subconstants.insert(end(subconstants), elements, elements + num_elements);
+		specialization = specialized;
 	}
 
-	SPIRConstant(uint32_t constant_type_, uint32_t v0)
-	    : constant_type(constant_type_)
+	// Construct scalar (32-bit).
+	SPIRConstant(uint32_t constant_type_, uint32_t v0, bool specialized)
+		: constant_type(constant_type_), specialization(specialized)
 	{
 		m.c[0].r[0].u32 = v0;
 		m.c[0].vecsize = 1;
 		m.columns = 1;
+
+		if (specialized)
+			m.c[0].id[0] = self;
 	}
 
-	SPIRConstant(uint32_t constant_type_, uint32_t v0, uint32_t v1)
-	    : constant_type(constant_type_)
-	{
-		m.c[0].r[0].u32 = v0;
-		m.c[0].r[1].u32 = v1;
-		m.c[0].vecsize = 2;
-		m.columns = 1;
-	}
-
-	SPIRConstant(uint32_t constant_type_, uint32_t v0, uint32_t v1, uint32_t v2)
-	    : constant_type(constant_type_)
-	{
-		m.c[0].r[0].u32 = v0;
-		m.c[0].r[1].u32 = v1;
-		m.c[0].r[2].u32 = v2;
-		m.c[0].vecsize = 3;
-		m.columns = 1;
-	}
-
-	SPIRConstant(uint32_t constant_type_, uint32_t v0, uint32_t v1, uint32_t v2, uint32_t v3)
-	    : constant_type(constant_type_)
-	{
-		m.c[0].r[0].u32 = v0;
-		m.c[0].r[1].u32 = v1;
-		m.c[0].r[2].u32 = v2;
-		m.c[0].r[3].u32 = v3;
-		m.c[0].vecsize = 4;
-		m.columns = 1;
-	}
-
-	SPIRConstant(uint32_t constant_type_, uint64_t v0)
-	    : constant_type(constant_type_)
+	// Construct scalar (64-bit).
+	SPIRConstant(uint32_t constant_type_, uint64_t v0, bool specialized)
+		: constant_type(constant_type_), specialization(specialized)
 	{
 		m.c[0].r[0].u64 = v0;
 		m.c[0].vecsize = 1;
 		m.columns = 1;
+
+		if (specialized)
+			m.c[0].id[0] = self;
 	}
 
-	SPIRConstant(uint32_t constant_type_, uint64_t v0, uint64_t v1)
-	    : constant_type(constant_type_)
+	// Construct vector.
+	SPIRConstant(uint32_t constant_type_, const SPIRConstant * const *vector_elements, uint32_t num_elements, bool specialized)
+		: constant_type(constant_type_), specialization(specialized)
 	{
-		m.c[0].r[0].u64 = v0;
-		m.c[0].r[1].u64 = v1;
-		m.c[0].vecsize = 2;
+		m.c[0].vecsize = num_elements;
 		m.columns = 1;
+
+		for (uint32_t i = 0; i < num_elements; i++)
+		{
+			m.c[0].r[i] = vector_elements[i]->m.c[0].r[0];
+			m.c[0].id[i] = vector_elements[i]->m.c[0].id[0];
+		}
 	}
 
-	SPIRConstant(uint32_t constant_type_, uint64_t v0, uint64_t v1, uint64_t v2)
-	    : constant_type(constant_type_)
+	// Construct matrix.
+	SPIRConstant(uint32_t constant_type_, const ConstantVector *vectors, uint32_t num_vectors, bool specialized)
+		: constant_type(constant_type_), specialization(specialized)
 	{
-		m.c[0].r[0].u64 = v0;
-		m.c[0].r[1].u64 = v1;
-		m.c[0].r[2].u64 = v2;
-		m.c[0].vecsize = 3;
-		m.columns = 1;
-	}
-
-	SPIRConstant(uint32_t constant_type_, uint64_t v0, uint64_t v1, uint64_t v2, uint64_t v3)
-	    : constant_type(constant_type_)
-	{
-		m.c[0].r[0].u64 = v0;
-		m.c[0].r[1].u64 = v1;
-		m.c[0].r[2].u64 = v2;
-		m.c[0].r[3].u64 = v3;
-		m.c[0].vecsize = 4;
-		m.columns = 1;
-	}
-
-	SPIRConstant(uint32_t constant_type_, const ConstantVector &vec0)
-	    : constant_type(constant_type_)
-	{
-		m.columns = 1;
-		m.c[0] = vec0;
-	}
-
-	SPIRConstant(uint32_t constant_type_, const ConstantVector &vec0, const ConstantVector &vec1)
-	    : constant_type(constant_type_)
-	{
-		m.columns = 2;
-		m.c[0] = vec0;
-		m.c[1] = vec1;
-	}
-
-	SPIRConstant(uint32_t constant_type_, const ConstantVector &vec0, const ConstantVector &vec1,
-	             const ConstantVector &vec2)
-	    : constant_type(constant_type_)
-	{
-		m.columns = 3;
-		m.c[0] = vec0;
-		m.c[1] = vec1;
-		m.c[2] = vec2;
-	}
-
-	SPIRConstant(uint32_t constant_type_, const ConstantVector &vec0, const ConstantVector &vec1,
-	             const ConstantVector &vec2, const ConstantVector &vec3)
-	    : constant_type(constant_type_)
-	{
-		m.columns = 4;
-		m.c[0] = vec0;
-		m.c[1] = vec1;
-		m.c[2] = vec2;
-		m.c[3] = vec3;
+		m.columns = num_vectors;
+		memcpy(m.c, vectors, num_vectors * sizeof(*vectors));
 	}
 
 	uint32_t constant_type;
 	ConstantMatrix m;
-	bool specialization = false; // If the constant is a specialization constant.
+	bool specialization = false; // If the constant is a specialization constant (i.e. created with OpSpecConstant*).
 
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;

@@ -1640,10 +1640,11 @@ void Compiler::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(ops[0]);
+
 		if (type.width > 32)
-			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32)).specialization = op == OpSpecConstant;
+			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
 		else
-			set<SPIRConstant>(id, ops[0], ops[2]).specialization = op == OpSpecConstant;
+			set<SPIRConstant>(id, ops[0], ops[2], op == OpSpecConstant);
 		break;
 	}
 
@@ -1651,7 +1652,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstantFalse:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], uint32_t(0)).specialization = op == OpSpecConstantFalse;
+		set<SPIRConstant>(id, ops[0], uint32_t(0), op == OpSpecConstantFalse);
 		break;
 	}
 
@@ -1659,7 +1660,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstantTrue:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], uint32_t(1)).specialization = op == OpSpecConstantTrue;
+		set<SPIRConstant>(id, ops[0], uint32_t(1), op == OpSpecConstantTrue);
 		break;
 	}
 
@@ -1678,109 +1679,41 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t type = ops[0];
 
 		auto &ctype = get<SPIRType>(type);
-		SPIRConstant *constant = nullptr;
 
 		// We can have constants which are structs and arrays.
 		// In this case, our SPIRConstant will be a list of other SPIRConstant ids which we
 		// can refer to.
 		if (ctype.basetype == SPIRType::Struct || !ctype.array.empty())
 		{
-			constant = &set<SPIRConstant>(id, type, ops + 2, length - 2);
-			constant->specialization = op == OpSpecConstantComposite;
+			set<SPIRConstant>(id, type, ops + 2, length - 2, op == OpSpecConstantComposite);
 			break;
 		}
 
-		bool type_64bit = ctype.width > 32;
 		bool matrix = ctype.columns > 1;
 
 		if (matrix)
 		{
-			switch (length - 2)
-			{
-			case 1:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector());
-				break;
-
-			case 2:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector(),
-				                              get<SPIRConstant>(ops[3]).vector());
-				break;
-
-			case 3:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector(),
-				                              get<SPIRConstant>(ops[3]).vector(), get<SPIRConstant>(ops[4]).vector());
-				break;
-
-			case 4:
-				constant =
-				    &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector(), get<SPIRConstant>(ops[3]).vector(),
-				                       get<SPIRConstant>(ops[4]).vector(), get<SPIRConstant>(ops[5]).vector());
-				break;
-
-			default:
+			uint32_t columns = length - 2;
+			if (columns > 4)
 				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 columns.");
-			}
+
+			SPIRConstant::ConstantVector c[4];
+			for (uint32_t i = 0; i < columns; i++)
+				c[i] = get<SPIRConstant>(ops[2 + i]).vector();
+			set<SPIRConstant>(id, type, c, columns, op == OpSpecConstantComposite);
 		}
 		else
 		{
-			switch (length - 2)
-			{
-			case 1:
-				if (type_64bit)
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64());
-				else
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar());
-				break;
-
-			case 2:
-				if (type_64bit)
-				{
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64(),
-					                              get<SPIRConstant>(ops[3]).scalar_u64());
-				}
-				else
-				{
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
-					                              get<SPIRConstant>(ops[3]).scalar());
-				}
-				break;
-
-			case 3:
-				if (type_64bit)
-				{
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64(),
-					                              get<SPIRConstant>(ops[3]).scalar_u64(),
-					                              get<SPIRConstant>(ops[4]).scalar_u64());
-				}
-				else
-				{
-					constant =
-					    &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
-					                       get<SPIRConstant>(ops[3]).scalar(), get<SPIRConstant>(ops[4]).scalar());
-				}
-				break;
-
-			case 4:
-				if (type_64bit)
-				{
-					constant = &set<SPIRConstant>(
-					    id, type, get<SPIRConstant>(ops[2]).scalar_u64(), get<SPIRConstant>(ops[3]).scalar_u64(),
-					    get<SPIRConstant>(ops[4]).scalar_u64(), get<SPIRConstant>(ops[5]).scalar_u64());
-				}
-				else
-				{
-					constant = &set<SPIRConstant>(
-					    id, type, get<SPIRConstant>(ops[2]).scalar(), get<SPIRConstant>(ops[3]).scalar(),
-					    get<SPIRConstant>(ops[4]).scalar(), get<SPIRConstant>(ops[5]).scalar());
-				}
-				break;
-
-			default:
+			uint32_t components = length - 2;
+			if (components > 4)
 				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 components.");
-			}
+
+			const SPIRConstant *c[4];
+			for (uint32_t i = 0; i < components; i++)
+				c[i] = &get<SPIRConstant>(ops[2 + i]);
+			set<SPIRConstant>(id, type, c, components, op == OpSpecConstantComposite);
 		}
 
-		constant->specialization = op == OpSpecConstantComposite;
 		break;
 	}
 
@@ -3618,7 +3551,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 		vector<uint32_t> elements(constant_type.array.back());
 		for (uint32_t i = 0; i < constant_type.array.back(); i++)
 			elements[i] = parent_id;
-		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()), false);
 	}
 	else if (!constant_type.member_types.empty())
 	{
@@ -3629,7 +3562,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 			make_constant_null(member_ids + i, constant_type.member_types[i]);
 			elements[i] = member_ids + i;
 		}
-		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()), false);
 	}
 	else
 	{
