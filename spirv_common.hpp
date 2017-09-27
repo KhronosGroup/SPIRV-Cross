@@ -712,15 +712,26 @@ struct SPIRConstant : IVariant
 	struct ConstantVector
 	{
 		Constant r[4];
-		uint32_t id[4] = {}; // If != 0, this is a specialization constant, and we should keep track of it as such.
+		uint32_t id[4] = {}; // If != 0, this element is a specialization constant, and we should keep track of it as such.
 		uint32_t vecsize = 1;
 	};
 
 	struct ConstantMatrix
 	{
 		ConstantVector c[4];
+		uint32_t id[4] = {}; // If != 0, this column is a specialization constant, and we should keep track of it as such.
 		uint32_t columns = 1;
 	};
+
+	inline uint32_t specialization_constant_id(uint32_t col, uint32_t row) const
+	{
+		return m.c[col].id[row];
+	}
+
+	inline uint32_t specialization_constant_id(uint32_t col) const
+	{
+		return m.id[col];
+	}
 
 	inline uint32_t scalar(uint32_t col = 0, uint32_t row = 0) const
 	{
@@ -756,10 +767,12 @@ struct SPIRConstant : IVariant
 	{
 		return m.c[0];
 	}
+
 	inline uint32_t vector_size() const
 	{
 		return m.c[0].vecsize;
 	}
+
 	inline uint32_t columns() const
 	{
 		return m.columns;
@@ -792,9 +805,6 @@ struct SPIRConstant : IVariant
 		m.c[0].r[0].u32 = v0;
 		m.c[0].vecsize = 1;
 		m.columns = 1;
-
-		if (specialized)
-			m.c[0].id[0] = self;
 	}
 
 	// Construct scalar (64-bit).
@@ -804,31 +814,37 @@ struct SPIRConstant : IVariant
 		m.c[0].r[0].u64 = v0;
 		m.c[0].vecsize = 1;
 		m.columns = 1;
-
-		if (specialized)
-			m.c[0].id[0] = self;
 	}
 
-	// Construct vector.
+	// Construct vectors and matrices.
 	SPIRConstant(uint32_t constant_type_, const SPIRConstant * const *vector_elements, uint32_t num_elements, bool specialized)
 		: constant_type(constant_type_), specialization(specialized)
 	{
-		m.c[0].vecsize = num_elements;
-		m.columns = 1;
+		bool matrix = vector_elements[0]->m.c[0].vecsize > 1;
 
-		for (uint32_t i = 0; i < num_elements; i++)
+		if (matrix)
 		{
-			m.c[0].r[i] = vector_elements[i]->m.c[0].r[0];
-			m.c[0].id[i] = vector_elements[i]->m.c[0].id[0];
-		}
-	}
+			m.columns = num_elements;
 
-	// Construct matrix.
-	SPIRConstant(uint32_t constant_type_, const ConstantVector *vectors, uint32_t num_vectors, bool specialized)
-		: constant_type(constant_type_), specialization(specialized)
-	{
-		m.columns = num_vectors;
-		memcpy(m.c, vectors, num_vectors * sizeof(*vectors));
+			for (uint32_t i = 0; i < num_elements; i++)
+			{
+				m.c[i] = vector_elements[i]->m.c[0];
+				if (vector_elements[i]->specialization)
+					m.id[i] = vector_elements[i]->self;
+			}
+		}
+		else
+		{
+			m.c[0].vecsize = num_elements;
+			m.columns = 1;
+
+			for (uint32_t i = 0; i < num_elements; i++)
+			{
+				m.c[0].r[i] = vector_elements[i]->m.c[0].r[0];
+				if (vector_elements[i]->specialization)
+					m.c[0].id[i] = vector_elements[i]->self;
+			}
+		}
 	}
 
 	uint32_t constant_type;

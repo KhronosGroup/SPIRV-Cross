@@ -1686,34 +1686,18 @@ void Compiler::parse(const Instruction &instruction)
 		if (ctype.basetype == SPIRType::Struct || !ctype.array.empty())
 		{
 			set<SPIRConstant>(id, type, ops + 2, length - 2, op == OpSpecConstantComposite);
-			break;
-		}
-
-		bool matrix = ctype.columns > 1;
-
-		if (matrix)
-		{
-			uint32_t columns = length - 2;
-			if (columns > 4)
-				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 columns.");
-
-			SPIRConstant::ConstantVector c[4];
-			for (uint32_t i = 0; i < columns; i++)
-				c[i] = get<SPIRConstant>(ops[2 + i]).vector();
-			set<SPIRConstant>(id, type, c, columns, op == OpSpecConstantComposite);
 		}
 		else
 		{
-			uint32_t components = length - 2;
-			if (components > 4)
-				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 components.");
+			uint32_t elements = length - 2;
+			if (elements > 4)
+				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 elements.");
 
 			const SPIRConstant *c[4];
-			for (uint32_t i = 0; i < components; i++)
+			for (uint32_t i = 0; i < elements; i++)
 				c[i] = &get<SPIRConstant>(ops[2 + i]);
-			set<SPIRConstant>(id, type, c, components, op == OpSpecConstantComposite);
+			set<SPIRConstant>(id, type, c, elements, op == OpSpecConstantComposite);
 		}
-
 		break;
 	}
 

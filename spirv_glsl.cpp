@@ -1342,8 +1342,16 @@ void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 	auto &type = get<SPIRType>(constant.constant_type);
 	auto name = to_name(constant.self);
 
-	statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
-	          variable_decl(type, name), " = ", constant_expression(constant), ";");
+	// Only scalars have constant IDs.
+	if (has_decoration(constant.self, DecorationSpecId))
+	{
+		statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
+		          variable_decl(type, name), " = ", constant_expression(constant), ";");
+	}
+	else
+	{
+		statement("const ", variable_decl(type, name), " = ", constant_expression(constant), ";");
+	}
 }
 
 void CompilerGLSL::replace_illegal_names()
@@ -2169,7 +2177,11 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		string res = type_to_glsl(get<SPIRType>(c.constant_type)) + "(";
 		for (uint32_t col = 0; col < c.columns(); col++)
 		{
-			res += constant_expression_vector(c, col);
+			if (options.vulkan_semantics && c.specialization_constant_id(col) != 0)
+				res += to_name(c.specialization_constant_id(col));
+			else
+				res += constant_expression_vector(c, col);
+
 			if (col + 1 < c.columns())
 				res += ", ";
 		}
@@ -2188,6 +2200,20 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		res += type_to_glsl(type) + "(";
 
 	bool splat = backend.use_constructor_splatting && c.vector_size() > 1;
+
+	if (splat)
+	{
+		// Cannot use constant splatting if we have specialization constants somewhere in the vector.
+		for (uint32_t i = 0; i < c.vector_size(); i++)
+		{
+			if (options.vulkan_semantics && c.specialization_constant_id(vector, i) != 0)
+			{
+				splat = false;
+				break;
+			}
+		}
+	}
+
 	if (splat)
 	{
 		if (type_to_std430_base_size(type) == 8)
@@ -2219,7 +2245,11 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_f32(vector, i));
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += convert_to_string(c.scalar_f32(vector, i));
+
 				if (backend.float_literal_suffix)
 					res += "f";
 				if (i + 1 < c.vector_size())
@@ -2239,9 +2269,15 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_f64(vector, i));
-				if (backend.double_literal_suffix)
-					res += "lf";
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+				{
+					res += convert_to_string(c.scalar_f64(vector, i));
+					if (backend.double_literal_suffix)
+						res += "lf";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2261,11 +2297,17 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_i64(vector, i));
-				if (backend.long_long_literal_suffix)
-					res += "ll";
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
 				else
-					res += "l";
+				{
+					res += convert_to_string(c.scalar_i64(vector, i));
+					if (backend.long_long_literal_suffix)
+						res += "ll";
+					else
+						res += "l";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2285,11 +2327,17 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_u64(vector, i));
-				if (backend.long_long_literal_suffix)
-					res += "ull";
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
 				else
-					res += "ul";
+				{
+					res += convert_to_string(c.scalar_u64(vector, i));
+					if (backend.long_long_literal_suffix)
+						res += "ull";
+					else
+						res += "ul";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2307,9 +2355,15 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar(vector, i));
-				if (backend.uint32_t_literal_suffix)
-					res += "u";
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+				{
+					res += convert_to_string(c.scalar(vector, i));
+					if (backend.uint32_t_literal_suffix)
+						res += "u";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2323,7 +2377,10 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_i32(vector, i));
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += convert_to_string(c.scalar_i32(vector, i));
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2337,7 +2394,11 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += c.scalar(vector, i) ? "true" : "false";
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += c.scalar(vector, i) ? "true" : "false";
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
