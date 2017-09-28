@@ -268,6 +268,26 @@ public:
 	uint32_t get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index = 0) const;
 	spv::ExecutionModel get_execution_model() const;
 
+	// In SPIR-V, the compute work group size can be represented by a constant vector, in which case
+	// the LocalSize execution mode is ignored.
+	//
+	// This constant vector can be a constant vector, specialization constant vector, or partly specialized constant vector.
+	// To modify and query work group dimensions which are specialization constants, SPIRConstant values must be modified
+	// directly via get_constant() rather than using LocalSize directly. This function will return which constants should be modified.
+	//
+	// To modify dimensions which are *not* specialization constants, set_execution_mode should be used directly.
+	// Arguments to set_execution_mode which are specialization constants are effectively ignored during compilation.
+	// NOTE: This is somewhat different from how SPIR-V works. In SPIR-V, the constant vector will completely replace LocalSize,
+	// while in this interface, LocalSize is only ignored for specialization constants.
+	//
+	// The specialization constant will be written to x, y and z arguments.
+	// If the component is not a specialization constant, a zeroed out struct will be written.
+	// The return value is the constant ID of the builtin WorkGroupSize, but this is not expected to be useful
+	// for most use cases.
+	uint32_t get_work_group_size_specialization_constants(SpecializationConstant &x,
+	                                                      SpecializationConstant &y,
+	                                                      SpecializationConstant &z) const;
+
 	// Analyzes all separate image and samplers used from the currently selected entry point,
 	// and re-routes them all to a combined image sampler instead.
 	// This is required to "support" separate image samplers in targets which do not natively support

@@ -770,6 +770,28 @@ void Compiler::parse()
 		SPIRV_CROSS_THROW("Function was not terminated.");
 	if (current_block)
 		SPIRV_CROSS_THROW("Block was not terminated.");
+
+	// Figure out specialization constants for work group sizes.
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (meta[c.self].decoration.builtin &&
+			    meta[c.self].decoration.builtin_type == BuiltInWorkgroupSize)
+			{
+				// In current SPIR-V, there can be just one constant like this.
+				// All entry points will receive the constant value.
+				for (auto &entry : entry_points)
+				{
+					entry.second.workgroup_size.constant = c.self;
+					entry.second.workgroup_size.x = c.scalar(0, 0);
+					entry.second.workgroup_size.y = c.scalar(0, 1);
+					entry.second.workgroup_size.z = c.scalar(0, 2);
+				}
+			}
+		}
+	}
 }
 
 void Compiler::flatten_interface_block(uint32_t id)
@@ -2343,6 +2365,40 @@ void Compiler::unset_execution_mode(ExecutionMode mode)
 {
 	auto &execution = get_entry_point();
 	execution.flags &= ~(1ull << mode);
+}
+
+uint32_t Compiler::get_work_group_size_specialization_constants(SpecializationConstant &x, SpecializationConstant &y,
+                                                                SpecializationConstant &z) const
+{
+	auto &execution = get_entry_point();
+	x = {};
+	y = {};
+	z = {};
+
+	if (execution.workgroup_size.constant != 0)
+	{
+		auto &c = get<SPIRConstant>(execution.workgroup_size.constant);
+
+		if (c.m.c[0].id[0] != 0)
+		{
+			x.id = c.m.c[0].id[0];
+			x.constant_id = get_decoration(c.m.c[0].id[0], DecorationSpecId);
+		}
+
+		if (c.m.c[0].id[1] != 0)
+		{
+			y.id = c.m.c[0].id[1];
+			y.constant_id = get_decoration(c.m.c[0].id[1], DecorationSpecId);
+		}
+
+		if (c.m.c[0].id[2] != 0)
+		{
+			z.id = c.m.c[0].id[2];
+			z.constant_id = get_decoration(c.m.c[0].id[2], DecorationSpecId);
+		}
+	}
+
+	return execution.workgroup_size.constant;
 }
 
 uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index) const

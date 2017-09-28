@@ -626,6 +626,9 @@ void CompilerHLSL::emit_builtin_variables()
 void CompilerHLSL::emit_specialization_constants()
 {
 	bool emitted = false;
+	SpecializationConstant wg_x, wg_y, wg_z;
+	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeConstant)
@@ -633,6 +636,14 @@ void CompilerHLSL::emit_specialization_constants()
 			auto &c = id.get<SPIRConstant>();
 			if (!c.specialization)
 				continue;
+
+			if (c.self == workgroup_size_id ||
+			    c.self == wg_x.id ||
+			    c.self == wg_y.id ||
+			    c.self == wg_z.id)
+			{
+				continue;
+			}
 
 			auto &type = get<SPIRType>(c.constant_type);
 			auto name = to_name(c.self);
@@ -1199,8 +1210,21 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	if (execution.model == ExecutionModelGLCompute)
 	{
-		statement("[numthreads(", execution.workgroup_size.x, ", ", execution.workgroup_size.y, ", ",
-		          execution.workgroup_size.z, ")]");
+		SpecializationConstant wg_x, wg_y, wg_z;
+		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+		uint32_t x = execution.workgroup_size.x;
+		uint32_t y = execution.workgroup_size.y;
+		uint32_t z = execution.workgroup_size.z;
+
+		if (wg_x.id)
+			x = get<SPIRConstant>(wg_x.id).scalar();
+		if (wg_y.id)
+			y = get<SPIRConstant>(wg_y.id).scalar();
+		if (wg_z.id)
+			z = get<SPIRConstant>(wg_z.id).scalar();
+
+		statement("[numthreads(", x, ", ", y, ", ", z, ")]");
 	}
 
 	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", merge(arguments), ")");
@@ -1354,19 +1378,22 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 void CompilerHLSL::emit_fixup()
 {
-	// Do various mangling on the gl_Position.
-	if (options.shader_model <= 30)
+	if (get_entry_point().model == ExecutionModelVertex)
 	{
-		statement("gl_Position.x = gl_Position.x - gl_HalfPixel.x * "
-		          "gl_Position.w;");
-		statement("gl_Position.y = gl_Position.y + gl_HalfPixel.y * "
-		          "gl_Position.w;");
-	}
+		// Do various mangling on the gl_Position.
+		if (options.shader_model <= 30)
+		{
+			statement("gl_Position.x = gl_Position.x - gl_HalfPixel.x * "
+					          "gl_Position.w;");
+			statement("gl_Position.y = gl_Position.y + gl_HalfPixel.y * "
+					          "gl_Position.w;");
+		}
 
-	if (CompilerGLSL::options.vertex.flip_vert_y)
-		statement("gl_Position.y = -gl_Position.y;");
-	if (CompilerGLSL::options.vertex.fixup_clipspace)
-		statement("gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;");
+		if (CompilerGLSL::options.vertex.flip_vert_y)
+			statement("gl_Position.y = -gl_Position.y;");
+		if (CompilerGLSL::options.vertex.fixup_clipspace)
+			statement("gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;");
+	}
 }
 
 void CompilerHLSL::emit_texture_op(const Instruction &i)

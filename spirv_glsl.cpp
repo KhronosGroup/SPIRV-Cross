@@ -16,6 +16,7 @@
 
 #include "spirv_glsl.hpp"
 #include "GLSL.std.450.h"
+#include "spirv_common.hpp"
 #include <algorithm>
 #include <assert.h>
 #include <utility>
@@ -421,10 +422,50 @@ void CompilerGLSL::emit_header()
 		break;
 
 	case ExecutionModelGLCompute:
-		inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
-		inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
-		inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+	{
+		if (execution.workgroup_size.constant != 0)
+		{
+			SpecializationConstant wg_x, wg_y, wg_z;
+			get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+			if (wg_x.id && wg_x.constant_id)
+			{
+				if (options.vulkan_semantics)
+					inputs.push_back(join("local_size_x_id = ", wg_x.constant_id));
+				else
+					inputs.push_back(join("local_size_x = ", get<SPIRConstant>(wg_x.id).scalar()));
+			}
+			else
+				inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
+
+			if (wg_y.id && wg_y.constant_id)
+			{
+				if (options.vulkan_semantics)
+					inputs.push_back(join("local_size_y_id = ", wg_y.constant_id));
+				else
+					inputs.push_back(join("local_size_y = ", get<SPIRConstant>(wg_y.id).scalar()));
+			}
+			else
+				inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
+
+			if (wg_z.id && wg_z.constant_id)
+			{
+				if (options.vulkan_semantics)
+					inputs.push_back(join("local_size_z_id = ", wg_z.constant_id));
+				else
+					inputs.push_back(join("local_size_z = ", get<SPIRConstant>(wg_z.id).scalar()));
+			}
+			else
+				inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+		}
+		else
+		{
+			inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
+			inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
+			inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+		}
 		break;
+	}
 
 	case ExecutionModelFragment:
 		if (options.es)
@@ -1341,6 +1382,18 @@ void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 {
 	auto &type = get<SPIRType>(constant.constant_type);
 	auto name = to_name(constant.self);
+
+	SpecializationConstant wg_x, wg_y, wg_z;
+	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+	if (constant.self == workgroup_size_id ||
+	    constant.self == wg_x.id ||
+	    constant.self == wg_y.id ||
+	    constant.self == wg_z.id)
+	{
+		// These specialization constants are implicitly declared by emitting layout() in;
+		return;
+	}
 
 	// Only scalars have constant IDs.
 	if (has_decoration(constant.self, DecorationSpecId))
