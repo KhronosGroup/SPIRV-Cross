@@ -86,7 +86,8 @@ string Compiler::compile()
 bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 {
 	auto &type = get<SPIRType>(v.basetype);
-	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool ssbo = v.storage == StorageClassStorageBuffer ||
+	            ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0);
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 	bool is_restrict = (meta[v.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
@@ -426,6 +427,7 @@ static inline bool storage_class_is_interface(spv::StorageClass storage)
 	case StorageClassUniformConstant:
 	case StorageClassAtomicCounter:
 	case StorageClassPushConstant:
+	case StorageClassStorageBuffer:
 		return true;
 
 	default:
@@ -655,9 +657,14 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		{
 			res.uniform_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
 		}
-		// SSBOs
+		// Old way to declare SSBOs.
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
+		{
+			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+		}
+		// Modern way to declare SSBOs.
+		else if (type.storage == StorageClassStorageBuffer)
 		{
 			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
 		}
@@ -777,8 +784,7 @@ void Compiler::parse()
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
-			if (meta[c.self].decoration.builtin &&
-			    meta[c.self].decoration.builtin_type == BuiltInWorkgroupSize)
+			if (meta[c.self].decoration.builtin && meta[c.self].decoration.builtin_type == BuiltInWorkgroupSize)
 			{
 				// In current SPIR-V, there can be just one constant like this.
 				// All entry points will receive the constant value.
@@ -3549,7 +3555,8 @@ bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 	{
 		auto *var = maybe_get<SPIRVariable>(id);
 		// Ensure that this is actually a buffer object.
-		return var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock);
+		return var && (var->storage == StorageClassStorageBuffer ||
+		               has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock));
 	}
 	else
 		return false;
@@ -3565,7 +3572,8 @@ bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id)
 		{
 			auto *var = maybe_get<SPIRVariable>(i);
 			// Ensure that this is actually a buffer object.
-			if (var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			if (var && (var->storage == StorageClassStorageBuffer ||
+			            has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock)))
 			{
 				counter_id = i;
 				return true;

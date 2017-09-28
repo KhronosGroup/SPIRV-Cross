@@ -1056,7 +1056,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBlock)))
 		attr.push_back("std140");
-	else if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock)))
+	else if (var.storage == StorageClassStorageBuffer ||
+	         (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock))))
 		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
 	else if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
 		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
@@ -1135,7 +1136,8 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
-	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool ssbo = var.storage == StorageClassStorageBuffer ||
+	            ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0);
 	if (ssbo)
 		SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
 
@@ -1155,7 +1157,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 
 	uint64_t flags = get_buffer_block_flags(var);
-	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool ssbo = var.storage == StorageClassStorageBuffer ||
+	            ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0);
 	bool is_restrict = ssbo && (flags & (1ull << DecorationRestrict)) != 0;
 	bool is_writeonly = ssbo && (flags & (1ull << DecorationNonReadable)) != 0;
 	bool is_readonly = ssbo && (flags & (1ull << DecorationNonWritable)) != 0;
@@ -1386,9 +1389,7 @@ void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 	SpecializationConstant wg_x, wg_y, wg_z;
 	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
-	if (constant.self == workgroup_size_id ||
-	    constant.self == wg_x.id ||
-	    constant.self == wg_y.id ||
+	if (constant.self == workgroup_size_id || constant.self == wg_x.id || constant.self == wg_y.id ||
 	    constant.self == wg_z.id)
 	{
 		// These specialization constants are implicitly declared by emitting layout() in;
@@ -1751,9 +1752,12 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
-			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
+			bool has_block_flags = (meta[type.self].decoration.decoration_flags &
+			                        ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+
+			if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
+			    has_block_flags)
 			{
 				emit_buffer_block(var);
 			}

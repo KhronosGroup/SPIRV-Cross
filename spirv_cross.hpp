@@ -197,7 +197,7 @@ public:
 
 	// Returns a vector of which members of a struct are potentially in use by a
 	// SPIR-V shader. The granularity of this analysis is per-member of a struct.
-	// This can be used for Buffer (UBO), BufferBlock (SSBO) and PushConstant blocks.
+	// This can be used for Buffer (UBO), BufferBlock/StorageBuffer (SSBO) and PushConstant blocks.
 	// ID is the Resource::id obtained from get_shader_resources().
 	std::vector<BufferRange> get_active_buffer_ranges(uint32_t id) const;
 
@@ -284,8 +284,7 @@ public:
 	// If the component is not a specialization constant, a zeroed out struct will be written.
 	// The return value is the constant ID of the builtin WorkGroupSize, but this is not expected to be useful
 	// for most use cases.
-	uint32_t get_work_group_size_specialization_constants(SpecializationConstant &x,
-	                                                      SpecializationConstant &y,
+	uint32_t get_work_group_size_specialization_constants(SpecializationConstant &x, SpecializationConstant &y,
 	                                                      SpecializationConstant &z) const;
 
 	// Analyzes all separate image and samplers used from the currently selected entry point,

@@ -713,14 +713,16 @@ struct SPIRConstant : IVariant
 	struct ConstantVector
 	{
 		Constant r[4];
-		uint32_t id[4] = {}; // If != 0, this element is a specialization constant, and we should keep track of it as such.
+		// If != 0, this element is a specialization constant, and we should keep track of it as such.
+		uint32_t id[4] = {};
 		uint32_t vecsize = 1;
 	};
 
 	struct ConstantMatrix
 	{
 		ConstantVector c[4];
-		uint32_t id[4] = {}; // If != 0, this column is a specialization constant, and we should keep track of it as such.
+		// If != 0, this column is a specialization constant, and we should keep track of it as such.
+		uint32_t id[4] = {};
 		uint32_t columns = 1;
 	};
 
@@ -793,7 +795,8 @@ struct SPIRConstant : IVariant
 	}
 
 	SPIRConstant(uint32_t constant_type_, const uint32_t *elements, uint32_t num_elements, bool specialized)
-		: constant_type(constant_type_), specialization(specialized)
+	    : constant_type(constant_type_)
+	    , specialization(specialized)
 	{
 		subconstants.insert(end(subconstants), elements, elements + num_elements);
 		specialization = specialized;
@@ -801,7 +804,8 @@ struct SPIRConstant : IVariant
 
 	// Construct scalar (32-bit).
 	SPIRConstant(uint32_t constant_type_, uint32_t v0, bool specialized)
-		: constant_type(constant_type_), specialization(specialized)
+	    : constant_type(constant_type_)
+	    , specialization(specialized)
 	{
 		m.c[0].r[0].u32 = v0;
 		m.c[0].vecsize = 1;
@@ -810,7 +814,8 @@ struct SPIRConstant : IVariant
 
 	// Construct scalar (64-bit).
 	SPIRConstant(uint32_t constant_type_, uint64_t v0, bool specialized)
-		: constant_type(constant_type_), specialization(specialized)
+	    : constant_type(constant_type_)
+	    , specialization(specialized)
 	{
 		m.c[0].r[0].u64 = v0;
 		m.c[0].vecsize = 1;
@@ -818,8 +823,10 @@ struct SPIRConstant : IVariant
 	}
 
 	// Construct vectors and matrices.
-	SPIRConstant(uint32_t constant_type_, const SPIRConstant * const *vector_elements, uint32_t num_elements, bool specialized)
-		: constant_type(constant_type_), specialization(specialized)
+	SPIRConstant(uint32_t constant_type_, const SPIRConstant *const *vector_elements, uint32_t num_elements,
+	             bool specialized)
+	    : constant_type(constant_type_)
+	    , specialization(specialized)
 	{
 		bool matrix = vector_elements[0]->m.c[0].vecsize > 1;
 

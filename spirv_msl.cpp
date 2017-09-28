@@ -217,7 +217,8 @@ void CompilerMSL::extract_global_variables_from_functions()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassInput || var.storage == StorageClassUniform ||
-			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant)
+			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant ||
+			    var.storage == StorageClassStorageBuffer)
 			{
 				global_var_ids.insert(var.self);
 			}
@@ -1004,7 +1005,7 @@ void CompilerMSL::emit_resources()
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-			     type.storage == StorageClassPushConstant) &&
+			     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer) &&
 			    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)) &&
 			    !is_hidden_variable(var))
 			{
@@ -2272,12 +2273,17 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 
 	if ((type.basetype == SPIRType::Struct) &&
 	    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-	     type.storage == StorageClassPushConstant))
+	     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer))
 	{
-		return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
-		        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
-		           "device" :
-		           "constant";
+		if (type.storage == StorageClassStorageBuffer)
+			return "device";
+		else
+		{
+			return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
+			        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
+			           "device" :
+			           "constant";
+		}
 	}
 
 	return "thread";
@@ -2324,7 +2330,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			uint32_t var_id = var.self;
 
 			if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-			     var.storage == StorageClassPushConstant) &&
+			     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
 			    !is_hidden_variable(var))
 			{
 				switch (type.basetype)
