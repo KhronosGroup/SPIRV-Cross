@@ -2004,7 +2004,12 @@ string CompilerGLSL::to_expression(uint32_t id)
 	case TypeConstant:
 	{
 		auto &c = get<SPIRConstant>(id);
-		if (c.specialization && options.vulkan_semantics)
+
+		// WorkGroupSize may be a constant.
+		auto &dec = meta[c.self].decoration;
+		if (dec.builtin)
+			return builtin_to_glsl(dec.builtin_type, StorageClassGeneric);
+		else if (c.specialization && options.vulkan_semantics)
 			return to_name(id);
 		else
 			return constant_expression(c);
