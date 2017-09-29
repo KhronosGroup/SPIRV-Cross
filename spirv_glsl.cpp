@@ -428,7 +428,7 @@ void CompilerGLSL::emit_header()
 			SpecializationConstant wg_x, wg_y, wg_z;
 			get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
-			if (wg_x.id && wg_x.constant_id)
+			if (wg_x.id)
 			{
 				if (options.vulkan_semantics)
 					inputs.push_back(join("local_size_x_id = ", wg_x.constant_id));
@@ -438,7 +438,7 @@ void CompilerGLSL::emit_header()
 			else
 				inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
 
-			if (wg_y.id && wg_y.constant_id)
+			if (wg_y.id)
 			{
 				if (options.vulkan_semantics)
 					inputs.push_back(join("local_size_y_id = ", wg_y.constant_id));
@@ -448,7 +448,7 @@ void CompilerGLSL::emit_header()
 			else
 				inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
 
-			if (wg_z.id && wg_z.constant_id)
+			if (wg_z.id)
 			{
 				if (options.vulkan_semantics)
 					inputs.push_back(join("local_size_z_id = ", wg_z.constant_id));
