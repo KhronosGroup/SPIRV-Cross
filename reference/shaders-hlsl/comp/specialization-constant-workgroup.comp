@@ -1,0 +1,16 @@
+const uint _13 = 1u;
+const uint _15 = 1u;
+const uint3 gl_WorkGroupSize = uint3(_13, 10u, _15);
+
+RWByteAddressBuffer _10 : register(u0);
+
+void comp_main()
+{
+    _10.Store3(0, gl_WorkGroupSize);
+}
+
+[numthreads(1, 10, 1)]
+void main()
+{
+    comp_main();
+}
