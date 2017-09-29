@@ -1,0 +1,21 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+constant uint _13_tmp [[function_constant(3)]];
+constant uint _13 = is_function_constant_defined(_13_tmp) ? _13_tmp : 1u;
+constant uint _15_tmp [[function_constant(20)]];
+constant uint _15 = is_function_constant_defined(_15_tmp) ? _15_tmp : 1u;
+constant uint3 gl_WorkGroupSize = uint3(_13, 10u, _15);
+
+struct SSBO
+{
+    uint3 wg_size;
+};
+
+kernel void main0(device SSBO& _10 [[buffer(0)]])
+{
+    _10.wg_size = gl_WorkGroupSize;
+}
+
