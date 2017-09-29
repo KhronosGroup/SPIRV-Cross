@@ -1056,7 +1056,8 @@ void CompilerMSL::emit_specialization_constants()
 		else
 		{
 			// Composite specialization constants must be built from other specialization constants.
-			statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+			statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(get<SPIRConstant>(sc.id)),
+			          ";");
 		}
 	}
 
