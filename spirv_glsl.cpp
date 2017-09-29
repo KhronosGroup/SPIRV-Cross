@@ -1171,8 +1171,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
-	if (resource_names.find(buffer_name) != end(resource_names))
-		buffer_name = get_fallback_name(type.self);
+	if (meta[type.self].decoration.alias.empty() || resource_names.find(buffer_name) != end(resource_names))
+		buffer_name = get_block_fallback_name(var.self);
 	else
 		resource_names.insert(buffer_name);
 

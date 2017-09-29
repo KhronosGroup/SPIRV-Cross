@@ -655,18 +655,24 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)))
 		{
-			res.uniform_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			auto &block_name = meta[type.self].decoration.alias;
+			res.uniform_buffers.push_back({ var.self, var.basetype, type.self,
+			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
 		}
 		// Old way to declare SSBOs.
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
 		{
-			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			auto &block_name = meta[type.self].decoration.alias;
+			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
+			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
 		}
 		// Modern way to declare SSBOs.
 		else if (type.storage == StorageClassStorageBuffer)
 		{
-			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			auto &block_name = meta[type.self].decoration.alias;
+			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
+			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
 		}
 		// Push constant blocks
 		else if (type.storage == StorageClassPushConstant)
@@ -1119,6 +1125,17 @@ StorageClass Compiler::get_storage_class(uint32_t id) const
 const std::string &Compiler::get_name(uint32_t id) const
 {
 	return meta.at(id).decoration.alias;
+}
+
+const std::string Compiler::get_fallback_name(uint32_t id) const
+{
+	return join("_", id);
+}
+
+const std::string Compiler::get_block_fallback_name(uint32_t id) const
+{
+	auto &var = get<SPIRVariable>(id);
+	return join("_", get<SPIRType>(var.basetype).self, "_", id);
 }
 
 uint64_t Compiler::get_decoration_mask(uint32_t id) const

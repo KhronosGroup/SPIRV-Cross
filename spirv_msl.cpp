@@ -996,6 +996,7 @@ void CompilerMSL::emit_resources()
 	}
 
 	// Output Uniform buffers and constants
+	unordered_set<uint32_t> declared_interface_structs;
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -1009,8 +1010,13 @@ void CompilerMSL::emit_resources()
 			    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)) &&
 			    !is_hidden_variable(var))
 			{
-				align_struct(type);
-				emit_struct(type);
+				// Avoid declaring the same struct multiple times.
+				if (declared_interface_structs.count(type.self) == 0)
+				{
+					align_struct(type);
+					emit_struct(type);
+					declared_interface_structs.insert(type.self);
+				}
 			}
 		}
 	}
@@ -2177,6 +2183,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			switch (builtin)
 			{
 			case BuiltInGlobalInvocationId:
+			case BuiltInWorkgroupId:
+			case BuiltInNumWorkgroups:
 			case BuiltInLocalInvocationId:
 			case BuiltInLocalInvocationIndex:
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
@@ -2800,6 +2808,12 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInGlobalInvocationId:
 		return "thread_position_in_grid";
 
+	case BuiltInWorkgroupId:
+		return "threadgroup_position_in_grid";
+
+	case BuiltInNumWorkgroups:
+		return "threadgroups_per_grid";
+
 	case BuiltInLocalInvocationId:
 		return "thread_position_in_threadgroup";
 
@@ -2848,8 +2862,9 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 
 	// Compute function in
 	case BuiltInGlobalInvocationId:
-		return "uint3";
 	case BuiltInLocalInvocationId:
+	case BuiltInNumWorkgroups:
+	case BuiltInWorkgroupId:
 		return "uint3";
 	case BuiltInLocalInvocationIndex:
 		return "uint";

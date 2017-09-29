@@ -155,10 +155,11 @@ public:
 
 	// If get_name() is an empty string, get the fallback name which will be used
 	// instead in the disassembled source.
-	virtual const std::string get_fallback_name(uint32_t id) const
-	{
-		return join("_", id);
-	}
+	virtual const std::string get_fallback_name(uint32_t id) const;
+
+	// If get_name() of a Block struct is an empty string, get the fallback name.
+	// This needs to be per-variable as multiple variables can use the same block type.
+	virtual const std::string get_block_fallback_name(uint32_t id) const;
 
 	// Given an OpTypeStruct in ID, obtain the identifier for member number "index".
 	// This may be an empty string.
