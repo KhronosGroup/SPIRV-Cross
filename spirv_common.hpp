@@ -789,7 +789,7 @@ struct SPIRConstant : IVariant
 			c.vecsize = constant_type_.vecsize;
 	}
 
-	SPIRConstant(uint32_t constant_type_)
+	explicit SPIRConstant(uint32_t constant_type_)
 	    : constant_type(constant_type_)
 	{
 	}

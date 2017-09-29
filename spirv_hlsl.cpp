@@ -636,11 +636,8 @@ void CompilerHLSL::emit_specialization_constants()
 			auto &c = id.get<SPIRConstant>();
 			if (!c.specialization)
 				continue;
-
-			if (c.self == workgroup_size_id || c.self == wg_x.id || c.self == wg_y.id || c.self == wg_z.id)
-			{
+			if (c.self == workgroup_size_id)
 				continue;
-			}
 
 			auto &type = get<SPIRType>(c.constant_type);
 			auto name = to_name(c.self);
@@ -648,6 +645,12 @@ void CompilerHLSL::emit_specialization_constants()
 			statement("const ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
+	}
+
+	if (workgroup_size_id)
+	{
+		statement("const uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+		emitted = true;
 	}
 
 	if (emitted)

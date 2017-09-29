@@ -1,3 +1,5 @@
+const uint3 gl_WorkGroupSize = uint3(8u, 4u, 2u);
+
 static uint3 gl_LocalInvocationID;
 static uint3 gl_GlobalInvocationID;
 static uint gl_LocalInvocationIndex;
@@ -13,7 +15,7 @@ void comp_main()
     uint3 local_id = gl_LocalInvocationID;
     uint3 global_id = gl_GlobalInvocationID;
     uint local_index = gl_LocalInvocationIndex;
-    uint3 work_group_size = uint3(8u, 4u, 2u);
+    uint3 work_group_size = gl_WorkGroupSize;
 }
 
 [numthreads(8, 4, 2)]

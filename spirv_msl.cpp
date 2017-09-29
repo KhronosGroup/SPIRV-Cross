@@ -1031,21 +1031,43 @@ void CompilerMSL::emit_specialization_constants()
 {
 	const vector<SpecializationConstant> spec_consts = get_specialization_constants();
 
-	if (spec_consts.empty())
-		return;
+	SpecializationConstant wg_x, wg_y, wg_z;
+	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
 	for (auto &sc : spec_consts)
 	{
-		string sc_type_name = type_to_glsl(expression_type(sc.id));
+		// If WorkGroupSize is a specialization constant, it will be declared explicitly below.
+		if (sc.id == workgroup_size_id)
+			continue;
+
+		auto &type = expression_type(sc.id);
+		string sc_type_name = type_to_glsl(type);
 		string sc_name = to_name(sc.id);
 		string sc_tmp_name = to_name(sc.id) + "_tmp";
 
-		statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
-		          convert_to_string(sc.constant_id), ")]];");
-		statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name, ") ? ",
-		          sc_tmp_name, " : ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+		if (type.vecsize == 1 && type.columns == 1 && type.basetype != SPIRType::Struct && type.array.empty())
+		{
+			// Only scalar, non-composite values can be function constants.
+			statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
+			          convert_to_string(sc.constant_id), ")]];");
+			statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name, ") ? ",
+			          sc_tmp_name, " : ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+		}
+		else
+		{
+			// Composite specialization constants must be built from other specialization constants.
+			statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+		}
 	}
-	statement("");
+
+	// TODO: This can be expressed as a [[threads_per_threadgroup]] input semantic, but we need to know
+	// the work group size at compile time in SPIR-V, and [[threads_per_threadgroup]] would need to be passed around as a global.
+	// The work group size may be a specialization constant.
+	if (workgroup_size_id)
+		statement("constant uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+
+	if (!spec_consts.empty() || workgroup_size_id)
+		statement("");
 }
 
 // Override for MSL-specific syntax instructions
