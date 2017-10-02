@@ -8,9 +8,9 @@ osx_image: xcode8.2
 sudo: required
 dist: trusty
 
-# We check out glslang at a specific revision to avoid test output mismatches
+# We check out glslang and SPIRV-Tools at specific revisions to avoid test output mismatches
 env:
-  - GLSLANG_REV=f0bc598dd7871689f25514b22a82f7455d762bef
+  - GLSLANG_REV=f0bc598dd7871689f25514b22a82f7455d762bef SPIRV_TOOLS_REV=40e9c60ffea56f45f388835e6945b01d4d8b022d
 
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python3; fi
@@ -20,6 +20,7 @@ before_script:
 
 script:
   - git -C glslang checkout $GLSLANG_REV
+  - git -C SPIRV-Tools checkout $SPIRV_TOOLS_REV
   - cd glslang && cmake . && make -j2 && cd ..
   - cd SPIRV-Tools && cmake . && make -j2 && cd ..
   - make -j2

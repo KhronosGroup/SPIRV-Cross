@@ -56,8 +56,13 @@ class CompilerGLSL : public Compiler
 public:
 	struct Options
 	{
+		// The shading language version. Corresponds to #version $VALUE.
 		uint32_t version = 450;
+
+		// Emit the OpenGL ES shading language instead of desktop OpenGL.
 		bool es = false;
+
+		// Debug option to always emit temporary variables for all expressions.
 		bool force_temporary = false;
 
 		// If true, variables will be moved to their appropriate scope through CFG analysis.
@@ -78,6 +83,12 @@ public:
 		// This function does not change the actual SPIRType of any object.
 		// Only the generated code, including declarations of interface variables are changed to be single array dimension.
 		bool flatten_multidimensional_arrays = false;
+
+		// For older desktop GLSL targets than version 420, the
+		// GL_ARB_shading_language_420pack extensions is used to be able to support
+		// layout(binding) on UBOs and samplers.
+		// If disabled on older targets, binding decorations will be stripped.
+		bool enable_420pack_extension = true;
 
 		enum Precision
 		{
@@ -395,6 +406,10 @@ protected:
 
 	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
 	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
+
+	std::string bitcast_expression(SPIRType::BaseType target_type, uint32_t arg);
+	std::string bitcast_expression(const SPIRType &target_type, SPIRType::BaseType expr_type, const std::string &expr);
+
 	std::string build_composite_combiner(const uint32_t *elems, uint32_t length);
 	bool remove_duplicate_swizzle(std::string &op);
 	bool remove_unity_swizzle(uint32_t base, std::string &op);

@@ -2629,7 +2629,6 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 
 	auto &callee = compiler.get<SPIRFunction>(args[2]);
 	args += 3;
-	length -= 3;
 
 	// There are two types of cases we have to handle,
 	// a callee might call sampler2D(texture2D, sampler) directly where

@@ -9,7 +9,7 @@ struct _UBO
     int some_value;
 };
 
-cbuffer UBO : register(c0)
+cbuffer UBO : register(b0)
 {
     _UBO _42;
 };

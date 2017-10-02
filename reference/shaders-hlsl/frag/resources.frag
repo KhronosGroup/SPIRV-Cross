@@ -3,7 +3,7 @@ struct _CBuffer
     float4 a;
 };
 
-cbuffer CBuffer : register(c3)
+cbuffer CBuffer : register(b3)
 {
     _CBuffer cbuf;
 };

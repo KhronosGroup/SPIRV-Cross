@@ -6,7 +6,7 @@ struct _CBO
     float4 d;
 };
 
-cbuffer CBO : register(c4)
+cbuffer CBO : register(b4)
 {
     _CBO cbo[2][4];
 };

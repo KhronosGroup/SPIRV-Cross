@@ -349,7 +349,7 @@ void CompilerGLSL::emit_header()
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
 	// Needed for binding = # on UBOs, etc.
-	if (!options.es && options.version < 420)
+	if (!options.es && options.version < 420 && options.enable_420pack_extension)
 	{
 		statement("#ifdef GL_ARB_shading_language_420pack");
 		statement("#extension GL_ARB_shading_language_420pack : require");
@@ -999,8 +999,15 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("set = ", dec.set));
 	}
 
-	if (flags & (1ull << DecorationBinding))
+	bool can_use_binding;
+	if (options.es)
+		can_use_binding = options.version >= 310;
+	else
+		can_use_binding = options.enable_420pack_extension || (options.version >= 420);
+
+	if (can_use_binding && (flags & (1ull << DecorationBinding)))
 		attr.push_back(join("binding = ", dec.binding));
+
 	if (flags & (1ull << DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
@@ -3291,6 +3298,19 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_binary_func_op(result_type, id, args[0], args[1], "modf");
 		break;
 
+	case GLSLstd450ModfStruct:
+	{
+		forced_temporaries.insert(id);
+		auto &type = get<SPIRType>(result_type);
+		auto flags = meta[id].decoration.decoration_flags;
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(id)), ";");
+		set<SPIRExpression>(id, to_name(id), result_type, true);
+
+		statement(to_expression(id), ".", to_member_name(type, 0), " = ", "modf(", to_expression(args[0]), ", ",
+		          to_expression(id), ".", to_member_name(type, 1), ");");
+		break;
+	}
+
 	// Minmax
 	case GLSLstd450FMin:
 	case GLSLstd450UMin:
@@ -3400,6 +3420,20 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		forced_temporaries.insert(id);
 		emit_binary_func_op(result_type, id, args[0], args[1], "frexp");
 		break;
+
+	case GLSLstd450FrexpStruct:
+	{
+		forced_temporaries.insert(id);
+		auto &type = get<SPIRType>(result_type);
+		auto flags = meta[id].decoration.decoration_flags;
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(id)), ";");
+		set<SPIRExpression>(id, to_name(id), result_type, true);
+
+		statement(to_expression(id), ".", to_member_name(type, 0), " = ", "frexp(", to_expression(args[0]), ", ",
+		          to_expression(id), ".", to_member_name(type, 1), ");");
+		break;
+	}
+
 	case GLSLstd450Ldexp:
 		emit_binary_func_op(result_type, id, args[0], args[1], "ldexp");
 		break;
@@ -3527,6 +3561,31 @@ string CompilerGLSL::bitcast_glsl(const SPIRType &result_type, uint32_t argument
 		return to_enclosed_expression(argument);
 	else
 		return join(op, "(", to_expression(argument), ")");
+}
+
+std::string CompilerGLSL::bitcast_expression(SPIRType::BaseType target_type, uint32_t arg)
+{
+	auto expr = to_expression(arg);
+	auto &src_type = expression_type(arg);
+	if (src_type.basetype != target_type)
+	{
+		auto target = src_type;
+		target.basetype = target_type;
+		expr = join(bitcast_glsl_op(target, src_type), "(", expr, ")");
+	}
+
+	return expr;
+}
+
+std::string CompilerGLSL::bitcast_expression(const SPIRType &target_type, SPIRType::BaseType expr_type,
+                                             const std::string &expr)
+{
+	if (target_type.basetype == expr_type)
+		return expr;
+
+	auto src_type = target_type;
+	src_type.basetype = expr_type;
+	return join(bitcast_glsl_op(target_type, src_type), "(", expr, ")");
 }
 
 string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
@@ -4490,6 +4549,10 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 	// TODO: Shift operators, but it's not important for now.
 	auto op = rhs.find_first_of("+-/*%|&^", lhs.size() + 1);
 	if (op != lhs.size() + 1)
+		return false;
+
+	// Check that the op is followed by space. This excludes && and ||.
+	if (rhs[op + 1] != ' ')
 		return false;
 
 	char bop = rhs[op];
@@ -5603,27 +5666,36 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpImageQueryLevels:
 	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
 		if (!options.es && options.version < 430)
 			require_extension("GL_ARB_texture_query_levels");
 		if (options.es)
 			SPIRV_CROSS_THROW("textureQueryLevels not supported in ES profile.");
-		UFOP(textureQueryLevels);
+
+		auto expr = join("textureQueryLevels(", to_expression(ops[2]), ")");
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
 	}
 
 	case OpImageQuerySamples:
 	{
-		auto *var = maybe_get_backing_variable(ops[2]);
-		if (!var)
-			SPIRV_CROSS_THROW(
-			    "Bug. OpImageQuerySamples must have a backing variable so we know if the image is sampled or not.");
+		auto &type = expression_type(ops[2]);
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
 
-		auto &type = get<SPIRType>(var->basetype);
-		bool image = type.image.sampled == 2;
-		if (image)
-			UFOP(imageSamples);
+		string expr;
+		if (type.image.sampled == 2)
+			expr = join("imageSamples(", to_expression(ops[2]), ")");
 		else
-			UFOP(textureSamples);
+			expr = join("textureSamples(", to_expression(ops[2]), ")");
+
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
 	}
 
@@ -5636,8 +5708,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpImageQuerySizeLod:
-		BFOP(textureSize);
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		auto expr = join("textureSize(", to_expression(ops[2]), ", ", bitcast_expression(SPIRType::Int, ops[3]), ")");
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::Int, expr);
+		emit_op(result_type, id, expr, true);
 		break;
+	}
 
 	// Image load/store
 	case OpImageRead:
@@ -5816,8 +5896,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (type.basetype == SPIRType::Image)
 		{
-			// The size of an image is always constant.
-			emit_op(result_type, id, join("imageSize(", to_expression(ops[2]), ")"), true);
+			string expr;
+			if (type.image.sampled == 2)
+			{
+				// The size of an image is always constant.
+				expr = join("imageSize(", to_expression(ops[2]), ")");
+			}
+			else
+			{
+				// This path is hit for samplerBuffers and multisampled images which do not have LOD.
+				expr = join("textureSize(", to_expression(ops[2]), ")");
+			}
+
+			auto &restype = get<SPIRType>(ops[0]);
+			expr = bitcast_expression(restype, SPIRType::Int, expr);
+			emit_op(result_type, id, expr, true);
 		}
 		else
 			SPIRV_CROSS_THROW("Invalid type for OpImageQuerySize.");
@@ -6722,8 +6815,27 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 	auto &child = get<SPIRBlock>(to);
 
 	for (auto &phi : child.phi_variables)
+	{
 		if (phi.parent == from)
-			statement(to_expression(phi.function_variable), " = ", to_expression(phi.local_variable), ";");
+		{
+			auto &var = get<SPIRVariable>(phi.function_variable);
+
+			// A Phi variable might be a loop variable, so flush to static expression.
+			if (var.loop_variable && !var.loop_variable_enable)
+				var.static_expression = phi.local_variable;
+			else
+			{
+				flush_variable_declaration(phi.function_variable);
+
+				// This might be called in continue block, so make sure we
+				// use this to emit ESSL 1.0 compliant increments/decrements.
+				auto lhs = to_expression(phi.function_variable);
+				auto rhs = to_expression(phi.local_variable);
+				if (!optimize_read_modify_write(lhs, rhs))
+					statement(lhs, " = ", rhs, ";");
+			}
+		}
+	}
 }
 
 void CompilerGLSL::branch(uint32_t from, uint32_t to)

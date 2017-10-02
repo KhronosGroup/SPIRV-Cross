@@ -48,6 +48,7 @@ namespace spirv_cross
 #else
 	fprintf(stderr, "There was a compiler error: %s\n", msg.c_str());
 #endif
+	fflush(stderr);
 	abort();
 }
 
