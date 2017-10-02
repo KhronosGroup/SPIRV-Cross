@@ -23,11 +23,12 @@
                OpDecorate %21 DescriptorSet 0
                OpDecorate %21 Binding 1
       %float = OpTypeFloat 32
+       %uint = OpTypeInt 32 0
+	   %size1 = OpConstant %uint 1
 %_ptr_StorageBuffer_float = OpTypePointer StorageBuffer %float
-%_runtimearr_float = OpTypeRuntimeArray %float
+%_runtimearr_float = OpTypeArray %float %size1 ; Runtime arrays do not work yet in MSL.
   %_struct_4 = OpTypeStruct %_runtimearr_float
 %_ptr_StorageBuffer__struct_4 = OpTypePointer StorageBuffer %_struct_4
-       %uint = OpTypeInt 32 0
        %void = OpTypeVoid
           %8 = OpTypeFunction %void
      %v3uint = OpTypeVector %uint 3
