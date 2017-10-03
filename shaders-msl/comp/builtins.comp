@@ -7,5 +7,6 @@ void main()
 	uvec3 global_id = gl_GlobalInvocationID;
 	uint local_index = gl_LocalInvocationIndex;
 	uvec3 work_group_size = gl_WorkGroupSize;
+	uvec3 num_work_groups = gl_NumWorkGroups;
 	uvec3 work_group_id = gl_WorkGroupID;
 }

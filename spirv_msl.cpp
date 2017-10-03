@@ -217,7 +217,8 @@ void CompilerMSL::extract_global_variables_from_functions()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassInput || var.storage == StorageClassUniform ||
-			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant)
+			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant ||
+			    var.storage == StorageClassStorageBuffer)
 			{
 				global_var_ids.insert(var.self);
 			}
@@ -995,6 +996,7 @@ void CompilerMSL::emit_resources()
 	}
 
 	// Output Uniform buffers and constants
+	unordered_set<uint32_t> declared_interface_structs;
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeVariable)
@@ -1004,12 +1006,17 @@ void CompilerMSL::emit_resources()
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-			     type.storage == StorageClassPushConstant) &&
+			     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer) &&
 			    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)) &&
 			    !is_hidden_variable(var))
 			{
-				align_struct(type);
-				emit_struct(type);
+				// Avoid declaring the same struct multiple times.
+				if (declared_interface_structs.count(type.self) == 0)
+				{
+					align_struct(type);
+					emit_struct(type);
+					declared_interface_structs.insert(type.self);
+				}
 			}
 		}
 	}
@@ -1030,21 +1037,44 @@ void CompilerMSL::emit_specialization_constants()
 {
 	const vector<SpecializationConstant> spec_consts = get_specialization_constants();
 
-	if (spec_consts.empty())
-		return;
+	SpecializationConstant wg_x, wg_y, wg_z;
+	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
 	for (auto &sc : spec_consts)
 	{
-		string sc_type_name = type_to_glsl(expression_type(sc.id));
+		// If WorkGroupSize is a specialization constant, it will be declared explicitly below.
+		if (sc.id == workgroup_size_id)
+			continue;
+
+		auto &type = expression_type(sc.id);
+		string sc_type_name = type_to_glsl(type);
 		string sc_name = to_name(sc.id);
 		string sc_tmp_name = to_name(sc.id) + "_tmp";
 
-		statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
-		          convert_to_string(sc.constant_id), ")]];");
-		statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name, ") ? ",
-		          sc_tmp_name, " : ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+		if (type.vecsize == 1 && type.columns == 1 && type.basetype != SPIRType::Struct && type.array.empty())
+		{
+			// Only scalar, non-composite values can be function constants.
+			statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
+			          convert_to_string(sc.constant_id), ")]];");
+			statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name, ") ? ",
+			          sc_tmp_name, " : ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+		}
+		else
+		{
+			// Composite specialization constants must be built from other specialization constants.
+			statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(get<SPIRConstant>(sc.id)),
+			          ";");
+		}
 	}
-	statement("");
+
+	// TODO: This can be expressed as a [[threads_per_threadgroup]] input semantic, but we need to know
+	// the work group size at compile time in SPIR-V, and [[threads_per_threadgroup]] would need to be passed around as a global.
+	// The work group size may be a specialization constant.
+	if (workgroup_size_id)
+		statement("constant uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+
+	if (!spec_consts.empty() || workgroup_size_id)
+		statement("");
 }
 
 // Override for MSL-specific syntax instructions
@@ -2153,6 +2183,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			switch (builtin)
 			{
 			case BuiltInGlobalInvocationId:
+			case BuiltInWorkgroupId:
+			case BuiltInNumWorkgroups:
 			case BuiltInLocalInvocationId:
 			case BuiltInLocalInvocationIndex:
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
@@ -2272,12 +2304,17 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 
 	if ((type.basetype == SPIRType::Struct) &&
 	    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-	     type.storage == StorageClassPushConstant))
+	     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer))
 	{
-		return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
-		        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
-		           "device" :
-		           "constant";
+		if (type.storage == StorageClassStorageBuffer)
+			return "device";
+		else
+		{
+			return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
+			        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
+			           "device" :
+			           "constant";
+		}
 	}
 
 	return "thread";
@@ -2324,7 +2361,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			uint32_t var_id = var.self;
 
 			if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-			     var.storage == StorageClassPushConstant) &&
+			     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
 			    !is_hidden_variable(var))
 			{
 				switch (type.basetype)
@@ -2771,6 +2808,12 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInGlobalInvocationId:
 		return "thread_position_in_grid";
 
+	case BuiltInWorkgroupId:
+		return "threadgroup_position_in_grid";
+
+	case BuiltInNumWorkgroups:
+		return "threadgroups_per_grid";
+
 	case BuiltInLocalInvocationId:
 		return "thread_position_in_threadgroup";
 
@@ -2819,8 +2862,9 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 
 	// Compute function in
 	case BuiltInGlobalInvocationId:
-		return "uint3";
 	case BuiltInLocalInvocationId:
+	case BuiltInNumWorkgroups:
+	case BuiltInWorkgroupId:
 		return "uint3";
 	case BuiltInLocalInvocationIndex:
 		return "uint";

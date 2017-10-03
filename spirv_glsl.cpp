@@ -16,6 +16,7 @@
 
 #include "spirv_glsl.hpp"
 #include "GLSL.std.450.h"
+#include "spirv_common.hpp"
 #include <algorithm>
 #include <assert.h>
 #include <utility>
@@ -421,10 +422,50 @@ void CompilerGLSL::emit_header()
 		break;
 
 	case ExecutionModelGLCompute:
-		inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
-		inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
-		inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+	{
+		if (execution.workgroup_size.constant != 0)
+		{
+			SpecializationConstant wg_x, wg_y, wg_z;
+			get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+			if (wg_x.id)
+			{
+				if (options.vulkan_semantics)
+					inputs.push_back(join("local_size_x_id = ", wg_x.constant_id));
+				else
+					inputs.push_back(join("local_size_x = ", get<SPIRConstant>(wg_x.id).scalar()));
+			}
+			else
+				inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
+
+			if (wg_y.id)
+			{
+				if (options.vulkan_semantics)
+					inputs.push_back(join("local_size_y_id = ", wg_y.constant_id));
+				else
+					inputs.push_back(join("local_size_y = ", get<SPIRConstant>(wg_y.id).scalar()));
+			}
+			else
+				inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
+
+			if (wg_z.id)
+			{
+				if (options.vulkan_semantics)
+					inputs.push_back(join("local_size_z_id = ", wg_z.constant_id));
+				else
+					inputs.push_back(join("local_size_z = ", get<SPIRConstant>(wg_z.id).scalar()));
+			}
+			else
+				inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+		}
+		else
+		{
+			inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
+			inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
+			inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+		}
 		break;
+	}
 
 	case ExecutionModelFragment:
 		if (options.es)
@@ -1015,7 +1056,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBlock)))
 		attr.push_back("std140");
-	else if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock)))
+	else if (var.storage == StorageClassStorageBuffer ||
+	         (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock))))
 		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
 	else if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
 		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
@@ -1094,7 +1136,8 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
-	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool ssbo = var.storage == StorageClassStorageBuffer ||
+	            ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0);
 	if (ssbo)
 		SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
 
@@ -1114,7 +1157,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 
 	uint64_t flags = get_buffer_block_flags(var);
-	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool ssbo = var.storage == StorageClassStorageBuffer ||
+	            ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0);
 	bool is_restrict = ssbo && (flags & (1ull << DecorationRestrict)) != 0;
 	bool is_writeonly = ssbo && (flags & (1ull << DecorationNonReadable)) != 0;
 	bool is_readonly = ssbo && (flags & (1ull << DecorationNonWritable)) != 0;
@@ -1127,8 +1171,8 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
-	if (resource_names.find(buffer_name) != end(resource_names))
-		buffer_name = get_fallback_name(type.self);
+	if (meta[type.self].decoration.alias.empty() || resource_names.find(buffer_name) != end(resource_names))
+		buffer_name = get_block_fallback_name(var.self);
 	else
 		resource_names.insert(buffer_name);
 
@@ -1342,8 +1386,26 @@ void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 	auto &type = get<SPIRType>(constant.constant_type);
 	auto name = to_name(constant.self);
 
-	statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
-	          variable_decl(type, name), " = ", constant_expression(constant), ";");
+	SpecializationConstant wg_x, wg_y, wg_z;
+	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+	if (constant.self == workgroup_size_id || constant.self == wg_x.id || constant.self == wg_y.id ||
+	    constant.self == wg_z.id)
+	{
+		// These specialization constants are implicitly declared by emitting layout() in;
+		return;
+	}
+
+	// Only scalars have constant IDs.
+	if (has_decoration(constant.self, DecorationSpecId))
+	{
+		statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
+		          variable_decl(type, name), " = ", constant_expression(constant), ";");
+	}
+	else
+	{
+		statement("const ", variable_decl(type, name), " = ", constant_expression(constant), ";");
+	}
 }
 
 void CompilerGLSL::replace_illegal_names()
@@ -1690,9 +1752,12 @@ void CompilerGLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
-			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
+			bool has_block_flags = (meta[type.self].decoration.decoration_flags &
+			                        ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+
+			if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
+			    has_block_flags)
 			{
 				emit_buffer_block(var);
 			}
@@ -1943,7 +2008,12 @@ string CompilerGLSL::to_expression(uint32_t id)
 	case TypeConstant:
 	{
 		auto &c = get<SPIRConstant>(id);
-		if (c.specialization && options.vulkan_semantics)
+
+		// WorkGroupSize may be a constant.
+		auto &dec = meta[c.self].decoration;
+		if (dec.builtin)
+			return builtin_to_glsl(dec.builtin_type, StorageClassGeneric);
+		else if (c.specialization && options.vulkan_semantics)
 			return to_name(id);
 		else
 			return constant_expression(c);
@@ -2169,7 +2239,11 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		string res = type_to_glsl(get<SPIRType>(c.constant_type)) + "(";
 		for (uint32_t col = 0; col < c.columns(); col++)
 		{
-			res += constant_expression_vector(c, col);
+			if (options.vulkan_semantics && c.specialization_constant_id(col) != 0)
+				res += to_name(c.specialization_constant_id(col));
+			else
+				res += constant_expression_vector(c, col);
+
 			if (col + 1 < c.columns())
 				res += ", ";
 		}
@@ -2188,6 +2262,20 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		res += type_to_glsl(type) + "(";
 
 	bool splat = backend.use_constructor_splatting && c.vector_size() > 1;
+
+	if (splat)
+	{
+		// Cannot use constant splatting if we have specialization constants somewhere in the vector.
+		for (uint32_t i = 0; i < c.vector_size(); i++)
+		{
+			if (options.vulkan_semantics && c.specialization_constant_id(vector, i) != 0)
+			{
+				splat = false;
+				break;
+			}
+		}
+	}
+
 	if (splat)
 	{
 		if (type_to_std430_base_size(type) == 8)
@@ -2219,7 +2307,11 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_f32(vector, i));
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += convert_to_string(c.scalar_f32(vector, i));
+
 				if (backend.float_literal_suffix)
 					res += "f";
 				if (i + 1 < c.vector_size())
@@ -2239,9 +2331,15 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_f64(vector, i));
-				if (backend.double_literal_suffix)
-					res += "lf";
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+				{
+					res += convert_to_string(c.scalar_f64(vector, i));
+					if (backend.double_literal_suffix)
+						res += "lf";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2261,11 +2359,17 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_i64(vector, i));
-				if (backend.long_long_literal_suffix)
-					res += "ll";
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
 				else
-					res += "l";
+				{
+					res += convert_to_string(c.scalar_i64(vector, i));
+					if (backend.long_long_literal_suffix)
+						res += "ll";
+					else
+						res += "l";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2285,11 +2389,17 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_u64(vector, i));
-				if (backend.long_long_literal_suffix)
-					res += "ull";
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
 				else
-					res += "ul";
+				{
+					res += convert_to_string(c.scalar_u64(vector, i));
+					if (backend.long_long_literal_suffix)
+						res += "ull";
+					else
+						res += "ul";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2307,9 +2417,15 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar(vector, i));
-				if (backend.uint32_t_literal_suffix)
-					res += "u";
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+				{
+					res += convert_to_string(c.scalar(vector, i));
+					if (backend.uint32_t_literal_suffix)
+						res += "u";
+				}
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2323,7 +2439,10 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += convert_to_string(c.scalar_i32(vector, i));
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += convert_to_string(c.scalar_i32(vector, i));
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2337,7 +2456,11 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				res += c.scalar(vector, i) ? "true" : "false";
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += c.scalar(vector, i) ? "true" : "false";
+
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}

@@ -626,12 +626,17 @@ void CompilerHLSL::emit_builtin_variables()
 void CompilerHLSL::emit_specialization_constants()
 {
 	bool emitted = false;
+	SpecializationConstant wg_x, wg_y, wg_z;
+	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
 			if (!c.specialization)
+				continue;
+			if (c.self == workgroup_size_id)
 				continue;
 
 			auto &type = get<SPIRType>(c.constant_type);
@@ -640,6 +645,12 @@ void CompilerHLSL::emit_specialization_constants()
 			statement("const ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
+	}
+
+	if (workgroup_size_id)
+	{
+		statement("const uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+		emitted = true;
 	}
 
 	if (emitted)
@@ -678,9 +689,12 @@ void CompilerHLSL::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
-			    !is_hidden_variable(var) && (meta[type.self].decoration.decoration_flags &
-			                                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))))
+			bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
+			bool has_block_flags = (meta[type.self].decoration.decoration_flags &
+			                        ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+
+			if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
+			    has_block_flags)
 			{
 				emit_buffer_block(var);
 				emitted = true;
@@ -1010,7 +1024,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
-	bool is_uav = has_decoration(type.self, DecorationBufferBlock);
+	bool is_uav = var.storage == StorageClassStorageBuffer || has_decoration(type.self, DecorationBufferBlock);
 
 	if (is_uav)
 	{
@@ -1199,8 +1213,21 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	if (execution.model == ExecutionModelGLCompute)
 	{
-		statement("[numthreads(", execution.workgroup_size.x, ", ", execution.workgroup_size.y, ", ",
-		          execution.workgroup_size.z, ")]");
+		SpecializationConstant wg_x, wg_y, wg_z;
+		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+		uint32_t x = execution.workgroup_size.x;
+		uint32_t y = execution.workgroup_size.y;
+		uint32_t z = execution.workgroup_size.z;
+
+		if (wg_x.id)
+			x = get<SPIRConstant>(wg_x.id).scalar();
+		if (wg_y.id)
+			y = get<SPIRConstant>(wg_y.id).scalar();
+		if (wg_z.id)
+			z = get<SPIRConstant>(wg_z.id).scalar();
+
+		statement("[numthreads(", x, ", ", y, ", ", z, ")]");
 	}
 
 	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", merge(arguments), ")");
@@ -1354,19 +1381,22 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 void CompilerHLSL::emit_fixup()
 {
-	// Do various mangling on the gl_Position.
-	if (options.shader_model <= 30)
+	if (get_entry_point().model == ExecutionModelVertex)
 	{
-		statement("gl_Position.x = gl_Position.x - gl_HalfPixel.x * "
-		          "gl_Position.w;");
-		statement("gl_Position.y = gl_Position.y + gl_HalfPixel.y * "
-		          "gl_Position.w;");
-	}
+		// Do various mangling on the gl_Position.
+		if (options.shader_model <= 30)
+		{
+			statement("gl_Position.x = gl_Position.x - gl_HalfPixel.x * "
+			          "gl_Position.w;");
+			statement("gl_Position.y = gl_Position.y + gl_HalfPixel.y * "
+			          "gl_Position.w;");
+		}
 
-	if (CompilerGLSL::options.vertex.flip_vert_y)
-		statement("gl_Position.y = -gl_Position.y;");
-	if (CompilerGLSL::options.vertex.fixup_clipspace)
-		statement("gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;");
+		if (CompilerGLSL::options.vertex.flip_vert_y)
+			statement("gl_Position.y = -gl_Position.y;");
+		if (CompilerGLSL::options.vertex.fixup_clipspace)
+			statement("gl_Position.z = (gl_Position.z + gl_Position.w) * 0.5;");
+	}
 }
 
 void CompilerHLSL::emit_texture_op(const Instruction &i)
@@ -1786,6 +1816,8 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			else
 				space = "c"; // Constant buffers
 		}
+		else if (storage == StorageClassStorageBuffer)
+			space = "u"; // UAV
 
 		break;
 	}
@@ -2065,7 +2097,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 	bool need_byte_access_chain = false;
 	auto &type = expression_type(ops[2]);
 	const SPIRAccessChain *chain = nullptr;
-	if (has_decoration(type.self, DecorationBufferBlock))
+	if (type.storage == StorageClassStorageBuffer || has_decoration(type.self, DecorationBufferBlock))
 	{
 		// If we are starting to poke into an SSBO, we are dealing with ByteAddressBuffers, and we need
 		// to emit SPIRAccessChain rather than a plain SPIRExpression.
