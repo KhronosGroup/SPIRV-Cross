@@ -86,12 +86,17 @@ def validate_shader_msl(shader):
         print('Error compiling Metal shader: ' + msl_path)
         sys.exit(1)
 
-def cross_compile_msl(shader):
+def cross_compile_msl(shader, spirv):
     spirv_f, spirv_path = tempfile.mkstemp()
     msl_f, msl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
     os.close(msl_f)
-    subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+
+    if spirv:
+        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+    else:
+        subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+
     spirv_cross_path = './spirv-cross'
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl'])
     subprocess.check_call(['spirv-val', spirv_path])
@@ -110,12 +115,17 @@ def shader_to_sm(shader):
     else:
         return '50'
 
-def cross_compile_hlsl(shader):
+def cross_compile_hlsl(shader, spirv):
     spirv_f, spirv_path = tempfile.mkstemp()
     hlsl_f, hlsl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
     os.close(hlsl_f)
-    subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+
+    if spirv:
+        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+    else:
+        subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
+
     spirv_cross_path = './spirv-cross'
 
     sm = shader_to_sm(shader)
@@ -298,7 +308,8 @@ def test_shader(stats, shader, update, keep):
 def test_shader_msl(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     print('\nTesting MSL shader:', joined_path)
-    spirv, msl = cross_compile_msl(joined_path)
+    is_spirv = shader_is_spirv(shader[1])
+    spirv, msl = cross_compile_msl(joined_path, is_spirv)
     regression_check(shader, msl, update, keep)
     os.remove(spirv)
 
@@ -308,7 +319,8 @@ def test_shader_msl(stats, shader, update, keep):
 def test_shader_hlsl(stats, shader, update, keep):
     joined_path = os.path.join(shader[0], shader[1])
     print('Testing HLSL shader:', joined_path)
-    spirv, msl = cross_compile_hlsl(joined_path)
+    is_spirv = shader_is_spirv(shader[1])
+    spirv, msl = cross_compile_hlsl(joined_path, is_spirv)
     regression_check(shader, msl, update, keep)
     os.remove(spirv)
 

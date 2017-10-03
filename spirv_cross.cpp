@@ -86,7 +86,8 @@ string Compiler::compile()
 bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 {
 	auto &type = get<SPIRType>(v.basetype);
-	bool ssbo = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0;
+	bool ssbo = v.storage == StorageClassStorageBuffer ||
+	            ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0);
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 	bool is_restrict = (meta[v.self].decoration.decoration_flags & (1ull << DecorationRestrict)) != 0;
@@ -426,6 +427,7 @@ static inline bool storage_class_is_interface(spv::StorageClass storage)
 	case StorageClassUniformConstant:
 	case StorageClassAtomicCounter:
 	case StorageClassPushConstant:
+	case StorageClassStorageBuffer:
 		return true;
 
 	default:
@@ -653,13 +655,24 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)))
 		{
-			res.uniform_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			auto &block_name = meta[type.self].decoration.alias;
+			res.uniform_buffers.push_back({ var.self, var.basetype, type.self,
+			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
 		}
-		// SSBOs
+		// Old way to declare SSBOs.
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
 		{
-			res.storage_buffers.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+			auto &block_name = meta[type.self].decoration.alias;
+			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
+			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
+		}
+		// Modern way to declare SSBOs.
+		else if (type.storage == StorageClassStorageBuffer)
+		{
+			auto &block_name = meta[type.self].decoration.alias;
+			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
+			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
 		}
 		// Push constant blocks
 		else if (type.storage == StorageClassPushConstant)
@@ -770,6 +783,27 @@ void Compiler::parse()
 		SPIRV_CROSS_THROW("Function was not terminated.");
 	if (current_block)
 		SPIRV_CROSS_THROW("Block was not terminated.");
+
+	// Figure out specialization constants for work group sizes.
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (meta[c.self].decoration.builtin && meta[c.self].decoration.builtin_type == BuiltInWorkgroupSize)
+			{
+				// In current SPIR-V, there can be just one constant like this.
+				// All entry points will receive the constant value.
+				for (auto &entry : entry_points)
+				{
+					entry.second.workgroup_size.constant = c.self;
+					entry.second.workgroup_size.x = c.scalar(0, 0);
+					entry.second.workgroup_size.y = c.scalar(0, 1);
+					entry.second.workgroup_size.z = c.scalar(0, 2);
+				}
+			}
+		}
+	}
 }
 
 void Compiler::flatten_interface_block(uint32_t id)
@@ -1091,6 +1125,17 @@ StorageClass Compiler::get_storage_class(uint32_t id) const
 const std::string &Compiler::get_name(uint32_t id) const
 {
 	return meta.at(id).decoration.alias;
+}
+
+const std::string Compiler::get_fallback_name(uint32_t id) const
+{
+	return join("_", id);
+}
+
+const std::string Compiler::get_block_fallback_name(uint32_t id) const
+{
+	auto &var = get<SPIRVariable>(id);
+	return join("_", get<SPIRType>(var.basetype).self, "_", id);
 }
 
 uint64_t Compiler::get_decoration_mask(uint32_t id) const
@@ -1640,10 +1685,11 @@ void Compiler::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(ops[0]);
+
 		if (type.width > 32)
-			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32)).specialization = op == OpSpecConstant;
+			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
 		else
-			set<SPIRConstant>(id, ops[0], ops[2]).specialization = op == OpSpecConstant;
+			set<SPIRConstant>(id, ops[0], ops[2], op == OpSpecConstant);
 		break;
 	}
 
@@ -1651,7 +1697,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstantFalse:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], uint32_t(0)).specialization = op == OpSpecConstantFalse;
+		set<SPIRConstant>(id, ops[0], uint32_t(0), op == OpSpecConstantFalse);
 		break;
 	}
 
@@ -1659,7 +1705,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpConstantTrue:
 	{
 		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], uint32_t(1)).specialization = op == OpSpecConstantTrue;
+		set<SPIRConstant>(id, ops[0], uint32_t(1), op == OpSpecConstantTrue);
 		break;
 	}
 
@@ -1678,109 +1724,25 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t type = ops[0];
 
 		auto &ctype = get<SPIRType>(type);
-		SPIRConstant *constant = nullptr;
 
 		// We can have constants which are structs and arrays.
 		// In this case, our SPIRConstant will be a list of other SPIRConstant ids which we
 		// can refer to.
 		if (ctype.basetype == SPIRType::Struct || !ctype.array.empty())
 		{
-			constant = &set<SPIRConstant>(id, type, ops + 2, length - 2);
-			constant->specialization = op == OpSpecConstantComposite;
-			break;
-		}
-
-		bool type_64bit = ctype.width > 32;
-		bool matrix = ctype.columns > 1;
-
-		if (matrix)
-		{
-			switch (length - 2)
-			{
-			case 1:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector());
-				break;
-
-			case 2:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector(),
-				                              get<SPIRConstant>(ops[3]).vector());
-				break;
-
-			case 3:
-				constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector(),
-				                              get<SPIRConstant>(ops[3]).vector(), get<SPIRConstant>(ops[4]).vector());
-				break;
-
-			case 4:
-				constant =
-				    &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).vector(), get<SPIRConstant>(ops[3]).vector(),
-				                       get<SPIRConstant>(ops[4]).vector(), get<SPIRConstant>(ops[5]).vector());
-				break;
-
-			default:
-				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 columns.");
-			}
+			set<SPIRConstant>(id, type, ops + 2, length - 2, op == OpSpecConstantComposite);
 		}
 		else
 		{
-			switch (length - 2)
-			{
-			case 1:
-				if (type_64bit)
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64());
-				else
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar());
-				break;
+			uint32_t elements = length - 2;
+			if (elements > 4)
+				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 elements.");
 
-			case 2:
-				if (type_64bit)
-				{
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64(),
-					                              get<SPIRConstant>(ops[3]).scalar_u64());
-				}
-				else
-				{
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
-					                              get<SPIRConstant>(ops[3]).scalar());
-				}
-				break;
-
-			case 3:
-				if (type_64bit)
-				{
-					constant = &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar_u64(),
-					                              get<SPIRConstant>(ops[3]).scalar_u64(),
-					                              get<SPIRConstant>(ops[4]).scalar_u64());
-				}
-				else
-				{
-					constant =
-					    &set<SPIRConstant>(id, type, get<SPIRConstant>(ops[2]).scalar(),
-					                       get<SPIRConstant>(ops[3]).scalar(), get<SPIRConstant>(ops[4]).scalar());
-				}
-				break;
-
-			case 4:
-				if (type_64bit)
-				{
-					constant = &set<SPIRConstant>(
-					    id, type, get<SPIRConstant>(ops[2]).scalar_u64(), get<SPIRConstant>(ops[3]).scalar_u64(),
-					    get<SPIRConstant>(ops[4]).scalar_u64(), get<SPIRConstant>(ops[5]).scalar_u64());
-				}
-				else
-				{
-					constant = &set<SPIRConstant>(
-					    id, type, get<SPIRConstant>(ops[2]).scalar(), get<SPIRConstant>(ops[3]).scalar(),
-					    get<SPIRConstant>(ops[4]).scalar(), get<SPIRConstant>(ops[5]).scalar());
-				}
-				break;
-
-			default:
-				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 components.");
-			}
+			const SPIRConstant *c[4];
+			for (uint32_t i = 0; i < elements; i++)
+				c[i] = &get<SPIRConstant>(ops[2 + i]);
+			set<SPIRConstant>(id, type, c, elements, op == OpSpecConstantComposite);
 		}
-
-		constant->specialization = op == OpSpecConstantComposite;
 		break;
 	}
 
@@ -2426,6 +2388,40 @@ void Compiler::unset_execution_mode(ExecutionMode mode)
 {
 	auto &execution = get_entry_point();
 	execution.flags &= ~(1ull << mode);
+}
+
+uint32_t Compiler::get_work_group_size_specialization_constants(SpecializationConstant &x, SpecializationConstant &y,
+                                                                SpecializationConstant &z) const
+{
+	auto &execution = get_entry_point();
+	x = {};
+	y = {};
+	z = {};
+
+	if (execution.workgroup_size.constant != 0)
+	{
+		auto &c = get<SPIRConstant>(execution.workgroup_size.constant);
+
+		if (c.m.c[0].id[0] != 0)
+		{
+			x.id = c.m.c[0].id[0];
+			x.constant_id = get_decoration(c.m.c[0].id[0], DecorationSpecId);
+		}
+
+		if (c.m.c[0].id[1] != 0)
+		{
+			y.id = c.m.c[0].id[1];
+			y.constant_id = get_decoration(c.m.c[0].id[1], DecorationSpecId);
+		}
+
+		if (c.m.c[0].id[2] != 0)
+		{
+			z.id = c.m.c[0].id[2];
+			z.constant_id = get_decoration(c.m.c[0].id[2], DecorationSpecId);
+		}
+	}
+
+	return execution.workgroup_size.constant;
 }
 
 uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index) const
@@ -3576,7 +3572,8 @@ bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 	{
 		auto *var = maybe_get<SPIRVariable>(id);
 		// Ensure that this is actually a buffer object.
-		return var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock);
+		return var && (var->storage == StorageClassStorageBuffer ||
+		               has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock));
 	}
 	else
 		return false;
@@ -3592,7 +3589,8 @@ bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id)
 		{
 			auto *var = maybe_get<SPIRVariable>(i);
 			// Ensure that this is actually a buffer object.
-			if (var && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			if (var && (var->storage == StorageClassStorageBuffer ||
+			            has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock)))
 			{
 				counter_id = i;
 				return true;
@@ -3618,7 +3616,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 		vector<uint32_t> elements(constant_type.array.back());
 		for (uint32_t i = 0; i < constant_type.array.back(); i++)
 			elements[i] = parent_id;
-		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()), false);
 	}
 	else if (!constant_type.member_types.empty())
 	{
@@ -3629,7 +3627,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 			make_constant_null(member_ids + i, constant_type.member_types[i]);
 			elements[i] = member_ids + i;
 		}
-		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()));
+		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()), false);
 	}
 	else
 	{
