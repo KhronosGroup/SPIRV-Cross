@@ -518,6 +518,8 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		SPIRV_CROSS_THROW("All locations from 0 to 63 are exhausted.");
 	};
 
+	bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
+
 	auto &m = meta[var.self].decoration;
 	auto name = to_name(var.self);
 	if (use_binding_number)
@@ -531,7 +533,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		else
 			binding_number = get_vacant_location();
 
-		if (type.columns > 1)
+		if (need_matrix_unroll && type.columns > 1)
 		{
 			if (!type.array.empty())
 				SPIRV_CROSS_THROW("Arrays of matrices used as input/output. This is not supported.");
@@ -1277,12 +1279,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (var.storage != StorageClassInput)
 				continue;
 
+			bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
+
 			if (!block && !var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				auto name = to_name(var.self);
 				auto &mtype = get<SPIRType>(var.basetype);
-				if (mtype.columns > 1)
+				if (need_matrix_unroll && mtype.columns > 1)
 				{
 					// Unroll matrices.
 					for (uint32_t col = 0; col < mtype.columns; col++)
