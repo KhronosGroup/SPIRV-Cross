@@ -4781,16 +4781,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			auto lhs = to_expression(ops[0]);
 			auto rhs = to_expression(ops[1]);
+			// Statements to OpStore may be empty if it is a struct with zero members. Just forward the store to /dev/null.
+			if (!rhs.empty())
+			{
+				auto lhs = to_expression(ops[0]);
 
-			// Tries to optimize assignments like "<lhs> = <lhs> op expr".
-			// While this is purely cosmetic, this is important for legacy ESSL where loop
-			// variable increments must be in either i++ or i += const-expr.
-			// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
-			if (!optimize_read_modify_write(lhs, rhs))
-				statement(lhs, " = ", rhs, ";");
-			register_write(ops[0]);
+				// Tries to optimize assignments like "<lhs> = <lhs> op expr".
+				// While this is purely cosmetic, this is important for legacy ESSL where loop
+				// variable increments must be in either i++ or i += const-expr.
+				// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
+				if (!optimize_read_modify_write(lhs, rhs))
+					statement(lhs, " = ", rhs, ";");
+				register_write(ops[0]);
+			}
 		}
 		break;
 	}
@@ -4908,15 +4912,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		const auto *elems = &ops[2];
 		length -= 2;
 
-		if (!length)
-			SPIRV_CROSS_THROW("Invalid input to OpCompositeConstruct.");
-
 		bool forward = true;
 		for (uint32_t i = 0; i < length; i++)
 			forward = forward && should_forward(elems[i]);
 
-		auto &in_type = expression_type(elems[0]);
 		auto &out_type = get<SPIRType>(result_type);
+
+		if (!length)
+		{
+			if (out_type.basetype == SPIRType::Struct)
+			{
+				// It is technically allowed to make a blank struct,
+				// but we cannot make a meaningful expression out of it in high level languages,
+				// so make it a blank expression.
+				emit_op(result_type, id, "", forward);
+				break;
+			}
+			else
+				SPIRV_CROSS_THROW("Invalid input to OpCompositeConstruct.");
+		}
+
+		auto &in_type = expression_type(elems[0]);
 
 		// Only splat if we have vector constructors.
 		// Arrays and structs must be initialized properly in full.
@@ -6880,12 +6896,15 @@ void CompilerGLSL::emit_function(SPIRFunction &func, uint64_t return_flags)
 				// Don't declare variable until first use to declutter the GLSL output quite a lot.
 				// If we don't touch the variable before first branch,
 				// declare it then since we need variable declaration to be in top scope.
-				var.deferred_declaration = true;
+				// Never declare empty structs. They have no meaningful representation.
+				auto &type = get<SPIRType>(var.basetype);
+				bool empty_struct = type.basetype == SPIRType::Struct && type.member_types.empty();
+				var.deferred_declaration = !empty_struct;
 			}
 		}
 		else
 		{
-			// HACK: SPIRV likes to use samplers and images as local variables, but GLSL does not allow this.
+			// HACK: SPIR-V in older glslang output likes to use samplers and images as local variables, but GLSL does not allow this.
 			// For these types (non-lvalue), we enforce forwarding through a shadowed variable.
 			// This means that when we OpStore to these variables, we just write in the expression ID directly.
 			// This breaks any kind of branching, since the variable must be statically assigned.
