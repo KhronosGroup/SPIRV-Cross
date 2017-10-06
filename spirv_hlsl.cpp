@@ -905,11 +905,18 @@ void CompilerHLSL::emit_resources()
 
 	if (requires_op_fmod)
 	{
-		statement("float mod(float x, float y)");
-		begin_scope();
-		statement("return x - y * floor(x / y);");
-		end_scope();
-		statement("");
+		static const char *types[] = {
+			"float", "float2", "float3", "float4",
+		};
+
+		for (auto &type : types)
+		{
+			statement(type, " mod(", type, " x, ", type, " y)");
+			begin_scope();
+			statement("return x - y * floor(x / y);");
+			end_scope();
+			statement("");
+		}
 	}
 
 	if (requires_textureProj)
