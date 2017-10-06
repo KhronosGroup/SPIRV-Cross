@@ -590,6 +590,17 @@ void rename_interface_variable(Compiler &compiler, const vector<Resource> &resou
 		if (loc != rename.location)
 			continue;
 
+		auto &type = compiler.get_type(v.base_type_id);
+
+		// This is more of a friendly variant. If we need to rename interface variables, we might have to rename
+		// structs as well and make sure all the names match up.
+		if (type.basetype == SPIRType::Struct)
+		{
+			compiler.set_name(v.base_type_id, join("SPIRV_Cross_Interface_Location", rename.location));
+			for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+				compiler.set_member_name(v.base_type_id, i, join("InterfaceMember", i));
+		}
+
 		compiler.set_name(v.id, rename.variable_name);
 	}
 }
