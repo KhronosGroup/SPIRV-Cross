@@ -349,12 +349,18 @@ void CompilerGLSL::emit_header()
 	auto &execution = get_entry_point();
 	statement("#version ", options.version, options.es && options.version > 100 ? " es" : "");
 
-	// Needed for binding = # on UBOs, etc.
-	if (!options.es && options.version < 420 && options.enable_420pack_extension)
+	if (!options.es && options.version < 420)
 	{
-		statement("#ifdef GL_ARB_shading_language_420pack");
-		statement("#extension GL_ARB_shading_language_420pack : require");
-		statement("#endif");
+		// Needed for binding = # on UBOs, etc.
+		if (options.enable_420pack_extension)
+		{
+			statement("#ifdef GL_ARB_shading_language_420pack");
+			statement("#extension GL_ARB_shading_language_420pack : require");
+			statement("#endif");
+		}
+		// Needed for: layout(early_fragment_tests) in;
+		if (execution.flags & (1ull << ExecutionModeEarlyFragmentTests))
+			require_extension("GL_ARB_shader_image_load_store");
 	}
 
 	for (auto &ext : forced_extensions)
