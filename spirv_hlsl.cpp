@@ -1079,47 +1079,60 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	}
 	else
 	{
-		// ConstantBuffer<T> does not support packoffset, so it is unuseable.
-		// Unfortunately, it's the only way to get arrays of UBOs, so don't support that until we
-		// have a better solution.
-		if (!type.array.empty())
-			SPIRV_CROSS_THROW("Arrays of cbuffers are not supported.");
-
 		// Block names should never alias.
 		auto block_name = to_name(type.self, false);
 
-		// Shaders never use the block by interface name, so we don't
-		// have to track this other than updating name caches.
-		if (resource_names.find(block_name) != end(resource_names))
-			block_name = get_fallback_name(type.self);
-		else
-			resource_names.insert(block_name);
-
-		if (ssbo_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
-			set_decoration(type.self, DecorationCPacked);
-		else
-			SPIRV_CROSS_THROW("cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
-
-		// Flatten the top-level struct so we can use packoffset,
-		// this restriction is similar to GLSL where layout(offset) is not possible on sub-structs.
-		flattened_structs.insert(var.self);
-
-		type.member_name_cache.clear();
-		statement("cbuffer ", block_name, to_resource_binding(var));
-		begin_scope();
-
-		uint32_t i = 0;
-		for (auto &member : type.member_types)
+		if (type.array.empty())
 		{
-			add_member_name(type, i);
-			auto member_name = get_member_name(type.self, i);
-			set_member_name(type.self, i, sanitize_underscores(join(block_name, "_", member_name)));
-			emit_struct_member(type, member, i, "");
-			set_member_name(type.self, i, member_name);
-			i++;
-		}
+			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
+				set_decoration(type.self, DecorationCPacked);
+			else
+				SPIRV_CROSS_THROW("cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
 
-		end_scope_decl();
+			// Shaders never use the block by interface name, so we don't
+			// have to track this other than updating name caches.
+			if (resource_names.find(block_name) != end(resource_names))
+				block_name = get_fallback_name(type.self);
+			else
+				resource_names.insert(block_name);
+
+			// Flatten the top-level struct so we can use packoffset,
+			// this restriction is similar to GLSL where layout(offset) is not possible on sub-structs.
+			flattened_structs.insert(var.self);
+
+			type.member_name_cache.clear();
+			statement("cbuffer ", block_name, to_resource_binding(var));
+			begin_scope();
+
+			uint32_t i = 0;
+			for (auto &member : type.member_types)
+			{
+				add_member_name(type, i);
+				auto member_name = get_member_name(type.self, i);
+				set_member_name(type.self, i, sanitize_underscores(join(block_name, "_", member_name)));
+				emit_struct_member(type, member, i, "");
+				set_member_name(type.self, i, member_name);
+				i++;
+			}
+
+			end_scope_decl();
+		}
+		else
+		{
+			if (options.shader_model < 51)
+				SPIRV_CROSS_THROW("Need ConstantBuffer<T> to use arrays of UBOs, but this is only supported in SM 5.1.");
+
+			// ConstantBuffer<T> does not support packoffset, so it is unuseable unless everything aligns as we expect.
+			if (!buffer_is_packing_standard(type, BufferPackingHLSLCbuffer))
+				SPIRV_CROSS_THROW("HLSL ConstantBuffer<T> cannot be expressed with normal HLSL packing rules.");
+
+			add_resource_name(type.self);
+			add_resource_name(var.self);
+
+			emit_struct(get<SPIRType>(type.self));
+			statement("ConstantBuffer<", to_name(type.self), "> ", to_name(var.self), type_to_array_glsl(type),
+			          to_resource_binding(var), ";");
+		}
 	}
 }
 

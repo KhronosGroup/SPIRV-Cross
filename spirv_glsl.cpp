@@ -1033,7 +1033,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 	return size;
 }
 
-bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingStandard packing)
+bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing)
 {
 	// This is very tricky and error prone, but try to be exhaustive and correct here.
 	// SPIR-V doesn't directly say if we're using std430 or std140.
@@ -1097,7 +1097,7 @@ bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingS
 		// We cannot use enhanced layouts on substructs, so they better be up to spec.
 		auto substruct_packing = packing_to_substruct_packing(packing);
 
-		if (!memb_type.member_types.empty() && !ssbo_is_packing_standard(memb_type, substruct_packing))
+		if (!memb_type.member_types.empty() && !buffer_is_packing_standard(memb_type, substruct_packing))
 			return false;
 
 		// Bump size.
@@ -1193,9 +1193,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBlock)))
 	{
-		if (ssbo_is_packing_standard(type, BufferPackingStd140))
+		if (buffer_is_packing_standard(type, BufferPackingStd140))
 			attr.push_back("std140");
-		else if (ssbo_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+		else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
 		{
 			attr.push_back("std140");
 			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
@@ -1223,11 +1223,11 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	}
 	else if (push_constant_block || ssbo_block)
 	{
-		if (ssbo_is_packing_standard(type, BufferPackingStd430))
+		if (buffer_is_packing_standard(type, BufferPackingStd430))
 			attr.push_back("std430");
-		else if (ssbo_is_packing_standard(type, BufferPackingStd140))
+		else if (buffer_is_packing_standard(type, BufferPackingStd140))
 			attr.push_back("std140");
-		else if (ssbo_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+		else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
 		{
 			attr.push_back("std140");
 
@@ -1242,7 +1242,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 			set_decoration(type.self, DecorationCPacked);
 		}
-		else if (ssbo_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
+		else if (buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
 		{
 			attr.push_back("std430");
 			if (options.es && !options.vulkan_semantics)

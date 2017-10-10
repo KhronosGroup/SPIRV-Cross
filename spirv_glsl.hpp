@@ -398,7 +398,7 @@ protected:
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
 	virtual bool skip_argument(uint32_t id) const;
 
-	bool ssbo_is_packing_standard(const SPIRType &type, BufferPackingStandard packing);
+	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing);
 	uint32_t type_to_packed_base_size(const SPIRType &type, BufferPackingStandard packing);
 	uint32_t type_to_packed_alignment(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
 	uint32_t type_to_packed_array_stride(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
