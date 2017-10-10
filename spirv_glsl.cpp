@@ -1447,16 +1447,6 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 	if (!type.array.empty())
 		SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
 
-	// Block names should never alias.
-	auto block_name = to_name(type.self, false);
-
-	// Shaders never use the block by interface name, so we don't
-	// have to track this other than updating name caches.
-	if (resource_names.find(block_name) != end(resource_names))
-		block_name = get_fallback_name(type.self);
-	else
-		resource_names.insert(block_name);
-
 	auto old_flags = meta[type.self].decoration.decoration_flags;
 	// Emit the members as if they are part of a block to get all qualifiers.
 	meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
@@ -1474,7 +1464,8 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 		// Replace member name while emitting it so it encodes both struct name and member name.
 		// Sanitize underscores because joining the two identifiers might create more than 1 underscore in a row,
 		// which is not allowed.
-		auto member_name = get_member_name(type.self, i);
+		auto backup_name = get_member_name(type.self, i);
+		auto member_name = to_member_name(type, i);
 		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
 		emit_struct_member(type, member, i, qual);
 		// Restore member name.

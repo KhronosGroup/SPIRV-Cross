@@ -1,8 +1,8 @@
-cbuffer CBuffer : register(b3)
+cbuffer cbuf : register(b3)
 {
     float4 CBuffer_a : packoffset(c0);
 };
-cbuffer PushMe
+cbuffer registers
 {
     float4 PushMe_d : packoffset(c0);
 };

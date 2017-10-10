@@ -1094,9 +1094,6 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	}
 	else
 	{
-		// Block names should never alias.
-		auto block_name = to_name(type.self, false);
-
 		if (type.array.empty())
 		{
 			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
@@ -1104,29 +1101,24 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 			else
 				SPIRV_CROSS_THROW("cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
 
-			// Shaders never use the block by interface name, so we don't
-			// have to track this other than updating name caches.
-			if (resource_names.find(block_name) != end(resource_names))
-				block_name = get_fallback_name(type.self);
-			else
-				resource_names.insert(block_name);
-
 			// Flatten the top-level struct so we can use packoffset,
 			// this restriction is similar to GLSL where layout(offset) is not possible on sub-structs.
 			flattened_structs.insert(var.self);
 
 			type.member_name_cache.clear();
-			statement("cbuffer ", block_name, to_resource_binding(var));
+			add_resource_name(var.self);
+			statement("cbuffer ", to_name(var.self), to_resource_binding(var));
 			begin_scope();
 
 			uint32_t i = 0;
 			for (auto &member : type.member_types)
 			{
 				add_member_name(type, i);
-				auto member_name = get_member_name(type.self, i);
-				set_member_name(type.self, i, sanitize_underscores(join(block_name, "_", member_name)));
+				auto backup_name = get_member_name(type.self, i);
+				auto member_name = to_member_name(type, i);
+				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
 				emit_struct_member(type, member, i, "");
-				set_member_name(type.self, i, member_name);
+				set_member_name(type.self, i, backup_name);
 				i++;
 			}
 

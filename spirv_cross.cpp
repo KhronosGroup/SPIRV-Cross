@@ -27,7 +27,7 @@ using namespace spirv_cross;
 
 #define log(...) fprintf(stderr, __VA_ARGS__)
 
-static string ensure_valid_identifier(const string &name)
+static string ensure_valid_identifier(const string &name, bool member)
 {
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
 	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
@@ -37,12 +37,26 @@ static string ensure_valid_identifier(const string &name)
 	{
 		auto &c = str[i];
 
-		// _<num> variables are reserved by the internal implementation,
-		// otherwise, make sure the name is a valid identifier.
-		if (i == 0 || (str[0] == '_' && i == 1))
-			c = isalpha(c) ? c : '_';
+		if (member)
+		{
+			// _m<num> variables are reserved by the internal implementation,
+			// otherwise, make sure the name is a valid identifier.
+			if (i == 0)
+				c = isalpha(c) ? c : '_';
+			else if (i == 2 && str[0] == '_' && str[1] == 'm')
+				c = isalpha(c) ? c : '_';
+			else
+				c = isalnum(c) ? c : '_';
+		}
 		else
-			c = isalnum(c) ? c : '_';
+		{
+			// _<num> variables are reserved by the internal implementation,
+			// otherwise, make sure the name is a valid identifier.
+			if (i == 0 || (str[0] == '_' && i == 1))
+				c = isalpha(c) ? c : '_';
+			else
+				c = isalnum(c) ? c : '_';
+		}
 	}
 	return str;
 }
@@ -899,7 +913,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
 
-	str = ensure_valid_identifier(name);
+	str = ensure_valid_identifier(name, false);
 }
 
 const SPIRType &Compiler::get_type(uint32_t id) const
@@ -960,10 +974,10 @@ void Compiler::set_member_name(uint32_t id, uint32_t index, const std::string &n
 		return;
 
 	// Reserved for unnamed members.
-	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
+	if (name[0] == '_' && name.size() >= 3 && name[1] == 'm' && isdigit(name[2]))
 		return;
 
-	str = ensure_valid_identifier(name);
+	str = ensure_valid_identifier(name, true);
 }
 
 const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const

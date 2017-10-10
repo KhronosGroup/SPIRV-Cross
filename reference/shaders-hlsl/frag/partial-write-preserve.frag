@@ -4,7 +4,7 @@ struct B
     float b;
 };
 
-cbuffer UBO : register(b0)
+cbuffer _42 : register(b0)
 {
     int UBO_some_value : packoffset(c0);
 };

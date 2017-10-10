@@ -7,7 +7,7 @@ struct CBO_1
 };
 
 ConstantBuffer<CBO_1> cbo[2][4] : register(b4);
-cbuffer PushMe
+cbuffer push
 {
     float4 PushMe_a : packoffset(c0);
     float4 PushMe_b : packoffset(c1);
