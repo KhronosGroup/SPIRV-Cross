@@ -1135,7 +1135,8 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 		else
 		{
 			if (options.shader_model < 51)
-				SPIRV_CROSS_THROW("Need ConstantBuffer<T> to use arrays of UBOs, but this is only supported in SM 5.1.");
+				SPIRV_CROSS_THROW(
+				    "Need ConstantBuffer<T> to use arrays of UBOs, but this is only supported in SM 5.1.");
 
 			// ConstantBuffer<T> does not support packoffset, so it is unuseable unless everything aligns as we expect.
 			if (!buffer_is_packing_standard(type, BufferPackingHLSLCbuffer))
