@@ -1441,7 +1441,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	// OpOuterProduct
+		// OpOuterProduct
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);
@@ -1650,10 +1650,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 	}
 
-	// TODO:
-	//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
-	//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
-	//        GLSLstd450InterpolateAtOffset
+		// TODO:
+		//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
+		//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
+		//        GLSLstd450InterpolateAtOffset
 
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);

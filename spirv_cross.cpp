@@ -154,7 +154,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpMemoryBarrier:
 			return false;
 
-		// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
+			// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
 
 		default:
 			break;
@@ -443,7 +443,7 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	// Combined image samplers are always considered active as they are "magic" variables.
 	if (find_if(begin(combined_image_samplers), end(combined_image_samplers), [&var](const CombinedImageSampler &samp) {
 		    return samp.combined_id == var.self;
-		}) != end(combined_image_samplers))
+	    }) != end(combined_image_samplers))
 	{
 		return false;
 	}
@@ -2699,7 +2699,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
 		                   return param.image_id == p.image_id && param.sampler_id == p.sampler_id &&
 		                          param.global_image == p.global_image && param.global_sampler == p.global_sampler;
-		               });
+	                   });
 
 	if (itr == end(caller.combined_parameters))
 	{
@@ -2836,7 +2836,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
 	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
 		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
-		               });
+	                   });
 
 	if (itr == end(compiler.combined_image_samplers))
 	{
@@ -3153,8 +3153,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				break;
 			}
 
-			// Atomics shouldn't be able to access function-local variables.
-			// Some GLSL builtins access a pointer.
+				// Atomics shouldn't be able to access function-local variables.
+				// Some GLSL builtins access a pointer.
 
 			default:
 				break;
