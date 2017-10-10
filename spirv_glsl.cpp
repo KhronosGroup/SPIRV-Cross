@@ -26,7 +26,7 @@ using namespace spirv_cross;
 using namespace std;
 
 // Sanitizes underscores for GLSL where multiple underscores in a row are not allowed.
-static string sanitize_underscores(const string &str)
+string CompilerGLSL::sanitize_underscores(const string &str)
 {
 	string res;
 	res.reserve(str.size());

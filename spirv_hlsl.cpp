@@ -1032,6 +1032,37 @@ string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
 	return "";
 }
 
+void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+                                      const string &qualifier)
+{
+	auto &membertype = get<SPIRType>(member_type_id);
+
+	uint64_t memberflags = 0;
+	auto &memb = meta[type.self].members;
+	if (index < memb.size())
+		memberflags = memb[index].decoration_flags;
+
+	string qualifiers;
+	bool is_block = (meta[type.self].decoration.decoration_flags &
+	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+	if (is_block)
+		qualifiers = to_interpolation_qualifiers(memberflags);
+
+	string packing_offset;
+	if (has_decoration(type.self, DecorationCPacked) && (memberflags & (1ull << DecorationOffset)) != 0)
+	{
+		uint32_t offset = memb[index].offset;
+		if (offset & 3)
+			SPIRV_CROSS_THROW("Cannot pack on tighter bounds than 4 bytes in HLSL.");
+
+		static const char *packing_swizzle[] = { "", ".y", ".z", ".w" };
+		packing_offset = join(" : packoffset(c", offset / 16, packing_swizzle[(offset & 15) >> 2], ")");
+	}
+
+	statement(qualifiers, qualifier,
+	          variable_decl(membertype, to_member_name(type, index)), packing_offset, ";");
+}
+
 void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
@@ -1048,43 +1079,47 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	}
 	else
 	{
-		add_resource_name(type.self);
-		add_resource_name(var.self);
+		// ConstantBuffer<T> does not support packoffset, so it is unuseable.
+		// Unfortunately, it's the only way to get arrays of UBOs, so don't support that until we
+		// have a better solution.
+		if (!type.array.empty())
+			SPIRV_CROSS_THROW("Arrays of cbuffers are not supported.");
 
-		string struct_name;
-		if (options.shader_model >= 51)
-			struct_name = to_name(type.self);
+		// Block names should never alias.
+		auto block_name = to_name(type.self, false);
+
+		// Shaders never use the block by interface name, so we don't
+		// have to track this other than updating name caches.
+		if (resource_names.find(block_name) != end(resource_names))
+			block_name = get_fallback_name(type.self);
 		else
-			struct_name = join("_", to_name(type.self));
+			resource_names.insert(block_name);
 
-		// First, declare the struct of the UBO.
-		statement("struct ", struct_name);
-		begin_scope();
+		if (ssbo_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
+			set_decoration(type.self, DecorationCPacked);
+		else
+			SPIRV_CROSS_THROW("cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
+
+		// Flatten the top-level struct so we can use packoffset,
+		// this restriction is similar to GLSL where layout(offset) is not possible on sub-structs.
+		flattened_structs.insert(var.self);
 
 		type.member_name_cache.clear();
+		statement("cbuffer ", block_name, to_resource_binding(var));
+		begin_scope();
 
 		uint32_t i = 0;
 		for (auto &member : type.member_types)
 		{
 			add_member_name(type, i);
-			emit_struct_member(type, member, i);
+			auto member_name = get_member_name(type.self, i);
+			set_member_name(type.self, i, sanitize_underscores(join(block_name, "_", member_name)));
+			emit_struct_member(type, member, i, "");
+			set_member_name(type.self, i, member_name);
 			i++;
 		}
-		end_scope_decl();
-		statement("");
 
-		if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
-		{
-			statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type),
-			          to_resource_binding(var), ";");
-		}
-		else
-		{
-			statement("cbuffer ", to_name(type.self), to_resource_binding(var));
-			begin_scope();
-			statement(struct_name, " ", to_name(var.self), type_to_array_glsl(type), ";");
-			end_scope_decl();
-		}
+		end_scope_decl();
 	}
 }
 
@@ -1816,20 +1851,10 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			if (has_decoration(type.self, DecorationBufferBlock))
 				space = "u"; // UAV
 			else if (has_decoration(type.self, DecorationBlock))
-			{
-				if (options.shader_model >= 40)
-					space = "b"; // Constant buffers
-				else
-					space = "c"; // Constant buffers
-			}
+				space = "b"; // Constant buffers
 		}
 		else if (storage == StorageClassPushConstant)
-		{
-			if (options.shader_model >= 40)
-				space = "b"; // Constant buffers
-			else
-				space = "c"; // Constant buffers
-		}
+			space = "b"; // Constant buffers
 		else if (storage == StorageClassStorageBuffer)
 			space = "u"; // UAV
 

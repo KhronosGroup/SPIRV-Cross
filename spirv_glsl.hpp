@@ -486,6 +486,8 @@ protected:
 
 	void declare_undefined_values();
 
+	static std::string sanitize_underscores(const std::string &str);
+
 private:
 	void init()
 	{

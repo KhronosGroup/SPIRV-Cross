@@ -103,7 +103,9 @@ enum BufferPackingStandard
 	BufferPackingStd140,
 	BufferPackingStd430,
 	BufferPackingStd140EnhancedLayout,
-	BufferPackingStd430EnhancedLayout
+	BufferPackingStd430EnhancedLayout,
+	BufferPackingHLSLCbuffer,
+	BufferPackingHLSLCbufferPackOffset
 };
 
 class Compiler

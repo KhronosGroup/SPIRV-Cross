@@ -93,6 +93,9 @@ private:
 	std::string read_access_chain(const SPIRAccessChain &chain);
 	void emit_store(const Instruction &instruction);
 
+	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+	                        const std::string &qualifier) override;
+
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 
 	Options options;
