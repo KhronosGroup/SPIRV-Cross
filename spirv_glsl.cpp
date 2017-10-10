@@ -1114,6 +1114,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back("std140");
 		else if (ssbo_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
 		{
+			attr.push_back("std140");
 			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
 			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
 			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
