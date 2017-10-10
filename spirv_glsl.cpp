@@ -25,6 +25,63 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static bool packing_is_vec4_padded(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingHLSLCbuffer:
+	case BufferPackingHLSLCbufferPackOffset:
+	case BufferPackingStd140:
+	case BufferPackingStd140EnhancedLayout:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+static bool packing_is_hlsl(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingHLSLCbuffer:
+	case BufferPackingHLSLCbufferPackOffset:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+static bool packing_has_flexible_offset(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingStd140:
+	case BufferPackingStd430:
+	case BufferPackingHLSLCbuffer:
+		return false;
+
+	default:
+		return true;
+	}
+}
+
+static BufferPackingStandard packing_to_substruct_packing(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingStd140EnhancedLayout:
+		return BufferPackingStd140;
+	case BufferPackingStd430EnhancedLayout:
+		return BufferPackingStd430;
+	case BufferPackingHLSLCbufferPackOffset:
+		return BufferPackingHLSLCbuffer;
+	default:
+		return packing;
+	}
+}
+
 // Sanitizes underscores for GLSL where multiple underscores in a row are not allowed.
 string CompilerGLSL::sanitize_underscores(const string &str)
 {
@@ -807,6 +864,20 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 {
 	const uint32_t base_alignment = type_to_packed_base_size(type, packing);
 
+	if (!type.array.empty())
+	{
+		uint32_t minimum_alignment = 1;
+		if (packing_is_vec4_padded(packing))
+			minimum_alignment = 16;
+
+		auto *tmp = &get<SPIRType>(type.parent_type);
+		while (!tmp->array.empty())
+			tmp = &get<SPIRType>(tmp->parent_type);
+
+		// Get the alignment of the base type, then maybe round up.
+		return max(minimum_alignment, type_to_packed_alignment(*tmp, flags, packing));
+	}
+
 	if (type.basetype == SPIRType::Struct)
 	{
 		// Rule 9. Structs alignments are maximum alignment of its members.
@@ -819,13 +890,18 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 		}
 
 		// In std140, struct alignment is rounded up to 16.
-		if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+		if (packing_is_vec4_padded(packing))
 			alignment = max(alignment, 16u);
 
 		return alignment;
 	}
 	else
 	{
+		// Vectors are *not* aligned in HLSL, but there's an extra rule where vectors cannot straddle
+		// a vec4, this is handled outside since that part knows our current offset.
+		if (type.columns == 1 && packing_is_hlsl(packing))
+			return base_alignment;
+
 		// From 7.6.2.2 in GL 4.5 core spec.
 		// Rule 1
 		if (type.vecsize == 1 && type.columns == 1)
@@ -845,7 +921,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 		// vectors.
 		if ((flags & (1ull << DecorationColMajor)) && type.columns > 1)
 		{
-			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+			if (packing_is_vec4_padded(packing))
 				return 4 * base_alignment;
 			else if (type.vecsize == 3)
 				return 4 * base_alignment;
@@ -858,7 +934,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 		// Rule 7.
 		if ((flags & (1ull << DecorationRowMajor)) && type.vecsize > 1)
 		{
-			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+			if (packing_is_vec4_padded(packing))
 				return 4 * base_alignment;
 			else if (type.columns == 3)
 				return 4 * base_alignment;
@@ -875,24 +951,32 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 uint32_t CompilerGLSL::type_to_packed_array_stride(const SPIRType &type, uint64_t flags, BufferPackingStandard packing)
 {
 	// Array stride is equal to aligned size of the underlying type.
-	SPIRType tmp = type;
-	tmp.array.pop_back();
-	tmp.array_size_literal.pop_back();
+	uint32_t parent = type.parent_type;
+	assert(parent);
+
+	auto &tmp = get<SPIRType>(parent);
+
 	uint32_t size = type_to_packed_size(tmp, flags, packing);
-	uint32_t alignment = type_to_packed_alignment(tmp, flags, packing);
-
-	// Rule 4. In std140, array strides are padded out to the alignment of a vec4.
-	if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
-		alignment = max(alignment, 16u);
-
-	return (size + alignment - 1) & ~(alignment - 1);
+	if (tmp.array.empty())
+	{
+		uint32_t alignment = type_to_packed_alignment(type, flags, packing);
+		return (size + alignment - 1) & ~(alignment - 1);
+	}
+	else
+	{
+		// For multidimensional arrays, array stride always matches size of subtype.
+		// The alignment cannot change because multidimensional arrays are basically N * M array elements.
+		return size;
+	}
 }
 
 uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags, BufferPackingStandard packing)
 {
 	if (!type.array.empty())
+	{
 		return to_array_size_literal(type, uint32_t(type.array.size()) - 1) *
 		       type_to_packed_array_stride(type, flags, packing);
+	}
 
 	const uint32_t base_alignment = type_to_packed_base_size(type, packing);
 	uint32_t size = 0;
@@ -927,7 +1011,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 
 		if ((flags & (1ull << DecorationColMajor)) && type.columns > 1)
 		{
-			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+			if (packing_is_vec4_padded(packing))
 				size = type.columns * 4 * base_alignment;
 			else if (type.vecsize == 3)
 				size = type.columns * 4 * base_alignment;
@@ -937,7 +1021,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 
 		if ((flags & (1ull << DecorationRowMajor)) && type.vecsize > 1)
 		{
-			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+			if (packing_is_vec4_padded(packing))
 				size = type.vecsize * 4 * base_alignment;
 			else if (type.columns == 3)
 				size = type.vecsize * 4 * base_alignment;
@@ -974,6 +1058,17 @@ bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingS
 
 		// Verify alignment rules.
 		uint32_t packed_alignment = type_to_packed_alignment(memb_type, member_flags, packing);
+		uint32_t packed_size = type_to_packed_size(memb_type, member_flags, packing);
+
+		if (packing_is_hlsl(packing))
+		{
+			// If a member straddles across a vec4 boundary, alignment is actually vec4.
+			uint32_t begin_word = offset / 16;
+			uint32_t end_word = (offset + packed_size - 1) / 16;
+			if (begin_word != end_word)
+				packed_alignment = max(packed_alignment, 16u);
+		}
+
 		uint32_t alignment = max(packed_alignment, pad_alignment);
 		offset = (offset + alignment - 1) & ~(alignment - 1);
 
@@ -984,9 +1079,9 @@ bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingS
 		else
 			pad_alignment = 1;
 
-		// We only care about offsets in std140, std430, for EnhancedLayout variants,
-		// we have the flexibility to choose our own offsets.
-		if (packing == BufferPackingStd140 || packing == BufferPackingStd430)
+		// We only care about offsets in std140, std430, etc ...
+		// For EnhancedLayout variants, we have the flexibility to choose our own offsets.
+		if (!packing_has_flexible_offset(packing))
 		{
 			uint32_t actual_offset = type_struct_member_offset(type, i);
 			if (actual_offset != offset) // This cannot be the packing we're looking for.
@@ -1000,25 +1095,13 @@ bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingS
 
 		// Verify that sub-structs also follow packing rules.
 		// We cannot use enhanced layouts on substructs, so they better be up to spec.
-		BufferPackingStandard substruct_packing;
-		switch (packing)
-		{
-		case BufferPackingStd140EnhancedLayout:
-			substruct_packing = BufferPackingStd140;
-			break;
-		case BufferPackingStd430EnhancedLayout:
-			substruct_packing = BufferPackingStd430;
-			break;
-		default:
-			substruct_packing = packing;
-			break;
-		}
+		auto substruct_packing = packing_to_substruct_packing(packing);
 
 		if (!memb_type.member_types.empty() && !ssbo_is_packing_standard(memb_type, substruct_packing))
 			return false;
 
 		// Bump size.
-		offset += type_to_packed_size(memb_type, member_flags, packing);
+		offset += packed_size;
 	}
 
 	return true;

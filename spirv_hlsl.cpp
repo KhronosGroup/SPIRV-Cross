@@ -1049,7 +1049,7 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
 	string packing_offset;
-	if (has_decoration(type.self, DecorationCPacked) && (memberflags & (1ull << DecorationOffset)) != 0)
+	if (has_decoration(type.self, DecorationCPacked) && has_member_decoration(type.self, index, DecorationOffset))
 	{
 		uint32_t offset = memb[index].offset;
 		if (offset & 3)
