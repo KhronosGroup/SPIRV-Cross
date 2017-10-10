@@ -1,6 +1,6 @@
 cbuffer UBO
 {
-    float4x4 UBO_uMVP : packoffset(c0);
+    row_major float4x4 UBO_uMVP : packoffset(c0);
 };
 
 static float4 gl_Position;

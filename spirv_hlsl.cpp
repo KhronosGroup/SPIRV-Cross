@@ -1027,8 +1027,23 @@ void CompilerHLSL::emit_resources()
 	}
 }
 
-string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
+string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
 {
+	auto flags = combined_decoration_for_member(type, index);
+
+	bool is_block = (meta[type.self].decoration.decoration_flags &
+	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+
+	if (!is_block)
+		return "";
+
+	// Flip the convention. HLSL is a bit odd in that the memory layout is column major ... but the language API is "row-major".
+	// The way to deal with this is to multiply everything in inverse order, and reverse the memory layout.
+	if (flags & (1ull << DecorationColMajor))
+		return "row_major ";
+	else if (flags & (1ull << DecorationRowMajor))
+		return "column_major ";
+
 	return "";
 }
 
@@ -1059,7 +1074,7 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 		packing_offset = join(" : packoffset(c", offset / 16, packing_swizzle[(offset & 15) >> 2], ")");
 	}
 
-	statement(qualifiers, qualifier,
+	statement(layout_for_member(type, index), qualifiers, qualifier,
 	          variable_decl(membertype, to_member_name(type, index)), packing_offset, ";");
 }
 
