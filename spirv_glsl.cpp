@@ -1119,7 +1119,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
 			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
 			if (options.es && !options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do not support GL_ARB_enhanced_layouts.");
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
 				require_extension("GL_ARB_enhanced_layouts");
 
@@ -1132,9 +1133,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		}
 		else
 		{
-			SPIRV_CROSS_THROW(
-					"Uniform buffer cannot be expressed as std140, even with enhanced layouts. You can try flattening this block to "
-							"support a more flexible layout.");
+			SPIRV_CROSS_THROW("Uniform buffer cannot be expressed as std140, even with enhanced layouts. You can try "
+			                  "flattening this block to "
+			                  "support a more flexible layout.");
 		}
 	}
 	else if (push_constant_block || ssbo_block)
@@ -1151,7 +1152,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
 			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
 			if (options.es && !options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do not support GL_ARB_enhanced_layouts.");
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
 				require_extension("GL_ARB_enhanced_layouts");
 
@@ -1161,7 +1163,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		{
 			attr.push_back("std430");
 			if (options.es && !options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do not support GL_ARB_enhanced_layouts.");
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
 				require_extension("GL_ARB_enhanced_layouts");
 
@@ -1169,7 +1172,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		}
 		else
 		{
-			SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140, even with enhanced layouts. You can try flattening this block to support a more flexible layout.");
+			SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140, even with enhanced "
+			                  "layouts. You can try flattening this block to support a more flexible layout.");
 		}
 	}
 
