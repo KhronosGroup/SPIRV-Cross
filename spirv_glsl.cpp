@@ -656,6 +656,11 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	if (dec.decoration_flags & (1ull << DecorationLocation))
 		attr.push_back(join("location = ", dec.location));
 
+	// DecorationCPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
+	// This is only done selectively in GLSL as needed.
+	if (has_decoration(type.self, DecorationCPacked) && (dec.decoration_flags & (1ull << DecorationOffset)) != 0)
+		attr.push_back(join("offset = ", dec.offset));
+
 	if (attr.empty())
 		return "";
 
@@ -814,7 +819,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 		}
 
 		// In std140, struct alignment is rounded up to 16.
-		if (packing == BufferPackingStd140)
+		if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
 			alignment = max(alignment, 16u);
 
 		return alignment;
@@ -840,7 +845,9 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 		// vectors.
 		if ((flags & (1ull << DecorationColMajor)) && type.columns > 1)
 		{
-			if (type.vecsize == 3)
+			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+				return 4 * base_alignment;
+			else if (type.vecsize == 3)
 				return 4 * base_alignment;
 			else
 				return type.vecsize * base_alignment;
@@ -851,7 +858,9 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 		// Rule 7.
 		if ((flags & (1ull << DecorationRowMajor)) && type.vecsize > 1)
 		{
-			if (type.columns == 3)
+			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
+				return 4 * base_alignment;
+			else if (type.columns == 3)
 				return 4 * base_alignment;
 			else
 				return type.columns * base_alignment;
@@ -873,7 +882,7 @@ uint32_t CompilerGLSL::type_to_packed_array_stride(const SPIRType &type, uint64_
 	uint32_t alignment = type_to_packed_alignment(tmp, flags, packing);
 
 	// Rule 4. In std140, array strides are padded out to the alignment of a vec4.
-	if (packing == BufferPackingStd140)
+	if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
 		alignment = max(alignment, 16u);
 
 	return (size + alignment - 1) & ~(alignment - 1);
@@ -918,7 +927,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 
 		if ((flags & (1ull << DecorationColMajor)) && type.columns > 1)
 		{
-			if (packing == BufferPackingStd140)
+			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
 				size = type.columns * 4 * base_alignment;
 			else if (type.vecsize == 3)
 				size = type.columns * 4 * base_alignment;
@@ -928,7 +937,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 
 		if ((flags & (1ull << DecorationRowMajor)) && type.vecsize > 1)
 		{
-			if (packing == BufferPackingStd140)
+			if (packing == BufferPackingStd140 || packing == BufferPackingStd140EnhancedLayout)
 				size = type.vecsize * 4 * base_alignment;
 			else if (type.columns == 3)
 				size = type.vecsize * 4 * base_alignment;
@@ -975,9 +984,14 @@ bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingS
 		else
 			pad_alignment = 1;
 
-		uint32_t actual_offset = type_struct_member_offset(type, i);
-		if (actual_offset != offset) // This cannot be the packing we're looking for.
-			return false;
+		// We only care about offsets in std140, std430, for EnhancedLayout variants,
+		// we have the flexibility to choose our own offsets.
+		if (packing == BufferPackingStd140 || packing == BufferPackingStd430)
+		{
+			uint32_t actual_offset = type_struct_member_offset(type, i);
+			if (actual_offset != offset) // This cannot be the packing we're looking for.
+				return false;
+		}
 
 		// Verify array stride rules.
 		if (!memb_type.array.empty() &&
@@ -985,7 +999,22 @@ bool CompilerGLSL::ssbo_is_packing_standard(const SPIRType &type, BufferPackingS
 			return false;
 
 		// Verify that sub-structs also follow packing rules.
-		if (!memb_type.member_types.empty() && !ssbo_is_packing_standard(memb_type, packing))
+		// We cannot use enhanced layouts on substructs, so they better be up to spec.
+		BufferPackingStandard substruct_packing;
+		switch (packing)
+		{
+		case BufferPackingStd140EnhancedLayout:
+			substruct_packing = BufferPackingStd140;
+			break;
+		case BufferPackingStd430EnhancedLayout:
+			substruct_packing = BufferPackingStd430;
+			break;
+		default:
+			substruct_packing = packing;
+			break;
+		}
+
+		if (!memb_type.member_types.empty() && !ssbo_is_packing_standard(memb_type, substruct_packing))
 			return false;
 
 		// Bump size.
@@ -1073,34 +1102,74 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	if (flags & (1ull << DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
+	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
+	bool ssbo_block = var.storage == StorageClassStorageBuffer ||
+	                  (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock)));
+
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBlock)))
 	{
 		if (ssbo_is_packing_standard(type, BufferPackingStd140))
 			attr.push_back("std140");
+		else if (ssbo_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+		{
+			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
+			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
+			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
+			if (options.es && !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do not support GL_ARB_enhanced_layouts.");
+			if (!options.es && !options.vulkan_semantics && options.version < 440)
+				require_extension("GL_ARB_enhanced_layouts");
+
+			// This is a very last minute to check for this, but use this unused decoration to mark that we should emit
+			// explicit offsets for this block type.
+			// layout_for_variable() will be called before the actual buffer emit.
+			// The alternative is a full pass before codegen where we deduce this decoration,
+			// but then we are just doing the exact same work twice, and more complexity.
+			set_decoration(type.self, DecorationCPacked);
+		}
 		else
-			SPIRV_CROSS_THROW("Uniform buffer cannot be expressed as std140. You can try flattening this block to "
-			                  "support a more flexible layout.");
+		{
+			SPIRV_CROSS_THROW(
+					"Uniform buffer cannot be expressed as std140, even with enhanced layouts. You can try flattening this block to "
+							"support a more flexible layout.");
+		}
 	}
-	else if (var.storage == StorageClassStorageBuffer ||
-	         (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock))))
+	else if (push_constant_block || ssbo_block)
 	{
 		if (ssbo_is_packing_standard(type, BufferPackingStd430))
 			attr.push_back("std430");
 		else if (ssbo_is_packing_standard(type, BufferPackingStd140))
 			attr.push_back("std140");
-		else
-			SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140.");
-	}
-	else if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
-	{
-		if (ssbo_is_packing_standard(type, BufferPackingStd430))
-			attr.push_back("std430");
-		else if (ssbo_is_packing_standard(type, BufferPackingStd140))
+		else if (ssbo_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+		{
 			attr.push_back("std140");
+
+			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
+			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
+			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
+			if (options.es && !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do not support GL_ARB_enhanced_layouts.");
+			if (!options.es && !options.vulkan_semantics && options.version < 440)
+				require_extension("GL_ARB_enhanced_layouts");
+
+			set_decoration(type.self, DecorationCPacked);
+		}
+		else if (ssbo_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
+		{
+			attr.push_back("std430");
+			if (options.es && !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do not support GL_ARB_enhanced_layouts.");
+			if (!options.es && !options.vulkan_semantics && options.version < 440)
+				require_extension("GL_ARB_enhanced_layouts");
+
+			set_decoration(type.self, DecorationCPacked);
+		}
 		else
-			SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140.");
+		{
+			SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140, even with enhanced layouts. You can try flattening this block to support a more flexible layout.");
+		}
 	}
 
 	// For images, the type itself adds a layout qualifer.

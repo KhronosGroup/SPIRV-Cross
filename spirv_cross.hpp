@@ -101,7 +101,9 @@ struct BufferRange
 enum BufferPackingStandard
 {
 	BufferPackingStd140,
-	BufferPackingStd430
+	BufferPackingStd430,
+	BufferPackingStd140EnhancedLayout,
+	BufferPackingStd430EnhancedLayout
 };
 
 class Compiler
