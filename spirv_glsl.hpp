@@ -398,11 +398,11 @@ protected:
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
 	virtual bool skip_argument(uint32_t id) const;
 
-	bool ssbo_is_std430_packing(const SPIRType &type);
-	uint32_t type_to_std430_base_size(const SPIRType &type);
-	uint32_t type_to_std430_alignment(const SPIRType &type, uint64_t flags);
-	uint32_t type_to_std430_array_stride(const SPIRType &type, uint64_t flags);
-	uint32_t type_to_std430_size(const SPIRType &type, uint64_t flags);
+	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing);
+	uint32_t type_to_packed_base_size(const SPIRType &type, BufferPackingStandard packing);
+	uint32_t type_to_packed_alignment(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
+	uint32_t type_to_packed_array_stride(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
+	uint32_t type_to_packed_size(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
 
 	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
 	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);
@@ -485,6 +485,8 @@ protected:
 	bool type_is_empty(const SPIRType &type);
 
 	void declare_undefined_values();
+
+	static std::string sanitize_underscores(const std::string &str);
 
 private:
 	void init()

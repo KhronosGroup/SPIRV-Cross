@@ -13,7 +13,7 @@ env:
   - GLSLANG_REV=f0bc598dd7871689f25514b22a82f7455d762bef SPIRV_TOOLS_REV=40e9c60ffea56f45f388835e6945b01d4d8b022d
 
 before_script:
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install python3; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; brew install python3; fi
   - git clone https://github.com/KhronosGroup/glslang.git glslang
   - git clone https://github.com/KhronosGroup/SPIRV-Tools SPIRV-Tools
   - git clone https://github.com/KhronosGroup/SPIRV-Headers.git SPIRV-Tools/external/spirv-headers

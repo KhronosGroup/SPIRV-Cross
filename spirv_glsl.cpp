@@ -25,8 +25,65 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static bool packing_is_vec4_padded(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingHLSLCbuffer:
+	case BufferPackingHLSLCbufferPackOffset:
+	case BufferPackingStd140:
+	case BufferPackingStd140EnhancedLayout:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+static bool packing_is_hlsl(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingHLSLCbuffer:
+	case BufferPackingHLSLCbufferPackOffset:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+static bool packing_has_flexible_offset(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingStd140:
+	case BufferPackingStd430:
+	case BufferPackingHLSLCbuffer:
+		return false;
+
+	default:
+		return true;
+	}
+}
+
+static BufferPackingStandard packing_to_substruct_packing(BufferPackingStandard packing)
+{
+	switch (packing)
+	{
+	case BufferPackingStd140EnhancedLayout:
+		return BufferPackingStd140;
+	case BufferPackingStd430EnhancedLayout:
+		return BufferPackingStd430;
+	case BufferPackingHLSLCbufferPackOffset:
+		return BufferPackingHLSLCbuffer;
+	default:
+		return packing;
+	}
+}
+
 // Sanitizes underscores for GLSL where multiple underscores in a row are not allowed.
-static string sanitize_underscores(const string &str)
+string CompilerGLSL::sanitize_underscores(const string &str)
 {
 	string res;
 	res.reserve(str.size());
@@ -656,6 +713,11 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	if (dec.decoration_flags & (1ull << DecorationLocation))
 		attr.push_back(join("location = ", dec.location));
 
+	// DecorationCPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
+	// This is only done selectively in GLSL as needed.
+	if (has_decoration(type.self, DecorationCPacked) && (dec.decoration_flags & (1ull << DecorationOffset)) != 0)
+		attr.push_back(join("offset = ", dec.offset));
+
 	if (attr.empty())
 		return "";
 
@@ -785,7 +847,7 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 	}
 }
 
-uint32_t CompilerGLSL::type_to_std430_base_size(const SPIRType &type)
+uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPackingStandard)
 {
 	switch (type.basetype)
 	{
@@ -798,9 +860,23 @@ uint32_t CompilerGLSL::type_to_std430_base_size(const SPIRType &type)
 	}
 }
 
-uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t flags)
+uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t flags, BufferPackingStandard packing)
 {
-	const uint32_t base_alignment = type_to_std430_base_size(type);
+	const uint32_t base_alignment = type_to_packed_base_size(type, packing);
+
+	if (!type.array.empty())
+	{
+		uint32_t minimum_alignment = 1;
+		if (packing_is_vec4_padded(packing))
+			minimum_alignment = 16;
+
+		auto *tmp = &get<SPIRType>(type.parent_type);
+		while (!tmp->array.empty())
+			tmp = &get<SPIRType>(tmp->parent_type);
+
+		// Get the alignment of the base type, then maybe round up.
+		return max(minimum_alignment, type_to_packed_alignment(*tmp, flags, packing));
+	}
 
 	if (type.basetype == SPIRType::Struct)
 	{
@@ -809,13 +885,23 @@ uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t f
 		for (uint32_t i = 0; i < type.member_types.size(); i++)
 		{
 			auto member_flags = meta[type.self].members.at(i).decoration_flags;
-			alignment = max(alignment, type_to_std430_alignment(get<SPIRType>(type.member_types[i]), member_flags));
+			alignment =
+			    max(alignment, type_to_packed_alignment(get<SPIRType>(type.member_types[i]), member_flags, packing));
 		}
+
+		// In std140, struct alignment is rounded up to 16.
+		if (packing_is_vec4_padded(packing))
+			alignment = max(alignment, 16u);
 
 		return alignment;
 	}
 	else
 	{
+		// Vectors are *not* aligned in HLSL, but there's an extra rule where vectors cannot straddle
+		// a vec4, this is handled outside since that part knows our current offset.
+		if (type.columns == 1 && packing_is_hlsl(packing))
+			return base_alignment;
+
 		// From 7.6.2.2 in GL 4.5 core spec.
 		// Rule 1
 		if (type.vecsize == 1 && type.columns == 1)
@@ -835,7 +921,9 @@ uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t f
 		// vectors.
 		if ((flags & (1ull << DecorationColMajor)) && type.columns > 1)
 		{
-			if (type.vecsize == 3)
+			if (packing_is_vec4_padded(packing))
+				return 4 * base_alignment;
+			else if (type.vecsize == 3)
 				return 4 * base_alignment;
 			else
 				return type.vecsize * base_alignment;
@@ -846,7 +934,9 @@ uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t f
 		// Rule 7.
 		if ((flags & (1ull << DecorationRowMajor)) && type.vecsize > 1)
 		{
-			if (type.columns == 3)
+			if (packing_is_vec4_padded(packing))
+				return 4 * base_alignment;
+			else if (type.columns == 3)
 				return 4 * base_alignment;
 			else
 				return type.columns * base_alignment;
@@ -855,26 +945,40 @@ uint32_t CompilerGLSL::type_to_std430_alignment(const SPIRType &type, uint64_t f
 		// Rule 8 implied.
 	}
 
-	SPIRV_CROSS_THROW("Did not find suitable std430 rule for type. Bogus decorations?");
+	SPIRV_CROSS_THROW("Did not find suitable rule for type. Bogus decorations?");
 }
 
-uint32_t CompilerGLSL::type_to_std430_array_stride(const SPIRType &type, uint64_t flags)
+uint32_t CompilerGLSL::type_to_packed_array_stride(const SPIRType &type, uint64_t flags, BufferPackingStandard packing)
 {
 	// Array stride is equal to aligned size of the underlying type.
-	SPIRType tmp = type;
-	tmp.array.pop_back();
-	tmp.array_size_literal.pop_back();
-	uint32_t size = type_to_std430_size(tmp, flags);
-	uint32_t alignment = type_to_std430_alignment(tmp, flags);
-	return (size + alignment - 1) & ~(alignment - 1);
+	uint32_t parent = type.parent_type;
+	assert(parent);
+
+	auto &tmp = get<SPIRType>(parent);
+
+	uint32_t size = type_to_packed_size(tmp, flags, packing);
+	if (tmp.array.empty())
+	{
+		uint32_t alignment = type_to_packed_alignment(type, flags, packing);
+		return (size + alignment - 1) & ~(alignment - 1);
+	}
+	else
+	{
+		// For multidimensional arrays, array stride always matches size of subtype.
+		// The alignment cannot change because multidimensional arrays are basically N * M array elements.
+		return size;
+	}
 }
 
-uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
+uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags, BufferPackingStandard packing)
 {
 	if (!type.array.empty())
-		return to_array_size_literal(type, uint32_t(type.array.size()) - 1) * type_to_std430_array_stride(type, flags);
+	{
+		return to_array_size_literal(type, uint32_t(type.array.size()) - 1) *
+		       type_to_packed_array_stride(type, flags, packing);
+	}
 
-	const uint32_t base_alignment = type_to_std430_base_size(type);
+	const uint32_t base_alignment = type_to_packed_base_size(type, packing);
 	uint32_t size = 0;
 
 	if (type.basetype == SPIRType::Struct)
@@ -886,18 +990,18 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 			auto member_flags = meta[type.self].members.at(i).decoration_flags;
 			auto &member_type = get<SPIRType>(type.member_types[i]);
 
-			uint32_t std430_alignment = type_to_std430_alignment(member_type, member_flags);
-			uint32_t alignment = max(std430_alignment, pad_alignment);
+			uint32_t packed_alignment = type_to_packed_alignment(member_type, member_flags, packing);
+			uint32_t alignment = max(packed_alignment, pad_alignment);
 
 			// The next member following a struct member is aligned to the base alignment of the struct that came before.
 			// GL 4.5 spec, 7.6.2.2.
 			if (member_type.basetype == SPIRType::Struct)
-				pad_alignment = std430_alignment;
+				pad_alignment = packed_alignment;
 			else
 				pad_alignment = 1;
 
 			size = (size + alignment - 1) & ~(alignment - 1);
-			size += type_to_std430_size(member_type, member_flags);
+			size += type_to_packed_size(member_type, member_flags, packing);
 		}
 	}
 	else
@@ -907,7 +1011,9 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 
 		if ((flags & (1ull << DecorationColMajor)) && type.columns > 1)
 		{
-			if (type.vecsize == 3)
+			if (packing_is_vec4_padded(packing))
+				size = type.columns * 4 * base_alignment;
+			else if (type.vecsize == 3)
 				size = type.columns * 4 * base_alignment;
 			else
 				size = type.columns * type.vecsize * base_alignment;
@@ -915,7 +1021,9 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 
 		if ((flags & (1ull << DecorationRowMajor)) && type.vecsize > 1)
 		{
-			if (type.columns == 3)
+			if (packing_is_vec4_padded(packing))
+				size = type.vecsize * 4 * base_alignment;
+			else if (type.columns == 3)
 				size = type.vecsize * 4 * base_alignment;
 			else
 				size = type.vecsize * type.columns * base_alignment;
@@ -925,7 +1033,7 @@ uint32_t CompilerGLSL::type_to_std430_size(const SPIRType &type, uint64_t flags)
 	return size;
 }
 
-bool CompilerGLSL::ssbo_is_std430_packing(const SPIRType &type)
+bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing)
 {
 	// This is very tricky and error prone, but try to be exhaustive and correct here.
 	// SPIR-V doesn't directly say if we're using std430 or std140.
@@ -949,32 +1057,51 @@ bool CompilerGLSL::ssbo_is_std430_packing(const SPIRType &type)
 		auto member_flags = meta[type.self].members.at(i).decoration_flags;
 
 		// Verify alignment rules.
-		uint32_t std430_alignment = type_to_std430_alignment(memb_type, member_flags);
-		uint32_t alignment = max(std430_alignment, pad_alignment);
+		uint32_t packed_alignment = type_to_packed_alignment(memb_type, member_flags, packing);
+		uint32_t packed_size = type_to_packed_size(memb_type, member_flags, packing);
+
+		if (packing_is_hlsl(packing))
+		{
+			// If a member straddles across a vec4 boundary, alignment is actually vec4.
+			uint32_t begin_word = offset / 16;
+			uint32_t end_word = (offset + packed_size - 1) / 16;
+			if (begin_word != end_word)
+				packed_alignment = max(packed_alignment, 16u);
+		}
+
+		uint32_t alignment = max(packed_alignment, pad_alignment);
 		offset = (offset + alignment - 1) & ~(alignment - 1);
 
 		// The next member following a struct member is aligned to the base alignment of the struct that came before.
 		// GL 4.5 spec, 7.6.2.2.
 		if (memb_type.basetype == SPIRType::Struct)
-			pad_alignment = std430_alignment;
+			pad_alignment = packed_alignment;
 		else
 			pad_alignment = 1;
 
-		uint32_t actual_offset = type_struct_member_offset(type, i);
-		if (actual_offset != offset) // This cannot be std430.
-			return false;
+		// We only care about offsets in std140, std430, etc ...
+		// For EnhancedLayout variants, we have the flexibility to choose our own offsets.
+		if (!packing_has_flexible_offset(packing))
+		{
+			uint32_t actual_offset = type_struct_member_offset(type, i);
+			if (actual_offset != offset) // This cannot be the packing we're looking for.
+				return false;
+		}
 
 		// Verify array stride rules.
 		if (!memb_type.array.empty() &&
-		    type_to_std430_array_stride(memb_type, member_flags) != type_struct_member_array_stride(type, i))
+		    type_to_packed_array_stride(memb_type, member_flags, packing) != type_struct_member_array_stride(type, i))
 			return false;
 
-		// Verify that sub-structs also follow std430 rules.
-		if (!memb_type.member_types.empty() && !ssbo_is_std430_packing(memb_type))
+		// Verify that sub-structs also follow packing rules.
+		// We cannot use enhanced layouts on substructs, so they better be up to spec.
+		auto substruct_packing = packing_to_substruct_packing(packing);
+
+		if (!memb_type.member_types.empty() && !buffer_is_packing_standard(memb_type, substruct_packing))
 			return false;
 
 		// Bump size.
-		offset += type_to_std430_size(memb_type, member_flags);
+		offset += packed_size;
 	}
 
 	return true;
@@ -1058,15 +1185,80 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	if (flags & (1ull << DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
+	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
+	bool ssbo_block = var.storage == StorageClassStorageBuffer ||
+	                  (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock)));
+
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBlock)))
-		attr.push_back("std140");
-	else if (var.storage == StorageClassStorageBuffer ||
-	         (var.storage == StorageClassUniform && (typeflags & (1ull << DecorationBufferBlock))))
-		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
-	else if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
-		attr.push_back(ssbo_is_std430_packing(type) ? "std430" : "std140");
+	{
+		if (buffer_is_packing_standard(type, BufferPackingStd140))
+			attr.push_back("std140");
+		else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+		{
+			attr.push_back("std140");
+			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
+			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
+			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
+			if (options.es && !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				                  "not support GL_ARB_enhanced_layouts.");
+			if (!options.es && !options.vulkan_semantics && options.version < 440)
+				require_extension("GL_ARB_enhanced_layouts");
+
+			// This is a very last minute to check for this, but use this unused decoration to mark that we should emit
+			// explicit offsets for this block type.
+			// layout_for_variable() will be called before the actual buffer emit.
+			// The alternative is a full pass before codegen where we deduce this decoration,
+			// but then we are just doing the exact same work twice, and more complexity.
+			set_decoration(type.self, DecorationCPacked);
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Uniform buffer cannot be expressed as std140, even with enhanced layouts. You can try "
+			                  "flattening this block to "
+			                  "support a more flexible layout.");
+		}
+	}
+	else if (push_constant_block || ssbo_block)
+	{
+		if (buffer_is_packing_standard(type, BufferPackingStd430))
+			attr.push_back("std430");
+		else if (buffer_is_packing_standard(type, BufferPackingStd140))
+			attr.push_back("std140");
+		else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+		{
+			attr.push_back("std140");
+
+			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
+			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
+			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
+			if (options.es && !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				                  "not support GL_ARB_enhanced_layouts.");
+			if (!options.es && !options.vulkan_semantics && options.version < 440)
+				require_extension("GL_ARB_enhanced_layouts");
+
+			set_decoration(type.self, DecorationCPacked);
+		}
+		else if (buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
+		{
+			attr.push_back("std430");
+			if (options.es && !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				                  "not support GL_ARB_enhanced_layouts.");
+			if (!options.es && !options.vulkan_semantics && options.version < 440)
+				require_extension("GL_ARB_enhanced_layouts");
+
+			set_decoration(type.self, DecorationCPacked);
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140, even with enhanced "
+			                  "layouts. You can try flattening this block to support a more flexible layout.");
+		}
+	}
 
 	// For images, the type itself adds a layout qualifer.
 	// Only emit the format for storage images.
@@ -1255,16 +1447,6 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 	if (!type.array.empty())
 		SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
 
-	// Block names should never alias.
-	auto block_name = to_name(type.self, false);
-
-	// Shaders never use the block by interface name, so we don't
-	// have to track this other than updating name caches.
-	if (resource_names.find(block_name) != end(resource_names))
-		block_name = get_fallback_name(type.self);
-	else
-		resource_names.insert(block_name);
-
 	auto old_flags = meta[type.self].decoration.decoration_flags;
 	// Emit the members as if they are part of a block to get all qualifiers.
 	meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
@@ -1282,7 +1464,8 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 		// Replace member name while emitting it so it encodes both struct name and member name.
 		// Sanitize underscores because joining the two identifiers might create more than 1 underscore in a row,
 		// which is not allowed.
-		auto member_name = get_member_name(type.self, i);
+		auto backup_name = get_member_name(type.self, i);
+		auto member_name = to_member_name(type, i);
 		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
 		emit_struct_member(type, member, i, qual);
 		// Restore member name.
@@ -2284,7 +2467,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 
 	if (splat)
 	{
-		if (type_to_std430_base_size(type) == 8)
+		if (type.width == 64)
 		{
 			uint64_t ident = c.scalar_u64(vector, 0);
 			for (uint32_t i = 1; i < c.vector_size(); i++)
@@ -2496,7 +2679,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 		if (find_if(begin(header.declare_temporary), end(header.declare_temporary),
 		            [result_type, result_id](const pair<uint32_t, uint32_t> &tmp) {
 			            return tmp.first == result_type && tmp.second == result_id;
-			        }) == end(header.declare_temporary))
+		            }) == end(header.declare_temporary))
 		{
 			header.declare_temporary.emplace_back(result_type, result_id);
 			force_recompile = true;
@@ -2723,8 +2906,9 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
                                            uint32_t op2, uint32_t op3, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2) && should_forward(op3);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ",
-	                                     to_expression(op2), ", ", to_expression(op3), ")"),
+	emit_op(result_type, result_id,
+	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ", ",
+	             to_expression(op3), ")"),
 	        forward);
 
 	inherit_expression_dependencies(result_id, op0);
@@ -5657,8 +5841,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 
-	// OpAtomicStore unimplemented. Not sure what would use that.
-	// OpAtomicLoad seems to only be relevant for atomic counters.
+		// OpAtomicStore unimplemented. Not sure what would use that.
+		// OpAtomicLoad seems to only be relevant for atomic counters.
 
 	case OpAtomicIIncrement:
 		forced_temporaries.insert(ops[1]);

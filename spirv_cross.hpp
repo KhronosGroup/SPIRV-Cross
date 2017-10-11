@@ -98,6 +98,16 @@ struct BufferRange
 	size_t range;
 };
 
+enum BufferPackingStandard
+{
+	BufferPackingStd140,
+	BufferPackingStd430,
+	BufferPackingStd140EnhancedLayout,
+	BufferPackingStd430EnhancedLayout,
+	BufferPackingHLSLCbuffer,
+	BufferPackingHLSLCbufferPackOffset
+};
+
 class Compiler
 {
 public:

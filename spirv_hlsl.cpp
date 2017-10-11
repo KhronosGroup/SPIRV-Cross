@@ -906,7 +906,10 @@ void CompilerHLSL::emit_resources()
 	if (requires_op_fmod)
 	{
 		static const char *types[] = {
-			"float", "float2", "float3", "float4",
+			"float",
+			"float2",
+			"float3",
+			"float4",
 		};
 
 		for (auto &type : types)
@@ -1024,9 +1027,55 @@ void CompilerHLSL::emit_resources()
 	}
 }
 
-string CompilerHLSL::layout_for_member(const SPIRType &, uint32_t)
+string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
 {
+	auto flags = combined_decoration_for_member(type, index);
+
+	bool is_block = (meta[type.self].decoration.decoration_flags &
+	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+
+	if (!is_block)
+		return "";
+
+	// Flip the convention. HLSL is a bit odd in that the memory layout is column major ... but the language API is "row-major".
+	// The way to deal with this is to multiply everything in inverse order, and reverse the memory layout.
+	if (flags & (1ull << DecorationColMajor))
+		return "row_major ";
+	else if (flags & (1ull << DecorationRowMajor))
+		return "column_major ";
+
 	return "";
+}
+
+void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+                                      const string &qualifier)
+{
+	auto &membertype = get<SPIRType>(member_type_id);
+
+	uint64_t memberflags = 0;
+	auto &memb = meta[type.self].members;
+	if (index < memb.size())
+		memberflags = memb[index].decoration_flags;
+
+	string qualifiers;
+	bool is_block = (meta[type.self].decoration.decoration_flags &
+	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+	if (is_block)
+		qualifiers = to_interpolation_qualifiers(memberflags);
+
+	string packing_offset;
+	if (has_decoration(type.self, DecorationCPacked) && has_member_decoration(type.self, index, DecorationOffset))
+	{
+		uint32_t offset = memb[index].offset;
+		if (offset & 3)
+			SPIRV_CROSS_THROW("Cannot pack on tighter bounds than 4 bytes in HLSL.");
+
+		static const char *packing_swizzle[] = { "", ".y", ".z", ".w" };
+		packing_offset = join(" : packoffset(c", offset / 16, packing_swizzle[(offset & 15) >> 2], ")");
+	}
+
+	statement(layout_for_member(type, index), qualifiers, qualifier,
+	          variable_decl(membertype, to_member_name(type, index)), packing_offset, ";");
 }
 
 void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
@@ -1045,42 +1094,52 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	}
 	else
 	{
-		add_resource_name(type.self);
-		add_resource_name(var.self);
-
-		string struct_name;
-		if (options.shader_model >= 51)
-			struct_name = to_name(type.self);
-		else
-			struct_name = join("_", to_name(type.self));
-
-		// First, declare the struct of the UBO.
-		statement("struct ", struct_name);
-		begin_scope();
-
-		type.member_name_cache.clear();
-
-		uint32_t i = 0;
-		for (auto &member : type.member_types)
+		if (type.array.empty())
 		{
-			add_member_name(type, i);
-			emit_struct_member(type, member, i);
-			i++;
-		}
-		end_scope_decl();
-		statement("");
+			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
+				set_decoration(type.self, DecorationCPacked);
+			else
+				SPIRV_CROSS_THROW("cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
 
-		if (options.shader_model >= 51) // SM 5.1 uses ConstantBuffer<T> instead of cbuffer.
-		{
-			statement("ConstantBuffer<", struct_name, "> ", to_name(var.self), type_to_array_glsl(type),
-			          to_resource_binding(var), ";");
-		}
-		else
-		{
-			statement("cbuffer ", to_name(type.self), to_resource_binding(var));
+			// Flatten the top-level struct so we can use packoffset,
+			// this restriction is similar to GLSL where layout(offset) is not possible on sub-structs.
+			flattened_structs.insert(var.self);
+
+			type.member_name_cache.clear();
+			add_resource_name(var.self);
+			statement("cbuffer ", to_name(var.self), to_resource_binding(var));
 			begin_scope();
-			statement(struct_name, " ", to_name(var.self), type_to_array_glsl(type), ";");
+
+			uint32_t i = 0;
+			for (auto &member : type.member_types)
+			{
+				add_member_name(type, i);
+				auto backup_name = get_member_name(type.self, i);
+				auto member_name = to_member_name(type, i);
+				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+				emit_struct_member(type, member, i, "");
+				set_member_name(type.self, i, backup_name);
+				i++;
+			}
+
 			end_scope_decl();
+		}
+		else
+		{
+			if (options.shader_model < 51)
+				SPIRV_CROSS_THROW(
+				    "Need ConstantBuffer<T> to use arrays of UBOs, but this is only supported in SM 5.1.");
+
+			// ConstantBuffer<T> does not support packoffset, so it is unuseable unless everything aligns as we expect.
+			if (!buffer_is_packing_standard(type, BufferPackingHLSLCbuffer))
+				SPIRV_CROSS_THROW("HLSL ConstantBuffer<T> cannot be expressed with normal HLSL packing rules.");
+
+			add_resource_name(type.self);
+			add_resource_name(var.self);
+
+			emit_struct(get<SPIRType>(type.self));
+			statement("ConstantBuffer<", to_name(type.self), "> ", to_name(var.self), type_to_array_glsl(type),
+			          to_resource_binding(var), ";");
 		}
 	}
 }
@@ -1813,20 +1872,10 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			if (has_decoration(type.self, DecorationBufferBlock))
 				space = "u"; // UAV
 			else if (has_decoration(type.self, DecorationBlock))
-			{
-				if (options.shader_model >= 40)
-					space = "b"; // Constant buffers
-				else
-					space = "c"; // Constant buffers
-			}
+				space = "b"; // Constant buffers
 		}
 		else if (storage == StorageClassPushConstant)
-		{
-			if (options.shader_model >= 40)
-				space = "b"; // Constant buffers
-			else
-				space = "c"; // Constant buffers
-		}
+			space = "b"; // Constant buffers
 		else if (storage == StorageClassStorageBuffer)
 			space = "u"; // UAV
 
