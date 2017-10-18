@@ -1152,6 +1152,14 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 				can_use_varying_location = false;
 		}
 
+		if (get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput)
+		{
+			if (options.es && options.version < 300)
+				can_use_varying_location = false;
+			else if (!options.es && options.version < 330)
+				can_use_varying_location = false;
+		}
+
 		if (can_use_varying_location)
 		{
 			uint64_t combined_decoration = 0;
