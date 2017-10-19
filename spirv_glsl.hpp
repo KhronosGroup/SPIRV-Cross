@@ -488,6 +488,8 @@ protected:
 
 	static std::string sanitize_underscores(const std::string &str);
 
+	bool can_use_io_location(spv::StorageClass storage);
+
 private:
 	void init()
 	{
