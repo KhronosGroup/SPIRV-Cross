@@ -1152,7 +1152,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 				can_use_varying_location = false;
 		}
 
-		if (get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput)
+		if ((get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput) ||
+		    (get_execution_model() == ExecutionModelFragment && var.storage == StorageClassOutput))
 		{
 			if (options.es && options.version < 300)
 				can_use_varying_location = false;
