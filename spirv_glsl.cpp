@@ -710,7 +710,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	//if (flags & (1ull << DecorationColMajor))
 	//    attr.push_back("column_major");
 
-	if (dec.decoration_flags & (1ull << DecorationLocation))
+	if ((dec.decoration_flags & (1ull << DecorationLocation)) != 0 && can_use_io_location(type.storage))
 		attr.push_back(join("location = ", dec.location));
 
 	// DecorationCPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
@@ -1107,6 +1107,31 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	return true;
 }
 
+bool CompilerGLSL::can_use_io_location(StorageClass storage)
+{
+	// Location specifiers are must have in SPIR-V, but they aren't really supported in earlier versions of GLSL.
+	// Be very explicit here about how to solve the issue.
+	if ((get_execution_model() != ExecutionModelVertex && storage == StorageClassInput) ||
+	    (get_execution_model() != ExecutionModelFragment && storage == StorageClassOutput))
+	{
+		if (!options.es && options.version < 410 && !options.separate_shader_objects)
+			return false;
+		else if (options.es && options.version < 310)
+			return false;
+	}
+
+	if ((get_execution_model() == ExecutionModelVertex && storage == StorageClassInput) ||
+	    (get_execution_model() == ExecutionModelFragment && storage == StorageClassOutput))
+	{
+		if (options.es && options.version < 300)
+			return false;
+		else if (!options.es && options.version < 330)
+			return false;
+	}
+
+	return true;
+}
+
 string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 {
 	// FIXME: Come up with a better solution for when to disable layouts.
@@ -1137,40 +1162,16 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("input_attachment_index = ", dec.input_attachment));
 	}
 
-	if (flags & (1ull << DecorationLocation))
+	if ((flags & (1ull << DecorationLocation)) != 0 && can_use_io_location(var.storage))
 	{
-		bool can_use_varying_location = true;
+		uint64_t combined_decoration = 0;
+		for (uint32_t i = 0; i < meta[type.self].members.size(); i++)
+			combined_decoration |= combined_decoration_for_member(type, i);
 
-		// Location specifiers are must have in SPIR-V, but they aren't really supported in earlier versions of GLSL.
-		// Be very explicit here about how to solve the issue.
-		if ((get_execution_model() != ExecutionModelVertex && var.storage == StorageClassInput) ||
-		    (get_execution_model() != ExecutionModelFragment && var.storage == StorageClassOutput))
-		{
-			if (!options.es && options.version < 410 && !options.separate_shader_objects)
-				can_use_varying_location = false;
-			else if (options.es && options.version < 310)
-				can_use_varying_location = false;
-		}
-
-		if (get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput)
-		{
-			if (options.es && options.version < 300)
-				can_use_varying_location = false;
-			else if (!options.es && options.version < 330)
-				can_use_varying_location = false;
-		}
-
-		if (can_use_varying_location)
-		{
-			uint64_t combined_decoration = 0;
-			for (uint32_t i = 0; i < meta[type.self].members.size(); i++)
-				combined_decoration |= combined_decoration_for_member(type, i);
-
-			// If our members have location decorations, we don't need to
-			// emit location decorations at the top as well (looks weird).
-			if ((combined_decoration & (1ull << DecorationLocation)) == 0)
-				attr.push_back(join("location = ", dec.location));
-		}
+		// If our members have location decorations, we don't need to
+		// emit location decorations at the top as well (looks weird).
+		if ((combined_decoration & (1ull << DecorationLocation)) == 0)
+			attr.push_back(join("location = ", dec.location));
 	}
 
 	// set = 0 is the default. Do not emit set = decoration in regular GLSL output, but
