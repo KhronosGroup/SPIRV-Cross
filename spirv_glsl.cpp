@@ -6279,7 +6279,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				statement("memoryBarrierShared();");
 			else if (mem)
 				statement("memoryBarrier();");
-
 		}
 		statement("barrier();");
 		break;
