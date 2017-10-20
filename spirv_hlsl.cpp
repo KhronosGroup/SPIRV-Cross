@@ -23,6 +23,78 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static string image_format_to_type(ImageFormat fmt)
+{
+	switch (fmt)
+	{
+	case ImageFormatR8:
+	case ImageFormatR16:
+		return "unorm float";
+	case ImageFormatRg8:
+	case ImageFormatRg16:
+		return "unorm float2";
+	case ImageFormatRgba8:
+	case ImageFormatRgba16:
+		return "unorm float4";
+	case ImageFormatRgb10A2:
+		return "unorm float4";
+
+	case ImageFormatR8Snorm:
+	case ImageFormatR16Snorm:
+		return "snorm float";
+	case ImageFormatRg8Snorm:
+	case ImageFormatRg16Snorm:
+		return "snorm float2";
+	case ImageFormatRgba8Snorm:
+	case ImageFormatRgba16Snorm:
+		return "snorm float4";
+
+	case ImageFormatR16f:
+	case ImageFormatR32f:
+		return "float";
+	case ImageFormatRg16f:
+	case ImageFormatRg32f:
+		return "float2";
+	case ImageFormatRgba16f:
+	case ImageFormatRgba32f:
+		return "float4";
+
+	case ImageFormatR11fG11fB10f:
+		return "float3";
+
+	case ImageFormatR8i:
+	case ImageFormatR16i:
+	case ImageFormatR32i:
+		return "int";
+	case ImageFormatRg8i:
+	case ImageFormatRg16i:
+	case ImageFormatRg32i:
+		return "int2";
+	case ImageFormatRgba8i:
+	case ImageFormatRgba16i:
+	case ImageFormatRgba32i:
+		return "int4";
+
+	case ImageFormatR8ui:
+	case ImageFormatR16ui:
+	case ImageFormatR32ui:
+		return "uint";
+	case ImageFormatRg8ui:
+	case ImageFormatRg16ui:
+	case ImageFormatRg32ui:
+		return "uint2";
+	case ImageFormatRgba8ui:
+	case ImageFormatRgba16ui:
+	case ImageFormatRgba32ui:
+		return "uint4";
+	case ImageFormatRgb10a2ui:
+		return "int4";
+
+	default:
+		SPIRV_CROSS_THROW("Unrecognized typed image format.");
+	}
+}
+
 // Returns true if an arithmetic operation does not change behavior depending on signedness.
 static bool opcode_is_sign_invariant(Op opcode)
 {
@@ -48,21 +120,21 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	const char *dim = nullptr;
-	const char *rw = "";
+	bool typed_load = false;
 	uint32_t components = 4;
 
 	switch (type.image.dim)
 	{
 	case Dim1D:
-		rw = type.image.sampled == 2 ? "RW" : "";
+		typed_load = type.image.sampled == 2;
 		dim = "1D";
 		break;
 	case Dim2D:
-		rw = type.image.sampled == 2 ? "RW" : "";
+		typed_load = type.image.sampled == 2;
 		dim = "2D";
 		break;
 	case Dim3D:
-		rw = type.image.sampled == 2 ? "RW" : "";
+		typed_load = type.image.sampled == 2;
 		dim = "3D";
 		break;
 	case DimCube:
@@ -76,10 +148,7 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 		if (type.image.sampled == 1)
 			return join("Buffer<", type_to_glsl(imagetype), components, ">");
 		else if (type.image.sampled == 2)
-		{
-			SPIRV_CROSS_THROW("RWBuffer is not implemented yet for HLSL.");
-			//return join("RWBuffer<", type_to_glsl(imagetype), components, ">");
-		}
+			return join("RWBuffer<", image_format_to_type(imagetype.image.format), components, ">");
 		else
 			SPIRV_CROSS_THROW("Sampler buffers must be either sampled or unsampled. Cannot deduce in runtime.");
 	case DimSubpassData:
@@ -90,7 +159,9 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 	}
 	const char *arrayed = type.image.arrayed ? "Array" : "";
 	const char *ms = type.image.ms ? "MS" : "";
-	return join(rw, "Texture", dim, ms, arrayed, "<", type_to_glsl(imagetype), components, ">");
+	const char *rw = typed_load ? "RW" : "";
+	return join(rw, "Texture", dim, ms, arrayed, "<",
+	            typed_load ? image_format_to_type(type.image.format) : join(type_to_glsl(imagetype), components), ">");
 }
 
 string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
@@ -2251,7 +2322,8 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 {
 	const char *atomic_op = nullptr;
-	auto value_expr = to_expression(ops[5]);
+	auto value_expr = to_expression(ops[op == OpAtomicCompareExchange ? 6 : 5]);
+
 	switch (op)
 	{
 	case OpAtomicISub:
@@ -2287,6 +2359,13 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 
 	case OpAtomicExchange:
 		atomic_op = "InterlockedExchange";
+		break;
+
+	case OpAtomicCompareExchange:
+		if (length < 8)
+			SPIRV_CROSS_THROW("Not enough data for opcode.");
+		atomic_op = "InterlockedCompareExchange";
+		value_expr = join(to_expression(ops[7]), ", ", value_expr);
 		break;
 
 	default:
@@ -2689,8 +2768,6 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpAtomicCompareExchange:
-		break;
-
 	case OpAtomicExchange:
 	case OpAtomicISub:
 	case OpAtomicSMin:

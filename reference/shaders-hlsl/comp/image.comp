@@ -1,0 +1,21 @@
+RWTexture2D<float> uImageIn : register(u0);
+RWTexture2D<float> uImageOut : register(u1);
+
+static uint3 gl_GlobalInvocationID;
+struct SPIRV_Cross_Input
+{
+    uint3 gl_GlobalInvocationID : SV_DispatchThreadID;
+};
+
+void comp_main()
+{
+    float4 v = uImageIn[int2(gl_GlobalInvocationID.xy)];
+    uImageOut[int2(gl_GlobalInvocationID.xy)] = v;
+}
+
+[numthreads(1, 1, 1)]
+void main(SPIRV_Cross_Input stage_input)
+{
+    gl_GlobalInvocationID = stage_input.gl_GlobalInvocationID;
+    comp_main();
+}
