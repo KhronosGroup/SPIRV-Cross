@@ -48,20 +48,26 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	const char *dim = nullptr;
+	const char *rw = "";
 	uint32_t components = 4;
 
 	switch (type.image.dim)
 	{
 	case Dim1D:
+		rw = type.image.sampled == 2 ? "RW" : "";
 		dim = "1D";
 		break;
 	case Dim2D:
+		rw = type.image.sampled == 2 ? "RW" : "";
 		dim = "2D";
 		break;
 	case Dim3D:
+		rw = type.image.sampled == 2 ? "RW" : "";
 		dim = "3D";
 		break;
 	case DimCube:
+		if (type.image.sampled == 2)
+			SPIRV_CROSS_THROW("RWTextureCube does not exist in HLSL.");
 		dim = "Cube";
 		break;
 	case DimRect:
@@ -84,7 +90,7 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 	}
 	const char *arrayed = type.image.arrayed ? "Array" : "";
 	const char *ms = type.image.ms ? "MS" : "";
-	return join("Texture", dim, ms, arrayed, "<", type_to_glsl(imagetype), components, ">");
+	return join(rw, "Texture", dim, ms, arrayed, "<", type_to_glsl(imagetype), components, ">");
 }
 
 string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
@@ -894,7 +900,19 @@ void CompilerHLSL::emit_resources()
 		if (var.storage != StorageClassOutput)
 		{
 			add_resource_name(var.self);
-			statement("static ", variable_decl(var), ";");
+
+			const char *storage = nullptr;
+			switch (var.storage)
+			{
+			case StorageClassWorkgroup:
+				storage = "groupshared";
+				break;
+
+			default:
+				storage = "static";
+				break;
+			}
+			statement(storage, " ", variable_decl(var), ";");
 			emitted = true;
 		}
 	}
@@ -1857,8 +1875,14 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	switch (type.basetype)
 	{
 	case SPIRType::SampledImage:
-	case SPIRType::Image:
 		space = "t"; // SRV
+		break;
+
+	case SPIRType::Image:
+		if (type.image.sampled == 2)
+			space = "u"; // UAV
+		else
+			space = "t"; // SRV
 		break;
 
 	case SPIRType::Sampler:
@@ -2224,6 +2248,83 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 	}
 }
 
+void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
+{
+	const char *atomic_op = nullptr;
+	auto value_expr = to_expression(ops[5]);
+	switch (op)
+	{
+	case OpAtomicISub:
+		atomic_op = "InterlockedAdd";
+		value_expr = join("-", enclose_expression(value_expr));
+		break;
+
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+		atomic_op = "InterlockedMin";
+		break;
+
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+		atomic_op = "InterlockedMax";
+		break;
+
+	case OpAtomicAnd:
+		atomic_op = "InterlockedAnd";
+		break;
+
+	case OpAtomicOr:
+		atomic_op = "InterlockedOr";
+		break;
+
+	case OpAtomicXor:
+		atomic_op = "InterlockedXor";
+		break;
+
+	case OpAtomicIAdd:
+		atomic_op = "InterlockedAdd";
+		break;
+
+	case OpAtomicExchange:
+		atomic_op = "InterlockedExchange";
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Unknown atomic opcode.");
+	}
+
+	if (length < 6)
+		SPIRV_CROSS_THROW("Not enough data for opcode.");
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+	forced_temporaries.insert(ops[1]);
+
+	auto &type = get<SPIRType>(result_type);
+	statement(variable_decl(type, to_name(id)), ";");
+
+	auto &data_type = expression_type(ops[2]);
+	auto *chain = maybe_get<SPIRAccessChain>(ops[2]);
+	SPIRType::BaseType expression_type;
+	if (data_type.storage == StorageClassImage || !chain)
+	{
+		statement(atomic_op, "(", to_expression(ops[2]), ", ", value_expr, ", ", to_name(id), ");");
+		expression_type = data_type.basetype;
+	}
+	else
+	{
+		// RWByteAddress buffer is always uint in its underlying type.
+		expression_type = SPIRType::UInt;
+		statement(chain->base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index,
+		          ", ", value_expr, ", ", to_name(id), ");");
+	}
+
+	auto expr = bitcast_expression(type, expression_type, to_name(id));
+	set<SPIRExpression>(id, expr, result_type, true);
+	flush_all_atomic_capable_variables();
+	register_read(ops[1], ops[2], should_forward(ops[2]));
+}
+
 void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -2545,6 +2646,63 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto &restype = get<SPIRType>(ops[0]);
 		auto expr = bitcast_expression(restype, SPIRType::UInt, to_name(id));
 		set<SPIRExpression>(id, expr, result_type, true);
+		break;
+	}
+
+	case OpImageRead:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto *var = maybe_get_backing_variable(ops[2]);
+		auto imgexpr = join(to_expression(ops[2]), "[", to_expression(ops[3]), "]");
+
+		if (var && var->forwardable)
+		{
+			auto &e = emit_op(result_type, id, imgexpr, true);
+			e.loaded_from = var->self;
+			var->dependees.push_back(id);
+		}
+		else
+			emit_op(result_type, id, imgexpr, false);
+		break;
+	}
+
+	case OpImageWrite:
+	{
+		auto *var = maybe_get_backing_variable(ops[0]);
+		statement(to_expression(ops[0]), "[", to_expression(ops[1]), "] = ", to_expression(ops[2]), ";");
+		if (var && variable_storage_is_aliased(*var))
+			flush_all_aliased_variables();
+		break;
+	}
+
+	case OpImageTexelPointer:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), "[", to_expression(ops[3]), "]"), result_type, true);
+
+		// When using the pointer, we need to know which variable it is actually loaded from.
+		auto *var = maybe_get_backing_variable(ops[2]);
+		e.loaded_from = var ? var->self : 0;
+		break;
+	}
+
+	case OpAtomicCompareExchange:
+		break;
+
+	case OpAtomicExchange:
+	case OpAtomicISub:
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+	case OpAtomicAnd:
+	case OpAtomicOr:
+	case OpAtomicXor:
+	case OpAtomicIAdd:
+	{
+		emit_atomic(ops, instruction.length, opcode);
 		break;
 	}
 
