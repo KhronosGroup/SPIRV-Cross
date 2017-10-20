@@ -2404,6 +2404,16 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 	register_read(ops[1], ops[2], should_forward(ops[2]));
 }
 
+const Instruction *CompilerHLSL::get_next_instruction_in_block(const Instruction &instr)
+{
+	// FIXME: This is kind of hacky. There should be a cleaner way.
+	uint32_t offset = uint32_t(&instr - current_emitting_block->ops.data());
+	if ((offset + 1) < current_emitting_block->ops.size())
+		return &current_emitting_block->ops[offset + 1];
+	else
+		return nullptr;
+}
+
 void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -2780,6 +2790,52 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicIAdd:
 	{
 		emit_atomic(ops, instruction.length, opcode);
+		break;
+	}
+
+	case OpMemoryBarrier:
+	{
+		uint32_t mem = get<SPIRConstant>(ops[1]).scalar();
+
+		// If the next instruction is OpControlBarrier and it does what we need, this opcode can be a noop.
+		const Instruction *next = get_next_instruction_in_block(instruction);
+		if (next && next->op == OpControlBarrier)
+		{
+			auto *next_ops = stream(*next);
+			uint32_t next_mem = get<SPIRConstant>(next_ops[2]).scalar();
+			next_mem |= MemorySemanticsWorkgroupMemoryMask; // Barrier in HLSL always implies GroupSync.
+			if ((next_mem & mem) == mem)
+				break;
+		}
+
+		// We cannot forward any loads beyond the memory barrier.
+		if (mem)
+			flush_all_active_variables();
+
+		if (mem == MemorySemanticsWorkgroupMemoryMask)
+			statement("GroupMemoryBarrier();");
+		else if (mem)
+			statement("DeviceMemoryBarrier();");
+		break;
+	}
+
+	case OpControlBarrier:
+	{
+		uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
+
+		// We cannot forward any loads beyond the memory barrier.
+		if (mem)
+			flush_all_active_variables();
+
+		if (mem == MemorySemanticsWorkgroupMemoryMask)
+			statement("GroupMemoryBarrierWithGroupSync();");
+		else if (mem)
+			statement("DeviceMemoryBarrierWithGroupSync();");
+		else
+		{
+			// There is no "GroupSync" standalone function.
+			statement("GroupMemoryBarrierWithGroupSync();");
+		}
 		break;
 	}
 

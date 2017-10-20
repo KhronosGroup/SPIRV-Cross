@@ -4888,6 +4888,14 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 	return true;
 }
 
+void CompilerGLSL::emit_block_instructions(const SPIRBlock &block)
+{
+	current_emitting_block = &block;
+	for (auto &op : block.ops)
+		emit_instruction(op);
+	current_emitting_block = nullptr;
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -6262,10 +6270,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (get_entry_point().model == ExecutionModelGLCompute)
 		{
 			uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
+
+			// We cannot forward any loads beyond the memory barrier.
+			if (mem)
+				flush_all_active_variables();
+
 			if (mem == MemorySemanticsWorkgroupMemoryMask)
 				statement("memoryBarrierShared();");
 			else if (mem)
 				statement("memoryBarrier();");
+
 		}
 		statement("barrier();");
 		break;
@@ -7338,8 +7352,7 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
 	{
 		propagate_loop_dominators(*block);
 		// Write out all instructions we have in this block.
-		for (auto &op : block->ops)
-			emit_instruction(op);
+		emit_block_instructions(*block);
 
 		// For plain branchless for/while continue blocks.
 		if (block->next_block)
@@ -7410,8 +7423,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
 		// We can then take the condition expression and create a for (; cond ; ) { body; } structure instead.
-		for (auto &op : block.ops)
-			emit_instruction(op);
+		emit_block_instructions(block);
 
 		bool condition_is_temporary = forced_temporaries.find(block.condition) == end(forced_temporaries);
 
@@ -7462,8 +7474,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
 		// We can then take the condition expression and create a for (; cond ; ) { body; } structure instead.
-		for (auto &op : child.ops)
-			emit_instruction(op);
+		emit_block_instructions(child);
 
 		bool condition_is_temporary = forced_temporaries.find(child.condition) == end(forced_temporaries);
 
@@ -7569,8 +7580,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		statement("do");
 		begin_scope();
-		for (auto &op : block.ops)
-			emit_instruction(op);
+
+		emit_block_instructions(block);
 	}
 	else if (block.merge == SPIRBlock::MergeLoop)
 	{
@@ -7582,13 +7593,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		statement("for (;;)");
 		begin_scope();
-		for (auto &op : block.ops)
-			emit_instruction(op);
+
+		emit_block_instructions(block);
 	}
 	else
 	{
-		for (auto &op : block.ops)
-			emit_instruction(op);
+		emit_block_instructions(block);
 	}
 
 	// If we didn't successfully emit a loop header and we had loop variable candidates, we have a problem
