@@ -1,6 +1,6 @@
-const uint _5 = 9u;
-const uint _6 = 4u;
-const uint3 gl_WorkGroupSize = uint3(_5, 20u, _6);
+static const uint _5 = 9u;
+static const uint _6 = 4u;
+static const uint3 gl_WorkGroupSize = uint3(_5, 20u, _6);
 
 RWByteAddressBuffer _4 : register(u0);
 

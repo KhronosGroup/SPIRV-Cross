@@ -1,4 +1,4 @@
-const uint3 gl_WorkGroupSize = uint3(8u, 4u, 2u);
+static const uint3 gl_WorkGroupSize = uint3(8u, 4u, 2u);
 
 static uint3 gl_WorkGroupID;
 static uint3 gl_LocalInvocationID;
