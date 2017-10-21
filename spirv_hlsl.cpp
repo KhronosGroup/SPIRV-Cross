@@ -644,14 +644,15 @@ void CompilerHLSL::emit_specialization_constants()
 			auto &type = get<SPIRType>(c.constant_type);
 			auto name = to_name(c.self);
 
-			statement("const ", variable_decl(type, name), " = ", constant_expression(c), ";");
+			statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
 	}
 
 	if (workgroup_size_id)
 	{
-		statement("const uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+		statement("static const uint3 gl_WorkGroupSize = ",
+		          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
 		emitted = true;
 	}
 

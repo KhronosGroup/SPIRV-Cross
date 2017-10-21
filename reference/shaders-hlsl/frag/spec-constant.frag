@@ -1,11 +1,11 @@
-const float a = 1.0f;
-const float b = 2.0f;
-const int c = 3;
-const int d = 4;
-const uint e = 5u;
-const uint f = 6u;
-const bool g = false;
-const bool h = true;
+static const float a = 1.0f;
+static const float b = 2.0f;
+static const int c = 3;
+static const int d = 4;
+static const uint e = 5u;
+static const uint f = 6u;
+static const bool g = false;
+static const bool h = true;
 
 struct Foo
 {
