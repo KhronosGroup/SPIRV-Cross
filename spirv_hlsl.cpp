@@ -23,6 +23,134 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static unsigned image_format_to_components(ImageFormat fmt)
+{
+	switch (fmt)
+	{
+	case ImageFormatR8:
+	case ImageFormatR16:
+	case ImageFormatR8Snorm:
+	case ImageFormatR16Snorm:
+	case ImageFormatR16f:
+	case ImageFormatR32f:
+	case ImageFormatR8i:
+	case ImageFormatR16i:
+	case ImageFormatR32i:
+	case ImageFormatR8ui:
+	case ImageFormatR16ui:
+	case ImageFormatR32ui:
+		return 1;
+
+	case ImageFormatRg8:
+	case ImageFormatRg16:
+	case ImageFormatRg8Snorm:
+	case ImageFormatRg16Snorm:
+	case ImageFormatRg16f:
+	case ImageFormatRg32f:
+	case ImageFormatRg8i:
+	case ImageFormatRg16i:
+	case ImageFormatRg32i:
+	case ImageFormatRg8ui:
+	case ImageFormatRg16ui:
+	case ImageFormatRg32ui:
+		return 2;
+
+	case ImageFormatR11fG11fB10f:
+		return 3;
+
+	case ImageFormatRgba8:
+	case ImageFormatRgba16:
+	case ImageFormatRgb10A2:
+	case ImageFormatRgba8Snorm:
+	case ImageFormatRgba16Snorm:
+	case ImageFormatRgba16f:
+	case ImageFormatRgba32f:
+	case ImageFormatRgba8i:
+	case ImageFormatRgba16i:
+	case ImageFormatRgba32i:
+	case ImageFormatRgba8ui:
+	case ImageFormatRgba16ui:
+	case ImageFormatRgba32ui:
+	case ImageFormatRgb10a2ui:
+		return 4;
+
+	default:
+		SPIRV_CROSS_THROW("Unrecognized typed image format.");
+	}
+}
+
+static string image_format_to_type(ImageFormat fmt)
+{
+	switch (fmt)
+	{
+	case ImageFormatR8:
+	case ImageFormatR16:
+		return "unorm float";
+	case ImageFormatRg8:
+	case ImageFormatRg16:
+		return "unorm float2";
+	case ImageFormatRgba8:
+	case ImageFormatRgba16:
+		return "unorm float4";
+	case ImageFormatRgb10A2:
+		return "unorm float4";
+
+	case ImageFormatR8Snorm:
+	case ImageFormatR16Snorm:
+		return "snorm float";
+	case ImageFormatRg8Snorm:
+	case ImageFormatRg16Snorm:
+		return "snorm float2";
+	case ImageFormatRgba8Snorm:
+	case ImageFormatRgba16Snorm:
+		return "snorm float4";
+
+	case ImageFormatR16f:
+	case ImageFormatR32f:
+		return "float";
+	case ImageFormatRg16f:
+	case ImageFormatRg32f:
+		return "float2";
+	case ImageFormatRgba16f:
+	case ImageFormatRgba32f:
+		return "float4";
+
+	case ImageFormatR11fG11fB10f:
+		return "float3";
+
+	case ImageFormatR8i:
+	case ImageFormatR16i:
+	case ImageFormatR32i:
+		return "int";
+	case ImageFormatRg8i:
+	case ImageFormatRg16i:
+	case ImageFormatRg32i:
+		return "int2";
+	case ImageFormatRgba8i:
+	case ImageFormatRgba16i:
+	case ImageFormatRgba32i:
+		return "int4";
+
+	case ImageFormatR8ui:
+	case ImageFormatR16ui:
+	case ImageFormatR32ui:
+		return "uint";
+	case ImageFormatRg8ui:
+	case ImageFormatRg16ui:
+	case ImageFormatRg32ui:
+		return "uint2";
+	case ImageFormatRgba8ui:
+	case ImageFormatRgba16ui:
+	case ImageFormatRgba32ui:
+		return "uint4";
+	case ImageFormatRgb10a2ui:
+		return "int4";
+
+	default:
+		SPIRV_CROSS_THROW("Unrecognized typed image format.");
+	}
+}
+
 // Returns true if an arithmetic operation does not change behavior depending on signedness.
 static bool opcode_is_sign_invariant(Op opcode)
 {
@@ -48,20 +176,26 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	const char *dim = nullptr;
+	bool typed_load = false;
 	uint32_t components = 4;
 
 	switch (type.image.dim)
 	{
 	case Dim1D:
+		typed_load = type.image.sampled == 2;
 		dim = "1D";
 		break;
 	case Dim2D:
+		typed_load = type.image.sampled == 2;
 		dim = "2D";
 		break;
 	case Dim3D:
+		typed_load = type.image.sampled == 2;
 		dim = "3D";
 		break;
 	case DimCube:
+		if (type.image.sampled == 2)
+			SPIRV_CROSS_THROW("RWTextureCube does not exist in HLSL.");
 		dim = "Cube";
 		break;
 	case DimRect:
@@ -70,10 +204,7 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 		if (type.image.sampled == 1)
 			return join("Buffer<", type_to_glsl(imagetype), components, ">");
 		else if (type.image.sampled == 2)
-		{
-			SPIRV_CROSS_THROW("RWBuffer is not implemented yet for HLSL.");
-			//return join("RWBuffer<", type_to_glsl(imagetype), components, ">");
-		}
+			return join("RWBuffer<", image_format_to_type(type.image.format), ">");
 		else
 			SPIRV_CROSS_THROW("Sampler buffers must be either sampled or unsampled. Cannot deduce in runtime.");
 	case DimSubpassData:
@@ -84,7 +215,9 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 	}
 	const char *arrayed = type.image.arrayed ? "Array" : "";
 	const char *ms = type.image.ms ? "MS" : "";
-	return join("Texture", dim, ms, arrayed, "<", type_to_glsl(imagetype), components, ">");
+	const char *rw = typed_load ? "RW" : "";
+	return join(rw, "Texture", dim, ms, arrayed, "<",
+	            typed_load ? image_format_to_type(type.image.format) : join(type_to_glsl(imagetype), components), ">");
 }
 
 string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
@@ -894,7 +1027,19 @@ void CompilerHLSL::emit_resources()
 		if (var.storage != StorageClassOutput)
 		{
 			add_resource_name(var.self);
-			statement("static ", variable_decl(var), ";");
+
+			const char *storage = nullptr;
+			switch (var.storage)
+			{
+			case StorageClassWorkgroup:
+				storage = "groupshared";
+				break;
+
+			default:
+				storage = "static";
+				break;
+			}
+			statement(storage, " ", variable_decl(var), ";");
 			emitted = true;
 		}
 	}
@@ -1857,8 +2002,14 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	switch (type.basetype)
 	{
 	case SPIRType::SampledImage:
-	case SPIRType::Image:
 		space = "t"; // SRV
+		break;
+
+	case SPIRType::Image:
+		if (type.image.sampled == 2)
+			space = "u"; // UAV
+		else
+			space = "t"; // SRV
 		break;
 
 	case SPIRType::Sampler:
@@ -2224,6 +2375,101 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 	}
 }
 
+void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
+{
+	const char *atomic_op = nullptr;
+	auto value_expr = to_expression(ops[op == OpAtomicCompareExchange ? 6 : 5]);
+
+	switch (op)
+	{
+	case OpAtomicISub:
+		atomic_op = "InterlockedAdd";
+		value_expr = join("-", enclose_expression(value_expr));
+		break;
+
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+		atomic_op = "InterlockedMin";
+		break;
+
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+		atomic_op = "InterlockedMax";
+		break;
+
+	case OpAtomicAnd:
+		atomic_op = "InterlockedAnd";
+		break;
+
+	case OpAtomicOr:
+		atomic_op = "InterlockedOr";
+		break;
+
+	case OpAtomicXor:
+		atomic_op = "InterlockedXor";
+		break;
+
+	case OpAtomicIAdd:
+		atomic_op = "InterlockedAdd";
+		break;
+
+	case OpAtomicExchange:
+		atomic_op = "InterlockedExchange";
+		break;
+
+	case OpAtomicCompareExchange:
+		if (length < 8)
+			SPIRV_CROSS_THROW("Not enough data for opcode.");
+		atomic_op = "InterlockedCompareExchange";
+		value_expr = join(to_expression(ops[7]), ", ", value_expr);
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Unknown atomic opcode.");
+	}
+
+	if (length < 6)
+		SPIRV_CROSS_THROW("Not enough data for opcode.");
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+	forced_temporaries.insert(ops[1]);
+
+	auto &type = get<SPIRType>(result_type);
+	statement(variable_decl(type, to_name(id)), ";");
+
+	auto &data_type = expression_type(ops[2]);
+	auto *chain = maybe_get<SPIRAccessChain>(ops[2]);
+	SPIRType::BaseType expression_type;
+	if (data_type.storage == StorageClassImage || !chain)
+	{
+		statement(atomic_op, "(", to_expression(ops[2]), ", ", value_expr, ", ", to_name(id), ");");
+		expression_type = data_type.basetype;
+	}
+	else
+	{
+		// RWByteAddress buffer is always uint in its underlying type.
+		expression_type = SPIRType::UInt;
+		statement(chain->base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ", value_expr, ", ",
+		          to_name(id), ");");
+	}
+
+	auto expr = bitcast_expression(type, expression_type, to_name(id));
+	set<SPIRExpression>(id, expr, result_type, true);
+	flush_all_atomic_capable_variables();
+	register_read(ops[1], ops[2], should_forward(ops[2]));
+}
+
+const Instruction *CompilerHLSL::get_next_instruction_in_block(const Instruction &instr)
+{
+	// FIXME: This is kind of hacky. There should be a cleaner way.
+	uint32_t offset = uint32_t(&instr - current_emitting_block->ops.data());
+	if ((offset + 1) < current_emitting_block->ops.size())
+		return &current_emitting_block->ops[offset + 1];
+	else
+		return nullptr;
+}
+
 void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -2545,6 +2791,126 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto &restype = get<SPIRType>(ops[0]);
 		auto expr = bitcast_expression(restype, SPIRType::UInt, to_name(id));
 		set<SPIRExpression>(id, expr, result_type, true);
+		break;
+	}
+
+	case OpImageRead:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto *var = maybe_get_backing_variable(ops[2]);
+		auto imgexpr = join(to_expression(ops[2]), "[", to_expression(ops[3]), "]");
+
+		// The underlying image type in HLSL depends on the image format, unlike GLSL, where all images are "vec4",
+		// except that the underlying type changes how the data is interpreted.
+		if (var)
+			imgexpr = remap_swizzle(get<SPIRType>(result_type),
+			                        image_format_to_components(get<SPIRType>(var->basetype).image.format), imgexpr);
+
+		if (var && var->forwardable)
+		{
+			auto &e = emit_op(result_type, id, imgexpr, true);
+			e.loaded_from = var->self;
+			var->dependees.push_back(id);
+		}
+		else
+			emit_op(result_type, id, imgexpr, false);
+		break;
+	}
+
+	case OpImageWrite:
+	{
+		auto *var = maybe_get_backing_variable(ops[0]);
+
+		// The underlying image type in HLSL depends on the image format, unlike GLSL, where all images are "vec4",
+		// except that the underlying type changes how the data is interpreted.
+		auto value_expr = to_expression(ops[2]);
+		if (var)
+		{
+			auto &type = get<SPIRType>(var->basetype);
+			auto narrowed_type = get<SPIRType>(type.image.type);
+			narrowed_type.vecsize = image_format_to_components(type.image.format);
+			value_expr = remap_swizzle(narrowed_type, expression_type(ops[2]).vecsize, value_expr);
+		}
+
+		statement(to_expression(ops[0]), "[", to_expression(ops[1]), "] = ", value_expr, ";");
+		if (var && variable_storage_is_aliased(*var))
+			flush_all_aliased_variables();
+		break;
+	}
+
+	case OpImageTexelPointer:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto &e =
+		    set<SPIRExpression>(id, join(to_expression(ops[2]), "[", to_expression(ops[3]), "]"), result_type, true);
+
+		// When using the pointer, we need to know which variable it is actually loaded from.
+		auto *var = maybe_get_backing_variable(ops[2]);
+		e.loaded_from = var ? var->self : 0;
+		break;
+	}
+
+	case OpAtomicCompareExchange:
+	case OpAtomicExchange:
+	case OpAtomicISub:
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+	case OpAtomicAnd:
+	case OpAtomicOr:
+	case OpAtomicXor:
+	case OpAtomicIAdd:
+	{
+		emit_atomic(ops, instruction.length, opcode);
+		break;
+	}
+
+	case OpMemoryBarrier:
+	{
+		uint32_t mem = get<SPIRConstant>(ops[1]).scalar();
+
+		// If the next instruction is OpControlBarrier and it does what we need, this opcode can be a noop.
+		const Instruction *next = get_next_instruction_in_block(instruction);
+		if (next && next->op == OpControlBarrier)
+		{
+			auto *next_ops = stream(*next);
+			uint32_t next_mem = get<SPIRConstant>(next_ops[2]).scalar();
+			next_mem |= MemorySemanticsWorkgroupMemoryMask; // Barrier in HLSL always implies GroupSync.
+			if ((next_mem & mem) == mem)
+				break;
+		}
+
+		// We cannot forward any loads beyond the memory barrier.
+		if (mem)
+			flush_all_active_variables();
+
+		if (mem == MemorySemanticsWorkgroupMemoryMask)
+			statement("GroupMemoryBarrier();");
+		else if (mem)
+			statement("DeviceMemoryBarrier();");
+		break;
+	}
+
+	case OpControlBarrier:
+	{
+		uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
+
+		// We cannot forward any loads beyond the memory barrier.
+		if (mem)
+			flush_all_active_variables();
+
+		if (mem == MemorySemanticsWorkgroupMemoryMask)
+			statement("GroupMemoryBarrierWithGroupSync();");
+		else if (mem)
+			statement("DeviceMemoryBarrierWithGroupSync();");
+		else
+		{
+			// There is no "GroupSync" standalone function.
+			statement("GroupMemoryBarrierWithGroupSync();");
+		}
 		break;
 	}
 

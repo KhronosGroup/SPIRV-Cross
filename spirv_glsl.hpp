@@ -181,7 +181,12 @@ protected:
 
 	// Virtualize methods which need to be overridden by subclass targets like C++ and such.
 	virtual void emit_function_prototype(SPIRFunction &func, uint64_t return_flags);
+
+	// Kinda ugly way to let opcodes peek at their neighbor instructions for trivial peephole scenarios.
+	const SPIRBlock *current_emitting_block = nullptr;
+
 	virtual void emit_instruction(const Instruction &instr);
+	void emit_block_instructions(const SPIRBlock &block);
 	virtual void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                          uint32_t count);
 	virtual void emit_header();
@@ -376,7 +381,7 @@ protected:
 	                                                               uint32_t *matrix_stride = nullptr);
 
 	const char *index_to_swizzle(uint32_t index);
-	std::string remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr);
+	std::string remap_swizzle(const SPIRType &result_type, uint32_t input_components, const std::string &expr);
 	std::string declare_temporary(uint32_t type, uint32_t id);
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id);

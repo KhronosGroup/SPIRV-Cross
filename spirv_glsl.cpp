@@ -1704,17 +1704,15 @@ void CompilerGLSL::replace_fragment_outputs()
 	}
 }
 
-string CompilerGLSL::remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr)
+string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_components, const string &expr)
 {
-	auto &out_type = get<SPIRType>(result_type);
-
 	if (out_type.vecsize == input_components)
-		return to_expression(expr);
+		return expr;
 	else if (input_components == 1)
-		return join(type_to_glsl(out_type), "(", to_expression(expr), ")");
+		return join(type_to_glsl(out_type), "(", expr, ")");
 	else
 	{
-		auto e = to_enclosed_expression(expr) + ".";
+		auto e = enclose_expression(expr) + ".";
 		// Just clamp the swizzle index if we have more outputs than inputs.
 		for (uint32_t c = 0; c < out_type.vecsize; c++)
 			e += index_to_swizzle(min(c, input_components - 1));
@@ -4888,6 +4886,14 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 	return true;
 }
 
+void CompilerGLSL::emit_block_instructions(const SPIRBlock &block)
+{
+	current_emitting_block = &block;
+	for (auto &op : block.ops)
+		emit_instruction(op);
+	current_emitting_block = nullptr;
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -6095,14 +6101,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				// since ImageRead always returns 4-component vectors and the backing type is opaque.
 				if (!var->remapped_components)
 					SPIRV_CROSS_THROW("subpassInput was remapped, but remap_components is not set correctly.");
-				imgexpr = remap_swizzle(result_type, var->remapped_components, ops[2]);
+				imgexpr = remap_swizzle(get<SPIRType>(result_type), var->remapped_components, to_expression(ops[2]));
 			}
 			else
 			{
 				// PLS input could have different number of components than what the SPIR expects, swizzle to
 				// the appropriate vector size.
 				uint32_t components = pls_format_to_components(itr->format);
-				imgexpr = remap_swizzle(result_type, components, ops[2]);
+				imgexpr = remap_swizzle(get<SPIRType>(result_type), components, to_expression(ops[2]));
 			}
 			pure = true;
 		}
@@ -6143,6 +6149,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
 				}
 			}
+			imgexpr = remap_swizzle(get<SPIRType>(result_type), 4, imgexpr);
 			pure = true;
 		}
 		else
@@ -6160,6 +6167,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 			else
 				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ")");
+
+			imgexpr = remap_swizzle(get<SPIRType>(result_type), 4, imgexpr);
 			pure = false;
 		}
 
@@ -6208,6 +6217,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		auto &type = expression_type(ops[0]);
+		auto &value_type = expression_type(ops[2]);
+		auto store_type = value_type;
+		store_type.vecsize = 4;
+
 		if (type.image.ms)
 		{
 			uint32_t operands = ops[3];
@@ -6215,11 +6228,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				SPIRV_CROSS_THROW("Multisampled image used in OpImageWrite, but unexpected operand mask was used.");
 			uint32_t samples = ops[4];
 			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(samples),
-			          ", ", to_expression(ops[2]), ");");
+			          ", ", remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 		}
 		else
-			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]),
-			          ");");
+			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ",
+			          remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 
 		if (var && variable_storage_is_aliased(*var))
 			flush_all_aliased_variables();
@@ -6262,6 +6275,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (get_entry_point().model == ExecutionModelGLCompute)
 		{
 			uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
+
+			// We cannot forward any loads beyond the memory barrier.
+			if (mem)
+				flush_all_active_variables();
+
 			if (mem == MemorySemanticsWorkgroupMemoryMask)
 				statement("memoryBarrierShared();");
 			else if (mem)
@@ -7338,8 +7356,7 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
 	{
 		propagate_loop_dominators(*block);
 		// Write out all instructions we have in this block.
-		for (auto &op : block->ops)
-			emit_instruction(op);
+		emit_block_instructions(*block);
 
 		// For plain branchless for/while continue blocks.
 		if (block->next_block)
@@ -7410,8 +7427,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
 		// We can then take the condition expression and create a for (; cond ; ) { body; } structure instead.
-		for (auto &op : block.ops)
-			emit_instruction(op);
+		emit_block_instructions(block);
 
 		bool condition_is_temporary = forced_temporaries.find(block.condition) == end(forced_temporaries);
 
@@ -7462,8 +7478,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
 		// We can then take the condition expression and create a for (; cond ; ) { body; } structure instead.
-		for (auto &op : child.ops)
-			emit_instruction(op);
+		emit_block_instructions(child);
 
 		bool condition_is_temporary = forced_temporaries.find(child.condition) == end(forced_temporaries);
 
@@ -7569,8 +7584,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		statement("do");
 		begin_scope();
-		for (auto &op : block.ops)
-			emit_instruction(op);
+
+		emit_block_instructions(block);
 	}
 	else if (block.merge == SPIRBlock::MergeLoop)
 	{
@@ -7582,13 +7597,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		statement("for (;;)");
 		begin_scope();
-		for (auto &op : block.ops)
-			emit_instruction(op);
+
+		emit_block_instructions(block);
 	}
 	else
 	{
-		for (auto &op : block.ops)
-			emit_instruction(op);
+		emit_block_instructions(block);
 	}
 
 	// If we didn't successfully emit a loop header and we had loop variable candidates, we have a problem
