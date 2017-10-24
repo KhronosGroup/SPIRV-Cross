@@ -1,4 +1,4 @@
-const uint3 gl_WorkGroupSize = uint3(4u, 1u, 1u);
+static const uint3 gl_WorkGroupSize = uint3(4u, 1u, 1u);
 
 ByteAddressBuffer _22 : register(u0);
 RWByteAddressBuffer _44 : register(u1);
