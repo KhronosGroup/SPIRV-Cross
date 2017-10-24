@@ -1704,17 +1704,15 @@ void CompilerGLSL::replace_fragment_outputs()
 	}
 }
 
-string CompilerGLSL::remap_swizzle(uint32_t result_type, uint32_t input_components, uint32_t expr)
+string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_components, const string &expr)
 {
-	auto &out_type = get<SPIRType>(result_type);
-
 	if (out_type.vecsize == input_components)
-		return to_expression(expr);
+		return expr;
 	else if (input_components == 1)
-		return join(type_to_glsl(out_type), "(", to_expression(expr), ")");
+		return join(type_to_glsl(out_type), "(", expr, ")");
 	else
 	{
-		auto e = to_enclosed_expression(expr) + ".";
+		auto e = enclose_expression(expr) + ".";
 		// Just clamp the swizzle index if we have more outputs than inputs.
 		for (uint32_t c = 0; c < out_type.vecsize; c++)
 			e += index_to_swizzle(min(c, input_components - 1));
@@ -6103,14 +6101,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				// since ImageRead always returns 4-component vectors and the backing type is opaque.
 				if (!var->remapped_components)
 					SPIRV_CROSS_THROW("subpassInput was remapped, but remap_components is not set correctly.");
-				imgexpr = remap_swizzle(result_type, var->remapped_components, ops[2]);
+				imgexpr = remap_swizzle(get<SPIRType>(result_type), var->remapped_components, to_expression(ops[2]));
 			}
 			else
 			{
 				// PLS input could have different number of components than what the SPIR expects, swizzle to
 				// the appropriate vector size.
 				uint32_t components = pls_format_to_components(itr->format);
-				imgexpr = remap_swizzle(result_type, components, ops[2]);
+				imgexpr = remap_swizzle(get<SPIRType>(result_type), components, to_expression(ops[2]));
 			}
 			pure = true;
 		}
@@ -6151,6 +6149,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
 				}
 			}
+			imgexpr = remap_swizzle(get<SPIRType>(result_type), 4, imgexpr);
 			pure = true;
 		}
 		else
@@ -6168,6 +6167,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 			else
 				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ")");
+
+			imgexpr = remap_swizzle(get<SPIRType>(result_type), 4, imgexpr);
 			pure = false;
 		}
 
@@ -6216,6 +6217,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		auto &type = expression_type(ops[0]);
+		auto &value_type = expression_type(ops[2]);
+		auto store_type = value_type;
+		store_type.vecsize = 4;
+
 		if (type.image.ms)
 		{
 			uint32_t operands = ops[3];
@@ -6223,11 +6228,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				SPIRV_CROSS_THROW("Multisampled image used in OpImageWrite, but unexpected operand mask was used.");
 			uint32_t samples = ops[4];
 			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(samples),
-			          ", ", to_expression(ops[2]), ");");
+			          ", ", remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 		}
 		else
-			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]),
-			          ");");
+			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ",
+			          remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 
 		if (var && variable_storage_is_aliased(*var))
 			flush_all_aliased_variables();
