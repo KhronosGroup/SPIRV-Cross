@@ -291,7 +291,7 @@ struct SPIRType : IVariant
 
 	std::vector<uint32_t> member_types;
 
-	struct Image
+	struct ImageType
 	{
 		uint32_t type;
 		spv::Dim dim;
