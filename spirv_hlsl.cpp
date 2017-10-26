@@ -2230,15 +2230,21 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 	else if (type.columns == 1)
 	{
 		// Strided load since we are loading a column from a row-major matrix.
-		load_expr = type_to_glsl(target_type);
-		load_expr += "(";
+		if (type.vecsize > 1)
+		{
+			load_expr = type_to_glsl(target_type);
+			load_expr += "(";
+		}
+
 		for (uint32_t r = 0; r < type.vecsize; r++)
 		{
 			load_expr += join(chain.base, ".Load(", chain.dynamic_index, chain.static_index + r * chain.matrix_stride, ")");
 			if (r + 1 < type.vecsize)
 				load_expr += ", ";
 		}
-		load_expr += ")";
+
+		if (type.vecsize > 1)
+			load_expr += ")";
 	}
 	else if (!chain.row_major_matrix)
 	{
@@ -2316,6 +2322,12 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		auto load_expr = read_access_chain(*chain);
 
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
+
+		// Do not forward complex load sequences like matrices, structs and arrays.
+		auto &type = get<SPIRType>(result_type);
+		if (type.columns > 1 || !type.array.empty() || type.basetype == SPIRType::Struct)
+			forward = false;
+
 		auto &e = emit_op(result_type, id, load_expr, forward, true);
 		e.need_transpose = false;
 		register_read(id, ptr, forward);
@@ -2372,7 +2384,13 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 		// Strided store.
 		for (uint32_t r = 0; r < type.vecsize; r++)
 		{
-			auto store_expr = join(to_enclosed_expression(value), ".", index_to_swizzle(r));
+			auto store_expr = to_enclosed_expression(value);
+			if (type.vecsize > 1)
+			{
+				store_expr += ".";
+				store_expr += index_to_swizzle(r);
+			}
+
 			auto bitcast_op = bitcast_glsl_op(target_type, type);
 			if (!bitcast_op.empty())
 				store_expr = join(bitcast_op, "(", store_expr, ")");
