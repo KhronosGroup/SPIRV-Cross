@@ -784,8 +784,8 @@ void CompilerHLSL::emit_specialization_constants()
 
 	if (workgroup_size_id)
 	{
-		statement("static const uint3 gl_WorkGroupSize = ",
-		          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+		statement("static const uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)),
+		          ";");
 		emitted = true;
 	}
 
@@ -2238,7 +2238,8 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 
 		for (uint32_t r = 0; r < type.vecsize; r++)
 		{
-			load_expr += join(chain.base, ".Load(", chain.dynamic_index, chain.static_index + r * chain.matrix_stride, ")");
+			load_expr +=
+			    join(chain.base, ".Load(", chain.dynamic_index, chain.static_index + r * chain.matrix_stride, ")");
 			if (r + 1 < type.vecsize)
 				load_expr += ", ";
 		}
@@ -2274,7 +2275,8 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 		load_expr += "(";
 		for (uint32_t c = 0; c < type.columns; c++)
 		{
-			load_expr += join(chain.base, ".", load_op, "(", chain.dynamic_index, chain.static_index + c * chain.matrix_stride, ")");
+			load_expr += join(chain.base, ".", load_op, "(", chain.dynamic_index,
+			                  chain.static_index + c * chain.matrix_stride, ")");
 			if (c + 1 < type.columns)
 				load_expr += ", ";
 		}
@@ -2394,7 +2396,8 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 			auto bitcast_op = bitcast_glsl_op(target_type, type);
 			if (!bitcast_op.empty())
 				store_expr = join(bitcast_op, "(", store_expr, ")");
-			statement(chain.base, ".Store(", chain.dynamic_index, chain.static_index + chain.matrix_stride * r, ", ", store_expr, ");");
+			statement(chain.base, ".Store(", chain.dynamic_index, chain.static_index + chain.matrix_stride * r, ", ",
+			          store_expr, ");");
 		}
 	}
 	else if (!chain.row_major_matrix)
@@ -2424,7 +2427,8 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 			auto bitcast_op = bitcast_glsl_op(target_type, type);
 			if (!bitcast_op.empty())
 				store_expr = join(bitcast_op, "(", store_expr, ")");
-			statement(chain.base, ".", store_op, "(", chain.dynamic_index, chain.static_index + c * chain.matrix_stride, ", ", store_expr, ");");
+			statement(chain.base, ".", store_op, "(", chain.dynamic_index, chain.static_index + c * chain.matrix_stride,
+			          ", ", store_expr, ");");
 		}
 	}
 	else
