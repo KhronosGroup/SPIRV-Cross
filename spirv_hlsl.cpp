@@ -2198,6 +2198,9 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 	if (type.width != 32)
 		SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
 
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Reading arrays from ByteAddressBuffer not yet supported.");
+
 	string load_expr;
 
 	// Load a vector or scalar.
@@ -2278,12 +2281,12 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 
 		load_expr = type_to_glsl(target_type);
 		load_expr += "(";
-		for (uint32_t r = 0; r < type.vecsize; r++)
+		for (uint32_t c = 0; c < type.columns; c++)
 		{
-			for (uint32_t c = 0; c < type.columns; c++)
+			for (uint32_t r = 0; r < type.vecsize; r++)
 			{
 				load_expr += join(chain.base, ".Load(", chain.dynamic_index,
-				                  chain.static_index + r * (type.width / 8) + c * chain.matrix_stride, ")");
+				                  chain.static_index + c * (type.width / 8) + r * chain.matrix_stride, ")");
 
 				if ((r + 1 < type.vecsize) || (c + 1 < type.columns))
 					load_expr += ", ";
@@ -2321,19 +2324,24 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		CompilerGLSL::emit_instruction(instruction);
 }
 
-void CompilerHLSL::emit_store(const Instruction &instruction)
+void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t value)
 {
-	auto ops = stream(instruction);
-	auto *chain = maybe_get<SPIRAccessChain>(ops[0]);
-	if (chain)
+	auto &type = get<SPIRType>(chain.basetype);
+
+	SPIRType target_type;
+	target_type.basetype = SPIRType::UInt;
+	target_type.vecsize = type.vecsize;
+	target_type.columns = type.columns;
+
+	if (type.basetype == SPIRType::Struct)
+		SPIRV_CROSS_THROW("Writing structs to RWByteAddressBuffer not yet supported.");
+	if (type.width != 32)
+		SPIRV_CROSS_THROW("Writing types other than 32-bit to RWByteAddressBuffer not yet supported.");
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Reading arrays from ByteAddressBuffer not yet supported.");
+
+	if (type.columns == 1 && !chain.row_major_matrix)
 	{
-		auto &type = expression_type(ops[0]);
-
-		SPIRType target_type;
-		target_type.basetype = SPIRType::UInt;
-		target_type.vecsize = type.vecsize;
-		target_type.columns = type.columns;
-
 		const char *store_op = nullptr;
 		switch (type.vecsize)
 		{
@@ -2353,20 +2361,79 @@ void CompilerHLSL::emit_store(const Instruction &instruction)
 			SPIRV_CROSS_THROW("Unknown vector size.");
 		}
 
-		if (type.columns != 1)
-			SPIRV_CROSS_THROW("Writing matrices to RWByteAddressBuffer not yet supported.");
-		if (type.basetype == SPIRType::Struct)
-			SPIRV_CROSS_THROW("Writing structs to RWByteAddressBuffer not yet supported.");
-		if (type.width != 32)
-			SPIRV_CROSS_THROW("Writing types other than 32-bit to RWByteAddressBuffer not yet supported.");
-
-		auto store_expr = to_expression(ops[1]);
+		auto store_expr = to_expression(value);
 		auto bitcast_op = bitcast_glsl_op(target_type, type);
 		if (!bitcast_op.empty())
 			store_expr = join(bitcast_op, "(", store_expr, ")");
-		statement(chain->base, ".", store_op, "(", chain->dynamic_index, chain->static_index, ", ", store_expr, ");");
-		register_write(ops[0]);
+		statement(chain.base, ".", store_op, "(", chain.dynamic_index, chain.static_index, ", ", store_expr, ");");
 	}
+	else if (type.columns == 1)
+	{
+		// Strided store.
+		for (uint32_t r = 0; r < type.vecsize; r++)
+		{
+			auto store_expr = join(to_enclosed_expression(value), ".", index_to_swizzle(r));
+			auto bitcast_op = bitcast_glsl_op(target_type, type);
+			if (!bitcast_op.empty())
+				store_expr = join(bitcast_op, "(", store_expr, ")");
+			statement(chain.base, ".Store(", chain.dynamic_index, chain.static_index + chain.matrix_stride * r, ", ", store_expr, ");");
+		}
+	}
+	else if (!chain.row_major_matrix)
+	{
+		const char *store_op = nullptr;
+		switch (type.vecsize)
+		{
+		case 1:
+			store_op = "Store";
+			break;
+		case 2:
+			store_op = "Store2";
+			break;
+		case 3:
+			store_op = "Store3";
+			break;
+		case 4:
+			store_op = "Store4";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unknown vector size.");
+		}
+
+		for (uint32_t c = 0; c < type.columns; c++)
+		{
+			auto store_expr = join(to_enclosed_expression(value), "[", c, "]");
+			auto bitcast_op = bitcast_glsl_op(target_type, type);
+			if (!bitcast_op.empty())
+				store_expr = join(bitcast_op, "(", store_expr, ")");
+			statement(chain.base, ".", store_op, "(", chain.dynamic_index, chain.static_index + c * chain.matrix_stride, ", ", store_expr, ");");
+		}
+	}
+	else
+	{
+		for (uint32_t r = 0; r < type.vecsize; r++)
+		{
+			for (uint32_t c = 0; c < type.columns; c++)
+			{
+				auto store_expr = join(to_enclosed_expression(value), "[", c, "].", index_to_swizzle(r));
+				auto bitcast_op = bitcast_glsl_op(target_type, type);
+				if (!bitcast_op.empty())
+					store_expr = join(bitcast_op, "(", store_expr, ")");
+				statement(chain.base, ".Store(", chain.dynamic_index,
+				          chain.static_index + c * (type.width / 8) + r * chain.matrix_stride, ", ", store_expr, ");");
+			}
+		}
+	}
+
+	register_write(chain.self);
+}
+
+void CompilerHLSL::emit_store(const Instruction &instruction)
+{
+	auto ops = stream(instruction);
+	auto *chain = maybe_get<SPIRAccessChain>(ops[0]);
+	if (chain)
+		write_access_chain(*chain, ops[1]);
 	else
 		CompilerGLSL::emit_instruction(instruction);
 }
