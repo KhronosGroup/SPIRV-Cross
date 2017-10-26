@@ -4226,8 +4226,8 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 {
 	if (flattened_buffer_blocks.count(base))
 	{
-		uint32_t matrix_stride;
-		bool need_transpose;
+		uint32_t matrix_stride = 0;
+		bool need_transpose = false;
 		flattened_access_chain_offset(expression_type(base), indices, count, 0, 16, &need_transpose, &matrix_stride);
 
 		if (out_need_transpose)
@@ -4462,10 +4462,11 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
 	assert(type->basetype == SPIRType::Struct);
 	uint32_t type_id = 0;
 
-	uint32_t matrix_stride = 0;
-
 	std::string expr;
-	bool row_major_matrix_needs_conversion = false;
+
+	// Inherit matrix information in case we are access chaining a vector which might have come from a row major layout.
+	bool row_major_matrix_needs_conversion = need_transpose ? *need_transpose : false;
+	uint32_t matrix_stride = out_matrix_stride ? *out_matrix_stride : 0;
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -4535,11 +4536,29 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
-			if (ids[index].get_type() != TypeConstant)
-				SPIRV_CROSS_THROW("Cannot flatten dynamic matrix indexing!");
+			auto *constant = maybe_get<SPIRConstant>(index);
+			if (constant)
+			{
+				index = get<SPIRConstant>(index).scalar();
+				offset += index * (row_major_matrix_needs_conversion ? (type->width / 8) : matrix_stride);
+			}
+			else
+			{
+				uint32_t indexing_stride = row_major_matrix_needs_conversion ? (type->width / 8) : matrix_stride;
+				// Dynamic array access.
+				if (indexing_stride % word_stride)
+				{
+					SPIRV_CROSS_THROW(
+					    "Matrix stride for dynamic indexing must be divisible by the size of a 4-component vector. "
+					    "Likely culprit here is a row-major matrix being accessed dynamically. "
+					    "This cannot be flattened. Try using std140 layout instead.");
+				}
 
-			index = get<SPIRConstant>(index).scalar();
-			offset += index * (row_major_matrix_needs_conversion ? type->width / 8 : matrix_stride);
+				expr += to_enclosed_expression(index);
+				expr += " * ";
+				expr += convert_to_string(indexing_stride / word_stride);
+				expr += " + ";
+			}
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
@@ -4548,11 +4567,29 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
 		{
-			if (ids[index].get_type() != TypeConstant)
-				SPIRV_CROSS_THROW("Cannot flatten dynamic vector indexing!");
+			auto *constant = maybe_get<SPIRConstant>(index);
+			if (constant)
+			{
+				index = get<SPIRConstant>(index).scalar();
+				offset += index * (row_major_matrix_needs_conversion ? matrix_stride : (type->width / 8));
+			}
+			else
+			{
+				uint32_t indexing_stride = row_major_matrix_needs_conversion ? matrix_stride : (type->width / 8);
 
-			index = get<SPIRConstant>(index).scalar();
-			offset += index * (row_major_matrix_needs_conversion ? matrix_stride : type->width / 8);
+				// Dynamic array access.
+				if (indexing_stride % word_stride)
+				{
+					SPIRV_CROSS_THROW(
+					    "Stride for dynamic vector indexing must be divisible by the size of a 4-component vector. "
+					    "This cannot be flattened in legacy targets.");
+				}
+
+				expr += to_enclosed_expression(index);
+				expr += " * ";
+				expr += convert_to_string(indexing_stride / word_stride);
+				expr += " + ";
+			}
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
