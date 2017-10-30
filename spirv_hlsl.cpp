@@ -784,8 +784,8 @@ void CompilerHLSL::emit_specialization_constants()
 
 	if (workgroup_size_id)
 	{
-		statement("static const uint3 gl_WorkGroupSize = ",
-		          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+		statement("static const uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)),
+		          ";");
 		emitted = true;
 	}
 
@@ -2192,36 +2192,117 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 	target_type.vecsize = type.vecsize;
 	target_type.columns = type.columns;
 
-	// FIXME: Transposition?
-	if (type.columns != 1)
-		SPIRV_CROSS_THROW("Reading matrices from ByteAddressBuffer not yet supported.");
-
 	if (type.basetype == SPIRType::Struct)
 		SPIRV_CROSS_THROW("Reading structs from ByteAddressBuffer not yet supported.");
 
 	if (type.width != 32)
 		SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
 
-	const char *load_op = nullptr;
-	switch (type.vecsize)
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Reading arrays from ByteAddressBuffer not yet supported.");
+
+	string load_expr;
+
+	// Load a vector or scalar.
+	if (type.columns == 1 && !chain.row_major_matrix)
 	{
-	case 1:
-		load_op = "Load";
-		break;
-	case 2:
-		load_op = "Load2";
-		break;
-	case 3:
-		load_op = "Load3";
-		break;
-	case 4:
-		load_op = "Load4";
-		break;
-	default:
-		SPIRV_CROSS_THROW("Unknown vector size.");
+		const char *load_op = nullptr;
+		switch (type.vecsize)
+		{
+		case 1:
+			load_op = "Load";
+			break;
+		case 2:
+			load_op = "Load2";
+			break;
+		case 3:
+			load_op = "Load3";
+			break;
+		case 4:
+			load_op = "Load4";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unknown vector size.");
+		}
+
+		load_expr = join(chain.base, ".", load_op, "(", chain.dynamic_index, chain.static_index, ")");
+	}
+	else if (type.columns == 1)
+	{
+		// Strided load since we are loading a column from a row-major matrix.
+		if (type.vecsize > 1)
+		{
+			load_expr = type_to_glsl(target_type);
+			load_expr += "(";
+		}
+
+		for (uint32_t r = 0; r < type.vecsize; r++)
+		{
+			load_expr +=
+			    join(chain.base, ".Load(", chain.dynamic_index, chain.static_index + r * chain.matrix_stride, ")");
+			if (r + 1 < type.vecsize)
+				load_expr += ", ";
+		}
+
+		if (type.vecsize > 1)
+			load_expr += ")";
+	}
+	else if (!chain.row_major_matrix)
+	{
+		// Load a matrix, column-major, the easy case.
+		const char *load_op = nullptr;
+		switch (type.vecsize)
+		{
+		case 1:
+			load_op = "Load";
+			break;
+		case 2:
+			load_op = "Load2";
+			break;
+		case 3:
+			load_op = "Load3";
+			break;
+		case 4:
+			load_op = "Load4";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unknown vector size.");
+		}
+
+		// Note, this loading style in HLSL is *actually* row-major, but we always treat matrices as transposed in this backend,
+		// so row-major is technically column-major ...
+		load_expr = type_to_glsl(target_type);
+		load_expr += "(";
+		for (uint32_t c = 0; c < type.columns; c++)
+		{
+			load_expr += join(chain.base, ".", load_op, "(", chain.dynamic_index,
+			                  chain.static_index + c * chain.matrix_stride, ")");
+			if (c + 1 < type.columns)
+				load_expr += ", ";
+		}
+		load_expr += ")";
+	}
+	else
+	{
+		// Pick out elements one by one ... Hopefully compilers are smart enough to recognize this pattern
+		// considering HLSL is "row-major decl", but "column-major" memory layout (basically implicit transpose model, ugh) ...
+
+		load_expr = type_to_glsl(target_type);
+		load_expr += "(";
+		for (uint32_t c = 0; c < type.columns; c++)
+		{
+			for (uint32_t r = 0; r < type.vecsize; r++)
+			{
+				load_expr += join(chain.base, ".Load(", chain.dynamic_index,
+				                  chain.static_index + c * (type.width / 8) + r * chain.matrix_stride, ")");
+
+				if ((r + 1 < type.vecsize) || (c + 1 < type.columns))
+					load_expr += ", ";
+			}
+		}
+		load_expr += ")";
 	}
 
-	auto load_expr = join(chain.base, ".", load_op, "(", chain.dynamic_index, chain.static_index, ")");
 	auto bitcast_op = bitcast_glsl_op(type, target_type);
 	if (!bitcast_op.empty())
 		load_expr = join(bitcast_op, "(", load_expr, ")");
@@ -2243,27 +2324,38 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		auto load_expr = read_access_chain(*chain);
 
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
+
+		// Do not forward complex load sequences like matrices, structs and arrays.
+		auto &type = get<SPIRType>(result_type);
+		if (type.columns > 1 || !type.array.empty() || type.basetype == SPIRType::Struct)
+			forward = false;
+
 		auto &e = emit_op(result_type, id, load_expr, forward, true);
-		e.need_transpose = false; // TODO: Forward this somehow.
+		e.need_transpose = false;
 		register_read(id, ptr, forward);
 	}
 	else
 		CompilerGLSL::emit_instruction(instruction);
 }
 
-void CompilerHLSL::emit_store(const Instruction &instruction)
+void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t value)
 {
-	auto ops = stream(instruction);
-	auto *chain = maybe_get<SPIRAccessChain>(ops[0]);
-	if (chain)
+	auto &type = get<SPIRType>(chain.basetype);
+
+	SPIRType target_type;
+	target_type.basetype = SPIRType::UInt;
+	target_type.vecsize = type.vecsize;
+	target_type.columns = type.columns;
+
+	if (type.basetype == SPIRType::Struct)
+		SPIRV_CROSS_THROW("Writing structs to RWByteAddressBuffer not yet supported.");
+	if (type.width != 32)
+		SPIRV_CROSS_THROW("Writing types other than 32-bit to RWByteAddressBuffer not yet supported.");
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Reading arrays from ByteAddressBuffer not yet supported.");
+
+	if (type.columns == 1 && !chain.row_major_matrix)
 	{
-		auto &type = expression_type(ops[0]);
-
-		SPIRType target_type;
-		target_type.basetype = SPIRType::UInt;
-		target_type.vecsize = type.vecsize;
-		target_type.columns = type.columns;
-
 		const char *store_op = nullptr;
 		switch (type.vecsize)
 		{
@@ -2283,20 +2375,87 @@ void CompilerHLSL::emit_store(const Instruction &instruction)
 			SPIRV_CROSS_THROW("Unknown vector size.");
 		}
 
-		if (type.columns != 1)
-			SPIRV_CROSS_THROW("Writing matrices to RWByteAddressBuffer not yet supported.");
-		if (type.basetype == SPIRType::Struct)
-			SPIRV_CROSS_THROW("Writing structs to RWByteAddressBuffer not yet supported.");
-		if (type.width != 32)
-			SPIRV_CROSS_THROW("Writing types other than 32-bit to RWByteAddressBuffer not yet supported.");
-
-		auto store_expr = to_expression(ops[1]);
+		auto store_expr = to_expression(value);
 		auto bitcast_op = bitcast_glsl_op(target_type, type);
 		if (!bitcast_op.empty())
 			store_expr = join(bitcast_op, "(", store_expr, ")");
-		statement(chain->base, ".", store_op, "(", chain->dynamic_index, chain->static_index, ", ", store_expr, ");");
-		register_write(ops[0]);
+		statement(chain.base, ".", store_op, "(", chain.dynamic_index, chain.static_index, ", ", store_expr, ");");
 	}
+	else if (type.columns == 1)
+	{
+		// Strided store.
+		for (uint32_t r = 0; r < type.vecsize; r++)
+		{
+			auto store_expr = to_enclosed_expression(value);
+			if (type.vecsize > 1)
+			{
+				store_expr += ".";
+				store_expr += index_to_swizzle(r);
+			}
+
+			auto bitcast_op = bitcast_glsl_op(target_type, type);
+			if (!bitcast_op.empty())
+				store_expr = join(bitcast_op, "(", store_expr, ")");
+			statement(chain.base, ".Store(", chain.dynamic_index, chain.static_index + chain.matrix_stride * r, ", ",
+			          store_expr, ");");
+		}
+	}
+	else if (!chain.row_major_matrix)
+	{
+		const char *store_op = nullptr;
+		switch (type.vecsize)
+		{
+		case 1:
+			store_op = "Store";
+			break;
+		case 2:
+			store_op = "Store2";
+			break;
+		case 3:
+			store_op = "Store3";
+			break;
+		case 4:
+			store_op = "Store4";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unknown vector size.");
+		}
+
+		for (uint32_t c = 0; c < type.columns; c++)
+		{
+			auto store_expr = join(to_enclosed_expression(value), "[", c, "]");
+			auto bitcast_op = bitcast_glsl_op(target_type, type);
+			if (!bitcast_op.empty())
+				store_expr = join(bitcast_op, "(", store_expr, ")");
+			statement(chain.base, ".", store_op, "(", chain.dynamic_index, chain.static_index + c * chain.matrix_stride,
+			          ", ", store_expr, ");");
+		}
+	}
+	else
+	{
+		for (uint32_t r = 0; r < type.vecsize; r++)
+		{
+			for (uint32_t c = 0; c < type.columns; c++)
+			{
+				auto store_expr = join(to_enclosed_expression(value), "[", c, "].", index_to_swizzle(r));
+				auto bitcast_op = bitcast_glsl_op(target_type, type);
+				if (!bitcast_op.empty())
+					store_expr = join(bitcast_op, "(", store_expr, ")");
+				statement(chain.base, ".Store(", chain.dynamic_index,
+				          chain.static_index + c * (type.width / 8) + r * chain.matrix_stride, ", ", store_expr, ");");
+			}
+		}
+	}
+
+	register_write(chain.self);
+}
+
+void CompilerHLSL::emit_store(const Instruction &instruction)
+{
+	auto ops = stream(instruction);
+	auto *chain = maybe_get<SPIRAccessChain>(ops[0]);
+	if (chain)
+		write_access_chain(*chain, ops[1]);
 	else
 		CompilerGLSL::emit_instruction(instruction);
 }
@@ -2355,19 +2514,29 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		}
 
 		uint32_t matrix_stride = 0;
-		bool need_transpose = false;
+		bool row_major_matrix = false;
+
+		// Inherit matrix information.
+		if (chain)
+		{
+			matrix_stride = chain->matrix_stride;
+			row_major_matrix = chain->row_major_matrix;
+		}
+
 		auto offsets =
 		    flattened_access_chain_offset(*basetype, &ops[3 + to_plain_buffer_length],
-		                                  length - 3 - to_plain_buffer_length, 0, 1, &need_transpose, &matrix_stride);
+		                                  length - 3 - to_plain_buffer_length, 0, 1, &row_major_matrix, &matrix_stride);
 
 		auto &e = set<SPIRAccessChain>(ops[1], ops[0], type.storage, base, offsets.first, offsets.second);
+		e.row_major_matrix = row_major_matrix;
+		e.matrix_stride = matrix_stride;
+		e.immutable = should_forward(ops[2]);
+
 		if (chain)
 		{
 			e.dynamic_index += chain->dynamic_index;
 			e.static_index += chain->static_index;
 		}
-
-		e.immutable = should_forward(ops[2]);
 	}
 	else
 	{
