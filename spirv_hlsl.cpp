@@ -2609,21 +2609,21 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 
 	auto &data_type = expression_type(ops[2]);
 	auto *chain = maybe_get<SPIRAccessChain>(ops[2]);
-	SPIRType::BaseType expression_type;
+	SPIRType::BaseType expr_type;
 	if (data_type.storage == StorageClassImage || !chain)
 	{
 		statement(atomic_op, "(", to_expression(ops[2]), ", ", value_expr, ", ", to_name(id), ");");
-		expression_type = data_type.basetype;
+		expr_type = data_type.basetype;
 	}
 	else
 	{
 		// RWByteAddress buffer is always uint in its underlying type.
-		expression_type = SPIRType::UInt;
+		expr_type = SPIRType::UInt;
 		statement(chain->base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ", value_expr, ", ",
 		          to_name(id), ");");
 	}
 
-	auto expr = bitcast_expression(type, expression_type, to_name(id));
+	auto expr = bitcast_expression(type, expr_type, to_name(id));
 	set<SPIRExpression>(id, expr, result_type, true);
 	flush_all_atomic_capable_variables();
 	register_read(ops[1], ops[2], should_forward(ops[2]));
