@@ -27,7 +27,7 @@ using namespace spirv_cross;
 
 #define log(...) fprintf(stderr, __VA_ARGS__)
 
-static string ensure_valid_identifier(const string &name)
+static string ensure_valid_identifier(const string &name, bool member)
 {
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
 	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
@@ -37,12 +37,26 @@ static string ensure_valid_identifier(const string &name)
 	{
 		auto &c = str[i];
 
-		// _<num> variables are reserved by the internal implementation,
-		// otherwise, make sure the name is a valid identifier.
-		if (i == 0 || (str[0] == '_' && i == 1))
-			c = isalpha(c) ? c : '_';
+		if (member)
+		{
+			// _m<num> variables are reserved by the internal implementation,
+			// otherwise, make sure the name is a valid identifier.
+			if (i == 0)
+				c = isalpha(c) ? c : '_';
+			else if (i == 2 && str[0] == '_' && str[1] == 'm')
+				c = isalpha(c) ? c : '_';
+			else
+				c = isalnum(c) ? c : '_';
+		}
 		else
-			c = isalnum(c) ? c : '_';
+		{
+			// _<num> variables are reserved by the internal implementation,
+			// otherwise, make sure the name is a valid identifier.
+			if (i == 0 || (str[0] == '_' && i == 1))
+				c = isalpha(c) ? c : '_';
+			else
+				c = isalnum(c) ? c : '_';
+		}
 	}
 	return str;
 }
@@ -154,7 +168,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpMemoryBarrier:
 			return false;
 
-		// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
+			// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
 
 		default:
 			break;
@@ -443,7 +457,7 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	// Combined image samplers are always considered active as they are "magic" variables.
 	if (find_if(begin(combined_image_samplers), end(combined_image_samplers), [&var](const CombinedImageSampler &samp) {
 		    return samp.combined_id == var.self;
-		}) != end(combined_image_samplers))
+	    }) != end(combined_image_samplers))
 	{
 		return false;
 	}
@@ -899,7 +913,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
 
-	str = ensure_valid_identifier(name);
+	str = ensure_valid_identifier(name, false);
 }
 
 const SPIRType &Compiler::get_type(uint32_t id) const
@@ -960,10 +974,10 @@ void Compiler::set_member_name(uint32_t id, uint32_t index, const std::string &n
 		return;
 
 	// Reserved for unnamed members.
-	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
+	if (name[0] == '_' && name.size() >= 3 && name[1] == 'm' && isdigit(name[2]))
 		return;
 
-	str = ensure_valid_identifier(name);
+	str = ensure_valid_identifier(name, true);
 }
 
 const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
@@ -2710,7 +2724,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
 		                   return param.image_id == p.image_id && param.sampler_id == p.sampler_id &&
 		                          param.global_image == p.global_image && param.global_sampler == p.global_sampler;
-		               });
+	                   });
 
 	if (itr == end(caller.combined_parameters))
 	{
@@ -2847,7 +2861,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
 	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
 		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
-		               });
+	                   });
 
 	if (itr == end(compiler.combined_image_samplers))
 	{
@@ -3187,8 +3201,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				break;
 			}
 
-			// Atomics shouldn't be able to access function-local variables.
-			// Some GLSL builtins access a pointer.
+				// Atomics shouldn't be able to access function-local variables.
+				// Some GLSL builtins access a pointer.
 
 			default:
 				break;

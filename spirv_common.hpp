@@ -291,7 +291,7 @@ struct SPIRType : IVariant
 
 	std::vector<uint32_t> member_types;
 
-	struct Image
+	struct ImageType
 	{
 		uint32_t type;
 		spv::Dim dim;
@@ -640,7 +640,8 @@ struct SPIRAccessChain : IVariant
 	int32_t static_index;
 
 	uint32_t loaded_from = 0;
-	bool need_transpose = false;
+	uint32_t matrix_stride = 0;
+	bool row_major_matrix = false;
 	bool immutable = false;
 };
 
