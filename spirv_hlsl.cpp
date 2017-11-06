@@ -2486,7 +2486,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 
 	if (need_byte_access_chain)
 	{
-		uint32_t to_plain_buffer_length = type.array.size();
+		uint32_t to_plain_buffer_length = static_cast<uint32_t>(type.array.size());
 
 		string base;
 		if (to_plain_buffer_length != 0)
