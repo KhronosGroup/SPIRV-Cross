@@ -666,6 +666,23 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		else
 			binding_number = get_vacant_location();
 
+		// Allow semantic remap if specified.
+		string semantic = "TEXCOORD";
+		uint32_t semantic_index = binding_number;
+
+		if (vertex_attributes.size())
+		{
+			for (auto &attribute : vertex_attributes)
+			{
+				if (attribute.name == name)
+				{
+					semantic = attribute.semantic;
+					semantic_index = attribute.semantic_index;
+					break;
+				}
+			}
+		}
+
 		if (need_matrix_unroll && type.columns > 1)
 		{
 			if (!type.array.empty())
@@ -677,14 +694,14 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 				SPIRType newtype = type;
 				newtype.columns = 1;
 				statement(to_interpolation_qualifiers(get_decoration_mask(var.self)),
-				          variable_decl(newtype, join(name, "_", i)), " : TEXCOORD", binding_number, ";");
+				          variable_decl(newtype, join(name, "_", i)), " : ", semantic, semantic_index, binding_number, ";");
 				active_locations.insert(binding_number++);
 			}
 		}
 		else
 		{
 			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name),
-			          " : TEXCOORD", binding_number, ";");
+			          " : ", semantic, semantic_index, binding_number, ";");
 
 			// Structs and arrays should consume more locations.
 			uint32_t consumed_locations = type_to_consumed_locations(type);
@@ -3145,6 +3162,18 @@ void CompilerHLSL::require_texture_query_variant(const SPIRType &type)
 		force_recompile = true;
 		required_textureSizeVariants |= mask;
 	}
+}
+
+string CompilerHLSL::compile(std::vector<HLSLVertexAttr> *p_vertex_attributes)
+{
+	if (p_vertex_attributes)
+	{
+		vertex_attributes.clear();
+		for (auto &va : *p_vertex_attributes)
+			vertex_attributes.emplace_back(va);
+	}
+
+	return compile();
 }
 
 string CompilerHLSL::compile()
