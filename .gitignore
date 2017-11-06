@@ -13,5 +13,6 @@
 *.opensdf
 *.shader
 *.a
+*.so
 
 !CMakeLists.txt
