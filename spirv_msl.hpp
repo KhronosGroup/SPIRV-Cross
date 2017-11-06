@@ -76,8 +76,10 @@ public:
 	// Options for compiling to Metal Shading Language
 	struct Options
 	{
-		bool enable_point_size_builtin = true;
 		std::string entry_point_name;
+		float msl_version = 1.2f;
+		bool enable_point_size_builtin = true;
+		bool resolve_specialized_array_lengths = true;
 	};
 
 	const Options &get_options() const
@@ -101,6 +103,7 @@ public:
 		SPVFuncImplFindILsb,
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
+		SPVFuncImplArrayCopy,
 		SPVFuncImplInverse2x2,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse4x4,
@@ -165,10 +168,15 @@ protected:
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool skip_argument(uint32_t id) const override;
+	std::string to_qualifiers_glsl(uint32_t id) override;
+	void replace_illegal_names() override;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
+	void resolve_specialized_array_lengths();
+	void mark_packable_structs();
+	void mark_as_packable(SPIRType &type);
 
 	std::unordered_map<uint32_t, std::set<uint32_t>> function_global_vars;
 	void extract_global_variables_from_function(uint32_t func_id, std::set<uint32_t> &added_arg_ids,
@@ -181,12 +189,10 @@ protected:
 	void emit_resources();
 	void emit_specialization_constants();
 	void emit_interface_block(uint32_t ib_var_id);
-	void populate_func_name_overrides();
-	void populate_var_name_overrides();
 	bool maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs);
+	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
 
 	std::string func_type_decl(SPIRType &type);
-	std::string clean_func_name(std::string func_name) override;
 	std::string entry_point_args(bool append_comma);
 	std::string get_entry_point_name();
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
@@ -210,17 +216,15 @@ protected:
 	void align_struct(SPIRType &ib_type);
 	bool is_member_packable(SPIRType &ib_type, uint32_t index);
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
-	SPVFuncImpl get_spv_func_impl(spv::Op opcode, const uint32_t *args);
 	std::string get_argument_address_space(const SPIRVariable &argument);
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
 	                         uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
 	                         bool op1_is_pointer = false, uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
+	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
 
 	Options options;
-	std::unordered_map<std::string, std::string> func_name_overrides;
-	std::unordered_map<std::string, std::string> var_name_overrides;
 	std::set<SPVFuncImpl> spv_function_implementations;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
@@ -238,6 +242,7 @@ protected:
 	std::string stage_out_var_name = "out";
 	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
+	spv::Op previous_instruction_opcode = spv::OpNop;
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
@@ -248,8 +253,10 @@ protected:
 		}
 
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		CompilerMSL::SPVFuncImpl get_spv_func_impl(spv::Op opcode, const uint32_t *args);
 
 		CompilerMSL &compiler;
+		std::unordered_map<uint32_t, uint32_t> result_types;
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 	};

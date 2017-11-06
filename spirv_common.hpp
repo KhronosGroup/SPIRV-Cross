@@ -343,7 +343,8 @@ struct SPIREntryPoint
 {
 	SPIREntryPoint(uint32_t self_, spv::ExecutionModel execution_model, std::string entry_name)
 	    : self(self_)
-	    , name(std::move(entry_name))
+	    , name(entry_name)
+	    , orig_name(entry_name)
 	    , model(execution_model)
 	{
 	}
@@ -351,6 +352,7 @@ struct SPIREntryPoint
 
 	uint32_t self = 0;
 	std::string name;
+	std::string orig_name;
 	std::vector<uint32_t> interface_variables;
 
 	uint64_t flags = 0;
@@ -857,7 +859,9 @@ struct SPIRConstant : IVariant
 
 	uint32_t constant_type;
 	ConstantMatrix m;
-	bool specialization = false; // If the constant is a specialization constant (i.e. created with OpSpecConstant*).
+	bool specialization = false; // If this constant is a specialization constant (i.e. created with OpSpecConstant*).
+	bool is_used_as_array_length =
+	    false; // If this constant is used as an array length which creates specialization restrictions on some backends.
 
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;
@@ -914,6 +918,10 @@ public:
 	uint32_t get_type() const
 	{
 		return type;
+	}
+	uint32_t get_id() const
+	{
+		return holder ? holder->self : 0;
 	}
 	bool empty() const
 	{

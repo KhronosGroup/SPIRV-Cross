@@ -1484,18 +1484,21 @@ void Compiler::parse(const Instruction &instruction)
 	case OpTypeArray:
 	{
 		uint32_t id = ops[0];
-
-		auto &base = get<SPIRType>(ops[1]);
 		auto &arraybase = set<SPIRType>(id);
 
-		arraybase = base;
+		uint32_t tid = ops[1];
+		auto &base = get<SPIRType>(tid);
 
-		auto *c = maybe_get<SPIRConstant>(ops[2]);
+		arraybase = base;
+		arraybase.parent_type = tid;
+
+		uint32_t cid = ops[2];
+		mark_used_as_array_length(cid);
+		auto *c = maybe_get<SPIRConstant>(cid);
 		bool literal = c && !c->specialization;
 
 		arraybase.array_size_literal.push_back(literal);
-		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
-		arraybase.parent_type = ops[1];
+		arraybase.array.push_back(literal ? c->scalar() : cid);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -2513,6 +2516,14 @@ vector<string> Compiler::get_entry_points() const
 	return entries;
 }
 
+unordered_map<string, string> Compiler::get_entry_point_name_map() const
+{
+	unordered_map<string, string> entries;
+	for (auto &entry : entry_points)
+		entries[entry.second.orig_name] = entry.second.name;
+	return entries;
+}
+
 void Compiler::set_entry_point(const std::string &name)
 {
 	auto &entry = get_entry_point(name);
@@ -2910,6 +2921,29 @@ SPIRConstant &Compiler::get_constant(uint32_t id)
 const SPIRConstant &Compiler::get_constant(uint32_t id) const
 {
 	return get<SPIRConstant>(id);
+}
+
+void Compiler::mark_used_as_array_length(uint32_t id)
+{
+	switch (ids[id].get_type())
+	{
+	case TypeConstant:
+		get<SPIRConstant>(id).is_used_as_array_length = true;
+		break;
+
+	case TypeConstantOp:
+	{
+		auto &cop = get<SPIRConstantOp>(id);
+		for (uint32_t arg_id : cop.arguments)
+			mark_used_as_array_length(arg_id);
+	}
+
+	case TypeUndef:
+		return;
+
+	default:
+		SPIRV_CROSS_THROW("Array lengths must be a constant instruction (OpConstant.. or OpSpecConstant...).");
+	}
 }
 
 static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block, const unordered_set<uint32_t> &blocks)

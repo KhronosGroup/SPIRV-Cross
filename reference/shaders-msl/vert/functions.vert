@@ -47,15 +47,15 @@ T degrees(T r)
 template<typename T>
 T findLSB(T x)
 {
-    return select(ctz(x), -1, x == 0);
+    return select(ctz(x), T(-1), x == T(0));
 }
 
 // Implementation of the signed GLSL findMSB() function
 template<typename T>
 T findSMSB(T x)
 {
-    T v = select(x, -1 - x, x < 0);
-    return select(clz(0) - (clz(v) + 1), -1, v == 0);
+    T v = select(x, T(-1) - x, x < T(0));
+    return select(clz(T(0)) - (clz(v) + T(1)), T(-1), v == T(0));
 }
 
 // Returns the determinant of a 2x2 matrix.

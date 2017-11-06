@@ -254,6 +254,11 @@ public:
 	std::vector<std::string> get_entry_points() const;
 	void set_entry_point(const std::string &name);
 
+	// Returns a mapping between the original entry point name in the SPIR-V and a modified
+	// name defined by the backend. Some backends (eg. MSL) restrict the legal names allowed
+	// for entry point names (eg. "main" is illegal in MSL).
+	std::unordered_map<std::string, std::string> get_entry_point_name_map() const;
+
 	// Returns the internal data structure for entry points to allow poking around.
 	const SPIREntryPoint &get_entry_point(const std::string &name) const;
 	SPIREntryPoint &get_entry_point(const std::string &name);
@@ -335,6 +340,10 @@ public:
 	std::vector<SpecializationConstant> get_specialization_constants() const;
 	SPIRConstant &get_constant(uint32_t id);
 	const SPIRConstant &get_constant(uint32_t id) const;
+
+	// Recursively marks any constants referenced by the specified constant instruction as being used
+	// as an array length. The id must be a constant instruction (SPIRConstant or SPIRConstantOp).
+	void mark_used_as_array_length(uint32_t id);
 
 	uint32_t get_current_id_bound() const
 	{

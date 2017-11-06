@@ -3359,15 +3359,6 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	return farg_str;
 }
 
-// Some languages may have additional standard library functions whose names conflict
-// with a function defined in the body of the shader. Subclasses can override to rename
-// the function name defined in the shader to avoid conflict with the language standard
-// functions (eg. MSL includes saturate()).
-string CompilerGLSL::clean_func_name(string func_name)
-{
-	return func_name;
-}
-
 void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
 {
 	GLSLstd450 op = static_cast<GLSLstd450>(eop);
@@ -3855,6 +3846,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	bool access_chain_is_arrayed = false;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
+	bool vector_is_packed = false;
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
@@ -3951,12 +3943,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				}
 			}
 
-			if (member_is_packed_type(*type, index))
-			{
-				auto &membertype = get<SPIRType>(type->member_types[index]);
-				expr = unpack_expression_type(expr, membertype);
-			}
-
+			vector_is_packed = member_is_packed_type(*type, index);
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
 		}
@@ -3982,6 +3969,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
 		{
+			if (vector_is_packed)
+				expr = unpack_expression_type(expr, *type);
+
 			if (index_is_literal)
 			{
 				expr += ".";
@@ -4835,7 +4825,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		string funexpr;
 		vector<string> arglist;
-		funexpr += clean_func_name(to_name(func)) + "(";
+		funexpr += to_name(func) + "(";
 		for (uint32_t i = 0; i < length; i++)
 		{
 			// Do not pass in separate images or samplers if we're remapping
@@ -6183,7 +6173,7 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 
 // Checks whether the member is in packed data type, that might need to be unpacked.
 // GLSL does not define packed data types, but certain subclasses do.
-bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index)
+bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index) const
 {
 	return has_member_decoration(type.self, index, DecorationCPacked);
 }
@@ -6745,11 +6735,11 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 
 	if (func.self == entry_point)
 	{
-		decl += clean_func_name("main");
+		decl += "main";
 		processing_entry_point = true;
 	}
 	else
-		decl += clean_func_name(to_name(func.self));
+		decl += to_name(func.self);
 
 	decl += "(";
 	vector<string> arglist;

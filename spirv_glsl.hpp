@@ -206,7 +206,6 @@ protected:
 	                                     uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset,
 	                                     uint32_t offset, uint32_t bias, uint32_t comp, uint32_t sample,
 	                                     bool *p_forward);
-	virtual std::string clean_func_name(std::string func_name);
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);
 	virtual void emit_uniform(const SPIRVariable &var);
@@ -278,7 +277,7 @@ protected:
 
 	bool is_non_native_row_major_matrix(uint32_t id);
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
-	bool member_is_packed_type(const SPIRType &type, uint32_t index);
+	bool member_is_packed_type(const SPIRType &type, uint32_t index) const;
 	virtual std::string convert_row_major_matrix(std::string exp_str);
 
 	std::unordered_set<std::string> local_variable_names;
@@ -386,7 +385,7 @@ protected:
 	std::string to_member_name(const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
-	std::string to_qualifiers_glsl(uint32_t id);
+	virtual std::string to_qualifiers_glsl(uint32_t id);
 	const char *to_precision_qualifiers_glsl(uint32_t id);
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
 	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags);
@@ -418,7 +417,7 @@ protected:
 	// and force recompile.
 	bool check_atomic_image(uint32_t id);
 
-	void replace_illegal_names();
+	virtual void replace_illegal_names();
 
 	void replace_fragment_output(SPIRVariable &var);
 	void replace_fragment_outputs();
