@@ -1348,7 +1348,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		string img_exp = to_expression(img_id);
 		auto &img_type = expression_type(img_id);
 		Dim img_dim = img_type.image.dim;
-		bool is_array = img_type.image.arrayed;
+		bool img_is_array = img_type.image.arrayed;
 
 		if (img_type.basetype != SPIRType::Image)
 			SPIRV_CROSS_THROW("Invalid type for OpImageQuerySize.");
@@ -1371,7 +1371,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (img_dim == Dim3D)
 			expr += ", " + img_exp + ".get_depth(" + lod + ")";
 
-		if (is_array)
+		if (img_is_array)
 			expr += ", " + img_exp + ".get_array_size()";
 
 		expr += ")";
