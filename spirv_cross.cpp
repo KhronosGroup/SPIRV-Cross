@@ -2408,9 +2408,9 @@ uint32_t Compiler::get_work_group_size_specialization_constants(SpecializationCo
                                                                 SpecializationConstant &z) const
 {
 	auto &execution = get_entry_point();
-	x = {};
-	y = {};
-	z = {};
+	x = { 0, 0 };
+	y = { 0, 0 };
+	z = { 0, 0 };
 
 	if (execution.workgroup_size.constant != 0)
 	{
