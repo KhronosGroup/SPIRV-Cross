@@ -18,7 +18,6 @@
 #include "GLSL.std.450.h"
 
 #include <algorithm>
-#include <cassert>
 #include <numeric>
 
 using namespace spv;
