@@ -60,10 +60,6 @@ string CompilerMSL::compile()
 
 	replace_illegal_names();
 
-	// Set main function name if it was explicitly set
-	if (!options.entry_point_name.empty())
-		set_name(entry_point, options.entry_point_name);
-
 	non_stage_in_input_var_ids.clear();
 	struct_member_padding.clear();
 
@@ -1515,7 +1511,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
 
-		// OpOuterProduct
+	// OpOuterProduct
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);
@@ -1560,7 +1556,7 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 		break;
 	}
 
-	if (options.msl_version >= 2.0)
+	if (options.supports_msl_version(2))
 	{
 		bar_stmt += ", ";
 
@@ -1820,10 +1816,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 	}
 
-		// TODO:
-		//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
-		//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
-		//        GLSLstd450InterpolateAtOffset
+	// TODO:
+	//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
+	//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
+	//        GLSLstd450InterpolateAtOffset
 
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);

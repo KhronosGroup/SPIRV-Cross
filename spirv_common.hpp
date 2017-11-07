@@ -341,7 +341,7 @@ struct SPIRExtension : IVariant
 // so in order to avoid conflicts, we can't stick them in the ids array.
 struct SPIREntryPoint
 {
-	SPIREntryPoint(uint32_t self_, spv::ExecutionModel execution_model, std::string entry_name)
+	SPIREntryPoint(uint32_t self_, spv::ExecutionModel execution_model, const std::string &entry_name)
 	    : self(self_)
 	    , name(entry_name)
 	    , orig_name(entry_name)

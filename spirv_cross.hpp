@@ -351,10 +351,6 @@ public:
 	SPIRConstant &get_constant(uint32_t id);
 	const SPIRConstant &get_constant(uint32_t id) const;
 
-	// Recursively marks any constants referenced by the specified constant instruction as being used
-	// as an array length. The id must be a constant instruction (SPIRConstant or SPIRConstantOp).
-	void mark_used_as_array_length(uint32_t id);
-
 	uint32_t get_current_id_bound() const
 	{
 		return uint32_t(ids.size());
@@ -506,6 +502,7 @@ protected:
 	bool expression_is_lvalue(uint32_t id) const;
 	bool variable_storage_is_aliased(const SPIRVariable &var);
 	SPIRVariable *maybe_get_backing_variable(uint32_t chain);
+	void mark_used_as_array_length(uint32_t id);
 
 	void register_read(uint32_t expr, uint32_t chain, bool forwarded);
 	void register_write(uint32_t chain);

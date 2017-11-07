@@ -73,13 +73,24 @@ static const uint32_t kPushConstBinding = 0;
 class CompilerMSL : public CompilerGLSL
 {
 public:
+#define MAKE_MSL_VERSION(major, minor, patch) (((major)*1e4) + ((minor)*1e2) + (patch))
+
 	// Options for compiling to Metal Shading Language
 	struct Options
 	{
-		std::string entry_point_name;
-		float msl_version = 1.2f;
+		uint32_t msl_version = MAKE_MSL_VERSION(1, 2, 0);
 		bool enable_point_size_builtin = true;
 		bool resolve_specialized_array_lengths = true;
+
+		void set_msl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
+		{
+			msl_version = MAKE_MSL_VERSION(major, minor, patch);
+		}
+
+		bool supports_msl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
+		{
+			return msl_version >= MAKE_MSL_VERSION(major, minor, patch);
+		}
 	};
 
 	const Options &get_options() const
