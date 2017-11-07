@@ -74,7 +74,7 @@ static const uint32_t kPushConstBinding = 0;
 class CompilerMSL : public CompilerGLSL
 {
 public:
-#define MAKE_MSL_VERSION(major, minor, patch) (((major)*1e4) + ((minor)*1e2) + (patch))
+#define MAKE_MSL_VERSION(major, minor, patch) (((major)*10000) + ((minor)*100) + (patch))
 
 	// Options for compiling to Metal Shading Language
 	struct Options
