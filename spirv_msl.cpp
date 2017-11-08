@@ -106,7 +106,7 @@ string CompilerMSL::compile()
 	do
 	{
 		if (pass_count >= 3)
-			SPIRV_CROSS_THROW("Over 2 compilation loops detected. Must be a bug!");
+			SPIRV_CROSS_THROW("Over 3 compilation loops detected. Must be a bug!");
 
 		reset();
 

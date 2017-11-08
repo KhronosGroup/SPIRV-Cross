@@ -266,7 +266,9 @@ public:
 
 	// Returns a mapping between the original entry point name in the SPIR-V and a modified
 	// name defined by the backend. Some backends (eg. MSL) restrict the legal names allowed
-	// for entry point names (eg. "main" is illegal in MSL).
+	// for entry point names (eg. "main" is illegal in MSL). Renaming occurs during compile().
+	// Calling this function after before compiling will return a map of the original names
+	// to those same original names.
 	std::unordered_map<std::string, std::string> get_entry_point_name_map() const;
 
 	// Returns the internal data structure for entry points to allow poking around.

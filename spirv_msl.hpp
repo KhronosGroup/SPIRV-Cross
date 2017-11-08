@@ -18,12 +18,12 @@
 #define SPIRV_CROSS_MSL_HPP
 
 #include "spirv_glsl.hpp"
+#include <limits>
 #include <map>
 #include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <limits>
 
 namespace spirv_cross
 {
