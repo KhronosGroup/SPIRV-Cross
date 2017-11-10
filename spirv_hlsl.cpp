@@ -674,7 +674,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		{
 			for (auto &attribute : vertex_attributes)
 			{
-				if (attribute.name == name)
+				if (attribute.binding == binding_number)
 				{
 					semantic = attribute.semantic;
 					semantic_index = attribute.semantic_index;
@@ -3168,9 +3168,7 @@ string CompilerHLSL::compile(std::vector<HLSLVertexAttr> *p_vertex_attributes)
 {
 	if (p_vertex_attributes)
 	{
-		vertex_attributes.clear();
-		for (auto &va : *p_vertex_attributes)
-			vertex_attributes.emplace_back(va);
+		vertex_attributes = *p_vertex_attributes;
 	}
 
 	return compile();
