@@ -25,7 +25,7 @@ namespace spirv_cross
 {
 struct HLSLVertexAttr
 {
-	std::string name;
+	uint32_t binding;
 	std::string semantic;
 	uint32_t semantic_index;
 };
