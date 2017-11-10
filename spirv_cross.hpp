@@ -264,16 +264,19 @@ public:
 	std::vector<std::string> get_entry_points() const;
 	void set_entry_point(const std::string &name);
 
-	// Returns a mapping between the original entry point name in the SPIR-V and a modified
-	// name defined by the backend. Some backends (eg. MSL) restrict the legal names allowed
-	// for entry point names (eg. "main" is illegal in MSL). Renaming occurs during compile().
-	// Calling this function after before compiling will return a map of the original names
-	// to those same original names.
-	std::unordered_map<std::string, std::string> get_entry_point_name_map() const;
-
 	// Returns the internal data structure for entry points to allow poking around.
 	const SPIREntryPoint &get_entry_point(const std::string &name) const;
 	SPIREntryPoint &get_entry_point(const std::string &name);
+
+	// Some shader languages restrict the names that can be given to entry points, and the
+	// corresponding backend will automatically rename an entry point name, during the call
+	// to compile() if it is illegal. For example, the common entry point name main() is
+	// illegal in MSL, and is renamed to an alternate name by the MSL backend.
+	// Given the original entry point name contained in the SPIR-V, this function returns
+	// the name, as updated by the backend during the call to compile(). If the name is not
+	// illegal, and has not been renamed, or if this function is called before compile(),
+	// this function will simply return the same name.
+	const std::string &get_cleansed_entry_point_name(const std::string &name) const;
 
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;

@@ -2526,15 +2526,7 @@ vector<string> Compiler::get_entry_points() const
 {
 	vector<string> entries;
 	for (auto &entry : entry_points)
-		entries.push_back(entry.second.name);
-	return entries;
-}
-
-unordered_map<string, string> Compiler::get_entry_point_name_map() const
-{
-	unordered_map<string, string> entries;
-	for (auto &entry : entry_points)
-		entries[entry.second.orig_name] = entry.second.name;
+		entries.push_back(entry.second.orig_name);
 	return entries;
 }
 
@@ -2547,8 +2539,9 @@ void Compiler::set_entry_point(const std::string &name)
 SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
 {
 	auto itr =
-	    find_if(begin(entry_points), end(entry_points),
-	            [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.name == name; });
+	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		    return entry.second.orig_name == name;
+		});
 
 	if (itr == end(entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
@@ -2559,13 +2552,19 @@ SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
 const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
 {
 	auto itr =
-	    find_if(begin(entry_points), end(entry_points),
-	            [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.name == name; });
+	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		    return entry.second.orig_name == name;
+		});
 
 	if (itr == end(entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
+}
+
+const string &Compiler::get_cleansed_entry_point_name(const std::string &name) const
+{
+	return get_entry_point(name).name;
 }
 
 const SPIREntryPoint &Compiler::get_entry_point() const
