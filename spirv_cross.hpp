@@ -268,6 +268,16 @@ public:
 	const SPIREntryPoint &get_entry_point(const std::string &name) const;
 	SPIREntryPoint &get_entry_point(const std::string &name);
 
+	// Some shader languages restrict the names that can be given to entry points, and the
+	// corresponding backend will automatically rename an entry point name, during the call
+	// to compile() if it is illegal. For example, the common entry point name main() is
+	// illegal in MSL, and is renamed to an alternate name by the MSL backend.
+	// Given the original entry point name contained in the SPIR-V, this function returns
+	// the name, as updated by the backend during the call to compile(). If the name is not
+	// illegal, and has not been renamed, or if this function is called before compile(),
+	// this function will simply return the same name.
+	const std::string &get_cleansed_entry_point_name(const std::string &name) const;
+
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;
 	void unset_execution_mode(spv::ExecutionMode mode);
@@ -497,6 +507,7 @@ protected:
 	bool expression_is_lvalue(uint32_t id) const;
 	bool variable_storage_is_aliased(const SPIRVariable &var);
 	SPIRVariable *maybe_get_backing_variable(uint32_t chain);
+	void mark_used_as_array_length(uint32_t id);
 
 	void register_read(uint32_t expr, uint32_t chain, bool forwarded);
 	void register_write(uint32_t chain);

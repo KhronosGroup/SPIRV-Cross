@@ -168,7 +168,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpMemoryBarrier:
 			return false;
 
-			// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
+		// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
 
 		default:
 			break;
@@ -457,7 +457,7 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	// Combined image samplers are always considered active as they are "magic" variables.
 	if (find_if(begin(combined_image_samplers), end(combined_image_samplers), [&var](const CombinedImageSampler &samp) {
 		    return samp.combined_id == var.self;
-	    }) != end(combined_image_samplers))
+		}) != end(combined_image_samplers))
 	{
 		return false;
 	}
@@ -1498,18 +1498,21 @@ void Compiler::parse(const Instruction &instruction)
 	case OpTypeArray:
 	{
 		uint32_t id = ops[0];
-
-		auto &base = get<SPIRType>(ops[1]);
 		auto &arraybase = set<SPIRType>(id);
 
-		arraybase = base;
+		uint32_t tid = ops[1];
+		auto &base = get<SPIRType>(tid);
 
-		auto *c = maybe_get<SPIRConstant>(ops[2]);
+		arraybase = base;
+		arraybase.parent_type = tid;
+
+		uint32_t cid = ops[2];
+		mark_used_as_array_length(cid);
+		auto *c = maybe_get<SPIRConstant>(cid);
 		bool literal = c && !c->specialization;
 
 		arraybase.array_size_literal.push_back(literal);
-		arraybase.array.push_back(literal ? c->scalar() : ops[2]);
-		arraybase.parent_type = ops[1];
+		arraybase.array.push_back(literal ? c->scalar() : cid);
 		// Do NOT set arraybase.self!
 		break;
 	}
@@ -2523,7 +2526,7 @@ vector<string> Compiler::get_entry_points() const
 {
 	vector<string> entries;
 	for (auto &entry : entry_points)
-		entries.push_back(entry.second.name);
+		entries.push_back(entry.second.orig_name);
 	return entries;
 }
 
@@ -2536,8 +2539,9 @@ void Compiler::set_entry_point(const std::string &name)
 SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
 {
 	auto itr =
-	    find_if(begin(entry_points), end(entry_points),
-	            [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.name == name; });
+	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		    return entry.second.orig_name == name;
+		});
 
 	if (itr == end(entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
@@ -2548,13 +2552,19 @@ SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
 const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
 {
 	auto itr =
-	    find_if(begin(entry_points), end(entry_points),
-	            [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.name == name; });
+	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		    return entry.second.orig_name == name;
+		});
 
 	if (itr == end(entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
+}
+
+const string &Compiler::get_cleansed_entry_point_name(const std::string &name) const
+{
+	return get_entry_point(name).name;
 }
 
 const SPIREntryPoint &Compiler::get_entry_point() const
@@ -2713,7 +2723,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
 		                   return param.image_id == p.image_id && param.sampler_id == p.sampler_id &&
 		                          param.global_image == p.global_image && param.global_sampler == p.global_sampler;
-	                   });
+		               });
 
 	if (itr == end(caller.combined_parameters))
 	{
@@ -2850,7 +2860,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
 	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
 		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
-	                   });
+		               });
 
 	if (itr == end(compiler.combined_image_samplers))
 	{
@@ -2924,6 +2934,31 @@ SPIRConstant &Compiler::get_constant(uint32_t id)
 const SPIRConstant &Compiler::get_constant(uint32_t id) const
 {
 	return get<SPIRConstant>(id);
+}
+
+// Recursively marks any constants referenced by the specified constant instruction as being used
+// as an array length. The id must be a constant instruction (SPIRConstant or SPIRConstantOp).
+void Compiler::mark_used_as_array_length(uint32_t id)
+{
+	switch (ids[id].get_type())
+	{
+	case TypeConstant:
+		get<SPIRConstant>(id).is_used_as_array_length = true;
+		break;
+
+	case TypeConstantOp:
+	{
+		auto &cop = get<SPIRConstantOp>(id);
+		for (uint32_t arg_id : cop.arguments)
+			mark_used_as_array_length(arg_id);
+	}
+
+	case TypeUndef:
+		return;
+
+	default:
+		SPIRV_CROSS_THROW("Array lengths must be a constant instruction (OpConstant.. or OpSpecConstant...).");
+	}
 }
 
 static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block, const unordered_set<uint32_t> &blocks)
@@ -3167,8 +3202,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				break;
 			}
 
-				// Atomics shouldn't be able to access function-local variables.
-				// Some GLSL builtins access a pointer.
+			// Atomics shouldn't be able to access function-local variables.
+			// Some GLSL builtins access a pointer.
 
 			default:
 				break;

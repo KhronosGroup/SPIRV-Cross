@@ -447,9 +447,11 @@ struct CLIArguments
 	const char *cpp_interface_name = nullptr;
 	uint32_t version = 0;
 	uint32_t shader_model = 0;
+	uint32_t msl_version = 0;
 	bool es = false;
 	bool set_version = false;
 	bool set_shader_model = false;
+	bool set_msl_version = false;
 	bool set_es = false;
 	bool dump_resources = false;
 	bool force_temporary = false;
@@ -483,7 +485,7 @@ static void print_help()
 	                "[--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] "
 	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--flip-vert-y] [--iterations iter] "
 	                "[--cpp] [--cpp-interface-name <name>] "
-	                "[--msl] "
+	                "[--msl] [--msl-version <MMmmpp>]"
 	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
 	                "[--separate-shader-objects]"
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
@@ -686,6 +688,10 @@ static int main_inner(int argc, char *argv[])
 		args.shader_model = parser.next_uint();
 		args.set_shader_model = true;
 	});
+	cbs.add("--msl-version", [&args](CLIParser &parser) {
+		args.msl_version = parser.next_uint();
+		args.set_msl_version = true;
+	});
 
 	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
 
@@ -725,6 +731,8 @@ static int main_inner(int argc, char *argv[])
 
 		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
 		auto msl_opts = msl_comp->get_options();
+		if (args.set_msl_version)
+			msl_opts.msl_version = args.msl_version;
 		msl_comp->set_options(msl_opts);
 	}
 	else if (args.hlsl)

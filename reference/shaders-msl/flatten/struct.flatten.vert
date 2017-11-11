@@ -5,7 +5,7 @@ using namespace metal;
 
 struct Light
 {
-    float3 Position;
+    packed_float3 Position;
     float Radius;
     float4 Color;
 };
