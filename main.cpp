@@ -465,6 +465,7 @@ struct CLIArguments
 	vector<string> extensions;
 	vector<VariableTypeRemap> variable_type_remaps;
 	vector<InterfaceVariableRename> interface_variable_renames;
+	vector<HLSLVertexAttributeRemap> hlsl_attr_remap;
 	string entry;
 
 	uint32_t iterations = 1;
@@ -493,6 +494,7 @@ static void print_help()
 	                "[--flatten-multidimensional-arrays] [--no-420pack-extension] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>] "
 	                "[--rename-interface-variable <in|out> <location> <new_variable_name>] "
+			"[--set-hlsl-vertex-input-semantic <location> <semantic> "
 	                "\n");
 }
 
@@ -648,11 +650,18 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
 	cbs.add("--separate-shader-objects", [&args](CLIParser &) { args.sso = true; });
+	cbs.add("--set-hlsl-vertex-input-semantic", [&args](CLIParser &parser) {
+		HLSLVertexAttributeRemap remap;
+		remap.location = parser.next_uint();
+		remap.semantic = parser.next_string();
+		args.hlsl_attr_remap.push_back(move(remap));
+	});
+
 	cbs.add("--remap", [&args](CLIParser &parser) {
-		string src = parser.next_string();
-		string dst = parser.next_string();
-		uint32_t components = parser.next_uint();
-		args.remaps.push_back({ move(src), move(dst), components });
+			string src = parser.next_string();
+			string dst = parser.next_string();
+			uint32_t components = parser.next_uint();
+			args.remaps.push_back({ move(src), move(dst), components });
 	});
 
 	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
@@ -872,7 +881,12 @@ static int main_inner(int argc, char *argv[])
 
 	string glsl;
 	for (uint32_t i = 0; i < args.iterations; i++)
-		glsl = compiler->compile();
+	{
+		if (args.hlsl)
+			glsl = static_cast<CompilerHLSL *>(compiler.get())->compile(move(args.hlsl_attr_remap));
+		else
+			glsl = compiler->compile();
+	}
 
 	if (args.output)
 		write_string_to_file(args.output, glsl.c_str());
