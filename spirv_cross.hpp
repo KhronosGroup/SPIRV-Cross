@@ -264,6 +264,12 @@ public:
 	std::vector<std::string> get_entry_points() const;
 	void set_entry_point(const std::string &name);
 
+	// Renames an entry point from old_name to new_name.
+	// If old_name is currently selected as the current entry point, it will continue to be the current entry point,
+	// albeit with a new name.
+	// get_entry_points() is essentially invalidated at this point.
+	void rename_entry_point(const std::string &old_name, const std::string &new_name);
+
 	// Returns the internal data structure for entry points to allow poking around.
 	const SPIREntryPoint &get_entry_point(const std::string &name) const;
 	SPIREntryPoint &get_entry_point(const std::string &name);
