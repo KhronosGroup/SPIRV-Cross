@@ -1527,7 +1527,7 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 
 	string bar_stmt = "threadgroup_barrier(mem_flags::";
 
-	uint32_t mem_sem = id_mem_sem ? get<SPIRConstant>(id_mem_sem).scalar() : MemorySemanticsMaskNone;
+	uint32_t mem_sem = id_mem_sem ? get<SPIRConstant>(id_mem_sem).scalar() : uint32_t(MemorySemanticsMaskNone);
 	switch (mem_sem)
 	{
 	case MemorySemanticsCrossWorkgroupMemoryMask:
@@ -1560,8 +1560,8 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 		bar_stmt += ", ";
 
 		// Use the wider of the two scopes (smaller value)
-		uint32_t exe_scope = id_exe_scope ? get<SPIRConstant>(id_exe_scope).scalar() : ScopeInvocation;
-		uint32_t mem_scope = id_mem_scope ? get<SPIRConstant>(id_mem_scope).scalar() : ScopeInvocation;
+		uint32_t exe_scope = id_exe_scope ? get<SPIRConstant>(id_exe_scope).scalar() : uint32_t(ScopeInvocation);
+		uint32_t mem_scope = id_mem_scope ? get<SPIRConstant>(id_mem_scope).scalar() : uint32_t(ScopeInvocation);
 		uint32_t scope = min(exe_scope, mem_scope);
 		switch (scope)
 		{
