@@ -23,6 +23,13 @@
 
 namespace spirv_cross
 {
+struct HLSLVertexAttr
+{
+	uint32_t binding;
+	std::string semantic;
+	uint32_t semantic_index;
+};
+
 class CompilerHLSL : public CompilerGLSL
 {
 public:
@@ -54,6 +61,7 @@ public:
 		options = opts;
 	}
 
+	std::string compile(std::vector<HLSLVertexAttr> *p_vertex_attributes);
 	std::string compile() override;
 
 private:
@@ -133,6 +141,7 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
+	std::vector<HLSLVertexAttr> vertex_attributes;
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
