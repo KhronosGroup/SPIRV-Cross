@@ -588,6 +588,15 @@ string CompilerHLSL::to_interpolation_qualifiers(uint64_t flags)
 	return res;
 }
 
+std::string CompilerHLSL::to_semantic(uint32_t vertex_location)
+{
+	for (auto &attribute : remap_vertex_attributes)
+		if (attribute.location == vertex_location)
+			return attribute.semantic;
+
+	return join("TEXCOORD", vertex_location);
+}
+
 void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
@@ -605,7 +614,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 		if (has_member_decoration(type.self, i, DecorationLocation))
 		{
 			uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
-			semantic = join(" : TEXCOORD", location);
+			semantic = join(" : ", to_semantic(location));
 		}
 		else
 		{
@@ -613,7 +622,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 			// There could be a conflict if the block members partially specialize the locations.
 			// It is unclear how SPIR-V deals with this. Assume this does not happen for now.
 			uint32_t location = base_location + i;
-			semantic = join(" : TEXCOORD", location);
+			semantic = join(" : ", to_semantic(location));
 		}
 
 		add_member_name(type, i);
@@ -667,19 +676,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			location_number = get_vacant_location();
 
 		// Allow semantic remap if specified.
-		string semantic;
-
-		for (auto &attribute : remap_vertex_attributes)
-		{
-			if (attribute.location == location_number)
-			{
-				semantic = attribute.semantic;
-				break;
-			}
-		}
-
-		if (semantic.empty())
-			semantic = join("TEXCOORD", location_number);
+		auto semantic = to_semantic(location_number);
 
 		if (need_matrix_unroll && type.columns > 1)
 		{
