@@ -393,6 +393,9 @@ string CompilerGLSL::compile()
 		pass_count++;
 	} while (force_recompile);
 
+	// Entry point in GLSL is always main().
+	get_entry_point().name = "main";
+
 	return buffer->str();
 }
 

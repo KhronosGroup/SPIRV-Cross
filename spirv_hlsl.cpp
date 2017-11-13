@@ -3208,5 +3208,8 @@ string CompilerHLSL::compile()
 		pass_count++;
 	} while (force_recompile);
 
+	// Entry point in HLSL is always main() for the time being.
+	get_entry_point().name = "main";
+
 	return buffer->str();
 }

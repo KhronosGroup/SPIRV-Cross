@@ -2530,6 +2530,13 @@ vector<string> Compiler::get_entry_points() const
 	return entries;
 }
 
+void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name)
+{
+	auto &entry = get_entry_point(old_name);
+	entry.orig_name = new_name;
+	entry.name = new_name;
+}
+
 void Compiler::set_entry_point(const std::string &name)
 {
 	auto &entry = get_entry_point(name);

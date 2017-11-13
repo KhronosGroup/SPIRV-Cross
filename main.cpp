@@ -468,6 +468,8 @@ struct CLIArguments
 	vector<HLSLVertexAttributeRemap> hlsl_attr_remap;
 	string entry;
 
+	vector<pair<string, string>> entry_point_rename;
+
 	uint32_t iterations = 1;
 	bool cpp = false;
 	bool msl = false;
@@ -494,7 +496,8 @@ static void print_help()
 	                "[--flatten-multidimensional-arrays] [--no-420pack-extension] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>] "
 	                "[--rename-interface-variable <in|out> <location> <new_variable_name>] "
-	                "[--set-hlsl-vertex-input-semantic <location> <semantic> "
+	                "[--set-hlsl-vertex-input-semantic <location> <semantic>] "
+	                "[--rename-entry-point <old> <new>] "
 	                "\n");
 }
 
@@ -648,6 +651,11 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
+	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
+		auto old_name = parser.next_string();
+		auto new_name = parser.next_string();
+		args.entry_point_rename.push_back({ old_name, new_name });
+	});
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
 	cbs.add("--separate-shader-objects", [&args](CLIParser &) { args.sso = true; });
 	cbs.add("--set-hlsl-vertex-input-semantic", [&args](CLIParser &parser) {
@@ -762,6 +770,9 @@ static int main_inner(int argc, char *argv[])
 
 		compiler->set_variable_type_remap_callback(move(remap_cb));
 	}
+
+	for (auto &rename : args.entry_point_rename)
+		compiler->rename_entry_point(rename.first, rename.second);
 
 	if (!args.entry.empty())
 		compiler->set_entry_point(args.entry);
