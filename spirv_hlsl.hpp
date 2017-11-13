@@ -23,6 +23,13 @@
 
 namespace spirv_cross
 {
+// Interface which remaps vertex inputs to a fixed semantic name to make linking easier.
+struct HLSLVertexAttributeRemap
+{
+	uint32_t location;
+	std::string semantic;
+};
+
 class CompilerHLSL : public CompilerGLSL
 {
 public:
@@ -54,6 +61,11 @@ public:
 		options = opts;
 	}
 
+	// Compiles and remaps vertex attributes at specific locations to a fixed semantic.
+	// The default is TEXCOORD# where # denotes location.
+	// Matrices are unrolled to vectors with notation ${SEMANTIC}_#, where # denotes row.
+	// $SEMANTIC is either TEXCOORD# or a semantic name specified here.
+	std::string compile(std::vector<HLSLVertexAttributeRemap> vertex_attributes);
 	std::string compile() override;
 
 private:
@@ -133,10 +145,12 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
+	std::vector<HLSLVertexAttributeRemap> remap_vertex_attributes;
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
 	void emit_io_block(const SPIRVariable &var);
+	std::string to_semantic(uint32_t vertex_location);
 };
 }
 

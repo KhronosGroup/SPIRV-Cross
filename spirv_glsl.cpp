@@ -2686,7 +2686,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 		if (find_if(begin(header.declare_temporary), end(header.declare_temporary),
 		            [result_type, result_id](const pair<uint32_t, uint32_t> &tmp) {
 			            return tmp.first == result_type && tmp.second == result_id;
-			        }) == end(header.declare_temporary))
+		            }) == end(header.declare_temporary))
 		{
 			header.declare_temporary.emplace_back(result_type, result_id);
 			force_recompile = true;
@@ -2913,8 +2913,9 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
                                            uint32_t op2, uint32_t op3, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2) && should_forward(op3);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ",
-	                                     to_expression(op2), ", ", to_expression(op3), ")"),
+	emit_op(result_type, result_id,
+	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ", ",
+	             to_expression(op3), ")"),
 	        forward);
 
 	inherit_expression_dependencies(result_id, op0);
@@ -5882,8 +5883,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 
-	// OpAtomicStore unimplemented. Not sure what would use that.
-	// OpAtomicLoad seems to only be relevant for atomic counters.
+		// OpAtomicStore unimplemented. Not sure what would use that.
+		// OpAtomicLoad seems to only be relevant for atomic counters.
 
 	case OpAtomicIIncrement:
 		forced_temporaries.insert(ops[1]);

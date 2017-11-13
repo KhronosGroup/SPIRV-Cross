@@ -588,6 +588,15 @@ string CompilerHLSL::to_interpolation_qualifiers(uint64_t flags)
 	return res;
 }
 
+std::string CompilerHLSL::to_semantic(uint32_t vertex_location)
+{
+	for (auto &attribute : remap_vertex_attributes)
+		if (attribute.location == vertex_location)
+			return attribute.semantic;
+
+	return join("TEXCOORD", vertex_location);
+}
+
 void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
@@ -605,7 +614,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 		if (has_member_decoration(type.self, i, DecorationLocation))
 		{
 			uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
-			semantic = join(" : TEXCOORD", location);
+			semantic = join(" : ", to_semantic(location));
 		}
 		else
 		{
@@ -613,7 +622,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 			// There could be a conflict if the block members partially specialize the locations.
 			// It is unclear how SPIR-V deals with this. Assume this does not happen for now.
 			uint32_t location = base_location + i;
-			semantic = join(" : TEXCOORD", location);
+			semantic = join(" : ", to_semantic(location));
 		}
 
 		add_member_name(type, i);
@@ -636,12 +645,12 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 	auto &type = get<SPIRType>(var.basetype);
 
 	string binding;
-	bool use_binding_number = true;
+	bool use_location_number = true;
 	bool legacy = options.shader_model <= 30;
 	if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
 	{
 		binding = join(legacy ? "COLOR" : "SV_Target", get_decoration(var.self, DecorationLocation));
-		use_binding_number = false;
+		use_location_number = false;
 	}
 
 	const auto get_vacant_location = [&]() -> uint32_t {
@@ -655,16 +664,19 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 
 	auto &m = meta[var.self].decoration;
 	auto name = to_name(var.self);
-	if (use_binding_number)
+	if (use_location_number)
 	{
-		uint32_t binding_number;
+		uint32_t location_number;
 
 		// If an explicit location exists, use it with TEXCOORD[N] semantic.
 		// Otherwise, pick a vacant location.
 		if (m.decoration_flags & (1ull << DecorationLocation))
-			binding_number = m.location;
+			location_number = m.location;
 		else
-			binding_number = get_vacant_location();
+			location_number = get_vacant_location();
+
+		// Allow semantic remap if specified.
+		auto semantic = to_semantic(location_number);
 
 		if (need_matrix_unroll && type.columns > 1)
 		{
@@ -677,19 +689,19 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 				SPIRType newtype = type;
 				newtype.columns = 1;
 				statement(to_interpolation_qualifiers(get_decoration_mask(var.self)),
-				          variable_decl(newtype, join(name, "_", i)), " : TEXCOORD", binding_number, ";");
-				active_locations.insert(binding_number++);
+				          variable_decl(newtype, join(name, "_", i)), " : ", semantic, "_", i, ";");
+				active_locations.insert(location_number++);
 			}
 		}
 		else
 		{
-			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name),
-			          " : TEXCOORD", binding_number, ";");
+			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name), " : ",
+			          semantic, ";");
 
 			// Structs and arrays should consume more locations.
 			uint32_t consumed_locations = type_to_consumed_locations(type);
 			for (uint32_t i = 0; i < consumed_locations; i++)
-				active_locations.insert(binding_number + i);
+				active_locations.insert(location_number + i);
 		}
 	}
 	else
@@ -1052,7 +1064,10 @@ void CompilerHLSL::emit_resources()
 	if (requires_op_fmod)
 	{
 		static const char *types[] = {
-			"float", "float2", "float3", "float4",
+			"float",
+			"float2",
+			"float3",
+			"float4",
 		};
 
 		for (auto &type : types)
@@ -3142,6 +3157,12 @@ void CompilerHLSL::require_texture_query_variant(const SPIRType &type)
 		force_recompile = true;
 		required_textureSizeVariants |= mask;
 	}
+}
+
+string CompilerHLSL::compile(std::vector<HLSLVertexAttributeRemap> vertex_attributes)
+{
+	remap_vertex_attributes = move(vertex_attributes);
+	return compile();
 }
 
 string CompilerHLSL::compile()
