@@ -695,8 +695,8 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		}
 		else
 		{
-			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name),
-			          " : ", semantic, ";");
+			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name), " : ",
+			          semantic, ";");
 
 			// Structs and arrays should consume more locations.
 			uint32_t consumed_locations = type_to_consumed_locations(type);
@@ -1064,7 +1064,10 @@ void CompilerHLSL::emit_resources()
 	if (requires_op_fmod)
 	{
 		static const char *types[] = {
-			"float", "float2", "float3", "float4",
+			"float",
+			"float2",
+			"float3",
+			"float4",
 		};
 
 		for (auto &type : types)

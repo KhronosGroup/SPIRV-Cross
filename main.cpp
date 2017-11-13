@@ -494,7 +494,7 @@ static void print_help()
 	                "[--flatten-multidimensional-arrays] [--no-420pack-extension] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>] "
 	                "[--rename-interface-variable <in|out> <location> <new_variable_name>] "
-			"[--set-hlsl-vertex-input-semantic <location> <semantic> "
+	                "[--set-hlsl-vertex-input-semantic <location> <semantic> "
 	                "\n");
 }
 
@@ -658,10 +658,10 @@ static int main_inner(int argc, char *argv[])
 	});
 
 	cbs.add("--remap", [&args](CLIParser &parser) {
-			string src = parser.next_string();
-			string dst = parser.next_string();
-			uint32_t components = parser.next_uint();
-			args.remaps.push_back({ move(src), move(dst), components });
+		string src = parser.next_string();
+		string dst = parser.next_string();
+		uint32_t components = parser.next_uint();
+		args.remaps.push_back({ move(src), move(dst), components });
 	});
 
 	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
