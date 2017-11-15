@@ -2052,7 +2052,16 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	if (!space)
 		return "";
 
-	return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
+	// shader model 5.1 supports space
+	if (options.shader_model >= 51)
+		return join(" : register(", 
+			space, 
+			get_decoration(var.self, DecorationBinding), 
+			"space",
+			get_decoration(var.self, DecorationDescriptorSet),
+			")");
+	else
+		return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
 }
 
 string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
