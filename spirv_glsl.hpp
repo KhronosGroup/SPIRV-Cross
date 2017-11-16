@@ -488,7 +488,7 @@ protected:
 
 	bool type_is_empty(const SPIRType &type);
 
-	void declare_undefined_values();
+	virtual void declare_undefined_values();
 
 	static std::string sanitize_underscores(const std::string &str);
 
