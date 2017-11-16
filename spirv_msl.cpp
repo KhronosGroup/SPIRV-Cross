@@ -1041,6 +1041,40 @@ void CompilerMSL::emit_custom_functions()
 	}
 }
 
+// Undefined global memory is not allowed in MSL.
+// Declare constant and init to zeros.
+void CompilerMSL::declare_undefined_values()
+{
+	bool emitted = false;
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeUndef)
+		{
+			auto &undef = id.get<SPIRUndef>();
+			auto &type = get<SPIRType>(undef.basetype);
+
+			string arg_str;
+			switch (type.basetype)
+			{
+			case SPIRType::Struct:
+				arg_str = "";
+				break;
+
+			default:
+				arg_str = "0";
+				break;
+			}
+			string init_str = type_to_glsl(type) + "(" + arg_str + ")";
+
+			statement("constant ", variable_decl(type, to_name(undef.self), undef.self), " = ", init_str, ";");
+			emitted = true;
+		}
+	}
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerMSL::emit_resources()
 {
 	// Output non-interface structs. These include local function structs
@@ -1076,6 +1110,8 @@ void CompilerMSL::emit_resources()
 			}
 		}
 	}
+
+	declare_undefined_values();
 
 	// Output interface structs.
 	emit_interface_block(stage_in_var_id);
@@ -1510,7 +1546,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
 
-		// OpOuterProduct
+	// OpOuterProduct
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);
@@ -1815,10 +1851,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 	}
 
-		// TODO:
-		//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
-		//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
-		//        GLSLstd450InterpolateAtOffset
+	// TODO:
+	//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
+	//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
+	//        GLSLstd450InterpolateAtOffset
 
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
@@ -2703,13 +2739,11 @@ string CompilerMSL::ensure_valid_name(string name, string pfx)
 void CompilerMSL::replace_illegal_names()
 {
 	static const unordered_set<string> keywords = {
-		"kernel",
-		"bias",
+		"kernel", "bias",
 	};
 
 	static const unordered_set<string> illegal_func_names = {
-		"main",
-		"saturate",
+		"main", "saturate",
 	};
 
 	for (auto &id : ids)

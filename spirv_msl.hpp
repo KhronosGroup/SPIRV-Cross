@@ -185,6 +185,7 @@ protected:
 	bool skip_argument(uint32_t id) const override;
 	std::string to_qualifiers_glsl(uint32_t id) override;
 	void replace_illegal_names() override;
+	void declare_undefined_values() override;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
