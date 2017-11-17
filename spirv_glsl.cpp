@@ -1784,7 +1784,12 @@ void CompilerGLSL::fixup_image_load_store_access()
 
 void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionModel model)
 {
+	uint64_t emitted_builtins = 0;
+	uint64_t global_builtins = 0;
+	const SPIRVariable *block_var = nullptr;
 	bool emitted_block = false;
+	bool builtin_array = false;
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() != TypeVariable)
@@ -1801,6 +1806,13 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 				if (m.builtin)
 					builtins |= 1ull << m.builtin_type;
 		}
+		else if (var.storage == storage && !block && is_builtin_variable(var))
+		{
+			// While we're at it, collect all declared global builtins (HLSL mostly ...).
+			auto &m = meta[var.self].decoration;
+			if (m.builtin)
+				global_builtins |= 1ull << m.builtin_type;
+		}
 
 		if (!builtins)
 			continue;
@@ -1808,42 +1820,58 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		if (emitted_block)
 			SPIRV_CROSS_THROW("Cannot use more than one builtin I/O block.");
 
-		if (storage == StorageClassOutput)
-			statement("out gl_PerVertex");
-		else
-			statement("in gl_PerVertex");
-
-		begin_scope();
-		if (builtins & (1ull << BuiltInPosition))
-			statement("vec4 gl_Position;");
-		if (builtins & (1ull << BuiltInPointSize))
-			statement("float gl_PointSize;");
-		if (builtins & (1ull << BuiltInClipDistance))
-			statement("float gl_ClipDistance[];"); // TODO: Do we need a fixed array size here?
-		if (builtins & (1ull << BuiltInCullDistance))
-			statement("float gl_CullDistance[];"); // TODO: Do we need a fixed array size here?
-
-		bool builtin_array = !type.array.empty();
-		bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
-		if (builtin_array)
-		{
-			// Make sure the array has a supported name in the code.
-			if (storage == StorageClassOutput)
-				set_name(var.self, "gl_out");
-			else if (storage == StorageClassInput)
-				set_name(var.self, "gl_in");
-
-			if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
-				end_scope_decl(join(to_name(var.self), "[", get_entry_point().output_vertices, "]"));
-			else
-				end_scope_decl(join(to_name(var.self), tessellation ? "[gl_MaxPatchVertices]" : "[]"));
-		}
-		else
-			end_scope_decl();
-		statement("");
-
+		emitted_builtins = builtins;
 		emitted_block = true;
+		builtin_array = !type.array.empty();
+		block_var = &var;
 	}
+
+	global_builtins &=
+		(1ull << BuiltInPosition) |
+		(1ull << BuiltInPointSize) |
+		(1ull << BuiltInClipDistance) |
+		(1ull << BuiltInCullDistance);
+
+	// Try to collect all other declared builtins.
+	if (!emitted_block)
+		emitted_builtins = global_builtins;
+
+	// Can't declare an empty interface block.
+	if (!emitted_builtins)
+		return;
+
+	if (storage == StorageClassOutput)
+		statement("out gl_PerVertex");
+	else
+		statement("in gl_PerVertex");
+
+	begin_scope();
+	if (emitted_builtins & (1ull << BuiltInPosition))
+		statement("vec4 gl_Position;");
+	if (emitted_builtins & (1ull << BuiltInPointSize))
+		statement("float gl_PointSize;");
+	if (emitted_builtins & (1ull << BuiltInClipDistance))
+		statement("float gl_ClipDistance[];"); // TODO: Do we need a fixed array size here?
+	if (emitted_builtins & (1ull << BuiltInCullDistance))
+		statement("float gl_CullDistance[];"); // TODO: Do we need a fixed array size here?
+
+	bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
+	if (builtin_array)
+	{
+		// Make sure the array has a supported name in the code.
+		if (storage == StorageClassOutput)
+			set_name(block_var->self, "gl_out");
+		else if (storage == StorageClassInput)
+			set_name(block_var->self, "gl_in");
+
+		if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
+			end_scope_decl(join(to_name(block_var->self), "[", get_entry_point().output_vertices, "]"));
+		else
+			end_scope_decl(join(to_name(block_var->self), tessellation ? "[gl_MaxPatchVertices]" : "[]"));
+	}
+	else
+		end_scope_decl();
+	statement("");
 }
 
 void CompilerGLSL::declare_undefined_values()
