@@ -2052,7 +2052,16 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	if (!space)
 		return "";
 
-	return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
+	// shader model 5.1 supports space
+	if (options.shader_model >= 51)
+		return join(" : register(", 
+			space, 
+			get_decoration(var.self, DecorationBinding), 
+			", space",
+			get_decoration(var.self, DecorationDescriptorSet),
+			")");
+	else
+		return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
 }
 
 string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
@@ -2060,7 +2069,15 @@ string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
 	// For combined image samplers.
 	if (!has_decoration(var.self, DecorationBinding))
 		return "";
-	return join(" : register(s", get_decoration(var.self, DecorationBinding), ")");
+
+	if (options.shader_model >= 51)
+		return join(" : register(s",
+			get_decoration(var.self, DecorationBinding),
+			", space",
+			get_decoration(var.self, DecorationDescriptorSet),
+			")");
+	else
+		return join(" : register(s", get_decoration(var.self, DecorationBinding), ")");
 }
 
 void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
