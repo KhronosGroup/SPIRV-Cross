@@ -2054,12 +2054,8 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 
 	// shader model 5.1 supports space
 	if (options.shader_model >= 51)
-		return join(" : register(", 
-			space, 
-			get_decoration(var.self, DecorationBinding), 
-			", space",
-			get_decoration(var.self, DecorationDescriptorSet),
-			")");
+		return join(" : register(", space, get_decoration(var.self, DecorationBinding), ", space",
+		            get_decoration(var.self, DecorationDescriptorSet), ")");
 	else
 		return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
 }
@@ -2071,11 +2067,8 @@ string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
 		return "";
 
 	if (options.shader_model >= 51)
-		return join(" : register(s",
-			get_decoration(var.self, DecorationBinding),
-			", space",
-			get_decoration(var.self, DecorationDescriptorSet),
-			")");
+		return join(" : register(s", get_decoration(var.self, DecorationBinding), ", space",
+		            get_decoration(var.self, DecorationDescriptorSet), ")");
 	else
 		return join(" : register(s", get_decoration(var.self, DecorationBinding), ")");
 }

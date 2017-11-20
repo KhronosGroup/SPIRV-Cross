@@ -6,7 +6,7 @@ struct CBO_1
     float4 d;
 };
 
-ConstantBuffer<CBO_1> cbo[2][4] : register(b4);
+ConstantBuffer<CBO_1> cbo[2][4] : register(b4, space0);
 cbuffer push
 {
     float4 PushMe_a : packoffset(c0);
