@@ -5272,6 +5272,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We can only split the expression here if our expression is forwarded as a temporary.
 		bool allow_base_expression = forced_temporaries.find(id) == end(forced_temporaries);
 
+		// Do not allow base expression for struct members. We risk doing "swizzle" optimizations in this case.
+		auto &composite_type = expression_type(ops[2]);
+		if (composite_type.basetype == SPIRType::Struct)
+			allow_base_expression = false;
+
 		// Only apply this optimization if result is scalar.
 		if (allow_base_expression && should_forward(ops[2]) && type.vecsize == 1 && type.columns == 1 && length == 1)
 		{
