@@ -1437,7 +1437,9 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	auto &execution = get_entry_point();
 
-	if (execution.model == ExecutionModelGLCompute)
+	switch (execution.model)
+	{
+	case ExecutionModelGLCompute:
 	{
 		SpecializationConstant wg_x, wg_y, wg_z;
 		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
@@ -1454,6 +1456,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			z = get<SPIRConstant>(wg_z.id).scalar();
 
 		statement("[numthreads(", x, ", ", y, ", ", z, ")]");
+		break;
+	}
+	case ExecutionModelFragment:
+		if (execution.flags & (1ull << ExecutionModeEarlyFragmentTests))
+			statement("[earlydepthstencil]");
+		break;
+	default:
+		break;
 	}
 
 	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", merge(arguments), ")");
