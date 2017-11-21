@@ -689,6 +689,7 @@ protected:
 
 	std::unordered_set<uint32_t> forced_temporaries;
 	std::unordered_set<uint32_t> forwarded_temporaries;
+	std::unordered_set<uint32_t> hoisted_temporaries;
 
 	uint64_t active_input_builtins = 0;
 	uint64_t active_output_builtins = 0;

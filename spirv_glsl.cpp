@@ -2707,7 +2707,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 
 	// If we're declaring temporaries inside continue blocks,
 	// we must declare the temporary in the loop header so that the continue block can avoid declaring new variables.
-	if (current_continue_block)
+	if (current_continue_block && !hoisted_temporaries.count(result_id))
 	{
 		auto &header = get<SPIRBlock>(current_continue_block->loop_dominator);
 		if (find_if(begin(header.declare_temporary), end(header.declare_temporary),
@@ -7556,21 +7556,6 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 			else
 			{
 				flush_variable_declaration(phi.function_variable);
-
-				// We tried to write an ID which does not yet exist,
-				// this can happen if we are a continue block, and the value we are trying to write
-				// only exists inside the loop body.
-				// In this case we must hoist out the temporary to the same scope as the phi variable,
-				// declare it at the outer scope (using child.declare_temporary),
-				// force the temporary to be committed to a value when it is computed (forced_temporaries),
-				// and declare that variable without type information (hoisted_temporaries).
-				if (ids[phi.local_variable].empty() && !hoisted_temporaries.count(phi.local_variable))
-				{
-					force_recompile = true;
-					forced_temporaries.insert(phi.local_variable);
-					hoisted_temporaries.insert(phi.local_variable);
-					child.declare_temporary.emplace_back(var.basetype, phi.local_variable);
-				}
 
 				// This might be called in continue block, so make sure we
 				// use this to emit ESSL 1.0 compliant increments/decrements.

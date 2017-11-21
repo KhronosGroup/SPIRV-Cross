@@ -3122,8 +3122,23 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 			// A Phi node might be reading other phi variables as input, so check for this as well.
 			for (auto &phi : block.phi_variables)
+			{
 				if (id_is_phi_variable(phi.local_variable))
 					accessed_variables_to_block[phi.local_variable].insert(block.self);
+				else
+				{
+					// Temporary variable, due to potential issues with scoping,
+					// always declare these variables up-front in the entry block.
+					if (!compiler.hoisted_temporaries.count(phi.local_variable))
+					{
+						auto &var = compiler.get<SPIRVariable>(phi.function_variable);
+						auto &entry_block = compiler.get<SPIRBlock>(compiler.current_function->entry_block);
+						entry_block.declare_temporary.emplace_back(var.basetype, phi.local_variable);
+						compiler.hoisted_temporaries.insert(phi.local_variable);
+						compiler.forced_temporaries.insert(phi.local_variable);
+					}
+				}
+			}
 
 			switch (block.terminator)
 			{
