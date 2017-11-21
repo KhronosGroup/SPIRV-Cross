@@ -129,6 +129,15 @@ if (${PYTHONINTERP_FOUND})
 	add_test(NAME spirv-cross-test-hlsl
 		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl
 			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl)
+	add_test(NAME spirv-cross-test-opt
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --opt
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+	add_test(NAME spirv-cross-test-metal-opt
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal --opt
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl)
+	add_test(NAME spirv-cross-test-hlsl-opt
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl --opt
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl)
   endif()
 else()
   message(WARNING "Testing disabled. Could not find python3. If you have python3 installed try running "

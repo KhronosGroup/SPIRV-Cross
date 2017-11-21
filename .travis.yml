@@ -28,3 +28,6 @@ script:
   - ./test_shaders.py shaders
   - ./test_shaders.py --msl shaders-msl
   - ./test_shaders.py --hlsl shaders-hlsl
+  - ./test_shaders.py shaders --opt
+  - ./test_shaders.py --msl shaders-msl --opt
+  - ./test_shaders.py --hlsl shaders-hlsl --opt
