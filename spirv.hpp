@@ -938,6 +938,16 @@ enum Op {
     OpSubgroupAnyKHR = 4429,
     OpSubgroupAllEqualKHR = 4430,
     OpSubgroupReadInvocationKHR = 4432,
+    OpGroupIAddNonUniformAMD = 5000,
+    OpGroupFAddNonUniformAMD = 5001,
+    OpGroupFMinNonUniformAMD = 5002,
+    OpGroupUMinNonUniformAMD = 5003,
+    OpGroupSMinNonUniformAMD = 5004,
+    OpGroupFMaxNonUniformAMD = 5005,
+    OpGroupUMaxNonUniformAMD = 5006,
+    OpGroupSMaxNonUniformAMD = 5007,
+    OpFragmentMaskFetchAMD = 5011,
+    OpFragmentFetchAMD = 5012,
     OpMax = 0x7fffffff,
 };
 

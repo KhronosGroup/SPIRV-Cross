@@ -1324,6 +1324,14 @@ void Compiler::parse(const Instruction &instruction)
 		auto ext = extract_string(spirv, instruction.offset + 1);
 		if (ext == "GLSL.std.450")
 			set<SPIRExtension>(id, SPIRExtension::GLSL);
+		else if (ext == "SPV_AMD_shader_ballot")
+			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_shader_ballot);
+		else if (ext == "SPV_AMD_shader_explicit_vertex_parameter")
+			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter);
+		else if (ext == "SPV_AMD_shader_trinary_minmax")
+			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_shader_trinary_minmax);
+		else if (ext == "SPV_AMD_gcn_shader")
+			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_gcn_shader);
 		else
 			set<SPIRExtension>(id, SPIRExtension::Unsupported);
 

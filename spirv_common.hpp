@@ -326,7 +326,11 @@ struct SPIRExtension : IVariant
 	enum Extension
 	{
 		Unsupported,
-		GLSL
+		GLSL,
+		SPV_AMD_shader_ballot,
+		SPV_AMD_shader_explicit_vertex_parameter,
+		SPV_AMD_shader_trinary_minmax,
+		SPV_AMD_gcn_shader
 	};
 
 	SPIRExtension(Extension ext_)

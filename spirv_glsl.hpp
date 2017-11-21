@@ -21,6 +21,7 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <set>
 #include <utility>
 
 namespace spirv_cross
@@ -189,6 +190,14 @@ protected:
 	void emit_block_instructions(const SPIRBlock &block);
 	virtual void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                          uint32_t count);
+	virtual void emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                                           uint32_t count);
+	virtual void emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                                                              uint32_t count);
+	virtual void emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                                                   uint32_t count);
+	virtual void emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
+	                                        uint32_t count);
 	virtual void emit_header();
 	virtual void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id);
 	virtual void emit_texture_op(const Instruction &i);
@@ -445,7 +454,7 @@ protected:
 	std::unordered_map<uint32_t, uint32_t> expression_usage_counts;
 	void track_expression_read(uint32_t id);
 
-	std::unordered_set<std::string> forced_extensions;
+	std::set<std::string> forced_extensions;
 	std::vector<std::string> header_lines;
 
 	uint32_t statement_count;
