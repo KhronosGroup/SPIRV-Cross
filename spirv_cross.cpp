@@ -3088,8 +3088,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	struct AccessHandler : OpcodeHandler
 	{
 	public:
-		AccessHandler(Compiler &compiler_)
-		    : compiler(compiler_)
+		AccessHandler(Compiler &compiler_, SPIRFunction &entry_)
+		    : compiler(compiler_), entry(entry_)
 		{
 		}
 
@@ -3132,7 +3132,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					if (!compiler.hoisted_temporaries.count(phi.local_variable))
 					{
 						auto &var = compiler.get<SPIRVariable>(phi.function_variable);
-						auto &entry_block = compiler.get<SPIRBlock>(compiler.current_function->entry_block);
+						auto &entry_block = compiler.get<SPIRBlock>(entry.entry_block);
 						entry_block.declare_temporary.emplace_back(var.basetype, phi.local_variable);
 						compiler.hoisted_temporaries.insert(phi.local_variable);
 						compiler.forced_temporaries.insert(phi.local_variable);
@@ -3300,10 +3300,11 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		}
 
 		Compiler &compiler;
+		SPIRFunction &entry;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
 		const SPIRBlock *current_block = nullptr;
-	} handler(*this);
+	} handler(*this, entry);
 
 	// First, we map out all variable access within a function.
 	// Essentially a map of block -> { variables accessed in the basic block }
