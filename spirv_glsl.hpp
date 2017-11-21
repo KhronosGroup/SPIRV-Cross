@@ -494,6 +494,8 @@ protected:
 
 	bool can_use_io_location(spv::StorageClass storage);
 
+	std::unordered_set<uint32_t> hoisted_temporaries;
+
 private:
 	void init()
 	{
