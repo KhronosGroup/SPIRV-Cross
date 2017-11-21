@@ -163,7 +163,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     else:
         subprocess.check_call(['glslangValidator', '-V', '-o', spirv_path, shader])
 
-    if opt:
+    if opt and (not invalid_spirv):
         subprocess.check_call(['spirv-opt', '-O', '-o', spirv_path, spirv_path])
 
     if not invalid_spirv:

@@ -3120,6 +3120,11 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				}
 			};
 
+			// A Phi node might be reading other phi variables as input, so check for this as well.
+			for (auto &phi : block.phi_variables)
+				if (id_is_phi_variable(phi.local_variable))
+					accessed_variables_to_block[phi.local_variable].insert(block.self);
+
 			switch (block.terminator)
 			{
 			case SPIRBlock::Direct:
@@ -3147,7 +3152,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		{
 			if (id >= compiler.get_current_id_bound())
 				return false;
-			auto *var = compiler.maybe_get_backing_variable(id);
+			auto *var = compiler.maybe_get<SPIRVariable>(id);
 			return var && var->phi_variable;
 		}
 
@@ -3244,16 +3249,6 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					// Usually, functions write to a dummy variable,
 					// which is then copied to in full to the real argument.
 				}
-				break;
-			}
-
-			case OpPhi:
-			{
-				if (length < 2)
-					return false;
-
-				// Phi nodes are implemented as function variables, so register an access here.
-				accessed_variables_to_block[args[1]].insert(current_block->self);
 				break;
 			}
 
