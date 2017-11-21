@@ -1287,6 +1287,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpSourceExtension:
 	case OpNop:
 	case OpLine:
+	case OpNoLine:
 	case OpString:
 		break;
 
@@ -3142,6 +3143,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			}
 		}
 
+		bool id_is_phi_variable(uint32_t id)
+		{
+			if (id >= compiler.get_current_id_bound())
+				return false;
+			auto *var = compiler.maybe_get_backing_variable(id);
+			return var && var->phi_variable;
+		}
+
 		bool handle(spv::Op op, const uint32_t *args, uint32_t length)
 		{
 			switch (op)
@@ -3248,11 +3257,34 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				break;
 			}
 
+			case OpExtInst:
+			{
+				for (uint32_t i = 4; i < length; i++)
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
+				break;
+			}
+
+			case OpArrayLength:
+				// Uses literals, but cannot be a phi variable, so ignore.
+				break;
+
 				// Atomics shouldn't be able to access function-local variables.
 				// Some GLSL builtins access a pointer.
 
 			default:
+			{
+				// Rather dirty way of figuring out where Phi variables are used.
+				// As long as only IDs are used, we can scan through instructions and try to find any evidence that
+				// the ID of a variable has been used.
+				// There are potential false positives here where a literal is used in-place of an ID,
+				// but worst case, it does not affect the correctness of the compile.
+				// Exhaustive analysis would be better here, but it's not worth it for now.
+				for (uint32_t i = 0; i < length; i++)
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
 				break;
+			}
 			}
 			return true;
 		}
