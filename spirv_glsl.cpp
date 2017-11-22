@@ -1515,8 +1515,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			if (options.es && options.version < 320)
 			{
 				// Geometry and tessellation extensions imply this extension.
-				if (!forced_extensions.count("GL_EXT_geometry_shader") &&
-				    !forced_extensions.count("GL_EXT_tessellation_shader"))
+				if (!has_extension("GL_EXT_geometry_shader") && !has_extension("GL_EXT_tessellation_shader"))
 					require_extension("GL_EXT_shader_io_blocks");
 			}
 
@@ -3868,6 +3867,150 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 }
 
+void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
+                                                 uint32_t)
+{
+	require_extension("GL_AMD_shader_ballot");
+
+	enum AMDShaderBallot
+	{
+		SwizzleInvocationsAMD = 1,
+		SwizzleInvocationsMaskedAMD = 2,
+		WriteInvocationAMD = 3,
+		MbcntAMD = 4
+	};
+
+	auto op = static_cast<AMDShaderBallot>(eop);
+
+	switch (op)
+	{
+	case SwizzleInvocationsAMD:
+		emit_binary_func_op(result_type, id, args[0], args[1], "swizzleInvocationsAMD");
+		break;
+
+	case SwizzleInvocationsMaskedAMD:
+		emit_binary_func_op(result_type, id, args[0], args[1], "swizzleInvocationsMaskedAMD");
+		break;
+
+	case WriteInvocationAMD:
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "writeInvocationAMD");
+		break;
+
+	case MbcntAMD:
+		emit_unary_func_op(result_type, id, args[0], "mbcntAMD");
+		break;
+
+	default:
+		statement("// unimplemented SPV AMD shader ballot op ", eop);
+		break;
+	}
+}
+
+void CompilerGLSL::emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t result_type, uint32_t id, uint32_t eop,
+                                                                    const uint32_t *args, uint32_t)
+{
+	require_extension("GL_AMD_shader_explicit_vertex_parameter");
+
+	enum AMDShaderExplicitVertexParameter
+	{
+		InterpolateAtVertexAMD = 1
+	};
+
+	auto op = static_cast<AMDShaderExplicitVertexParameter>(eop);
+
+	switch (op)
+	{
+	case InterpolateAtVertexAMD:
+		emit_binary_func_op(result_type, id, args[0], args[1], "interpolateAtVertexAMD");
+		break;
+
+	default:
+		statement("// unimplemented SPV AMD shader explicit vertex parameter op ", eop);
+		break;
+	}
+}
+
+void CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t id, uint32_t eop,
+                                                         const uint32_t *args, uint32_t)
+{
+	require_extension("GL_AMD_shader_trinary_minmax");
+
+	enum AMDShaderTrinaryMinMax
+	{
+		FMin3AMD = 1,
+		UMin3AMD = 2,
+		SMin3AMD = 3,
+		FMax3AMD = 4,
+		UMax3AMD = 5,
+		SMax3AMD = 6,
+		FMid3AMD = 7,
+		UMid3AMD = 8,
+		SMid3AMD = 9
+	};
+
+	auto op = static_cast<AMDShaderTrinaryMinMax>(eop);
+
+	switch (op)
+	{
+	case FMin3AMD:
+	case UMin3AMD:
+	case SMin3AMD:
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "min3");
+		break;
+
+	case FMax3AMD:
+	case UMax3AMD:
+	case SMax3AMD:
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "max3");
+		break;
+
+	case FMid3AMD:
+	case UMid3AMD:
+	case SMid3AMD:
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "mid3");
+		break;
+
+	default:
+		statement("// unimplemented SPV AMD shader trinary minmax op ", eop);
+		break;
+	}
+}
+
+void CompilerGLSL::emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
+                                              uint32_t)
+{
+	require_extension("GL_AMD_gcn_shader");
+
+	enum AMDGCNShader
+	{
+		CubeFaceIndexAMD = 1,
+		CubeFaceCoordAMD = 2,
+		TimeAMD = 3
+	};
+
+	auto op = static_cast<AMDGCNShader>(eop);
+
+	switch (op)
+	{
+	case CubeFaceIndexAMD:
+		emit_unary_func_op(result_type, id, args[0], "cubeFaceIndexAMD");
+		break;
+	case CubeFaceCoordAMD:
+		emit_unary_func_op(result_type, id, args[0], "cubeFaceCoordAMD");
+		break;
+	case TimeAMD:
+	{
+		string expr = "timeAMD()";
+		emit_op(result_type, id, expr, true);
+		break;
+	}
+
+	default:
+		statement("// unimplemented SPV AMD gcn shader op ", eop);
+		break;
+	}
+}
+
 string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
@@ -3894,6 +4037,8 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 		return "int64BitsToDouble";
 	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
 		return "uint64BitsToDouble";
+	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::UInt && in_type.vecsize == 2)
+		return "packUint2x32";
 	else
 		return "";
 }
@@ -6372,13 +6517,168 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpExtInst:
 	{
 		uint32_t extension_set = ops[2];
-		if (get<SPIRExtension>(extension_set).ext != SPIRExtension::GLSL)
+
+		if (get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
+		{
+			emit_glsl_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		}
+		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_ballot)
+		{
+			emit_spv_amd_shader_ballot_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		}
+		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter)
+		{
+			emit_spv_amd_shader_explicit_vertex_parameter_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		}
+		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_trinary_minmax)
+		{
+			emit_spv_amd_shader_trinary_minmax_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		}
+		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_gcn_shader)
+		{
+			emit_spv_amd_gcn_shader_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		}
+		else
 		{
 			statement("// unimplemented ext op ", instruction.op);
 			break;
 		}
 
-		emit_glsl_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		break;
+	}
+
+	case OpSubgroupBallotKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		string expr;
+		expr = join("unpackUint2x32(ballotARB(" + to_expression(ops[2]) + "))");
+		emit_op(result_type, id, expr, true);
+
+		require_extension("GL_ARB_shader_ballot");
+		break;
+	}
+
+	case OpSubgroupFirstInvocationKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[2], "readFirstInvocationARB");
+
+		require_extension("GL_ARB_shader_ballot");
+		break;
+	}
+
+	case OpSubgroupReadInvocationKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_binary_func_op(result_type, id, ops[2], ops[3], "readInvocationARB");
+
+		require_extension("GL_ARB_shader_ballot");
+		break;
+	}
+
+	case OpSubgroupAllKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[2], "allInvocationsARB");
+
+		require_extension("GL_ARB_shader_group_vote");
+		break;
+	}
+
+	case OpSubgroupAnyKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[2], "anyInvocationARB");
+
+		require_extension("GL_ARB_shader_group_vote");
+		break;
+	}
+
+	case OpSubgroupAllEqualKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[2], "allInvocationsEqualARB");
+
+		require_extension("GL_ARB_shader_group_vote");
+		break;
+	}
+
+	case OpGroupIAddNonUniformAMD:
+	case OpGroupFAddNonUniformAMD:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[4], "addInvocationsNonUniformAMD");
+
+		require_extension("GL_AMD_shader_ballot");
+		break;
+	}
+
+	case OpGroupFMinNonUniformAMD:
+	case OpGroupUMinNonUniformAMD:
+	case OpGroupSMinNonUniformAMD:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[4], "minInvocationsNonUniformAMD");
+
+		require_extension("GL_AMD_shader_ballot");
+		break;
+	}
+
+	case OpGroupFMaxNonUniformAMD:
+	case OpGroupUMaxNonUniformAMD:
+	case OpGroupSMaxNonUniformAMD:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_unary_func_op(result_type, id, ops[4], "maxInvocationsNonUniformAMD");
+
+		require_extension("GL_AMD_shader_ballot");
+		break;
+	}
+
+	case OpFragmentMaskFetchAMD:
+	{
+		auto &type = expression_type(ops[2]);
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		if (type.image.dim == spv::DimSubpassData)
+		{
+			emit_unary_func_op(result_type, id, ops[2], "fragmentMaskFetchAMD");
+		}
+		else
+		{
+			emit_binary_func_op(result_type, id, ops[2], ops[3], "fragmentMaskFetchAMD");
+		}
+
+		require_extension("GL_AMD_shader_fragment_mask");
+		break;
+	}
+
+	case OpFragmentFetchAMD:
+	{
+		auto &type = expression_type(ops[2]);
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		if (type.image.dim == spv::DimSubpassData)
+		{
+			emit_binary_func_op(result_type, id, ops[2], ops[4], "fragmentFetchAMD");
+		}
+		else
+		{
+			emit_trinary_func_op(result_type, id, ops[2], ops[3], ops[4], "fragmentFetchAMD");
+		}
+
+		require_extension("GL_AMD_shader_fragment_mask");
 		break;
 	}
 
@@ -6976,11 +7276,17 @@ void CompilerGLSL::add_header_line(const std::string &line)
 	header_lines.push_back(line);
 }
 
+bool CompilerGLSL::has_extension(const std::string &ext) const
+{
+	auto itr = find(begin(forced_extensions), end(forced_extensions), ext);
+	return itr != end(forced_extensions);
+}
+
 void CompilerGLSL::require_extension(const string &ext)
 {
-	if (forced_extensions.find(ext) == end(forced_extensions))
+	if (!has_extension(ext))
 	{
-		forced_extensions.insert(ext);
+		forced_extensions.push_back(ext);
 		force_recompile = true;
 	}
 }
