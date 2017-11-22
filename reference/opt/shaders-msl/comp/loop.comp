@@ -1,0 +1,172 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct SSBO
+{
+    float4x4 mvp;
+    float4 in_data[1];
+};
+
+struct SSBO2
+{
+    float4 out_data[1];
+};
+
+constant float4 _189 = float4(0);
+constant int _191 = int(0);
+constant uint _196 = uint(0);
+
+kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], device SSBO& _24 [[buffer(0)]], device SSBO2& _177 [[buffer(1)]])
+{
+    int _33;
+    int _50;
+    uint _12;
+    uint _52;
+    uint _79;
+    uint _65;
+    float4 _189;
+    float4 _98;
+    int _191;
+    int _100;
+    int _129;
+    uint _127;
+    uint _196;
+    float4 _123;
+    uint _125;
+    int _145;
+    int _148;
+    int _154;
+    float4 _171;
+    int _185;
+    uint _186;
+    if (_24.in_data[gl_GlobalInvocationID.x].y == 20.0)
+    {
+        uint _184;
+        int _183;
+        _183 = 0;
+        _184 = 0u;
+        for (;;)
+        {
+            _50 = _183 * 2;
+            _52 = _184 + uint(1);
+            if (_52 < gl_GlobalInvocationID.x)
+            {
+                _183 = _50;
+                _184 = _52;
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        _185 = _50;
+        _186 = _52;
+    }
+    else
+    {
+        _185 = 0;
+        _186 = 0u;
+    }
+    switch (_185)
+    {
+        case 10:
+        {
+            uint _187;
+            _187 = _186;
+            for (;;)
+            {
+                _65 = _187 + uint(1);
+                _187 = _65;
+                continue;
+            }
+            break;
+        }
+        default:
+        {
+            uint _188;
+            _188 = _186;
+            for (;;)
+            {
+                _79 = _188 + 2u;
+                _188 = _79;
+                continue;
+            }
+            break;
+        }
+    }
+    float4 _190;
+    _190 = _189;
+    int _192;
+    _192 = _191;
+    while (_192 < 10)
+    {
+        _98 = _190 * 2.0;
+        _100 = _192 + 1;
+    }
+    float4 _193;
+    _193 = _190;
+    int _194;
+    _194 = _192;
+    uint _195;
+    _195 = 0u;
+    uint _197;
+    _197 = _196;
+    for (; _195 < 16u; _127 = _195 + uint(1), _129 = _194 + 1, _193 = float4 _198, _194 = _129, _195 = _127, _197 = uint _199)
+    {
+        _198 = _193;
+        _199 = 0u;
+        for (; _199 < 30u; _125 = _199 + uint(1), _198 = _123, _199 = _125)
+        {
+            _123 = _24.mvp * _198;
+        }
+    }
+    int _200;
+    _200 = 0;
+    for (;;)
+    {
+        int _135 = _200 + 1;
+        if (_135 > 10)
+        {
+        }
+        else
+        {
+            _145 = _135 + 3;
+            int _201;
+            _201 = _145;
+            _200 = _201;
+            continue;
+        }
+        _148 = (_135 + 2) + 10;
+        _201 = _148;
+        _200 = _201;
+        continue;
+    }
+    int _202;
+    _202 = 0;
+    for (;;)
+    {
+        _154 = _202 + 1;
+        if (_154 > 10)
+        {
+            _202 = _154;
+            continue;
+        }
+        else
+        {
+            break;
+        }
+    }
+    float4 _203;
+    _203 = _189;
+    for (;;)
+    {
+        _171 = _203 + float4(1.0);
+        _203 = _171;
+        continue;
+    }
+    _177.out_data[_196] = _189;
+}
+
