@@ -18,8 +18,8 @@ fragment main0_out main0()
     float4 _20;
     float4 _21;
     float4 _38;
-    float4 _52;
     float4 _51;
+    float4 _52;
     _51 = _50;
     for (;;)
     {

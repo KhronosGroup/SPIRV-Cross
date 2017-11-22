@@ -43,8 +43,8 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     uint _186;
     if (_24.in_data[gl_GlobalInvocationID.x].y == 20.0)
     {
-        uint _184;
         int _183;
+        uint _184;
         _183 = 0;
         _184 = 0u;
         for (;;)

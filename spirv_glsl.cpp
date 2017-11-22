@@ -7900,6 +7900,9 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 
 void CompilerGLSL::flush_undeclared_variables(SPIRBlock &block)
 {
+	// Enforce declaration order for regression testing purposes.
+	sort(begin(block.dominated_variables), end(block.dominated_variables));
+
 	for (auto &v : block.dominated_variables)
 	{
 		auto &var = get<SPIRVariable>(v);
