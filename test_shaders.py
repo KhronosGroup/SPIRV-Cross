@@ -279,6 +279,9 @@ def shader_is_sso(shader):
 def shader_is_flatten_dimensions(shader):
     return '.flatten_dim.' in shader
 
+def shader_is_noopt(shader):
+    return '.noopt.' in shader
+
 def test_shader(stats, shader, update, keep, opt):
     joined_path = os.path.join(shader[0], shader[1])
     vulkan = shader_is_vulkan(shader[1])
@@ -290,9 +293,10 @@ def test_shader(stats, shader, update, keep, opt):
     flatten_ubo = shader_is_flatten_ubo(shader[1])
     sso = shader_is_sso(shader[1])
     flatten_dim = shader_is_flatten_dimensions(shader[1])
+    noopt = shader_is_noopt(shader[1])
 
     print('Testing shader:', joined_path)
-    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo, sso, flatten_dim, opt)
+    spirv, glsl, vulkan_glsl = cross_compile(joined_path, vulkan, is_spirv, invalid_spirv, eliminate, is_legacy, flatten_ubo, sso, flatten_dim, opt and (not noopt))
 
     # Only test GLSL stats if we have a shader following GL semantics.
     if stats and (not vulkan) and (not is_spirv) and (not desktop):
@@ -318,7 +322,8 @@ def test_shader_msl(stats, shader, update, keep, opt):
     joined_path = os.path.join(shader[0], shader[1])
     print('\nTesting MSL shader:', joined_path)
     is_spirv = shader_is_spirv(shader[1])
-    spirv, msl = cross_compile_msl(joined_path, is_spirv, opt)
+    noopt = shader_is_noopt(shader[1])
+    spirv, msl = cross_compile_msl(joined_path, is_spirv, opt and (not noopt))
     regression_check(shader, msl, update, keep, opt)
     os.remove(spirv)
 
@@ -329,7 +334,8 @@ def test_shader_hlsl(stats, shader, update, keep, opt):
     joined_path = os.path.join(shader[0], shader[1])
     print('Testing HLSL shader:', joined_path)
     is_spirv = shader_is_spirv(shader[1])
-    spirv, msl = cross_compile_hlsl(joined_path, is_spirv, opt)
+    noopt = shader_is_noopt(shader[1])
+    spirv, msl = cross_compile_hlsl(joined_path, is_spirv, opt and (not noopt))
     regression_check(shader, msl, update, keep, opt)
     os.remove(spirv)
 

@@ -3188,6 +3188,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				// If we store through an access chain, we have a partial write.
 				if (var && var->self == ptr && var->storage == StorageClassFunction)
 					complete_write_variables_to_block[var->self].insert(current_block->self);
+
+				// Might try to store a Phi variable here.
+				if (id_is_phi_variable(args[1]))
+					accessed_variables_to_block[args[1]].insert(current_block->self);
 				break;
 			}
 
@@ -3233,6 +3237,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto *var = compiler.maybe_get_backing_variable(args[2]);
 				if (var && var->storage == StorageClassFunction)
 					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				// Might try to copy a Phi variable here.
+				if (id_is_phi_variable(args[2]))
+					accessed_variables_to_block[args[2]].insert(current_block->self);
 				break;
 			}
 
@@ -3263,6 +3271,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					// Cannot easily prove if argument we pass to a function is completely written.
 					// Usually, functions write to a dummy variable,
 					// which is then copied to in full to the real argument.
+
+					// Might try to copy a Phi variable here.
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
 				}
 				break;
 			}
