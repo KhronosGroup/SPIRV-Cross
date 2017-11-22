@@ -5426,7 +5426,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// Do not allow base expression for struct members. We risk doing "swizzle" optimizations in this case.
 		auto &composite_type = expression_type(ops[2]);
-		if (composite_type.basetype == SPIRType::Struct)
+		if (composite_type.basetype == SPIRType::Struct || !composite_type.array.empty())
 			allow_base_expression = false;
 
 		// Only apply this optimization if result is scalar.
