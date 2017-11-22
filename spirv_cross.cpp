@@ -3089,7 +3089,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	{
 	public:
 		AccessHandler(Compiler &compiler_, SPIRFunction &entry_)
-		    : compiler(compiler_), entry(entry_)
+		    : compiler(compiler_)
+		    , entry(entry_)
 		{
 		}
 
