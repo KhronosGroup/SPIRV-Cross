@@ -26,13 +26,10 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     uint _52;
     uint _79;
     uint _65;
-    float4 _189;
     float4 _98;
-    int _191;
     int _100;
     int _129;
     uint _127;
-    uint _196;
     float4 _123;
     uint _125;
     int _145;

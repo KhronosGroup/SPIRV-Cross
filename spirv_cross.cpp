@@ -3132,11 +3132,17 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					// always declare these variables up-front in the entry block.
 					if (!compiler.hoisted_temporaries.count(phi.local_variable))
 					{
-						auto &var = compiler.get<SPIRVariable>(phi.function_variable);
-						auto &entry_block = compiler.get<SPIRBlock>(entry.entry_block);
-						entry_block.declare_temporary.emplace_back(var.basetype, phi.local_variable);
-						compiler.hoisted_temporaries.insert(phi.local_variable);
-						compiler.forced_temporaries.insert(phi.local_variable);
+						auto *undef = compiler.maybe_get<SPIRUndef>(phi.local_variable);
+						// Undef variables are declared as global variables without initializer.
+						// Never declare these variables.
+						if (!undef)
+						{
+							auto &var = compiler.get<SPIRVariable>(phi.function_variable);
+							auto &entry_block = compiler.get<SPIRBlock>(entry.entry_block);
+							entry_block.declare_temporary.emplace_back(var.basetype, phi.local_variable);
+							compiler.hoisted_temporaries.insert(phi.local_variable);
+							compiler.forced_temporaries.insert(phi.local_variable);
+						}
 					}
 				}
 			}

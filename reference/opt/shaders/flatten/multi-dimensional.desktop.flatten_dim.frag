@@ -12,7 +12,6 @@ void main()
 {
     int _9;
     int _76;
-    int _93;
     int _74;
     int _72;
     vec4 values3[2 * 3 * 1];

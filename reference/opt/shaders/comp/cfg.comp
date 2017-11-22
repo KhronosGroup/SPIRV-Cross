@@ -12,7 +12,6 @@ void main()
 {
     int _13;
     int _166;
-    float _180;
     float _168;
     if (_11.data != 0.0)
     {
