@@ -6386,13 +6386,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (var && var->forwardable)
 		{
-			auto &e = emit_op(result_type, id, imgexpr, true);
+			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
+			auto &e = emit_op(result_type, id, imgexpr, forward);
 
 			// We only need to track dependencies if we're reading from image load/store.
 			if (!pure)
 			{
 				e.loaded_from = var->self;
-				var->dependees.push_back(id);
+				if (forward)
+					var->dependees.push_back(id);
 			}
 		}
 		else
