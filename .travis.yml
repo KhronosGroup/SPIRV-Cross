@@ -10,7 +10,7 @@ dist: trusty
 
 # We check out glslang and SPIRV-Tools at specific revisions to avoid test output mismatches
 env:
-  - GLSLANG_REV=f0bc598dd7871689f25514b22a82f7455d762bef SPIRV_TOOLS_REV=40e9c60ffea56f45f388835e6945b01d4d8b022d
+  - GLSLANG_REV=698bf7547a96b6feb7291e8ddc0d5d16475dbae2 SPIRV_TOOLS_REV=40e9c60ffea56f45f388835e6945b01d4d8b022d
 
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; brew install python3; fi

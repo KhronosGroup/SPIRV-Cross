@@ -4,10 +4,12 @@
 
 uniform sampler2DMS texture1;
 
-void main ()
+layout(location = 0) in vec4 vary;
+
+void main()
 {
     uint testi1 = fragmentMaskFetchAMD(texture1, ivec2(0));
-    vec4 test1 = fragmentFetchAMD(texture1, ivec2(1), 2);
-
-    vec4 pos =  interpolateAtVertexAMD(vec4(0.0), 0);
+    vec4 test1 = fragmentFetchAMD(texture1, ivec2(1), 2u);
+    vec4 pos = interpolateAtVertexAMD(vary, 0u);
 }
+

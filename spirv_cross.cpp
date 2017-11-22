@@ -573,6 +573,37 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 		break;
 	}
 
+	case OpExtInst:
+	{
+		if (length < 5)
+			return false;
+		uint32_t extension_set = args[2];
+		if (compiler.get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter)
+		{
+			enum AMDShaderExplicitVertexParameter
+			{
+				InterpolateAtVertexAMD = 1
+			};
+
+			auto op = static_cast<AMDShaderExplicitVertexParameter>(args[3]);
+
+			switch (op)
+			{
+			case InterpolateAtVertexAMD:
+			{
+				auto *var = compiler.maybe_get<SPIRVariable>(args[4]);
+				if (var && storage_class_is_interface(var->storage))
+					variables.insert(args[4]);
+				break;
+			}
+
+			default:
+				break;
+			}
+		}
+		break;
+	}
+
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
 	case OpLoad:

@@ -1515,8 +1515,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			if (options.es && options.version < 320)
 			{
 				// Geometry and tessellation extensions imply this extension.
-				if (!forced_extensions.count("GL_EXT_geometry_shader") &&
-				    !forced_extensions.count("GL_EXT_tessellation_shader"))
+				if (!has_extension("GL_EXT_geometry_shader") && !has_extension("GL_EXT_tessellation_shader"))
 					require_extension("GL_EXT_shader_io_blocks");
 			}
 
@@ -3868,11 +3867,13 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 }
 
-void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
+void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
+                                                 uint32_t)
 {
 	require_extension("GL_AMD_shader_ballot");
 
-	enum AMDShaderBallot {
+	enum AMDShaderBallot
+	{
 		SwizzleInvocationsAMD = 1,
 		SwizzleInvocationsMaskedAMD = 2,
 		WriteInvocationAMD = 3,
@@ -3905,11 +3906,13 @@ void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t 
 	}
 }
 
-void CompilerGLSL::emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
+void CompilerGLSL::emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t result_type, uint32_t id, uint32_t eop,
+                                                                    const uint32_t *args, uint32_t)
 {
 	require_extension("GL_AMD_shader_explicit_vertex_parameter");
 
-	enum AMDShaderExplicitVertexParameter {
+	enum AMDShaderExplicitVertexParameter
+	{
 		InterpolateAtVertexAMD = 1
 	};
 
@@ -3927,11 +3930,13 @@ void CompilerGLSL::emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t res
 	}
 }
 
-void CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
+void CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t id, uint32_t eop,
+                                                         const uint32_t *args, uint32_t)
 {
 	require_extension("GL_AMD_shader_trinary_minmax");
 
-	enum AMDShaderTrinaryMinMax {
+	enum AMDShaderTrinaryMinMax
+	{
 		FMin3AMD = 1,
 		UMin3AMD = 2,
 		SMin3AMD = 3,
@@ -3971,11 +3976,13 @@ void CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, u
 	}
 }
 
-void CompilerGLSL::emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
+void CompilerGLSL::emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
+                                              uint32_t)
 {
 	require_extension("GL_AMD_gcn_shader");
 
-	enum AMDGCNShader {
+	enum AMDGCNShader
+	{
 		CubeFaceIndexAMD = 1,
 		CubeFaceCoordAMD = 2,
 		TimeAMD = 3
@@ -4031,10 +4038,7 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
 		return "uint64BitsToDouble";
 	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::UInt && in_type.vecsize == 2)
-	{
-		require_extension("GL_ARB_gpu_shader_int64");
 		return "packUint2x32";
-	}
 	else
 		return "";
 }
@@ -4366,7 +4370,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
-			
 	}
 
 	if (pending_array_enclose)
@@ -6535,7 +6538,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			emit_spv_amd_gcn_shader_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
-		else {
+		else
+		{
 			statement("// unimplemented ext op ", instruction.op);
 			break;
 		}
@@ -6545,11 +6549,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpSubgroupBallotKHR:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		string expr;
-		expr = join("unpackUint2x32(ballotARB(" + to_expression(ops[2]) +"))");
+		expr = join("unpackUint2x32(ballotARB(" + to_expression(ops[2]) + "))");
 		emit_op(result_type, id, expr, true);
 
 		require_extension("GL_ARB_shader_ballot");
@@ -6558,7 +6561,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpSubgroupFirstInvocationKHR:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "readFirstInvocationARB");
@@ -6569,7 +6571,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpSubgroupReadInvocationKHR:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_binary_func_op(result_type, id, ops[2], ops[3], "readInvocationARB");
@@ -6580,7 +6581,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpSubgroupAllKHR:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "allInvocationsARB");
@@ -6591,7 +6591,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpSubgroupAnyKHR:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "anyInvocationARB");
@@ -6602,7 +6601,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpSubgroupAllEqualKHR:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "allInvocationsEqualARB");
@@ -6614,7 +6612,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupIAddNonUniformAMD:
 	case OpGroupFAddNonUniformAMD:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[4], "addInvocationsNonUniformAMD");
@@ -6627,7 +6624,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupUMinNonUniformAMD:
 	case OpGroupSMinNonUniformAMD:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[4], "minInvocationsNonUniformAMD");
@@ -6640,7 +6636,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupUMaxNonUniformAMD:
 	case OpGroupSMaxNonUniformAMD:
 	{
-		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[4], "maxInvocationsNonUniformAMD");
@@ -6659,7 +6654,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			emit_unary_func_op(result_type, id, ops[2], "fragmentMaskFetchAMD");
 		}
-		else 
+		else
 		{
 			emit_binary_func_op(result_type, id, ops[2], ops[3], "fragmentMaskFetchAMD");
 		}
@@ -6678,7 +6673,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			emit_binary_func_op(result_type, id, ops[2], ops[4], "fragmentFetchAMD");
 		}
-		else 
+		else
 		{
 			emit_trinary_func_op(result_type, id, ops[2], ops[3], ops[4], "fragmentFetchAMD");
 		}
@@ -7281,11 +7276,17 @@ void CompilerGLSL::add_header_line(const std::string &line)
 	header_lines.push_back(line);
 }
 
+bool CompilerGLSL::has_extension(const std::string &ext) const
+{
+	auto itr = find(begin(forced_extensions), end(forced_extensions), ext);
+	return itr != end(forced_extensions);
+}
+
 void CompilerGLSL::require_extension(const string &ext)
 {
-	if (forced_extensions.find(ext) == end(forced_extensions))
+	if (!has_extension(ext))
 	{
-		forced_extensions.insert(ext);
+		forced_extensions.push_back(ext);
 		force_recompile = true;
 	}
 }
