@@ -1463,6 +1463,8 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 	// Emit the members as if they are part of a block to get all qualifiers.
 	meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
 
+	type.member_name_cache.clear();
+
 	uint32_t i = 0;
 	for (auto &member : type.member_types)
 	{
