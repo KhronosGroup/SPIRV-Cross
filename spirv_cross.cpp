@@ -1287,6 +1287,7 @@ void Compiler::parse(const Instruction &instruction)
 	case OpSourceExtension:
 	case OpNop:
 	case OpLine:
+	case OpNoLine:
 	case OpString:
 		break;
 
@@ -3087,8 +3088,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	struct AccessHandler : OpcodeHandler
 	{
 	public:
-		AccessHandler(Compiler &compiler_)
+		AccessHandler(Compiler &compiler_, SPIRFunction &entry_)
 		    : compiler(compiler_)
+		    , entry(entry_)
 		{
 		}
 
@@ -3119,6 +3121,32 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				}
 			};
 
+			// A Phi node might be reading other phi variables as input, so check for this as well.
+			for (auto &phi : block.phi_variables)
+			{
+				if (id_is_phi_variable(phi.local_variable))
+					accessed_variables_to_block[phi.local_variable].insert(block.self);
+				else
+				{
+					// Temporary variable, due to potential issues with scoping,
+					// always declare these variables up-front in the entry block.
+					if (!compiler.hoisted_temporaries.count(phi.local_variable))
+					{
+						auto *undef = compiler.maybe_get<SPIRUndef>(phi.local_variable);
+						// Undef variables are declared as global variables without initializer.
+						// Never declare these variables.
+						if (!undef)
+						{
+							auto &var = compiler.get<SPIRVariable>(phi.function_variable);
+							auto &entry_block = compiler.get<SPIRBlock>(entry.entry_block);
+							entry_block.declare_temporary.emplace_back(var.basetype, phi.local_variable);
+							compiler.hoisted_temporaries.insert(phi.local_variable);
+							compiler.forced_temporaries.insert(phi.local_variable);
+						}
+					}
+				}
+			}
+
 			switch (block.terminator)
 			{
 			case SPIRBlock::Direct:
@@ -3142,6 +3170,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			}
 		}
 
+		bool id_is_phi_variable(uint32_t id)
+		{
+			if (id >= compiler.get_current_id_bound())
+				return false;
+			auto *var = compiler.maybe_get<SPIRVariable>(id);
+			return var && var->phi_variable;
+		}
+
 		bool handle(spv::Op op, const uint32_t *args, uint32_t length)
 		{
 			switch (op)
@@ -3159,6 +3195,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				// If we store through an access chain, we have a partial write.
 				if (var && var->self == ptr && var->storage == StorageClassFunction)
 					complete_write_variables_to_block[var->self].insert(current_block->self);
+
+				// Might try to store a Phi variable here.
+				if (id_is_phi_variable(args[1]))
+					accessed_variables_to_block[args[1]].insert(current_block->self);
 				break;
 			}
 
@@ -3204,6 +3244,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto *var = compiler.maybe_get_backing_variable(args[2]);
 				if (var && var->storage == StorageClassFunction)
 					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				// Might try to copy a Phi variable here.
+				if (id_is_phi_variable(args[2]))
+					accessed_variables_to_block[args[2]].insert(current_block->self);
 				break;
 			}
 
@@ -3234,34 +3278,52 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					// Cannot easily prove if argument we pass to a function is completely written.
 					// Usually, functions write to a dummy variable,
 					// which is then copied to in full to the real argument.
+
+					// Might try to copy a Phi variable here.
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
 				}
 				break;
 			}
 
-			case OpPhi:
+			case OpExtInst:
 			{
-				if (length < 2)
-					return false;
-
-				// Phi nodes are implemented as function variables, so register an access here.
-				accessed_variables_to_block[args[1]].insert(current_block->self);
+				for (uint32_t i = 4; i < length; i++)
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
 				break;
 			}
+
+			case OpArrayLength:
+				// Uses literals, but cannot be a phi variable, so ignore.
+				break;
 
 				// Atomics shouldn't be able to access function-local variables.
 				// Some GLSL builtins access a pointer.
 
 			default:
+			{
+				// Rather dirty way of figuring out where Phi variables are used.
+				// As long as only IDs are used, we can scan through instructions and try to find any evidence that
+				// the ID of a variable has been used.
+				// There are potential false positives here where a literal is used in-place of an ID,
+				// but worst case, it does not affect the correctness of the compile.
+				// Exhaustive analysis would be better here, but it's not worth it for now.
+				for (uint32_t i = 0; i < length; i++)
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
 				break;
+			}
 			}
 			return true;
 		}
 
 		Compiler &compiler;
+		SPIRFunction &entry;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
 		const SPIRBlock *current_block = nullptr;
-	} handler(*this);
+	} handler(*this, entry);
 
 	// First, we map out all variable access within a function.
 	// Essentially a map of block -> { variables accessed in the basic block }

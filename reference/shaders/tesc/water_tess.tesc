@@ -18,6 +18,8 @@ layout(location = 0) in vec2 vPatchPosBase[32];
 
 bool frustum_cull(vec2 p0)
 {
+    bool _205;
+    bool _214;
     vec2 min_xz = (p0 - vec2(10.0)) * _41.uScale.xy;
     vec2 max_xz = ((p0 + _41.uPatchSize) + vec2(10.0)) * _41.uScale.xy;
     vec3 bb_min = vec3(min_xz.x, -10.0, min_xz.y);
@@ -26,12 +28,12 @@ bool frustum_cull(vec2 p0)
     float radius = 0.5 * length(bb_max - bb_min);
     vec3 f0 = vec3(dot(_41.uFrustum[0], vec4(center, 1.0)), dot(_41.uFrustum[1], vec4(center, 1.0)), dot(_41.uFrustum[2], vec4(center, 1.0)));
     vec3 f1 = vec3(dot(_41.uFrustum[3], vec4(center, 1.0)), dot(_41.uFrustum[4], vec4(center, 1.0)), dot(_41.uFrustum[5], vec4(center, 1.0)));
-    vec3 _199 = f0;
-    bool _205 = any(lessThanEqual(_199, vec3(-radius)));
+    _205 = any(lessThanEqual(f0, vec3(-radius)));
     bool _215;
     if (!_205)
     {
-        _215 = any(lessThanEqual(f1, vec3(-radius)));
+        _214 = any(lessThanEqual(f1, vec3(-radius)));
+        _215 = _214;
     }
     else
     {

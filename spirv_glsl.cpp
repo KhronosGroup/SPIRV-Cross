@@ -1463,6 +1463,8 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 	// Emit the members as if they are part of a block to get all qualifiers.
 	meta[type.self].decoration.decoration_flags |= 1ull << DecorationBlock;
 
+	type.member_name_cache.clear();
+
 	uint32_t i = 0;
 	for (auto &member : type.member_types)
 	{
@@ -2707,7 +2709,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 
 	// If we're declaring temporaries inside continue blocks,
 	// we must declare the temporary in the loop header so that the continue block can avoid declaring new variables.
-	if (current_continue_block)
+	if (current_continue_block && !hoisted_temporaries.count(result_id))
 	{
 		auto &header = get<SPIRBlock>(current_continue_block->loop_dominator);
 		if (find_if(begin(header.declare_temporary), end(header.declare_temporary),
@@ -5424,7 +5426,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// Do not allow base expression for struct members. We risk doing "swizzle" optimizations in this case.
 		auto &composite_type = expression_type(ops[2]);
-		if (composite_type.basetype == SPIRType::Struct)
+		if (composite_type.basetype == SPIRType::Struct || !composite_type.array.empty())
 			allow_base_expression = false;
 
 		// Only apply this optimization if result is scalar.
@@ -6384,13 +6386,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (var && var->forwardable)
 		{
-			auto &e = emit_op(result_type, id, imgexpr, true);
+			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
+			auto &e = emit_op(result_type, id, imgexpr, forward);
 
 			// We only need to track dependencies if we're reading from image load/store.
 			if (!pure)
 			{
 				e.loaded_from = var->self;
-				var->dependees.push_back(id);
+				if (forward)
+					var->dependees.push_back(id);
 			}
 		}
 		else
@@ -7557,21 +7561,6 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 			{
 				flush_variable_declaration(phi.function_variable);
 
-				// We tried to write an ID which does not yet exist,
-				// this can happen if we are a continue block, and the value we are trying to write
-				// only exists inside the loop body.
-				// In this case we must hoist out the temporary to the same scope as the phi variable,
-				// declare it at the outer scope (using child.declare_temporary),
-				// force the temporary to be committed to a value when it is computed (forced_temporaries),
-				// and declare that variable without type information (hoisted_temporaries).
-				if (ids[phi.local_variable].empty() && !hoisted_temporaries.count(phi.local_variable))
-				{
-					force_recompile = true;
-					forced_temporaries.insert(phi.local_variable);
-					hoisted_temporaries.insert(phi.local_variable);
-					child.declare_temporary.emplace_back(var.basetype, phi.local_variable);
-				}
-
 				// This might be called in continue block, so make sure we
 				// use this to emit ESSL 1.0 compliant increments/decrements.
 				auto lhs = to_expression(phi.function_variable);
@@ -7911,6 +7900,9 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 
 void CompilerGLSL::flush_undeclared_variables(SPIRBlock &block)
 {
+	// Enforce declaration order for regression testing purposes.
+	sort(begin(block.dominated_variables), end(block.dominated_variables));
+
 	for (auto &v : block.dominated_variables)
 	{
 		auto &var = get<SPIRVariable>(v);
