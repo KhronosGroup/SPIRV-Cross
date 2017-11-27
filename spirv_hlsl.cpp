@@ -779,7 +779,8 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 	case BuiltInNumWorkgroups:
 	{
 		if (!num_workgroups_builtin)
-			SPIRV_CROSS_THROW("NumWorkgroups builtin is used, but remap_num_workgroups_builtin() was not called. Cannot emit code for this builtin.");
+			SPIRV_CROSS_THROW("NumWorkgroups builtin is used, but remap_num_workgroups_builtin() was not called. "
+			                  "Cannot emit code for this builtin.");
 
 		auto &var = get<SPIRVariable>(num_workgroups_builtin);
 		auto &type = get<SPIRType>(var.basetype);
@@ -1459,7 +1460,7 @@ string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
 }
 
 void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
-                                      const string &qualifier)
+                                      const string &qualifier, uint32_t base_offset)
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 
@@ -1475,9 +1476,12 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
 	string packing_offset;
-	if (has_decoration(type.self, DecorationCPacked) && has_member_decoration(type.self, index, DecorationOffset))
+	bool is_push_constant = type.storage == StorageClassPushConstant;
+
+	if ((has_decoration(type.self, DecorationCPacked) || is_push_constant) &&
+	    has_member_decoration(type.self, index, DecorationOffset))
 	{
-		uint32_t offset = memb[index].offset;
+		uint32_t offset = memb[index].offset - base_offset;
 		if (offset & 3)
 			SPIRV_CROSS_THROW("Cannot pack on tighter bounds than 4 bytes in HLSL.");
 
@@ -1557,7 +1561,58 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 {
-	emit_buffer_block(var);
+	if (root_constants_layout.empty())
+	{
+		emit_buffer_block(var);
+	}
+	else
+	{
+		for (const auto &layout : root_constants_layout)
+		{
+			auto &type = get<SPIRType>(var.basetype);
+
+			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset, layout.start, layout.end))
+				set_decoration(type.self, DecorationCPacked);
+			else
+				SPIRV_CROSS_THROW(
+				    "root constant cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
+
+			flattened_structs.insert(var.self);
+			type.member_name_cache.clear();
+			add_resource_name(var.self);
+			auto &memb = meta[type.self].members;
+
+			statement("cbuffer SPIRV_CROSS_RootConstant_", to_name(var.self),
+			          to_resource_register('b', layout.binding, layout.space));
+			begin_scope();
+
+			// Index of the next field in the generated root constant constant buffer
+			auto constant_index = 0u;
+
+			// Iterate over all member of the push constant and check which of the fields
+			// fit into the given root constant layout.
+			for (auto i = 0u; i < memb.size(); i++)
+			{
+				const auto offset = memb[i].offset;
+				if (layout.start <= offset && offset < layout.end)
+				{
+					const auto &member = type.member_types[i];
+
+					add_member_name(type, constant_index);
+					auto backup_name = get_member_name(type.self, i);
+					auto member_name = to_member_name(type, i);
+					set_member_name(type.self, constant_index,
+					                sanitize_underscores(join(to_name(type.self), "_", member_name)));
+					emit_struct_member(type, member, i, "", layout.start);
+					set_member_name(type.self, constant_index, backup_name);
+
+					constant_index++;
+				}
+			}
+
+			end_scope_decl();
+		}
+	}
 }
 
 string CompilerHLSL::to_sampler_expression(uint32_t id)
@@ -2316,24 +2371,24 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	if (!has_decoration(var.self, DecorationBinding))
 		return "";
 
-	auto &type = get<SPIRType>(var.basetype);
-	const char *space = nullptr;
+	const auto &type = get<SPIRType>(var.basetype);
+	char space = '\0';
 
 	switch (type.basetype)
 	{
 	case SPIRType::SampledImage:
-		space = "t"; // SRV
+		space = 't'; // SRV
 		break;
 
 	case SPIRType::Image:
 		if (type.image.sampled == 2)
-			space = "u"; // UAV
+			space = 'u'; // UAV
 		else
-			space = "t"; // SRV
+			space = 't'; // SRV
 		break;
 
 	case SPIRType::Sampler:
-		space = "s";
+		space = 's';
 		break;
 
 	case SPIRType::Struct:
@@ -2345,15 +2400,15 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			{
 				uint64_t flags = get_buffer_block_flags(var);
 				bool is_readonly = (flags & (1ull << DecorationNonWritable)) != 0;
-				space = is_readonly ? "t" : "u"; // UAV
+				space = is_readonly ? 't' : 'u'; // UAV
 			}
 			else if (has_decoration(type.self, DecorationBlock))
-				space = "b"; // Constant buffers
+				space = 'b'; // Constant buffers
 		}
 		else if (storage == StorageClassPushConstant)
-			space = "b"; // Constant buffers
+			space = 'b'; // Constant buffers
 		else if (storage == StorageClassStorageBuffer)
-			space = "u"; // UAV
+			space = 'u'; // UAV
 
 		break;
 	}
@@ -2364,12 +2419,8 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	if (!space)
 		return "";
 
-	// shader model 5.1 supports space
-	if (options.shader_model >= 51)
-		return join(" : register(", space, get_decoration(var.self, DecorationBinding), ", space",
-		            get_decoration(var.self, DecorationDescriptorSet), ")");
-	else
-		return join(" : register(", space, get_decoration(var.self, DecorationBinding), ")");
+	return to_resource_register(space, get_decoration(var.self, DecorationBinding),
+	                            get_decoration(var.self, DecorationDescriptorSet));
 }
 
 string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
@@ -2378,11 +2429,16 @@ string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
 	if (!has_decoration(var.self, DecorationBinding))
 		return "";
 
+	return to_resource_register('s', get_decoration(var.self, DecorationBinding),
+	                            get_decoration(var.self, DecorationDescriptorSet));
+}
+
+string CompilerHLSL::to_resource_register(char space, uint32_t binding, uint32_t space_set)
+{
 	if (options.shader_model >= 51)
-		return join(" : register(s", get_decoration(var.self, DecorationBinding), ", space",
-		            get_decoration(var.self, DecorationDescriptorSet), ")");
+		return join(" : register(", space, binding, ", space", space_set, ")");
 	else
-		return join(" : register(s", get_decoration(var.self, DecorationBinding), ")");
+		return join(" : register(", space, binding, ")");
 }
 
 void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)

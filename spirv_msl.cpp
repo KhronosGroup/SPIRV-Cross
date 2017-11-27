@@ -2394,7 +2394,7 @@ void CompilerMSL::emit_fixup()
 
 // Emit a structure member, padding and packing to maintain the correct memeber alignments.
 void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
-                                     const string &qualifier)
+                                     const string &qualifier, uint32_t)
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 

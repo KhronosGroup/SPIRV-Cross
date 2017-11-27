@@ -202,7 +202,7 @@ protected:
 	virtual std::string type_to_glsl(const SPIRType &type, uint32_t id = 0);
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage);
 	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
-	                                const std::string &qualifier = "");
+	                                const std::string &qualifier = "", uint32_t base_offset = 0);
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0);
 	virtual std::string constant_expression(const SPIRConstant &c);
 	std::string constant_op_expression(const SPIRConstantOp &cop);
@@ -424,7 +424,8 @@ protected:
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
 	virtual bool skip_argument(uint32_t id) const;
 
-	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing);
+	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing, uint32_t start_offset = 0,
+	                                uint32_t end_offset = std::numeric_limits<uint32_t>::max());
 	uint32_t type_to_packed_base_size(const SPIRType &type, BufferPackingStandard packing);
 	uint32_t type_to_packed_alignment(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
 	uint32_t type_to_packed_array_stride(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
