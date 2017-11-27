@@ -1183,6 +1183,22 @@ void CompilerHLSL::emit_resources()
 			}
 		}
 	}
+
+	if (requires_fp16_packing)
+	{
+		statement("uint SPIRV_Cross_packHalf2x16(float2 value)");
+		begin_scope();
+		statement("uint2 Packed = f32tof16(value);");
+		statement("return Packed.x | (Packed.y << 16);");
+		end_scope();
+		statement("");
+
+		statement("float2 SPIRV_Cross_unpackHalf2x16(uint value)");
+		begin_scope();
+		statement("return f16tof32(uint2(value & 0xffff, value >> 16));");
+		end_scope();
+		statement("");
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
@@ -2207,6 +2223,24 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		break;
 	case GLSLstd450InterpolateAtOffset:
 		emit_binary_func_op(result_type, id, args[0], args[1], "EvaluateAttributeSnapped");
+		break;
+
+	case GLSLstd450PackHalf2x16:
+		if (!requires_fp16_packing)
+		{
+			requires_fp16_packing = true;
+			force_recompile = true;
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_packHalf2x16");
+		break;
+
+	case GLSLstd450UnpackHalf2x16:
+		if (!requires_fp16_packing)
+		{
+			requires_fp16_packing = true;
+			force_recompile = true;
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_unpackHalf2x16");
 		break;
 
 	default:
