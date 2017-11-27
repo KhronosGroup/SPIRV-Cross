@@ -117,6 +117,8 @@ private:
 	bool requires_op_fmod = false;
 	bool requires_textureProj = false;
 	bool requires_fp16_packing = false;
+	bool requires_unorm8_packing = false;
+	bool requires_snorm8_packing = false;
 	uint64_t required_textureSizeVariants = 0;
 	void require_texture_query_variant(const SPIRType &type);
 
