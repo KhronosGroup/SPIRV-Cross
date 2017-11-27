@@ -1201,6 +1201,7 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
+	// HLSL does not seem to have builtins for these operation, so roll them by hand ...
 	if (requires_unorm8_packing)
 	{
 		statement("uint SPIRV_Cross_packUnorm4x8(float4 value)");
@@ -1232,6 +1233,41 @@ void CompilerHLSL::emit_resources()
 		statement("int SignedValue = int(value);");
 		statement("int4 Packed = int4(SignedValue << 24, SignedValue << 16, SignedValue << 8, SignedValue) >> 24;");
 		statement("return clamp(float4(Packed) / 127.0, -1.0, 1.0);");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_unorm16_packing)
+	{
+		statement("uint SPIRV_Cross_packUnorm2x16(float2 value)");
+		begin_scope();
+		statement("uint2 Packed = uint2(round(saturate(value) * 65535.0));");
+		statement("return Packed.x | (Packed.y << 16);");
+		end_scope();
+		statement("");
+
+		statement("float2 SPIRV_Cross_unpackUnorm2x16(uint value)");
+		begin_scope();
+		statement("uint2 Packed = uint2(value & 0xffff, value >> 16);");
+		statement("return float2(Packed) / 65535.0;");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_snorm16_packing)
+	{
+		statement("uint SPIRV_Cross_packSnorm2x16(float2 value)");
+		begin_scope();
+		statement("int2 Packed = int2(round(clamp(value, -1.0, 1.0) * 32767.0)) & 0xffff;");
+		statement("return uint(Packed.x | (Packed.y << 16));");
+		end_scope();
+		statement("");
+
+		statement("float2 SPIRV_Cross_unpackSnorm2x16(uint value)");
+		begin_scope();
+		statement("int SignedValue = int(value);");
+		statement("int2 Packed = int2(SignedValue << 16, SignedValue) >> 16;");
+		statement("return clamp(float2(Packed) / 32767.0, -1.0, 1.0);");
 		end_scope();
 		statement("");
 	}
@@ -2313,6 +2349,42 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 			force_recompile = true;
 		}
 		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_unpackUnorm4x8");
+		break;
+
+	case GLSLstd450PackSnorm2x16:
+		if (!requires_snorm16_packing)
+		{
+			requires_snorm16_packing = true;
+			force_recompile = true;
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_packSnorm2x16");
+		break;
+
+	case GLSLstd450UnpackSnorm2x16:
+		if (!requires_snorm16_packing)
+		{
+			requires_snorm16_packing = true;
+			force_recompile = true;
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_unpackSnorm2x16");
+		break;
+
+	case GLSLstd450PackUnorm2x16:
+		if (!requires_unorm16_packing)
+		{
+			requires_unorm16_packing = true;
+			force_recompile = true;
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_packUnorm2x16");
+		break;
+
+	case GLSLstd450UnpackUnorm2x16:
+		if (!requires_unorm16_packing)
+		{
+			requires_unorm16_packing = true;
+			force_recompile = true;
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_unpackUnorm2x16");
 		break;
 
 	default:
