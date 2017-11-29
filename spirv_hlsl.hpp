@@ -121,6 +121,8 @@ private:
 	bool requires_snorm8_packing = false;
 	bool requires_unorm16_packing = false;
 	bool requires_snorm16_packing = false;
+	bool requires_bitfield_insert = false;
+	bool requires_bitfield_extract = false;
 	uint64_t required_textureSizeVariants = 0;
 	void require_texture_query_variant(const SPIRType &type);
 
