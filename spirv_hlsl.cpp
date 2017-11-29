@@ -1974,7 +1974,19 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 			texop += img_expr;
 
 			if (imgtype.image.depth)
-				texop += ".SampleCmp";
+			{
+				if (gather)
+				{
+					SPIRV_CROSS_THROW("GatherCmp does not exist in HLSL.");
+				}
+				else if (lod || grad_x || grad_y)
+				{
+					// Assume we want a fixed level, and the only thing we can get in HLSL is SampleCmpLevelZero.
+					texop += ".SampleCmpLevelZero";
+				}
+				else
+					texop += ".SampleCmp";
+			}
 			else if (gather)
 			{
 				uint32_t comp_num = get<SPIRConstant>(comp).scalar();
@@ -2146,7 +2158,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(dref);
 	}
 
-	if (grad_x || grad_y)
+	if (!dref && (grad_x || grad_y))
 	{
 		forward = forward && should_forward(grad_x);
 		forward = forward && should_forward(grad_y);
@@ -2156,14 +2168,14 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		expr += to_expression(grad_y);
 	}
 
-	if (lod && options.shader_model >= 40 && op != OpImageFetch)
+	if (!dref && lod && options.shader_model >= 40 && op != OpImageFetch)
 	{
 		forward = forward && should_forward(lod);
 		expr += ", ";
 		expr += to_expression(lod);
 	}
 
-	if (bias && options.shader_model >= 40)
+	if (!dref && bias && options.shader_model >= 40)
 	{
 		forward = forward && should_forward(bias);
 		expr += ", ";
