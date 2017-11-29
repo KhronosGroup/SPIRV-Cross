@@ -3355,14 +3355,11 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			force_recompile = true;
 		}
 
-		auto expr = join("SPIRV_Cross_bitfieldInsert(",
-		                 to_expression(ops[2]), ", ",
-		                 to_expression(ops[3]), ", ",
-		                 to_expression(ops[4]), ", ",
-		                 to_expression(ops[5]), ")");
+		auto expr = join("SPIRV_Cross_bitfieldInsert(", to_expression(ops[2]), ", ", to_expression(ops[3]), ", ",
+		                 to_expression(ops[4]), ", ", to_expression(ops[5]), ")");
 
-		bool forward = should_forward(ops[2]) && should_forward(ops[3]) &&
-		               should_forward(ops[4]) && should_forward(ops[5]);
+		bool forward =
+		    should_forward(ops[2]) && should_forward(ops[3]) && should_forward(ops[4]) && should_forward(ops[5]);
 
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::UInt, expr);
