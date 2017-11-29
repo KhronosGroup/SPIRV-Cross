@@ -28,6 +28,10 @@ layout(rgba32ui, binding = 5) uniform writeonly uimage2D uImageOutU4;
 layout(rgba32f, binding = 6) uniform readonly imageBuffer uImageInBuffer4;
 layout(rgba32f, binding = 7) uniform writeonly imageBuffer uImageOutBuffer4;
 
+layout(binding = 8) uniform writeonly image2D uImageNoFmtF;
+layout(binding = 9) uniform writeonly uimage2D uImageNoFmtU;
+layout(binding = 10) uniform writeonly iimage2D uImageNoFmtI;
+
 void main()
 {
     vec4 f = imageLoad(uImageInF, ivec2(gl_GlobalInvocationID.xy));
@@ -65,5 +69,9 @@ void main()
 
 	vec4 b4 = imageLoad(uImageInBuffer4, int(gl_GlobalInvocationID.x));
 	imageStore(uImageOutBuffer4, int(gl_GlobalInvocationID.x), b4);
+
+	imageStore(uImageNoFmtF, ivec2(gl_GlobalInvocationID.xy), b2);
+	imageStore(uImageNoFmtU, ivec2(gl_GlobalInvocationID.xy), u4);
+	imageStore(uImageNoFmtI, ivec2(gl_GlobalInvocationID.xy), i4);
 }
 

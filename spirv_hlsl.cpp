@@ -74,77 +74,129 @@ static unsigned image_format_to_components(ImageFormat fmt)
 	case ImageFormatRgb10a2ui:
 		return 4;
 
+	case ImageFormatUnknown:
+		return 4; // Assume 4.
+
 	default:
 		SPIRV_CROSS_THROW("Unrecognized typed image format.");
 	}
 }
 
-static string image_format_to_type(ImageFormat fmt)
+static string image_format_to_type(ImageFormat fmt, SPIRType::BaseType basetype)
 {
 	switch (fmt)
 	{
 	case ImageFormatR8:
 	case ImageFormatR16:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "unorm float";
 	case ImageFormatRg8:
 	case ImageFormatRg16:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "unorm float2";
 	case ImageFormatRgba8:
 	case ImageFormatRgba16:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "unorm float4";
 	case ImageFormatRgb10A2:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "unorm float4";
 
 	case ImageFormatR8Snorm:
 	case ImageFormatR16Snorm:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "snorm float";
 	case ImageFormatRg8Snorm:
 	case ImageFormatRg16Snorm:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "snorm float2";
 	case ImageFormatRgba8Snorm:
 	case ImageFormatRgba16Snorm:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "snorm float4";
 
 	case ImageFormatR16f:
 	case ImageFormatR32f:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "float";
 	case ImageFormatRg16f:
 	case ImageFormatRg32f:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "float2";
 	case ImageFormatRgba16f:
 	case ImageFormatRgba32f:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "float4";
 
 	case ImageFormatR11fG11fB10f:
+		if (basetype != SPIRType::Float)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "float3";
 
 	case ImageFormatR8i:
 	case ImageFormatR16i:
 	case ImageFormatR32i:
+		if (basetype != SPIRType::Int)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "int";
 	case ImageFormatRg8i:
 	case ImageFormatRg16i:
 	case ImageFormatRg32i:
+		if (basetype != SPIRType::Int)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "int2";
 	case ImageFormatRgba8i:
 	case ImageFormatRgba16i:
 	case ImageFormatRgba32i:
+		if (basetype != SPIRType::Int)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "int4";
 
 	case ImageFormatR8ui:
 	case ImageFormatR16ui:
 	case ImageFormatR32ui:
+		if (basetype != SPIRType::UInt)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "uint";
 	case ImageFormatRg8ui:
 	case ImageFormatRg16ui:
 	case ImageFormatRg32ui:
+		if (basetype != SPIRType::UInt)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "uint2";
 	case ImageFormatRgba8ui:
 	case ImageFormatRgba16ui:
 	case ImageFormatRgba32ui:
+		if (basetype != SPIRType::UInt)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
 		return "uint4";
 	case ImageFormatRgb10a2ui:
-		return "int4";
+		if (basetype != SPIRType::UInt)
+			SPIRV_CROSS_THROW("Mismatch in image type and base type of image.");
+		return "uint4";
+
+	case ImageFormatUnknown:
+		switch (basetype)
+		{
+		case SPIRType::Float:
+			return "float4";
+		case SPIRType::Int:
+			return "int4";
+		case SPIRType::UInt:
+			return "uint4";
+		default:
+			SPIRV_CROSS_THROW("Unsupported base type for image.");
+		}
 
 	default:
 		SPIRV_CROSS_THROW("Unrecognized typed image format.");
@@ -204,7 +256,7 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 		if (type.image.sampled == 1)
 			return join("Buffer<", type_to_glsl(imagetype), components, ">");
 		else if (type.image.sampled == 2)
-			return join("RWBuffer<", image_format_to_type(type.image.format), ">");
+			return join("RWBuffer<", image_format_to_type(type.image.format, imagetype.basetype), ">");
 		else
 			SPIRV_CROSS_THROW("Sampler buffers must be either sampled or unsampled. Cannot deduce in runtime.");
 	case DimSubpassData:
@@ -217,7 +269,9 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 	const char *ms = type.image.ms ? "MS" : "";
 	const char *rw = typed_load ? "RW" : "";
 	return join(rw, "Texture", dim, ms, arrayed, "<",
-	            typed_load ? image_format_to_type(type.image.format) : join(type_to_glsl(imagetype), components), ">");
+	            typed_load ? image_format_to_type(type.image.format, imagetype.basetype) :
+	                         join(type_to_glsl(imagetype), components),
+	            ">");
 }
 
 string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
@@ -3242,9 +3296,11 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		if (var && var->forwardable)
 		{
-			auto &e = emit_op(result_type, id, imgexpr, true);
+			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
+			auto &e = emit_op(result_type, id, imgexpr, forward);
 			e.loaded_from = var->self;
-			var->dependees.push_back(id);
+			if (forward)
+				var->dependees.push_back(id);
 		}
 		else
 			emit_op(result_type, id, imgexpr, false);
