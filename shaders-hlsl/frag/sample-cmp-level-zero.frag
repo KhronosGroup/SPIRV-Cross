@@ -20,5 +20,8 @@ void main()
 	float l1 = textureGradOffset(uSampler2DArray, vDirRef, vec2(0.0), vec2(0.0), ivec2(-1));
 	float l2 = textureGrad(uSamplerCube, vDirRef, vec3(0.0), vec3(0.0));
 
-	FragColor = s0 + s1 + s2 + s3 + l0 + l1 + l2;
+	float p0 = textureProjOffset(uSampler2D, vDirRef, ivec2(+1));
+	float p1 = textureProjLodOffset(uSampler2D, vDirRef, 0.0, ivec2(+1));
+
+	FragColor = s0 + s1 + s2 + s3 + l0 + l1 + l2 + p0 + p1;
 }

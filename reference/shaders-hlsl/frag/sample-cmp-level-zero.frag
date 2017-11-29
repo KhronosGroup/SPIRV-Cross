@@ -22,6 +22,21 @@ struct SPIRV_Cross_Output
     float FragColor : SV_Target0;
 };
 
+float SPIRV_Cross_projectTextureCoordinate(float2 coord)
+{
+    return coord.x / coord.y;
+}
+
+float2 SPIRV_Cross_projectTextureCoordinate(float3 coord)
+{
+    return float2(coord.x, coord.y) / coord.z;
+}
+
+float3 SPIRV_Cross_projectTextureCoordinate(float4 coord)
+{
+    return float3(coord.x, coord.y, coord.z) / coord.w;
+}
+
 void frag_main()
 {
     float s0 = uSampler2D.SampleCmp(_uSampler2D_sampler, vUVRef.xy, vUVRef.z, int2(-1, -1));
@@ -31,7 +46,13 @@ void frag_main()
     float l0 = uSampler2D.SampleCmpLevelZero(_uSampler2D_sampler, vUVRef.xy, vUVRef.z, int2(-1, -1));
     float l1 = uSampler2DArray.SampleCmpLevelZero(_uSampler2DArray_sampler, vDirRef.xyz, vDirRef.w, int2(-1, -1));
     float l2 = uSamplerCube.SampleCmpLevelZero(_uSamplerCube_sampler, vDirRef.xyz, vDirRef.w);
-    FragColor = (((((s0 + s1) + s2) + s3) + l0) + l1) + l2;
+    float4 _80 = vDirRef;
+    _80.z = vDirRef.w;
+    float p0 = uSampler2D.SampleCmp(_uSampler2D_sampler, SPIRV_Cross_projectTextureCoordinate(_80.xyz), vDirRef.z, int2(1, 1));
+    float4 _87 = vDirRef;
+    _87.z = vDirRef.w;
+    float p1 = uSampler2D.SampleCmpLevelZero(_uSampler2D_sampler, SPIRV_Cross_projectTextureCoordinate(_87.xyz), vDirRef.z, int2(1, 1));
+    FragColor = (((((((s0 + s1) + s2) + s3) + l0) + l1) + l2) + p0) + p1;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
