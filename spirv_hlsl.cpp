@@ -1271,6 +1271,48 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+
+	if (requires_bitfield_insert)
+	{
+		static const char *types[] = { "uint", "uint2", "uint3", "uint4" };
+		for (auto &type : types)
+		{
+			statement(type, " SPIRV_Cross_bitfieldInsert(", type, " Base, ", type, " Insert, uint Offset, uint Count)");
+			begin_scope();
+			statement("uint Mask = Count == 32 ? 0xffffffff : (((1u << Count) - 1) << (Offset & 31));");
+			statement("return (Base & ~Mask) | ((Insert << Offset) & Mask);");
+			end_scope();
+			statement("");
+		}
+	}
+
+	if (requires_bitfield_extract)
+	{
+		static const char *unsigned_types[] = { "uint", "uint2", "uint3", "uint4" };
+		for (auto &type : unsigned_types)
+		{
+			statement(type, " SPIRV_Cross_bitfieldUExtract(", type, " Base, uint Offset, uint Count)");
+			begin_scope();
+			statement("uint Mask = Count == 32 ? 0xffffffff : ((1 << Count) - 1);");
+			statement("return (Base >> Offset) & Mask;");
+			end_scope();
+			statement("");
+		}
+
+		// In this overload, we will have to do sign-extension, which we will emulate by shifting up and down.
+		static const char *signed_types[] = { "int", "int2", "int3", "int4" };
+		for (auto &type : signed_types)
+		{
+			statement(type, " SPIRV_Cross_bitfieldSExtract(", type, " Base, int Offset, int Count)");
+			begin_scope();
+			statement("int Mask = Count == 32 ? -1 : ((1 << Count) - 1);");
+			statement(type, " Masked = (Base >> Offset) & Mask;");
+			statement("int ExtendShift = (32 - Count) & 31;");
+			statement("return (Masked << ExtendShift) >> ExtendShift;");
+			end_scope();
+			statement("");
+		}
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
@@ -2391,6 +2433,14 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	case GLSLstd450UnpackDouble2x32:
 		SPIRV_CROSS_THROW("packDouble2x32/unpackDouble2x32 not supported in HLSL.");
 
+	case GLSLstd450FindILsb:
+		emit_unary_func_op(result_type, id, args[0], "firstbitlow");
+		break;
+	case GLSLstd450FindSMsb:
+	case GLSLstd450FindUMsb:
+		emit_unary_func_op(result_type, id, args[0], "firstbithigh");
+		break;
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
@@ -3296,6 +3346,53 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		}
 		break;
 	}
+
+	case OpBitFieldInsert:
+	{
+		if (!requires_bitfield_insert)
+		{
+			requires_bitfield_insert = true;
+			force_recompile = true;
+		}
+
+		auto expr = join("SPIRV_Cross_bitfieldInsert(",
+		                 to_expression(ops[2]), ", ",
+		                 to_expression(ops[3]), ", ",
+		                 to_expression(ops[4]), ", ",
+		                 to_expression(ops[5]), ")");
+
+		bool forward = should_forward(ops[2]) && should_forward(ops[3]) &&
+		               should_forward(ops[4]) && should_forward(ops[5]);
+
+		auto &restype = get<SPIRType>(ops[0]);
+		expr = bitcast_expression(restype, SPIRType::UInt, expr);
+		emit_op(ops[0], ops[1], expr, forward);
+		break;
+	}
+
+	case OpBitFieldSExtract:
+	case OpBitFieldUExtract:
+	{
+		if (!requires_bitfield_extract)
+		{
+			requires_bitfield_extract = true;
+			force_recompile = true;
+		}
+
+		if (opcode == OpBitFieldSExtract)
+			TFOP(SPIRV_Cross_bitfieldSExtract);
+		else
+			TFOP(SPIRV_Cross_bitfieldUExtract);
+		break;
+	}
+
+	case OpBitCount:
+		UFOP(countbits);
+		break;
+
+	case OpBitReverse:
+		UFOP(reversebits);
+		break;
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);
