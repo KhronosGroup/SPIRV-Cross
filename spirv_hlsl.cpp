@@ -1880,6 +1880,11 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		proj = true;
 		break;
 
+	case OpImageQueryLod:
+		opt = &ops[4];
+		length -= 4;
+		break;
+
 	default:
 		opt = &ops[4];
 		length -= 4;
@@ -1960,6 +1965,11 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		}
 		texop += img_expr;
 		texop += ".Load";
+	}
+	else if (op == OpImageQueryLod)
+	{
+		texop += img_expr;
+		texop += ".CalculateLevelOfDetail";
 	}
 	else
 	{
@@ -2144,11 +2154,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		if (imgtype.image.dim != DimBuffer)
 			coord_expr = join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", to_expression(lod), ")");
 	}
-
-	if (op != OpImageFetch)
-	{
+	else
 		expr += ", ";
-	}
 	expr += coord_expr;
 
 	if (dref)
@@ -2203,7 +2210,21 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	expr += ")";
 
-	emit_op(result_type, id, expr, forward, false);
+	if (op == OpImageQueryLod)
+	{
+		// This is rather awkward.
+		// textureQueryLod returns two values, the "accessed level",
+		// as well as the actual LOD lambda.
+		// As far as I can tell, there is no way to get the .x component
+		// according to GLSL spec, and it depends on the sampler itself.
+		// Just assume X == Y, so we will need to splat the result to a float2.
+		statement("float _", id, "_tmp = ", expr, ";");
+		emit_op(result_type, id, join("float2(_", id, "_tmp, _", id, "_tmp)"), true, true);
+	}
+	else
+	{
+		emit_op(result_type, id, expr, forward, false);
+	}
 }
 
 string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
@@ -3235,6 +3256,10 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			BOP(<=);
 		break;
 	}
+
+	case OpImageQueryLod:
+		emit_texture_op(instruction);
+		break;
 
 	case OpImageQuerySizeLod:
 	{
