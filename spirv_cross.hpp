@@ -410,6 +410,19 @@ public:
 	// Gets the list of all SPIR-V extensions which were declared in the SPIR-V module.
 	const std::vector<std::string> &get_declared_extensions() const;
 
+	// When declaring buffer blocks in GLSL, the name declared in the GLSL source
+	// might not be the same as the name declared in the SPIR-V module due to naming conflicts.
+	// In this case, SPIRV-Cross needs to find a fallback-name, and it might only
+	// be possible to know this name after compiling to GLSL.
+	// This is particularly important for HLSL input and UAVs which tends to reuse the same block type
+	// for multiple distinct blocks. For these cases it is not possible to modify the name of the type itself
+	// because it might be unique. Instead, you can use this interface to check after compilation which
+	// name was actually used if your input SPIR-V tends to have this problem.
+	// For other names like remapped names for variables, etc, it's generally enough to query the name of the variables
+	// after compiling, block names are an exception to this rule.
+	// ID is the name of a variable as returned by Resource::id, and must be a variable with a Block-like type.
+	std::string get_remapped_declared_block_name(uint32_t id) const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -729,6 +742,7 @@ protected:
 
 	std::vector<spv::Capability> declared_capabilities;
 	std::vector<std::string> declared_extensions;
+	std::unordered_map<uint32_t, std::string> declared_block_names;
 };
 }
 

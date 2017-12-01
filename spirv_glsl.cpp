@@ -1374,17 +1374,24 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	bool is_readonly = ssbo && (flags & (1ull << DecorationNonWritable)) != 0;
 	bool is_coherent = ssbo && (flags & (1ull << DecorationCoherent)) != 0;
 
-	add_resource_name(var.self);
-
-	// Block names should never alias.
+	// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
 	auto buffer_name = to_name(type.self, false);
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
 	if (meta[type.self].decoration.alias.empty() || resource_names.find(buffer_name) != end(resource_names))
 		buffer_name = get_block_fallback_name(var.self);
-	else
-		resource_names.insert(buffer_name);
+
+	// Make sure we get something unique.
+	add_variable(resource_names, buffer_name);
+
+	// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
+	// This cannot conflict with anything else, so we're safe now.
+	if (buffer_name.empty())
+		buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
+
+	// Save for post-reflection later.
+	declared_block_names[var.self] = buffer_name;
 
 	statement(layout_for_variable(var), is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
 	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ",
@@ -1402,6 +1409,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 		i++;
 	}
 
+	add_resource_name(var.self);
 	end_scope_decl(to_name(var.self) + type_to_array_glsl(type));
 	statement("");
 }
@@ -1521,8 +1529,6 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 					require_extension("GL_EXT_shader_io_blocks");
 			}
 
-			add_resource_name(var.self);
-
 			// Block names should never alias.
 			auto block_name = to_name(type.self, false);
 
@@ -1546,6 +1552,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 				i++;
 			}
 
+			add_resource_name(var.self);
 			end_scope_decl(join(to_name(var.self), type_to_array_glsl(type)));
 			statement("");
 		}
@@ -7249,9 +7256,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	}
 }
 
-void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
+void CompilerGLSL::add_variable(unordered_set<string> &variables, string &name)
 {
-	auto &name = meta[id].decoration.alias;
 	if (name.empty())
 		return;
 
@@ -7263,6 +7269,12 @@ void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
 	}
 
 	update_name_cache(variables, name);
+}
+
+void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
+{
+	auto &name = meta[id].decoration.alias;
+	add_variable(variables, name);
 }
 
 void CompilerGLSL::add_local_variable_name(uint32_t id)

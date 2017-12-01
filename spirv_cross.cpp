@@ -679,7 +679,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+				res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			else
 				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
@@ -692,7 +692,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[type.self].decoration.alias });
+				res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			else
 				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
@@ -700,24 +700,21 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)))
 		{
-			auto &block_name = meta[type.self].decoration.alias;
 			res.uniform_buffers.push_back({ var.self, var.basetype, type.self,
-			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
+			                                get_remapped_declared_block_name(var.self) });
 		}
 		// Old way to declare SSBOs.
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
 		{
-			auto &block_name = meta[type.self].decoration.alias;
 			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
-			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
+			                                get_remapped_declared_block_name(var.self) });
 		}
 		// Modern way to declare SSBOs.
 		else if (type.storage == StorageClassStorageBuffer)
 		{
-			auto &block_name = meta[type.self].decoration.alias;
 			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
-			                                block_name.empty() ? get_block_fallback_name(var.self) : block_name });
+			                                get_remapped_declared_block_name(var.self) });
 		}
 		// Push constant blocks
 		else if (type.storage == StorageClassPushConstant)
@@ -1180,7 +1177,10 @@ const std::string Compiler::get_fallback_name(uint32_t id) const
 const std::string Compiler::get_block_fallback_name(uint32_t id) const
 {
 	auto &var = get<SPIRVariable>(id);
-	return join("_", get<SPIRType>(var.basetype).self, "_", id);
+	if (get_name(id).empty())
+		return join("_", get<SPIRType>(var.basetype).self, "_", id);
+	else
+		return get_name(id);
 }
 
 uint64_t Compiler::get_decoration_mask(uint32_t id) const
@@ -3801,4 +3801,18 @@ const std::vector<spv::Capability> &Compiler::get_declared_capabilities() const
 const std::vector<std::string> &Compiler::get_declared_extensions() const
 {
 	return declared_extensions;
+}
+
+std::string Compiler::get_remapped_declared_block_name(uint32_t id) const
+{
+	auto itr = declared_block_names.find(id);
+	if (itr != end(declared_block_names))
+		return itr->second;
+	else
+	{
+		auto &var = get<SPIRVariable>(id);
+		auto &type = get<SPIRType>(var.basetype);
+		auto &block_name = meta[type.self].decoration.alias;
+		return block_name.empty() ? get_block_fallback_name(id) : block_name;
+	}
 }
