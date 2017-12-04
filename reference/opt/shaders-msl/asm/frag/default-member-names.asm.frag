@@ -25,7 +25,7 @@ struct _10
     _9 _m12;
 };
 
-constant _10 _51 = _10();
+constant _10 _51 = {};
 
 struct main0_out
 {
