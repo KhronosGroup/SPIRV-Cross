@@ -19,19 +19,19 @@ struct alias_2
     alias_1 alias_1;
 };
 
-layout(binding = 0, std430) buffer _10_11
-{
-    alias_2 alias;
-} alias_3;
-
-layout(binding = 1, std140) buffer _15_16
+layout(binding = 0, std430) buffer alias_3
 {
     alias_2 alias;
 } alias_4;
 
+layout(binding = 1, std140) buffer alias_5
+{
+    alias_2 alias;
+} alias_6;
+
 void main()
 {
-    alias_2 alias_5 = alias_3.alias;
-    alias_4.alias = alias_5;
+    alias_2 alias_7 = alias_4.alias;
+    alias_6.alias = alias_7;
 }
 

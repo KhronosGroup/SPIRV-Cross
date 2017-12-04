@@ -1374,17 +1374,24 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	bool is_readonly = ssbo && (flags & (1ull << DecorationNonWritable)) != 0;
 	bool is_coherent = ssbo && (flags & (1ull << DecorationCoherent)) != 0;
 
-	add_resource_name(var.self);
-
-	// Block names should never alias.
+	// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
 	auto buffer_name = to_name(type.self, false);
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
 	if (meta[type.self].decoration.alias.empty() || resource_names.find(buffer_name) != end(resource_names))
 		buffer_name = get_block_fallback_name(var.self);
-	else
-		resource_names.insert(buffer_name);
+
+	// Make sure we get something unique.
+	add_variable(resource_names, buffer_name);
+
+	// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
+	// This cannot conflict with anything else, so we're safe now.
+	if (buffer_name.empty())
+		buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
+
+	// Save for post-reflection later.
+	declared_block_names[var.self] = buffer_name;
 
 	statement(layout_for_variable(var), is_coherent ? "coherent " : "", is_restrict ? "restrict " : "",
 	          is_writeonly ? "writeonly " : "", is_readonly ? "readonly " : "", ssbo ? "buffer " : "uniform ",
@@ -1402,6 +1409,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 		i++;
 	}
 
+	add_resource_name(var.self);
 	end_scope_decl(to_name(var.self) + type_to_array_glsl(type));
 	statement("");
 }
@@ -1521,8 +1529,6 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 					require_extension("GL_EXT_shader_io_blocks");
 			}
 
-			add_resource_name(var.self);
-
 			// Block names should never alias.
 			auto block_name = to_name(type.self, false);
 
@@ -1546,6 +1552,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 				i++;
 			}
 
+			add_resource_name(var.self);
 			end_scope_decl(join(to_name(var.self), type_to_array_glsl(type)));
 			statement("");
 		}
@@ -3450,6 +3457,15 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	auto swizzle_expr = swizzle(coord_components, expression_type(coord).vecsize);
 	// Only enclose the UV expression if needed.
 	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(coord) : (to_enclosed_expression(coord) + swizzle_expr);
+
+	// texelFetch only takes int, not uint.
+	auto &coord_type = expression_type(coord);
+	if (coord_type.basetype == SPIRType::UInt)
+	{
+		auto expected_type = coord_type;
+		expected_type.basetype = SPIRType::Int;
+		coord_expr = bitcast_expression(expected_type, coord_type.basetype, coord_expr);
+	}
 
 	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
@@ -6366,6 +6382,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
+			// imageLoad only accepts int coords, not uint.
+			auto coord_expr = to_expression(ops[3]);
+			auto target_coord_type = expression_type(ops[3]);
+			target_coord_type.basetype = SPIRType::Int;
+			coord_expr = bitcast_expression(target_coord_type, expression_type(ops[3]).basetype, coord_expr);
+
 			// Plain image load/store.
 			if (type.image.ms)
 			{
@@ -6374,11 +6396,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected operand mask was used.");
 
 				uint32_t samples = ops[5];
-				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ", ",
-				               to_expression(samples), ")");
+				imgexpr =
+				    join("imageLoad(", to_expression(ops[2]), ", ", coord_expr, ", ", to_expression(samples), ")");
 			}
 			else
-				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", to_expression(ops[3]), ")");
+				imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", coord_expr, ")");
 
 			imgexpr = remap_swizzle(get<SPIRType>(result_type), 4, imgexpr);
 			pure = false;
@@ -6435,17 +6457,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto store_type = value_type;
 		store_type.vecsize = 4;
 
+		// imageStore only accepts int coords, not uint.
+		auto coord_expr = to_expression(ops[1]);
+		auto target_coord_type = expression_type(ops[1]);
+		target_coord_type.basetype = SPIRType::Int;
+		coord_expr = bitcast_expression(target_coord_type, expression_type(ops[1]).basetype, coord_expr);
+
 		if (type.image.ms)
 		{
 			uint32_t operands = ops[3];
 			if (operands != ImageOperandsSampleMask || length != 5)
 				SPIRV_CROSS_THROW("Multisampled image used in OpImageWrite, but unexpected operand mask was used.");
 			uint32_t samples = ops[4];
-			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(samples),
-			          ", ", remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
+			statement("imageStore(", to_expression(ops[0]), ", ", coord_expr, ", ", to_expression(samples), ", ",
+			          remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 		}
 		else
-			statement("imageStore(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ",
+			statement("imageStore(", to_expression(ops[0]), ", ", coord_expr, ", ",
 			          remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 
 		if (var && variable_storage_is_aliased(*var))
@@ -7249,9 +7277,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	}
 }
 
-void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
+void CompilerGLSL::add_variable(unordered_set<string> &variables, string &name)
 {
-	auto &name = meta[id].decoration.alias;
 	if (name.empty())
 		return;
 
@@ -7263,6 +7290,12 @@ void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
 	}
 
 	update_name_cache(variables, name);
+}
+
+void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
+{
+	auto &name = meta[id].decoration.alias;
+	add_variable(variables, name);
 }
 
 void CompilerGLSL::add_local_variable_name(uint32_t id)

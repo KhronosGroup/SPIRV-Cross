@@ -488,6 +488,7 @@ protected:
 	void remap_pls_variables();
 
 	void add_variable(std::unordered_set<std::string> &variables, uint32_t id);
+	void add_variable(std::unordered_set<std::string> &variables, std::string &name);
 	void check_function_call_constraints(const uint32_t *args, uint32_t length);
 	void handle_invalid_expression(uint32_t id);
 	void find_static_extensions();
