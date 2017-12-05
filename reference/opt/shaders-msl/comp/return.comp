@@ -28,10 +28,6 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     }
     for (int _68 = 0; _68 < 20; _65 = _69 + 1, _68 = _65)
     {
-        if (_68 == 10)
-        {
-            break;
-        }
         return;
     }
     _27.out_data[gl_GlobalInvocationID.x] = float4(10.0);

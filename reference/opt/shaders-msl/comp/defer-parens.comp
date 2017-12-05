@@ -12,12 +12,10 @@ struct SSBO
 kernel void main0(device SSBO& _13 [[buffer(0)]])
 {
     float4 _17 = _13.data;
-    float2 _27 = float2(10.0);
-    float2 _28 = _17.yz + _27;
-    _13.data = float4(_17.x, _28, _17.w);
+    _13.data = float4(_17.x, _17.yz + float2(10.0), _17.w);
     _13.data = (_17 + _17) + _17;
-    _13.data = _28.xxyy;
-    _13.data = float4(_28.y);
-    _13.data = float4((_17.zw + _27)[_13.index]);
+    _13.data = (_17.yz + float2(10.0)).xxyy;
+    _13.data = float4((_17.yz + float2(10.0)).y);
+    _13.data = float4((_17.zw + float2(10.0))[_13.index]);
 }
 

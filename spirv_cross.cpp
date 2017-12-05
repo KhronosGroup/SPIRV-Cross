@@ -679,7 +679,8 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
+				res.stage_inputs.push_back(
+				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			else
 				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
@@ -692,7 +693,8 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 		{
 			if (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock))
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
+				res.stage_outputs.push_back(
+				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			else
 				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
 		}
@@ -700,21 +702,21 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)))
 		{
-			res.uniform_buffers.push_back({ var.self, var.basetype, type.self,
-			                                get_remapped_declared_block_name(var.self) });
+			res.uniform_buffers.push_back(
+			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 		}
 		// Old way to declare SSBOs.
 		else if (type.storage == StorageClassUniform &&
 		         (meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)))
 		{
-			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
-			                                get_remapped_declared_block_name(var.self) });
+			res.storage_buffers.push_back(
+			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 		}
 		// Modern way to declare SSBOs.
 		else if (type.storage == StorageClassStorageBuffer)
 		{
-			res.storage_buffers.push_back({ var.self, var.basetype, type.self,
-			                                get_remapped_declared_block_name(var.self) });
+			res.storage_buffers.push_back(
+			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 		}
 		// Push constant blocks
 		else if (type.storage == StorageClassPushConstant)
