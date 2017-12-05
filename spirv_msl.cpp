@@ -1042,7 +1042,7 @@ void CompilerMSL::emit_custom_functions()
 }
 
 // Undefined global memory is not allowed in MSL.
-// Declare constant and init to zeros.
+// Declare constant and init to zeros. Use {}, as global constructors can break Metal.
 void CompilerMSL::declare_undefined_values()
 {
 	bool emitted = false;
@@ -1052,21 +1052,7 @@ void CompilerMSL::declare_undefined_values()
 		{
 			auto &undef = id.get<SPIRUndef>();
 			auto &type = get<SPIRType>(undef.basetype);
-
-			string arg_str;
-			switch (type.basetype)
-			{
-			case SPIRType::Struct:
-				arg_str = "";
-				break;
-
-			default:
-				arg_str = "0";
-				break;
-			}
-			string init_str = type_to_glsl(type) + "(" + arg_str + ")";
-
-			statement("constant ", variable_decl(type, to_name(undef.self), undef.self), " = ", init_str, ";");
+			statement("constant ", variable_decl(type, to_name(undef.self), undef.self), " = {};");
 			emitted = true;
 		}
 	}

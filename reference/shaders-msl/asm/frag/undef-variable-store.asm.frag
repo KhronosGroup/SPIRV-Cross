@@ -3,8 +3,8 @@
 
 using namespace metal;
 
-constant float4 _38 = float4(0);
-constant float4 _47 = float4(0);
+constant float4 _38 = {};
+constant float4 _47 = {};
 
 struct main0_out
 {

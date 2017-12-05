@@ -8,7 +8,7 @@ struct SSBO2
     float4 out_data[1];
 };
 
-constant int _69 = int(0);
+constant int _69 = {};
 
 kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], device SSBO2& _27 [[buffer(0)]])
 {
