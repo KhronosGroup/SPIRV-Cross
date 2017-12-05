@@ -1976,6 +1976,8 @@ void Compiler::parse(const Instruction &instruction)
 		loop_blocks.insert(current_block->self);
 		loop_merge_targets.insert(current_block->merge_block);
 
+		continue_block_to_loop_header[current_block->continue_block] = current_block->self;
+
 		// Don't add loop headers to continue blocks,
 		// which would make it impossible branch into the loop header since
 		// they are treated as continues.
@@ -3214,6 +3216,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto *var = compiler.maybe_get<SPIRVariable>(ptr);
 				if (var && var->storage == StorageClassFunction)
 					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				for (uint32_t i = 3; i < length; i++)
+					if (id_is_phi_variable(args[i]))
+						accessed_variables_to_block[args[i]].insert(current_block->self);
 				break;
 			}
 
@@ -3352,16 +3358,27 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		{
 			// If we're accessing a variable inside a continue block, this variable might be a loop variable.
 			// We can only use loop variables with scalars, as we cannot track static expressions for vectors.
-			if (this->is_continue(block) && type.vecsize == 1 && type.columns == 1)
+			if (this->is_continue(block))
 			{
-				// The variable is used in multiple continue blocks, this is not a loop
-				// candidate, signal that by setting block to -1u.
-				auto &potential = potential_loop_variables[var.first];
+				// Potentially awkward case to check for.
+				// We might have a variable inside a loop, which is touched by the continue block,
+				// but is not actually a loop variable.
+				// The continue block is dominated by the inner part of the loop, which does not make sense in high-level
+				// language output because it will be declared before the body,
+				// so we will have to lift the dominator up to the relevant loop header instead.
+				builder.add_block(continue_block_to_loop_header[block]);
 
-				if (potential == 0)
-					potential = block;
-				else
-					potential = ~(0u);
+				if (type.vecsize == 1 && type.columns == 1)
+				{
+					// The variable is used in multiple continue blocks, this is not a loop
+					// candidate, signal that by setting block to -1u.
+					auto &potential = potential_loop_variables[var.first];
+
+					if (potential == 0)
+						potential = block;
+					else
+						potential = ~(0u);
+				}
 			}
 			builder.add_block(block);
 		}
@@ -3370,6 +3387,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 		// Add it to a per-block list of variables.
 		uint32_t dominating_block = builder.get_dominator();
+
 		// If all blocks here are dead code, this will be 0, so the variable in question
 		// will be completely eliminated.
 		if (dominating_block)

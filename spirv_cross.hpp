@@ -511,6 +511,7 @@ protected:
 	std::unordered_set<uint32_t> loop_merge_targets;
 	std::unordered_set<uint32_t> selection_merge_targets;
 	std::unordered_set<uint32_t> multiselect_merge_targets;
+	std::unordered_map<uint32_t, uint32_t> continue_block_to_loop_header;
 
 	virtual std::string to_name(uint32_t id, bool allow_alias = true) const;
 	bool is_builtin_variable(const SPIRVariable &var) const;
