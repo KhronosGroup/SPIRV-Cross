@@ -7846,6 +7846,9 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			{
 			case SPIRBlock::ForLoop:
 			{
+				// This block may be a dominating block, so make sure we flush undeclared variables before building the for loop header.
+				flush_undeclared_variables(block);
+
 				// Important that we do this in this order because
 				// emitting the continue block can invalidate the condition expression.
 				auto initializer = emit_for_loop_initializers(block);
@@ -7856,6 +7859,8 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			}
 
 			case SPIRBlock::WhileLoop:
+				// This block may be a dominating block, so make sure we flush undeclared variables before building the while loop header.
+				flush_undeclared_variables(block);
 				statement("while (", to_expression(block.condition), ")");
 				break;
 
