@@ -319,6 +319,7 @@ protected:
 		bool native_row_major_matrix = true;
 		bool use_constructor_splatting = true;
 		bool boolean_mix_support = true;
+		bool allow_precision_qualifiers = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

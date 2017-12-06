@@ -368,6 +368,9 @@ string CompilerGLSL::compile()
 	// Force a classic "C" locale, reverts when function returns
 	ClassicLocale classic_locale;
 
+	if (options.vulkan_semantics)
+		backend.allow_precision_qualifiers = true;
+
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
 	fixup_image_load_store_access();
@@ -6860,15 +6863,15 @@ void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 
 const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags)
 {
+	// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
+	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
+	    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
+	    type.basetype != SPIRType::Sampler)
+		return "";
+
 	if (options.es)
 	{
 		auto &execution = get_entry_point();
-
-		// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
-		if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
-		    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
-		    type.basetype != SPIRType::Sampler)
-			return "";
 
 		if (flags & (1ull << DecorationRelaxedPrecision))
 		{
@@ -6896,6 +6899,19 @@ const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 
 			return implied_fhighp || implied_ihighp ? "" : "highp ";
 		}
+	}
+	else if (backend.allow_precision_qualifiers)
+	{
+		// Vulkan GLSL supports precision qualifiers, even in desktop profiles, which is convenient.
+		// The default is highp however, so only emit mediump in the rare case that a shader has these.
+		if (flags & (1ull << DecorationRelaxedPrecision))
+		{
+			bool can_use_mediump =
+			    type.basetype == SPIRType::Float || type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt;
+			return can_use_mediump ? "mediump " : "";
+		}
+		else
+			return "";
 	}
 	else
 		return "";
