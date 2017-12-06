@@ -545,6 +545,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = legacy ? "VPOS" : "SV_Position";
 			break;
 
+		case BuiltInVertexId:
 		case BuiltInVertexIndex:
 			if (legacy)
 				SPIRV_CROSS_THROW("Vertex index not supported in SM 3.0 or lower.");
@@ -552,6 +553,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_VertexID";
 			break;
 
+		case BuiltInInstanceId:
 		case BuiltInInstanceIndex:
 			if (legacy)
 				SPIRV_CROSS_THROW("Instance index not supported in SM 3.0 or lower.");
@@ -762,6 +764,19 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		statement(variable_decl(type, name), " : ", binding, ";");
 }
 
+std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage)
+{
+	switch (builtin)
+	{
+	case BuiltInVertexId:
+		return "gl_VertexID";
+	case BuiltInInstanceId:
+		return "gl_InstanceID";
+	default:
+		return CompilerGLSL::builtin_to_glsl(builtin, storage);
+	}
+}
+
 void CompilerHLSL::emit_builtin_variables()
 {
 	// Emit global variables for the interface variables which are statically used by the shader.
@@ -784,7 +799,9 @@ void CompilerHLSL::emit_builtin_variables()
 			type = "float";
 			break;
 
+		case BuiltInVertexId:
 		case BuiltInVertexIndex:
+		case BuiltInInstanceId:
 		case BuiltInInstanceIndex:
 		case BuiltInSampleId:
 			type = "int";
@@ -1673,7 +1690,9 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				statement(builtin, " = stage_input.", builtin, ";");
 			break;
 
+		case BuiltInVertexId:
 		case BuiltInVertexIndex:
+		case BuiltInInstanceId:
 		case BuiltInInstanceIndex:
 			// D3D semantics are uint, but shader wants int.
 			statement(builtin, " = int(stage_input.", builtin, ");");
