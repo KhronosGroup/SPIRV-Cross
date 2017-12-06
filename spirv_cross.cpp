@@ -1706,6 +1706,13 @@ void Compiler::parse(const Instruction &instruction)
 
 		auto &var = set<SPIRVariable>(id, type, storage, initializer);
 
+		auto &ttype = get<SPIRType>(type);
+		if (ttype.basetype == SPIRType::BaseType::Image)
+		{
+			set_decoration(id, DecorationNonWritable);
+			set_decoration(id, DecorationNonReadable);
+		}
+
 		if (variable_storage_is_aliased(var))
 			aliased_variables.push_back(var.self);
 
