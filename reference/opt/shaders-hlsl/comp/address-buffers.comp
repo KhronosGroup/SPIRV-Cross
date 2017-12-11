@@ -1,5 +1,5 @@
 RWByteAddressBuffer WriteOnly : register(u2);
-ByteAddressBuffer ReadOnly : register(u0);
+ByteAddressBuffer ReadOnly : register(t0);
 RWByteAddressBuffer ReadWrite : register(u1);
 
 void comp_main()

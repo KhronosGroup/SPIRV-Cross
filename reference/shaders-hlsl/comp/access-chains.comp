@@ -1,5 +1,5 @@
 RWByteAddressBuffer wo : register(u1);
-ByteAddressBuffer ro : register(u0);
+ByteAddressBuffer ro : register(t0);
 
 static uint3 gl_GlobalInvocationID;
 struct SPIRV_Cross_Input
