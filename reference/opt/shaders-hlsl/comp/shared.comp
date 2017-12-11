@@ -1,6 +1,6 @@
 static const uint3 gl_WorkGroupSize = uint3(4u, 1u, 1u);
 
-ByteAddressBuffer _22 : register(u0);
+ByteAddressBuffer _22 : register(t0);
 RWByteAddressBuffer _44 : register(u1);
 
 static uint3 gl_GlobalInvocationID;

@@ -2280,7 +2280,11 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		if (storage == StorageClassUniform)
 		{
 			if (has_decoration(type.self, DecorationBufferBlock))
-				space = "u"; // UAV
+			{
+				uint64_t flags = get_buffer_block_flags(var);
+				bool is_readonly = (flags & (1ull << DecorationNonWritable)) != 0;
+				space = is_readonly ? "t" : "u"; // UAV
+			}
 			else if (has_decoration(type.self, DecorationBlock))
 				space = "b"; // Constant buffers
 		}

@@ -7,10 +7,10 @@ export PATH="./external/glslang-build/StandAlone:./external/spirv-tools-build/to
 echo "Using glslangValidation in: $(which glslangValidator)."
 echo "Using spirv-opt in: $(which spirv-opt)."
 
-./test_shaders.py shaders --update || exit 1
-./test_shaders.py shaders --update --opt || exit 1
-./test_shaders.py shaders-msl --msl --update || exit 1
-./test_shaders.py shaders-msl --msl --update --opt || exit 1
-./test_shaders.py shaders-hlsl --hlsl --update || exit 1
-./test_shaders.py shaders-hlsl --hlsl --update --opt || exit 1
+./test_shaders.py shaders || exit 1
+./test_shaders.py shaders --opt || exit 1
+./test_shaders.py shaders-msl --msl || exit 1
+./test_shaders.py shaders-msl --msl --opt || exit 1
+./test_shaders.py shaders-hlsl --hlsl || exit 1
+./test_shaders.py shaders-hlsl --hlsl --opt || exit 1
 
