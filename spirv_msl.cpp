@@ -3008,7 +3008,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInInstanceIndex:
 		return "gl_InstanceIndex";
 	case BuiltInLayer:
-        return current_function && (current_function->self == entry_point) ? stage_out_var_name + ".gl_Layer": "gl_Layer";
+		return current_function && (current_function->self == entry_point) ? stage_out_var_name + ".gl_Layer": "gl_Layer";
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	case BuiltInPosition:
@@ -3109,7 +3109,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 	case BuiltInInstanceIndex:
 		return "uint";
 	case BuiltInLayer:
-        return "uint";
+		return "uint";
 
 	// Vertex function out
 	case BuiltInClipDistance:

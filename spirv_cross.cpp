@@ -1706,6 +1706,7 @@ void Compiler::parse(const Instruction &instruction)
 
 		auto &var = set<SPIRVariable>(id, type, storage, initializer);
 
+		// hlsl based shaders don't have those decorations. force them and then reset when reading/writing images
 		auto &ttype = get<SPIRType>(type);
 		if (ttype.basetype == SPIRType::BaseType::Image)
 		{
