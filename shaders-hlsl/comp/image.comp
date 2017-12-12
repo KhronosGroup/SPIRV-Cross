@@ -10,27 +10,27 @@ layout(r32ui, binding = 5) uniform writeonly uimage2D uImageOutU;
 layout(r32f, binding = 6) uniform readonly imageBuffer uImageInBuffer;
 layout(r32f, binding = 7) uniform writeonly imageBuffer uImageOutBuffer;
 
-layout(rg32f, binding = 0) uniform readonly image2D uImageInF2;
-layout(rg32f, binding = 1) uniform writeonly image2D uImageOutF2;
-layout(rg32i, binding = 2) uniform readonly iimage2D uImageInI2;
-layout(rg32i, binding = 3) uniform writeonly iimage2D uImageOutI2;
-layout(rg32ui, binding = 4) uniform readonly uimage2D uImageInU2;
-layout(rg32ui, binding = 5) uniform writeonly uimage2D uImageOutU2;
-layout(rg32f, binding = 6) uniform readonly imageBuffer uImageInBuffer2;
-layout(rg32f, binding = 7) uniform writeonly imageBuffer uImageOutBuffer2;
+layout(rg32f, binding = 8) uniform readonly image2D uImageInF2;
+layout(rg32f, binding = 9) uniform writeonly image2D uImageOutF2;
+layout(rg32i, binding = 10) uniform readonly iimage2D uImageInI2;
+layout(rg32i, binding = 11) uniform writeonly iimage2D uImageOutI2;
+layout(rg32ui, binding = 12) uniform readonly uimage2D uImageInU2;
+layout(rg32ui, binding = 13) uniform writeonly uimage2D uImageOutU2;
+layout(rg32f, binding = 14) uniform readonly imageBuffer uImageInBuffer2;
+layout(rg32f, binding = 15) uniform writeonly imageBuffer uImageOutBuffer2;
 
-layout(rgba32f, binding = 0) uniform readonly image2D uImageInF4;
-layout(rgba32f, binding = 1) uniform writeonly image2D uImageOutF4;
-layout(rgba32i, binding = 2) uniform readonly iimage2D uImageInI4;
-layout(rgba32i, binding = 3) uniform writeonly iimage2D uImageOutI4;
-layout(rgba32ui, binding = 4) uniform readonly uimage2D uImageInU4;
-layout(rgba32ui, binding = 5) uniform writeonly uimage2D uImageOutU4;
-layout(rgba32f, binding = 6) uniform readonly imageBuffer uImageInBuffer4;
-layout(rgba32f, binding = 7) uniform writeonly imageBuffer uImageOutBuffer4;
+layout(rgba32f, binding = 16) uniform readonly image2D uImageInF4;
+layout(rgba32f, binding = 17) uniform writeonly image2D uImageOutF4;
+layout(rgba32i, binding = 18) uniform readonly iimage2D uImageInI4;
+layout(rgba32i, binding = 19) uniform writeonly iimage2D uImageOutI4;
+layout(rgba32ui, binding = 20) uniform readonly uimage2D uImageInU4;
+layout(rgba32ui, binding = 21) uniform writeonly uimage2D uImageOutU4;
+layout(rgba32f, binding = 22) uniform readonly imageBuffer uImageInBuffer4;
+layout(rgba32f, binding = 23) uniform writeonly imageBuffer uImageOutBuffer4;
 
-layout(binding = 8) uniform writeonly image2D uImageNoFmtF;
-layout(binding = 9) uniform writeonly uimage2D uImageNoFmtU;
-layout(binding = 10) uniform writeonly iimage2D uImageNoFmtI;
+layout(binding = 24) uniform writeonly image2D uImageNoFmtF;
+layout(binding = 25) uniform writeonly uimage2D uImageNoFmtU;
+layout(binding = 26) uniform writeonly iimage2D uImageNoFmtI;
 
 void main()
 {

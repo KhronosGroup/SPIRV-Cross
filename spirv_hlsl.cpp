@@ -1232,7 +1232,10 @@ void CompilerHLSL::emit_resources()
 					if (has_lod[index])
 						statement("Tex.GetDimensions(Level, ret.x, Param);");
 					else
+					{
 						statement("Tex.GetDimensions(ret.x);");
+						statement("Param = 0u;");
+					}
 					break;
 				case 2:
 					if (has_lod[index])
@@ -3596,6 +3599,7 @@ string CompilerHLSL::compile()
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
 	backend.boolean_mix_support = false;
+	backend.can_swizzle_scalar = true;
 
 	update_active_builtins();
 	analyze_sampler_comparison_states();

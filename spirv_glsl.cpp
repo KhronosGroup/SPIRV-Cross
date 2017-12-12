@@ -1722,7 +1722,7 @@ string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_comp
 {
 	if (out_type.vecsize == input_components)
 		return expr;
-	else if (input_components == 1)
+	else if (input_components == 1 && !backend.can_swizzle_scalar)
 		return join(type_to_glsl(out_type), "(", expr, ")");
 	else
 	{
@@ -1732,6 +1732,8 @@ string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_comp
 			e += index_to_swizzle(min(c, input_components - 1));
 		if (backend.swizzle_is_function && out_type.vecsize > 1)
 			e += "()";
+
+		remove_duplicate_swizzle(e);
 		return e;
 	}
 }
@@ -5369,13 +5371,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Arrays and structs must be initialized properly in full.
 		bool composite = !out_type.array.empty() || out_type.basetype == SPIRType::Struct;
 		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
+		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
 
-		if (splat)
+		if (splat || swizzle_splat)
 		{
 			uint32_t input = elems[0];
 			for (uint32_t i = 0; i < length; i++)
+			{
 				if (input != elems[i])
+				{
 					splat = false;
+					swizzle_splat = false;
+				}
+			}
 		}
 
 		string constructor_op;
@@ -5389,6 +5397,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 				constructor_op += build_composite_combiner(elems, length);
 			constructor_op += " }";
+		}
+		else if (swizzle_splat && !composite)
+		{
+			constructor_op = remap_swizzle(get<SPIRType>(result_type), 1, to_expression(elems[0]));
 		}
 		else
 		{

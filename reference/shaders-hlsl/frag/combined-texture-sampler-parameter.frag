@@ -1,5 +1,5 @@
-Texture2D<float4> uSampler : register(t1);
-SamplerState _uSampler_sampler : register(s1);
+Texture2D<float4> uSampler : register(t0);
+SamplerState _uSampler_sampler : register(s0);
 Texture2D<float4> uSamplerShadow : register(t1);
 SamplerComparisonState _uSamplerShadow_sampler : register(s1);
 

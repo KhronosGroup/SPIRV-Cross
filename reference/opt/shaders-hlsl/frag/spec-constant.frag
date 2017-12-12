@@ -15,14 +15,13 @@ struct SPIRV_Cross_Output
     float4 FragColor : SV_Target0;
 };
 
-float _146[(c + 2)];
-
 void frag_main()
 {
-    float _113 = a + b;
     float vec0[(c + 3)][8];
+    vec0[0][0] = 10.0f;
     Foo foo;
-    FragColor = ((float4(_113, _113, _113, _113) + float4(vec0[0][0], vec0[0][0], vec0[0][0], vec0[0][0])) + float4(_146[0], _146[0], _146[0], _146[0])) + float4(foo.elems[c], foo.elems[c], foo.elems[c], foo.elems[c]);
+    foo.elems[c] = 10.0f;
+    FragColor = (((a + b).xxxx + vec0[0][0].xxxx) + 20.0f.xxxx) + foo.elems[c].xxxx;
 }
 
 SPIRV_Cross_Output main()

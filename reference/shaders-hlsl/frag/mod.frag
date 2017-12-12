@@ -51,7 +51,7 @@ void frag_main()
     float3 m1 = mod(a3, b3);
     float2 m2 = mod(a2, b2);
     float m3 = mod(a1, b1);
-    FragColor = ((m0 + m1.xyzx) + m2.xyxy) + float4(m3, m3, m3, m3);
+    FragColor = ((m0 + m1.xyzx) + m2.xyxy) + m3.xxxx;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

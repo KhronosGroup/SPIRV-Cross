@@ -48,6 +48,7 @@ uint SPIRV_Cross_textureSize(Buffer<float4> Tex, uint Level, out uint Param)
 {
     uint ret;
     Tex.GetDimensions(ret.x);
+    Param = 0u;
     return ret;
 }
 

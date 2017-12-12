@@ -61,11 +61,13 @@ void frag_main()
     int c35 = int(g);
     uint c36 = uint(g);
     float c37 = float(g);
-    float _113 = t0 + t1;
     float vec0[(c + 3)][8];
+    vec0[0][0] = 10.0f;
     float vec1[(c + 2)];
+    vec1[0] = 20.0f;
     Foo foo;
-    FragColor = ((float4(_113, _113, _113, _113) + float4(vec0[0][0], vec0[0][0], vec0[0][0], vec0[0][0])) + float4(vec1[0], vec1[0], vec1[0], vec1[0])) + float4(foo.elems[c], foo.elems[c], foo.elems[c], foo.elems[c]);
+    foo.elems[c] = 10.0f;
+    FragColor = (((t0 + t1).xxxx + vec0[0][0].xxxx) + vec1[0].xxxx) + foo.elems[c].xxxx;
 }
 
 SPIRV_Cross_Output main()

@@ -320,6 +320,7 @@ protected:
 		bool use_constructor_splatting = true;
 		bool boolean_mix_support = true;
 		bool allow_precision_qualifiers = false;
+		bool can_swizzle_scalar = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

@@ -105,10 +105,43 @@ def cross_compile_msl(shader, spirv, opt):
     subprocess.check_call(['spirv-val', spirv_path])
     return (spirv_path, msl_path)
 
+def shader_model_hlsl(shader):
+    if '.vert' in shader:
+        return '-Tvs_5_1'
+    elif '.frag' in shader:
+        return '-Tps_5_1'
+    elif '.comp' in shader:
+        return '-Tcs_5_1'
+    else:
+        return None
+
+def shader_to_win_path(shader):
+    # It's (very) convenient to be able to run HLSL testing in wine on Unix-likes, so support that.
+    try:
+        with subprocess.Popen(['winepath', '-w', shader], stdout = subprocess.PIPE, stderr = subprocess.PIPE) as f:
+            stdout_data, stderr_data = f.communicate()
+            return stdout_data.decode('utf-8')
+    except OSError as oe:
+        if (oe.errno != os.errno.ENOENT): # Ignore not found errors
+            return shader
+    except subprocess.CalledProcessError:
+        raise
+
+    return shader
+
 def validate_shader_hlsl(shader):
     subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '-V', shader])
-    if (not force_no_external_validation) and os.path.exists('fxc'):
-        subprocess.check_call(['fxc', shader])
+    is_no_fxc = '.nofxc.' in shader
+    if (not force_no_external_validation) and (not is_no_fxc):
+        try:
+            win_path = shader_to_win_path(shader)
+            subprocess.check_call(['fxc', '-nologo', shader_model_hlsl(shader), win_path])
+        except OSError as oe:
+            if (oe.errno != os.errno.ENOENT): # Ignore not found errors
+                raise
+        except subprocess.CalledProcessError:
+            print('Failed compiling HLSL shader:', shader, 'with FXC.')
+            sys.exit(1)
 
 def shader_to_sm(shader):
     if '.sm51.' in shader:
