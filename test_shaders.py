@@ -105,10 +105,21 @@ def cross_compile_msl(shader, spirv, opt):
     subprocess.check_call(['spirv-val', spirv_path])
     return (spirv_path, msl_path)
 
+def shader_model_hlsl(shader):
+    if '.vert' in shader:
+        return '-Tvs_5_1'
+    elif '.frag' in shader:
+        return '-Tps_5_1'
+    elif '.comp' in shader:
+        return '-Tcs_5_1'
+    else:
+        return None
+
 def validate_shader_hlsl(shader):
     subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '-V', shader])
-    if (not force_no_external_validation) and os.path.exists('fxc'):
-        subprocess.check_call(['fxc', shader])
+    is_asm = '.asm' in shader
+    if (not force_no_external_validation) and (not is_asm) and os.path.exists('fxc'):
+        subprocess.check_call(['fxc', '-nologo', shader_model_hlsl(shader), shader])
 
 def shader_to_sm(shader):
     if '.sm51.' in shader:

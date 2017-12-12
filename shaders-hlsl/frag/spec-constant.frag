@@ -71,7 +71,10 @@ void main()
 	// Flexible sized arrays with spec constants and spec constant ops.
 	float vec0[c + 3][8];
 	float vec1[c + 2];
+	vec0[0][0] = 10.0;
+	vec1[0] = 20.0;
 
 	Foo foo;
+	foo.elems[c] = 10.0;
 	FragColor = vec4(t0 + t1) + vec0[0][0] + vec1[0] + foo.elems[c];
 }
