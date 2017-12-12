@@ -5371,12 +5371,17 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
 		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
 
-		if (splat)
+		if (splat || swizzle_splat)
 		{
 			uint32_t input = elems[0];
 			for (uint32_t i = 0; i < length; i++)
+			{
 				if (input != elems[i])
+				{
 					splat = false;
+					swizzle_splat = false;
+				}
+			}
 		}
 
 		string constructor_op;
@@ -5391,7 +5396,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				constructor_op += build_composite_combiner(elems, length);
 			constructor_op += " }";
 		}
-		else if (splat && swizzle_splat && !composite)
+		else if (swizzle_splat && !composite)
 		{
 			constructor_op = remap_swizzle(get<SPIRType>(result_type), 1, to_expression(elems[0]));
 		}
