@@ -127,6 +127,8 @@ def shader_to_win_path(shader):
     except subprocess.CalledProcessError:
         raise
 
+    return shader
+
 def validate_shader_hlsl(shader):
     subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '-V', shader])
     is_no_fxc = '.nofxc.' in shader
