@@ -1732,6 +1732,8 @@ string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_comp
 			e += index_to_swizzle(min(c, input_components - 1));
 		if (backend.swizzle_is_function && out_type.vecsize > 1)
 			e += "()";
+
+		remove_duplicate_swizzle(e);
 		return e;
 	}
 }

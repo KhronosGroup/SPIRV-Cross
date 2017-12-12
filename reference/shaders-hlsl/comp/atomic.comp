@@ -13,7 +13,7 @@ void comp_main()
     InterlockedAdd(uImage[int2(1, 5)], 1u, _19);
     uint _27;
     InterlockedAdd(uImage[int2(1, 5)], 1u, _27);
-    iImage[int2(1, 6)] = int(_27).xxxx.x;
+    iImage[int2(1, 6)] = int(_27).x;
     uint _32;
     InterlockedOr(uImage[int2(1, 5)], 1u, _32);
     uint _34;
