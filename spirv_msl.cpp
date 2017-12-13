@@ -3012,8 +3012,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInPosition:
 	case BuiltInPointSize:
 	case BuiltInClipDistance:
-	case BuiltInFragDepth:
 	case BuiltInLayer:
+	case BuiltInFragDepth:
 		if (current_function && (current_function->self == entry_point))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
 		else
