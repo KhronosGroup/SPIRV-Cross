@@ -3007,14 +3007,13 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_VertexIndex";
 	case BuiltInInstanceIndex:
 		return "gl_InstanceIndex";
-	case BuiltInLayer:
-		return current_function && (current_function->self == entry_point) ? stage_out_var_name + ".gl_Layer": "gl_Layer";
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	case BuiltInPosition:
 	case BuiltInPointSize:
 	case BuiltInClipDistance:
 	case BuiltInFragDepth:
+	case BuiltInLayer:
 		if (current_function && (current_function->self == entry_point))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
 		else
@@ -3108,8 +3107,6 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "uint";
 	case BuiltInInstanceIndex:
 		return "uint";
-	case BuiltInLayer:
-		return "uint";
 
 	// Vertex function out
 	case BuiltInClipDistance:
@@ -3118,6 +3115,8 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "float";
 	case BuiltInPosition:
 		return "float4";
+	case BuiltInLayer:
+		return "uint";
 
 	// Fragment function in
 	case BuiltInFrontFacing:
