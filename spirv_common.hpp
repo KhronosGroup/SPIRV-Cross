@@ -657,10 +657,11 @@ struct SPIRVariable : IVariant
 	};
 
 	SPIRVariable() = default;
-	SPIRVariable(uint32_t basetype_, spv::StorageClass storage_, uint32_t initializer_ = 0)
+	SPIRVariable(uint32_t basetype_, spv::StorageClass storage_, uint32_t initializer_ = 0, uint32_t basevariable_ = 0)
 	    : basetype(basetype_)
 	    , storage(storage_)
 	    , initializer(initializer_)
+	    , basevariable(basevariable_)
 	{
 	}
 
@@ -668,6 +669,7 @@ struct SPIRVariable : IVariant
 	spv::StorageClass storage = spv::StorageClassGeneric;
 	uint32_t decoration = 0;
 	uint32_t initializer = 0;
+	uint32_t basevariable = 0;
 
 	std::vector<uint32_t> dereference_chain;
 	bool compat_builtin = false;

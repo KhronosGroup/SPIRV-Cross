@@ -301,9 +301,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 		uint32_t next_id = increase_bound_by(uint32_t(added_arg_ids.size()));
 		for (uint32_t arg_id : added_arg_ids)
 		{
-			uint32_t type_id = get<SPIRVariable>(arg_id).basetype;
+			auto var = get<SPIRVariable>(arg_id);
+			uint32_t type_id = var.basetype;
 			func.add_parameter(type_id, next_id, true);
-			set<SPIRVariable>(next_id, type_id, StorageClassFunction);
+			set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
 
 			// Ensure both the existing and new variables have the same name, and the name is valid
 			string vld_name = ensure_valid_name(to_name(arg_id), "v");
@@ -360,6 +361,11 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 			uint32_t mbr_type_id = type.member_types[mbr_idx];
 			auto &mbr_type = get<SPIRType>(mbr_type_id);
 			mark_as_packable(mbr_type);
+			if (mbr_type.type_alias)
+			{
+				auto &mbr_type_alias = get<SPIRType>(mbr_type.type_alias);
+				mark_as_packable(mbr_type_alias);
+			}
 		}
 	}
 }
@@ -1351,8 +1357,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		// Mark that this shader reads from this image
 		uint32_t img_id = ops[2];
 		auto *p_var = maybe_get_backing_variable(img_id);
-		if (p_var)
+		if (p_var && has_decoration(p_var->self, DecorationNonReadable))
+		{
 			unset_decoration(p_var->self, DecorationNonReadable);
+			force_recompile = true;
+		}
 
 		emit_texture_op(instruction);
 		break;
@@ -2673,7 +2682,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (constref)
 		decl += "const ";
 
-	decl += type_to_glsl(type);
+	decl += type_to_glsl(type, arg.id);
 
 	if (is_array(type))
 		decl += "*";
@@ -2940,6 +2949,8 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		default:
 		{
 			auto *p_var = maybe_get_backing_variable(id);
+			if (p_var && p_var->basevariable)
+				p_var = maybe_get<SPIRVariable>(p_var->basevariable);
 			if (p_var && !has_decoration(p_var->self, DecorationNonWritable))
 			{
 				img_type_name += ", access::";
@@ -3104,6 +3115,8 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "float";
 	case BuiltInPosition:
 		return "float4";
+	case BuiltInLayer:
+		return "uint";
 
 	// Fragment function in
 	case BuiltInFrontFacing:
