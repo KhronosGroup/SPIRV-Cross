@@ -16,10 +16,8 @@ fragment main0_out main0()
     main0_out out = {};
     float4 _20;
     float4 _21;
-    float4 _51;
     float4 _52;
-    _51 = _50;
-    for (;;)
+    do
     {
         if (0.0 != 0.0)
         {
@@ -33,7 +31,7 @@ fragment main0_out main0()
         }
         _52 = _38;
         break;
-    }
+    } while (false);
     out._entryPointOutput = _52;
     return out;
 }
