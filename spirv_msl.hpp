@@ -77,9 +77,24 @@ public:
 	// Options for compiling to Metal Shading Language
 	struct Options
 	{
+		typedef enum {
+			iOS,
+			macOS,
+		} Platform;
+
+		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		bool enable_point_size_builtin = true;
 		bool resolve_specialized_array_lengths = true;
+
+		bool is_ios()
+		{
+			return platform == iOS;
+		}
+		bool is_macos()
+		{
+			return platform == macOS;
+		}
 
 		void set_msl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
 		{

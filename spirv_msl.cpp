@@ -1559,34 +1559,18 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	string bar_stmt = "threadgroup_barrier(mem_flags::";
 
 	uint32_t mem_sem = id_mem_sem ? get<SPIRConstant>(id_mem_sem).scalar() : uint32_t(MemorySemanticsMaskNone);
-	switch (mem_sem)
-	{
-	case MemorySemanticsCrossWorkgroupMemoryMask:
+
+	if (mem_sem & MemorySemanticsCrossWorkgroupMemoryMask)
 		bar_stmt += "mem_device";
-		break;
-
-	case MemorySemanticsSubgroupMemoryMask:
-	case MemorySemanticsWorkgroupMemoryMask:
-	case MemorySemanticsAtomicCounterMemoryMask:
+	else if (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask |
+	                    MemorySemanticsAtomicCounterMemoryMask))
 		bar_stmt += "mem_threadgroup";
-		break;
-
-	case MemorySemanticsImageMemoryMask:
+	else if (mem_sem & MemorySemanticsImageMemoryMask)
 		bar_stmt += "mem_texture";
-		break;
-
-	case MemorySemanticsAcquireMask:
-	case MemorySemanticsReleaseMask:
-	case MemorySemanticsAcquireReleaseMask:
-	case MemorySemanticsSequentiallyConsistentMask:
-	case MemorySemanticsUniformMemoryMask:
-	case MemorySemanticsMaskNone:
-	default:
+	else
 		bar_stmt += "mem_none";
-		break;
-	}
 
-	if (options.supports_msl_version(2))
+	if (options.is_ios() && options.supports_msl_version(2))
 	{
 		bar_stmt += ", ";
 
