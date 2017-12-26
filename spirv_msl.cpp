@@ -279,6 +279,15 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			}
 			case OpFunctionCall:
 			{
+				// First see if any of the function call args are globals
+				for (uint32_t arg_idx = 3; arg_idx < i.length; arg_idx++)
+				{
+					uint32_t arg_id = ops[arg_idx];
+					if (global_var_ids.find(arg_id) != global_var_ids.end())
+						added_arg_ids.insert(arg_id);
+				}
+
+				// Then recurse into the function itself to extract globals used internally in the function
 				uint32_t inner_func_id = ops[2];
 				std::set<uint32_t> inner_func_args;
 				extract_global_variables_from_function(inner_func_id, inner_func_args, global_var_ids,
@@ -306,12 +315,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			func.add_parameter(type_id, next_id, true);
 			set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
 
-			// Ensure both the existing and new variables have the same name, and the name is valid
-			string vld_name = ensure_valid_name(to_name(arg_id), "v");
-			set_name(arg_id, vld_name);
-			set_name(next_id, vld_name);
+			// Ensure the existing variable has a valid name and the new variable has all the same meta info
+			set_name(arg_id, ensure_valid_name(to_name(arg_id), "v"));
+			meta[next_id] = meta[arg_id];
 
-			meta[next_id].decoration.qualified_alias = meta[arg_id].decoration.qualified_alias;
 			next_id++;
 		}
 	}
@@ -1903,7 +1910,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 
 		// Manufacture automatic sampler arg for SampledImage texture
 		auto &arg_type = get<SPIRType>(arg.type);
-		if (arg_type.basetype == SPIRType::SampledImage)
+		if (arg_type.basetype == SPIRType::SampledImage && arg_type.image.dim != DimBuffer)
 			decl += ", thread const sampler& " + to_sampler_expression(arg.id);
 
 		if (&arg != &func.arguments.back())
@@ -2197,7 +2204,7 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 	{
 		auto &var = id_v.get<SPIRVariable>();
 		auto &type = get<SPIRType>(var.basetype);
-		if (type.basetype == SPIRType::SampledImage)
+		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 			arg_str += ", " + to_sampler_expression(id);
 	}
 
@@ -2583,7 +2590,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
-				BuiltIn bi_type = meta[var_id].decoration.builtin_type;
+				BuiltIn bi_type = (BuiltIn)get_decoration(var_id, DecorationBuiltIn);
 				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
 			}
@@ -2666,7 +2673,10 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (constref)
 		decl += "const ";
 
-	decl += type_to_glsl(type, arg.id);
+	if (is_builtin_variable(var))
+		decl += builtin_type_decl((BuiltIn)get_decoration(arg.id, DecorationBuiltIn));
+	else
+		decl += type_to_glsl(type, arg.id);
 
 	if (is_array(type))
 		decl += "*";
