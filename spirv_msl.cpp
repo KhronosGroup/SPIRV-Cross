@@ -3319,9 +3319,12 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		// we must extract the result type directly from the Instruction, rather than the ID.
 		uint32_t id_rhs = args[1];
 		uint32_t type_id_rhs = result_types[id_rhs];
-		if ((compiler.ids[id_rhs].get_type() != TypeConstant) && type_id_rhs &&
-		    compiler.is_array(compiler.get<SPIRType>(type_id_rhs)))
-			return SPVFuncImplArrayCopy;
+		if ((compiler.ids[id_rhs].get_type() != TypeConstant) && type_id_rhs)
+		{
+			auto & type = compiler.ids[type_id_rhs].get_type() != TypeType ? compiler.expression_type(type_id_rhs) : compiler.get<SPIRType>(type_id_rhs);
+			if (compiler.is_array(type))
+				return SPVFuncImplArrayCopy;
+		}
 
 		break;
 	}
