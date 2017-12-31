@@ -5567,11 +5567,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				shuffle = true;
 
 		string expr;
-		bool trivial_forward;
+		bool should_fwd, trivial_forward;
 
 		if (shuffle)
 		{
-			trivial_forward = !expression_is_forwarded(vec0) && !expression_is_forwarded(vec1);
+			bool allow_fwd = !options.force_temp_use_for_two_vector_shuffles;
+			should_fwd = allow_fwd && should_forward(vec0) && should_forward(vec1);
+			trivial_forward = allow_fwd && !expression_is_forwarded(vec0) && !expression_is_forwarded(vec1);
 
 			// Constructor style and shuffling from two different vectors.
 			vector<string> args;
@@ -5586,6 +5588,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
+			should_fwd = should_forward(vec0);
 			trivial_forward = !expression_is_forwarded(vec0);
 
 			// We only source from first vector, so can use swizzle.
@@ -5600,7 +5603,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// A shuffle is trivial in that it doesn't actually *do* anything.
 		// We inherit the forwardedness from our arguments to avoid flushing out to temporaries when it's not really needed.
 
-		emit_op(result_type, id, expr, should_forward(vec0) && should_forward(vec1), trivial_forward);
+		emit_op(result_type, id, expr, should_fwd, trivial_forward);
 		break;
 	}
 
@@ -6099,8 +6102,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 
-		// OpAtomicStore unimplemented. Not sure what would use that.
-		// OpAtomicLoad seems to only be relevant for atomic counters.
+	// OpAtomicStore unimplemented. Not sure what would use that.
+	// OpAtomicLoad seems to only be relevant for atomic counters.
 
 	case OpAtomicIIncrement:
 		forced_temporaries.insert(ops[1]);
