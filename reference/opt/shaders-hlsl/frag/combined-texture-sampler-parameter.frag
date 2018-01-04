@@ -12,7 +12,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    FragColor = (uSampler.Sample(_uSampler_sampler, float2(1.0f, 1.0f)) + uSampler.Load(int3(int2(10, 10), 0))).x + uSamplerShadow.SampleCmp(_uSamplerShadow_sampler, float3(1.0f, 1.0f, 1.0f).xy, 1.0f);
+    FragColor = (uSampler.Sample(_uSampler_sampler, 1.0f.xx) + uSampler.Load(int3(int2(10, 10), 0))).x + uSamplerShadow.SampleCmp(_uSamplerShadow_sampler, 1.0f.xxx.xy, 1.0f);
 }
 
 SPIRV_Cross_Output main()

@@ -11,7 +11,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    FragColor = uDepth.SampleCmp(uSampler, float3(1.0f, 1.0f, 1.0f).xy, 1.0f) + uDepth.Sample(uSampler1, float2(1.0f, 1.0f)).x;
+    FragColor = uDepth.SampleCmp(uSampler, 1.0f.xxx.xy, 1.0f) + uDepth.Sample(uSampler1, 1.0f.xx).x;
 }
 
 SPIRV_Cross_Output main()
