@@ -4163,6 +4163,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_InvocationID";
 	case BuiltInLayer:
 		return "gl_Layer";
+	case BuiltInViewportIndex:
+		return "gl_ViewportIndex";
 	case BuiltInTessLevelOuter:
 		return "gl_TessLevelOuter";
 	case BuiltInTessLevelInner:
