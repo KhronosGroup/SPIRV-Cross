@@ -1513,7 +1513,17 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 
 string CompilerHLSL::to_sampler_expression(uint32_t id)
 {
-	return join("_", to_expression(id), "_sampler");
+	auto expr = join("_", to_expression(id));
+	auto index = expr.find_first_of('[');
+	if (index == string::npos)
+	{
+		return expr + "_sampler";
+	}
+	else
+	{
+		// We have an expression like _ident[array], so we cannot tack on _sampler, insert it inside the string instead.
+		return expr.insert(index, "_sampler");
+	}
 }
 
 void CompilerHLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
@@ -1529,17 +1539,13 @@ string CompilerHLSL::to_func_call_arg(uint32_t id)
 		return arg_str;
 
 	// Manufacture automatic sampler arg if the arg is a SampledImage texture and we're in modern HLSL.
-	auto *var = maybe_get<SPIRVariable>(id);
-	if (var)
-	{
-		auto &type = get<SPIRType>(var->basetype);
+	auto &type = expression_type(id);
 
-		// We don't have to consider combined image samplers here via OpSampledImage because
-		// those variables cannot be passed as arguments to functions.
-		// Only global SampledImage variables may be used as arguments.
-		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
-			arg_str += ", " + to_sampler_expression(id);
-	}
+	// We don't have to consider combined image samplers here via OpSampledImage because
+	// those variables cannot be passed as arguments to functions.
+	// Only global SampledImage variables may be used as arguments.
+	if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
+		arg_str += ", " + to_sampler_expression(id);
 
 	return arg_str;
 }
@@ -2334,25 +2340,28 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	case SPIRType::SampledImage:
 	case SPIRType::Image:
 	{
-		statement(image_type_hlsl_modern(type), " ", to_name(var.self), to_resource_binding(var), ";");
+		statement(image_type_hlsl_modern(type), " ", to_name(var.self), type_to_array_glsl(type),
+		          to_resource_binding(var), ";");
 
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
 			if (type.image.depth)
-				statement("SamplerComparisonState ", to_sampler_expression(var.self), to_resource_binding_sampler(var),
-				          ";");
+				statement("SamplerComparisonState ", to_sampler_expression(var.self), type_to_array_glsl(type),
+				          to_resource_binding_sampler(var), ";");
 			else
-				statement("SamplerState ", to_sampler_expression(var.self), to_resource_binding_sampler(var), ";");
+				statement("SamplerState ", to_sampler_expression(var.self), type_to_array_glsl(type),
+				          to_resource_binding_sampler(var), ";");
 		}
 		break;
 	}
 
 	case SPIRType::Sampler:
 		if (comparison_samplers.count(var.self))
-			statement("SamplerComparisonState ", to_name(var.self), to_resource_binding(var), ";");
+			statement("SamplerComparisonState ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var),
+			          ";");
 		else
-			statement("SamplerState ", to_name(var.self), to_resource_binding(var), ";");
+			statement("SamplerState ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 		break;
 
 	default:
