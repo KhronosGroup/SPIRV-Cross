@@ -297,10 +297,10 @@ protected:
 	void add_resource_name(uint32_t id);
 	void add_member_name(SPIRType &type, uint32_t name);
 
-	bool is_non_native_row_major_matrix(uint32_t id);
-	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
+	virtual bool is_non_native_row_major_matrix(uint32_t id);
+	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
 	bool member_is_packed_type(const SPIRType &type, uint32_t index) const;
-	virtual std::string convert_row_major_matrix(std::string exp_str);
+	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type);
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;

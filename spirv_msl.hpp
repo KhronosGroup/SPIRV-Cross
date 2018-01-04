@@ -137,6 +137,12 @@ public:
 		SPVFuncImplInverse2x2,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse4x4,
+		SPVFuncImplRowMajor2x3,
+		SPVFuncImplRowMajor2x4,
+		SPVFuncImplRowMajor3x2,
+		SPVFuncImplRowMajor3x4,
+		SPVFuncImplRowMajor4x2,
+		SPVFuncImplRowMajor4x3,
 	};
 
 	// Constructs an instance to compile the SPIR-V code into Metal Shading Language,
@@ -201,6 +207,9 @@ protected:
 	std::string to_qualifiers_glsl(uint32_t id) override;
 	void replace_illegal_names() override;
 	void declare_undefined_values() override;
+	bool is_non_native_row_major_matrix(uint32_t id) override;
+	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
+	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type) override;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
@@ -222,6 +231,7 @@ protected:
 	void emit_interface_block(uint32_t ib_var_id);
 	bool maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
+	void add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows);
 
 	std::string func_type_decl(SPIRType &type);
 	std::string entry_point_args(bool append_comma);

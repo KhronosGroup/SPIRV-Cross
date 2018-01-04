@@ -2237,7 +2237,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 		if (e.base_expression)
 			return to_enclosed_expression(e.base_expression) + e.expression;
 		else if (e.need_transpose)
-			return convert_row_major_matrix(e.expression);
+			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type));
 		else
 			return e.expression;
 	}
@@ -4350,7 +4350,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		{
 			if (row_major_matrix_needs_conversion)
 			{
-				expr = convert_row_major_matrix(expr);
+				expr = convert_row_major_matrix(expr, *type);
 				row_major_matrix_needs_conversion = false;
 			}
 
@@ -4529,7 +4529,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 
 		// Cannot forward transpositions, so resolve them here.
 		if (need_transpose)
-			expr += convert_row_major_matrix(tmp);
+			expr += convert_row_major_matrix(tmp, member_type);
 		else
 			expr += tmp;
 	}
@@ -5654,9 +5654,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
 	{
-		// If the matrix needs transpose, just flip the multiply order.
+		// If the matrix needs transpose and it is square, just flip the multiply order.
+		SPIRType *t;
 		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
-		if (e && e->need_transpose)
+		if (e && e->need_transpose && (t = &get<SPIRType>(e->expression_type)) && t->columns == t->vecsize)
 		{
 			e->need_transpose = false;
 			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
@@ -6840,7 +6841,7 @@ bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index) c
 // row_major matrix result of the expression to a column_major matrix.
 // Base implementation uses the standard library transpose() function.
 // Subclasses may override to use a different function.
-string CompilerGLSL::convert_row_major_matrix(string exp_str)
+string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType & /*exp_type*/)
 {
 	strip_enclosed_expression(exp_str);
 	return join("transpose(", exp_str, ")");

@@ -1048,6 +1048,64 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplRowMajor2x3:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float2x3 spvConvertFromRowMajor2x3(float2x3 m)");
+			begin_scope();
+			statement("return float2x3(float3(m[0][0], m[0][2], m[1][1]), float3(m[0][1], m[1][0], m[1][2]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor2x4:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float2x4 spvConvertFromRowMajor2x4(float2x4 m)");
+			begin_scope();
+			statement("return float2x4(float4(m[0][0], m[0][2], m[1][0], m[1][2]), float4(m[0][1], m[0][3], m[1][1], "
+			          "m[1][3]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor3x2:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float3x2 spvConvertFromRowMajor3x2(float3x2 m)");
+			begin_scope();
+			statement("return float3x2(float2(m[0][0], m[1][1]), float2(m[0][1], m[2][0]), float2(m[1][0], m[2][1]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor3x4:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float3x4 spvConvertFromRowMajor3x4(float3x4 m)");
+			begin_scope();
+			statement("return float3x4(float4(m[0][0], m[0][3], m[1][2], m[2][1]), float4(m[0][1], m[1][0], m[1][3], "
+			          "m[2][2]), float4(m[0][2], m[1][1], m[2][0], m[2][3]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor4x2:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float4x2 spvConvertFromRowMajor4x2(float4x2 m)");
+			begin_scope();
+			statement("return float4x2(float2(m[0][0], m[2][0]), float2(m[0][1], m[2][1]), float2(m[1][0], m[3][0]), "
+			          "float2(m[1][1], m[3][1]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor4x3:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float4x3 spvConvertFromRowMajor4x3(float4x3 m)");
+			begin_scope();
+			statement("return float4x3(float3(m[0][0], m[1][1], m[2][2]), float3(m[0][1], m[1][2], m[3][0]), "
+			          "float3(m[0][2], m[2][0], m[3][1]), float3(m[1][0], m[2][1], m[3][2]));");
+			end_scope();
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -2218,6 +2276,82 @@ string CompilerMSL::to_sampler_expression(uint32_t id)
 {
 	uint32_t samp_id = meta[id].sampler;
 	return samp_id ? to_expression(samp_id) : to_expression(id) + sampler_name_suffix;
+}
+
+// Checks whether the ID is a row_major matrix that requires conversion before use
+bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
+{
+	// Natively supported row-major matrices do not need to be converted.
+	// Legacy targets do not support row major.
+	if (backend.native_row_major_matrix && !is_legacy())
+		return false;
+
+	// Non-matrix or column-major matrix types do not need to be converted.
+	if (!(meta[id].decoration.decoration_flags & (1ull << DecorationRowMajor)))
+		return false;
+
+	// Generate a function that will swap matrix elements from row-major to column-major.
+	const auto type = expression_type(id);
+	add_convert_row_major_matrix_function(type.columns, type.vecsize);
+	return true;
+}
+
+// Checks whether the member is a row_major matrix that requires conversion before use
+bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
+{
+	// Natively supported row-major matrices do not need to be converted.
+	if (backend.native_row_major_matrix && !is_legacy())
+		return false;
+
+	// Non-matrix or column-major matrix types do not need to be converted.
+	if (!(combined_decoration_for_member(type, index) & (1ull << DecorationRowMajor)))
+		return false;
+
+	// Generate a function that will swap matrix elements from row-major to column-major.
+	const auto mbr_type = get<SPIRType>(type.member_types[index]);
+	add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
+	return true;
+}
+
+// Adds a function suitable for converting a non-square row-major matrix to a column-major matrix.
+void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows)
+{
+	SPVFuncImpl spv_func;
+	if (cols == rows) // Square matrix...just use transpose() function
+		return;
+	else if (cols == 2 && rows == 3)
+		spv_func = SPVFuncImplRowMajor2x3;
+	else if (cols == 2 && rows == 4)
+		spv_func = SPVFuncImplRowMajor2x4;
+	else if (cols == 3 && rows == 2)
+		spv_func = SPVFuncImplRowMajor3x2;
+	else if (cols == 3 && rows == 4)
+		spv_func = SPVFuncImplRowMajor3x4;
+	else if (cols == 4 && rows == 2)
+		spv_func = SPVFuncImplRowMajor4x2;
+	else if (cols == 4 && rows == 3)
+		spv_func = SPVFuncImplRowMajor4x3;
+	else
+		SPIRV_CROSS_THROW("Could not convert row-major matrix.");
+
+	auto rslt = spv_function_implementations.insert(spv_func);
+	if (rslt.second)
+		force_recompile = true;
+}
+
+// Wraps the expression string in a function call that converts the
+// row_major matrix result of the expression to a column_major matrix.
+string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type)
+{
+	strip_enclosed_expression(exp_str);
+
+	string func_name;
+	if (exp_type.columns == exp_type.vecsize)
+		func_name = "transpose";
+	else
+		func_name = string("spvConvertFromRowMajor") + to_string(exp_type.columns) + "x" + to_string(exp_type.vecsize);
+
+	return join(func_name, "(", exp_str, ")");
 }
 
 // Called automatically at the end of the entry point function
