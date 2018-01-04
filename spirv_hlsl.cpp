@@ -2334,25 +2334,25 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	case SPIRType::SampledImage:
 	case SPIRType::Image:
 	{
-		statement(image_type_hlsl_modern(type), " ", to_name(var.self), to_resource_binding(var), ";");
+		statement(image_type_hlsl_modern(type), " ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
 			if (type.image.depth)
-				statement("SamplerComparisonState ", to_sampler_expression(var.self), to_resource_binding_sampler(var),
+				statement("SamplerComparisonState ", to_sampler_expression(var.self), type_to_array_glsl(type), to_resource_binding_sampler(var),
 				          ";");
 			else
-				statement("SamplerState ", to_sampler_expression(var.self), to_resource_binding_sampler(var), ";");
+				statement("SamplerState ", to_sampler_expression(var.self), type_to_array_glsl(type), to_resource_binding_sampler(var), ";");
 		}
 		break;
 	}
 
 	case SPIRType::Sampler:
 		if (comparison_samplers.count(var.self))
-			statement("SamplerComparisonState ", to_name(var.self), to_resource_binding(var), ";");
+			statement("SamplerComparisonState ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 		else
-			statement("SamplerState ", to_name(var.self), to_resource_binding(var), ";");
+			statement("SamplerState ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 		break;
 
 	default:
