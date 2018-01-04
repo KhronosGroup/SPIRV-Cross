@@ -2495,12 +2495,16 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	type.columns = 1;
 
 	string res;
-	if (c.vector_size() > 1)
-		res += type_to_glsl(type) + "(";
-
 	bool splat = backend.use_constructor_splatting && c.vector_size() > 1;
+	bool swizzle_splat = backend.can_swizzle_scalar && c.vector_size() > 1;
 
-	if (splat)
+	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Double)
+	{
+		// Cannot swizzle literal integers as a special case.
+		swizzle_splat = false;
+	}
+
+	if (splat || swizzle_splat)
 	{
 		// Cannot use constant splatting if we have specialization constants somewhere in the vector.
 		for (uint32_t i = 0; i < c.vector_size(); i++)
@@ -2508,37 +2512,55 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 			if (options.vulkan_semantics && c.specialization_constant_id(vector, i) != 0)
 			{
 				splat = false;
+				swizzle_splat = false;
 				break;
 			}
 		}
 	}
 
-	if (splat)
+	if (splat || swizzle_splat)
 	{
 		if (type.width == 64)
 		{
 			uint64_t ident = c.scalar_u64(vector, 0);
 			for (uint32_t i = 1; i < c.vector_size(); i++)
+			{
 				if (ident != c.scalar_u64(vector, i))
+				{
 					splat = false;
+					swizzle_splat = false;
+					break;
+				}
+			}
 		}
 		else
 		{
 			uint32_t ident = c.scalar(vector, 0);
 			for (uint32_t i = 1; i < c.vector_size(); i++)
+			{
 				if (ident != c.scalar(vector, i))
+				{
 					splat = false;
+					swizzle_splat = false;
+				}
+			}
 		}
 	}
+
+	if (c.vector_size() > 1 && !swizzle_splat)
+		res += type_to_glsl(type) + "(";
 
 	switch (type.basetype)
 	{
 	case SPIRType::Float:
-		if (splat)
+		if (splat || swizzle_splat)
 		{
 			res += convert_to_string(c.scalar_f32(vector, 0));
 			if (backend.float_literal_suffix)
 				res += "f";
+
+			if (swizzle_splat)
+				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
 		}
 		else
 		{
@@ -2558,11 +2580,14 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		break;
 
 	case SPIRType::Double:
-		if (splat)
+		if (splat || swizzle_splat)
 		{
 			res += convert_to_string(c.scalar_f64(vector, 0));
 			if (backend.double_literal_suffix)
 				res += "lf";
+
+			if (swizzle_splat)
+				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
 		}
 		else
 		{
@@ -2708,7 +2733,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		SPIRV_CROSS_THROW("Invalid constant expression basetype.");
 	}
 
-	if (c.vector_size() > 1)
+	if (c.vector_size() > 1 && !swizzle_splat)
 		res += ")";
 
 	return res;
@@ -5372,6 +5397,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool composite = !out_type.array.empty() || out_type.basetype == SPIRType::Struct;
 		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
 		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
+
+		if (ids[elems[0]].get_type() == TypeConstant &&
+		    (in_type.basetype != SPIRType::Float && in_type.basetype != SPIRType::Double))
+		{
+			// Cannot swizzle literal integers as a special case.
+			swizzle_splat = false;
+		}
 
 		if (splat || swizzle_splat)
 		{

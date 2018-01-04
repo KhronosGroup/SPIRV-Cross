@@ -13,7 +13,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    FragColor = float4(0.0f, 0.0f, 0.0f, EvaluateAttributeSnapped(interpolant, float2(0.100000001490116119384765625f, 0.100000001490116119384765625f)).x) + float4(0.0f, 0.0f, 0.0f, ddx_coarse(interpolant.x));
+    FragColor = float4(0.0f, 0.0f, 0.0f, EvaluateAttributeSnapped(interpolant, 0.100000001490116119384765625f.xx).x) + float4(0.0f, 0.0f, 0.0f, ddx_coarse(interpolant.x));
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

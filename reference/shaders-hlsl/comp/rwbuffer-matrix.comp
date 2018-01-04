@@ -70,17 +70,17 @@ void write_dynamic_index_row()
     _28.Store(UBO_index0 * 4 + UBO_index1 * 8 + 144, asuint(2.0f));
     _28.Store(UBO_index0 * 4 + UBO_index1 * 8 + 192, asuint(3.0f));
     _28.Store(UBO_index0 * 4 + UBO_index1 * 16 + 240, asuint(4.0f));
-    _28.Store(UBO_index0 * 4 + 64, asuint(float4(1.0f, 1.0f, 1.0f, 1.0f).x));
-    _28.Store(UBO_index0 * 4 + 80, asuint(float4(1.0f, 1.0f, 1.0f, 1.0f).y));
-    _28.Store(UBO_index0 * 4 + 96, asuint(float4(1.0f, 1.0f, 1.0f, 1.0f).z));
-    _28.Store(UBO_index0 * 4 + 112, asuint(float4(1.0f, 1.0f, 1.0f, 1.0f).w));
-    _28.Store(UBO_index0 * 4 + 144, asuint(float2(2.0f, 2.0f).x));
-    _28.Store(UBO_index0 * 4 + 152, asuint(float2(2.0f, 2.0f).y));
-    _28.Store(UBO_index0 * 4 + 192, asuint(float3(3.0f, 3.0f, 3.0f).x));
-    _28.Store(UBO_index0 * 4 + 200, asuint(float3(3.0f, 3.0f, 3.0f).y));
-    _28.Store(UBO_index0 * 4 + 208, asuint(float3(3.0f, 3.0f, 3.0f).z));
-    _28.Store(UBO_index0 * 4 + 240, asuint(float2(4.0f, 4.0f).x));
-    _28.Store(UBO_index0 * 4 + 256, asuint(float2(4.0f, 4.0f).y));
+    _28.Store(UBO_index0 * 4 + 64, asuint(1.0f.x));
+    _28.Store(UBO_index0 * 4 + 80, asuint(1.0f.xxxx.y));
+    _28.Store(UBO_index0 * 4 + 96, asuint(1.0f.xxxx.z));
+    _28.Store(UBO_index0 * 4 + 112, asuint(1.0f.xxxx.w));
+    _28.Store(UBO_index0 * 4 + 144, asuint(2.0f.x));
+    _28.Store(UBO_index0 * 4 + 152, asuint(2.0f.xx.y));
+    _28.Store(UBO_index0 * 4 + 192, asuint(3.0f.x));
+    _28.Store(UBO_index0 * 4 + 200, asuint(3.0f.xxx.y));
+    _28.Store(UBO_index0 * 4 + 208, asuint(3.0f.xxx.z));
+    _28.Store(UBO_index0 * 4 + 240, asuint(4.0f.x));
+    _28.Store(UBO_index0 * 4 + 256, asuint(4.0f.xx.y));
 }
 
 void write_dynamic_index_col()
@@ -89,10 +89,10 @@ void write_dynamic_index_col()
     _28.Store(UBO_index0 * 8 + UBO_index1 * 4 + 128, asuint(2.0f));
     _28.Store(UBO_index0 * 16 + UBO_index1 * 4 + 160, asuint(3.0f));
     _28.Store(UBO_index0 * 8 + UBO_index1 * 4 + 216, asuint(4.0f));
-    _28.Store4(UBO_index0 * 16 + 0, asuint(float4(1.0f, 1.0f, 1.0f, 1.0f)));
-    _28.Store2(UBO_index0 * 8 + 128, asuint(float2(2.0f, 2.0f)));
-    _28.Store3(UBO_index0 * 16 + 160, asuint(float3(3.0f, 3.0f, 3.0f)));
-    _28.Store2(UBO_index0 * 8 + 216, asuint(float2(4.0f, 4.0f)));
+    _28.Store4(UBO_index0 * 16 + 0, asuint(1.0f.xxxx));
+    _28.Store2(UBO_index0 * 8 + 128, asuint(2.0f.xx));
+    _28.Store3(UBO_index0 * 16 + 160, asuint(3.0f.xxx));
+    _28.Store2(UBO_index0 * 8 + 216, asuint(4.0f.xx));
 }
 
 void read_dynamic_index_row()

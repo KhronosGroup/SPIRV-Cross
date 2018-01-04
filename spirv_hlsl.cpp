@@ -2778,6 +2778,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 				store_expr += ".";
 				store_expr += index_to_swizzle(r);
 			}
+			remove_duplicate_swizzle(store_expr);
 
 			auto bitcast_op = bitcast_glsl_op(target_type, type);
 			if (!bitcast_op.empty())
@@ -2824,6 +2825,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 			for (uint32_t c = 0; c < type.columns; c++)
 			{
 				auto store_expr = join(to_enclosed_expression(value), "[", c, "].", index_to_swizzle(r));
+				remove_duplicate_swizzle(store_expr);
 				auto bitcast_op = bitcast_glsl_op(target_type, type);
 				if (!bitcast_op.empty())
 					store_expr = join(bitcast_op, "(", store_expr, ")");
