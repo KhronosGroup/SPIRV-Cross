@@ -4293,9 +4293,47 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 
 			assert(type->parent_type);
-			// If we are flattening multidimensional arrays, do manual stride computation.
-			if (options.flatten_multidimensional_arrays && dimension_flatten)
+
+			const auto append_index = [&]() {
+				expr += "[";
+				if (index_is_literal)
+					expr += convert_to_string(index);
+				else
+					expr += to_expression(index);
+				expr += "]";
+			};
+
+			auto *var = maybe_get<SPIRVariable>(base);
+			if (i == 0 && var && is_builtin_variable(*var) && !has_decoration(type->self, DecorationBlock))
 			{
+				// This deals with scenarios for tesc/geom where arrays of gl_Position[] are declared.
+				// Normally, these variables live in blocks when compiled from GLSL,
+				// but HLSL seems to just emit straight arrays here.
+				// We must pretend this access goes through gl_in/gl_out arrays
+				// to be able to access certain builtins as arrays.
+				auto builtin = meta[base].decoration.builtin_type;
+				switch (builtin)
+				{
+				case BuiltInPosition:
+				case BuiltInPointSize:
+				case BuiltInCullDistance:
+				case BuiltInClipDistance:
+					if (var->storage == StorageClassInput)
+						expr = join("gl_in[", to_expression(index), "].", expr);
+					else if (var->storage == StorageClassOutput)
+						expr = join("gl_out[", to_expression(index), "].", expr);
+					else
+						append_index();
+					break;
+
+				default:
+					append_index();
+					break;
+				}
+			}
+			else if (options.flatten_multidimensional_arrays && dimension_flatten)
+			{
+				// If we are flattening multidimensional arrays, do manual stride computation.
 				auto &parent_type = get<SPIRType>(type->parent_type);
 
 				if (index_is_literal)
@@ -4313,18 +4351,14 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					pending_array_enclose = false;
 				else
 					expr += " + ";
+
+				if (!pending_array_enclose)
+					expr += "]";
 			}
 			else
 			{
-				expr += "[";
-				if (index_is_literal)
-					expr += convert_to_string(index);
-				else
-					expr += to_expression(index);
+				append_index();
 			}
-
-			if (!pending_array_enclose)
-				expr += "]";
 
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
@@ -7065,6 +7099,11 @@ uint32_t CompilerGLSL::to_array_size_literal(const SPIRType &type, uint32_t inde
 string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 {
 	assert(type.array.size() == type.array_size_literal.size());
+
+	// Tessellation control shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
+	// Opt for unsized as it's the more "correct" variant to use.
+	if (type.storage == StorageClassInput && get_entry_point().model == ExecutionModelTessellationControl)
+		return "";
 
 	auto &size = type.array[index];
 	if (!type.array_size_literal[index])
