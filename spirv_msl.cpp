@@ -2362,10 +2362,8 @@ void CompilerMSL::emit_fixup()
 	if ((execution.model == ExecutionModelVertex) && stage_out_var_id && !qual_pos_var_name.empty())
 	{
 		if (CompilerGLSL::options.vertex.fixup_clipspace)
-		{
 			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
 			          ".w) * 0.5;       // Adjust clip-space for Metal");
-		}
 
 		if (CompilerGLSL::options.vertex.flip_vert_y)
 			statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
@@ -3426,9 +3424,44 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		break;
 	}
 
-	// Keep track of the instruction return types, mapped by ID
-	if (length > 1)
-		result_types[args[1]] = args[0];
+	// If it has one, keep track of the instruction's result type, mapped by ID
+	switch (opcode)
+	{
+	case OpStore:
+	case OpCopyMemory:
+	case OpCopyMemorySized:
+	case OpImageWrite:
+	case OpLoopMerge:
+	case OpSelectionMerge:
+	case OpLabel:
+	case OpBranch:
+	case OpBranchConditional:
+	case OpSwitch:
+	case OpReturnValue:
+	case OpLifetimeStart:
+	case OpLifetimeStop:
+	case OpAtomicStore:
+	case OpAtomicFlagClear:
+	case OpEmitStreamVertex:
+	case OpEndStreamPrimitive:
+	case OpControlBarrier:
+	case OpMemoryBarrier:
+	case OpGroupWaitEvents:
+	case OpRetainEvent:
+	case OpReleaseEvent:
+	case OpSetUserEventStatus:
+	case OpCaptureEventProfilingInfo:
+	case OpCommitReadPipe:
+	case OpCommitWritePipe:
+	case OpGroupCommitReadPipe:
+	case OpGroupCommitWritePipe:
+		break;
+
+	default:
+		if (length > 1)
+			result_types[args[1]] = args[0];
+		break;
+	}
 
 	return true;
 }
