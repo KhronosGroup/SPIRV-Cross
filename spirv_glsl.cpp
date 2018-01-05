@@ -4225,7 +4225,8 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-                                           bool index_is_literal, bool chain_only, bool *need_transpose)
+                                           bool index_is_literal, bool chain_only, bool *need_transpose,
+                                           bool *result_is_packed)
 {
 	string expr;
 	if (!chain_only)
@@ -4368,7 +4369,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		else if (type->vecsize > 1)
 		{
 			if (vector_is_packed)
+			{
 				expr = unpack_expression_type(expr, *type);
+				vector_is_packed = false;
+			}
 
 			if (index_is_literal)
 			{
@@ -4404,6 +4408,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	if (need_transpose)
 		*need_transpose = row_major_matrix_needs_conversion;
+
+	if (result_is_packed)
+		*result_is_packed = vector_is_packed;
+
 	return expr;
 }
 
@@ -4413,7 +4421,7 @@ string CompilerGLSL::to_flattened_struct_member(const SPIRType &type, uint32_t i
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-                                  bool *out_need_transpose)
+                                  bool *out_need_transpose, bool *result_is_packed)
 {
 	if (flattened_buffer_blocks.count(base))
 	{
@@ -4423,6 +4431,8 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 
 		if (out_need_transpose)
 			*out_need_transpose = target_type.columns > 1 && need_transpose;
+		if (result_is_packed)
+			*result_is_packed = false;
 
 		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, need_transpose);
 	}
@@ -4432,11 +4442,13 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 		auto &type = get<SPIRType>(get<SPIRVariable>(base).basetype);
 		if (out_need_transpose)
 			*out_need_transpose = false;
+		if (result_is_packed)
+			*result_is_packed = false;
 		return sanitize_underscores(join(to_name(type.self), "_", chain));
 	}
 	else
 	{
-		return access_chain_internal(base, indices, count, false, false, out_need_transpose);
+		return access_chain_internal(base, indices, count, false, false, out_need_transpose, result_is_packed);
 	}
 }
 
@@ -5019,7 +5031,7 @@ string CompilerGLSL::build_composite_combiner(const uint32_t *elems, uint32_t le
 		{
 			// We'll likely end up with duplicated swizzles, e.g.
 			// foobar.xyz.xyz from patterns like
-			// OpVectorSwizzle
+			// OpVectorShuffle
 			// OpCompositeExtract x 3
 			// OpCompositeConstruct 3x + other scalar.
 			// Just modify op in-place.
@@ -5179,6 +5191,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto &e = emit_op(result_type, id, expr, forward, true);
 		e.need_transpose = need_transpose;
 		register_read(id, ptr, forward);
+
+		// Pass through whether the result is of a packed type.
+		if (has_decoration(ptr, DecorationCPacked))
+			set_decoration(id, DecorationCPacked);
+
 		break;
 	}
 
@@ -5191,11 +5208,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// If the base is immutable, the access chain pointer must also be.
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
-		bool need_transpose;
-		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &need_transpose);
+		bool need_transpose, result_is_packed;
+		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &need_transpose, &result_is_packed);
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 		expr.loaded_from = ops[2];
 		expr.need_transpose = need_transpose;
+
+		// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
+		if (result_is_packed)
+			set_decoration(ops[1], DecorationCPacked);
+		else
+			unset_decoration(ops[1], DecorationCPacked);
+
 		break;
 	}
 
@@ -5592,10 +5616,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			trivial_forward = !expression_is_forwarded(vec0);
 
 			// We only source from first vector, so can use swizzle.
+			// If the vector is packed, unpack it before applying a swizzle (needed for MSL)
 			expr += to_enclosed_expression(vec0);
+			if (has_decoration(vec0, DecorationCPacked))
+				expr = unpack_expression_type(expr, expression_type(vec0));
+
 			expr += ".";
 			for (uint32_t i = 0; i < length; i++)
 				expr += index_to_swizzle(elems[i]);
+
 			if (backend.swizzle_is_function && length > 1)
 				expr += "()";
 		}
