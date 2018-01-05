@@ -23,5 +23,12 @@ void main()
     barrier();
 
     out_data[ident] = sShared[gl_WorkGroupSize.x - gl_LocalInvocationIndex - 1u];
+
+    barrier();
+    memoryBarrier();
+    memoryBarrierBuffer();
+    memoryBarrierImage();
+    memoryBarrierShared();
+    groupMemoryBarrier();
 }
 
