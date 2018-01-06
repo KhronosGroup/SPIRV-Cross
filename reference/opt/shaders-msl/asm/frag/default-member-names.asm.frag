@@ -25,7 +25,7 @@ struct _10
     _9 _m12;
 };
 
-constant float _57 = {};
+constant _10 _51 = {};
 
 struct main0_out
 {
@@ -35,7 +35,7 @@ struct main0_out
 fragment main0_out main0()
 {
     main0_out out = {};
-    out.m_3 = float4(_57);
+    out.m_3 = float4(_51._m0, _51._m1, _51._m2, _51._m3);
     return out;
 }
 

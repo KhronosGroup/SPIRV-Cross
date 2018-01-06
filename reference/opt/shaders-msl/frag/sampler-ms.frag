@@ -11,8 +11,8 @@ struct main0_out
 fragment main0_out main0(float4 gl_FragCoord [[position]], texture2d_ms<float> uSampler [[texture(0)]], sampler uSamplerSmplr [[sampler(0)]])
 {
     main0_out out = {};
-    int2 coord = int2(gl_FragCoord.xy);
-    out.FragColor = ((uSampler.read(uint2(coord), 0) + uSampler.read(uint2(coord), 1)) + uSampler.read(uint2(coord), 2)) + uSampler.read(uint2(coord), 3);
+    int2 _17 = int2(gl_FragCoord.xy);
+    out.FragColor = ((uSampler.read(uint2(_17), 0) + uSampler.read(uint2(_17), 1)) + uSampler.read(uint2(_17), 2)) + uSampler.read(uint2(_17), 3);
     return out;
 }
 

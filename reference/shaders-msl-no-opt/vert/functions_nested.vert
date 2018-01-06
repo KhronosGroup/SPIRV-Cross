@@ -159,7 +159,8 @@ void vs_adjust(thread float4& dst_reg0, thread float4& dst_reg1, thread float4& 
     tmp0.y = float4(dot(float4(in_pos.xyz, 1.0), v_309.vc[5])).y;
     tmp0.z = float4(dot(float4(in_pos.xyz, 1.0), v_309.vc[6])).z;
     float4 tmp1;
-    tmp1 = float4(in_tc0.xy.x, in_tc0.xy.y, tmp1.z, tmp1.w);
+    float4 _359 = float4(in_tc0.xy.x, in_tc0.xy.y, tmp1.z, tmp1.w);
+    tmp1 = _359;
     tmp1.z = v_309.vc[15].x;
     dst_reg7.y = float4(dot(float4(tmp1.xyz, 1.0), v_309.vc[8])).y;
     dst_reg7.x = float4(dot(float4(tmp1.xyz, 1.0), v_309.vc[7])).x;

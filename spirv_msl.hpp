@@ -91,6 +91,7 @@ public:
 		{
 			return platform == iOS;
 		}
+
 		bool is_macos()
 		{
 			return platform == macOS;

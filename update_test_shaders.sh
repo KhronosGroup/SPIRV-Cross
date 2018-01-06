@@ -11,6 +11,7 @@ echo "Using spirv-opt in: $(which spirv-opt)."
 ./test_shaders.py shaders --update --opt || exit 1
 ./test_shaders.py shaders-msl --msl --update || exit 1
 ./test_shaders.py shaders-msl --msl --update --opt || exit 1
+./test_shaders.py shaders-msl-no-opt --msl --update || exit 1
 ./test_shaders.py shaders-hlsl --hlsl --update || exit 1
 ./test_shaders.py shaders-hlsl --hlsl --update --opt || exit 1
 

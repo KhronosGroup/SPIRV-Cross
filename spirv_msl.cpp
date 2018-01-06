@@ -57,6 +57,21 @@ string CompilerMSL::compile()
 	// Force a classic "C" locale, reverts when function returns
 	ClassicLocale classic_locale;
 
+	// Do not deal with GLES-isms like precision, older extensions and such.
+	CompilerGLSL::options.vulkan_semantics = true;
+	CompilerGLSL::options.es = false;
+	CompilerGLSL::options.version = 120;
+	backend.float_literal_suffix = false;
+	backend.uint32_t_literal_suffix = true;
+	backend.basic_int_type = "int";
+	backend.basic_uint_type = "uint";
+	backend.discard_literal = "discard_fragment()";
+	backend.swizzle_is_function = false;
+	backend.shared_is_implied = false;
+	backend.native_row_major_matrix = false;
+	backend.flexible_member_array_supported = false;
+	backend.force_temp_use_for_two_vector_shuffles = true;
+
 	replace_illegal_names();
 
 	non_stage_in_input_var_ids.clear();
@@ -87,20 +102,6 @@ string CompilerMSL::compile()
 	// Resolve any specialization constants that are used for array lengths.
 	if (options.resolve_specialized_array_lengths)
 		resolve_specialized_array_lengths();
-
-	// Do not deal with GLES-isms like precision, older extensions and such.
-	CompilerGLSL::options.vulkan_semantics = true;
-	CompilerGLSL::options.es = false;
-	CompilerGLSL::options.version = 120;
-	backend.float_literal_suffix = false;
-	backend.uint32_t_literal_suffix = true;
-	backend.basic_int_type = "int";
-	backend.basic_uint_type = "uint";
-	backend.discard_literal = "discard_fragment()";
-	backend.swizzle_is_function = false;
-	backend.shared_is_implied = false;
-	backend.native_row_major_matrix = false;
-	backend.flexible_member_array_supported = false;
 
 	uint32_t pass_count = 0;
 	do
@@ -1606,6 +1607,24 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
 
+	case OpVectorTimesMatrix:
+	case OpMatrixTimesVector:
+	{
+		// If the matrix needs transpose and it is square, just flip the multiply order.
+		uint32_t mtx_id = ops[opcode == OpMatrixTimesVector ? 2 : 3];
+		auto *e = maybe_get<SPIRExpression>(mtx_id);
+		auto &t = expression_type(mtx_id);
+		if (e && e->need_transpose && t.columns == t.vecsize)
+		{
+			e->need_transpose = false;
+			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			e->need_transpose = true;
+		}
+		else
+			BOP(*);
+		break;
+	}
+
 		// OpOuterProduct
 
 	default:
@@ -2282,8 +2301,7 @@ string CompilerMSL::to_sampler_expression(uint32_t id)
 bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 {
 	// Natively supported row-major matrices do not need to be converted.
-	// Legacy targets do not support row major.
-	if (backend.native_row_major_matrix && !is_legacy())
+	if (backend.native_row_major_matrix)
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
@@ -2300,7 +2318,7 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
 {
 	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix && !is_legacy())
+	if (backend.native_row_major_matrix)
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
@@ -2722,7 +2740,8 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
-				BuiltIn bi_type = (BuiltIn)get_decoration(var_id, DecorationBuiltIn);
+
+				BuiltIn bi_type = meta[var_id].decoration.builtin_type;
 				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
 			}
@@ -3431,15 +3450,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpCopyMemory:
 	case OpCopyMemorySized:
 	case OpImageWrite:
-	case OpLoopMerge:
-	case OpSelectionMerge:
-	case OpLabel:
-	case OpBranch:
-	case OpBranchConditional:
-	case OpSwitch:
-	case OpReturnValue:
-	case OpLifetimeStart:
-	case OpLifetimeStop:
 	case OpAtomicStore:
 	case OpAtomicFlagClear:
 	case OpEmitStreamVertex:

@@ -5595,7 +5595,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (shuffle)
 		{
-			bool allow_fwd = !options.force_temp_use_for_two_vector_shuffles;
+			bool allow_fwd = !backend.force_temp_use_for_two_vector_shuffles;
 			should_fwd = allow_fwd && should_forward(vec0) && should_forward(vec1);
 			trivial_forward = allow_fwd && !expression_is_forwarded(vec0) && !expression_is_forwarded(vec1);
 
@@ -5683,10 +5683,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
 	{
-		// If the matrix needs transpose and it is square, just flip the multiply order.
-		SPIRType *t;
+		// If the matrix needs transpose, just flip the multiply order.
 		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
-		if (e && e->need_transpose && (t = &get<SPIRType>(e->expression_type)) && t->columns == t->vecsize)
+		if (e && e->need_transpose)
 		{
 			e->need_transpose = false;
 			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
