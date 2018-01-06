@@ -271,7 +271,7 @@ protected:
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
 	std::unordered_map<MSLStructMemberKey, uint32_t> struct_member_padding;
-	std::vector<std::string> pragma_lines;
+	std::set<std::string> pragma_lines;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;

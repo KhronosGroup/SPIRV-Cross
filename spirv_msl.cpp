@@ -819,8 +819,8 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
-	for (auto &header : pragma_lines)
-		statement(header);
+	for (auto &pragma : pragma_lines)
+		statement(pragma);
 
 	if (!pragma_lines.empty())
 		statement("");
@@ -838,7 +838,7 @@ void CompilerMSL::emit_header()
 
 void CompilerMSL::add_pragma_line(const string &line)
 {
-	pragma_lines.push_back(line);
+	pragma_lines.insert(line);
 }
 
 // Emits any needed custom function bodies.
@@ -2354,7 +2354,10 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 
 	auto rslt = spv_function_implementations.insert(spv_func);
 	if (rslt.second)
+	{
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
 		force_recompile = true;
+	}
 }
 
 // Wraps the expression string in a function call that converts the
