@@ -57,6 +57,21 @@ string CompilerMSL::compile()
 	// Force a classic "C" locale, reverts when function returns
 	ClassicLocale classic_locale;
 
+	// Do not deal with GLES-isms like precision, older extensions and such.
+	CompilerGLSL::options.vulkan_semantics = true;
+	CompilerGLSL::options.es = false;
+	CompilerGLSL::options.version = 120;
+	backend.float_literal_suffix = false;
+	backend.uint32_t_literal_suffix = true;
+	backend.basic_int_type = "int";
+	backend.basic_uint_type = "uint";
+	backend.discard_literal = "discard_fragment()";
+	backend.swizzle_is_function = false;
+	backend.shared_is_implied = false;
+	backend.native_row_major_matrix = false;
+	backend.flexible_member_array_supported = false;
+	backend.force_temp_use_for_two_vector_shuffles = true;
+
 	replace_illegal_names();
 
 	non_stage_in_input_var_ids.clear();
@@ -87,20 +102,6 @@ string CompilerMSL::compile()
 	// Resolve any specialization constants that are used for array lengths.
 	if (options.resolve_specialized_array_lengths)
 		resolve_specialized_array_lengths();
-
-	// Do not deal with GLES-isms like precision, older extensions and such.
-	CompilerGLSL::options.vulkan_semantics = true;
-	CompilerGLSL::options.es = false;
-	CompilerGLSL::options.version = 120;
-	backend.float_literal_suffix = false;
-	backend.uint32_t_literal_suffix = true;
-	backend.basic_int_type = "int";
-	backend.basic_uint_type = "uint";
-	backend.discard_literal = "discard_fragment()";
-	backend.swizzle_is_function = false;
-	backend.shared_is_implied = false;
-	backend.native_row_major_matrix = false;
-	backend.flexible_member_array_supported = false;
 
 	uint32_t pass_count = 0;
 	do
@@ -279,6 +280,15 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			}
 			case OpFunctionCall:
 			{
+				// First see if any of the function call args are globals
+				for (uint32_t arg_idx = 3; arg_idx < i.length; arg_idx++)
+				{
+					uint32_t arg_id = ops[arg_idx];
+					if (global_var_ids.find(arg_id) != global_var_ids.end())
+						added_arg_ids.insert(arg_id);
+				}
+
+				// Then recurse into the function itself to extract globals used internally in the function
 				uint32_t inner_func_id = ops[2];
 				std::set<uint32_t> inner_func_args;
 				extract_global_variables_from_function(inner_func_id, inner_func_args, global_var_ids,
@@ -306,12 +316,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			func.add_parameter(type_id, next_id, true);
 			set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
 
-			// Ensure both the existing and new variables have the same name, and the name is valid
-			string vld_name = ensure_valid_name(to_name(arg_id), "v");
-			set_name(arg_id, vld_name);
-			set_name(next_id, vld_name);
+			// Ensure the existing variable has a valid name and the new variable has all the same meta info
+			set_name(arg_id, ensure_valid_name(to_name(arg_id), "v"));
+			meta[next_id] = meta[arg_id];
 
-			meta[next_id].decoration.qualified_alias = meta[arg_id].decoration.qualified_alias;
 			next_id++;
 		}
 	}
@@ -811,8 +819,8 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
-	for (auto &header : pragma_lines)
-		statement(header);
+	for (auto &pragma : pragma_lines)
+		statement(pragma);
 
 	if (!pragma_lines.empty())
 		statement("");
@@ -830,7 +838,7 @@ void CompilerMSL::emit_header()
 
 void CompilerMSL::add_pragma_line(const string &line)
 {
-	pragma_lines.push_back(line);
+	pragma_lines.insert(line);
 }
 
 // Emits any needed custom function bodies.
@@ -1037,6 +1045,64 @@ void CompilerMSL::emit_custom_functions()
 			statement("// Divide the classical adjoint matrix by the determinant.");
 			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
 			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor2x3:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float2x3 spvConvertFromRowMajor2x3(float2x3 m)");
+			begin_scope();
+			statement("return float2x3(float3(m[0][0], m[0][2], m[1][1]), float3(m[0][1], m[1][0], m[1][2]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor2x4:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float2x4 spvConvertFromRowMajor2x4(float2x4 m)");
+			begin_scope();
+			statement("return float2x4(float4(m[0][0], m[0][2], m[1][0], m[1][2]), float4(m[0][1], m[0][3], m[1][1], "
+			          "m[1][3]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor3x2:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float3x2 spvConvertFromRowMajor3x2(float3x2 m)");
+			begin_scope();
+			statement("return float3x2(float2(m[0][0], m[1][1]), float2(m[0][1], m[2][0]), float2(m[1][0], m[2][1]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor3x4:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float3x4 spvConvertFromRowMajor3x4(float3x4 m)");
+			begin_scope();
+			statement("return float3x4(float4(m[0][0], m[0][3], m[1][2], m[2][1]), float4(m[0][1], m[1][0], m[1][3], "
+			          "m[2][2]), float4(m[0][2], m[1][1], m[2][0], m[2][3]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor4x2:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float4x2 spvConvertFromRowMajor4x2(float4x2 m)");
+			begin_scope();
+			statement("return float4x2(float2(m[0][0], m[2][0]), float2(m[0][1], m[2][1]), float2(m[1][0], m[3][0]), "
+			          "float2(m[1][1], m[3][1]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor4x3:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			statement("float4x3 spvConvertFromRowMajor4x3(float4x3 m)");
+			begin_scope();
+			statement("return float4x3(float3(m[0][0], m[1][1], m[2][2]), float3(m[0][1], m[1][2], m[3][0]), "
+			          "float3(m[0][2], m[2][0], m[3][1]), float3(m[1][0], m[2][1], m[3][2]));");
 			end_scope();
 			statement("");
 			break;
@@ -1541,6 +1607,24 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
 
+	case OpVectorTimesMatrix:
+	case OpMatrixTimesVector:
+	{
+		// If the matrix needs transpose and it is square, just flip the multiply order.
+		uint32_t mtx_id = ops[opcode == OpMatrixTimesVector ? 2 : 3];
+		auto *e = maybe_get<SPIRExpression>(mtx_id);
+		auto &t = expression_type(mtx_id);
+		if (e && e->need_transpose && t.columns == t.vecsize)
+		{
+			e->need_transpose = false;
+			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			e->need_transpose = true;
+		}
+		else
+			BOP(*);
+		break;
+	}
+
 		// OpOuterProduct
 
 	default:
@@ -1559,34 +1643,18 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	string bar_stmt = "threadgroup_barrier(mem_flags::";
 
 	uint32_t mem_sem = id_mem_sem ? get<SPIRConstant>(id_mem_sem).scalar() : uint32_t(MemorySemanticsMaskNone);
-	switch (mem_sem)
-	{
-	case MemorySemanticsCrossWorkgroupMemoryMask:
+
+	if (mem_sem & MemorySemanticsCrossWorkgroupMemoryMask)
 		bar_stmt += "mem_device";
-		break;
-
-	case MemorySemanticsSubgroupMemoryMask:
-	case MemorySemanticsWorkgroupMemoryMask:
-	case MemorySemanticsAtomicCounterMemoryMask:
+	else if (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask |
+	                    MemorySemanticsAtomicCounterMemoryMask))
 		bar_stmt += "mem_threadgroup";
-		break;
-
-	case MemorySemanticsImageMemoryMask:
+	else if (mem_sem & MemorySemanticsImageMemoryMask)
 		bar_stmt += "mem_texture";
-		break;
-
-	case MemorySemanticsAcquireMask:
-	case MemorySemanticsReleaseMask:
-	case MemorySemanticsAcquireReleaseMask:
-	case MemorySemanticsSequentiallyConsistentMask:
-	case MemorySemanticsUniformMemoryMask:
-	case MemorySemanticsMaskNone:
-	default:
+	else
 		bar_stmt += "mem_none";
-		break;
-	}
 
-	if (options.supports_msl_version(2))
+	if (options.is_ios() && options.supports_msl_version(2))
 	{
 		bar_stmt += ", ";
 
@@ -1919,7 +1987,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 
 		// Manufacture automatic sampler arg for SampledImage texture
 		auto &arg_type = get<SPIRType>(arg.type);
-		if (arg_type.basetype == SPIRType::SampledImage)
+		if (arg_type.basetype == SPIRType::SampledImage && arg_type.image.dim != DimBuffer)
 			decl += ", thread const sampler& " + to_sampler_expression(arg.id);
 
 		if (&arg != &func.arguments.back())
@@ -2213,7 +2281,7 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 	{
 		auto &var = id_v.get<SPIRVariable>();
 		auto &type = get<SPIRType>(var.basetype);
-		if (type.basetype == SPIRType::SampledImage)
+		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 			arg_str += ", " + to_sampler_expression(id);
 	}
 
@@ -2229,6 +2297,84 @@ string CompilerMSL::to_sampler_expression(uint32_t id)
 	return samp_id ? to_expression(samp_id) : to_expression(id) + sampler_name_suffix;
 }
 
+// Checks whether the ID is a row_major matrix that requires conversion before use
+bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
+{
+	// Natively supported row-major matrices do not need to be converted.
+	if (backend.native_row_major_matrix)
+		return false;
+
+	// Non-matrix or column-major matrix types do not need to be converted.
+	if (!(meta[id].decoration.decoration_flags & (1ull << DecorationRowMajor)))
+		return false;
+
+	// Generate a function that will swap matrix elements from row-major to column-major.
+	const auto type = expression_type(id);
+	add_convert_row_major_matrix_function(type.columns, type.vecsize);
+	return true;
+}
+
+// Checks whether the member is a row_major matrix that requires conversion before use
+bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
+{
+	// Natively supported row-major matrices do not need to be converted.
+	if (backend.native_row_major_matrix)
+		return false;
+
+	// Non-matrix or column-major matrix types do not need to be converted.
+	if (!(combined_decoration_for_member(type, index) & (1ull << DecorationRowMajor)))
+		return false;
+
+	// Generate a function that will swap matrix elements from row-major to column-major.
+	const auto mbr_type = get<SPIRType>(type.member_types[index]);
+	add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
+	return true;
+}
+
+// Adds a function suitable for converting a non-square row-major matrix to a column-major matrix.
+void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows)
+{
+	SPVFuncImpl spv_func;
+	if (cols == rows) // Square matrix...just use transpose() function
+		return;
+	else if (cols == 2 && rows == 3)
+		spv_func = SPVFuncImplRowMajor2x3;
+	else if (cols == 2 && rows == 4)
+		spv_func = SPVFuncImplRowMajor2x4;
+	else if (cols == 3 && rows == 2)
+		spv_func = SPVFuncImplRowMajor3x2;
+	else if (cols == 3 && rows == 4)
+		spv_func = SPVFuncImplRowMajor3x4;
+	else if (cols == 4 && rows == 2)
+		spv_func = SPVFuncImplRowMajor4x2;
+	else if (cols == 4 && rows == 3)
+		spv_func = SPVFuncImplRowMajor4x3;
+	else
+		SPIRV_CROSS_THROW("Could not convert row-major matrix.");
+
+	auto rslt = spv_function_implementations.insert(spv_func);
+	if (rslt.second)
+	{
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+		force_recompile = true;
+	}
+}
+
+// Wraps the expression string in a function call that converts the
+// row_major matrix result of the expression to a column_major matrix.
+string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type)
+{
+	strip_enclosed_expression(exp_str);
+
+	string func_name;
+	if (exp_type.columns == exp_type.vecsize)
+		func_name = "transpose";
+	else
+		func_name = string("spvConvertFromRowMajor") + to_string(exp_type.columns) + "x" + to_string(exp_type.vecsize);
+
+	return join(func_name, "(", exp_str, ")");
+}
+
 // Called automatically at the end of the entry point function
 void CompilerMSL::emit_fixup()
 {
@@ -2237,10 +2383,8 @@ void CompilerMSL::emit_fixup()
 	if ((execution.model == ExecutionModelVertex) && stage_out_var_id && !qual_pos_var_name.empty())
 	{
 		if (CompilerGLSL::options.vertex.fixup_clipspace)
-		{
 			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
 			          ".w) * 0.5;       // Adjust clip-space for Metal");
-		}
 
 		if (CompilerGLSL::options.vertex.flip_vert_y)
 			statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
@@ -2599,6 +2743,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
+
 				BuiltIn bi_type = meta[var_id].decoration.builtin_type;
 				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
@@ -2682,7 +2827,10 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (constref)
 		decl += "const ";
 
-	decl += type_to_glsl(type, arg.id);
+	if (is_builtin_variable(var))
+		decl += builtin_type_decl((BuiltIn)get_decoration(arg.id, DecorationBuiltIn));
+	else
+		decl += type_to_glsl(type, arg.id);
 
 	if (is_array(type))
 		decl += "*";
@@ -3298,9 +3446,35 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		break;
 	}
 
-	// Keep track of the instruction return types, mapped by ID
-	if (length > 1)
-		result_types[args[1]] = args[0];
+	// If it has one, keep track of the instruction's result type, mapped by ID
+	switch (opcode)
+	{
+	case OpStore:
+	case OpCopyMemory:
+	case OpCopyMemorySized:
+	case OpImageWrite:
+	case OpAtomicStore:
+	case OpAtomicFlagClear:
+	case OpEmitStreamVertex:
+	case OpEndStreamPrimitive:
+	case OpControlBarrier:
+	case OpMemoryBarrier:
+	case OpGroupWaitEvents:
+	case OpRetainEvent:
+	case OpReleaseEvent:
+	case OpSetUserEventStatus:
+	case OpCaptureEventProfilingInfo:
+	case OpCommitReadPipe:
+	case OpCommitWritePipe:
+	case OpGroupCommitReadPipe:
+	case OpGroupCommitWritePipe:
+		break;
+
+	default:
+		if (length > 1)
+			result_types[args[1]] = args[0];
+		break;
+	}
 
 	return true;
 }

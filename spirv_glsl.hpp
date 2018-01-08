@@ -290,10 +290,10 @@ protected:
 	void add_resource_name(uint32_t id);
 	void add_member_name(SPIRType &type, uint32_t name);
 
-	bool is_non_native_row_major_matrix(uint32_t id);
-	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
+	virtual bool is_non_native_row_major_matrix(uint32_t id);
+	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
 	bool member_is_packed_type(const SPIRType &type, uint32_t index) const;
-	virtual std::string convert_row_major_matrix(std::string exp_str);
+	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type);
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
@@ -321,6 +321,8 @@ protected:
 		bool boolean_mix_support = true;
 		bool allow_precision_qualifiers = false;
 		bool can_swizzle_scalar = false;
+		bool force_temp_use_for_two_vector_shuffles = false;
+
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -371,9 +373,10 @@ protected:
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-	                                  bool chain_only = false, bool *need_transpose = nullptr);
+	                                  bool chain_only = false, bool *need_transpose = nullptr,
+	                                  bool *result_is_packed = nullptr);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-	                         bool *need_transpose = nullptr);
+	                         bool *need_transpose = nullptr, bool *result_is_packed = nullptr);
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,

@@ -358,10 +358,19 @@ def test_shader_msl(stats, shader, update, keep, opt):
     noopt = shader_is_noopt(shader[1])
     spirv, msl = cross_compile_msl(joined_path, is_spirv, opt and (not noopt))
     regression_check(shader, msl, update, keep, opt)
-    os.remove(spirv)
+
+    # Uncomment the following line to print the temp SPIR-V file path.
+    # This temp SPIR-V file is not deleted until after the Metal validation step below.
+    # If Metal validation fails, the temp SPIR-V file can be copied out and
+    # used as input to an invocation of spirv-cross to debug from Xcode directly.
+    # To do so, build spriv-cross using `make DEBUG=1`, then run the spriv-cross
+    # executable from Xcode using args: `--msl --entry main --output msl_path spirv_path`.
+#    print('SPRIV shader: ' + spirv)
 
     if not force_no_external_validation:
         validate_shader_msl(shader, opt)
+
+    os.remove(spirv)
 
 def test_shader_hlsl(stats, shader, update, keep, opt):
     joined_path = os.path.join(shader[0], shader[1])
