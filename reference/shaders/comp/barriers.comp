@@ -26,6 +26,40 @@ void group_barrier()
     groupMemoryBarrier();
 }
 
+void barrier_shared_exec()
+{
+    memoryBarrierShared();
+    barrier();
+}
+
+void full_barrier_exec()
+{
+    memoryBarrier();
+    memoryBarrierShared();
+    barrier();
+}
+
+void image_barrier_exec()
+{
+    memoryBarrierImage();
+    memoryBarrierShared();
+    barrier();
+}
+
+void buffer_barrier_exec()
+{
+    memoryBarrierBuffer();
+    memoryBarrierShared();
+    barrier();
+}
+
+void group_barrier_exec()
+{
+    groupMemoryBarrier();
+    memoryBarrierShared();
+    barrier();
+}
+
 void exec_barrier()
 {
     memoryBarrierShared();
@@ -39,6 +73,11 @@ void main()
     image_barrier();
     buffer_barrier();
     group_barrier();
+    barrier_shared_exec();
+    full_barrier_exec();
+    image_barrier_exec();
+    buffer_barrier_exec();
+    group_barrier_exec();
     exec_barrier();
 }
 

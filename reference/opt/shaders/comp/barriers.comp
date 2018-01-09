@@ -10,5 +10,19 @@ void main()
     groupMemoryBarrier();
     memoryBarrierShared();
     barrier();
+    memoryBarrier();
+    memoryBarrierShared();
+    barrier();
+    memoryBarrierImage();
+    memoryBarrierShared();
+    barrier();
+    memoryBarrierBuffer();
+    memoryBarrierShared();
+    barrier();
+    groupMemoryBarrier();
+    memoryBarrierShared();
+    barrier();
+    memoryBarrierShared();
+    barrier();
 }
 
