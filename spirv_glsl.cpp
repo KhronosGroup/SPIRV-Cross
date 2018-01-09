@@ -6678,8 +6678,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				uint32_t next_semantics = get<SPIRConstant>(next_ops[2]).scalar();
 				next_semantics = mask_relevant_memory_semantics(next_semantics);
 
+				bool memory_scope_covered = false;
+				if (next_memory == memory)
+					memory_scope_covered = true;
+				else if (next_semantics == MemorySemanticsWorkgroupMemoryMask)
+				{
+					// If we only care about workgroup memory, either Device or Workgroup scope is fine,
+					// scope does not have to match.
+					if ((next_memory == ScopeDevice || next_memory == ScopeWorkgroup) &&
+					    (memory == ScopeDevice || memory == ScopeWorkgroup))
+					{
+						memory_scope_covered = true;
+					}
+				}
+				else if (memory == ScopeWorkgroup && next_memory == ScopeDevice)
+				{
+					// The control barrier has device scope, but the memory barrier just has workgroup scope.
+					memory_scope_covered = true;
+				}
+
 				// If we have the same memory scope, and all memory types are covered, we're good.
-				if (next_memory == memory && (semantics & next_semantics) == semantics)
+				if (memory_scope_covered && (semantics & next_semantics) == semantics)
 					break;
 			}
 		}

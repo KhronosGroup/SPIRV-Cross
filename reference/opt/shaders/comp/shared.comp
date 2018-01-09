@@ -17,7 +17,6 @@ void main()
 {
     sShared[gl_LocalInvocationIndex] = _22.in_data[gl_GlobalInvocationID.x];
     memoryBarrierShared();
-    memoryBarrierShared();
     barrier();
     _44.out_data[gl_GlobalInvocationID.x] = sShared[(4u - gl_LocalInvocationIndex) - 1u];
 }
