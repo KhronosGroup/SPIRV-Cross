@@ -9,12 +9,10 @@ kernel void main0()
 {
     threadgroup_barrier(mem_flags::mem_threadgroup);
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    threadgroup_barrier(mem_flags::mem_texture);
     threadgroup_barrier(mem_flags::mem_none);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    threadgroup_barrier(mem_flags::mem_texture);
     threadgroup_barrier(mem_flags::mem_none);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     threadgroup_barrier(mem_flags::mem_threadgroup);

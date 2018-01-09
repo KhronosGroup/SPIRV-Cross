@@ -17,11 +17,6 @@ void full_barrier()
     threadgroup_barrier(mem_flags::mem_threadgroup);
 }
 
-void image_barrier()
-{
-    threadgroup_barrier(mem_flags::mem_texture);
-}
-
 void buffer_barrier()
 {
     threadgroup_barrier(mem_flags::mem_none);
@@ -40,11 +35,6 @@ void barrier_shared_exec()
 void full_barrier_exec()
 {
     threadgroup_barrier(mem_flags::mem_threadgroup);
-}
-
-void image_barrier_exec()
-{
-    threadgroup_barrier(mem_flags::mem_texture);
 }
 
 void buffer_barrier_exec()
@@ -66,12 +56,10 @@ kernel void main0()
 {
     barrier_shared();
     full_barrier();
-    image_barrier();
     buffer_barrier();
     group_barrier();
     barrier_shared_exec();
     full_barrier_exec();
-    image_barrier_exec();
     buffer_barrier_exec();
     group_barrier_exec();
     exec_barrier();
