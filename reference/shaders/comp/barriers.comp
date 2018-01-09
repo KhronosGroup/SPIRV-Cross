@@ -1,0 +1,44 @@
+#version 310 es
+layout(local_size_x = 4, local_size_y = 1, local_size_z = 1) in;
+
+void barrier_shared()
+{
+    memoryBarrierShared();
+}
+
+void full_barrier()
+{
+    memoryBarrier();
+}
+
+void image_barrier()
+{
+    memoryBarrierImage();
+}
+
+void buffer_barrier()
+{
+    memoryBarrierBuffer();
+}
+
+void group_barrier()
+{
+    groupMemoryBarrier();
+}
+
+void exec_barrier()
+{
+    memoryBarrierShared();
+    barrier();
+}
+
+void main()
+{
+    barrier_shared();
+    full_barrier();
+    image_barrier();
+    buffer_barrier();
+    group_barrier();
+    exec_barrier();
+}
+
