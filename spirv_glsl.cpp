@@ -1492,7 +1492,7 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 		// which is not allowed.
 		auto backup_name = get_member_name(type.self, i);
 		auto member_name = to_member_name(type, i);
-		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+		set_member_name(type.self, i, sanitize_underscores(join(to_name(var.self), "_", member_name)));
 		emit_struct_member(type, member, i, qual);
 		// Restore member name.
 		set_member_name(type.self, i, member_name);
@@ -4478,9 +4478,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	return expr;
 }
 
-string CompilerGLSL::to_flattened_struct_member(const SPIRType &type, uint32_t index)
+string CompilerGLSL::to_flattened_struct_member(const SPIRVariable &var, uint32_t index)
 {
-	return sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, index)));
+	auto &type = get<SPIRType>(var.basetype);
+	return sanitize_underscores(join(to_name(var.self), "_", to_member_name(type, index)));
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
@@ -4502,12 +4503,11 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	else if (flattened_structs.count(base) && count > 0)
 	{
 		auto chain = access_chain_internal(base, indices, count, false, true).substr(1);
-		auto &type = get<SPIRType>(get<SPIRVariable>(base).basetype);
 		if (out_need_transpose)
 			*out_need_transpose = false;
 		if (result_is_packed)
 			*result_is_packed = false;
-		return sanitize_underscores(join(to_name(type.self), "_", chain));
+		return sanitize_underscores(join(to_name(base), "_", chain));
 	}
 	else
 	{
@@ -4528,7 +4528,7 @@ string CompilerGLSL::load_flattened_struct(SPIRVariable &var)
 
 		// Flatten the varyings.
 		// Apply name transformation for flattened I/O blocks.
-		expr += to_flattened_struct_member(type, i);
+		expr += to_flattened_struct_member(var, i);
 	}
 	expr += ')';
 	return expr;
@@ -4552,7 +4552,7 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 		// Flatten the varyings.
 		// Apply name transformation for flattened I/O blocks.
 
-		auto lhs = sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, i)));
+		auto lhs = sanitize_underscores(join(to_name(var.self), "_", to_member_name(type, i)));
 		rhs = join(to_name(var.self), ".", to_member_name(type, i));
 		statement(lhs, " = ", rhs, ";");
 	}

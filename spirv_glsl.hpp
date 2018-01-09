@@ -452,7 +452,7 @@ protected:
 	std::unordered_set<uint32_t> flattened_structs;
 
 	std::string load_flattened_struct(SPIRVariable &var);
-	std::string to_flattened_struct_member(const SPIRType &type, uint32_t index);
+	std::string to_flattened_struct_member(const SPIRVariable &var, uint32_t index);
 	void store_flattened_struct(SPIRVariable &var, uint32_t value);
 
 	// Usage tracking. If a temporary is used more than once, use the temporary instead to

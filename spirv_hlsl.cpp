@@ -1478,7 +1478,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 				add_member_name(type, i);
 				auto backup_name = get_member_name(type.self, i);
 				auto member_name = to_member_name(type, i);
-				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+				set_member_name(type.self, i, sanitize_underscores(join(to_name(var.self), "_", member_name)));
 				emit_struct_member(type, member, i, "");
 				set_member_name(type.self, i, backup_name);
 				i++;
