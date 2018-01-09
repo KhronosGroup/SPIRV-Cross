@@ -1,6 +1,6 @@
 #!/bin/bash
 
-GLSLANG_REV=698bf7547a96b6feb7291e8ddc0d5d16475dbae2
+GLSLANG_REV=9c6f8cc29ba303b43ccf36deea6bb38a304f9b92
 SPIRV_TOOLS_REV=e28edd458b729da7bbfd51e375feb33103709e6f
 
 if [ -d external/glslang ]; then
