@@ -3432,48 +3432,61 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpMemoryBarrier:
-	{
-		uint32_t mem = get<SPIRConstant>(ops[1]).scalar();
-
-		// If the next instruction is OpControlBarrier and it does what we need, this opcode can be a noop.
-		const Instruction *next = get_next_instruction_in_block(instruction);
-		if (next && next->op == OpControlBarrier)
-		{
-			auto *next_ops = stream(*next);
-			uint32_t next_mem = get<SPIRConstant>(next_ops[2]).scalar();
-			next_mem |= MemorySemanticsWorkgroupMemoryMask; // Barrier in HLSL always implies GroupSync.
-			if ((next_mem & mem) == mem)
-				break;
-		}
-
-		// We cannot forward any loads beyond the memory barrier.
-		if (mem)
-			flush_all_active_variables();
-
-		if (mem == MemorySemanticsWorkgroupMemoryMask)
-			statement("GroupMemoryBarrier();");
-		else if (mem)
-			statement("DeviceMemoryBarrier();");
-		break;
-	}
-
 	case OpControlBarrier:
 	{
-		uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
+		uint32_t mem;
+		if (opcode == OpControlBarrier)
+			mem = get<SPIRConstant>(ops[2]).scalar();
+		else
+			mem = get<SPIRConstant>(ops[1]).scalar();
 
-		// We cannot forward any loads beyond the memory barrier.
+		// We are only interested in these semantics.
+		// Others, like the acquire/release semantics, have no translation to HLSL.
+		mem &= MemorySemanticsUniformMemoryMask |
+		       MemorySemanticsWorkgroupMemoryMask |
+		       MemorySemanticsAtomicCounterMemoryMask |
+		       MemorySemanticsImageMemoryMask;
+
+		if (opcode == OpMemoryBarrier)
+		{
+			// If the next instruction is OpControlBarrier and it does what we need, this opcode can be a noop.
+			const Instruction *next = get_next_instruction_in_block(instruction);
+			if (next && next->op == OpControlBarrier)
+			{
+				auto *next_ops = stream(*next);
+				uint32_t next_mem = get<SPIRConstant>(next_ops[2]).scalar();
+				if ((next_mem & mem) == mem)
+					break;
+			}
+		}
+
+		bool group_sync = opcode == OpControlBarrier;
 		if (mem)
+		{
+			// We cannot forward any loads beyond the memory barrier.
 			flush_all_active_variables();
 
-		if (mem == MemorySemanticsWorkgroupMemoryMask)
-			statement("GroupMemoryBarrierWithGroupSync();");
-		else if (mem)
-			statement("DeviceMemoryBarrierWithGroupSync();");
-		else
+			string barrier = "AllMemoryBarrier";
+
+			// Try to use a more specific barrier if allowed by the memory semantics
+			if (!(mem & ~MemorySemanticsWorkgroupMemoryMask))
+				barrier = "GroupMemoryBarrier";
+			else if (!(mem & ~(MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask)))
+				barrier = "DeviceMemoryBarrier";
+
+			if (group_sync)
+				barrier += "WithGroupSync();";
+			else
+				barrier += "();";
+
+			statement(barrier);
+		}
+		else if (group_sync)
 		{
 			// There is no "GroupSync" standalone function.
 			statement("GroupMemoryBarrierWithGroupSync();");
 		}
+
 		break;
 	}
 

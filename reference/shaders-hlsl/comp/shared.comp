@@ -20,6 +20,12 @@ void comp_main()
     sShared[gl_LocalInvocationIndex] = idata;
     GroupMemoryBarrierWithGroupSync();
     _44.Store(ident * 4 + 0, asuint(sShared[(4u - gl_LocalInvocationIndex) - 1u]));
+    GroupMemoryBarrierWithGroupSync();
+    AllMemoryBarrier();
+    DeviceMemoryBarrier();
+    DeviceMemoryBarrier();
+    GroupMemoryBarrier();
+    AllMemoryBarrier();
 }
 
 [numthreads(4, 1, 1)]
