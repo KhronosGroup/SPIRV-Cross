@@ -1,10 +1,10 @@
 cbuffer cbuf : register(b3)
 {
-    float4 CBuffer_a : packoffset(c0);
+    float4 cbuf_a : packoffset(c0);
 };
 cbuffer registers
 {
-    float4 PushMe_d : packoffset(c0);
+    float4 registers_d : packoffset(c0);
 };
 Texture2D<float4> uSampledImage : register(t4);
 SamplerState _uSampledImage_sampler : register(s4);
@@ -26,7 +26,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    FragColor = (uSampledImage.Sample(_uSampledImage_sampler, vTex) + uTexture.Sample(uSampler, vTex)) + (CBuffer_a + PushMe_d);
+    FragColor = (uSampledImage.Sample(_uSampledImage_sampler, vTex) + uTexture.Sample(uSampler, vTex)) + (cbuf_a + registers_d);
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

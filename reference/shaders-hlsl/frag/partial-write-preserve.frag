@@ -6,7 +6,7 @@ struct B
 
 cbuffer _42 : register(b0)
 {
-    int UBO_some_value : packoffset(c0);
+    int _42_some_value : packoffset(c0);
 };
 
 void partial_inout(inout float4 x)
@@ -22,7 +22,7 @@ void complete_inout(out float4 x)
 void branchy_inout(inout float4 v)
 {
     v.y = 20.0f;
-    if (UBO_some_value == 20)
+    if (_42_some_value == 20)
     {
         v = 50.0f.xxxx;
     }
@@ -30,7 +30,7 @@ void branchy_inout(inout float4 v)
 
 void branchy_inout_2(out float4 v)
 {
-    if (UBO_some_value == 20)
+    if (_42_some_value == 20)
     {
         v = 50.0f.xxxx;
     }
