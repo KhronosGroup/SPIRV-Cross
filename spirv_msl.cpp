@@ -71,7 +71,6 @@ string CompilerMSL::compile()
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
 	backend.force_temp_use_for_two_vector_shuffles = true;
-	backend.force_gl_in_out_block = false;
 
 	replace_illegal_names();
 

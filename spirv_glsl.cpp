@@ -370,6 +370,7 @@ string CompilerGLSL::compile()
 
 	if (options.vulkan_semantics)
 		backend.allow_precision_qualifiers = true;
+	backend.force_gl_in_out_block = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
@@ -4318,8 +4319,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				{
 				case BuiltInPosition:
 				case BuiltInPointSize:
-				case BuiltInCullDistance:
-				case BuiltInClipDistance:
+				//case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
+				//case BuiltInClipDistance:
 					if (var->storage == StorageClassInput)
 						expr = join("gl_in[", to_expression(index), "].", expr);
 					else if (var->storage == StorageClassOutput)

@@ -322,7 +322,7 @@ protected:
 		bool allow_precision_qualifiers = false;
 		bool can_swizzle_scalar = false;
 		bool force_temp_use_for_two_vector_shuffles = false;
-		bool force_gl_in_out_block = true;
+		bool force_gl_in_out_block = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
