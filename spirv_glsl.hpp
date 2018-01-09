@@ -509,6 +509,7 @@ protected:
 	static std::string sanitize_underscores(const std::string &str);
 
 	bool can_use_io_location(spv::StorageClass storage);
+	const Instruction *get_next_instruction_in_block(const Instruction &instr);
 
 private:
 	void init()

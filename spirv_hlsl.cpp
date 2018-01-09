@@ -3017,16 +3017,6 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 	register_read(ops[1], ops[2], should_forward(ops[2]));
 }
 
-const Instruction *CompilerHLSL::get_next_instruction_in_block(const Instruction &instr)
-{
-	// FIXME: This is kind of hacky. There should be a cleaner way.
-	uint32_t offset = uint32_t(&instr - current_emitting_block->ops.data());
-	if ((offset + 1) < current_emitting_block->ops.size())
-		return &current_emitting_block->ops[offset + 1];
-	else
-		return nullptr;
-}
-
 void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);

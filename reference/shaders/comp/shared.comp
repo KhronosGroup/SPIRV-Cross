@@ -18,8 +18,8 @@ void main()
     uint ident = gl_GlobalInvocationID.x;
     float idata = _22.in_data[ident];
     sShared[gl_LocalInvocationIndex] = idata;
-    memoryBarrier();
-    memoryBarrier();
+    memoryBarrierShared();
+    memoryBarrierShared();
     barrier();
     _44.out_data[ident] = sShared[(4u - gl_LocalInvocationIndex) - 1u];
 }
