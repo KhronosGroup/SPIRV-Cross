@@ -18,7 +18,7 @@ void comp_main()
     uint ident = gl_GlobalInvocationID.x;
     float idata = asfloat(_22.Load(ident * 4 + 0));
     sShared[gl_LocalInvocationIndex] = idata;
-    DeviceMemoryBarrierWithGroupSync();
+    GroupMemoryBarrierWithGroupSync();
     _44.Store(ident * 4 + 0, asuint(sShared[(4u - gl_LocalInvocationIndex) - 1u]));
 }
 

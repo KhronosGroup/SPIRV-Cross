@@ -25,16 +25,6 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-static uint32_t mask_relevant_memory_semantics(uint32_t semantics)
-{
-	return semantics & (MemorySemanticsAtomicCounterMemoryMask |
-	                    MemorySemanticsImageMemoryMask |
-	                    MemorySemanticsWorkgroupMemoryMask |
-	                    MemorySemanticsUniformMemoryMask |
-	                    MemorySemanticsCrossWorkgroupMemoryMask |
-	                    MemorySemanticsSubgroupMemoryMask);
-}
-
 static bool packing_is_vec4_padded(BufferPackingStandard packing)
 {
 	switch (packing)
@@ -8449,3 +8439,14 @@ const Instruction *CompilerGLSL::get_next_instruction_in_block(const Instruction
 	else
 		return nullptr;
 }
+
+uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
+{
+	return semantics & (MemorySemanticsAtomicCounterMemoryMask |
+	                    MemorySemanticsImageMemoryMask |
+	                    MemorySemanticsWorkgroupMemoryMask |
+	                    MemorySemanticsUniformMemoryMask |
+	                    MemorySemanticsCrossWorkgroupMemoryMask |
+	                    MemorySemanticsSubgroupMemoryMask);
+}
+

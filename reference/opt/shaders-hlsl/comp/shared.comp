@@ -16,7 +16,7 @@ groupshared float sShared[4];
 void comp_main()
 {
     sShared[gl_LocalInvocationIndex] = asfloat(_22.Load(gl_GlobalInvocationID.x * 4 + 0));
-    DeviceMemoryBarrierWithGroupSync();
+    GroupMemoryBarrierWithGroupSync();
     _44.Store(gl_GlobalInvocationID.x * 4 + 0, asuint(sShared[(4u - gl_LocalInvocationIndex) - 1u]));
 }
 

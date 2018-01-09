@@ -510,6 +510,7 @@ protected:
 
 	bool can_use_io_location(spv::StorageClass storage);
 	const Instruction *get_next_instruction_in_block(const Instruction &instr);
+	static uint32_t mask_relevant_memory_semantics(uint32_t semantics);
 
 private:
 	void init()
