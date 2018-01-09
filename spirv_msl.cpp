@@ -71,6 +71,7 @@ string CompilerMSL::compile()
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
 	backend.force_temp_use_for_two_vector_shuffles = true;
+	backend.force_gl_in_out_block = false;
 
 	replace_illegal_names();
 
@@ -3160,6 +3161,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInPosition:
 	case BuiltInPointSize:
 	case BuiltInClipDistance:
+	case BuiltInCullDistance:
 	case BuiltInLayer:
 	case BuiltInFragDepth:
 		if (current_function && (current_function->self == entry_point))

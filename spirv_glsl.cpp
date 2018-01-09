@@ -4305,7 +4305,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			};
 
 			auto *var = maybe_get<SPIRVariable>(base);
-			if (i == 0 && var && is_builtin_variable(*var) && !has_decoration(type->self, DecorationBlock))
+			if (backend.force_gl_in_out_block && i == 0 && var && is_builtin_variable(*var) &&
+			    !has_decoration(type->self, DecorationBlock))
 			{
 				// This deals with scenarios for tesc/geom where arrays of gl_Position[] are declared.
 				// Normally, these variables live in blocks when compiled from GLSL,
