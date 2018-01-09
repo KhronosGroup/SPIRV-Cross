@@ -322,7 +322,7 @@ protected:
 		bool allow_precision_qualifiers = false;
 		bool can_swizzle_scalar = false;
 		bool force_temp_use_for_two_vector_shuffles = false;
-		bool force_gl_in_out_block = true;
+		bool force_gl_in_out_block = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -452,7 +452,7 @@ protected:
 	std::unordered_set<uint32_t> flattened_structs;
 
 	std::string load_flattened_struct(SPIRVariable &var);
-	std::string to_flattened_struct_member(const SPIRType &type, uint32_t index);
+	std::string to_flattened_struct_member(const SPIRVariable &var, uint32_t index);
 	void store_flattened_struct(SPIRVariable &var, uint32_t value);
 
 	// Usage tracking. If a temporary is used more than once, use the temporary instead to
@@ -509,6 +509,8 @@ protected:
 	static std::string sanitize_underscores(const std::string &str);
 
 	bool can_use_io_location(spv::StorageClass storage);
+	const Instruction *get_next_instruction_in_block(const Instruction &instr);
+	static uint32_t mask_relevant_memory_semantics(uint32_t semantics);
 
 private:
 	void init()

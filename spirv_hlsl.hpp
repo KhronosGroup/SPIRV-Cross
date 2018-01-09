@@ -107,7 +107,6 @@ private:
 	void write_access_chain(const SPIRAccessChain &chain, uint32_t value);
 	void emit_store(const Instruction &instruction);
 	void emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op);
-	const Instruction *get_next_instruction_in_block(const Instruction &instr);
 
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier) override;

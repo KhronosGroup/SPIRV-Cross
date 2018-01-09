@@ -370,6 +370,7 @@ string CompilerGLSL::compile()
 
 	if (options.vulkan_semantics)
 		backend.allow_precision_qualifiers = true;
+	backend.force_gl_in_out_block = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
@@ -1491,7 +1492,7 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 		// which is not allowed.
 		auto backup_name = get_member_name(type.self, i);
 		auto member_name = to_member_name(type, i);
-		set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+		set_member_name(type.self, i, sanitize_underscores(join(to_name(var.self), "_", member_name)));
 		emit_struct_member(type, member, i, qual);
 		// Restore member name.
 		set_member_name(type.self, i, member_name);
@@ -4316,10 +4317,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				auto builtin = meta[base].decoration.builtin_type;
 				switch (builtin)
 				{
+				// case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
+				// case BuiltInClipDistance:
 				case BuiltInPosition:
 				case BuiltInPointSize:
-				case BuiltInCullDistance:
-				case BuiltInClipDistance:
 					if (var->storage == StorageClassInput)
 						expr = join("gl_in[", to_expression(index), "].", expr);
 					else if (var->storage == StorageClassOutput)
@@ -4477,9 +4478,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	return expr;
 }
 
-string CompilerGLSL::to_flattened_struct_member(const SPIRType &type, uint32_t index)
+string CompilerGLSL::to_flattened_struct_member(const SPIRVariable &var, uint32_t index)
 {
-	return sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, index)));
+	auto &type = get<SPIRType>(var.basetype);
+	return sanitize_underscores(join(to_name(var.self), "_", to_member_name(type, index)));
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
@@ -4501,12 +4503,11 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	else if (flattened_structs.count(base) && count > 0)
 	{
 		auto chain = access_chain_internal(base, indices, count, false, true).substr(1);
-		auto &type = get<SPIRType>(get<SPIRVariable>(base).basetype);
 		if (out_need_transpose)
 			*out_need_transpose = false;
 		if (result_is_packed)
 			*result_is_packed = false;
-		return sanitize_underscores(join(to_name(type.self), "_", chain));
+		return sanitize_underscores(join(to_name(base), "_", chain));
 	}
 	else
 	{
@@ -4527,7 +4528,7 @@ string CompilerGLSL::load_flattened_struct(SPIRVariable &var)
 
 		// Flatten the varyings.
 		// Apply name transformation for flattened I/O blocks.
-		expr += to_flattened_struct_member(type, i);
+		expr += to_flattened_struct_member(var, i);
 	}
 	expr += ')';
 	return expr;
@@ -4551,7 +4552,7 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 		// Flatten the varyings.
 		// Apply name transformation for flattened I/O blocks.
 
-		auto lhs = sanitize_underscores(join(to_name(type.self), "_", to_member_name(type, i)));
+		auto lhs = sanitize_underscores(join(to_name(var.self), "_", to_member_name(type, i)));
 		rhs = join(to_name(var.self), ".", to_member_name(type, i));
 		statement(lhs, " = ", rhs, ";");
 	}
@@ -6196,12 +6197,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicLoad:
 		flush_all_atomic_capable_variables();
 		// FIXME: Image?
+		// OpAtomicLoad seems to only be relevant for atomic counters.
 		UFOP(atomicCounter);
 		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 
-	// OpAtomicStore unimplemented. Not sure what would use that.
-	// OpAtomicLoad seems to only be relevant for atomic counters.
+	case OpAtomicStore:
+		SPIRV_CROSS_THROW("Unsupported opcode OpAtomicStore.");
 
 	case OpAtomicIIncrement:
 		forced_temporaries.insert(ops[1]);
@@ -6628,37 +6630,114 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	// Compute
 	case OpControlBarrier:
-	{
-		// Ignore execution and memory scope.
-		if (get_entry_point().model == ExecutionModelGLCompute)
-		{
-			uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
-
-			// We cannot forward any loads beyond the memory barrier.
-			if (mem)
-				flush_all_active_variables();
-
-			if (mem == MemorySemanticsWorkgroupMemoryMask)
-				statement("memoryBarrierShared();");
-			else if (mem)
-				statement("memoryBarrier();");
-		}
-		statement("barrier();");
-		break;
-	}
-
 	case OpMemoryBarrier:
 	{
-		uint32_t mem = get<SPIRConstant>(ops[1]).scalar();
+		if (get_entry_point().model == ExecutionModelTessellationControl)
+		{
+			// Control shaders only have barriers, and it implies memory barriers.
+			if (opcode == OpControlBarrier)
+				statement("barrier();");
+			break;
+		}
 
-		// We cannot forward any loads beyond the memory barrier.
-		if (mem)
+		uint32_t memory;
+		uint32_t semantics;
+
+		if (opcode == OpMemoryBarrier)
+		{
+			memory = get<SPIRConstant>(ops[0]).scalar();
+			semantics = get<SPIRConstant>(ops[1]).scalar();
+		}
+		else
+		{
+			memory = get<SPIRConstant>(ops[1]).scalar();
+			semantics = get<SPIRConstant>(ops[2]).scalar();
+		}
+
+		// We only care about these flags, acquire/release and friends are not relevant to GLSL.
+		semantics = mask_relevant_memory_semantics(semantics);
+
+		if (opcode == OpMemoryBarrier)
+		{
+			// If we are a memory barrier, and the next instruction is a control barrier, check if that memory barrier
+			// does what we need, so we avoid redundant barriers.
+			const Instruction *next = get_next_instruction_in_block(instruction);
+			if (next && next->op == OpControlBarrier)
+			{
+				auto *next_ops = stream(*next);
+				uint32_t next_memory = get<SPIRConstant>(next_ops[1]).scalar();
+				uint32_t next_semantics = get<SPIRConstant>(next_ops[2]).scalar();
+				next_semantics = mask_relevant_memory_semantics(next_semantics);
+
+				bool memory_scope_covered = false;
+				if (next_memory == memory)
+					memory_scope_covered = true;
+				else if (next_semantics == MemorySemanticsWorkgroupMemoryMask)
+				{
+					// If we only care about workgroup memory, either Device or Workgroup scope is fine,
+					// scope does not have to match.
+					if ((next_memory == ScopeDevice || next_memory == ScopeWorkgroup) &&
+					    (memory == ScopeDevice || memory == ScopeWorkgroup))
+					{
+						memory_scope_covered = true;
+					}
+				}
+				else if (memory == ScopeWorkgroup && next_memory == ScopeDevice)
+				{
+					// The control barrier has device scope, but the memory barrier just has workgroup scope.
+					memory_scope_covered = true;
+				}
+
+				// If we have the same memory scope, and all memory types are covered, we're good.
+				if (memory_scope_covered && (semantics & next_semantics) == semantics)
+					break;
+			}
+		}
+
+		// We are synchronizing some memory or syncing execution,
+		// so we cannot forward any loads beyond the memory barrier.
+		if (semantics || opcode == OpControlBarrier)
 			flush_all_active_variables();
 
-		if (mem == MemorySemanticsWorkgroupMemoryMask)
-			statement("memoryBarrierShared();");
-		else if (mem)
-			statement("memoryBarrier();");
+		if (memory == ScopeWorkgroup) // Only need to consider memory within a group
+		{
+			if (semantics == MemorySemanticsWorkgroupMemoryMask)
+				statement("memoryBarrierShared();");
+			else if (semantics != 0)
+				statement("groupMemoryBarrier();");
+		}
+		else
+		{
+			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+			                              MemorySemanticsImageMemoryMask | MemorySemanticsAtomicCounterMemoryMask;
+
+			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
+			{
+				// These are not relevant for GLSL, but assume it means memoryBarrier().
+				// memoryBarrier() does everything, so no need to test anything else.
+				statement("memoryBarrier();");
+			}
+			else if ((semantics & all_barriers) == all_barriers)
+			{
+				// Short-hand instead of emitting 4 barriers.
+				statement("memoryBarrier();");
+			}
+			else
+			{
+				// Pick out individual barriers.
+				if (semantics & MemorySemanticsWorkgroupMemoryMask)
+					statement("memoryBarrierShared();");
+				if (semantics & MemorySemanticsUniformMemoryMask)
+					statement("memoryBarrierBuffer();");
+				if (semantics & MemorySemanticsImageMemoryMask)
+					statement("memoryBarrierImage();");
+				if (semantics & MemorySemanticsAtomicCounterMemoryMask)
+					statement("memoryBarrierAtomicCounter();");
+			}
+		}
+
+		if (opcode == OpControlBarrier)
+			statement("barrier();");
 		break;
 	}
 
@@ -8348,4 +8427,21 @@ void CompilerGLSL::check_function_call_constraints(const uint32_t *args, uint32_
 			                  "or use in/out variables instead which do not need type remapping information.");
 		}
 	}
+}
+
+const Instruction *CompilerGLSL::get_next_instruction_in_block(const Instruction &instr)
+{
+	// FIXME: This is kind of hacky. There should be a cleaner way.
+	auto offset = uint32_t(&instr - current_emitting_block->ops.data());
+	if ((offset + 1) < current_emitting_block->ops.size())
+		return &current_emitting_block->ops[offset + 1];
+	else
+		return nullptr;
+}
+
+uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
+{
+	return semantics & (MemorySemanticsAtomicCounterMemoryMask | MemorySemanticsImageMemoryMask |
+	                    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }

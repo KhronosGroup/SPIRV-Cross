@@ -1,10 +1,10 @@
 cbuffer cbuf : register(b3)
 {
-    float4 CBuffer_a : packoffset(c0);
+    float4 cbuf_a : packoffset(c0);
 };
 cbuffer registers
 {
-    float4 PushMe_d : packoffset(c0);
+    float4 registers_d : packoffset(c0);
 };
 Texture2D<float4> uSampledImage : register(t4);
 SamplerState _uSampledImage_sampler : register(s4);
@@ -28,7 +28,7 @@ void frag_main()
 {
     float4 c0 = uSampledImage.Sample(_uSampledImage_sampler, vTex);
     float4 c1 = uTexture.Sample(uSampler, vTex);
-    float4 c2 = CBuffer_a + PushMe_d;
+    float4 c2 = cbuf_a + registers_d;
     FragColor = (c0 + c1) + c2;
 }
 

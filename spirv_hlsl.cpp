@@ -1478,7 +1478,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 				add_member_name(type, i);
 				auto backup_name = get_member_name(type.self, i);
 				auto member_name = to_member_name(type, i);
-				set_member_name(type.self, i, sanitize_underscores(join(to_name(type.self), "_", member_name)));
+				set_member_name(type.self, i, sanitize_underscores(join(to_name(var.self), "_", member_name)));
 				emit_struct_member(type, member, i, "");
 				set_member_name(type.self, i, backup_name);
 				i++;
@@ -3017,16 +3017,6 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 	register_read(ops[1], ops[2], should_forward(ops[2]));
 }
 
-const Instruction *CompilerHLSL::get_next_instruction_in_block(const Instruction &instr)
-{
-	// FIXME: This is kind of hacky. There should be a cleaner way.
-	uint32_t offset = uint32_t(&instr - current_emitting_block->ops.data());
-	if ((offset + 1) < current_emitting_block->ops.size())
-		return &current_emitting_block->ops[offset + 1];
-	else
-		return nullptr;
-}
-
 void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -3431,48 +3421,91 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpControlBarrier:
 	case OpMemoryBarrier:
 	{
-		uint32_t mem = get<SPIRConstant>(ops[1]).scalar();
+		uint32_t memory;
+		uint32_t semantics;
 
-		// If the next instruction is OpControlBarrier and it does what we need, this opcode can be a noop.
-		const Instruction *next = get_next_instruction_in_block(instruction);
-		if (next && next->op == OpControlBarrier)
+		if (opcode == OpMemoryBarrier)
 		{
-			auto *next_ops = stream(*next);
-			uint32_t next_mem = get<SPIRConstant>(next_ops[2]).scalar();
-			next_mem |= MemorySemanticsWorkgroupMemoryMask; // Barrier in HLSL always implies GroupSync.
-			if ((next_mem & mem) == mem)
-				break;
+			memory = get<SPIRConstant>(ops[0]).scalar();
+			semantics = get<SPIRConstant>(ops[1]).scalar();
 		}
-
-		// We cannot forward any loads beyond the memory barrier.
-		if (mem)
-			flush_all_active_variables();
-
-		if (mem == MemorySemanticsWorkgroupMemoryMask)
-			statement("GroupMemoryBarrier();");
-		else if (mem)
-			statement("DeviceMemoryBarrier();");
-		break;
-	}
-
-	case OpControlBarrier:
-	{
-		uint32_t mem = get<SPIRConstant>(ops[2]).scalar();
-
-		// We cannot forward any loads beyond the memory barrier.
-		if (mem)
-			flush_all_active_variables();
-
-		if (mem == MemorySemanticsWorkgroupMemoryMask)
-			statement("GroupMemoryBarrierWithGroupSync();");
-		else if (mem)
-			statement("DeviceMemoryBarrierWithGroupSync();");
 		else
 		{
-			// There is no "GroupSync" standalone function.
-			statement("GroupMemoryBarrierWithGroupSync();");
+			memory = get<SPIRConstant>(ops[1]).scalar();
+			semantics = get<SPIRConstant>(ops[2]).scalar();
+		}
+
+		// We only care about these flags, acquire/release and friends are not relevant to GLSL.
+		semantics = mask_relevant_memory_semantics(semantics);
+
+		if (opcode == OpMemoryBarrier)
+		{
+			// If we are a memory barrier, and the next instruction is a control barrier, check if that memory barrier
+			// does what we need, so we avoid redundant barriers.
+			const Instruction *next = get_next_instruction_in_block(instruction);
+			if (next && next->op == OpControlBarrier)
+			{
+				auto *next_ops = stream(*next);
+				uint32_t next_memory = get<SPIRConstant>(next_ops[1]).scalar();
+				uint32_t next_semantics = get<SPIRConstant>(next_ops[2]).scalar();
+				next_semantics = mask_relevant_memory_semantics(next_semantics);
+
+				// There is no "just execution barrier" in HLSL.
+				// If there are no memory semantics for next instruction, we will imply group shared memory is synced.
+				if (next_semantics == 0)
+					next_semantics = MemorySemanticsWorkgroupMemoryMask;
+
+				bool memory_scope_covered = false;
+				if (next_memory == memory)
+					memory_scope_covered = true;
+				else if (next_semantics == MemorySemanticsWorkgroupMemoryMask)
+				{
+					// If we only care about workgroup memory, either Device or Workgroup scope is fine,
+					// scope does not have to match.
+					if ((next_memory == ScopeDevice || next_memory == ScopeWorkgroup) &&
+					    (memory == ScopeDevice || memory == ScopeWorkgroup))
+					{
+						memory_scope_covered = true;
+					}
+				}
+				else if (memory == ScopeWorkgroup && next_memory == ScopeDevice)
+				{
+					// The control barrier has device scope, but the memory barrier just has workgroup scope.
+					memory_scope_covered = true;
+				}
+
+				// If we have the same memory scope, and all memory types are covered, we're good.
+				if (memory_scope_covered && (semantics & next_semantics) == semantics)
+					break;
+			}
+		}
+
+		// We are synchronizing some memory or syncing execution,
+		// so we cannot forward any loads beyond the memory barrier.
+		if (semantics || opcode == OpControlBarrier)
+			flush_all_active_variables();
+
+		if (opcode == OpControlBarrier)
+		{
+			// We cannot emit just execution barrier, for no memory semantics pick the cheapest option.
+			if (semantics == MemorySemanticsWorkgroupMemoryMask || semantics == 0)
+				statement("GroupMemoryBarrierWithGroupSync();");
+			else if (semantics != 0 && (semantics & MemorySemanticsWorkgroupMemoryMask) == 0)
+				statement("DeviceMemoryBarrierWithGroupSync();");
+			else
+				statement("AllMemoryBarrierWithGroupSync();");
+		}
+		else
+		{
+			if (semantics == MemorySemanticsWorkgroupMemoryMask)
+				statement("GroupMemoryBarrier();");
+			else if (semantics != 0 && (semantics & MemorySemanticsWorkgroupMemoryMask) == 0)
+				statement("DeviceMemoryBarrier();");
+			else
+				statement("AllMemoryBarrier();");
 		}
 		break;
 	}

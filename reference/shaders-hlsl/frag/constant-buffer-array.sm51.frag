@@ -9,10 +9,10 @@ struct CBO_1
 ConstantBuffer<CBO_1> cbo[2][4] : register(b4, space0);
 cbuffer push
 {
-    float4 PushMe_a : packoffset(c0);
-    float4 PushMe_b : packoffset(c1);
-    float4 PushMe_c : packoffset(c2);
-    float4 PushMe_d : packoffset(c3);
+    float4 push_a : packoffset(c0);
+    float4 push_b : packoffset(c1);
+    float4 push_c : packoffset(c2);
+    float4 push_d : packoffset(c3);
 };
 
 static float4 FragColor;
@@ -28,10 +28,10 @@ void frag_main()
     FragColor += cbo[1][2].b;
     FragColor += cbo[1][2].c;
     FragColor += cbo[1][2].d;
-    FragColor += PushMe_a;
-    FragColor += PushMe_b;
-    FragColor += PushMe_c;
-    FragColor += PushMe_d;
+    FragColor += push_a;
+    FragColor += push_b;
+    FragColor += push_c;
+    FragColor += push_d;
 }
 
 SPIRV_Cross_Output main()

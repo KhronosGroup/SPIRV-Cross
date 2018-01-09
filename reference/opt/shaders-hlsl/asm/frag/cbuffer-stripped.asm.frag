@@ -1,7 +1,7 @@
 cbuffer _5 : register(b0)
 {
-    column_major float2x4 _4_m0 : packoffset(c0);
-    float4 _4_m1 : packoffset(c4);
+    column_major float2x4 _5_m0 : packoffset(c0);
+    float4 _5_m1 : packoffset(c4);
 };
 
 static float2 _3;
@@ -13,7 +13,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    _3 = mul(_4_m0, _4_m1);
+    _3 = mul(_5_m0, _5_m1);
 }
 
 SPIRV_Cross_Output main()

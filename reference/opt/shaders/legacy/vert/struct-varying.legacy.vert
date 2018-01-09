@@ -6,25 +6,25 @@ struct Output
     vec2 b;
 };
 
-varying vec4 Output_a;
-varying vec2 Output_b;
+varying vec4 vout_a;
+varying vec2 vout_b;
 
 void main()
 {
     {
         Output vout = Output(vec4(0.5), vec2(0.25));
-        Output_a = vout.a;
-        Output_b = vout.b;
+        vout_a = vout.a;
+        vout_b = vout.b;
     }
     {
         Output vout = Output(vec4(0.5), vec2(0.25));
-        Output_a = vout.a;
-        Output_b = vout.b;
+        vout_a = vout.a;
+        vout_b = vout.b;
     }
-    Output _22 = Output(Output_a, Output_b);
-    Output_a = _22.a;
-    Output_b = _22.b;
-    Output_a.x = 1.0;
-    Output_b.y = 1.0;
+    Output _22 = Output(vout_a, vout_b);
+    vout_a = _22.a;
+    vout_b = _22.b;
+    vout_a.x = 1.0;
+    vout_b.y = 1.0;
 }
 
