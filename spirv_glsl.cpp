@@ -4317,10 +4317,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				auto builtin = meta[base].decoration.builtin_type;
 				switch (builtin)
 				{
+				// case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
+				// case BuiltInClipDistance:
 				case BuiltInPosition:
 				case BuiltInPointSize:
-				//case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
-				//case BuiltInClipDistance:
 					if (var->storage == StorageClassInput)
 						expr = join("gl_in[", to_expression(index), "].", expr);
 					else if (var->storage == StorageClassOutput)
@@ -6197,12 +6197,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicLoad:
 		flush_all_atomic_capable_variables();
 		// FIXME: Image?
+		// OpAtomicLoad seems to only be relevant for atomic counters.
 		UFOP(atomicCounter);
 		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 
-	// OpAtomicStore unimplemented. Not sure what would use that.
-	// OpAtomicLoad seems to only be relevant for atomic counters.
+	case OpAtomicStore:
+		SPIRV_CROSS_THROW("Unsupported opcode OpAtomicStore.");
 
 	case OpAtomicIIncrement:
 		forced_temporaries.insert(ops[1]);
@@ -6707,10 +6708,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask |
-			                              MemorySemanticsUniformMemoryMask |
-			                              MemorySemanticsImageMemoryMask |
-			                              MemorySemanticsAtomicCounterMemoryMask;
+			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+			                              MemorySemanticsImageMemoryMask | MemorySemanticsAtomicCounterMemoryMask;
 
 			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
 			{
@@ -8442,11 +8441,7 @@ const Instruction *CompilerGLSL::get_next_instruction_in_block(const Instruction
 
 uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 {
-	return semantics & (MemorySemanticsAtomicCounterMemoryMask |
-	                    MemorySemanticsImageMemoryMask |
-	                    MemorySemanticsWorkgroupMemoryMask |
-	                    MemorySemanticsUniformMemoryMask |
-	                    MemorySemanticsCrossWorkgroupMemoryMask |
-	                    MemorySemanticsSubgroupMemoryMask);
+	return semantics & (MemorySemanticsAtomicCounterMemoryMask | MemorySemanticsImageMemoryMask |
+	                    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }
-
