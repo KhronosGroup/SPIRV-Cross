@@ -8357,6 +8357,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		statement(backend.discard_literal, ";");
 		break;
 
+	case SPIRBlock::Unreachable:
+		emit_next_block = false;
+		break;
+
 	default:
 		SPIRV_CROSS_THROW("Unimplemented block terminator.");
 	}
