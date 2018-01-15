@@ -222,16 +222,14 @@ fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[positio
     float3 _403 = mix(_318.xyz, EnvironmentMapTexture.sample(EnvironmentMapSampler, reflect(-in.IN_View_Depth.xyz, _329)).xyz, float3(_312));
     float4 _404 = float4(_403.x, _403.y, _403.z, _318.w);
     float3 _422 = (((_19.CB0.AmbientColor + (((_19.CB0.Lamp0Color * clamp(_333, 0.0, 1.0)) + (_19.CB0.Lamp1Color * max(-_333, 0.0))) * _392)) + _368.xyz) * _404.xyz) + (_19.CB0.Lamp0Color * (((step(0.0, _333) * _306) * _392) * pow(clamp(dot(_329, normalize(_332 + normalize(in.IN_View_Depth.xyz))), 0.0, 1.0), _308)));
-    float4 _423 = float4(_422.x, _422.y, _422.z, _124.w);
-    float4 _425 = _423;
+    float4 _425 = float4(_422.x, _422.y, _422.z, _124.w);
     _425.w = _404.w;
     float2 _435 = min(in.IN_Uv_EdgeDistance1.wz, in.IN_UvStuds_EdgeDistance2.wz);
     float _439 = min(_435.x, _435.y) / _163;
     float3 _445 = _425.xyz * clamp((clamp((_163 * _19.CB0.OutlineBrightness_ShadowInfo.x) + _19.CB0.OutlineBrightness_ShadowInfo.y, 0.0, 1.0) * (1.5 - _439)) + _439, 0.0, 1.0);
     float4 _446 = float4(_445.x, _445.y, _445.z, _425.w);
     float3 _453 = mix(_19.CB0.FogColor, _446.xyz, float3(clamp(_146.LightPosition_Fog.w, 0.0, 1.0)));
-    float4 _454 = float4(_453.x, _453.y, _453.z, _446.w);
-    out._entryPointOutput = _454;
+    out._entryPointOutput = float4(_453.x, _453.y, _453.z, _446.w);
     return out;
 }
 
