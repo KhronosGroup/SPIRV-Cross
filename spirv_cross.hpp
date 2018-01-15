@@ -705,6 +705,10 @@ protected:
 	std::unordered_set<uint32_t> forwarded_temporaries;
 	std::unordered_set<uint32_t> hoisted_temporaries;
 
+	// Based on initial analysis, we expect a temporary to be declared in a certain block.
+	// If we end up declaring a temporary in another block, we'll hoist out that temporary later.
+	std::unordered_map<uint32_t, uint32_t> expected_dominator_for_temporary;
+
 	uint64_t active_input_builtins = 0;
 	uint64_t active_output_builtins = 0;
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.

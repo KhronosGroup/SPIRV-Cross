@@ -3162,15 +3162,18 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			switch (block.terminator)
 			{
 			case SPIRBlock::Direct:
+				notify_variable_access(block.condition, block.self);
 				test_phi(block.next_block);
 				break;
 
 			case SPIRBlock::Select:
+				notify_variable_access(block.condition, block.self);
 				test_phi(block.true_block);
 				test_phi(block.false_block);
 				break;
 
 			case SPIRBlock::MultiSelect:
+				notify_variable_access(block.condition, block.self);
 				for (auto &target : block.cases)
 					test_phi(target.block);
 				if (block.default_block)
@@ -3182,12 +3185,29 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			}
 		}
 
+		void notify_variable_access(uint32_t id, uint32_t block)
+		{
+			if (id_is_phi_variable(id))
+				accessed_variables_to_block[id].insert(block);
+			else if (id_is_potential_temporary(id))
+				accessed_temporaries_to_block[id].insert(block);
+		}
+
 		bool id_is_phi_variable(uint32_t id)
 		{
 			if (id >= compiler.get_current_id_bound())
 				return false;
 			auto *var = compiler.maybe_get<SPIRVariable>(id);
 			return var && var->phi_variable;
+		}
+
+		bool id_is_potential_temporary(uint32_t id)
+		{
+			if (id >= compiler.get_current_id_bound())
+				return false;
+
+			// Temporaries are not created before we start emitting code.
+			return compiler.ids[id].empty() || (compiler.ids[id].get_type() == TypeExpression);
 		}
 
 		bool handle(spv::Op op, const uint32_t *args, uint32_t length)
@@ -3209,8 +3229,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					complete_write_variables_to_block[var->self].insert(current_block->self);
 
 				// Might try to store a Phi variable here.
-				if (id_is_phi_variable(args[1]))
-					accessed_variables_to_block[args[1]].insert(current_block->self);
+				notify_variable_access(args[1], current_block->self);
 				break;
 			}
 
@@ -3226,8 +3245,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					accessed_variables_to_block[var->self].insert(current_block->self);
 
 				for (uint32_t i = 3; i < length; i++)
-					if (id_is_phi_variable(args[i]))
-						accessed_variables_to_block[args[i]].insert(current_block->self);
+					notify_variable_access(args[i], current_block->self);
+
+				// The result of an access chain is a fixed expression and is not really considered a temporary.
 				break;
 			}
 
@@ -3262,8 +3282,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					accessed_variables_to_block[var->self].insert(current_block->self);
 
 				// Might try to copy a Phi variable here.
-				if (id_is_phi_variable(args[2]))
-					accessed_variables_to_block[args[2]].insert(current_block->self);
+				notify_variable_access(args[2], current_block->self);
 				break;
 			}
 
@@ -3275,6 +3294,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto *var = compiler.maybe_get_backing_variable(ptr);
 				if (var && var->storage == StorageClassFunction)
 					accessed_variables_to_block[var->self].insert(current_block->self);
+
+				// Loaded value is a temporary.
+				notify_variable_access(args[1], current_block->self);
 				break;
 			}
 
@@ -3296,17 +3318,19 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					// which is then copied to in full to the real argument.
 
 					// Might try to copy a Phi variable here.
-					if (id_is_phi_variable(args[i]))
-						accessed_variables_to_block[args[i]].insert(current_block->self);
+					notify_variable_access(args[i], current_block->self);
 				}
+
+				// Return value may be a temporary.
+				notify_variable_access(args[1], current_block->self);
 				break;
 			}
 
 			case OpExtInst:
 			{
 				for (uint32_t i = 4; i < length; i++)
-					if (id_is_phi_variable(args[i]))
-						accessed_variables_to_block[args[i]].insert(current_block->self);
+					notify_variable_access(args[i], current_block->self);
+				notify_variable_access(args[1], current_block->self);
 				break;
 			}
 
@@ -3326,8 +3350,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				// but worst case, it does not affect the correctness of the compile.
 				// Exhaustive analysis would be better here, but it's not worth it for now.
 				for (uint32_t i = 0; i < length; i++)
-					if (id_is_phi_variable(args[i]))
-						accessed_variables_to_block[args[i]].insert(current_block->self);
+					notify_variable_access(args[i], current_block->self);
 				break;
 			}
 			}
@@ -3337,6 +3360,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		Compiler &compiler;
 		SPIRFunction &entry;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_temporaries_to_block;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
 		const SPIRBlock *current_block = nullptr;
 	} handler(*this, entry);
@@ -3404,6 +3428,22 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			block.dominated_variables.push_back(var.first);
 			this->get<SPIRVariable>(var.first).dominator = dominating_block;
 		}
+	}
+
+	for (auto &var : handler.accessed_temporaries_to_block)
+	{
+		DominatorBuilder builder(cfg);
+
+		// Figure out which block is dominating all accesses of those temporaries.
+		auto &blocks = var.second;
+		for (auto &block : blocks)
+			builder.add_block(block);
+
+		builder.lift_continue_block_dominator();
+
+		uint32_t dominating_block = builder.get_dominator();
+		if (dominating_block)
+			expected_dominator_for_temporary[var.first] = dominating_block;
 	}
 
 	unordered_set<uint32_t> seen_blocks;

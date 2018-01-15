@@ -2745,6 +2745,24 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 	auto &type = get<SPIRType>(result_type);
 	auto flags = meta[result_id].decoration.decoration_flags;
 
+	auto itr = expected_dominator_for_temporary.find(result_id);
+	if (!hoisted_temporaries.count(result_id) && itr != end(expected_dominator_for_temporary))
+	{
+		if (current_emitting_block->self != itr->second)
+		{
+			// This should be very rare, but if we try to declare a temporary inside a loop,
+			// and that temporary is used outside the loop as well (spirv-opt inliner likes this)
+			// we should actually emit the temporary outside the loop. We don't know the result types
+			// before declaring the temporary unless we check every possible opcode during CFG traversal,
+			// so do it lazily like this where we fallback in these rare scenarios.
+
+			hoisted_temporaries.insert(result_id);
+			forced_temporaries.insert(result_id);
+			get<SPIRBlock>(itr->second).declare_temporary.emplace_back(result_type, result_id);
+			force_recompile = true;
+		}
+	}
+
 	// If we're declaring temporaries inside continue blocks,
 	// we must declare the temporary in the loop header so that the continue block can avoid declaring new variables.
 	if (current_continue_block && !hoisted_temporaries.count(result_id))
