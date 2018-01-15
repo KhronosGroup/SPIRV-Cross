@@ -5503,6 +5503,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			// Only use this path if we are building composites.
 			// This path cannot be used for arithmetic.
+			constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
 			constructor_op += "{ ";
 			if (splat)
 				constructor_op += to_expression(elems[0]);
