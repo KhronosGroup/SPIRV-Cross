@@ -65,9 +65,6 @@ public:
 		// Debug option to always emit temporary variables for all expressions.
 		bool force_temporary = false;
 
-		// If true, variables will be moved to their appropriate scope through CFG analysis.
-		bool cfg_analysis = true;
-
 		// If true, Vulkan GLSL features are used instead of GL-compatible features.
 		// Mostly useful for debugging SPIR-V files.
 		bool vulkan_semantics = false;
