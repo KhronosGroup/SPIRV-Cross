@@ -8032,9 +8032,19 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 	if (block.loop_variables.empty())
 		return "";
 
+	bool same_types = for_loop_initializers_are_same_type(block);
+	// We can only declare for loop initializers if all variables are of same type.
+	// If we cannot do this, declare individual variables before the loop header.
+
 	if (block.loop_variables.size() == 1)
 	{
 		return variable_decl(get<SPIRVariable>(block.loop_variables.front()));
+	}
+	else if (!same_types)
+	{
+		for (auto &loop_var : block.loop_variables)
+			statement(variable_decl(get<SPIRVariable>(loop_var)), ";");
+		return "";
 	}
 	else
 	{
@@ -8055,6 +8065,26 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 		}
 		return expr;
 	}
+}
+
+bool CompilerGLSL::for_loop_initializers_are_same_type(const SPIRBlock &block)
+{
+	if (block.loop_variables.size() <= 1)
+		return true;
+
+	uint32_t expected = get<SPIRVariable>(block.loop_variables[0]).basetype;
+	uint64_t expected_flags = get_decoration_mask(block.loop_variables[0]);
+	for (auto &var : block.loop_variables)
+	{
+		if (expected != get<SPIRVariable>(var).basetype)
+			return false;
+
+		// Precision flags and things like that must also match.
+		if (expected_flags != get_decoration_mask(var))
+			return false;
+	}
+
+	return true;
 }
 
 bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method)
