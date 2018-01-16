@@ -479,12 +479,11 @@ struct CLIArguments
 	bool flatten_multidimensional_arrays = false;
 	bool use_420pack_extension = true;
 	bool remove_unused = false;
-	bool cfg_analysis = true;
 };
 
 static void print_help()
 {
-	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] [--no-cfg-analysis] "
+	fprintf(stderr, "Usage: spirv-cross [--output <output path>] [SPIR-V file] [--es] [--no-es] "
 	                "[--version <GLSL version>] [--dump-resources] [--help] [--force-temporary] "
 	                "[--vulkan-semantics] [--flatten-ubo] [--fixup-clipspace] [--flip-vert-y] [--iterations iter] "
 	                "[--cpp] [--cpp-interface-name <name>] "
@@ -634,7 +633,6 @@ static int main_inner(int argc, char *argv[])
 		args.version = parser.next_uint();
 		args.set_version = true;
 	});
-	cbs.add("--no-cfg-analysis", [&args](CLIParser &) { args.cfg_analysis = false; });
 	cbs.add("--dump-resources", [&args](CLIParser &) { args.dump_resources = true; });
 	cbs.add("--force-temporary", [&args](CLIParser &) { args.force_temporary = true; });
 	cbs.add("--flatten-ubo", [&args](CLIParser &) { args.flatten_ubo = true; });
@@ -796,7 +794,6 @@ static int main_inner(int argc, char *argv[])
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.vertex.flip_vert_y = args.yflip;
-	opts.cfg_analysis = args.cfg_analysis;
 	compiler->set_options(opts);
 
 	// Set HLSL specific options.
