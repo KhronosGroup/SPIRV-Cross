@@ -3341,6 +3341,19 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				// Atomics shouldn't be able to access function-local variables.
 				// Some GLSL builtins access a pointer.
 
+			case OpCompositeInsert:
+			case OpVectorShuffle:
+				// Specialize for opcode which contains literals.
+				for (uint32_t i = 1; i < 4; i++)
+					notify_variable_access(args[i], current_block->self);
+				break;
+
+			case OpCompositeExtract:
+				// Specialize for opcode which contains literals.
+				for (uint32_t i = 1; i < 3; i++)
+					notify_variable_access(args[i], current_block->self);
+				break;
+
 			default:
 			{
 				// Rather dirty way of figuring out where Phi variables are used.
