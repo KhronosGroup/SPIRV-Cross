@@ -31,11 +31,9 @@ struct main0_out
 vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _21 [[buffer(0)]])
 {
     main0_out out = {};
-    int _12;
-    int _92;
     out.gl_Position = _21.uMVP * in.aVertex;
     out.vColor = float4(0.0);
-    for (int _103 = 0; _103 < 4; _92 = _103 + 1, _103 = _92)
+    for (int _103 = 0; _103 < 4; _103++)
     {
         float3 _68 = in.aVertex.xyz - _21.lights[_103].Position;
         out.vColor += ((_21.lights[_103].Color * clamp(1.0 - (length(_68) / _21.lights[_103].Radius), 0.0, 1.0)) * dot(in.aNormal, normalize(_68)));

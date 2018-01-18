@@ -97,12 +97,6 @@ vec4 _297;
 
 void main()
 {
-    vec4 _178;
-    vec4 _191;
-    vec4 _205;
-    vec4 _218;
-    vec4 _283;
-    vec4 _296;
     bool _173;
     VertexOutput _128 = _121;
     _128.HPosition = gl_FragCoord;
@@ -141,15 +135,13 @@ void main()
         _173 = 0.0 == 0.0;
         if (_173)
         {
-            _178 = texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166);
-            _193 = _178;
+            _193 = texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166);
             break;
         }
         else
         {
             float _180 = 1.0 / (1.0 - 0.0);
-            _191 = mix(texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166), vec4(clamp((clamp(1.0 - (_146.View_Depth.w * 0.00333332992158830165863037109375), 0.0, 1.0) * _180) - (0.0 * _180), 0.0, 1.0)));
-            _193 = _191;
+            _193 = mix(texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166), vec4(clamp((clamp(1.0 - (_146.View_Depth.w * 0.00333332992158830165863037109375), 0.0, 1.0) * _180) - (0.0 * _180), 0.0, 1.0)));
             break;
         }
         _193 = _192;
@@ -160,15 +152,13 @@ void main()
     {
         if (_173)
         {
-            _205 = texture(SPIRV_Cross_CombinedNormalMapTextureNormalMapSampler, _166);
-            _220 = _205;
+            _220 = texture(SPIRV_Cross_CombinedNormalMapTextureNormalMapSampler, _166);
             break;
         }
         else
         {
             float _207 = 1.0 / (1.0 - 0.0);
-            _218 = mix(texture(SPIRV_Cross_CombinedNormalMapTextureNormalMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedNormalMapTextureNormalMapSampler, _166), vec4(clamp((_165 * _207) - (0.0 * _207), 0.0, 1.0)));
-            _220 = _218;
+            _220 = mix(texture(SPIRV_Cross_CombinedNormalMapTextureNormalMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedNormalMapTextureNormalMapSampler, _166), vec4(clamp((_165 * _207) - (0.0 * _207), 0.0, 1.0)));
             break;
         }
         _220 = _219;
@@ -188,15 +178,13 @@ void main()
     {
         if (0.75 == 0.0)
         {
-            _283 = texture(SPIRV_Cross_CombinedSpecularMapTextureSpecularMapSampler, _166);
-            _298 = _283;
+            _298 = texture(SPIRV_Cross_CombinedSpecularMapTextureSpecularMapSampler, _166);
             break;
         }
         else
         {
             float _285 = 1.0 / (1.0 - 0.75);
-            _296 = mix(texture(SPIRV_Cross_CombinedSpecularMapTextureSpecularMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedSpecularMapTextureSpecularMapSampler, _166), vec4(clamp((_165 * _285) - (0.75 * _285), 0.0, 1.0)));
-            _298 = _296;
+            _298 = mix(texture(SPIRV_Cross_CombinedSpecularMapTextureSpecularMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedSpecularMapTextureSpecularMapSampler, _166), vec4(clamp((_165 * _285) - (0.75 * _285), 0.0, 1.0)));
             break;
         }
         _298 = _297;

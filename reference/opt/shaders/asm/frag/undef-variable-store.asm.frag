@@ -7,8 +7,6 @@ vec4 _50;
 
 void main()
 {
-    vec4 _20;
-    vec4 _21;
     vec4 _51;
     vec4 _52;
     _51 = _50;

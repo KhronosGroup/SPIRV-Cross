@@ -18,20 +18,17 @@ layout(location = 0) in vec2 vPatchPosBase[];
 
 void main()
 {
-    bool _515;
-    bool _524;
     vec2 _430 = (vPatchPosBase[0] - vec2(10.0)) * _41.uScale.xy;
     vec2 _440 = ((vPatchPosBase[0] + _41.uPatchSize) + vec2(10.0)) * _41.uScale.xy;
     vec3 _445 = vec3(_430.x, -10.0, _430.y);
     vec3 _450 = vec3(_440.x, 10.0, _440.y);
     vec3 _454 = (_445 + _450) * 0.5;
     float _459 = 0.5 * length(_450 - _445);
-    _515 = any(lessThanEqual(vec3(dot(_41.uFrustum[0], vec4(_454, 1.0)), dot(_41.uFrustum[1], vec4(_454, 1.0)), dot(_41.uFrustum[2], vec4(_454, 1.0))), vec3(-_459)));
+    bool _515 = any(lessThanEqual(vec3(dot(_41.uFrustum[0], vec4(_454, 1.0)), dot(_41.uFrustum[1], vec4(_454, 1.0)), dot(_41.uFrustum[2], vec4(_454, 1.0))), vec3(-_459)));
     bool _525;
     if (!_515)
     {
-        _524 = any(lessThanEqual(vec3(dot(_41.uFrustum[3], vec4(_454, 1.0)), dot(_41.uFrustum[4], vec4(_454, 1.0)), dot(_41.uFrustum[5], vec4(_454, 1.0))), vec3(-_459)));
-        _525 = _524;
+        _525 = any(lessThanEqual(vec3(dot(_41.uFrustum[3], vec4(_454, 1.0)), dot(_41.uFrustum[4], vec4(_454, 1.0)), dot(_41.uFrustum[5], vec4(_454, 1.0))), vec3(-_459)));
     }
     else
     {

@@ -705,10 +705,6 @@ protected:
 	std::unordered_set<uint32_t> forwarded_temporaries;
 	std::unordered_set<uint32_t> hoisted_temporaries;
 
-	// Based on initial analysis, we expect a temporary to be declared in a certain block.
-	// If we end up declaring a temporary in another block, we'll hoist out that temporary later.
-	std::unordered_map<uint32_t, uint32_t> expected_dominator_for_temporary;
-
 	uint64_t active_input_builtins = 0;
 	uint64_t active_output_builtins = 0;
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.
@@ -748,6 +744,9 @@ protected:
 	std::vector<spv::Capability> declared_capabilities;
 	std::vector<std::string> declared_extensions;
 	std::unordered_map<uint32_t, std::string> declared_block_names;
+
+	bool instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op, const uint32_t *args,
+	                                uint32_t length);
 };
 }
 

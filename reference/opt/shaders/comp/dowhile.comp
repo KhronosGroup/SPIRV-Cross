@@ -16,12 +16,10 @@ int i;
 
 void main()
 {
-    vec4 _33;
     vec4 _42;
     i = 0;
-    _33 = _28.in_data[gl_GlobalInvocationID.x];
     vec4 _56;
-    _56 = _33;
+    _56 = _28.in_data[gl_GlobalInvocationID.x];
     for (;;)
     {
         _42 = _28.mvp * _56;

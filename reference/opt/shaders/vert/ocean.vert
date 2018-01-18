@@ -54,11 +54,6 @@ uvec4 _483;
 
 void main()
 {
-    uint _443;
-    uint _28;
-    uint _449;
-    uint _455;
-    uint _461;
     float _350 = all(equal(LODWeights, vec4(0.0))) ? _53.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.w : dot(LODWeights, _53.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].LODs);
     float _352 = floor(_350);
     uint _357 = uint(_352);
@@ -67,8 +62,7 @@ void main()
     uint _482;
     if (_359.x < 32u)
     {
-        _443 = _366.x;
-        _482 = _443;
+        _482 = _366.x;
     }
     else
     {
@@ -79,8 +73,7 @@ void main()
     uint _484;
     if (_359.y < 32u)
     {
-        _449 = _366.x;
-        _484 = _449;
+        _484 = _366.x;
     }
     else
     {
@@ -91,8 +84,7 @@ void main()
     uint _485;
     if (_359.x < 32u)
     {
-        _455 = _366.y;
-        _485 = _455;
+        _485 = _366.y;
     }
     else
     {
@@ -103,8 +95,7 @@ void main()
     uint _486;
     if (_359.y < 32u)
     {
-        _461 = _366.y;
-        _486 = _461;
+        _486 = _366.y;
     }
     else
     {

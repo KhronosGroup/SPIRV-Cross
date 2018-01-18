@@ -10,8 +10,6 @@ int _69;
 
 void main()
 {
-    int _29;
-    int _65;
     if (gl_GlobalInvocationID.x == 2u)
     {
         _27.out_data[gl_GlobalInvocationID.x] = vec4(20.0);
@@ -24,7 +22,7 @@ void main()
             return;
         }
     }
-    for (int _68 = 0; _68 < 20; _65 = _69 + 1, _68 = _65)
+    for (int _68 = 0; _68 < 20; _68 = _69 + 1)
     {
         return;
     }
