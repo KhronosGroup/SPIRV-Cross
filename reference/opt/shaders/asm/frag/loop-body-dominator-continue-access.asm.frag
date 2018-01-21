@@ -15,15 +15,11 @@ uint _155;
 
 int GetCascade(vec3 fragWorldPosition)
 {
-    uint _49;
-    uint _119;
-    mat4 _43;
-    mat4 _47;
     mat4 _153;
     _153 = _152;
     uint _156;
     mat4 _157;
-    for (uint _151 = 0u; _151 < _11.shadowCascadesNum; _119 = _156 + uint(1), _151 = _119, _153 = _157)
+    for (uint _151 = 0u; _151 < _11.shadowCascadesNum; _151 = _156 + uint(1), _153 = _157)
     {
         mat4 _154;
         _154 = _153;

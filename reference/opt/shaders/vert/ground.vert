@@ -51,9 +51,6 @@ layout(location = 0) out vec2 TexCoord;
 
 void main()
 {
-    uint _372;
-    uint _28;
-    uint _376;
     float _300 = all(equal(LODWeights, vec4(0.0))) ? _53.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.w : dot(LODWeights, _53.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].LODs);
     float _302 = floor(_300);
     uint _307 = uint(_302);
@@ -62,8 +59,7 @@ void main()
     uint _395;
     if (_309.x < 32u)
     {
-        _372 = _316.x;
-        _395 = _372;
+        _395 = _316.x;
     }
     else
     {
@@ -72,8 +68,7 @@ void main()
     uint _396;
     if (_309.y < 32u)
     {
-        _376 = _316.y;
-        _396 = _376;
+        _396 = _316.y;
     }
     else
     {

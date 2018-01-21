@@ -18,8 +18,6 @@ struct main0_out
 fragment main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    float4 _15;
-    float4 _17;
     float4 _24;
     float4 _33;
     _24 = _21;

@@ -104,12 +104,6 @@ struct main0_out
 fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[position]], constant CB0& _19 [[buffer(0)]], texture3d<float> LightMapTexture [[texture(0)]], sampler LightMapSampler [[sampler(0)]], sampler ShadowMapSampler [[sampler(1)]], texture2d<float> ShadowMapTexture [[texture(1)]], texturecube<float> EnvironmentMapTexture [[texture(2)]], sampler EnvironmentMapSampler [[sampler(2)]], sampler DiffuseMapSampler [[sampler(3)]], texture2d<float> DiffuseMapTexture [[texture(3)]], sampler NormalMapSampler [[sampler(4)]], texture2d<float> NormalMapTexture [[texture(4)]], texture2d<float> NormalDetailMapTexture [[texture(5)]], sampler NormalDetailMapSampler [[sampler(5)]], texture2d<float> StudsMapTexture [[texture(6)]], sampler StudsMapSampler [[sampler(6)]], sampler SpecularMapSampler [[sampler(7)]], texture2d<float> SpecularMapTexture [[texture(7)]])
 {
     main0_out out = {};
-    float4 _178;
-    float4 _191;
-    float4 _205;
-    float4 _218;
-    float4 _283;
-    float4 _296;
     bool _173;
     VertexOutput _128 = _121;
     _128.HPosition = gl_FragCoord;
@@ -148,15 +142,13 @@ fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[positio
         _173 = 0.0 == 0.0;
         if (_173)
         {
-            _178 = DiffuseMapTexture.sample(DiffuseMapSampler, _166);
-            _193 = _178;
+            _193 = DiffuseMapTexture.sample(DiffuseMapSampler, _166);
             break;
         }
         else
         {
             float _180 = 1.0 / (1.0 - 0.0);
-            _191 = mix(DiffuseMapTexture.sample(DiffuseMapSampler, (_166 * 0.25)), DiffuseMapTexture.sample(DiffuseMapSampler, _166), float4(clamp((clamp(1.0 - (_146.View_Depth.w * 0.00333332992158830165863037109375), 0.0, 1.0) * _180) - (0.0 * _180), 0.0, 1.0)));
-            _193 = _191;
+            _193 = mix(DiffuseMapTexture.sample(DiffuseMapSampler, (_166 * 0.25)), DiffuseMapTexture.sample(DiffuseMapSampler, _166), float4(clamp((clamp(1.0 - (_146.View_Depth.w * 0.00333332992158830165863037109375), 0.0, 1.0) * _180) - (0.0 * _180), 0.0, 1.0)));
             break;
         }
         _193 = _192;
@@ -167,15 +159,13 @@ fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[positio
     {
         if (_173)
         {
-            _205 = NormalMapTexture.sample(NormalMapSampler, _166);
-            _220 = _205;
+            _220 = NormalMapTexture.sample(NormalMapSampler, _166);
             break;
         }
         else
         {
             float _207 = 1.0 / (1.0 - 0.0);
-            _218 = mix(NormalMapTexture.sample(NormalMapSampler, (_166 * 0.25)), NormalMapTexture.sample(NormalMapSampler, _166), float4(clamp((_165 * _207) - (0.0 * _207), 0.0, 1.0)));
-            _220 = _218;
+            _220 = mix(NormalMapTexture.sample(NormalMapSampler, (_166 * 0.25)), NormalMapTexture.sample(NormalMapSampler, _166), float4(clamp((_165 * _207) - (0.0 * _207), 0.0, 1.0)));
             break;
         }
         _220 = _219;
@@ -195,15 +185,13 @@ fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[positio
     {
         if (0.75 == 0.0)
         {
-            _283 = SpecularMapTexture.sample(SpecularMapSampler, _166);
-            _298 = _283;
+            _298 = SpecularMapTexture.sample(SpecularMapSampler, _166);
             break;
         }
         else
         {
             float _285 = 1.0 / (1.0 - 0.75);
-            _296 = mix(SpecularMapTexture.sample(SpecularMapSampler, (_166 * 0.25)), SpecularMapTexture.sample(SpecularMapSampler, _166), float4(clamp((_165 * _285) - (0.75 * _285), 0.0, 1.0)));
-            _298 = _296;
+            _298 = mix(SpecularMapTexture.sample(SpecularMapSampler, (_166 * 0.25)), SpecularMapTexture.sample(SpecularMapSampler, _166), float4(clamp((_165 * _285) - (0.75 * _285), 0.0, 1.0)));
             break;
         }
         _298 = _297;

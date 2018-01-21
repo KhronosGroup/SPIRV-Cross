@@ -15,8 +15,6 @@ float4 _21;
 
 void frag_main()
 {
-    float4 _15;
-    float4 _17;
     float4 _33;
     do
     {

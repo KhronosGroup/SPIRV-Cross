@@ -18,9 +18,6 @@ layout(binding = 1, std430) writeonly buffer HeightmapFFT
 
 void main()
 {
-    uint _66;
-    uint _435;
-    uint _439;
     uvec2 _263 = uvec2(64u, 1u) * gl_NumWorkGroups.xy;
     uvec2 _268 = _263 - gl_GlobalInvocationID.xy;
     bvec2 _270 = equal(gl_GlobalInvocationID.xy, uvec2(0u));
@@ -31,8 +28,7 @@ void main()
     }
     else
     {
-        _435 = _268.x;
-        _470 = _435;
+        _470 = _268.x;
     }
     uint _471;
     if (_270.y)
@@ -41,8 +37,7 @@ void main()
     }
     else
     {
-        _439 = _268.y;
-        _471 = _439;
+        _471 = _268.y;
     }
     vec2 _296 = vec2(gl_GlobalInvocationID.xy);
     vec2 _298 = vec2(_263);

@@ -3449,34 +3449,9 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	}
 
 	// If it has one, keep track of the instruction's result type, mapped by ID
-	switch (opcode)
-	{
-	case OpStore:
-	case OpCopyMemory:
-	case OpCopyMemorySized:
-	case OpImageWrite:
-	case OpAtomicStore:
-	case OpAtomicFlagClear:
-	case OpEmitStreamVertex:
-	case OpEndStreamPrimitive:
-	case OpControlBarrier:
-	case OpMemoryBarrier:
-	case OpGroupWaitEvents:
-	case OpRetainEvent:
-	case OpReleaseEvent:
-	case OpSetUserEventStatus:
-	case OpCaptureEventProfilingInfo:
-	case OpCommitReadPipe:
-	case OpCommitWritePipe:
-	case OpGroupCommitReadPipe:
-	case OpGroupCommitWritePipe:
-		break;
-
-	default:
-		if (length > 1)
-			result_types[args[1]] = args[0];
-		break;
-	}
+	uint32_t result_type, result_id;
+	if (compiler.instruction_to_result_type(result_type, result_id, opcode, args, length))
+		result_types[result_id] = result_type;
 
 	return true;
 }

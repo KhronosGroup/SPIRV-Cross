@@ -14,11 +14,9 @@ layout(location = 1) in vec3 aNormal;
 
 void main()
 {
-    int _12;
-    int _92;
     gl_Position = mat4(UBO[0], UBO[1], UBO[2], UBO[3]) * aVertex;
     vColor = vec4(0.0);
-    for (int _103 = 0; _103 < 4; _92 = _103 + 1, _103 = _92)
+    for (int _103 = 0; _103 < 4; _103++)
     {
         vec3 _68 = aVertex.xyz - Light(UBO[_103 * 2 + 4].xyz, UBO[_103 * 2 + 4].w, UBO[_103 * 2 + 5]).Position;
         vColor += (((UBO[_103 * 2 + 5]) * clamp(1.0 - (length(_68) / Light(UBO[_103 * 2 + 4].xyz, UBO[_103 * 2 + 4].w, UBO[_103 * 2 + 5]).Radius), 0.0, 1.0)) * dot(aNormal, normalize(_68)));
