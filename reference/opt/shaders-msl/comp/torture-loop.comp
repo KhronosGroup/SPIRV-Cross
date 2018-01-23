@@ -47,7 +47,8 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     _96 = _40;
     float4 _100;
     uint _101;
-    for (uint _97 = 0u, _99 = _98; _97 < 16u; _95 = _100, _96++, _97++, _99 = _101)
+    uint _99;
+    for (uint _97 = 0u; _97 < 16u; _95 = _100, _96++, _97++, _99 = _101)
     {
         _100 = _95;
         _101 = 0u;
