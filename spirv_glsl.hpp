@@ -313,6 +313,8 @@ protected:
 		bool flexible_member_array_supported = true;
 		bool explicit_struct_type = false;
 		bool use_initializer_list = false;
+		bool use_typed_initializer_list = false;
+		bool can_declare_struct_inline = true;
 		bool native_row_major_matrix = true;
 		bool use_constructor_splatting = true;
 		bool boolean_mix_support = true;
