@@ -3503,6 +3503,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 		assert(header);
 		auto &header_block = this->get<SPIRBlock>(header);
+		auto &blocks = handler.accessed_variables_to_block[loop_variable.first];
+
+		// If a loop variable is not used before the loop, it's probably not a loop variable.
+		bool has_accessed_variable = blocks.count(header) != 0;
 
 		// Now, there are two conditions we need to meet for the variable to be a loop variable.
 		// 1. The dominating block must have a branch-free path to the loop header,
@@ -3513,6 +3517,9 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		bool static_loop_init = true;
 		while (dominator != header)
 		{
+			if (blocks.count(dominator) != 0)
+				has_accessed_variable = true;
+
 			auto &succ = cfg.get_succeeding_edges(dominator);
 			if (succ.size() != 1)
 			{
@@ -3530,12 +3537,11 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			dominator = succ.front();
 		}
 
-		if (!static_loop_init)
+		if (!static_loop_init || !has_accessed_variable)
 			continue;
 
 		// The second condition we need to meet is that no access after the loop
 		// merge can occur. Walk the CFG to see if we find anything.
-		auto &blocks = handler.accessed_variables_to_block[loop_variable.first];
 
 		seen_blocks.clear();
 		cfg.walk_from(seen_blocks, header_block.merge_block, [&](uint32_t walk_block) {

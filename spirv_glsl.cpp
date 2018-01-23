@@ -7180,7 +7180,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 
 	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self), variable.self));
 
-	if (variable.loop_variable)
+	if (variable.loop_variable && variable.static_expression)
 		res += join(" = ", to_expression(variable.static_expression));
 	else if (variable.initializer)
 		res += join(" = ", to_expression(variable.initializer));
@@ -8022,11 +8022,17 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 	// We can only declare for loop initializers if all variables are of same type.
 	// If we cannot do this, declare individual variables before the loop header.
 
-	if (block.loop_variables.size() == 1)
+	// We might have a loop variable candidate which was not assigned to for some reason.
+	bool missing_initializer = false;
+	for (auto &variable : block.loop_variables)
+		if (get<SPIRVariable>(variable).static_expression == 0)
+			missing_initializer = true;
+
+	if (block.loop_variables.size() == 1 && !missing_initializer)
 	{
 		return variable_decl(get<SPIRVariable>(block.loop_variables.front()));
 	}
-	else if (!same_types)
+	else if (!same_types || missing_initializer)
 	{
 		for (auto &loop_var : block.loop_variables)
 			statement(variable_decl(get<SPIRVariable>(loop_var)), ";");
