@@ -69,6 +69,7 @@ string CompilerMSL::compile()
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
 	backend.use_initializer_list = true;
+	backend.use_typed_initializer_list = true;
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
 	backend.force_temp_use_for_two_vector_shuffles = true;

@@ -3644,6 +3644,7 @@ string CompilerHLSL::compile()
 	backend.use_constructor_splatting = false;
 	backend.boolean_mix_support = false;
 	backend.can_swizzle_scalar = true;
+	backend.can_declare_struct_inline = false;
 
 	update_active_builtins();
 	analyze_sampler_comparison_states();

@@ -5485,12 +5485,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 		}
 
+		if (out_type.basetype == SPIRType::Struct && !backend.can_declare_struct_inline)
+			forward = false;
+
 		string constructor_op;
 		if (backend.use_initializer_list && composite)
 		{
 			// Only use this path if we are building composites.
 			// This path cannot be used for arithmetic.
-			constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
+			if (backend.use_typed_initializer_list)
+				constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
 			constructor_op += "{ ";
 			if (splat)
 				constructor_op += to_expression(elems[0]);
