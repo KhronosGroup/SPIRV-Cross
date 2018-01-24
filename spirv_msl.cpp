@@ -72,7 +72,6 @@ string CompilerMSL::compile()
 	backend.use_typed_initializer_list = true;
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
-	backend.force_temp_use_for_two_vector_shuffles = true;
 
 	replace_illegal_names();
 

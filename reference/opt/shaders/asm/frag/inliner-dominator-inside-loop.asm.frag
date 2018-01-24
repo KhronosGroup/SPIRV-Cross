@@ -97,7 +97,6 @@ vec4 _297;
 
 void main()
 {
-    bool _173;
     VertexOutput _128 = _121;
     _128.HPosition = gl_FragCoord;
     VertexOutput _130 = _128;
@@ -129,6 +128,7 @@ void main()
     float _163 = _146.View_Depth.w * _19.CB0.RefractionBias_FadeDistance_GlowFactor.y;
     float _165 = clamp(1.0 - _163, 0.0, 1.0);
     vec2 _166 = IN_Uv_EdgeDistance1.xy * 1.0;
+    bool _173;
     vec4 _193;
     do
     {

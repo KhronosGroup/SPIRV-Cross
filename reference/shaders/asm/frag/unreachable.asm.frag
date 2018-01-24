@@ -8,8 +8,8 @@ vec4 _21;
 void main()
 {
     vec4 _24;
-    vec4 _33;
     _24 = _21;
+    vec4 _33;
     for (;;)
     {
         if (counter == 10)

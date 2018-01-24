@@ -243,6 +243,14 @@ protected:
 	template <typename... Ts>
 	inline void statement(Ts &&... ts)
 	{
+		if (force_recompile)
+		{
+			// Do not bother emitting code while force_recompile is active.
+			// We will compile again.
+			statement_count++;
+			return;
+		}
+
 		if (redirect_statement)
 			redirect_statement->push_back(join(std::forward<Ts>(ts)...));
 		else
@@ -320,7 +328,6 @@ protected:
 		bool boolean_mix_support = true;
 		bool allow_precision_qualifiers = false;
 		bool can_swizzle_scalar = false;
-		bool force_temp_use_for_two_vector_shuffles = false;
 		bool force_gl_in_out_block = false;
 	} backend;
 
