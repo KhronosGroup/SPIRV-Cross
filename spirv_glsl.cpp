@@ -7180,10 +7180,18 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 
 	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self), variable.self));
 
-	if (variable.loop_variable)
-		res += join(" = ", to_expression(variable.static_expression));
+	if (variable.loop_variable && variable.static_expression)
+	{
+		uint32_t expr = variable.static_expression;
+		if (ids[expr].get_type() != TypeUndef)
+			res += join(" = ", to_expression(variable.static_expression));
+	}
 	else if (variable.initializer)
-		res += join(" = ", to_expression(variable.initializer));
+	{
+		uint32_t expr = variable.initializer;
+		if (ids[expr].get_type() != TypeUndef)
+			res += join(" = ", to_expression(variable.initializer));
+	}
 	return res;
 }
 
@@ -8022,11 +8030,23 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 	// We can only declare for loop initializers if all variables are of same type.
 	// If we cannot do this, declare individual variables before the loop header.
 
-	if (block.loop_variables.size() == 1)
+	// We might have a loop variable candidate which was not assigned to for some reason.
+	uint32_t missing_initializers = 0;
+	for (auto &variable : block.loop_variables)
+	{
+		uint32_t expr = get<SPIRVariable>(variable).static_expression;
+
+		// Sometimes loop variables are initialized with OpUndef, but we can just declare
+		// a plain variable without initializer in this case.
+		if (expr == 0 || ids[expr].get_type() == TypeUndef)
+			missing_initializers++;
+	}
+
+	if (block.loop_variables.size() == 1 && missing_initializers == 0)
 	{
 		return variable_decl(get<SPIRVariable>(block.loop_variables.front()));
 	}
-	else if (!same_types)
+	else if (!same_types || missing_initializers == uint32_t(block.loop_variables.size()))
 	{
 		for (auto &loop_var : block.loop_variables)
 			statement(variable_decl(get<SPIRVariable>(loop_var)), ";");
@@ -8034,20 +8054,32 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 	}
 	else
 	{
-		auto &var = get<SPIRVariable>(block.loop_variables.front());
-		auto &type = get<SPIRType>(var.basetype);
-
-		// Don't remap the type here as we have multiple names,
-		// doesn't make sense to remap types for loop variables anyways.
-		// It is assumed here that all relevant qualifiers are equal for all loop variables.
-		string expr = join(to_qualifiers_glsl(var.self), type_to_glsl(type), " ");
+		// We have a mix of loop variables, either ones with a clear initializer, or ones without.
+		// Separate the two streams.
+		string expr;
 
 		for (auto &loop_var : block.loop_variables)
 		{
-			auto &v = get<SPIRVariable>(loop_var);
-			expr += join(to_name(loop_var), " = ", to_expression(v.static_expression));
-			if (&loop_var != &block.loop_variables.back())
-				expr += ", ";
+			uint32_t static_expr = get<SPIRVariable>(loop_var).static_expression;
+			if (static_expr == 0 || ids[static_expr].get_type() == TypeUndef)
+			{
+				statement(variable_decl(get<SPIRVariable>(loop_var)), ";");
+			}
+			else
+			{
+				if (expr.empty())
+				{
+					// For loop initializers are of the form <type id = value, id = value, id = value, etc ...
+					auto &var = get<SPIRVariable>(block.loop_variables.front());
+					auto &type = get<SPIRType>(var.basetype);
+					expr = join(to_qualifiers_glsl(var.self), type_to_glsl(type), " ");
+				}
+				else
+					expr += ", ";
+
+				auto &v = get<SPIRVariable>(loop_var);
+				expr += join(to_name(loop_var), " = ", to_expression(v.static_expression));
+			}
 		}
 		return expr;
 	}
@@ -8058,11 +8090,21 @@ bool CompilerGLSL::for_loop_initializers_are_same_type(const SPIRBlock &block)
 	if (block.loop_variables.size() <= 1)
 		return true;
 
-	uint32_t expected = get<SPIRVariable>(block.loop_variables[0]).basetype;
-	uint64_t expected_flags = get_decoration_mask(block.loop_variables[0]);
+	uint32_t expected = 0;
+	uint64_t expected_flags = 0;
 	for (auto &var : block.loop_variables)
 	{
-		if (expected != get<SPIRVariable>(var).basetype)
+		// Don't care about uninitialized variables as they will not be part of the initializers.
+		uint32_t expr = get<SPIRVariable>(var).static_expression;
+		if (expr == 0 || ids[expr].get_type() == TypeUndef)
+			continue;
+
+		if (expected == 0)
+		{
+			expected = get<SPIRVariable>(var).basetype;
+			expected_flags = get_decoration_mask(var);
+		}
+		else if (expected != get<SPIRVariable>(var).basetype)
 			return false;
 
 		// Precision flags and things like that must also match.
