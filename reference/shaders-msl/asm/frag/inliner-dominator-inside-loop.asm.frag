@@ -104,7 +104,6 @@ struct main0_out
 fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[position]], constant CB0& _19 [[buffer(0)]], texture3d<float> LightMapTexture [[texture(0)]], sampler LightMapSampler [[sampler(0)]], sampler ShadowMapSampler [[sampler(1)]], texture2d<float> ShadowMapTexture [[texture(1)]], texturecube<float> EnvironmentMapTexture [[texture(2)]], sampler EnvironmentMapSampler [[sampler(2)]], sampler DiffuseMapSampler [[sampler(3)]], texture2d<float> DiffuseMapTexture [[texture(3)]], sampler NormalMapSampler [[sampler(4)]], texture2d<float> NormalMapTexture [[texture(4)]], texture2d<float> NormalDetailMapTexture [[texture(5)]], sampler NormalDetailMapSampler [[sampler(5)]], texture2d<float> StudsMapTexture [[texture(6)]], sampler StudsMapSampler [[sampler(6)]], sampler SpecularMapSampler [[sampler(7)]], texture2d<float> SpecularMapTexture [[texture(7)]])
 {
     main0_out out = {};
-    bool _173;
     VertexOutput _128 = _121;
     _128.HPosition = gl_FragCoord;
     VertexOutput _130 = _128;
@@ -136,6 +135,7 @@ fragment main0_out main0(main0_in in [[stage_in]], float4 gl_FragCoord [[positio
     float _163 = _146.View_Depth.w * _19.CB0.RefractionBias_FadeDistance_GlowFactor.y;
     float _165 = clamp(1.0 - _163, 0.0, 1.0);
     float2 _166 = in.IN_Uv_EdgeDistance1.xy * 1.0;
+    bool _173;
     float4 _193;
     do
     {

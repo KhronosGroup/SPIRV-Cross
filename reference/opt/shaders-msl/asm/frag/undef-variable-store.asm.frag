@@ -15,8 +15,8 @@ fragment main0_out main0()
 {
     main0_out out = {};
     float4 _51;
-    float4 _52;
     _51 = _50;
+    float4 _52;
     for (;;)
     {
         if (0.0 != 0.0)

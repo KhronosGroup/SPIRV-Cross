@@ -8297,6 +8297,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 	else if (continue_type == SPIRBlock::DoWhileLoop)
 	{
+		flush_undeclared_variables(block);
 		statement("do");
 		begin_scope();
 

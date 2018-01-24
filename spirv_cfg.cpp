@@ -48,14 +48,6 @@ uint32_t CFG::find_common_dominator(uint32_t a, uint32_t b) const
 	return a;
 }
 
-uint32_t CFG::update_common_dominator(uint32_t a, uint32_t b)
-{
-	auto dominator = find_common_dominator(immediate_dominators[a], immediate_dominators[b]);
-	immediate_dominators[a] = dominator;
-	immediate_dominators[b] = dominator;
-	return dominator;
-}
-
 void CFG::build_immediate_dominators()
 {
 	// Traverse the post-order in reverse and build up the immediate dominator tree.
@@ -74,7 +66,7 @@ void CFG::build_immediate_dominators()
 			if (immediate_dominators[block])
 			{
 				assert(immediate_dominators[edge]);
-				immediate_dominators[block] = update_common_dominator(block, edge);
+				immediate_dominators[block] = find_common_dominator(block, edge);
 			}
 			else
 				immediate_dominators[block] = edge;
