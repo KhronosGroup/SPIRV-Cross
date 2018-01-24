@@ -2240,7 +2240,17 @@ string CompilerGLSL::to_expression(uint32_t id)
 		else if (e.need_transpose)
 			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type));
 		else
-			return e.expression;
+		{
+			if (force_recompile)
+			{
+				// During first compilation phase, certain expression patterns can trigger exponential growth of memory.
+				// Avoid this by returning dummy expressions during this phase.
+				// Do not use empty expressions here, because those are sentinels for other cases.
+				return "_";
+			}
+			else
+				return e.expression;
+		}
 	}
 
 	case TypeConstant:
@@ -5675,9 +5685,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (shuffle)
 		{
-			bool allow_fwd = !backend.force_temp_use_for_two_vector_shuffles;
-			should_fwd = allow_fwd && should_forward(vec0) && should_forward(vec1);
-			trivial_forward = allow_fwd && !expression_is_forwarded(vec0) && !expression_is_forwarded(vec1);
+			should_fwd = should_forward(vec0) && should_forward(vec1);
+			trivial_forward = !expression_is_forwarded(vec0) && !expression_is_forwarded(vec1);
 
 			// Constructor style and shuffling from two different vectors.
 			vector<string> args;
@@ -8288,6 +8297,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 	else if (continue_type == SPIRBlock::DoWhileLoop)
 	{
+		flush_undeclared_variables(block);
 		statement("do");
 		begin_scope();
 

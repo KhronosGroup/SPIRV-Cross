@@ -16,8 +16,8 @@ float4 _21;
 void frag_main()
 {
     float4 _24;
-    float4 _33;
     _24 = _21;
+    float4 _33;
     for (;;)
     {
         if (counter == 10)
