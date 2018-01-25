@@ -6941,15 +6941,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 // function arguments. This is necessary for shader languages that do not support global
 // access to shader input content from within a function (eg. Metal). Each additional
 // function args uses the name of the global variable. Function nesting will modify the
-// functions and calls all the way up the nesting chain.
+// functions and function calls all the way up the nesting chain.
 void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t index, vector<string> &arglist)
 {
 	auto &args = func.arguments;
 	uint32_t arg_cnt = uint32_t(args.size());
 	for (uint32_t arg_idx = index; arg_idx < arg_cnt; arg_idx++)
 	{
-		assert(args[arg_idx].alias_global_variable);
-		arglist.push_back(to_func_call_arg(args[arg_idx].id));
+		auto &arg = args[arg_idx];
+		assert(arg.alias_global_variable);
+		arglist.push_back(to_func_call_arg(arg.id));
+
+		// If the underlying variable needs to be declared
+		// (ie. a local variable with deferred declaration), do so now.
+		uint32_t var_id = get<SPIRVariable>(arg.id).basevariable;
+		if (var_id)
+			flush_variable_declaration(var_id);
 	}
 }
 

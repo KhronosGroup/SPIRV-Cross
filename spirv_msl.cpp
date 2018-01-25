@@ -2636,19 +2636,27 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 {
 	const auto &type = get<SPIRType>(argument.basetype);
 
-	if ((type.basetype == SPIRType::Struct) &&
-	    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
-	     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer))
+	switch (type.storage)
 	{
-		if (type.storage == StorageClassStorageBuffer)
-			return "device";
-		else
-		{
+	case StorageClassWorkgroup:
+		return "threadgroup";
+
+	case StorageClassStorageBuffer:
+		return "device";
+
+	case StorageClassUniform:
+	case StorageClassUniformConstant:
+	case StorageClassPushConstant:
+		if (type.basetype == SPIRType::Struct)
 			return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
 			        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
 			           "device" :
 			           "constant";
-		}
+
+		break;
+
+	default:
+		break;
 	}
 
 	return "thread";
