@@ -8265,6 +8265,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	bool emitted_for_loop_header = false;
 
 	// If we need to force temporaries for certain IDs due to continue blocks, do it before starting loop header.
+	// Need to sort these to ensure that reference output is stable.
+	sort(begin(block.declare_temporary), end(block.declare_temporary),
+	     [](const pair<uint32_t, uint32_t> &a, const pair<uint32_t, uint32_t> &b) { return a.second < b.second; });
+
 	for (auto &tmp : block.declare_temporary)
 	{
 		auto flags = meta[tmp.second].decoration.decoration_flags;
