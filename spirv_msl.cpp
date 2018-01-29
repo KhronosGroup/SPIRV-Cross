@@ -2697,7 +2697,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	// with different order of buffers can result in issues with buffer assignments inside the driver.
 	struct Resource
 	{
-		Variant* id;
+		Variant *id;
 		string name;
 		SPIRType::BaseType basetype;
 		uint32_t index;
@@ -2720,20 +2720,25 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (type.basetype == SPIRType::SampledImage)
 				{
-					resources.push_back({ &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
+					resources.push_back(
+					    { &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
 
 					if (type.image.dim != DimBuffer)
-						resources.push_back({ &id, to_sampler_expression(var_id), SPIRType::Sampler, get_metal_resource_index(var, SPIRType::Sampler) });
+						resources.push_back({ &id, to_sampler_expression(var_id), SPIRType::Sampler,
+						                      get_metal_resource_index(var, SPIRType::Sampler) });
 				}
 				else
 				{
-					resources.push_back({ &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
+					resources.push_back(
+					    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
 				}
 			}
 		}
 	}
 
-	std::sort(resources.begin(), resources.end(), [](const Resource& lhs, const Resource& rhs) { return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index); });
+	std::sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
+		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
+	});
 
 	for (auto &r : resources)
 	{
