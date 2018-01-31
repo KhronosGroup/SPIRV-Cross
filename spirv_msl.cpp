@@ -2837,17 +2837,28 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += "const ";
 
 	if (is_builtin_variable(var))
-		decl += builtin_type_decl((BuiltIn)get_decoration(arg.id, DecorationBuiltIn));
+		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)));
 	else
 		decl += type_to_glsl(type, arg.id);
 
 	if (is_array(type))
-		decl += "*";
+	{
+		decl += " (&";
+		decl += to_name(var.self);
+		decl += ")";
+		decl += type_to_array_glsl(type);
+	}
 	else if (!pointer)
+	{
 		decl += "&";
-
-	decl += " ";
-	decl += to_name(var.self);
+		decl += " ";
+		decl += to_name(var.self);
+	}
+	else
+	{
+		decl += " ";
+		decl += to_name(var.self);
+	}
 
 	return decl;
 }
