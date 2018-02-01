@@ -7881,11 +7881,29 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 		else
 		{
 			auto &from_block = get<SPIRBlock>(from);
-			auto &dominator = get<SPIRBlock>(from_block.loop_dominator);
+			bool outside_control_flow = false;
+			uint32_t loop_dominator = 0;
 
-			// For non-complex continue blocks, we implicitly branch to the continue block
-			// by having the continue block be part of the loop header in for (; ; continue-block).
-			bool outside_control_flow = block_is_outside_flow_control_from_block(dominator, from_block);
+			// FIXME: Refactor this to not use the old loop_dominator tracking.
+			if (from_block.merge_block)
+			{
+				// If we are a loop header, we don't set the loop dominator,
+				// so just use "self" here.
+				loop_dominator = from;
+			}
+			else if (from_block.loop_dominator != -1u)
+			{
+				loop_dominator = from_block.loop_dominator;
+			}
+
+			if (loop_dominator != 0)
+			{
+				auto &dominator = get<SPIRBlock>(loop_dominator);
+
+				// For non-complex continue blocks, we implicitly branch to the continue block
+				// by having the continue block be part of the loop header in for (; ; continue-block).
+				outside_control_flow = block_is_outside_flow_control_from_block(dominator, from_block);
+			}
 
 			// Some simplification for for-loops. We always end up with a useless continue;
 			// statement since we branch to a loop block.
