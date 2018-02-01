@@ -3088,8 +3088,11 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		emit_op(result_type, id, to_expression(ops[2]), true, true);
-		// TODO: Maybe change this when separate samplers/images are supported
+		auto *combined = maybe_get<SPIRCombinedImageSampler>(ops[2]);
+		if (combined)
+			emit_op(result_type, id, to_expression(combined->image), true, true);
+		else
+			emit_op(result_type, id, to_expression(ops[2]), true, true);
 		break;
 	}
 
