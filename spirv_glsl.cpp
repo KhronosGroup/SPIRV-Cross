@@ -1634,10 +1634,10 @@ void CompilerGLSL::replace_illegal_names()
 		"iimageCubeArray", "image1D", "image1DArray", "image2D", "image2DArray", "image2DMS", "image2DMSArray", "image2DRect",
 		"image3D", "imageBuffer", "imageCube", "imageCubeArray", "in", "inline", "inout", "input", "int", "interface", "invariant",
 		"isampler1D", "isampler1DArray", "isampler2D", "isampler2DArray", "isampler2DMS", "isampler2DMSArray", "isampler2DRect",
-		"isampler3D", "isamplerBuffer", "isamplerCube", "isamplerCubeArray", "ivec2", "ivec3", "ivec4", "layout", "long", "lowp",
+		"isampler3D", "isamplerBuffer", "isamplerCube", "isamplerCubeArray", "ivec2", "ivec3", "ivec4", "layout", "line", "linear", "long", "lowp",
 		"mat2", "mat2x2", "mat2x3", "mat2x4", "mat3", "mat3x2", "mat3x3", "mat3x4", "mat4", "mat4x2", "mat4x3", "mat4x4", "mediump",
-		"namespace", "noinline", "noperspective", "out", "output", "packed", "partition", "patch", "precision", "public", "readonly",
-		"resource", "restrict", "return", "row_major", "sample", "sampler1D", "sampler1DArray", "sampler1DArrayShadow",
+		"namespace", "noinline", "noperspective", "out", "output", "packed", "partition", "patch", "point", "precision", "public", "readonly",
+		"resource", "restrict", "return", "row_major", "sample", "sampler", "sampler1D", "sampler1DArray", "sampler1DArrayShadow",
 		"sampler1DShadow", "sampler2D", "sampler2DArray", "sampler2DArrayShadow", "sampler2DMS", "sampler2DMSArray",
 		"sampler2DRect", "sampler2DRectShadow", "sampler2DShadow", "sampler3D", "sampler3DRect", "samplerBuffer",
 		"samplerCube", "samplerCubeArray", "samplerCubeArrayShadow", "samplerCubeShadow", "short", "sizeof", "smooth", "static",
@@ -2256,12 +2256,17 @@ string CompilerGLSL::to_expression(uint32_t id)
 	case TypeConstant:
 	{
 		auto &c = get<SPIRConstant>(id);
+		auto &type = get<SPIRType>(c.constant_type);
 
 		// WorkGroupSize may be a constant.
 		auto &dec = meta[c.self].decoration;
 		if (dec.builtin)
 			return builtin_to_glsl(dec.builtin_type, StorageClassGeneric);
 		else if (c.specialization && options.vulkan_semantics)
+			return to_name(id);
+		else if (type.basetype == SPIRType::Struct && !backend.can_declare_struct_inline)
+			return to_name(id);
+		else if (!type.array.empty() && !backend.can_declare_arrays_inline)
 			return to_name(id);
 		else
 			return constant_expression(c);
@@ -5496,6 +5501,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		if (out_type.basetype == SPIRType::Struct && !backend.can_declare_struct_inline)
+			forward = false;
+		if (!out_type.array.empty() && !backend.can_declare_arrays_inline)
 			forward = false;
 
 		string constructor_op;
