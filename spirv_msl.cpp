@@ -1977,6 +1977,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	if (!type.array.empty())
 	{
 		// Fake arrays returns by writing to an out array instead.
+		decl += "thread ";
 		decl += type_to_glsl(type);
 		decl += " (&SPIRV_Cross_return_value)";
 		decl += type_to_array_glsl(type);
