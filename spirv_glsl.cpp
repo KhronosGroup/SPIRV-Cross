@@ -5367,9 +5367,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		length -= 3;
 
 		auto &callee = get<SPIRFunction>(func);
+		auto &return_type = get<SPIRType>(callee.return_type);
 		bool pure = function_is_pure(callee);
 
 		bool callee_has_out_variables = false;
+		bool emit_return_value_as_argument = false;
 
 		// Invalidate out variables passed to functions since they can be OpStore'd to.
 		for (uint32_t i = 0; i < length; i++)
@@ -5383,12 +5385,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			flush_variable_declaration(arg[i]);
 		}
 
+		if (!return_type.array.empty() && !backend.can_return_array)
+		{
+			callee_has_out_variables = true;
+			emit_return_value_as_argument = true;
+		}
+
 		if (!pure)
 			register_impure_function_call();
 
 		string funexpr;
 		vector<string> arglist;
 		funexpr += to_name(func) + "(";
+
+		if (emit_return_value_as_argument)
+		{
+			statement(type_to_glsl(return_type), " ", to_name(id), type_to_array_glsl(return_type), ";");
+			arglist.push_back(to_name(id));
+		}
+
 		for (uint32_t i = 0; i < length; i++)
 		{
 			// Do not pass in separate images or samplers if we're remapping
@@ -5423,7 +5438,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Check for function call constraints.
 		check_function_call_constraints(arg, length);
 
-		if (get<SPIRType>(result_type).basetype != SPIRType::Void)
+		if (return_type.basetype != SPIRType::Void)
 		{
 			// If the function actually writes to an out variable,
 			// take the conservative route and do not forward.
@@ -5435,7 +5450,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			bool forward = args_will_forward(id, arg, length, pure) && !callee_has_out_variables && pure &&
 			               (forced_temporaries.find(id) == end(forced_temporaries));
 
-			emit_op(result_type, id, funexpr, forward);
+			if (emit_return_value_as_argument)
+			{
+				statement(funexpr, ";");
+				set<SPIRExpression>(id, to_name(id), result_type, true);
+			}
+			else
+				emit_op(result_type, id, funexpr, forward);
 
 			// Function calls are implicit loads from all variables in question.
 			// Set dependencies for them.
@@ -8454,9 +8475,26 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		if (block.return_value)
 		{
-			// OpReturnValue can return Undef, so don't emit anything for this case.
-			if (ids.at(block.return_value).get_type() != TypeUndef)
-				statement("return ", to_expression(block.return_value), ";");
+			auto &type = expression_type(block.return_value);
+			if (!type.array.empty() && !backend.can_return_array)
+			{
+				// If we cannot return arrays, we will have a special out argument we can write to instead.
+				// The backend is responsible for setting this up, and redirection the return values as appropriate.
+				if (ids.at(block.return_value).get_type() != TypeUndef)
+					emit_array_copy("SPIRV_Cross_return_value", block.return_value);
+
+				if (!block_is_outside_flow_control_from_block(get<SPIRBlock>(current_function->entry_block), block) ||
+				    block.loop_dominator != SPIRBlock::NoDominator)
+				{
+					statement("return;");
+				}
+			}
+			else
+			{
+				// OpReturnValue can return Undef, so don't emit anything for this case.
+				if (ids.at(block.return_value).get_type() != TypeUndef)
+					statement("return ", to_expression(block.return_value), ";");
+			}
 		}
 		// If this block is the very final block and not called from control flow,
 		// we do not need an explicit return which looks out of place. Just end the function here.
@@ -8464,7 +8502,9 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// but we actually need a return here ...
 		else if (!block_is_outside_flow_control_from_block(get<SPIRBlock>(current_function->entry_block), block) ||
 		         block.loop_dominator != SPIRBlock::NoDominator)
+		{
 			statement("return;");
+		}
 		break;
 
 	case SPIRBlock::Kill:
@@ -8581,4 +8621,9 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 	return semantics & (MemorySemanticsAtomicCounterMemoryMask | MemorySemanticsImageMemoryMask |
 	                    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
 	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
+}
+
+void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
+{
+	statement(lhs, " = ", to_expression(rhs_id), ";");
 }

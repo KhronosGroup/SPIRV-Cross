@@ -72,6 +72,7 @@ string CompilerMSL::compile()
 	backend.use_typed_initializer_list = true;
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
+	backend.can_return_array = false;
 
 	replace_illegal_names();
 
@@ -913,10 +914,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplArrayCopy:
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
 			          "assignment. ");
-			statement("template<typename T>");
-			statement("void spvArrayCopy(thread T* dst, thread const T* src, uint count)");
+			statement("template<typename T, uint N>");
+			statement("void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])");
 			begin_scope();
-			statement("for (uint i = 0; i < count; *dst++ = *src++, i++);");
+			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
 			end_scope();
 			statement("");
 			break;
@@ -1743,6 +1744,15 @@ bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t i
 	return true;
 }
 
+void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
+{
+	// Assignment from an array initializer is fine.
+	if (ids[rhs_id].get_type() != TypeConstant)
+		statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
+	else
+		statement(lhs, " = ", to_expression(rhs_id), ";");
+}
+
 // Since MSL does not allow arrays to be copied via simple variable assignment,
 // if the LHS and RHS represent an assignment of an entire array, it must be
 // implemented by calling an array copy function.
@@ -1763,7 +1773,7 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	statement("spvArrayCopy(", to_expression(id_lhs), ", ", to_expression(id_rhs), ", ", to_array_size(type, 0), ");");
+	emit_array_copy(to_expression(id_lhs), id_rhs);
 	register_write(id_lhs);
 
 	return true;
@@ -1949,11 +1959,30 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	processing_entry_point = (func.self == entry_point);
 
 	auto &type = get<SPIRType>(func.return_type);
-	decl += func_type_decl(type);
-	decl += " ";
-	decl += to_name(func.self);
+
+	if (type.array.empty())
+	{
+		decl += func_type_decl(type);
+		decl += " ";
+		decl += to_name(func.self);
+	}
+	else
+	{
+		// We cannot return arrays in MSL, so "return" through an out variable.
+		decl = "void ";
+	}
 
 	decl += "(";
+
+	if (!type.array.empty())
+	{
+		// Fake arrays returns by writing to an out array instead.
+		decl += type_to_glsl(type);
+		decl += " (&SPIRV_Cross_return_value)";
+		decl += type_to_array_glsl(type);
+		if (!func.arguments.empty())
+			decl += ", ";
+	}
 
 	if (processing_entry_point)
 	{
@@ -3521,6 +3550,15 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	{
 	case OpFMod:
 		return SPVFuncImplMod;
+
+	case OpFunctionCall:
+	{
+		auto &return_type = compiler.get<SPIRType>(args[0]);
+		if (!return_type.array.empty())
+			return SPVFuncImplArrayCopy;
+		else
+			return SPVFuncImplNone;
+	}
 
 	case OpStore:
 	{

@@ -1663,11 +1663,17 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 	string decl;
 
 	auto &type = get<SPIRType>(func.return_type);
-	decl += flags_to_precision_qualifiers_glsl(type, return_flags);
-	decl += type_to_glsl(type);
-	if (!type.array.empty())
-		SPIRV_CROSS_THROW("Returning arrays from functions not possible in HLSL.");
-	decl += " ";
+	if (type.array.empty())
+	{
+		decl += flags_to_precision_qualifiers_glsl(type, return_flags);
+		decl += type_to_glsl(type);
+		decl += " ";
+	}
+	else
+	{
+		// We cannot return arrays in HLSL, so "return" through an out variable.
+		decl = "void ";
+	}
 
 	if (func.self == entry_point)
 	{
@@ -1685,6 +1691,19 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 		decl += to_name(func.self);
 
 	decl += "(";
+
+	if (!type.array.empty())
+	{
+		// Fake array returns by writing to an out array instead.
+		decl += "out ";
+		decl += type_to_glsl(type);
+		decl += " ";
+		decl += "SPIRV_Cross_return_value";
+		decl += type_to_array_glsl(type);
+		if (!func.arguments.empty())
+			decl += ", ";
+	}
+
 	for (auto &arg : func.arguments)
 	{
 		// Might change the variable name if it already exists in this function.
@@ -3804,6 +3823,7 @@ string CompilerHLSL::compile()
 	backend.can_swizzle_scalar = true;
 	backend.can_declare_struct_inline = false;
 	backend.can_declare_arrays_inline = false;
+	backend.can_return_array = false;
 
 	update_active_builtins();
 	analyze_sampler_comparison_states();
