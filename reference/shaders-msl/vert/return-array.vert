@@ -23,12 +23,12 @@ void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])
     for (uint i = 0; i < N; dst[i] = src[i], i++);
 }
 
-void (float4 (&SPIRV_Cross_return_value)[2])
+void test(float4 (&SPIRV_Cross_return_value)[2])
 {
     SPIRV_Cross_return_value = {float4(10.0), float4(20.0)};
 }
 
-void (float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)
+void test2(float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)
 {
     float4 foobar[2];
     foobar[0] = vInput0;

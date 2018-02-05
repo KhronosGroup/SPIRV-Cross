@@ -1963,15 +1963,15 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	if (type.array.empty())
 	{
 		decl += func_type_decl(type);
-		decl += " ";
-		decl += to_name(func.self);
 	}
 	else
 	{
 		// We cannot return arrays in MSL, so "return" through an out variable.
-		decl = "void ";
+		decl = "void";
 	}
 
+	decl += " ";
+	decl += to_name(func.self);
 	decl += "(";
 
 	if (!type.array.empty())
