@@ -7645,6 +7645,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_f
 	auto &type = get<SPIRType>(func.return_type);
 	decl += flags_to_precision_qualifiers_glsl(type, return_flags);
 	decl += type_to_glsl(type);
+	decl += type_to_array_glsl(type);
 	decl += " ";
 
 	if (func.self == entry_point)

@@ -2595,7 +2595,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 {
 	auto &execution = get_entry_point();
 	// The regular function return type. If not processing the entry point function, that's all we need
-	string return_type = type_to_glsl(type);
+	string return_type = type_to_glsl(type) + type_to_array_glsl(type);
 	if (!processing_entry_point)
 		return return_type;
 
@@ -2604,7 +2604,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	{
 		auto &so_var = get<SPIRVariable>(stage_out_var_id);
 		auto &so_type = get<SPIRType>(so_var.basetype);
-		return_type = type_to_glsl(so_type);
+		return_type = type_to_glsl(so_type) + type_to_array_glsl(type);
 	}
 
 	// Prepend a entry type, based on the execution model
