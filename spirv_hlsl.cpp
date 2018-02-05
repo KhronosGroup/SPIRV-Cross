@@ -588,6 +588,10 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_GroupID";
 			break;
 
+		case BuiltInNumWorkgroups:
+			// Handled specially.
+			break;
+
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 			break;
@@ -772,6 +776,15 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 		return "gl_VertexID";
 	case BuiltInInstanceId:
 		return "gl_InstanceID";
+	case BuiltInNumWorkgroups:
+	{
+		if (!num_workgroups_builtin)
+			SPIRV_CROSS_THROW("NumWorkgroups builtin is used, but remap_num_workgroups_builtin() was not called. Cannot emit code for this builtin.");
+
+		auto &var = get<SPIRVariable>(num_workgroups_builtin);
+		auto &type = get<SPIRType>(var.basetype);
+		return sanitize_underscores(join(to_name(num_workgroups_builtin), "_", get_member_name(type.self, 0)));
+	}
 	default:
 		return CompilerGLSL::builtin_to_glsl(builtin, storage);
 	}
@@ -825,6 +838,10 @@ void CompilerHLSL::emit_builtin_variables()
 
 		case BuiltInLocalInvocationIndex:
 			type = "uint";
+			break;
+
+		case BuiltInNumWorkgroups:
+			// Handled specially.
 			break;
 
 		default:
@@ -1106,7 +1123,7 @@ void CompilerHLSL::emit_resources()
 		return name1.compare(name2) < 0;
 	};
 
-	if (!input_variables.empty() || active_input_builtins)
+	if (!input_variables.empty() || (active_input_builtins & ~(1ull << BuiltInNumWorkgroups)))
 	{
 		require_input = true;
 		statement("struct SPIRV_Cross_Input");
@@ -1737,6 +1754,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		case BuiltInInstanceIndex:
 			// D3D semantics are uint, but shader wants int.
 			statement(builtin, " = int(stage_input.", builtin, ");");
+			break;
+
+		case BuiltInNumWorkgroups:
+			// Handled specially.
 			break;
 
 		default:
@@ -3657,6 +3678,50 @@ string CompilerHLSL::compile(std::vector<HLSLVertexAttributeRemap> vertex_attrib
 {
 	remap_vertex_attributes = move(vertex_attributes);
 	return compile();
+}
+
+uint32_t CompilerHLSL::remap_num_workgroups_builtin()
+{
+	update_active_builtins();
+	if ((active_input_builtins & (1ull << BuiltInNumWorkgroups)) == 0)
+		return 0;
+
+	// Create a new, fake UBO.
+	uint32_t offset = increase_bound_by(4);
+
+	uint32_t uint_type_id = offset;
+	uint32_t block_type_id = offset + 1;
+	uint32_t block_pointer_type_id = offset + 2;
+	uint32_t variable_id = offset + 3;
+
+	SPIRType uint_type;
+	uint_type.basetype = SPIRType::UInt;
+	uint_type.vecsize = 3;
+	uint_type.columns = 1;
+	set<SPIRType>(uint_type_id, uint_type);
+
+	SPIRType block_type;
+	block_type.basetype = SPIRType::Struct;
+	block_type.member_types.push_back(uint_type_id);
+	set<SPIRType>(block_type_id, block_type);
+	set_decoration(block_type_id, DecorationBlock);
+	set_member_name(block_type_id, 0, "count");
+	set_member_decoration(block_type_id, 0, DecorationOffset, 0);
+
+	SPIRType block_pointer_type = block_type;
+	block_pointer_type.pointer = true;
+	block_pointer_type.storage = StorageClassUniform;
+	block_pointer_type.parent_type = block_type_id;
+	auto &ptr_type = set<SPIRType>(block_pointer_type_id, block_pointer_type);
+
+	// Preserve self.
+	ptr_type.self = block_type_id;
+
+	set<SPIRVariable>(variable_id, block_pointer_type_id, StorageClassUniform);
+	meta[variable_id].decoration.alias = "SPIRV_Cross_NumWorkgroups";
+
+	num_workgroups_builtin = variable_id;
+	return variable_id;
 }
 
 string CompilerHLSL::compile()
