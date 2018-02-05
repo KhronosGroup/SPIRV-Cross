@@ -68,6 +68,18 @@ public:
 	std::string compile(std::vector<HLSLVertexAttributeRemap> vertex_attributes);
 	std::string compile() override;
 
+	// This is a special HLSL workaround for the NumWorkGroups builtin.
+	// This does not exist in HLSL, so the calling application must create a dummy cbuffer in
+	// which the application will store this builtin.
+	// The cbuffer layout will be:
+	// cbuffer SPIRV_Cross_NumWorkgroups : register(b#, space#) { uint3 SPIRV_Cross_NumWorkgroups_count; };
+	// This must be called before compile().
+	// The function returns 0 if NumWorkGroups builtin is not statically used in the shader from the current entry point.
+	// If non-zero, this returns the variable ID of a cbuffer which corresponds to
+	// the cbuffer declared above. By default, no binding or descriptor set decoration is set,
+	// so the calling application should declare explicit bindings on this ID before calling compile().
+	uint32_t remap_num_workgroups_builtin();
+
 private:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string image_type_hlsl(const SPIRType &type);
@@ -159,6 +171,8 @@ private:
 
 	void emit_io_block(const SPIRVariable &var);
 	std::string to_semantic(uint32_t vertex_location);
+
+	uint32_t num_workgroups_builtin = 0;
 };
 }
 

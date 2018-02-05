@@ -887,6 +887,17 @@ static int main_inner(int argc, char *argv[])
 		}
 	}
 
+	if (args.hlsl)
+	{
+		auto *hlsl_compiler = static_cast<CompilerHLSL *>(compiler.get());
+		uint32_t new_builtin = hlsl_compiler->remap_num_workgroups_builtin();
+		if (new_builtin)
+		{
+			hlsl_compiler->set_decoration(new_builtin, DecorationDescriptorSet, 0);
+			hlsl_compiler->set_decoration(new_builtin, DecorationBinding, 0);
+		}
+	}
+
 	string glsl;
 	for (uint32_t i = 0; i < args.iterations; i++)
 	{
