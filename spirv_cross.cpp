@@ -3369,7 +3369,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 
 	// Analyze if there are parameters which need to be implicitly preserved with an "in" qualifier.
 	this->analyze_parameter_preservation(entry, cfg, handler.accessed_variables_to_block,
-	                               handler.complete_write_variables_to_block);
+	                                     handler.complete_write_variables_to_block);
 
 	unordered_map<uint32_t, uint32_t> potential_loop_variables;
 

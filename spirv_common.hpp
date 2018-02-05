@@ -726,10 +726,10 @@ struct SPIRConstant : IVariant
 		uint32_t id[4];
 		uint32_t vecsize = 1;
 
+		// Workaround for MSVC 2013, initializing an array breaks.
 		ConstantVector()
 		{
-			unsigned i;
-			for (i = 0; i < 4; i++)
+			for (unsigned i = 0; i < 4; i++)
 				id[i] = 0;
 		}
 	};
@@ -741,11 +741,11 @@ struct SPIRConstant : IVariant
 		uint32_t id[4];
 		uint32_t columns = 1;
 
+		// Workaround for MSVC 2013, initializing an array breaks.
 		ConstantMatrix()
 		{
-                   unsigned i;
-                   for (i = 0; i < 4; i++)
-                      id[i] = 0;
+			for (unsigned i = 0; i < 4; i++)
+				id[i] = 0;
 		}
 	};
 
