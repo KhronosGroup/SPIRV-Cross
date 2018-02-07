@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_GLSL_HPP
 
 #include "spirv_cross.hpp"
+#include <limits>
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
