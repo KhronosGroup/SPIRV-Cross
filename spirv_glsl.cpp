@@ -1040,7 +1040,8 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 	return size;
 }
 
-bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing)
+bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing,
+                                              uint32_t start_offset, uint32_t end_offset)
 {
 	// This is very tricky and error prone, but try to be exhaustive and correct here.
 	// SPIR-V doesn't directly say if we're using std430 or std140.
@@ -1079,6 +1080,10 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 		uint32_t alignment = max(packed_alignment, pad_alignment);
 		offset = (offset + alignment - 1) & ~(alignment - 1);
 
+		// Field is not in the specified range anymore and we can ignore any further fields.
+		if (offset >= end_offset)
+			break;
+
 		// The next member following a struct member is aligned to the base alignment of the struct that came before.
 		// GL 4.5 spec, 7.6.2.2.
 		if (memb_type.basetype == SPIRType::Struct)
@@ -1086,26 +1091,30 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 		else
 			pad_alignment = 1;
 
-		// We only care about offsets in std140, std430, etc ...
-		// For EnhancedLayout variants, we have the flexibility to choose our own offsets.
-		if (!packing_has_flexible_offset(packing))
+		// Only care about packing if we are in the given range
+		if (offset >= start_offset)
 		{
-			uint32_t actual_offset = type_struct_member_offset(type, i);
-			if (actual_offset != offset) // This cannot be the packing we're looking for.
+			// We only care about offsets in std140, std430, etc ...
+			// For EnhancedLayout variants, we have the flexibility to choose our own offsets.
+			if (!packing_has_flexible_offset(packing))
+			{
+				uint32_t actual_offset = type_struct_member_offset(type, i);
+				if (actual_offset != offset) // This cannot be the packing we're looking for.
+					return false;
+			}
+
+			// Verify array stride rules.
+			if (!memb_type.array.empty() && type_to_packed_array_stride(memb_type, member_flags, packing) !=
+			                                    type_struct_member_array_stride(type, i))
+				return false;
+
+			// Verify that sub-structs also follow packing rules.
+			// We cannot use enhanced layouts on substructs, so they better be up to spec.
+			auto substruct_packing = packing_to_substruct_packing(packing);
+
+			if (!memb_type.member_types.empty() && !buffer_is_packing_standard(memb_type, substruct_packing))
 				return false;
 		}
-
-		// Verify array stride rules.
-		if (!memb_type.array.empty() &&
-		    type_to_packed_array_stride(memb_type, member_flags, packing) != type_struct_member_array_stride(type, i))
-			return false;
-
-		// Verify that sub-structs also follow packing rules.
-		// We cannot use enhanced layouts on substructs, so they better be up to spec.
-		auto substruct_packing = packing_to_substruct_packing(packing);
-
-		if (!memb_type.member_types.empty() && !buffer_is_packing_standard(memb_type, substruct_packing))
-			return false;
 
 		// Bump size.
 		offset += packed_size;
@@ -7066,7 +7075,7 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uin
 // Emit a structure member. Subclasses may override to modify output,
 // or to dynamically add a padding member if needed.
 void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
-                                      const string &qualifier)
+                                      const string &qualifier, uint32_t)
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 

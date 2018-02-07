@@ -187,7 +187,7 @@ protected:
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_fixup() override;
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
-	                        const std::string &qualifier = "") override;
+	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
