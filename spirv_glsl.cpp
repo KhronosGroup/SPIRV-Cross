@@ -7891,7 +7891,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 				// so just use "self" here.
 				loop_dominator = from;
 			}
-			else if (from_block.loop_dominator != -1u)
+			else if (from_block.loop_dominator != SPIRBlock::NoDominator)
 			{
 				loop_dominator = from_block.loop_dominator;
 			}
