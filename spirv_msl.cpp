@@ -915,8 +915,16 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplArrayCopy:
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
 			          "assignment.");
-			statement("template<typename T, typename U, uint N>");
-			statement("void spvArrayCopy(thread T (&dst)[N], U (&src)[N])");
+			statement("template<typename T, uint N>");
+			statement("void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])");
+			begin_scope();
+			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
+			end_scope();
+			statement("");
+
+			statement("// An overload for constant arrays.");
+			statement("template<typename T, uint N>");
+			statement("void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])");
 			begin_scope();
 			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
 			end_scope();
@@ -1777,7 +1785,10 @@ bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t i
 void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 {
 	// Assignment from an array initializer is fine.
-	statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
+	if (ids[rhs_id].get_type() == TypeConstant)
+		statement("spvArrayCopyConstant(", lhs, ", ", to_expression(rhs_id), ");");
+	else
+		statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
 }
 
 // Since MSL does not allow arrays to be copied via simple variable assignment,

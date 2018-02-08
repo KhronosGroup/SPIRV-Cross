@@ -28,8 +28,15 @@ struct main0_out
 };
 
 // Implementation of an array copy function to cover GLSL's ability to copy an array via assignment.
-template<typename T, typename U, uint N>
-void spvArrayCopy(thread T (&dst)[N], U (&src)[N])
+template<typename T, uint N>
+void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; dst[i] = src[i], i++);
+}
+
+// An overload for constant arrays.
+template<typename T, uint N>
+void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])
 {
     for (uint i = 0; i < N; dst[i] = src[i], i++);
 }
