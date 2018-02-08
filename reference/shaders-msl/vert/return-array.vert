@@ -5,6 +5,8 @@
 
 using namespace metal;
 
+constant float4 _20[2] = {float4(10.0), float4(20.0)};
+
 struct main0_in
 {
     float4 vInput1 [[attribute(1)]];
@@ -16,7 +18,7 @@ struct main0_out
     float4 gl_Position [[position]];
 };
 
-// Implementation of an array copy function to cover GLSL's ability to copy an array via assignment. 
+// Implementation of an array copy function to cover GLSL's ability to copy an array via assignment.
 template<typename T, uint N>
 void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])
 {
@@ -25,7 +27,7 @@ void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])
 
 void test(thread float4 (&SPIRV_Cross_return_value)[2])
 {
-    SPIRV_Cross_return_value = {float4(10.0), float4(20.0)};
+    spvArrayCopy(SPIRV_Cross_return_value, _20);
 }
 
 void test2(thread float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)

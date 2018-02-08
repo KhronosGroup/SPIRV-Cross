@@ -72,6 +72,7 @@ string CompilerMSL::compile()
 	backend.use_typed_initializer_list = true;
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
+	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
 
 	replace_illegal_names();
@@ -913,7 +914,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplArrayCopy:
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
-			          "assignment. ");
+			          "assignment.");
 			statement("template<typename T, uint N>");
 			statement("void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])");
 			begin_scope();
@@ -1135,6 +1136,34 @@ void CompilerMSL::declare_undefined_values()
 		statement("");
 }
 
+void CompilerMSL::declare_constant_arrays()
+{
+	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
+	// global constants directly, so we are able to use constants as variable expressions.
+	bool emitted = false;
+
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (c.specialization)
+				continue;
+
+			auto &type = get<SPIRType>(c.constant_type);
+			if (!type.array.empty())
+			{
+				auto name = to_name(c.self);
+				statement("constant ", variable_decl(type, name), " = ", constant_expression(c), ";");
+				emitted = true;
+			}
+		}
+	}
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerMSL::emit_resources()
 {
 	// Output non-interface structs. These include local function structs
@@ -1171,6 +1200,7 @@ void CompilerMSL::emit_resources()
 		}
 	}
 
+	declare_constant_arrays();
 	declare_undefined_values();
 
 	// Output interface structs.
@@ -1747,10 +1777,7 @@ bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t i
 void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 {
 	// Assignment from an array initializer is fine.
-	if (ids[rhs_id].get_type() != TypeConstant)
-		statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
-	else
-		statement(lhs, " = ", to_expression(rhs_id), ";");
+	statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
 }
 
 // Since MSL does not allow arrays to be copied via simple variable assignment,
@@ -1759,14 +1786,22 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 // Returns whether the struct assignment was emitted.
 bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 {
-	// Assignment from an array initializer is fine.
-	if (ids[id_rhs].get_type() == TypeConstant)
-		return false;
-
 	// We only care about assignments of an entire array
 	auto &type = expression_type(id_rhs);
 	if (type.array.size() == 0)
 		return false;
+
+	auto *var = maybe_get<SPIRVariable>(id_lhs);
+	if (ids[id_rhs].get_type() == TypeConstant && var && var->deferred_declaration)
+	{
+		// Special case, if we end up declaring a variable when assigning the constant array,
+		// we can avoid the copy by directly assigning the constant expression.
+		// This is likely necessary to be able to use a variable as a true look-up table, as it is unlikely
+		// the compiler will be able to optimize the spvArrayCopy() into a constant LUT.
+		// After a variable has been declared, we can no longer assign constant arrays in MSL unfortunately.
+		statement(to_expression(id_lhs), " = ", constant_expression(get<SPIRConstant>(id_rhs)), ";");
+		return true;
+	}
 
 	// Ensure the LHS variable has been declared
 	auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
@@ -3566,11 +3601,24 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		// Get the result type of the RHS. Since this is run as a pre-processing stage,
 		// we must extract the result type directly from the Instruction, rather than the ID.
 		uint32_t id_rhs = args[1];
-		uint32_t type_id_rhs = result_types[id_rhs];
-		if ((compiler.ids[id_rhs].get_type() != TypeConstant) && type_id_rhs &&
-		    compiler.is_array(compiler.get<SPIRType>(type_id_rhs)))
-			return SPVFuncImplArrayCopy;
 
+		const SPIRType *type = nullptr;
+		if (compiler.ids[id_rhs].get_type() != TypeNone)
+		{
+			// Could be a constant, or similar.
+			type = &compiler.expression_type(id_rhs);
+		}
+		else
+		{
+			// Or ... an expression.
+			if (result_types[id_rhs] != 0)
+				type = &compiler.get<SPIRType>(result_types[id_rhs]);
+		}
+
+		if (type && compiler.is_array(*type))
+			return SPVFuncImplArrayCopy;
+		else
+			return SPVFuncImplNone;
 		break;
 	}
 
