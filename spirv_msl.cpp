@@ -915,8 +915,8 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplArrayCopy:
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
 			          "assignment.");
-			statement("template<typename T, uint N>");
-			statement("void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])");
+			statement("template<typename T, typename U, uint N>");
+			statement("void spvArrayCopy(thread T (&dst)[N], U (&src)[N])");
 			begin_scope();
 			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
 			end_scope();
