@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <assert.h>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -69,6 +70,7 @@ void CompilerMSL::build_implicit_builtins()
 			    meta[var.self].decoration.builtin &&
 			    meta[var.self].decoration.builtin_type == BuiltInFragCoord)
 			{
+				builtin_frag_coord_id = var.self;
 				has_frag_coord = true;
 				break;
 			}
@@ -93,10 +95,11 @@ void CompilerMSL::build_implicit_builtins()
 			vec4_type_ptr.parent_type = type_id;
 			vec4_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
-			ptr_type.self = offset;
+			ptr_type.self = type_id;
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInFragCoord);
+			builtin_frag_coord_id = var_id;
 		}
 	}
 }
@@ -123,6 +126,7 @@ string CompilerMSL::compile()
 	backend.flexible_member_array_supported = false;
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
+	backend.boolean_mix_support = false;
 
 	replace_illegal_names();
 
@@ -331,6 +335,14 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+
+				auto &type = get<SPIRType>(ops[0]);
+				if (type.image.dim == DimSubpassData)
+				{
+					// Implicitly reads gl_FragCoord.
+					assert(builtin_frag_coord_id != 0);
+					added_arg_ids.insert(builtin_frag_coord_id);
+				}
 
 				break;
 			}
@@ -3023,7 +3035,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (is_array(type))
 	{
 		decl += " (&";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
@@ -3031,12 +3043,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		decl += "&";
 		decl += " ";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 	}
 	else
 	{
 		decl += " ";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 	}
 
 	return decl;

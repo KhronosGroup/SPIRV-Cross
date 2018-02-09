@@ -268,6 +268,7 @@ protected:
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
 	void emit_array_copy(const std::string &lhs, uint32_t rhs_id) override;
 	void build_implicit_builtins();
+	uint32_t builtin_frag_coord_id = 0;
 
 	Options options;
 	std::set<SPVFuncImpl> spv_function_implementations;
