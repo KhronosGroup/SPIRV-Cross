@@ -3781,10 +3781,10 @@ bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint
 
 void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_images(uint32_t image)
 {
-	// Traverse the variable dependency hierarchy and tag everything in its path with comparison samplers.
+	// Traverse the variable dependency hierarchy and tag everything in its path with comparison images.
 	comparison_images.insert(image);
 	for (auto &img : dependency_hierarchy[image])
-		add_hierarchy_to_comparison_samplers(img);
+		add_hierarchy_to_comparison_images(img);
 }
 
 void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_samplers(uint32_t sampler)
