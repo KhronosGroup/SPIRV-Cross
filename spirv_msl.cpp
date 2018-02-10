@@ -337,7 +337,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(base_id);
 
 				auto &type = get<SPIRType>(ops[0]);
-				if (type.image.dim == DimSubpassData)
+				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
 				{
 					// Implicitly reads gl_FragCoord.
 					assert(builtin_frag_coord_id != 0);
