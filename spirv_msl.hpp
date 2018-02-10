@@ -208,6 +208,7 @@ protected:
 	std::string to_qualifiers_glsl(uint32_t id) override;
 	void replace_illegal_names() override;
 	void declare_undefined_values() override;
+	void declare_constant_arrays();
 	bool is_non_native_row_major_matrix(uint32_t id) override;
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type) override;
@@ -265,6 +266,7 @@ protected:
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
+	void emit_array_copy(const std::string &lhs, uint32_t rhs_id) override;
 
 	Options options;
 	std::set<SPVFuncImpl> spv_function_implementations;
