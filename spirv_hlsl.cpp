@@ -260,8 +260,9 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 		else
 			SPIRV_CROSS_THROW("Sampler buffers must be either sampled or unsampled. Cannot deduce in runtime.");
 	case DimSubpassData:
-		// This should be implemented same way as desktop GL. Fetch on a 2D texture based on int2(SV_Position).
-		SPIRV_CROSS_THROW("Subpass data support is not yet implemented for HLSL"); // TODO
+		dim = "2D";
+		typed_load = false;
+		break;
 	default:
 		SPIRV_CROSS_THROW("Invalid dimension.");
 	}
@@ -2402,7 +2403,7 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		break;
 
 	case SPIRType::Image:
-		if (type.image.sampled == 2)
+		if (type.image.sampled == 2 && type.image.dim != DimSubpassData)
 			space = 'u'; // UAV
 		else
 			space = 't'; // SRV
@@ -3483,21 +3484,52 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		auto *var = maybe_get_backing_variable(ops[2]);
-		auto imgexpr = join(to_expression(ops[2]), "[", to_expression(ops[3]), "]");
+		auto &type = expression_type(ops[2]);
+		bool subpass_data = type.image.dim == DimSubpassData;
+		bool pure = false;
 
-		// The underlying image type in HLSL depends on the image format, unlike GLSL, where all images are "vec4",
-		// except that the underlying type changes how the data is interpreted.
-		if (var)
-			imgexpr = remap_swizzle(get<SPIRType>(result_type),
-			                        image_format_to_components(get<SPIRType>(var->basetype).image.format), imgexpr);
+		string imgexpr;
+
+		if (subpass_data)
+		{
+			if (options.shader_model < 40)
+				SPIRV_CROSS_THROW("Subpass loads are not supported in HLSL shader model 2/3.");
+
+			// Similar to GLSL, implement subpass loads using texelFetch.
+			if (type.image.ms)
+			{
+				uint32_t operands = ops[4];
+				if (operands != ImageOperandsSampleMask || instruction.length != 6)
+					SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+				uint32_t sample = ops[5];
+				imgexpr = join(to_expression(ops[2]), ".Load(int2(gl_FragCoord.xy), ", to_expression(sample), ")");
+			}
+			else
+				imgexpr = join(to_expression(ops[2]), ".Load(int3(int2(gl_FragCoord.xy), 0))");
+
+			pure = true;
+		}
+		else
+		{
+			imgexpr = join(to_expression(ops[2]), "[", to_expression(ops[3]), "]");
+			// The underlying image type in HLSL depends on the image format, unlike GLSL, where all images are "vec4",
+			// except that the underlying type changes how the data is interpreted.
+			if (var && !subpass_data)
+				imgexpr = remap_swizzle(get<SPIRType>(result_type),
+				                        image_format_to_components(get<SPIRType>(var->basetype).image.format), imgexpr);
+		}
 
 		if (var && var->forwardable)
 		{
 			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
 			auto &e = emit_op(result_type, id, imgexpr, forward);
-			e.loaded_from = var->self;
-			if (forward)
-				var->dependees.push_back(id);
+
+			if (!pure)
+			{
+				e.loaded_from = var->self;
+				if (forward)
+					var->dependees.push_back(id);
+			}
 		}
 		else
 			emit_op(result_type, id, imgexpr, false);
@@ -3826,7 +3858,11 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 
 	update_active_builtins();
-	analyze_sampler_comparison_states();
+	analyze_image_and_sampler_usage();
+
+	// Subpass input needs SV_Position.
+	if (need_subpass_input)
+		active_input_builtins |= 1ull << BuiltInFragCoord;
 
 	uint32_t pass_count = 0;
 	do

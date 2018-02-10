@@ -720,8 +720,12 @@ protected:
 	// SPIR-V does not support this distinction, so we must keep track of this information outside the type system.
 	// There might be unrelated IDs found in this set which do not correspond to actual variables.
 	// This set should only be queried for the existence of samplers which are already known to be variables or parameter IDs.
+	// Similar is implemented for images, as well as if subpass inputs are needed.
 	std::unordered_set<uint32_t> comparison_samplers;
-	void analyze_sampler_comparison_states();
+	std::unordered_set<uint32_t> comparison_images;
+	bool need_subpass_input = false;
+
+	void analyze_image_and_sampler_usage();
 	struct CombinedImageSamplerUsageHandler : OpcodeHandler
 	{
 		CombinedImageSamplerUsageHandler(Compiler &compiler_)
@@ -734,9 +738,12 @@ protected:
 		Compiler &compiler;
 
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> dependency_hierarchy;
+		std::unordered_set<uint32_t> comparison_images;
 		std::unordered_set<uint32_t> comparison_samplers;
 
 		void add_hierarchy_to_comparison_samplers(uint32_t sampler);
+		void add_hierarchy_to_comparison_images(uint32_t sampler);
+		bool need_subpass_input = false;
 	};
 
 	void make_constant_null(uint32_t id, uint32_t type);

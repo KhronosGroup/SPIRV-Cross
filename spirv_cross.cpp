@@ -3752,11 +3752,13 @@ bool Compiler::has_active_builtin(BuiltIn builtin, StorageClass storage)
 	return flags & (1ull << builtin);
 }
 
-void Compiler::analyze_sampler_comparison_states()
+void Compiler::analyze_image_and_sampler_usage()
 {
 	CombinedImageSamplerUsageHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 	comparison_samplers = move(handler.comparison_samplers);
+	comparison_images = move(handler.comparison_images);
+	need_subpass_input = handler.need_subpass_input;
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
@@ -3775,6 +3777,14 @@ bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint
 	}
 
 	return true;
+}
+
+void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_images(uint32_t image)
+{
+	// Traverse the variable dependency hierarchy and tag everything in its path with comparison images.
+	comparison_images.insert(image);
+	for (auto &img : dependency_hierarchy[image])
+		add_hierarchy_to_comparison_images(img);
 }
 
 void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_samplers(uint32_t sampler)
@@ -3796,6 +3806,12 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		if (length < 3)
 			return false;
 		dependency_hierarchy[args[1]].insert(args[2]);
+
+		// Ideally defer this to OpImageRead, but then we'd need to track loaded IDs.
+		// If we load an image, we're going to use it and there is little harm in declaring an unused gl_FragCoord.
+		auto &type = compiler.get<SPIRType>(args[0]);
+		if (type.image.dim == DimSubpassData)
+			need_subpass_input = true;
 		break;
 	}
 
@@ -3808,6 +3824,10 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		auto &type = compiler.get<SPIRType>(result_type);
 		if (type.image.depth)
 		{
+			// This image must be a depth image.
+			uint32_t image = args[2];
+			add_hierarchy_to_comparison_images(image);
+
 			// This sampler must be a SamplerComparisionState, and not a regular SamplerState.
 			uint32_t sampler = args[3];
 			add_hierarchy_to_comparison_samplers(sampler);

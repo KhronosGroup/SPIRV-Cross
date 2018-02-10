@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <assert.h>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -52,6 +53,57 @@ CompilerMSL::CompilerMSL(const uint32_t *ir, size_t word_count, MSLVertexAttr *p
 			resource_bindings.push_back(&p_res_bindings[i]);
 }
 
+void CompilerMSL::build_implicit_builtins()
+{
+	if (need_subpass_input)
+	{
+		bool has_frag_coord = false;
+
+		for (auto &id : ids)
+		{
+			if (id.get_type() != TypeVariable)
+				continue;
+
+			auto &var = id.get<SPIRVariable>();
+
+			if (var.storage == StorageClassInput &&
+			    meta[var.self].decoration.builtin &&
+			    meta[var.self].decoration.builtin_type == BuiltInFragCoord)
+			{
+				builtin_frag_coord_id = var.self;
+				has_frag_coord = true;
+				break;
+			}
+		}
+
+		if (!has_frag_coord)
+		{
+			uint32_t offset = increase_bound_by(3);
+			uint32_t type_id = offset;
+			uint32_t type_ptr_id = offset + 1;
+			uint32_t var_id = offset + 2;
+
+			// Create gl_FragCoord.
+			SPIRType vec4_type;
+			vec4_type.basetype = SPIRType::Float;
+			vec4_type.vecsize = 4;
+			set<SPIRType>(type_id, vec4_type);
+
+			SPIRType vec4_type_ptr;
+			vec4_type_ptr = vec4_type;
+			vec4_type_ptr.pointer = true;
+			vec4_type_ptr.parent_type = type_id;
+			vec4_type_ptr.storage = StorageClassInput;
+			auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
+			ptr_type.self = type_id;
+
+			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
+			set_decoration(var_id, DecorationBuiltIn, BuiltInFragCoord);
+			builtin_frag_coord_id = var_id;
+		}
+	}
+}
+
 string CompilerMSL::compile()
 {
 	// Force a classic "C" locale, reverts when function returns
@@ -60,7 +112,7 @@ string CompilerMSL::compile()
 	// Do not deal with GLES-isms like precision, older extensions and such.
 	CompilerGLSL::options.vulkan_semantics = true;
 	CompilerGLSL::options.es = false;
-	CompilerGLSL::options.version = 120;
+	CompilerGLSL::options.version = 450;
 	backend.float_literal_suffix = false;
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
@@ -74,6 +126,7 @@ string CompilerMSL::compile()
 	backend.flexible_member_array_supported = false;
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
+	backend.boolean_mix_support = false;
 
 	replace_illegal_names();
 
@@ -81,6 +134,9 @@ string CompilerMSL::compile()
 	struct_member_padding.clear();
 
 	update_active_builtins();
+	analyze_image_and_sampler_usage();
+	build_implicit_builtins();
+
 	fixup_image_load_store_access();
 
 	set_enabled_interface_variables(get_active_interface_variables());
@@ -273,11 +329,20 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			switch (op)
 			{
 			case OpLoad:
+			case OpInBoundsAccessChain:
 			case OpAccessChain:
 			{
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+
+				auto &type = get<SPIRType>(ops[0]);
+				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+				{
+					// Implicitly reads gl_FragCoord.
+					assert(builtin_frag_coord_id != 0);
+					added_arg_ids.insert(builtin_frag_coord_id);
+				}
 
 				break;
 			}
@@ -1462,11 +1527,15 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	{
 		// Mark that this shader reads from this image
 		uint32_t img_id = ops[2];
-		auto *p_var = maybe_get_backing_variable(img_id);
-		if (p_var && has_decoration(p_var->self, DecorationNonReadable))
+		auto &type = expression_type(img_id);
+		if (type.image.dim != DimSubpassData)
 		{
-			unset_decoration(p_var->self, DecorationNonReadable);
-			force_recompile = true;
+			auto *p_var = maybe_get_backing_variable(img_id);
+			if (p_var && has_decoration(p_var->self, DecorationNonReadable))
+			{
+				unset_decoration(p_var->self, DecorationNonReadable);
+				force_recompile = true;
+			}
 		}
 
 		emit_texture_op(instruction);
@@ -2139,6 +2208,13 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		alt_coord = ".y";
 
+		break;
+
+	case DimSubpassData:
+		if (imgtype.image.ms)
+			tex_coords = "uint2(gl_FragCoord.xy)";
+		else
+			tex_coords = join("uint2(gl_FragCoord.xy), 0");
 		break;
 
 	case Dim2D:
@@ -2959,7 +3035,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (is_array(type))
 	{
 		decl += " (&";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
@@ -2967,12 +3043,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		decl += "&";
 		decl += " ";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 	}
 	else
 	{
 		decl += " ";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 	}
 
 	return decl;
@@ -3161,8 +3237,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	// Bypass pointers because we need the real image struct
 	auto &img_type = get<SPIRType>(type.self).image;
+	bool shadow_image = comparison_images.count(id) != 0;
 
-	if (img_type.depth)
+	if (img_type.depth || shadow_image)
 	{
 		switch (img_type.dim)
 		{
@@ -3192,6 +3269,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			break;
 		case DimBuffer:
 		case Dim2D:
+		case DimSubpassData:
 			img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
 			break;
 		case Dim3D:
@@ -3213,7 +3291,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	// For unsampled images, append the sample/read/write access qualifier.
 	// For kernel images, the access qualifier my be supplied directly by SPIR-V.
 	// Otherwise it may be set based on whether the image is read from or written to within the shader.
-	if (type.basetype == SPIRType::Image && type.image.sampled == 2)
+	if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.dim != DimSubpassData)
 	{
 		switch (img_type.access)
 		{

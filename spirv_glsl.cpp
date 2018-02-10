@@ -376,7 +376,7 @@ string CompilerGLSL::compile()
 	find_static_extensions();
 	fixup_image_load_store_access();
 	update_active_builtins();
-	analyze_sampler_comparison_states();
+	analyze_image_and_sampler_usage();
 
 	uint32_t pass_count = 0;
 	do
@@ -7419,7 +7419,9 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 			require_extension("GL_EXT_texture_array");
 		res += "Array";
 	}
-	if (type.image.depth)
+
+	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
+	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) && type.image.depth)
 		res += "Shadow";
 
 	return res;
