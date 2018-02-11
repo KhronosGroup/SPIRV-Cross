@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <assert.h>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -52,6 +53,57 @@ CompilerMSL::CompilerMSL(const uint32_t *ir, size_t word_count, MSLVertexAttr *p
 			resource_bindings.push_back(&p_res_bindings[i]);
 }
 
+void CompilerMSL::build_implicit_builtins()
+{
+	if (need_subpass_input)
+	{
+		bool has_frag_coord = false;
+
+		for (auto &id : ids)
+		{
+			if (id.get_type() != TypeVariable)
+				continue;
+
+			auto &var = id.get<SPIRVariable>();
+
+			if (var.storage == StorageClassInput &&
+			    meta[var.self].decoration.builtin &&
+			    meta[var.self].decoration.builtin_type == BuiltInFragCoord)
+			{
+				builtin_frag_coord_id = var.self;
+				has_frag_coord = true;
+				break;
+			}
+		}
+
+		if (!has_frag_coord)
+		{
+			uint32_t offset = increase_bound_by(3);
+			uint32_t type_id = offset;
+			uint32_t type_ptr_id = offset + 1;
+			uint32_t var_id = offset + 2;
+
+			// Create gl_FragCoord.
+			SPIRType vec4_type;
+			vec4_type.basetype = SPIRType::Float;
+			vec4_type.vecsize = 4;
+			set<SPIRType>(type_id, vec4_type);
+
+			SPIRType vec4_type_ptr;
+			vec4_type_ptr = vec4_type;
+			vec4_type_ptr.pointer = true;
+			vec4_type_ptr.parent_type = type_id;
+			vec4_type_ptr.storage = StorageClassInput;
+			auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
+			ptr_type.self = type_id;
+
+			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
+			set_decoration(var_id, DecorationBuiltIn, BuiltInFragCoord);
+			builtin_frag_coord_id = var_id;
+		}
+	}
+}
+
 string CompilerMSL::compile()
 {
 	// Force a classic "C" locale, reverts when function returns
@@ -60,7 +112,7 @@ string CompilerMSL::compile()
 	// Do not deal with GLES-isms like precision, older extensions and such.
 	CompilerGLSL::options.vulkan_semantics = true;
 	CompilerGLSL::options.es = false;
-	CompilerGLSL::options.version = 120;
+	CompilerGLSL::options.version = 450;
 	backend.float_literal_suffix = false;
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
@@ -72,6 +124,9 @@ string CompilerMSL::compile()
 	backend.use_typed_initializer_list = true;
 	backend.native_row_major_matrix = false;
 	backend.flexible_member_array_supported = false;
+	backend.can_declare_arrays_inline = false;
+	backend.can_return_array = false;
+	backend.boolean_mix_support = false;
 
 	replace_illegal_names();
 
@@ -79,6 +134,9 @@ string CompilerMSL::compile()
 	struct_member_padding.clear();
 
 	update_active_builtins();
+	analyze_image_and_sampler_usage();
+	build_implicit_builtins();
+
 	fixup_image_load_store_access();
 
 	set_enabled_interface_variables(get_active_interface_variables());
@@ -271,11 +329,20 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			switch (op)
 			{
 			case OpLoad:
+			case OpInBoundsAccessChain:
 			case OpAccessChain:
 			{
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+
+				auto &type = get<SPIRType>(ops[0]);
+				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+				{
+					// Implicitly reads gl_FragCoord.
+					assert(builtin_frag_coord_id != 0);
+					added_arg_ids.insert(builtin_frag_coord_id);
+				}
 
 				break;
 			}
@@ -941,11 +1008,19 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplArrayCopy:
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
-			          "assignment. ");
-			statement("template<typename T>");
-			statement("void spvArrayCopy(thread T* dst, thread const T* src, uint count)");
+			          "assignment.");
+			statement("template<typename T, uint N>");
+			statement("void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])");
 			begin_scope();
-			statement("for (uint i = 0; i < count; *dst++ = *src++, i++);");
+			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
+			end_scope();
+			statement("");
+
+			statement("// An overload for constant arrays.");
+			statement("template<typename T, uint N>");
+			statement("void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])");
+			begin_scope();
+			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
 			end_scope();
 			statement("");
 			break;
@@ -1163,6 +1238,34 @@ void CompilerMSL::declare_undefined_values()
 		statement("");
 }
 
+void CompilerMSL::declare_constant_arrays()
+{
+	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
+	// global constants directly, so we are able to use constants as variable expressions.
+	bool emitted = false;
+
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeConstant)
+		{
+			auto &c = id.get<SPIRConstant>();
+			if (c.specialization)
+				continue;
+
+			auto &type = get<SPIRType>(c.constant_type);
+			if (!type.array.empty())
+			{
+				auto name = to_name(c.self);
+				statement("constant ", variable_decl(type, name), " = ", constant_expression(c), ";");
+				emitted = true;
+			}
+		}
+	}
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerMSL::emit_resources()
 {
 	// Output non-interface structs. These include local function structs
@@ -1199,6 +1302,7 @@ void CompilerMSL::emit_resources()
 		}
 	}
 
+	declare_constant_arrays();
 	declare_undefined_values();
 
 	// Output interface structs.
@@ -1452,11 +1556,15 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	{
 		// Mark that this shader reads from this image
 		uint32_t img_id = ops[2];
-		auto *p_var = maybe_get_backing_variable(img_id);
-		if (p_var && has_decoration(p_var->self, DecorationNonReadable))
+		auto &type = expression_type(img_id);
+		if (type.image.dim != DimSubpassData)
 		{
-			unset_decoration(p_var->self, DecorationNonReadable);
-			force_recompile = true;
+			auto *p_var = maybe_get_backing_variable(img_id);
+			if (p_var && has_decoration(p_var->self, DecorationNonReadable))
+			{
+				unset_decoration(p_var->self, DecorationNonReadable);
+				force_recompile = true;
+			}
 		}
 
 		emit_texture_op(instruction);
@@ -1773,27 +1881,44 @@ bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t i
 	return true;
 }
 
+void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
+{
+	// Assignment from an array initializer is fine.
+	if (ids[rhs_id].get_type() == TypeConstant)
+		statement("spvArrayCopyConstant(", lhs, ", ", to_expression(rhs_id), ");");
+	else
+		statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
+}
+
 // Since MSL does not allow arrays to be copied via simple variable assignment,
 // if the LHS and RHS represent an assignment of an entire array, it must be
 // implemented by calling an array copy function.
 // Returns whether the struct assignment was emitted.
 bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 {
-	// Assignment from an array initializer is fine.
-	if (ids[id_rhs].get_type() == TypeConstant)
-		return false;
-
 	// We only care about assignments of an entire array
 	auto &type = expression_type(id_rhs);
 	if (type.array.size() == 0)
 		return false;
+
+	auto *var = maybe_get<SPIRVariable>(id_lhs);
+	if (ids[id_rhs].get_type() == TypeConstant && var && var->deferred_declaration)
+	{
+		// Special case, if we end up declaring a variable when assigning the constant array,
+		// we can avoid the copy by directly assigning the constant expression.
+		// This is likely necessary to be able to use a variable as a true look-up table, as it is unlikely
+		// the compiler will be able to optimize the spvArrayCopy() into a constant LUT.
+		// After a variable has been declared, we can no longer assign constant arrays in MSL unfortunately.
+		statement(to_expression(id_lhs), " = ", constant_expression(get<SPIRConstant>(id_rhs)), ";");
+		return true;
+	}
 
 	// Ensure the LHS variable has been declared
 	auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	statement("spvArrayCopy(", to_expression(id_lhs), ", ", to_expression(id_rhs), ", ", to_array_size(type, 0), ");");
+	emit_array_copy(to_expression(id_lhs), id_rhs);
 	register_write(id_lhs);
 
 	return true;
@@ -1979,11 +2104,31 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 	processing_entry_point = (func.self == entry_point);
 
 	auto &type = get<SPIRType>(func.return_type);
-	decl += func_type_decl(type);
+
+	if (type.array.empty())
+	{
+		decl += func_type_decl(type);
+	}
+	else
+	{
+		// We cannot return arrays in MSL, so "return" through an out variable.
+		decl = "void";
+	}
+
 	decl += " ";
 	decl += to_name(func.self);
-
 	decl += "(";
+
+	if (!type.array.empty())
+	{
+		// Fake arrays returns by writing to an out array instead.
+		decl += "thread ";
+		decl += type_to_glsl(type);
+		decl += " (&SPIRV_Cross_return_value)";
+		decl += type_to_array_glsl(type);
+		if (!func.arguments.empty())
+			decl += ", ";
+	}
 
 	if (processing_entry_point)
 	{
@@ -2093,6 +2238,13 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		alt_coord = ".y";
 
+		break;
+
+	case DimSubpassData:
+		if (imgtype.image.ms)
+			tex_coords = "uint2(gl_FragCoord.xy)";
+		else
+			tex_coords = join("uint2(gl_FragCoord.xy), 0");
 		break;
 
 	case Dim2D:
@@ -2433,7 +2585,7 @@ void CompilerMSL::emit_fixup()
 
 // Emit a structure member, padding and packing to maintain the correct memeber alignments.
 void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
-                                     const string &qualifier)
+                                     const string &qualifier, uint32_t)
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 
@@ -2650,7 +2802,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 {
 	auto &execution = get_entry_point();
 	// The regular function return type. If not processing the entry point function, that's all we need
-	string return_type = type_to_glsl(type);
+	string return_type = type_to_glsl(type) + type_to_array_glsl(type);
 	if (!processing_entry_point)
 		return return_type;
 
@@ -2659,7 +2811,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	{
 		auto &so_var = get<SPIRVariable>(stage_out_var_id);
 		auto &so_type = get<SPIRType>(so_var.basetype);
-		return_type = type_to_glsl(so_type);
+		return_type = type_to_glsl(so_type) + type_to_array_glsl(type);
 	}
 
 	// Prepend a entry type, based on the execution model
@@ -2938,7 +3090,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (is_array(type))
 	{
 		decl += " (&";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
@@ -2946,12 +3098,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		decl += "&";
 		decl += " ";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 	}
 	else
 	{
 		decl += " ";
-		decl += to_name(var.self);
+		decl += to_expression(var.self);
 	}
 
 	return decl;
@@ -3140,8 +3292,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	// Bypass pointers because we need the real image struct
 	auto &img_type = get<SPIRType>(type.self).image;
+	bool shadow_image = comparison_images.count(id) != 0;
 
-	if (img_type.depth)
+	if (img_type.depth || shadow_image)
 	{
 		switch (img_type.dim)
 		{
@@ -3171,6 +3324,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			break;
 		case DimBuffer:
 		case Dim2D:
+		case DimSubpassData:
 			img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
 			break;
 		case Dim3D:
@@ -3192,7 +3346,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	// For unsampled images, append the sample/read/write access qualifier.
 	// For kernel images, the access qualifier my be supplied directly by SPIR-V.
 	// Otherwise it may be set based on whether the image is read from or written to within the shader.
-	if (type.basetype == SPIRType::Image && type.image.sampled == 2)
+	if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.dim != DimSubpassData)
 	{
 		switch (img_type.access)
 		{
@@ -3555,16 +3709,38 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpFMod:
 		return SPVFuncImplMod;
 
+	case OpFunctionCall:
+	{
+		auto &return_type = compiler.get<SPIRType>(args[0]);
+		if (!return_type.array.empty())
+			return SPVFuncImplArrayCopy;
+		else
+			return SPVFuncImplNone;
+	}
+
 	case OpStore:
 	{
 		// Get the result type of the RHS. Since this is run as a pre-processing stage,
 		// we must extract the result type directly from the Instruction, rather than the ID.
 		uint32_t id_rhs = args[1];
-		uint32_t type_id_rhs = result_types[id_rhs];
-		if ((compiler.ids[id_rhs].get_type() != TypeConstant) && type_id_rhs &&
-		    compiler.is_array(compiler.get<SPIRType>(type_id_rhs)))
-			return SPVFuncImplArrayCopy;
 
+		const SPIRType *type = nullptr;
+		if (compiler.ids[id_rhs].get_type() != TypeNone)
+		{
+			// Could be a constant, or similar.
+			type = &compiler.expression_type(id_rhs);
+		}
+		else
+		{
+			// Or ... an expression.
+			if (result_types[id_rhs] != 0)
+				type = &compiler.get<SPIRType>(result_types[id_rhs]);
+		}
+
+		if (type && compiler.is_array(*type))
+			return SPVFuncImplArrayCopy;
+		else
+			return SPVFuncImplNone;
 		break;
 	}
 
