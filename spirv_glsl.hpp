@@ -298,7 +298,7 @@ protected:
 	virtual bool is_non_native_row_major_matrix(uint32_t id);
 	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
 	bool member_is_packed_type(const SPIRType &type, uint32_t index) const;
-	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type);
+	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, bool is_packed);
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
