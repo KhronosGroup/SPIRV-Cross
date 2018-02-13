@@ -811,29 +811,9 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 	curr_offset = 0;
 	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
 	{
-		// Align current offset to the current member's default alignment.
-		size_t align_mask = get_declared_struct_member_alignment(ib_type, mbr_idx) - 1;
-		curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
+		if (is_member_packable(ib_type, mbr_idx))
+			set_member_decoration(ib_type_id, mbr_idx, DecorationCPacked);
 
-		// Fetch the member offset as declared in the SPIRV.
-		uint32_t mbr_offset = get_member_decoration(ib_type_id, mbr_idx, DecorationOffset);
-		if (curr_offset > mbr_offset)
-		{
-			uint32_t prev_mbr_idx = mbr_idx - 1;
-			if (is_member_packable(ib_type, prev_mbr_idx))
-				set_member_decoration(ib_type_id, prev_mbr_idx, DecorationCPacked);
-		}
-
-		// Increment the current offset to be positioned immediately after the current member.
-		curr_offset = mbr_offset + uint32_t(get_declared_struct_member_size(ib_type, mbr_idx));
-	}
-
-	// Test the alignment of each member, and if a member is positioned farther than its
-	// alignment and the end of the previous member, add a dummy padding member that will
-	// be added before the current member when the delaration of this struct is emitted.
-	curr_offset = 0;
-	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
-	{
 		// Align current offset to the current member's default alignment.
 		size_t align_mask = get_declared_struct_member_alignment(ib_type, mbr_idx) - 1;
 		curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
@@ -858,14 +838,48 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 // variation that is smaller than the unpacked variation of that type.
 bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 {
-	uint32_t mbr_type_id = ib_type.member_types[index];
-	auto &mbr_type = get<SPIRType>(mbr_type_id);
-
-	// 3-element vectors (char3, uchar3, short3, ushort3, int3, uint3, half3, float3)
-	if (mbr_type.vecsize == 3 && mbr_type.columns == 1)
+	// We've already marked it as packable
+	if (has_member_decoration(ib_type.self, index, DecorationCPacked))
 		return true;
 
-	return false;
+	auto &mbr_type = get<SPIRType>(ib_type.member_types[index]);
+
+	// Only 3-element vectors or 3-row matrices need to be packed.
+	if (mbr_type.vecsize != 3)
+		return false;
+
+	// Only row-major matrices need to be packed.
+	if (is_matrix(mbr_type) && !has_member_decoration(ib_type.self, index, DecorationRowMajor))
+		return false;
+
+	uint32_t component_size = mbr_type.width / 8;
+	uint32_t unpacked_mbr_size = component_size * (mbr_type.vecsize + 1) * mbr_type.columns;
+	if (is_array(mbr_type))
+	{
+		// If member is an array, and the array stride is larger than the type needs, don't pack it.
+		// Take into consideration multi-dimentional arrays.
+		uint32_t md_elem_cnt = 1;
+		size_t last_elem_idx = mbr_type.array.size() - 1;
+		for (uint32_t i = 0; i < last_elem_idx; i++)
+			md_elem_cnt *= max(to_array_size_literal(mbr_type, i), 1U);
+
+		uint32_t unpacked_array_stride = unpacked_mbr_size * md_elem_cnt;
+		uint32_t array_stride = type_struct_member_array_stride(ib_type, index);
+		return unpacked_array_stride > array_stride;
+	}
+	else
+	{
+		// Pack if there is not enough space between this member and next.
+		// If last member, only pack if it's a row-major matrix.
+		if (index < ib_type.member_types.size() - 1)
+		{
+			uint32_t mbr_offset_curr = get_member_decoration(ib_type.self, index, DecorationOffset);
+			uint32_t mbr_offset_next = get_member_decoration(ib_type.self, index + 1, DecorationOffset);
+			return unpacked_mbr_size > mbr_offset_next - mbr_offset_curr;
+		}
+		else
+			return is_matrix(mbr_type);
+	}
 }
 
 // Returns a combination of type ID and member index for use as hash key
@@ -902,11 +916,26 @@ void CompilerMSL::emit_header()
 	statement("");
 	statement("using namespace metal;");
 	statement("");
+
+	for (auto &td : typedef_lines)
+		statement(td);
+
+	if (!typedef_lines.empty())
+		statement("");
 }
 
 void CompilerMSL::add_pragma_line(const string &line)
 {
-	pragma_lines.insert(line);
+	auto rslt = pragma_lines.insert(line);
+	if (rslt.second)
+		force_recompile = true;
+}
+
+void CompilerMSL::add_typedef_line(const string &line)
+{
+	auto rslt = typedef_lines.insert(line);
+	if (rslt.second)
+		force_recompile = true;
 }
 
 // Emits any needed custom function bodies.
@@ -1719,11 +1748,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
 	{
-		// If the matrix needs transpose and it is square, just flip the multiply order.
+		// If the matrix needs transpose and it is square or packed, just flip the multiply order.
 		uint32_t mtx_id = ops[opcode == OpMatrixTimesVector ? 2 : 3];
 		auto *e = maybe_get<SPIRExpression>(mtx_id);
 		auto &t = expression_type(mtx_id);
-		if (e && e->need_transpose && t.columns == t.vecsize)
+		bool is_packed = has_decoration(mtx_id, DecorationCPacked);
+		if (e && e->need_transpose && (t.columns == t.vecsize || is_packed))
 		{
 			e->need_transpose = false;
 			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
@@ -2462,8 +2492,13 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 		return false;
 
 	// Generate a function that will swap matrix elements from row-major to column-major.
-	const auto type = expression_type(id);
-	add_convert_row_major_matrix_function(type.columns, type.vecsize);
+	// Packed row-matrix should just use transpose() function.
+	if (!has_decoration(id, DecorationCPacked))
+	{
+		const auto type = expression_type(id);
+		add_convert_row_major_matrix_function(type.columns, type.vecsize);
+	}
+
 	return true;
 }
 
@@ -2475,12 +2510,17 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!(combined_decoration_for_member(type, index) & (1ull << DecorationRowMajor)))
+	if (!has_member_decoration(type.self, index, DecorationRowMajor))
 		return false;
 
 	// Generate a function that will swap matrix elements from row-major to column-major.
-	const auto mbr_type = get<SPIRType>(type.member_types[index]);
-	add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
+	// Packed row-matrix should just use transpose() function.
+	if (!has_member_decoration(type.self, index, DecorationCPacked))
+	{
+		const auto mbr_type = get<SPIRType>(type.member_types[index]);
+		add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
+	}
+
 	return true;
 }
 
@@ -2507,20 +2547,19 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 
 	auto rslt = spv_function_implementations.insert(spv_func);
 	if (rslt.second)
-	{
 		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
-		force_recompile = true;
-	}
 }
 
 // Wraps the expression string in a function call that converts the
 // row_major matrix result of the expression to a column_major matrix.
-string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type)
+string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type, bool is_packed)
 {
 	strip_enclosed_expression(exp_str);
 
 	string func_name;
-	if (exp_type.columns == exp_type.vecsize)
+
+	// Square and packed matrices can just use transpose
+	if (exp_type.columns == exp_type.vecsize || is_packed)
 		func_name = "transpose";
 	else
 		func_name = string("spvConvertFromRowMajor") + to_string(exp_type.columns) + "x" + to_string(exp_type.vecsize);
@@ -2557,7 +2596,23 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 		statement("char pad", to_string(index), "[", to_string(pad_len), "];");
 
 	// If this member is packed, mark it as so.
-	string pack_pfx = member_is_packed_type(type, index) ? "packed_" : "";
+	string pack_pfx = "";
+	if (member_is_packed_type(type, index))
+	{
+		pack_pfx = "packed_";
+
+		// If we're packing a matrix, output an appropriate typedef
+		if (membertype.vecsize > 1 && membertype.columns > 1)
+		{
+			string base_type = membertype.width == 16 ? "half" : "float";
+			string td_line = "typedef ";
+			td_line += base_type + to_string(membertype.vecsize) + "x" + to_string(membertype.columns);
+			td_line += " " + pack_pfx;
+			td_line += base_type + to_string(membertype.columns) + "x" + to_string(membertype.vecsize);
+			td_line += ";";
+			add_typedef_line(td_line);
+		}
+	}
 
 	statement(pack_pfx, type_to_glsl(membertype), " ", qualifier, to_member_name(type, index),
 	          member_attribute_qualifier(type, index), type_to_array_glsl(membertype), ";");
@@ -3523,7 +3578,6 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 // Returns the byte size of a struct member.
 size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
-	auto dec_mask = get_member_decoration_mask(struct_type.self, index);
 	auto &type = get<SPIRType>(struct_type.member_types[index]);
 
 	switch (type.basetype)
@@ -3538,10 +3592,6 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 
 	default:
 	{
-		size_t component_size = type.width / 8;
-		unsigned vecsize = type.vecsize;
-		unsigned columns = type.columns;
-
 		// For arrays, we can use ArrayStride to get an easy check.
 		// Runtime arrays will have zero size so force to min of one.
 		if (!type.array.empty())
@@ -3550,29 +3600,15 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 		if (type.basetype == SPIRType::Struct)
 			return get_declared_struct_size(type);
 
-		if (columns == 1) // An unpacked 3-element vector is the same size as a 4-element vector.
-		{
-			if (!(dec_mask & (1ull << DecorationCPacked)))
-			{
-				if (vecsize == 3)
-					vecsize = 4;
-			}
-		}
-		else // For matrices, a 3-element column is the same size as a 4-element column.
-		{
-			if (dec_mask & (1ull << DecorationColMajor))
-			{
-				if (vecsize == 3)
-					vecsize = 4;
-			}
-			else if (dec_mask & (1ull << DecorationRowMajor))
-			{
-				if (columns == 3)
-					columns = 4;
-			}
-		}
+		uint32_t component_size = type.width / 8;
+		uint32_t vecsize = type.vecsize;
+		uint32_t columns = type.columns;
 
-		return vecsize * columns * component_size;
+		// An unpacked 3-element vector or matrix column is the same memory size as a 4-element.
+		if (vecsize == 3 && !has_member_decoration(struct_type.self, index, DecorationCPacked))
+			vecsize = 4;
+
+		return component_size * vecsize * columns;
 	}
 	}
 }
@@ -3597,16 +3633,13 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 
 	default:
 	{
-		// Alignment of packed type is the same as the underlying component size.
-		// Alignment of unpacked type is the same as the type size (or one matrix column).
+		// Alignment of packed type is the same as the underlying component or column size.
+		// Alignment of unpacked type is the same as the vector size.
+		// Alignment of 3-elements vector is the same as 4-elements (including packed using column).
 		if (member_is_packed_type(struct_type, index))
-			return type.width / 8;
+			return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
 		else
-		{
-			// Divide by array size and colum count. Runtime arrays will have zero size so force to min of one.
-			uint32_t array_size = type.array.empty() ? 1 : max(type.array.back(), 1U);
-			return get_declared_struct_member_size(struct_type, index) / (type.columns * array_size);
-		}
+			return (type.width / 8) * (type.vecsize == 3 ? 4 : type.vecsize);
 	}
 	}
 }

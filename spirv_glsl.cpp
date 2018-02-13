@@ -2247,7 +2247,10 @@ string CompilerGLSL::to_expression(uint32_t id)
 		if (e.base_expression)
 			return to_enclosed_expression(e.base_expression) + e.expression;
 		else if (e.need_transpose)
-			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type));
+		{
+			bool is_packed = has_decoration(id, DecorationCPacked);
+			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), is_packed);
+		}
 		else
 		{
 			if (force_recompile)
@@ -4298,7 +4301,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	bool access_chain_is_arrayed = false;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
-	bool vector_is_packed = false;
+	bool is_packed = false;
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
@@ -4430,7 +4433,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				}
 			}
 
-			vector_is_packed = member_is_packed_type(*type, index);
+			is_packed = member_is_packed_type(*type, index);
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
 		}
@@ -4439,8 +4442,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		{
 			if (row_major_matrix_needs_conversion)
 			{
-				expr = convert_row_major_matrix(expr, *type);
+				expr = convert_row_major_matrix(expr, *type, is_packed);
 				row_major_matrix_needs_conversion = false;
+				is_packed = false;
 			}
 
 			expr += "[";
@@ -4456,10 +4460,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
 		{
-			if (vector_is_packed)
+			if (is_packed)
 			{
 				expr = unpack_expression_type(expr, *type);
-				vector_is_packed = false;
+				is_packed = false;
 			}
 
 			if (index_is_literal)
@@ -4498,7 +4502,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		*need_transpose = row_major_matrix_needs_conversion;
 
 	if (result_is_packed)
-		*result_is_packed = vector_is_packed;
+		*result_is_packed = is_packed;
 
 	return expr;
 }
@@ -4629,7 +4633,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 
 		// Cannot forward transpositions, so resolve them here.
 		if (need_transpose)
-			expr += convert_row_major_matrix(tmp, member_type);
+			expr += convert_row_major_matrix(tmp, member_type, false);
 		else
 			expr += tmp;
 	}
@@ -7080,7 +7084,7 @@ bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index) c
 // row_major matrix result of the expression to a column_major matrix.
 // Base implementation uses the standard library transpose() function.
 // Subclasses may override to use a different function.
-string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType & /*exp_type*/)
+string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType & /*exp_type*/, bool /*is_packed*/)
 {
 	strip_enclosed_expression(exp_str);
 	return join("transpose(", exp_str, ")");

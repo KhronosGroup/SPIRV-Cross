@@ -211,7 +211,7 @@ protected:
 	void declare_constant_arrays();
 	bool is_non_native_row_major_matrix(uint32_t id) override;
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
-	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type) override;
+	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, bool is_packed) override;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
@@ -265,6 +265,7 @@ protected:
 	                         bool op1_is_pointer = false, uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
+	void add_typedef_line(const std::string &line);
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
 	void emit_array_copy(const std::string &lhs, uint32_t rhs_id) override;
 	void build_implicit_builtins();
@@ -276,6 +277,7 @@ protected:
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;
 	std::unordered_map<MSLStructMemberKey, uint32_t> struct_member_padding;
 	std::set<std::string> pragma_lines;
+	std::set<std::string> typedef_lines;
 	std::vector<MSLResourceBinding *> resource_bindings;
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
