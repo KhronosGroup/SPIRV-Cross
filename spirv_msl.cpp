@@ -86,6 +86,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_FragCoord.
 			SPIRType vec4_type;
 			vec4_type.basetype = SPIRType::Float;
+			vec4_type.width = 32;
 			vec4_type.vecsize = 4;
 			set<SPIRType>(type_id, vec4_type);
 
@@ -127,6 +128,7 @@ string CompilerMSL::compile()
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
 	backend.boolean_mix_support = false;
+	backend.allow_truncated_access_chain = true;
 
 	replace_illegal_names();
 
@@ -547,15 +549,16 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				BuiltIn builtin;
 				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
 
-				auto &mbr_type = get<SPIRType>(mbr_type_id);
-				if (should_move_to_input_buffer(mbr_type, is_builtin, storage))
+				if (should_move_to_input_buffer(mbr_type_id, is_builtin, storage))
 					move_member_to_input_buffer(type, mbr_idx);
 
 				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					// Add a reference to the member to the interface struct.
 					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-					ib_type.member_types.push_back(mbr_type_id); // membertype.self is different for array types
+					mbr_type_id = ensure_correct_builtin_type(mbr_type_id, builtin);
+					type.member_types[mbr_idx] = mbr_type_id;
+					ib_type.member_types.push_back(mbr_type_id);
 
 					// Give the member a name
 					string mbr_name = ensure_valid_name(to_qualified_member_name(type, mbr_idx), "m");
@@ -601,13 +604,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			bool is_builtin = is_builtin_variable(*p_var);
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
 
-			if (should_move_to_input_buffer(type, is_builtin, storage))
+			if (should_move_to_input_buffer(type_id, is_builtin, storage))
 				move_to_input_buffer(*p_var);
 
 			else if (!is_builtin || has_active_builtin(builtin, storage))
 			{
 				// Add a reference to the variable type to the interface struct.
 				uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
+				type_id = ensure_correct_builtin_type(type_id, builtin);
+				p_var->basetype = type_id;
 				ib_type.member_types.push_back(type_id);
 
 				// Give the member a name
@@ -654,8 +659,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 // Other types do not need to move, and false is returned.
 // Matrices and arrays are not permitted in the output of a vertex function or the input
 // or output of a fragment function, and in those cases, an exception is thrown.
-bool CompilerMSL::should_move_to_input_buffer(SPIRType &type, bool is_builtin, StorageClass storage)
+bool CompilerMSL::should_move_to_input_buffer(uint32_t type_id, bool is_builtin, StorageClass storage)
 {
+	auto &type = get<SPIRType>(type_id);
+
 	if ((is_matrix(type) || is_array(type)) && !is_builtin)
 	{
 		auto &execution = get_entry_point();
@@ -786,6 +793,36 @@ uint32_t CompilerMSL::get_input_buffer_block_var_id(uint32_t msl_buffer)
 		non_stage_in_input_var_ids[msl_buffer] = ib_var_id;
 	}
 	return ib_var_id;
+}
+
+// Ensure that the type is compatible with the builtin.
+// If it is, simply return the given type ID.
+// Otherwise, create a new type, and return it's ID.
+uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn builtin)
+{
+	auto &type = get<SPIRType>(type_id);
+
+	if (builtin == BuiltInSampleMask && is_array(type))
+	{
+		uint32_t next_id = increase_bound_by(type.pointer ? 2 : 1);
+		uint32_t base_type_id = next_id++;
+		auto &base_type = set<SPIRType>(base_type_id);
+		base_type.basetype = SPIRType::UInt;
+		base_type.width = 32;
+
+		if (!type.pointer)
+			return base_type_id;
+
+		uint32_t ptr_type_id = next_id++;
+		auto &ptr_type = set<SPIRType>(ptr_type_id);
+		ptr_type = base_type;
+		ptr_type.pointer = true;
+		ptr_type.storage = type.storage;
+		ptr_type.parent_type = base_type_id;
+		return ptr_type_id;
+	}
+
+	return type_id;
 }
 
 // Sort the members of the struct type by offset, and pack and then pad members where needed
@@ -3425,20 +3462,24 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_InstanceIndex";
 
 	// When used in the entry function, output builtins are qualified with output struct name.
+	// Test storage class as NOT Input, as output builtins might be part of generic type.
 	case BuiltInPosition:
 	case BuiltInPointSize:
 	case BuiltInClipDistance:
 	case BuiltInCullDistance:
 	case BuiltInLayer:
 	case BuiltInFragDepth:
-		if (current_function && (current_function->self == entry_point))
+	case BuiltInSampleMask:
+		if (storage != StorageClassInput && current_function && (current_function->self == entry_point))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
-		else
-			return CompilerGLSL::builtin_to_glsl(builtin, storage);
+
+		break;
 
 	default:
-		return CompilerGLSL::builtin_to_glsl(builtin, storage);
+		break;
 	}
+
+	return CompilerGLSL::builtin_to_glsl(builtin, storage);
 }
 
 // Returns an MSL string attribute qualifer for a SPIR-V builtin

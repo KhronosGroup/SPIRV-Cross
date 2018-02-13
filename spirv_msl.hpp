@@ -226,6 +226,7 @@ protected:
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	uint32_t add_interface_block(spv::StorageClass storage);
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
+	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
 
 	void emit_custom_functions();
 	void emit_resources();
@@ -251,7 +252,7 @@ protected:
 	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	size_t get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const;
 	std::string to_component_argument(uint32_t id);
-	bool should_move_to_input_buffer(SPIRType &type, bool is_builtin, spv::StorageClass storage);
+	bool should_move_to_input_buffer(uint32_t type_id, bool is_builtin, spv::StorageClass storage);
 	void move_to_input_buffer(SPIRVariable &var);
 	void move_member_to_input_buffer(const SPIRType &type, uint32_t index);
 	std::string add_input_buffer_block_member(uint32_t mbr_type_id, std::string mbr_name, uint32_t mbr_locn);
