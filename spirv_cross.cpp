@@ -3244,7 +3244,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					accessed_variables_to_block[var->self].insert(current_block->self);
 
 				// If we store through an access chain, we have a partial write.
-				if (var->self == lhs)
+				if (var && var->self == lhs)
 					complete_write_variables_to_block[var->self].insert(current_block->self);
 
 				var = compiler.maybe_get_backing_variable(rhs);
