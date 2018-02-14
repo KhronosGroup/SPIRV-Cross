@@ -3805,6 +3805,7 @@ uint32_t CompilerHLSL::remap_num_workgroups_builtin()
 
 	SPIRType uint_type;
 	uint_type.basetype = SPIRType::UInt;
+	uint_type.width = 32;
 	uint_type.vecsize = 3;
 	uint_type.columns = 1;
 	set<SPIRType>(uint_type_id, uint_type);
