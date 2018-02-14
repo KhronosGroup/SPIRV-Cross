@@ -332,6 +332,7 @@ protected:
 		bool can_swizzle_scalar = false;
 		bool force_gl_in_out_block = false;
 		bool can_return_array = true;
+		bool allow_truncated_access_chain = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

@@ -4487,7 +4487,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
 		}
-		else
+		else if (!backend.allow_truncated_access_chain)
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
 	}
 
