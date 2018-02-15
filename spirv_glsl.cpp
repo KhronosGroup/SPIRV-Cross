@@ -8336,6 +8336,9 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		auto flags = meta[tmp.second].decoration.decoration_flags;
 		auto &type = get<SPIRType>(tmp.first);
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
+
+		// The temporary might be read from before it's assigned, set up the expression now.
+		set<SPIRExpression>(tmp.second, to_name(tmp.second), tmp.first, true);
 	}
 
 	SPIRBlock::ContinueBlockType continue_type = SPIRBlock::ContinueNone;
