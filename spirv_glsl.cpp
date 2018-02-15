@@ -5909,6 +5909,34 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		BFOP(mod);
 		break;
 
+	case OpFRem:
+	{
+		if (is_legacy())
+			SPIRV_CROSS_THROW("OpFRem requires trunc() and is only supported on non-legacy targets. A workaround is needed for legacy.");
+
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t op0 = ops[2];
+		uint32_t op1 = ops[3];
+
+		// Needs special handling.
+		bool forward = should_forward(op0) && should_forward(op1);
+		auto expr = join(to_enclosed_expression(op0),
+		                 " - ",
+		                 to_enclosed_expression(op1),
+		                 " * ",
+		                 "trunc(",
+		                 to_enclosed_expression(op0),
+		                 " / ",
+		                 to_enclosed_expression(op1),
+		                 ")");
+
+		emit_op(result_type, result_id, expr, forward);
+		inherit_expression_dependencies(result_id, op0);
+		inherit_expression_dependencies(result_id, op1);
+		break;
+	}
+
 	// Relational
 	case OpAny:
 		UFOP(any);

@@ -3224,6 +3224,10 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpFRem:
+		emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], "fmod");
+		break;
+
 	case OpImage:
 	{
 		uint32_t result_type = ops[0];

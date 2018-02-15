@@ -1486,6 +1486,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		UFOP(popcount);
 		break;
 
+	case OpFRem:
+		BFOP(fmod);
+		break;
+
 	// Atomics
 	case OpAtomicExchange:
 	{
