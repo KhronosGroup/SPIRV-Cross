@@ -18,8 +18,8 @@
 #include "GLSL.std.450.h"
 
 #include <algorithm>
-#include <numeric>
 #include <assert.h>
+#include <numeric>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -66,8 +66,7 @@ void CompilerMSL::build_implicit_builtins()
 
 			auto &var = id.get<SPIRVariable>();
 
-			if (var.storage == StorageClassInput &&
-			    meta[var.self].decoration.builtin &&
+			if (var.storage == StorageClassInput && meta[var.self].decoration.builtin &&
 			    meta[var.self].decoration.builtin_type == BuiltInFragCoord)
 			{
 				builtin_frag_coord_id = var.self;
@@ -1484,6 +1483,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpBitCount:
 		UFOP(popcount);
+		break;
+
+	case OpFRem:
+		BFOP(fmod);
 		break;
 
 	// Atomics
