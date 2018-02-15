@@ -589,6 +589,11 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_GroupID";
 			break;
 
+		case BuiltInFrontFacing:
+			type = "bool";
+			semantic = "SV_IsFrontFace";
+			break;
+
 		case BuiltInNumWorkgroups:
 			// Handled specially.
 			break;
@@ -840,6 +845,10 @@ void CompilerHLSL::emit_builtin_variables()
 
 		case BuiltInLocalInvocationIndex:
 			type = "uint";
+			break;
+
+		case BuiltInFrontFacing:
+			type = "bool";
 			break;
 
 		case BuiltInNumWorkgroups:
