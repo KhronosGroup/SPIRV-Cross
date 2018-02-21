@@ -2846,7 +2846,8 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 		uint32_t result_type = args[0];
 
 		auto &type = compiler.get<SPIRType>(result_type);
-		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
+		bool separate_image =
+		    type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
 
 		// If not separate image, don't bother.
 		if (!separate_image)
@@ -2880,10 +2881,11 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 			return false;
 
 		auto &type = compiler.get<SPIRType>(args[0]);
-		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
+		bool separate_image =
+		    type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
 		if (separate_image)
 			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate images. This is not possible to "
-					                  "statically remap to plain GLSL.");
+			                  "statically remap to plain GLSL.");
 		break;
 	}
 
@@ -2959,7 +2961,8 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
 		{
 			if (compiler.dummy_sampler_id == 0)
-				SPIRV_CROSS_THROW("texelFetch without sampler was found, but no dummy sampler has been created with build_dummy_sampler_for_combined_images().");
+				SPIRV_CROSS_THROW("texelFetch without sampler was found, but no dummy sampler has been created with "
+				                  "build_dummy_sampler_for_combined_images().");
 
 			// Do it outside.
 			is_fetch = true;
