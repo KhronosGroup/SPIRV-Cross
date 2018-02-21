@@ -438,11 +438,6 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 			uint32_t mbr_type_id = type.member_types[mbr_idx];
 			auto &mbr_type = get<SPIRType>(mbr_type_id);
 			mark_as_packable(mbr_type);
-			if (mbr_type.type_alias)
-			{
-				auto &mbr_type_alias = get<SPIRType>(mbr_type.type_alias);
-				mark_as_packable(mbr_type_alias);
-			}
 		}
 	}
 }
