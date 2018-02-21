@@ -326,6 +326,8 @@ public:
 	// is required.
 	//
 	// If the returned ID is non-zero, it can be decorated with set/bindings as desired before calling compile().
+	// Calling this function also invalidates get_active_interface_variables(), so this should be called
+	// before that function.
 	uint32_t build_dummy_sampler_for_combined_images();
 
 	// Analyzes all separate image and samplers used from the currently selected entry point,

@@ -646,6 +646,11 @@ unordered_set<uint32_t> Compiler::get_active_interface_variables() const
 	unordered_set<uint32_t> variables;
 	InterfaceVariableAccessHandler handler(*this, variables);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+
+	// If we needed to create one, we'll need it.
+	if (dummy_sampler_id)
+		variables.insert(dummy_sampler_id);
+
 	return variables;
 }
 
@@ -3073,6 +3078,7 @@ uint32_t Compiler::build_dummy_sampler_for_combined_images()
 		ptr_sampler = sampler;
 		ptr_sampler.self = type_id;
 		ptr_sampler.storage = StorageClassUniformConstant;
+		ptr_sampler.pointer = true;
 
 		set<SPIRVariable>(var_id, ptr_type_id, StorageClassUniformConstant, 0);
 		set_name(var_id, "SPIRV_Cross_DummySampler");

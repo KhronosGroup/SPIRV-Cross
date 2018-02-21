@@ -733,6 +733,7 @@ static int main_inner(int argc, char *argv[])
 	unique_ptr<CompilerGLSL> compiler;
 
 	bool combined_image_samplers = false;
+	bool build_dummy_sampler = false;
 
 	if (args.cpp)
 	{
@@ -755,6 +756,7 @@ static int main_inner(int argc, char *argv[])
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
+		build_dummy_sampler = true;
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
 	}
 
@@ -820,6 +822,9 @@ static int main_inner(int argc, char *argv[])
 		hlsl->set_options(hlsl_opts);
 	}
 
+	if (build_dummy_sampler)
+		compiler->build_dummy_sampler_for_combined_images();
+
 	ShaderResources res;
 	if (args.remove_unused)
 	{
@@ -878,7 +883,6 @@ static int main_inner(int argc, char *argv[])
 
 	if (combined_image_samplers)
 	{
-		compiler->build_dummy_sampler_for_combined_images();
 		compiler->build_combined_image_samplers();
 		// Give the remapped combined samplers new names.
 		for (auto &remap : compiler->get_combined_image_samplers())
