@@ -3485,12 +3485,39 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool, bool, bool is_proj, uint32_t coord,
-                                      uint32_t coord_components, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
-                                      uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
-                                      uint32_t sample, bool *p_forward)
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
+                                      uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
+                                      uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
+                                      uint32_t comp, uint32_t sample, bool *p_forward)
 {
 	string farg_str = to_expression(img);
+
+	if (is_fetch)
+	{
+		auto *var = maybe_get_backing_variable(img);
+
+		// If we are fetching from a plain OpTypeImage, we must combine with a dummy sampler.
+		if (var)
+		{
+			auto &type = get<SPIRType>(var->basetype);
+			if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
+			{
+				if (!dummy_sampler_id)
+					SPIRV_CROSS_THROW(
+					    "Cannot find dummy sampler ID. Was build_dummy_sampler_for_combined_images() called?");
+
+				if (options.vulkan_semantics)
+				{
+					auto sampled_type = imgtype;
+					sampled_type.basetype = SPIRType::SampledImage;
+					farg_str = join(type_to_glsl(sampled_type), "(", to_expression(img), ", ",
+					                to_expression(dummy_sampler_id), ")");
+				}
+				else
+					farg_str = to_combined_image_sampler(img, dummy_sampler_id);
+			}
+		}
+	}
 
 	bool swizz_func = backend.swizzle_is_function;
 	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
