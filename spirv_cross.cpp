@@ -2823,9 +2823,77 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 	}
 }
 
+bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	if (need_dummy_sampler)
+	{
+		// No need to traverse further, we know the result.
+		return false;
+	}
+
+	switch (opcode)
+	{
+	case OpLoad:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+
+		auto &type = compiler.get<SPIRType>(result_type);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
+
+		// If not separate image, don't bother.
+		if (!separate_image)
+			return true;
+
+		uint32_t id = args[1];
+		uint32_t ptr = args[2];
+		compiler.set<SPIRExpression>(id, "", result_type, true);
+		compiler.register_read(id, ptr, true);
+		break;
+	}
+
+	case OpImageFetch:
+	{
+		// If we are fetching from a plain OpTypeImage, we must pre-combine with our dummy sampler.
+		auto *var = compiler.maybe_get_backing_variable(args[2]);
+		if (var)
+		{
+			auto &type = compiler.get<SPIRType>(var->basetype);
+			if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
+				need_dummy_sampler = true;
+		}
+
+		break;
+	}
+
+	case OpInBoundsAccessChain:
+	case OpAccessChain:
+	{
+		if (length < 3)
+			return false;
+
+		auto &type = compiler.get<SPIRType>(args[0]);
+		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
+		if (separate_image)
+			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate images. This is not possible to "
+					                  "statically remap to plain GLSL.");
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	return true;
+}
+
 bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
 	// We need to figure out where samplers and images are loaded from, so do only the bare bones compilation we need.
+	bool is_fetch = false;
+
 	switch (opcode)
 	{
 	case OpLoad:
@@ -2875,6 +2943,27 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		return true;
 	}
 
+	case OpImageFetch:
+	{
+		// If we are fetching from a plain OpTypeImage, we must pre-combine with our dummy sampler.
+		auto *var = compiler.maybe_get_backing_variable(args[2]);
+		if (!var)
+			return true;
+
+		auto &type = compiler.get<SPIRType>(var->basetype);
+		if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
+		{
+			if (compiler.dummy_sampler_id == 0)
+				SPIRV_CROSS_THROW("texelFetch without sampler was found, but no dummy sampler has been created with build_dummy_sampler_for_combined_images().");
+
+			// Do it outside.
+			is_fetch = true;
+			break;
+		}
+
+		return true;
+	}
+
 	case OpSampledImage:
 		// Do it outside.
 		break;
@@ -2899,7 +2988,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 			if (image)
 				image_id = image->self;
 
-			uint32_t sampler_id = args[3];
+			uint32_t sampler_id = is_fetch ? compiler.dummy_sampler_id : args[3];
 			auto *sampler = compiler.maybe_get_backing_variable(sampler_id);
 			if (sampler)
 				sampler_id = sampler->self;
@@ -2914,7 +3003,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	// Function parameters are not necessarily pointers, so if we don't have a backing variable, remapping will know
 	// which backing variable the image/sample came from.
 	uint32_t image_id = remap_parameter(args[2]);
-	uint32_t sampler_id = remap_parameter(args[3]);
+	uint32_t sampler_id = is_fetch ? compiler.dummy_sampler_id : remap_parameter(args[3]);
 
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
 	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
@@ -2923,10 +3012,24 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 	if (itr == end(compiler.combined_image_samplers))
 	{
+		uint32_t sampled_type;
+		if (is_fetch)
+		{
+			// Have to invent the sampled image type.
+			sampled_type = compiler.increase_bound_by(1);
+			auto &type = compiler.set<SPIRType>(sampled_type);
+			type = compiler.expression_type(args[2]);
+			type.self = sampled_type;
+			type.basetype = SPIRType::SampledImage;
+		}
+		else
+		{
+			sampled_type = args[0];
+		}
+
 		auto id = compiler.increase_bound_by(2);
 		auto type_id = id + 0;
 		auto combined_id = id + 1;
-		auto sampled_type = args[0];
 
 		// Make a new type, pointer to OpTypeSampledImage, so we can make a variable of this type.
 		// We will probably have this type lying around, but it doesn't hurt to make duplicates for internal purposes.
@@ -2941,13 +3044,43 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
 		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
-		auto old_flags = compiler.meta[sampler_id].decoration.decoration_flags;
+		// Fetch inherits precision from the image, not sampler (there is no sampler).
+		auto old_flags = compiler.meta[is_fetch ? image_id : sampler_id].decoration.decoration_flags;
 		new_flags = old_flags & (1ull << DecorationRelaxedPrecision);
 
 		compiler.combined_image_samplers.push_back({ combined_id, image_id, sampler_id });
 	}
 
 	return true;
+}
+
+uint32_t Compiler::build_dummy_sampler_for_combined_images()
+{
+	DummySamplerForCombinedImageHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	if (handler.need_dummy_sampler)
+	{
+		uint32_t offset = increase_bound_by(3);
+		auto type_id = offset + 0;
+		auto ptr_type_id = offset + 1;
+		auto var_id = offset + 2;
+
+		SPIRType sampler_type;
+		auto &sampler = set<SPIRType>(type_id);
+		sampler.basetype = SPIRType::Sampler;
+
+		auto &ptr_sampler = set<SPIRType>(ptr_type_id);
+		ptr_sampler = sampler;
+		ptr_sampler.self = type_id;
+		ptr_sampler.storage = StorageClassUniformConstant;
+
+		set<SPIRVariable>(var_id, ptr_type_id, StorageClassUniformConstant, 0);
+		set_name(var_id, "SPIRV_Cross_DummySampler");
+		dummy_sampler_id = var_id;
+		return var_id;
+	}
+	else
+		return 0;
 }
 
 void Compiler::build_combined_image_samplers()

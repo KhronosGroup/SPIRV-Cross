@@ -878,6 +878,7 @@ static int main_inner(int argc, char *argv[])
 
 	if (combined_image_samplers)
 	{
+		compiler->build_dummy_sampler_for_combined_images();
 		compiler->build_combined_image_samplers();
 		// Give the remapped combined samplers new names.
 		for (auto &remap : compiler->get_combined_image_samplers())

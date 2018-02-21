@@ -314,6 +314,20 @@ public:
 	uint32_t get_work_group_size_specialization_constants(SpecializationConstant &x, SpecializationConstant &y,
 	                                                      SpecializationConstant &z) const;
 
+	// Analyzes all OpImageFetch (texelFetch) opcodes and checks if there are instances where
+	// said instruction is used without a combined image sampler.
+	// GLSL targets do not support the use of texelFetch without a sampler.
+	// To workaround this, we must inject a dummy sampler which can be used to form a sampler2D at the call-site of
+	// texelFetch as necessary.
+	//
+	// This must be called before build_combined_image_samplers().
+	// build_combined_image_samplers() may refer to the ID returned by this method if the returned ID is non-zero.
+	// The return value will be the ID of a sampler object if a dummy sampler is necessary, or 0 if no sampler object
+	// is required.
+	//
+	// If the returned ID is non-zero, it can be decorated with set/bindings as desired before calling compile().
+	uint32_t build_dummy_sampler_for_combined_images();
+
 	// Analyzes all separate image and samplers used from the currently selected entry point,
 	// and re-routes them all to a combined image sampler instead.
 	// This is required to "support" separate image samplers in targets which do not natively support
@@ -678,6 +692,18 @@ protected:
 		                                     bool depth);
 	};
 
+	struct DummySamplerForCombinedImageHandler : OpcodeHandler
+	{
+		DummySamplerForCombinedImageHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+		bool need_dummy_sampler = false;
+	};
+
 	struct ActiveBuiltinHandler : OpcodeHandler
 	{
 		ActiveBuiltinHandler(Compiler &compiler_)
@@ -724,6 +750,11 @@ protected:
 	std::unordered_set<uint32_t> comparison_samplers;
 	std::unordered_set<uint32_t> comparison_images;
 	bool need_subpass_input = false;
+
+	// In certain backends, we will need to use a dummy sampler to be able to emit code.
+	// GLSL does not support texelFetch on texture2D objects, but SPIR-V does,
+	// so we need to workaround by having the application inject a dummy sampler.
+	uint32_t dummy_sampler_id = 0;
 
 	void analyze_image_and_sampler_usage();
 	struct CombinedImageSamplerUsageHandler : OpcodeHandler
