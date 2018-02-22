@@ -1935,7 +1935,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			break;
 
 		case BuiltInCullDistance:
-			for (uint32_t cull = 0; cull < clip_distance_count; cull++)
+			for (uint32_t cull = 0; cull < cull_distance_count; cull++)
 				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], ";");
 			break;
 
