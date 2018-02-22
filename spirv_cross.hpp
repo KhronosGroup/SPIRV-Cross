@@ -715,6 +715,8 @@ protected:
 
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 		Compiler &compiler;
+
+		void handle_builtin(const SPIRType &type, spv::BuiltIn builtin);
 	};
 
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
@@ -735,6 +737,9 @@ protected:
 
 	uint64_t active_input_builtins = 0;
 	uint64_t active_output_builtins = 0;
+	uint32_t clip_distance_count = 0;
+	uint32_t cull_distance_count = 0;
+
 	// Traverses all reachable opcodes and sets active_builtins to a bitmask of all builtin variables which are accessed in the shader.
 	void update_active_builtins();
 	bool has_active_builtin(spv::BuiltIn builtin, spv::StorageClass storage);

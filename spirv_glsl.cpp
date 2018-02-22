@@ -1871,9 +1871,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	if (emitted_builtins & (1ull << BuiltInPointSize))
 		statement("float gl_PointSize;");
 	if (emitted_builtins & (1ull << BuiltInClipDistance))
-		statement("float gl_ClipDistance[];"); // TODO: Do we need a fixed array size here?
+		statement("float gl_ClipDistance[", clip_distance_count, "];");
 	if (emitted_builtins & (1ull << BuiltInCullDistance))
-		statement("float gl_CullDistance[];"); // TODO: Do we need a fixed array size here?
+		statement("float gl_CullDistance[", cull_distance_count, "];");
 
 	bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
 	if (builtin_array)
@@ -1927,7 +1927,7 @@ void CompilerGLSL::emit_resources()
 		emit_pls();
 
 	// Emit custom gl_PerVertex for SSO compatibility.
-	if (options.separate_shader_objects && !options.es)
+	if (options.separate_shader_objects && !options.es && execution.model != ExecutionModelFragment)
 	{
 		switch (execution.model)
 		{
@@ -1945,6 +1945,18 @@ void CompilerGLSL::emit_resources()
 		default:
 			break;
 		}
+	}
+	else
+	{
+		// Need to redeclare clip/cull distance with explicit size to use them.
+		// SPIR-V mandates these builtins have a size declared.
+		const char *storage = execution.model == ExecutionModelFragment ? "in" : "out";
+		if (clip_distance_count != 0)
+			statement(storage, " float gl_ClipDistance[", clip_distance_count, "];");
+		if (cull_distance_count != 0)
+			statement(storage, " float gl_CullDistance[", cull_distance_count, "];");
+		if (clip_distance_count != 0 || cull_distance_count != 0)
+			statement("");
 	}
 
 	bool emitted = false;
