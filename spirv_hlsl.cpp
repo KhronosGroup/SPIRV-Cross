@@ -509,6 +509,40 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 			semantic = legacy ? "DEPTH" : "SV_Depth";
 			break;
 
+		case BuiltInClipDistance:
+			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
+			for (uint32_t clip = 0; clip < clip_distance_count; clip += 4)
+			{
+				uint32_t to_declare = clip_distance_count - clip;
+				if (to_declare > 4)
+					to_declare = 4;
+
+				uint32_t semantic_index = clip / 4;
+
+				static const char *types[] = { "float", "float2", "float3", "float4" };
+				statement(types[to_declare - 1], " ",
+				          builtin_to_glsl(builtin, StorageClassOutput),
+				          semantic_index, " : SV_ClipDistance", semantic_index, ";");
+			}
+			break;
+
+		case BuiltInCullDistance:
+			// HLSL is a bit weird here, use SV_CullDistance0, SV_CullDistance1 and so on with vectors.
+			for (uint32_t cull = 0; cull < cull_distance_count; cull += 4)
+			{
+				uint32_t to_declare = cull_distance_count - cull;
+				if (to_declare > 4)
+					to_declare = 4;
+
+				uint32_t semantic_index = cull / 4;
+
+				static const char *types[] = { "float", "float2", "float3", "float4" };
+				statement(types[to_declare - 1], " ",
+				          builtin_to_glsl(builtin, StorageClassOutput),
+				          semantic_index, " : SV_CullDistance", semantic_index, ";");
+			}
+			break;
+
 		case BuiltInPointSize:
 			// If point_size_compat is enabled, just ignore PointSize.
 			// PointSize does not exist in HLSL, but some code bases might want to be able to use these shaders,
@@ -596,6 +630,40 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 		case BuiltInNumWorkgroups:
 			// Handled specially.
+			break;
+
+		case BuiltInClipDistance:
+			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
+			for (uint32_t clip = 0; clip < clip_distance_count; clip += 4)
+			{
+				uint32_t to_declare = clip_distance_count - clip;
+				if (to_declare > 4)
+					to_declare = 4;
+
+				uint32_t semantic_index = clip / 4;
+
+				static const char *types[] = { "float", "float2", "float3", "float4" };
+				statement(types[to_declare - 1], " ",
+				          builtin_to_glsl(builtin, StorageClassInput),
+				          semantic_index, " : SV_ClipDistance", semantic_index, ";");
+			}
+			break;
+
+		case BuiltInCullDistance:
+			// HLSL is a bit weird here, use SV_CullDistance0, SV_CullDistance1 and so on with vectors.
+			for (uint32_t cull = 0; cull < cull_distance_count; cull += 4)
+			{
+				uint32_t to_declare = cull_distance_count - cull;
+				if (to_declare > 4)
+					to_declare = 4;
+
+				uint32_t semantic_index = cull / 4;
+
+				static const char *types[] = { "float", "float2", "float3", "float4" };
+				statement(types[to_declare - 1], " ",
+				          builtin_to_glsl(builtin, StorageClassInput),
+				          semantic_index, " : SV_CullDistance", semantic_index, ";");
+			}
 			break;
 
 		default:
@@ -807,6 +875,7 @@ void CompilerHLSL::emit_builtin_variables()
 
 		const char *type = nullptr;
 		auto builtin = static_cast<BuiltIn>(i);
+		uint32_t array_size = 0;
 
 		switch (builtin)
 		{
@@ -855,6 +924,16 @@ void CompilerHLSL::emit_builtin_variables()
 			// Handled specially.
 			break;
 
+		case BuiltInClipDistance:
+			array_size = clip_distance_count;
+			type = "float";
+			break;
+
+		case BuiltInCullDistance:
+			array_size = cull_distance_count;
+			type = "float";
+			break;
+
 		default:
 			SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
 			break;
@@ -865,7 +944,12 @@ void CompilerHLSL::emit_builtin_variables()
 		// need to distinguish that when we add support for that.
 
 		if (type)
-			statement("static ", type, " ", builtin_to_glsl(builtin, storage), ";");
+		{
+			if (array_size)
+				statement("static ", type, " ", builtin_to_glsl(builtin, storage), "[", array_size, "];");
+			else
+				statement("static ", type, " ", builtin_to_glsl(builtin, storage), ";");
+		}
 	}
 }
 
@@ -1843,7 +1927,16 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			break;
 
 		case BuiltInNumWorkgroups:
-			// Handled specially.
+			break;
+
+		case BuiltInClipDistance:
+			for (uint32_t clip = 0; clip < clip_distance_count; clip++)
+				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], ";");
+			break;
+
+		case BuiltInCullDistance:
+			for (uint32_t cull = 0; cull < cull_distance_count; cull++)
+				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], ";");
 			break;
 
 		default:
@@ -1938,8 +2031,25 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (i == BuiltInPointSize)
 				continue;
 
-			auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassOutput);
-			statement("stage_output.", builtin, " = ", builtin, ";");
+			switch (static_cast<BuiltIn>(i))
+			{
+			case BuiltInClipDistance:
+				for (uint32_t clip = 0; clip < clip_distance_count; clip++)
+					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], " = gl_ClipDistance[", clip, "];");
+				break;
+
+			case BuiltInCullDistance:
+				for (uint32_t cull = 0; cull < cull_distance_count; cull++)
+					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[", cull, "];");
+				break;
+
+			default:
+			{
+				auto builtin_expr = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassOutput);
+				statement("stage_output.", builtin_expr, " = ", builtin_expr, ";");
+				break;
+			}
+			}
 		}
 
 		for (auto &id : ids)

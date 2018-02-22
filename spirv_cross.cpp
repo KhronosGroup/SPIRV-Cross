@@ -3749,6 +3749,30 @@ bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &b
 	}
 }
 
+void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltIn builtin)
+{
+	// If used, we will need to explicitly declare a new array size for these builtins.
+
+	if (builtin == BuiltInClipDistance)
+	{
+		if (!type.array_size_literal[0])
+			SPIRV_CROSS_THROW("Array size for ClipDistance must be a literal.");
+		uint32_t array_size = type.array[0];
+		if (array_size == 0)
+			SPIRV_CROSS_THROW("Array size for ClipDistance must not be unsized.");
+		compiler.clip_distance_count = array_size;
+	}
+	else if (builtin == BuiltInCullDistance)
+	{
+		if (!type.array_size_literal[0])
+			SPIRV_CROSS_THROW("Array size for CullDistance must be a literal.");
+		uint32_t array_size = type.array[0];
+		if (array_size == 0)
+			SPIRV_CROSS_THROW("Array size for CullDistance must not be unsized.");
+		compiler.cull_distance_count = array_size;
+	}
+}
+
 bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
 {
 	const auto add_if_builtin = [&](uint32_t id) {
@@ -3761,6 +3785,7 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 			auto &flags =
 			    type.storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
 			flags |= 1ull << compiler.meta[id].decoration.builtin_type;
+			handle_builtin(type, compiler.meta[id].decoration.builtin_type);
 		}
 	};
 
@@ -3846,7 +3871,10 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 				{
 					auto &decorations = compiler.meta[type->self].members[index];
 					if (decorations.builtin)
+					{
 						flags |= 1ull << decorations.builtin_type;
+						handle_builtin(compiler.get<SPIRType>(type->member_types[index]), decorations.builtin_type);
+					}
 				}
 
 				type = &compiler.get<SPIRType>(type->member_types[index]);
@@ -3871,6 +3899,8 @@ void Compiler::update_active_builtins()
 {
 	active_input_builtins = 0;
 	active_output_builtins = 0;
+	cull_distance_count = 0;
+	clip_distance_count = 0;
 	ActiveBuiltinHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 }
