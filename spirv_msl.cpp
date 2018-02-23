@@ -1063,6 +1063,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("return a1 * b2 - b1 * a2;");
 			end_scope();
 			statement("");
+
 			statement("// Returns the determinant of a 3x3 matrix.");
 			statement("inline float spvDet3x3(float a1, float a2, float a3, float b1, float b2, float b3, float c1, "
 			          "float c2, float c3)");
@@ -1076,7 +1077,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("float4x4 spvInverse4x4(float4x4 m)");
 			begin_scope();
 			statement("float4x4 adj;	// The adjoint matrix (inverse after dividing by determinant)");
-			statement("");
+			statement_no_indent("");
 			statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
 			statement("adj[0][0] =  spvDet3x3(m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
 			          "m[3][3]);");
@@ -1086,7 +1087,7 @@ void CompilerMSL::emit_custom_functions()
 			          "m[3][3]);");
 			statement("adj[0][3] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], "
 			          "m[2][3]);");
-			statement("");
+			statement_no_indent("");
 			statement("adj[1][0] = -spvDet3x3(m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
 			          "m[3][3]);");
 			statement("adj[1][1] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
@@ -1095,7 +1096,7 @@ void CompilerMSL::emit_custom_functions()
 			          "m[3][3]);");
 			statement("adj[1][3] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], "
 			          "m[2][3]);");
-			statement("");
+			statement_no_indent("");
 			statement("adj[2][0] =  spvDet3x3(m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
 			          "m[3][3]);");
 			statement("adj[2][1] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
@@ -1104,7 +1105,7 @@ void CompilerMSL::emit_custom_functions()
 			          "m[3][3]);");
 			statement("adj[2][3] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], "
 			          "m[2][3]);");
-			statement("");
+			statement_no_indent("");
 			statement("adj[3][0] = -spvDet3x3(m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
 			          "m[3][2]);");
 			statement("adj[3][1] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
@@ -1113,11 +1114,11 @@ void CompilerMSL::emit_custom_functions()
 			          "m[3][2]);");
 			statement("adj[3][3] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], "
 			          "m[2][2]);");
-			statement("");
+			statement_no_indent("");
 			statement("// Calculate the determinant as a combination of the cofactors of the first row.");
 			statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]) + (adj[0][3] "
 			          "* m[3][0]);");
-			statement("");
+			statement_no_indent("");
 			statement("// Divide the classical adjoint matrix by the determinant.");
 			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
 			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
@@ -1126,34 +1127,38 @@ void CompilerMSL::emit_custom_functions()
 			break;
 
 		case SPVFuncImplInverse3x3:
-			statement("// Returns the determinant of a 2x2 matrix.");
-			statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
-			begin_scope();
-			statement("return a1 * b2 - b1 * a2;");
-			end_scope();
-			statement("");
+			if (spv_function_implementations.count(SPVFuncImplInverse4x4) == 0)
+			{
+				statement("// Returns the determinant of a 2x2 matrix.");
+				statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
+				begin_scope();
+				statement("return a1 * b2 - b1 * a2;");
+				end_scope();
+				statement("");
+			}
+
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
 			statement("float3x3 spvInverse3x3(float3x3 m)");
 			begin_scope();
 			statement("float3x3 adj;	// The adjoint matrix (inverse after dividing by determinant)");
-			statement("");
+			statement_no_indent("");
 			statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
 			statement("adj[0][0] =  spvDet2x2(m[1][1], m[1][2], m[2][1], m[2][2]);");
 			statement("adj[0][1] = -spvDet2x2(m[0][1], m[0][2], m[2][1], m[2][2]);");
 			statement("adj[0][2] =  spvDet2x2(m[0][1], m[0][2], m[1][1], m[1][2]);");
-			statement("");
+			statement_no_indent("");
 			statement("adj[1][0] = -spvDet2x2(m[1][0], m[1][2], m[2][0], m[2][2]);");
 			statement("adj[1][1] =  spvDet2x2(m[0][0], m[0][2], m[2][0], m[2][2]);");
 			statement("adj[1][2] = -spvDet2x2(m[0][0], m[0][2], m[1][0], m[1][2]);");
-			statement("");
+			statement_no_indent("");
 			statement("adj[2][0] =  spvDet2x2(m[1][0], m[1][1], m[2][0], m[2][1]);");
 			statement("adj[2][1] = -spvDet2x2(m[0][0], m[0][1], m[2][0], m[2][1]);");
 			statement("adj[2][2] =  spvDet2x2(m[0][0], m[0][1], m[1][0], m[1][1]);");
-			statement("");
+			statement_no_indent("");
 			statement("// Calculate the determinant as a combination of the cofactors of the first row.");
 			statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]);");
-			statement("");
+			statement_no_indent("");
 			statement("// Divide the classical adjoint matrix by the determinant.");
 			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
 			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
@@ -1167,17 +1172,17 @@ void CompilerMSL::emit_custom_functions()
 			statement("float2x2 spvInverse2x2(float2x2 m)");
 			begin_scope();
 			statement("float2x2 adj;	// The adjoint matrix (inverse after dividing by determinant)");
-			statement("");
+			statement_no_indent("");
 			statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
 			statement("adj[0][0] =  m[1][1];");
 			statement("adj[0][1] = -m[0][1];");
-			statement("");
+			statement_no_indent("");
 			statement("adj[1][0] = -m[1][0];");
 			statement("adj[1][1] =  m[0][0];");
-			statement("");
+			statement_no_indent("");
 			statement("// Calculate the determinant as a combination of the cofactors of the first row.");
 			statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]);");
-			statement("");
+			statement_no_indent("");
 			statement("// Divide the classical adjoint matrix by the determinant.");
 			statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
 			statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
