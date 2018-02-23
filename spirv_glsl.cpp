@@ -244,6 +244,7 @@ void CompilerGLSL::reset()
 	forwarded_temporaries.clear();
 
 	resource_names.clear();
+	function_overloads.clear();
 
 	for (auto &id : ids)
 	{
@@ -7856,8 +7857,44 @@ bool CompilerGLSL::check_atomic_image(uint32_t id)
 		return false;
 }
 
+void CompilerGLSL::add_function_overload(const SPIRFunction &func)
+{
+	Hasher hasher;
+	for (auto &arg : func.arguments)
+		hasher.u32(arg.type);
+	uint64_t types_hash = hasher.get();
+
+	auto function_name = to_name(func.self);
+	auto itr = function_overloads.find(function_name);
+	if (itr != end(function_overloads))
+	{
+		// There exists a function with this name already.
+		auto &overloads = itr->second;
+		if (overloads.count(types_hash) != 0)
+		{
+			// Overload conflict, assign a new name.
+			add_resource_name(func.self);
+			function_overloads[to_name(func.self)].insert(types_hash);
+		}
+		else
+		{
+			// Can reuse the name.
+			overloads.insert(types_hash);
+		}
+	}
+	else
+	{
+		// First time we see this function name.
+		add_resource_name(func.self);
+		function_overloads[to_name(func.self)].insert(types_hash);
+	}
+}
+
 void CompilerGLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
 {
+	if (func.self != entry_point)
+		add_function_overload(func);
+
 	// Avoid shadow declarations.
 	local_variable_names = resource_names;
 

@@ -295,6 +295,7 @@ protected:
 	void add_local_variable_name(uint32_t id);
 	void add_resource_name(uint32_t id);
 	void add_member_name(SPIRType &type, uint32_t name);
+	void add_function_overload(const SPIRFunction &func);
 
 	virtual bool is_non_native_row_major_matrix(uint32_t id);
 	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
@@ -303,6 +304,7 @@ protected:
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
+	std::unordered_map<std::string, std::unordered_set<uint64_t>> function_overloads;
 
 	bool processing_entry_point = false;
 
