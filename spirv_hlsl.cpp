@@ -1746,6 +1746,9 @@ string CompilerHLSL::to_func_call_arg(uint32_t id)
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
 {
+	if (func.self != entry_point)
+		add_function_overload(func);
+
 	auto &execution = get_entry_point();
 	// Avoid shadow declarations.
 	local_variable_names = resource_names;

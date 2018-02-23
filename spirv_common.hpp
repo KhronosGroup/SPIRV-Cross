@@ -1037,6 +1037,23 @@ public:
 private:
 	std::locale old;
 };
+
+class Hasher
+{
+public:
+	inline void u32(uint32_t value)
+	{
+		h = (h * 0x100000001b3ull) ^ value;
+	}
+
+	inline uint64_t get() const
+	{
+		return h;
+	}
+
+private:
+	uint64_t h = 0xcbf29ce484222325ull;
+};
 }
 
 #endif

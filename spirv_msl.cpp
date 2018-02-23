@@ -2133,6 +2133,9 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 // If this is the entry point function, Metal-specific return value and function arguments are added.
 void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
 {
+	if (func.self != entry_point)
+		add_function_overload(func);
+
 	local_variable_names = resource_names;
 	string decl;
 
