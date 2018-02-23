@@ -125,6 +125,8 @@ inline std::string convert_to_string(T &&t)
 #endif
 
 #ifdef _MSC_VER
+// sprintf warning.
+// We cannot rely on snprintf existing because, ..., MSVC.
 #pragma warning(push)
 #pragma warning(disable : 4996)
 #endif
