@@ -7472,10 +7472,18 @@ uint32_t CompilerGLSL::to_array_size_literal(const SPIRType &type, uint32_t inde
 {
 	assert(type.array.size() == type.array_size_literal.size());
 
-	if (!type.array_size_literal[index])
-		SPIRV_CROSS_THROW("The array size is not a literal, but a specialization constant or spec constant op.");
-
-	return type.array[index];
+	if (type.array_size_literal[index])
+	{
+		return type.array[index];
+	}
+	else
+	{
+		// Use the default spec constant value.
+		// This is the best we can do.
+		uint32_t array_size_id = type.array[index];
+		uint32_t array_size = get<SPIRConstant>(array_size_id).scalar();
+		return array_size;
+	}
 }
 
 string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
