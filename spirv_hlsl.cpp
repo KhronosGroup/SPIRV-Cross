@@ -662,6 +662,13 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			}
 			break;
 
+		case BuiltInPointCoord:
+			// PointCoord is not supported, but provide a way to just ignore that, similar to PointSize.
+			if (options.point_coord_compat)
+				break;
+			else
+				SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
+
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 			break;
@@ -856,6 +863,9 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 		auto &type = get<SPIRType>(var.basetype);
 		return sanitize_underscores(join(to_name(num_workgroups_builtin), "_", get_member_name(type.self, 0)));
 	}
+	case BuiltInPointCoord:
+		// Crude hack, but there is no real alternative. This path is only enabled if point_coord_compat is set.
+		return "float2(0.5f, 0.5f)";
 	default:
 		return CompilerGLSL::builtin_to_glsl(builtin, storage);
 	}
@@ -917,6 +927,7 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 
 		case BuiltInNumWorkgroups:
+		case BuiltInPointCoord:
 			// Handled specially.
 			break;
 
@@ -1214,7 +1225,9 @@ void CompilerHLSL::emit_resources()
 		return name1.compare(name2) < 0;
 	};
 
-	if (!input_variables.empty() || (active_input_builtins & ~(1ull << BuiltInNumWorkgroups)))
+	static const uint64_t implicit_builtins = (1ull << BuiltInNumWorkgroups) |
+	                                          (1ull << BuiltInPointCoord);
+	if (!input_variables.empty() || (active_input_builtins & ~implicit_builtins))
 	{
 		require_input = true;
 		statement("struct SPIRV_Cross_Input");
@@ -1926,6 +1939,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			break;
 
 		case BuiltInNumWorkgroups:
+		case BuiltInPointCoord:
 			break;
 
 		case BuiltInClipDistance:
@@ -3918,6 +3932,7 @@ string CompilerHLSL::compile(std::vector<HLSLVertexAttributeRemap> vertex_attrib
 uint32_t CompilerHLSL::remap_num_workgroups_builtin()
 {
 	update_active_builtins();
+
 	if ((active_input_builtins & (1ull << BuiltInNumWorkgroups)) == 0)
 		return 0;
 

@@ -51,6 +51,9 @@ public:
 
 		// Allows the PointSize builtin, and ignores it, as PointSize is not supported in HLSL.
 		bool point_size_compat = false;
+
+		// Allows the PointCoord builtin, returns float2(0.5, 0.5), as PointCoord is not supported in HLSL.
+		bool point_coord_compat = false;
 	};
 
 	CompilerHLSL(std::vector<uint32_t> spirv_)

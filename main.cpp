@@ -818,6 +818,7 @@ static int main_inner(int argc, char *argv[])
 		{
 			// Enable all compat options.
 			hlsl_opts.point_size_compat = true;
+			hlsl_opts.point_coord_compat = true;
 		}
 		hlsl->set_options(hlsl_opts);
 	}
