@@ -1225,8 +1225,7 @@ void CompilerHLSL::emit_resources()
 		return name1.compare(name2) < 0;
 	};
 
-	static const uint64_t implicit_builtins = (1ull << BuiltInNumWorkgroups) |
-	                                          (1ull << BuiltInPointCoord);
+	static const uint64_t implicit_builtins = (1ull << BuiltInNumWorkgroups) | (1ull << BuiltInPointCoord);
 	if (!input_variables.empty() || (active_input_builtins & ~implicit_builtins))
 	{
 		require_input = true;
@@ -1539,6 +1538,159 @@ void CompilerHLSL::emit_resources()
 			end_scope();
 			statement("");
 		}
+	}
+
+	if (requires_inverse_2x2)
+	{
+		statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
+		statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
+		statement("float2x2 SPIRV_Cross_Inverse(float2x2 m)");
+		begin_scope();
+		statement("float2x2 adj;	// The adjoint matrix (inverse after dividing by determinant)");
+		statement_no_indent("");
+		statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
+		statement("adj[0][0] =  m[1][1];");
+		statement("adj[0][1] = -m[0][1];");
+		statement_no_indent("");
+		statement("adj[1][0] = -m[1][0];");
+		statement("adj[1][1] =  m[0][0];");
+		statement_no_indent("");
+		statement("// Calculate the determinant as a combination of the cofactors of the first row.");
+		statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]);");
+		statement_no_indent("");
+		statement("// Divide the classical adjoint matrix by the determinant.");
+		statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
+		statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_inverse_3x3)
+	{
+		statement("// Returns the determinant of a 2x2 matrix.");
+		statement("float SPIRV_Cross_Det2x2(float a1, float a2, float b1, float b2)");
+		begin_scope();
+		statement("return a1 * b2 - b1 * a2;");
+		end_scope();
+		statement_no_indent("");
+		statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
+		statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
+		statement("float3x3 SPIRV_Cross_Inverse(float3x3 m)");
+		begin_scope();
+		statement("float3x3 adj;	// The adjoint matrix (inverse after dividing by determinant)");
+		statement_no_indent("");
+		statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
+		statement("adj[0][0] =  SPIRV_Cross_Det2x2(m[1][1], m[1][2], m[2][1], m[2][2]);");
+		statement("adj[0][1] = -SPIRV_Cross_Det2x2(m[0][1], m[0][2], m[2][1], m[2][2]);");
+		statement("adj[0][2] =  SPIRV_Cross_Det2x2(m[0][1], m[0][2], m[1][1], m[1][2]);");
+		statement_no_indent("");
+		statement("adj[1][0] = -SPIRV_Cross_Det2x2(m[1][0], m[1][2], m[2][0], m[2][2]);");
+		statement("adj[1][1] =  SPIRV_Cross_Det2x2(m[0][0], m[0][2], m[2][0], m[2][2]);");
+		statement("adj[1][2] = -SPIRV_Cross_Det2x2(m[0][0], m[0][2], m[1][0], m[1][2]);");
+		statement_no_indent("");
+		statement("adj[2][0] =  SPIRV_Cross_Det2x2(m[1][0], m[1][1], m[2][0], m[2][1]);");
+		statement("adj[2][1] = -SPIRV_Cross_Det2x2(m[0][0], m[0][1], m[2][0], m[2][1]);");
+		statement("adj[2][2] =  SPIRV_Cross_Det2x2(m[0][0], m[0][1], m[1][0], m[1][1]);");
+		statement_no_indent("");
+		statement("// Calculate the determinant as a combination of the cofactors of the first row.");
+		statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]);");
+		statement_no_indent("");
+		statement("// Divide the classical adjoint matrix by the determinant.");
+		statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
+		statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_inverse_4x4)
+	{
+		if (!requires_inverse_3x3)
+		{
+			statement("// Returns the determinant of a 2x2 matrix.");
+			statement("float SPIRV_Cross_Det2x2(float a1, float a2, float b1, float b2)");
+			begin_scope();
+			statement("return a1 * b2 - b1 * a2;");
+			end_scope();
+			statement("");
+		}
+
+		statement("// Returns the determinant of a 3x3 matrix.");
+		statement("float SPIRV_Cross_Det3x3(float a1, float a2, float a3, float b1, float b2, float b3, float c1, "
+		          "float c2, float c3)");
+		begin_scope();
+		statement("return a1 * SPIRV_Cross_Det2x2(b2, b3, c2, c3) - b1 * SPIRV_Cross_Det2x2(a2, a3, c2, c3) + c1 * "
+		          "SPIRV_Cross_Det2x2(a2, a3, "
+		          "b2, b3);");
+		end_scope();
+		statement_no_indent("");
+		statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
+		statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
+		statement("float4x4 SPIRV_Cross_Inverse(float4x4 m)");
+		begin_scope();
+		statement("float4x4 adj;	// The adjoint matrix (inverse after dividing by determinant)");
+		statement_no_indent("");
+		statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
+		statement(
+		    "adj[0][0] =  SPIRV_Cross_Det3x3(m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
+		    "m[3][3]);");
+		statement(
+		    "adj[0][1] = -SPIRV_Cross_Det3x3(m[0][1], m[0][2], m[0][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
+		    "m[3][3]);");
+		statement(
+		    "adj[0][2] =  SPIRV_Cross_Det3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[3][1], m[3][2], "
+		    "m[3][3]);");
+		statement(
+		    "adj[0][3] = -SPIRV_Cross_Det3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], "
+		    "m[2][3]);");
+		statement_no_indent("");
+		statement(
+		    "adj[1][0] = -SPIRV_Cross_Det3x3(m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
+		    "m[3][3]);");
+		statement(
+		    "adj[1][1] =  SPIRV_Cross_Det3x3(m[0][0], m[0][2], m[0][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
+		    "m[3][3]);");
+		statement(
+		    "adj[1][2] = -SPIRV_Cross_Det3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[3][0], m[3][2], "
+		    "m[3][3]);");
+		statement(
+		    "adj[1][3] =  SPIRV_Cross_Det3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], "
+		    "m[2][3]);");
+		statement_no_indent("");
+		statement(
+		    "adj[2][0] =  SPIRV_Cross_Det3x3(m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
+		    "m[3][3]);");
+		statement(
+		    "adj[2][1] = -SPIRV_Cross_Det3x3(m[0][0], m[0][1], m[0][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
+		    "m[3][3]);");
+		statement(
+		    "adj[2][2] =  SPIRV_Cross_Det3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[3][0], m[3][1], "
+		    "m[3][3]);");
+		statement(
+		    "adj[2][3] = -SPIRV_Cross_Det3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], "
+		    "m[2][3]);");
+		statement_no_indent("");
+		statement(
+		    "adj[3][0] = -SPIRV_Cross_Det3x3(m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
+		    "m[3][2]);");
+		statement(
+		    "adj[3][1] =  SPIRV_Cross_Det3x3(m[0][0], m[0][1], m[0][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
+		    "m[3][2]);");
+		statement(
+		    "adj[3][2] = -SPIRV_Cross_Det3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[3][0], m[3][1], "
+		    "m[3][2]);");
+		statement(
+		    "adj[3][3] =  SPIRV_Cross_Det3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], "
+		    "m[2][2]);");
+		statement_no_indent("");
+		statement("// Calculate the determinant as a combination of the cofactors of the first row.");
+		statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]) + (adj[0][3] "
+		          "* m[3][0]);");
+		statement_no_indent("");
+		statement("// Divide the classical adjoint matrix by the determinant.");
+		statement("// If determinant is zero, matrix is not invertable, so leave it unchanged.");
+		statement("return (det != 0.0f) ? (adj * (1.0f / det)) : m;");
+		end_scope();
+		statement("");
 	}
 }
 
@@ -2829,6 +2981,37 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	case GLSLstd450FindUMsb:
 		emit_unary_func_op(result_type, id, args[0], "firstbithigh");
 		break;
+
+	case GLSLstd450MatrixInverse:
+	{
+		auto &type = get<SPIRType>(result_type);
+		if (type.vecsize == 2 && type.columns == 2)
+		{
+			if (!requires_inverse_2x2)
+			{
+				requires_inverse_2x2 = true;
+				force_recompile = true;
+			}
+		}
+		else if (type.vecsize == 3 && type.columns == 3)
+		{
+			if (!requires_inverse_3x3)
+			{
+				requires_inverse_3x3 = true;
+				force_recompile = true;
+			}
+		}
+		else if (type.vecsize == 4 && type.columns == 4)
+		{
+			if (!requires_inverse_4x4)
+			{
+				requires_inverse_4x4 = true;
+				force_recompile = true;
+			}
+		}
+		emit_unary_func_op(result_type, id, args[0], "SPIRV_Cross_Inverse");
+		break;
+	}
 
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
