@@ -333,6 +333,7 @@ protected:
 		bool force_gl_in_out_block = false;
 		bool can_return_array = true;
 		bool allow_truncated_access_chain = false;
+		bool supports_extensions = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -524,6 +525,9 @@ protected:
 	bool can_use_io_location(spv::StorageClass storage);
 	const Instruction *get_next_instruction_in_block(const Instruction &instr);
 	static uint32_t mask_relevant_memory_semantics(uint32_t semantics);
+
+	std::string convert_float_to_string(const SPIRConstant &value, uint32_t col, uint32_t row);
+	std::string convert_double_to_string(const SPIRConstant &value, uint32_t col, uint32_t row);
 
 private:
 	void init()

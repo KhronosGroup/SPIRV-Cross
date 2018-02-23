@@ -520,9 +520,8 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 				uint32_t semantic_index = clip / 4;
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
-				statement(types[to_declare - 1], " ",
-				          builtin_to_glsl(builtin, StorageClassOutput),
-				          semantic_index, " : SV_ClipDistance", semantic_index, ";");
+				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassOutput), semantic_index,
+				          " : SV_ClipDistance", semantic_index, ";");
 			}
 			break;
 
@@ -537,9 +536,8 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 				uint32_t semantic_index = cull / 4;
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
-				statement(types[to_declare - 1], " ",
-				          builtin_to_glsl(builtin, StorageClassOutput),
-				          semantic_index, " : SV_CullDistance", semantic_index, ";");
+				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassOutput), semantic_index,
+				          " : SV_CullDistance", semantic_index, ";");
 			}
 			break;
 
@@ -643,9 +641,8 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 				uint32_t semantic_index = clip / 4;
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
-				statement(types[to_declare - 1], " ",
-				          builtin_to_glsl(builtin, StorageClassInput),
-				          semantic_index, " : SV_ClipDistance", semantic_index, ";");
+				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassInput), semantic_index,
+				          " : SV_ClipDistance", semantic_index, ";");
 			}
 			break;
 
@@ -660,9 +657,8 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 				uint32_t semantic_index = cull / 4;
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
-				statement(types[to_declare - 1], " ",
-				          builtin_to_glsl(builtin, StorageClassInput),
-				          semantic_index, " : SV_CullDistance", semantic_index, ";");
+				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassInput), semantic_index,
+				          " : SV_CullDistance", semantic_index, ";");
 			}
 			break;
 
@@ -1931,12 +1927,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		case BuiltInClipDistance:
 			for (uint32_t clip = 0; clip < clip_distance_count; clip++)
-				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], ";");
+				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3],
+				          ";");
 			break;
 
 		case BuiltInCullDistance:
 			for (uint32_t cull = 0; cull < cull_distance_count; cull++)
-				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], ";");
+				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3],
+				          ";");
 			break;
 
 		default:
@@ -2035,12 +2033,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			{
 			case BuiltInClipDistance:
 				for (uint32_t clip = 0; clip < clip_distance_count; clip++)
-					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], " = gl_ClipDistance[", clip, "];");
+					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], " = gl_ClipDistance[",
+					          clip, "];");
 				break;
 
 			case BuiltInCullDistance:
 				for (uint32_t cull = 0; cull < cull_distance_count; cull++)
-					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[", cull, "];");
+					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[",
+					          cull, "];");
 				break;
 
 			default:

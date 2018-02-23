@@ -19,6 +19,7 @@
 #include "spirv_common.hpp"
 #include <algorithm>
 #include <assert.h>
+#include <cmath>
 #include <utility>
 
 using namespace spv;
@@ -371,6 +372,7 @@ string CompilerGLSL::compile()
 	if (options.vulkan_semantics)
 		backend.allow_precision_qualifiers = true;
 	backend.force_gl_in_out_block = true;
+	backend.supports_extensions = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
 	find_static_extensions();
@@ -2529,6 +2531,149 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	}
 }
 
+#ifdef _MSC_VER
+// sprintf warning.
+// We cannot rely on snprintf existing because, ..., MSVC.
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+
+string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
+{
+	string res;
+	float float_value = c.scalar_f32(col, row);
+
+	if (isnan(float_value) || isinf(float_value))
+	{
+		// Use special representation.
+		if (!is_legacy())
+		{
+			SPIRType out_type;
+			SPIRType in_type;
+			out_type.basetype = SPIRType::Float;
+			in_type.basetype = SPIRType::UInt;
+			out_type.vecsize = 1;
+			in_type.vecsize = 1;
+			out_type.width = 32;
+			in_type.width = 32;
+
+			char print_buffer[32];
+			sprintf(print_buffer, "0x%xu", c.scalar(col, row));
+			res = join(bitcast_glsl_op(out_type, in_type), "(", print_buffer, ")");
+		}
+		else
+		{
+			if (float_value == numeric_limits<float>::infinity())
+			{
+				if (backend.float_literal_suffix)
+					res = "(1.0f / 0.0f)";
+				else
+					res = "(1.0 / 0.0)";
+			}
+			else if (float_value == -numeric_limits<float>::infinity())
+			{
+				if (backend.float_literal_suffix)
+					res = "(-1.0f / 0.0f)";
+				else
+					res = "(-1.0 / 0.0)";
+			}
+			else if (isnan(float_value))
+			{
+				if (backend.float_literal_suffix)
+					res = "(0.0f / 0.0f)";
+				else
+					res = "(0.0 / 0.0)";
+			}
+			else
+				SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+		}
+	}
+	else
+	{
+		res = convert_to_string(float_value);
+		if (backend.float_literal_suffix)
+			res += "f";
+	}
+
+	return res;
+}
+
+std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
+{
+	string res;
+	float double_value = c.scalar_f64(col, row);
+
+	if (isnan(double_value) || isinf(double_value))
+	{
+		// Use special representation.
+		if (!is_legacy())
+		{
+			SPIRType out_type;
+			SPIRType in_type;
+			out_type.basetype = SPIRType::Double;
+			in_type.basetype = SPIRType::UInt64;
+			out_type.vecsize = 1;
+			in_type.vecsize = 1;
+			out_type.width = 64;
+			in_type.width = 64;
+
+			uint64_t u64_value = c.scalar_u64(col, row);
+
+			if (options.es)
+				SPIRV_CROSS_THROW("64-bit integers/float not supported in ES profile.");
+			require_extension("GL_ARB_gpu_shader_int64");
+
+			char print_buffer[64];
+			sprintf(print_buffer, "0x%llx%s", static_cast<unsigned long long>(u64_value),
+			        backend.long_long_literal_suffix ? "ull" : "ul");
+			res = join(bitcast_glsl_op(out_type, in_type), "(", print_buffer, ")");
+		}
+		else
+		{
+			if (options.es)
+				SPIRV_CROSS_THROW("FP64 not supported in ES profile.");
+			if (options.version < 400)
+				require_extension("GL_ARB_gpu_shader_fp64");
+
+			if (double_value == numeric_limits<double>::infinity())
+			{
+				if (backend.double_literal_suffix)
+					res = "(1.0lf / 0.0lf)";
+				else
+					res = "(1.0 / 0.0)";
+			}
+			else if (double_value == -numeric_limits<double>::infinity())
+			{
+				if (backend.double_literal_suffix)
+					res = "(-1.0lf / 0.0lf)";
+				else
+					res = "(-1.0 / 0.0)";
+			}
+			else if (isnan(double_value))
+			{
+				if (backend.double_literal_suffix)
+					res = "(0.0lf / 0.0lf)";
+				else
+					res = "(0.0 / 0.0)";
+			}
+			else
+				SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+		}
+	}
+	else
+	{
+		res = convert_to_string(double_value);
+		if (backend.double_literal_suffix)
+			res += "lf";
+	}
+
+	return res;
+}
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
+
 string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t vector)
 {
 	auto type = get<SPIRType>(c.constant_type);
@@ -2595,10 +2740,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	case SPIRType::Float:
 		if (splat || swizzle_splat)
 		{
-			res += convert_to_string(c.scalar_f32(vector, 0));
-			if (backend.float_literal_suffix)
-				res += "f";
-
+			res += convert_float_to_string(c, vector, 0);
 			if (swizzle_splat)
 				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
 		}
@@ -2609,10 +2751,8 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
-					res += convert_to_string(c.scalar_f32(vector, i));
+					res += convert_float_to_string(c, vector, i);
 
-				if (backend.float_literal_suffix)
-					res += "f";
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
@@ -2622,10 +2762,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	case SPIRType::Double:
 		if (splat || swizzle_splat)
 		{
-			res += convert_to_string(c.scalar_f64(vector, 0));
-			if (backend.double_literal_suffix)
-				res += "lf";
-
+			res += convert_double_to_string(c, vector, 0);
 			if (swizzle_splat)
 				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
 		}
@@ -2636,11 +2773,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
-				{
-					res += convert_to_string(c.scalar_f64(vector, i));
-					if (backend.double_literal_suffix)
-						res += "lf";
-				}
+					res += convert_double_to_string(c, vector, i);
 
 				if (i + 1 < c.vector_size())
 					res += ", ";
@@ -7672,7 +7805,7 @@ bool CompilerGLSL::has_extension(const std::string &ext) const
 
 void CompilerGLSL::require_extension(const string &ext)
 {
-	if (!has_extension(ext))
+	if (backend.supports_extensions && !has_extension(ext))
 	{
 		forced_extensions.push_back(ext);
 		force_recompile = true;
