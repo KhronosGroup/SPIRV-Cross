@@ -2296,7 +2296,9 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 	if (!type.array.empty())
 	{
 		// For arrays, we can use ArrayStride to get an easy check.
-		return type_struct_member_array_stride(struct_type, index) * type.array.back();
+		bool array_size_literal = type.array_size_literal.back();
+		uint32_t array_size = array_size_literal ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		return type_struct_member_array_stride(struct_type, index) * array_size;
 	}
 	else if (type.basetype == SPIRType::Struct)
 	{

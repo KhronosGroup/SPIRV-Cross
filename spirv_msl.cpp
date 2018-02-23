@@ -3637,7 +3637,12 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 		// For arrays, we can use ArrayStride to get an easy check.
 		// Runtime arrays will have zero size so force to min of one.
 		if (!type.array.empty())
-			return type_struct_member_array_stride(struct_type, index) * max(type.array.back(), 1U);
+		{
+			bool array_size_literal = type.array_size_literal.back();
+			uint32_t array_size =
+			    array_size_literal ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+			return type_struct_member_array_stride(struct_type, index) * max(array_size, 1u);
+		}
 
 		if (type.basetype == SPIRType::Struct)
 			return get_declared_struct_size(type);
