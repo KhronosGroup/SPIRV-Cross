@@ -7869,7 +7869,19 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 {
 	Hasher hasher;
 	for (auto &arg : func.arguments)
-		hasher.u32(arg.type);
+	{
+		// Parameters can vary with pointer type or not,
+		// but that will not change the signature in GLSL/HLSL,
+		// so strip the pointer type before hashing.
+		uint32_t type_id = arg.type;
+		auto *type = &get<SPIRType>(type_id);
+		while (type->pointer)
+		{
+			type_id = type->parent_type;
+			type = &get<SPIRType>(type_id);
+		}
+		hasher.u32(type_id);
+	}
 	uint64_t types_hash = hasher.get();
 
 	auto function_name = to_name(func.self);
