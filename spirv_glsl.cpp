@@ -2544,7 +2544,7 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 	string res;
 	float float_value = c.scalar_f32(col, row);
 
-	if (isnan(float_value) || isinf(float_value))
+	if (std::isnan(float_value) || std::isinf(float_value))
 	{
 		// Use special representation.
 		if (!is_legacy())
@@ -2578,7 +2578,7 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 				else
 					res = "(-1.0 / 0.0)";
 			}
-			else if (isnan(float_value))
+			else if (std::isnan(float_value))
 			{
 				if (backend.float_literal_suffix)
 					res = "(0.0f / 0.0f)";
@@ -2602,9 +2602,9 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
 {
 	string res;
-	float double_value = c.scalar_f64(col, row);
+	double double_value = c.scalar_f64(col, row);
 
-	if (isnan(double_value) || isinf(double_value))
+	if (std::isnan(double_value) || std::isinf(double_value))
 	{
 		// Use special representation.
 		if (!is_legacy())
@@ -2650,7 +2650,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 				else
 					res = "(-1.0 / 0.0)";
 			}
-			else if (isnan(double_value))
+			else if (std::isnan(double_value))
 			{
 				if (backend.double_literal_suffix)
 					res = "(0.0lf / 0.0lf)";
