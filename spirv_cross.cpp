@@ -3751,7 +3751,7 @@ bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &b
 	}
 }
 
-void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltIn builtin)
+void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltIn builtin, uint64_t decoration_flags)
 {
 	// If used, we will need to explicitly declare a new array size for these builtins.
 
@@ -3773,6 +3773,11 @@ void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltI
 			SPIRV_CROSS_THROW("Array size for CullDistance must not be unsized.");
 		compiler.cull_distance_count = array_size;
 	}
+	else if (builtin == BuiltInPosition)
+	{
+		if (decoration_flags & (1ull << DecorationInvariant))
+			compiler.position_invariant = true;
+	}
 }
 
 bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
@@ -3781,13 +3786,14 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		// Only handles variables here.
 		// Builtins which are part of a block are handled in AccessChain.
 		auto *var = compiler.maybe_get<SPIRVariable>(id);
-		if (var && compiler.meta[id].decoration.builtin)
+		auto &decorations = compiler.meta[id].decoration;
+		if (var && decorations.builtin)
 		{
 			auto &type = compiler.get<SPIRType>(var->basetype);
 			auto &flags =
 			    type.storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
-			flags |= 1ull << compiler.meta[id].decoration.builtin_type;
-			handle_builtin(type, compiler.meta[id].decoration.builtin_type);
+			flags |= 1ull << decorations.builtin_type;
+			handle_builtin(type, decorations.builtin_type, decorations.decoration_flags);
 		}
 	};
 
@@ -3875,7 +3881,8 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 					if (decorations.builtin)
 					{
 						flags |= 1ull << decorations.builtin_type;
-						handle_builtin(compiler.get<SPIRType>(type->member_types[index]), decorations.builtin_type);
+						handle_builtin(compiler.get<SPIRType>(type->member_types[index]), decorations.builtin_type,
+						               decorations.decoration_flags);
 					}
 				}
 
