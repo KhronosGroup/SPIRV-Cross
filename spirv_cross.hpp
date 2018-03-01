@@ -108,6 +108,12 @@ enum BufferPackingStandard
 	BufferPackingHLSLCbufferPackOffset
 };
 
+struct EntryPoint
+{
+	std::string name;
+	spv::ExecutionModel execution_model;
+};
+
 class Compiler
 {
 public:
@@ -261,17 +267,23 @@ public:
 	// Entry points should be set right after the constructor completes as some reflection functions traverse the graph from the entry point.
 	// Resource reflection also depends on the entry point.
 	// By default, the current entry point is set to the first OpEntryPoint which appears in the SPIR-V module.
+	SPIRV_CROSS_DEPRECATED("Please use get_entry_points_and_stages instead.")
 	std::vector<std::string> get_entry_points() const;
+	SPIRV_CROSS_DEPRECATED("Please use set_entry_point(const std::string &, spv::ExecutionModel) instead.")
 	void set_entry_point(const std::string &name);
 
 	// Renames an entry point from old_name to new_name.
 	// If old_name is currently selected as the current entry point, it will continue to be the current entry point,
 	// albeit with a new name.
 	// get_entry_points() is essentially invalidated at this point.
+	SPIRV_CROSS_DEPRECATED(
+	    "Please use rename_entry_point(const std::string&, const std::string&, spv::ExecutionModel) instead.")
 	void rename_entry_point(const std::string &old_name, const std::string &new_name);
 
 	// Returns the internal data structure for entry points to allow poking around.
+	SPIRV_CROSS_DEPRECATED("Please use get_entry_point(const std::string &, spv::ExecutionModel instead.")
 	const SPIREntryPoint &get_entry_point(const std::string &name) const;
+	SPIRV_CROSS_DEPRECATED("Please use get_entry_point(const std::string &, spv::ExecutionModel instead.")
 	SPIREntryPoint &get_entry_point(const std::string &name);
 
 	// Some shader languages restrict the names that can be given to entry points, and the
@@ -282,7 +294,21 @@ public:
 	// the name, as updated by the backend during the call to compile(). If the name is not
 	// illegal, and has not been renamed, or if this function is called before compile(),
 	// this function will simply return the same name.
+	SPIRV_CROSS_DEPRECATED(
+	    "Please use get_cleansed_entry_point_name(const std::string &, spv::ExecutionModel) instead.")
 	const std::string &get_cleansed_entry_point_name(const std::string &name) const;
+
+	// New variants of entry point query and reflection.
+	// Names for entry points in the SPIR-V module may alias if they belong to different execution models.
+	// To disambiguate, we must pass along with the entry point names the execution model.
+	std::vector<EntryPoint> get_entry_points_and_stages() const;
+	void set_entry_point(const std::string &entry, spv::ExecutionModel execution_model);
+	void rename_entry_point(const std::string &old_name, const std::string &new_name,
+	                        spv::ExecutionModel execution_model);
+	const SPIREntryPoint &get_entry_point(const std::string &name, spv::ExecutionModel execution_model) const;
+	SPIREntryPoint &get_entry_point(const std::string &name, spv::ExecutionModel execution_model);
+	const std::string &get_cleansed_entry_point_name(const std::string &name,
+	                                                 spv::ExecutionModel execution_model) const;
 
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;
@@ -793,6 +819,11 @@ protected:
 
 	bool instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op, const uint32_t *args,
 	                                uint32_t length);
+
+private:
+	// Used only to implement the old deprecated get_entry_point() interface.
+	const SPIREntryPoint &get_first_entry_point(const std::string &name) const;
+	SPIREntryPoint &get_first_entry_point(const std::string &name);
 };
 }
 
