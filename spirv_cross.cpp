@@ -2589,20 +2589,51 @@ vector<string> Compiler::get_entry_points() const
 	return entries;
 }
 
+vector<EntryPoint> Compiler::get_entry_points_and_stages() const
+{
+	vector<EntryPoint> entries;
+	for (auto &entry : entry_points)
+		entries.push_back({ entry.second.orig_name, entry.second.model });
+	return entries;
+}
+
 void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name)
 {
-	auto &entry = get_entry_point(old_name);
+	auto &entry = get_first_entry_point(old_name);
+	entry.orig_name = new_name;
+	entry.name = new_name;
+}
+
+void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name, spv::ExecutionModel model)
+{
+	auto &entry = get_entry_point(old_name, model);
 	entry.orig_name = new_name;
 	entry.name = new_name;
 }
 
 void Compiler::set_entry_point(const std::string &name)
 {
-	auto &entry = get_entry_point(name);
+	auto &entry = get_first_entry_point(name);
+	entry_point = entry.self;
+}
+
+void Compiler::set_entry_point(const std::string &name, spv::ExecutionModel model)
+{
+	auto &entry = get_entry_point(name, model);
 	entry_point = entry.self;
 }
 
 SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
+{
+	return get_first_entry_point(name);
+}
+
+const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
+{
+	return get_first_entry_point(name);
+}
+
+SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
 {
 	auto itr =
 	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
@@ -2615,11 +2646,37 @@ SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
 	return itr->second;
 }
 
-const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
+const SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name) const
 {
 	auto itr =
 	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
 		    return entry.second.orig_name == name;
+	    });
+
+	if (itr == end(entry_points))
+		SPIRV_CROSS_THROW("Entry point does not exist.");
+
+	return itr->second;
+}
+
+SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionModel model)
+{
+	auto itr =
+	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		    return entry.second.orig_name == name && entry.second.model == model;
+	    });
+
+	if (itr == end(entry_points))
+		SPIRV_CROSS_THROW("Entry point does not exist.");
+
+	return itr->second;
+}
+
+const SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionModel model) const
+{
+	auto itr =
+	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		    return entry.second.orig_name == name && entry.second.model == model;
 	    });
 
 	if (itr == end(entry_points))
@@ -2630,7 +2687,12 @@ const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
 
 const string &Compiler::get_cleansed_entry_point_name(const std::string &name) const
 {
-	return get_entry_point(name).name;
+	return get_first_entry_point(name).name;
+}
+
+const string &Compiler::get_cleansed_entry_point_name(const std::string &name, ExecutionModel model) const
+{
+	return get_entry_point(name, model).name;
 }
 
 const SPIREntryPoint &Compiler::get_entry_point() const
