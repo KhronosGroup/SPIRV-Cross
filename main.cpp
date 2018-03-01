@@ -498,7 +498,8 @@ static void print_help()
 	                "[--hlsl] [--shader-model] [--hlsl-enable-compat] "
 	                "[--separate-shader-objects]"
 	                "[--pls-in format input-name] [--pls-out format output-name] [--remap source_name target_name "
-	                "components] [--extension ext] [--entry name] [--stage <stage (vert, frag, geom, tesc, tese, comp)>] [--remove-unused-variables] "
+	                "components] [--extension ext] [--entry name] [--stage <stage (vert, frag, geom, tesc, tese, "
+	                "comp)>] [--remove-unused-variables] "
 	                "[--flatten-multidimensional-arrays] [--no-420pack-extension] "
 	                "[--remap-variable-type <variable_name> <new_variable_type>] "
 	                "[--rename-interface-variable <in|out> <location> <new_variable_name>] "
@@ -822,8 +823,7 @@ static int main_inner(int argc, char *argv[])
 
 			if (entry_point.empty())
 			{
-				fprintf(stderr, "Could not find an entry point with stage: %s\n",
-				        args.entry_stage.c_str());
+				fprintf(stderr, "Could not find an entry point with stage: %s\n", args.entry_stage.c_str());
 				return EXIT_FAILURE;
 			}
 		}
@@ -842,8 +842,8 @@ static int main_inner(int argc, char *argv[])
 
 			if (!exists)
 			{
-				fprintf(stderr, "Could not find an entry point %s with stage: %s\n",
-				        entry_point.c_str(), args.entry_stage.c_str());
+				fprintf(stderr, "Could not find an entry point %s with stage: %s\n", entry_point.c_str(),
+				        args.entry_stage.c_str());
 				return EXIT_FAILURE;
 			}
 		}
@@ -864,14 +864,12 @@ static int main_inner(int argc, char *argv[])
 
 		if (stage_count == 0)
 		{
-			fprintf(stderr, "There is no entry point with name: %s\n",
-			        entry_point.c_str());
+			fprintf(stderr, "There is no entry point with name: %s\n", entry_point.c_str());
 			return EXIT_FAILURE;
 		}
 		else if (stage_count > 1)
 		{
-			fprintf(stderr, "There is more than one entry point with name: %s. Use --stage.\n",
-			        entry_point.c_str());
+			fprintf(stderr, "There is more than one entry point with name: %s. Use --stage.\n", entry_point.c_str());
 			return EXIT_FAILURE;
 		}
 	}

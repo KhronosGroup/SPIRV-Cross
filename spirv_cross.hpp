@@ -276,7 +276,8 @@ public:
 	// If old_name is currently selected as the current entry point, it will continue to be the current entry point,
 	// albeit with a new name.
 	// get_entry_points() is essentially invalidated at this point.
-	SPIRV_CROSS_DEPRECATED("Please use rename_entry_point(const std::string&, const std::string&, spv::ExecutionModel) instead.")
+	SPIRV_CROSS_DEPRECATED(
+	    "Please use rename_entry_point(const std::string&, const std::string&, spv::ExecutionModel) instead.")
 	void rename_entry_point(const std::string &old_name, const std::string &new_name);
 
 	// Returns the internal data structure for entry points to allow poking around.
@@ -293,7 +294,8 @@ public:
 	// the name, as updated by the backend during the call to compile(). If the name is not
 	// illegal, and has not been renamed, or if this function is called before compile(),
 	// this function will simply return the same name.
-	SPIRV_CROSS_DEPRECATED("Please use get_cleansed_entry_point_name(const std::string &, spv::ExecutionModel) instead.")
+	SPIRV_CROSS_DEPRECATED(
+	    "Please use get_cleansed_entry_point_name(const std::string &, spv::ExecutionModel) instead.")
 	const std::string &get_cleansed_entry_point_name(const std::string &name) const;
 
 	// New variants of entry point query and reflection.
@@ -301,10 +303,12 @@ public:
 	// To disambiguate, we must pass along with the entry point names the execution model.
 	std::vector<EntryPoint> get_entry_points_and_stages() const;
 	void set_entry_point(const std::string &entry, spv::ExecutionModel execution_model);
-	void rename_entry_point(const std::string &old_name, const std::string &new_name, spv::ExecutionModel execution_model);
+	void rename_entry_point(const std::string &old_name, const std::string &new_name,
+	                        spv::ExecutionModel execution_model);
 	const SPIREntryPoint &get_entry_point(const std::string &name, spv::ExecutionModel execution_model) const;
 	SPIREntryPoint &get_entry_point(const std::string &name, spv::ExecutionModel execution_model);
-	const std::string &get_cleansed_entry_point_name(const std::string &name, spv::ExecutionModel execution_model) const;
+	const std::string &get_cleansed_entry_point_name(const std::string &name,
+	                                                 spv::ExecutionModel execution_model) const;
 
 	// Query and modify OpExecutionMode.
 	uint64_t get_execution_mode_mask() const;
