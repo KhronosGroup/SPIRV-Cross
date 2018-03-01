@@ -1816,6 +1816,11 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	bool emitted_block = false;
 	bool builtin_array = false;
 
+	// Need to use declared size in the type.
+	// These variables might have been declared, but not statically used, so we haven't deduced their size yet.
+	uint32_t cull_distance_size = 0;
+	uint32_t clip_distance_size = 0;
+
 	for (auto &id : ids)
 	{
 		if (id.get_type() != TypeVariable)
@@ -1828,16 +1833,32 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 
 		if (var.storage == storage && block && is_builtin_variable(var))
 		{
+			uint32_t index = 0;
 			for (auto &m : meta[type.self].members)
+			{
 				if (m.builtin)
+				{
 					builtins |= 1ull << m.builtin_type;
+					if (m.builtin_type == BuiltInCullDistance)
+						cull_distance_size = get<SPIRType>(type.member_types[index]).array.front();
+					else if (m.builtin_type == BuiltInClipDistance)
+						clip_distance_size = get<SPIRType>(type.member_types[index]).array.front();
+				}
+				index++;
+			}
 		}
 		else if (var.storage == storage && !block && is_builtin_variable(var))
 		{
 			// While we're at it, collect all declared global builtins (HLSL mostly ...).
 			auto &m = meta[var.self].decoration;
 			if (m.builtin)
+			{
 				global_builtins |= 1ull << m.builtin_type;
+				if (m.builtin_type == BuiltInCullDistance)
+					cull_distance_size = type.array.front();
+				else if (m.builtin_type == BuiltInClipDistance)
+					clip_distance_size = type.array.front();
+			}
 		}
 
 		if (!builtins)
@@ -1874,9 +1895,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	if (emitted_builtins & (1ull << BuiltInPointSize))
 		statement("float gl_PointSize;");
 	if (emitted_builtins & (1ull << BuiltInClipDistance))
-		statement("float gl_ClipDistance[", clip_distance_count, "];");
+		statement("float gl_ClipDistance[", clip_distance_size, "];");
 	if (emitted_builtins & (1ull << BuiltInCullDistance))
-		statement("float gl_CullDistance[", cull_distance_count, "];");
+		statement("float gl_CullDistance[", cull_distance_size, "];");
 
 	bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
 	if (builtin_array)
@@ -1960,6 +1981,12 @@ void CompilerGLSL::emit_resources()
 			statement(storage, " float gl_CullDistance[", cull_distance_count, "];");
 		if (clip_distance_count != 0 || cull_distance_count != 0)
 			statement("");
+	}
+
+	if (position_invariant)
+	{
+		statement("invariant gl_Position;");
+		statement("");
 	}
 
 	bool emitted = false;
