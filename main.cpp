@@ -15,6 +15,7 @@
  */
 
 #include "spirv_cpp.hpp"
+#include "spirv_cross_util.hpp"
 #include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
@@ -592,33 +593,6 @@ static PlsFormat pls_format(const char *str)
 		return PlsNone;
 }
 
-void rename_interface_variable(Compiler &compiler, const vector<Resource> &resources,
-                               const InterfaceVariableRename &rename)
-{
-	for (auto &v : resources)
-	{
-		if (!compiler.has_decoration(v.id, spv::DecorationLocation))
-			continue;
-
-		auto loc = compiler.get_decoration(v.id, spv::DecorationLocation);
-		if (loc != rename.location)
-			continue;
-
-		auto &type = compiler.get_type(v.base_type_id);
-
-		// This is more of a friendly variant. If we need to rename interface variables, we might have to rename
-		// structs as well and make sure all the names match up.
-		if (type.basetype == SPIRType::Struct)
-		{
-			compiler.set_name(v.base_type_id, join("SPIRV_Cross_Interface_Location", rename.location));
-			for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
-				compiler.set_member_name(v.base_type_id, i, join("InterfaceMember", i));
-		}
-
-		compiler.set_name(v.id, rename.variable_name);
-	}
-}
-
 static ExecutionModel stage_to_execution_model(const std::string &stage)
 {
 	if (stage == "vert")
@@ -964,9 +938,11 @@ static int main_inner(int argc, char *argv[])
 	for (auto &rename : args.interface_variable_renames)
 	{
 		if (rename.storageClass == StorageClassInput)
-			rename_interface_variable(*compiler, res.stage_inputs, rename);
+			spirv_cross_util::rename_interface_variable(*compiler, res.stage_inputs, rename.location,
+			                                            rename.variable_name);
 		else if (rename.storageClass == StorageClassOutput)
-			rename_interface_variable(*compiler, res.stage_outputs, rename);
+			spirv_cross_util::rename_interface_variable(*compiler, res.stage_outputs, rename.location,
+			                                            rename.variable_name);
 		else
 		{
 			fprintf(stderr, "error at --rename-interface-variable <in|out> ...\n");
