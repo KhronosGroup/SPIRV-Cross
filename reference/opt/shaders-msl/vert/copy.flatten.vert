@@ -16,6 +16,13 @@ struct UBO
     Light lights[4];
 };
 
+struct Light_1
+{
+    float3 Position;
+    float Radius;
+    float4 Color;
+};
+
 struct main0_in
 {
     float3 aNormal [[attribute(1)]];
