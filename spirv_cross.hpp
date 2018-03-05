@@ -824,6 +824,9 @@ private:
 	// Used only to implement the old deprecated get_entry_point() interface.
 	const SPIREntryPoint &get_first_entry_point(const std::string &name) const;
 	SPIREntryPoint &get_first_entry_point(const std::string &name);
+
+	void fixup_type_alias();
+	bool type_is_block_like(const SPIRType &type) const;
 };
 }
 

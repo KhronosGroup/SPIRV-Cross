@@ -612,7 +612,8 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	// with just different offsets, matrix layouts, etc ...
 	// Type-punning with these types is legal, which complicates things
 	// when we are storing struct and array types in an SSBO for example.
-	if (type.type_alias != 0)
+	// If the type master is packed however, we can no longer assume that the struct declaration will be redundant.
+	if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
 		return;
 
 	// Don't declare empty structs in GLSL, this is not allowed.
