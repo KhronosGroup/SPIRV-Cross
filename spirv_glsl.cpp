@@ -4384,6 +4384,10 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 		return "uint64BitsToDouble";
 	else if (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::UInt && in_type.vecsize == 2)
 		return "packUint2x32";
+	else if (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UInt && in_type.vecsize == 1)
+		return "unpackFloat2x16";
+	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Half && in_type.vecsize == 2)
+		return "packFloat2x16";
 	else
 		return "";
 }
@@ -6492,6 +6496,26 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		UFOP(fwidth);
 		if (is_legacy_es())
 			require_extension("GL_OES_standard_derivatives");
+		break;
+
+	case OpFwidthCoarse:
+		UFOP(fwidthCoarse);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
+		break;
+
+	case OpFwidthFine:
+		UFOP(fwidthFine);
+		if (options.es)
+		{
+			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
+		}
+		if (options.version < 450)
+			require_extension("GL_ARB_derivative_control");
 		break;
 
 	// Bitfield
