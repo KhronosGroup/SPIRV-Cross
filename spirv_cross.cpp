@@ -1565,7 +1565,14 @@ void Compiler::parse(const Instruction &instruction)
 		uint32_t id = ops[0];
 		uint32_t width = ops[1];
 		auto &type = set<SPIRType>(id);
-		type.basetype = width > 32 ? SPIRType::Double : SPIRType::Float;
+		if (width == 64)
+			type.basetype = SPIRType::Double;
+		else if (width == 32)
+			type.basetype = SPIRType::Float;
+		else if (width == 16)
+			type.basetype = SPIRType::Half;
+		else
+			SPIRV_CROSS_THROW("Unrecognized bit-width of floating point type.");
 		type.width = width;
 		break;
 	}

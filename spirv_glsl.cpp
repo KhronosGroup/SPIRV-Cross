@@ -26,6 +26,13 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static bool type_is_floating_point(const SPIRType &type)
+{
+	return type.basetype == SPIRType::Half ||
+	       type.basetype == SPIRType::Float ||
+	       type.basetype == SPIRType::Double;
+}
+
 static bool packing_is_vec4_padded(BufferPackingStandard packing)
 {
 	switch (packing)
@@ -319,6 +326,9 @@ void CompilerGLSL::find_static_extensions()
 				if (!options.es)
 					require_extension("GL_ARB_gpu_shader_int64");
 			}
+
+			if (type.basetype == SPIRType::Half)
+				require_extension("GL_AMD_gpu_shader_half_float");
 		}
 	}
 
@@ -2567,6 +2577,29 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 #pragma warning(disable : 4996)
 #endif
 
+string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
+{
+	string res;
+	float float_value = c.scalar_f16(col, row);
+
+	if (std::isnan(float_value) || std::isinf(float_value))
+	{
+		// There is no uintBitsToFloat for 16-bit, so have to rely on legacy fallback here.
+		if (float_value == numeric_limits<float>::infinity())
+			res = "(1.0hf / 0.0hf)";
+		else if (float_value == -numeric_limits<float>::infinity())
+			res = "(-1.0hf / 0.0hf)";
+		else if (std::isnan(float_value))
+			res = "(0.0hf / 0.0hf)";
+		else
+			SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+	}
+	else
+		res = convert_to_string(float_value) + "hf";
+
+	return res;
+}
+
 string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
 {
 	string res;
@@ -2712,7 +2745,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 	bool splat = backend.use_constructor_splatting && c.vector_size() > 1;
 	bool swizzle_splat = backend.can_swizzle_scalar && c.vector_size() > 1;
 
-	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Double)
+	if (!type_is_floating_point(type))
 	{
 		// Cannot swizzle literal integers as a special case.
 		swizzle_splat = false;
@@ -2766,6 +2799,28 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 
 	switch (type.basetype)
 	{
+	case SPIRType::Half:
+		if (splat || swizzle_splat)
+		{
+			res += convert_half_to_string(c, vector, 0);
+			if (swizzle_splat)
+				res = remap_swizzle(get<SPIRType>(c.constant_type), 1, res);
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+					res += convert_half_to_string(c, vector, i);
+
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
 	case SPIRType::Float:
 		if (splat || swizzle_splat)
 		{
@@ -3308,6 +3363,10 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 	case SPIRType::Int:
 	case SPIRType::UInt:
 		ret = cleft->scalar() == 0 && cright->scalar() == 1;
+		break;
+
+	case SPIRType::Half:
+		ret = cleft->scalar_f16() == 0.0f && cright->scalar_f16() == 1.0f;
 		break;
 
 	case SPIRType::Float:
@@ -5716,7 +5775,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
 
 		if (ids[elems[0]].get_type() == TypeConstant &&
-		    (in_type.basetype != SPIRType::Float && in_type.basetype != SPIRType::Double))
+		    !type_is_floating_point(in_type))
 		{
 			// Cannot swizzle literal integers as a special case.
 			swizzle_splat = false;
@@ -7724,6 +7783,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return backend.basic_uint_type;
 		case SPIRType::AtomicCounter:
 			return "atomic_uint";
+		case SPIRType::Half:
+			return "float16_t";
 		case SPIRType::Float:
 			return "float";
 		case SPIRType::Double:
@@ -7746,6 +7807,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return join("ivec", type.vecsize);
 		case SPIRType::UInt:
 			return join("uvec", type.vecsize);
+		case SPIRType::Half:
+			return join("f16vec", type.vecsize);
 		case SPIRType::Float:
 			return join("vec", type.vecsize);
 		case SPIRType::Double:
@@ -7768,6 +7831,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return join("imat", type.vecsize);
 		case SPIRType::UInt:
 			return join("umat", type.vecsize);
+		case SPIRType::Half:
+			return join("f16mat", type.vecsize);
 		case SPIRType::Float:
 			return join("mat", type.vecsize);
 		case SPIRType::Double:
@@ -7787,6 +7852,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return join("imat", type.columns, "x", type.vecsize);
 		case SPIRType::UInt:
 			return join("umat", type.columns, "x", type.vecsize);
+		case SPIRType::Half:
+			return join("f16mat", type.columns, "x", type.vecsize);
 		case SPIRType::Float:
 			return join("mat", type.columns, "x", type.vecsize);
 		case SPIRType::Double:
