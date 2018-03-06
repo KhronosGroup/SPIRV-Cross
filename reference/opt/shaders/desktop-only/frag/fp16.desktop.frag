@@ -11,7 +11,7 @@ layout(location = 3) in f16vec4 v4;
 
 void main()
 {
-    f16vec4 _508;
-    f16vec4 _580 = modf(v4, _508);
+    f16vec4 _511;
+    f16vec4 _583 = modf(v4, _511);
 }
 

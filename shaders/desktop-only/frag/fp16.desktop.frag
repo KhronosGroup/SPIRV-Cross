@@ -25,11 +25,12 @@ void test_constants()
 {
 	float16_t a = 1.0hf;
 	float16_t b = 1.5hf;
-	float16_t c = -1.5hf;
-	float16_t d = (0.0hf / 0.0hf);
-	float16_t e = (1.0hf / 0.0hf);
-	float16_t f = (-1.0hf / 0.0hf);
-	float16_t g = 1014.0hf;
+	float16_t c = -1.5hf; // Negatives
+	float16_t d = (0.0hf / 0.0hf); // NaN
+	float16_t e = (1.0hf / 0.0hf); // +Inf
+	float16_t f = (-1.0hf / 0.0hf); // -Inf
+	float16_t g = 1014.0hf; // Large.
+	float16_t h = 0.000001hf; // Denormal
 }
 
 float16_t test_result()

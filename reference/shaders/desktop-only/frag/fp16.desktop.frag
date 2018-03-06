@@ -31,6 +31,7 @@ void test_constants()
     float16_t e = (1.0hf / 0.0hf);
     float16_t f = (-1.0hf / 0.0hf);
     float16_t g = 1014.0hf;
+    float16_t h = 9.5367431640625e-07hf;
 }
 
 float16_t test_result()
@@ -86,8 +87,8 @@ void test_builtins()
     res = fract(v4);
     res = mod(v4, v4);
     f16vec4 tmp;
-    f16vec4 _229 = modf(v4, tmp);
-    res = _229;
+    f16vec4 _231 = modf(v4, tmp);
+    res = _231;
     res = min(v4, v4);
     res = max(v4, v4);
     res = clamp(v4, v4, v4);
@@ -98,10 +99,10 @@ void test_builtins()
     bvec4 btmp = isnan(v4);
     btmp = isinf(v4);
     res = fma(v4, v4, v4);
-    ResType _273;
-    _273._m0 = frexp(v4, _273._m1);
-    ivec4 itmp = _273._m1;
-    res = _273._m0;
+    ResType _275;
+    _275._m0 = frexp(v4, _275._m1);
+    ivec4 itmp = _275._m1;
+    res = _275._m0;
     res = ldexp(res, itmp);
     uint pack0 = packFloat2x16(v4.xy);
     uint pack1 = packFloat2x16(v4.zw);
