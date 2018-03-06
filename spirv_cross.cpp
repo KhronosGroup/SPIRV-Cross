@@ -188,7 +188,12 @@ string Compiler::to_name(uint32_t id, bool allow_alias) const
 		// as that can be overridden by the reflection APIs after parse.
 		auto &type = get<SPIRType>(id);
 		if (type.type_alias)
-			return to_name(type.type_alias);
+		{
+			// If the alias master has been specially packed, we will have emitted a clean variant as well,
+			// so skip the name aliasing here.
+			if (!has_decoration(type.type_alias, DecorationCPacked))
+				return to_name(type.type_alias);
+		}
 	}
 
 	if (meta[id].decoration.alias.empty())
@@ -802,6 +807,71 @@ static bool is_valid_spirv_version(uint32_t version)
 	}
 }
 
+bool Compiler::type_is_block_like(const SPIRType &type) const
+{
+	if (type.basetype != SPIRType::Struct)
+		return false;
+
+	if (has_decoration(type.self, DecorationBlock) ||
+	    has_decoration(type.self, DecorationBufferBlock))
+	{
+		return true;
+	}
+
+	// Block-like types may have Offset decorations.
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+		if (has_member_decoration(type.self, i, DecorationOffset))
+			return true;
+
+	return false;
+}
+
+void Compiler::fixup_type_alias()
+{
+	// Due to how some backends work, the "master" type of type_alias must be a block-like type if it exists.
+	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
+	// alias if the slave type is a block type.
+	for (auto &id : ids)
+	{
+		if (id.get_type() != TypeType)
+			continue;
+
+		auto &type = id.get<SPIRType>();
+
+		if (type.type_alias && type_is_block_like(type))
+		{
+			// Become the master.
+			for (auto &other_id : ids)
+			{
+				if (other_id.get_type() != TypeType)
+					continue;
+				if (other_id.get_id() == type.self)
+					continue;
+
+				auto &other_type = other_id.get<SPIRType>();
+				if (other_type.type_alias == type.type_alias)
+					other_type.type_alias = type.self;
+			}
+
+			get<SPIRType>(type.type_alias).type_alias = id.get_id();
+			type.type_alias = 0;
+		}
+	}
+
+	for (auto &id : ids)
+	{
+		if (id.get_type() != TypeType)
+			continue;
+
+		auto &type = id.get<SPIRType>();
+		if (type.type_alias && type_is_block_like(type))
+		{
+			// This is not allowed, drop the type_alias.
+			type.type_alias = 0;
+		}
+	}
+}
+
 void Compiler::parse()
 {
 	auto len = spirv.size();
@@ -853,6 +923,8 @@ void Compiler::parse()
 			}
 		}
 	}
+
+	fixup_type_alias();
 }
 
 void Compiler::flatten_interface_block(uint32_t id)

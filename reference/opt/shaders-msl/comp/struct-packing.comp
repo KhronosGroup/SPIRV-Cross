@@ -67,11 +67,54 @@ struct SSBO1
     float array[1];
 };
 
+struct S0_1
+{
+    float2 a[1];
+    float b;
+};
+
+struct S1_1
+{
+    packed_float3 a;
+    float b;
+};
+
+struct S2_1
+{
+    float3 a[1];
+    float b;
+};
+
+struct S3_1
+{
+    float2 a;
+    float b;
+};
+
+struct S4_1
+{
+    float2 c;
+};
+
+struct Content_1
+{
+    S0_1 m0s[1];
+    S1_1 m1s[1];
+    S2_1 m2s[1];
+    S0_1 m0;
+    S1_1 m1;
+    S2_1 m2;
+    S3_1 m3;
+    char pad7[4];
+    float m4;
+    S4_1 m3s[8];
+};
+
 struct SSBO0
 {
-    Content content;
-    Content content1[2];
-    Content content2;
+    Content_1 content;
+    Content_1 content1[2];
+    Content_1 content2;
     float array[1];
 };
 
