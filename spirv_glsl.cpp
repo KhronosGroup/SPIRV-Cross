@@ -876,15 +876,20 @@ uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPack
 	case SPIRType::Int64:
 	case SPIRType::UInt64:
 		return 8;
-	default:
+	case SPIRType::Float:
+	case SPIRType::Int:
+	case SPIRType::UInt:
 		return 4;
+	case SPIRType::Half:
+		return 2;
+
+	default:
+		SPIRV_CROSS_THROW("Unrecognized type in type_to_packed_base_size.");
 	}
 }
 
 uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t flags, BufferPackingStandard packing)
 {
-	const uint32_t base_alignment = type_to_packed_base_size(type, packing);
-
 	if (!type.array.empty())
 	{
 		uint32_t minimum_alignment = 1;
@@ -918,6 +923,8 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, uint64_t f
 	}
 	else
 	{
+		const uint32_t base_alignment = type_to_packed_base_size(type, packing);
+
 		// Vectors are *not* aligned in HLSL, but there's an extra rule where vectors cannot straddle
 		// a vec4, this is handled outside since that part knows our current offset.
 		if (type.columns == 1 && packing_is_hlsl(packing))
@@ -999,7 +1006,6 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 		       type_to_packed_array_stride(type, flags, packing);
 	}
 
-	const uint32_t base_alignment = type_to_packed_base_size(type, packing);
 	uint32_t size = 0;
 
 	if (type.basetype == SPIRType::Struct)
@@ -1027,6 +1033,8 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, uint64_t flags,
 	}
 	else
 	{
+		const uint32_t base_alignment = type_to_packed_base_size(type, packing);
+
 		if (type.columns == 1)
 			size = type.vecsize * base_alignment;
 
