@@ -2592,16 +2592,16 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 	{
 		// There is no uintBitsToFloat for 16-bit, so have to rely on legacy fallback here.
 		if (float_value == numeric_limits<float>::infinity())
-			res = "(1.0hf / 0.0hf)";
+			res = join("(1.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
 		else if (float_value == -numeric_limits<float>::infinity())
-			res = "(-1.0hf / 0.0hf)";
+			res = join("(-1.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
 		else if (std::isnan(float_value))
-			res = "(0.0hf / 0.0hf)";
+			res = join("(0.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
 		else
 			SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
 	}
 	else
-		res = convert_to_string(float_value) + "hf";
+		res = convert_to_string(float_value) + backend.half_literal_suffix;
 
 	return res;
 }

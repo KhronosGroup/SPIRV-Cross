@@ -25,7 +25,12 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-static const uint32_t k_unknown_location = ~0;
+static const uint32_t k_unknown_location = ~0u;
+
+static bool type_is_floating_point(const SPIRType &type)
+{
+	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
+}
 
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_attrs,
                          vector<MSLResourceBinding> *p_res_bindings)
@@ -114,6 +119,7 @@ string CompilerMSL::compile()
 	CompilerGLSL::options.es = false;
 	CompilerGLSL::options.version = 450;
 	backend.float_literal_suffix = false;
+	backend.half_literal_suffix = "h";
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
@@ -597,7 +603,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char ||
 		         type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
 		         type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
-		         type.basetype == SPIRType::Float || type.basetype == SPIRType::Double ||
+		         type_is_floating_point(type) ||
 		         type.basetype == SPIRType::Boolean)
 		{
 			bool is_builtin = is_builtin_variable(*p_var);
@@ -1472,6 +1478,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		UFOP(dfdy);
 		break;
 
+	case OpFwidth:
+	case OpFwidthCoarse:
+	case OpFwidthFine:
+		UFOP(fwidth);
+		break;
+
 	// Bitfield
 	case OpBitFieldInsert:
 		QFOP(insert_bits);
@@ -2257,7 +2269,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	bool forward = should_forward(coord);
 	auto coord_expr = to_enclosed_expression(coord);
 	auto &coord_type = expression_type(coord);
-	bool coord_is_fp = (coord_type.basetype == SPIRType::Float) || (coord_type.basetype == SPIRType::Double);
+	bool coord_is_fp = type_is_floating_point(coord_type);
 	bool is_cube_fetch = false;
 
 	string tex_coords = coord_expr;
@@ -3311,8 +3323,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	case SPIRType::UInt64:
 		type_name = "size_t";
 		break;
+	case SPIRType::Half:
+		type_name = "half";
+		break;
 	case SPIRType::Float:
-		type_name = (type.width == 16 ? "half" : "float");
+		type_name = "float";
 		break;
 	case SPIRType::Double:
 		type_name = "double"; // Currently unsupported
@@ -3449,7 +3464,9 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double) ||
 	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double) ||
 	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64) ||
-	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64))
+	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64) ||
+	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UInt) ||
+	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Half))
 		return "as_type<" + type_to_glsl(out_type) + ">";
 
 	return "";
