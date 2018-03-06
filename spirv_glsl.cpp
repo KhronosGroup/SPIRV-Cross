@@ -28,9 +28,7 @@ using namespace std;
 
 static bool type_is_floating_point(const SPIRType &type)
 {
-	return type.basetype == SPIRType::Half ||
-	       type.basetype == SPIRType::Float ||
-	       type.basetype == SPIRType::Double;
+	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
 }
 
 static bool packing_is_vec4_padded(BufferPackingStandard packing)
@@ -5786,8 +5784,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
 		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
 
-		if (ids[elems[0]].get_type() == TypeConstant &&
-		    !type_is_floating_point(in_type))
+		if (ids[elems[0]].get_type() == TypeConstant && !type_is_floating_point(in_type))
 		{
 			// Cannot swizzle literal integers as a special case.
 			swizzle_splat = false;
