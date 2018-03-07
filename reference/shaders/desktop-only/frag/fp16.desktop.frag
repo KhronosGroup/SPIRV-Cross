@@ -130,9 +130,6 @@ void test_builtins()
     res = fwidth(v4);
     res = fwidthFine(v4);
     res = fwidthCoarse(v4);
-    res = interpolateAtCentroid(v4);
-    res = interpolateAtSample(v4, 0);
-    res = interpolateAtOffset(v4, f16vec2(0.0999755859375hf));
 }
 
 void main()
