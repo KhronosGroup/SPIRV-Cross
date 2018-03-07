@@ -598,8 +598,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char ||
 		         type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
 		         type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
-		         type_is_floating_point(type) ||
-		         type.basetype == SPIRType::Boolean)
+		         type_is_floating_point(type) || type.basetype == SPIRType::Boolean)
 		{
 			bool is_builtin = is_builtin_variable(*p_var);
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));

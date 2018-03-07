@@ -812,8 +812,7 @@ bool Compiler::type_is_block_like(const SPIRType &type) const
 	if (type.basetype != SPIRType::Struct)
 		return false;
 
-	if (has_decoration(type.self, DecorationBlock) ||
-	    has_decoration(type.self, DecorationBufferBlock))
+	if (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock))
 	{
 		return true;
 	}
