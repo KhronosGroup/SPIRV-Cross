@@ -3679,7 +3679,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				// so we will have to lift the dominator up to the relevant loop header instead.
 				builder.add_block(this->continue_block_to_loop_header[block]);
 
-				if (type.vecsize == 1 && type.columns == 1)
+				// Arrays or structs cannot be loop variables.
+				if (type.vecsize == 1 && type.columns == 1 && type.basetype != SPIRType::Struct && type.array.empty())
 				{
 					// The variable is used in multiple continue blocks, this is not a loop
 					// candidate, signal that by setting block to -1u.
