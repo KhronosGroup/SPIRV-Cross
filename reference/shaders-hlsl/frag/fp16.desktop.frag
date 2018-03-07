@@ -1,9 +1,3 @@
-struct ResType
-{
-    min16float4 _m0;
-    int4 _m1;
-};
-
 static min16float4 v4;
 static min16float3 v3;
 static min16float v1;
@@ -134,11 +128,6 @@ void test_builtins()
     bool4 btmp = isnan(v4);
     btmp = isinf(v4);
     res = mad(v4, v4, v4);
-    ResType _188;
-    _188._m0 = frexp(v4, _188._m1);
-    int4 itmp = _188._m1;
-    res = _188._m0;
-    res = ldexp(res, itmp);
     uint pack0 = SPIRV_Cross_packFloat2x16(v4.xy);
     uint pack1 = SPIRV_Cross_packFloat2x16(v4.zw);
     res = min16float4(SPIRV_Cross_unpackFloat2x16(pack0), SPIRV_Cross_unpackFloat2x16(pack1));

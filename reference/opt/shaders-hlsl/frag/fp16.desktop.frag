@@ -1,9 +1,3 @@
-struct ResType
-{
-    min16float4 _m0;
-    int4 _m1;
-};
-
 static min16float4 v4;
 static min16float3 v3;
 static min16float v1;
@@ -31,8 +25,8 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    min16float4 _335;
-    min16float4 _399 = modf(v4, _335);
+    min16float4 _324;
+    min16float4 _387 = modf(v4, _324);
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)

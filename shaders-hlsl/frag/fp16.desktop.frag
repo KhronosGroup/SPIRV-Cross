@@ -103,9 +103,9 @@ void test_builtins()
 	btmp = isinf(v4);
 	res = fma(v4, v4, v4);
 
-	ivec4 itmp;
-	res = frexp(v4, itmp);
-	res = ldexp(res, itmp);
+	//ivec4 itmp;
+	//res = frexp(v4, itmp);
+	//res = ldexp(res, itmp);
 
 	uint pack0 = packFloat2x16(v4.xy);
 	uint pack1 = packFloat2x16(v4.zw);
