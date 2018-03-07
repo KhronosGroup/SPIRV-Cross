@@ -26,11 +26,6 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
-static bool type_is_floating_point(const SPIRType &type)
-{
-	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
-}
-
 static bool packing_is_vec4_padded(BufferPackingStandard packing)
 {
 	switch (packing)
@@ -2590,18 +2585,50 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 
 	if (std::isnan(float_value) || std::isinf(float_value))
 	{
-		// There is no uintBitsToFloat for 16-bit, so have to rely on legacy fallback here.
-		if (float_value == numeric_limits<float>::infinity())
-			res = join("(1.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
-		else if (float_value == -numeric_limits<float>::infinity())
-			res = join("(-1.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
-		else if (std::isnan(float_value))
-			res = join("(0.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
+		if (backend.half_literal_suffix)
+		{
+			// There is no uintBitsToFloat for 16-bit, so have to rely on legacy fallback here.
+			if (float_value == numeric_limits<float>::infinity())
+				res = join("(1.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
+			else if (float_value == -numeric_limits<float>::infinity())
+				res = join("(-1.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
+			else if (std::isnan(float_value))
+				res = join("(0.0", backend.half_literal_suffix, " / 0.0", backend.half_literal_suffix, ")");
+			else
+				SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+		}
 		else
-			SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+		{
+			SPIRType type;
+			type.basetype = SPIRType::Half;
+			type.vecsize = 1;
+			type.columns = 1;
+
+			if (float_value == numeric_limits<float>::infinity())
+				res = join(type_to_glsl(type), "(1.0 / 0.0)");
+			else if (float_value == -numeric_limits<float>::infinity())
+				res = join(type_to_glsl(type), "(-1.0 / 0.0)");
+			else if (std::isnan(float_value))
+				res = join(type_to_glsl(type), "(0.0 / 0.0)");
+			else
+				SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+		}
 	}
 	else
-		res = convert_to_string(float_value) + backend.half_literal_suffix;
+	{
+		if (backend.half_literal_suffix)
+			res = convert_to_string(float_value) + backend.half_literal_suffix;
+		else
+		{
+			// In HLSL (FXC), it's important to cast the literals to half precision right away.
+			// There is no literal for it.
+			SPIRType type;
+			type.basetype = SPIRType::Half;
+			type.vecsize = 1;
+			type.columns = 1;
+			res = join(type_to_glsl(type), "(", convert_to_string(float_value), ")");
+		}
+	}
 
 	return res;
 }

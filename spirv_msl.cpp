@@ -27,11 +27,6 @@ using namespace std;
 
 static const uint32_t k_unknown_location = ~0u;
 
-static bool type_is_floating_point(const SPIRType &type)
-{
-	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
-}
-
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_attrs,
                          vector<MSLResourceBinding> *p_res_bindings)
     : CompilerGLSL(move(spirv_))
