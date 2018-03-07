@@ -45,12 +45,12 @@ void test_conversions()
 	uint b = uint(one);
 	bool c = bool(one);
 	float d = float(one);
-	double e = double(one);
+	//double e = double(one);
 	float16_t a2 = float16_t(a);
 	float16_t b2 = float16_t(b);
 	float16_t c2 = float16_t(c);
 	float16_t d2 = float16_t(d);
-	float16_t e2 = float16_t(e);
+	//float16_t e2 = float16_t(e);
 }
 
 void test_builtins()

@@ -74,12 +74,10 @@ void test_conversions()
     uint b = uint(one);
     bool c = one != 0.0h;
     float d = float(one);
-    double e = double(one);
     half a2 = half(a);
     half b2 = half(b);
     half c2 = half(c);
     half d2 = half(d);
-    half e2 = half(e);
 }
 
 void test_builtins(thread half4& v4, thread half3& v3, thread half& v1)
@@ -115,23 +113,23 @@ void test_builtins(thread half4& v4, thread half3& v3, thread half& v1)
     res = fract(v4);
     res = mod(v4, v4);
     half4 tmp;
-    half4 _231 = modf(v4, tmp);
-    res = _231;
+    half4 _223 = modf(v4, tmp);
+    res = _223;
     res = min(v4, v4);
     res = max(v4, v4);
     res = clamp(v4, v4, v4);
     res = mix(v4, v4, v4);
-    bool4 _251 = v4 < v4;
-    res = half4(_251.x ? v4.x : v4.x, _251.y ? v4.y : v4.y, _251.z ? v4.z : v4.z, _251.w ? v4.w : v4.w);
+    bool4 _243 = v4 < v4;
+    res = half4(_243.x ? v4.x : v4.x, _243.y ? v4.y : v4.y, _243.z ? v4.z : v4.z, _243.w ? v4.w : v4.w);
     res = step(v4, v4);
     res = smoothstep(v4, v4, v4);
     bool4 btmp = isnan(v4);
     btmp = isinf(v4);
     res = fma(v4, v4, v4);
-    ResType _275;
-    _275._m0 = frexp(v4, _275._m1);
-    int4 itmp = _275._m1;
-    res = _275._m0;
+    ResType _267;
+    _267._m0 = frexp(v4, _267._m1);
+    int4 itmp = _267._m1;
+    res = _267._m0;
     res = ldexp(res, itmp);
     uint pack0 = as_type<uint>(v4.xy);
     uint pack1 = as_type<uint>(v4.zw);

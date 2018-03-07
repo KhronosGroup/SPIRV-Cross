@@ -16,7 +16,7 @@ struct main0_in
 
 fragment void main0(main0_in in [[stage_in]])
 {
-    half4 _505;
-    half4 _577 = modf(in.v4, _505);
+    half4 _491;
+    half4 _563 = modf(in.v4, _491);
 }
 
