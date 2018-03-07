@@ -8775,7 +8775,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		get<SPIRVariable>(var).loop_variable_enable = true;
 
 	// This is the older loop behavior in glslang which branches to loop body directly from the loop header.
-	if (block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
+	if (!options.disable_for_loops && block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
 	{
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectForLoop))
@@ -8787,7 +8787,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 	// This is the newer loop behavior in glslang which branches from Loop header directly to
 	// a new block, which in turn has a OpBranchSelection without a selection merge.
-	else if (block_is_loop_candidate(block, SPIRBlock::MergeToDirectForLoop))
+	else if (!options.disable_for_loops && block_is_loop_candidate(block, SPIRBlock::MergeToDirectForLoop))
 	{
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToDirectForLoop))

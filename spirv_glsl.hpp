@@ -88,6 +88,12 @@ public:
 		// If disabled on older targets, binding decorations will be stripped.
 		bool enable_420pack_extension = true;
 
+		// If true, complex for-style loops are no longer generated; instead, for (;;) and break/continue are used
+		// Optimization passes in SPIRV-Tools can merge the entire loop body block into the continue block.
+		// This results in shaders that are very hard to read; this flag works around the problem.
+		// Note that setting this to true can break compatibility with older GLSL versions.
+		bool disable_for_loops = false;
+
 		enum Precision
 		{
 			DontCare,
