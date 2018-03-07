@@ -394,6 +394,8 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return backend.basic_uint_type;
 		case SPIRType::AtomicCounter:
 			return "atomic_uint";
+		case SPIRType::Half:
+			return "min16float";
 		case SPIRType::Float:
 			return "float";
 		case SPIRType::Double:
@@ -416,6 +418,8 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return join("int", type.vecsize);
 		case SPIRType::UInt:
 			return join("uint", type.vecsize);
+		case SPIRType::Half:
+			return join("min16float", type.vecsize);
 		case SPIRType::Float:
 			return join("float", type.vecsize);
 		case SPIRType::Double:
@@ -438,6 +442,8 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return join("int", type.columns, "x", type.vecsize);
 		case SPIRType::UInt:
 			return join("uint", type.columns, "x", type.vecsize);
+		case SPIRType::Half:
+			return join("min16float", type.columns, "x", type.vecsize);
 		case SPIRType::Float:
 			return join("float", type.columns, "x", type.vecsize);
 		case SPIRType::Double:
@@ -1423,6 +1429,23 @@ void CompilerHLSL::emit_resources()
 		statement("float2 SPIRV_Cross_unpackHalf2x16(uint value)");
 		begin_scope();
 		statement("return f16tof32(uint2(value & 0xffff, value >> 16));");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_explicit_fp16_packing)
+	{
+		// HLSL does not pack into a single word sadly :(
+		statement("uint SPIRV_Cross_packFloat2x16(min16float2 value)");
+		begin_scope();
+		statement("uint2 Packed = f32tof16(value);");
+		statement("return Packed.x | (Packed.y << 16);");
+		end_scope();
+		statement("");
+
+		statement("min16float2 SPIRV_Cross_unpackFloat2x16(uint value)");
+		begin_scope();
+		statement("return min16float2(f16tof32(uint2(value & 0xffff, value >> 16)));");
 		end_scope();
 		statement("");
 	}
@@ -2839,6 +2862,24 @@ string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 		return "asdouble";
 	else if (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64)
 		return "asdouble";
+	else if (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UInt && in_type.vecsize == 1)
+	{
+		if (!requires_explicit_fp16_packing)
+		{
+			requires_explicit_fp16_packing = true;
+			force_recompile = true;
+		}
+		return "SPIRV_Cross_unpackFloat2x16";
+	}
+	else if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Half && in_type.vecsize == 2)
+	{
+		if (!requires_explicit_fp16_packing)
+		{
+			requires_explicit_fp16_packing = true;
+			force_recompile = true;
+		}
+		return "SPIRV_Cross_packFloat2x16";
+	}
 	else
 		return "";
 }
@@ -2856,6 +2897,14 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	case GLSLstd450Fract:
 		emit_unary_func_op(result_type, id, args[0], "frac");
 		break;
+
+	case GLSLstd450RoundEven:
+		SPIRV_CROSS_THROW("roundEven is not supported on HLSL.");
+
+	case GLSLstd450Acosh:
+	case GLSLstd450Asinh:
+	case GLSLstd450Atanh:
+		SPIRV_CROSS_THROW("Inverse hyperbolics are not supported on HLSL.");
 
 	case GLSLstd450FMix:
 	case GLSLstd450IMix:
@@ -3574,6 +3623,12 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		UFOP(ddy_coarse);
 		break;
 
+	case OpFwidth:
+	case OpFwidthCoarse:
+	case OpFwidthFine:
+		UFOP(fwidth);
+		break;
+
 	case OpLogicalNot:
 	{
 		auto result_type = ops[0];
@@ -4166,6 +4221,7 @@ string CompilerHLSL::compile()
 	CompilerGLSL::options.vulkan_semantics = true;
 	backend.float_literal_suffix = true;
 	backend.double_literal_suffix = false;
+	backend.half_literal_suffix = nullptr;
 	backend.long_long_literal_suffix = true;
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";

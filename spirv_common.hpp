@@ -263,6 +263,7 @@ struct SPIRType : IVariant
 		Int64,
 		UInt64,
 		AtomicCounter,
+		Half,
 		Float,
 		Double,
 		Struct,
@@ -751,6 +752,57 @@ struct SPIRConstant : IVariant
 		}
 	};
 
+	static inline float f16_to_f32(uint16_t u16_value)
+	{
+		// Based on the GLM implementation.
+		int s = (u16_value >> 15) & 0x1;
+		int e = (u16_value >> 10) & 0x1f;
+		int m = (u16_value >> 0) & 0x3ff;
+
+		union {
+			float f32;
+			uint32_t u32;
+		} u;
+
+		if (e == 0)
+		{
+			if (m == 0)
+			{
+				u.u32 = uint32_t(s) << 31;
+				return u.f32;
+			}
+			else
+			{
+				while ((m & 0x400) == 0)
+				{
+					m <<= 1;
+					e--;
+				}
+
+				e++;
+				m &= ~0x400;
+			}
+		}
+		else if (e == 31)
+		{
+			if (m == 0)
+			{
+				u.u32 = (uint32_t(s) << 31) | 0x7f800000u;
+				return u.f32;
+			}
+			else
+			{
+				u.u32 = (uint32_t(s) << 31) | 0x7f800000u | (m << 13);
+				return u.f32;
+			}
+		}
+
+		e += 127 - 15;
+		m <<= 13;
+		u.u32 = (uint32_t(s) << 31) | (e << 23) | m;
+		return u.f32;
+	}
+
 	inline uint32_t specialization_constant_id(uint32_t col, uint32_t row) const
 	{
 		return m.c[col].id[row];
@@ -764,6 +816,16 @@ struct SPIRConstant : IVariant
 	inline uint32_t scalar(uint32_t col = 0, uint32_t row = 0) const
 	{
 		return m.c[col].r[row].u32;
+	}
+
+	inline uint16_t scalar_u16(uint32_t col = 0, uint32_t row = 0) const
+	{
+		return uint16_t(m.c[col].r[row].u32 & 0xffffu);
+	}
+
+	inline float scalar_f16(uint32_t col = 0, uint32_t row = 0) const
+	{
+		return f16_to_f32(scalar_u16(col, row));
 	}
 
 	inline float scalar_f32(uint32_t col = 0, uint32_t row = 0) const
@@ -1054,6 +1116,11 @@ public:
 private:
 	uint64_t h = 0xcbf29ce484222325ull;
 };
+
+static inline bool type_is_floating_point(const SPIRType &type)
+{
+	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
+}
 }
 
 #endif
