@@ -33,14 +33,14 @@ struct main0_out
 template<typename T>
 T radians(T d)
 {
-    return d * 0.01745329251;
+    return d * T(0.01745329251);
 }
 
 // Implementation of the GLSL degrees() function
 template<typename T>
 T degrees(T r)
 {
-    return r * 57.2957795131;
+    return r * T(57.2957795131);
 }
 
 // Implementation of the GLSL findLSB() function

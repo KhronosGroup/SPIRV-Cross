@@ -997,7 +997,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T>");
 			statement("T radians(T d)");
 			begin_scope();
-			statement("return d * 0.01745329251;");
+			statement("return d * T(0.01745329251);");
 			end_scope();
 			statement("");
 			break;
@@ -1007,7 +1007,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T>");
 			statement("T degrees(T r)");
 			begin_scope();
-			statement("return r * 57.2957795131;");
+			statement("return r * T(57.2957795131);");
 			end_scope();
 			statement("");
 			break;
