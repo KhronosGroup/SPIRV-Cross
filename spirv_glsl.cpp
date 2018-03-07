@@ -8573,7 +8573,7 @@ string CompilerGLSL::emit_for_loop_initializers(const SPIRBlock &block)
 				if (expr.empty())
 				{
 					// For loop initializers are of the form <type id = value, id = value, id = value, etc ...
-					auto &var = get<SPIRVariable>(block.loop_variables.front());
+					auto &var = get<SPIRVariable>(loop_var);
 					auto &type = get<SPIRType>(var.basetype);
 					expr = join(to_qualifiers_glsl(var.self), type_to_glsl(type), " ");
 				}
