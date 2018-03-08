@@ -460,7 +460,8 @@ struct SPIRBlock : IVariant
 	enum Method
 	{
 		MergeToSelectForLoop,
-		MergeToDirectForLoop
+		MergeToDirectForLoop,
+		MergeToSelectContinueForLoop
 	};
 
 	enum ContinueBlockType

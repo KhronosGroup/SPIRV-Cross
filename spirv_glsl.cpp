@@ -8635,7 +8635,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 {
 	SPIRBlock::ContinueBlockType continue_type = continue_block_type(get<SPIRBlock>(block.continue_block));
 
-	if (method == SPIRBlock::MergeToSelectForLoop)
+	if (method == SPIRBlock::MergeToSelectForLoop || method == SPIRBlock::MergeToSelectContinueForLoop)
 	{
 		uint32_t current_count = statement_count;
 		// If we're trying to create a true for loop,
@@ -8659,8 +8659,13 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				// emitting the continue block can invalidate the condition expression.
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(block.condition);
-				auto continue_block = emit_continue_block(block.continue_block);
-				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
+				if (method != SPIRBlock::MergeToSelectContinueForLoop)
+				{
+					auto continue_block = emit_continue_block(block.continue_block);
+					statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
+				}
+				else
+					statement("for (", initializer, "; ", condition, "; )");
 				break;
 			}
 
@@ -8763,6 +8768,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	bool select_branch_to_true_block = false;
 	bool skip_direct_branch = false;
 	bool emitted_for_loop_header = false;
+	bool force_complex_continue_block = false;
 
 	// If we need to force temporaries for certain IDs due to continue blocks, do it before starting loop header.
 	// Need to sort these to ensure that reference output is stable.
@@ -8787,8 +8793,22 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	for (auto var : block.loop_variables)
 		get<SPIRVariable>(var).loop_variable_enable = true;
 
+	// This is the method often used by spirv-opt to implement loops.
+	// The loop header goes straight into the continue block.
+	// However, don't attempt this on ESSL 1.0, because if a loop variable is used in a continue block,
+	// it *MUST* be used in the continue block. This loop method will not work.
+	if (!is_legacy_es() && block_is_loop_candidate(block, SPIRBlock::MergeToSelectContinueForLoop))
+	{
+		flush_undeclared_variables(block);
+		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectContinueForLoop))
+		{
+			select_branch_to_true_block = true;
+			emitted_for_loop_header = true;
+			force_complex_continue_block = true;
+		}
+	}
 	// This is the older loop behavior in glslang which branches to loop body directly from the loop header.
-	if (block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
+	else if (block_is_loop_candidate(block, SPIRBlock::MergeToSelectForLoop))
 	{
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectForLoop))
@@ -8869,9 +8889,23 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 
 	case SPIRBlock::Select:
-		// True if MergeToSelectForLoop succeeded.
+		// True if MergeToSelectForLoop or MergeToSelectContinueForLoop succeeded.
 		if (select_branch_to_true_block)
-			branch(block.self, block.true_block);
+		{
+			if (force_complex_continue_block)
+			{
+				assert(block.true_block == block.continue_block);
+
+				// We're going to emit a continue block directly here, so make sure it's marked as complex.
+				auto &complex_continue = get<SPIRBlock>(block.continue_block).complex_continue;
+				bool old_complex = complex_continue;
+				complex_continue = true;
+				branch(block.self, block.true_block);
+				complex_continue = old_complex;
+			}
+			else
+				branch(block.self, block.true_block);
+		}
 		else
 			branch(block.self, block.condition, block.true_block, block.false_block);
 		break;
