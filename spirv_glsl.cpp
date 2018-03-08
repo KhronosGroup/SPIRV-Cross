@@ -8316,6 +8316,63 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 	}
 }
 
+void CompilerGLSL::branch_to_continue(uint32_t from, uint32_t to)
+{
+	assert(is_continue(to));
+
+	auto &to_block = get<SPIRBlock>(to);
+	if (to_block.complex_continue)
+	{
+		// Just emit the whole block chain as is.
+		auto usage_counts = expression_usage_counts;
+		auto invalid = invalid_expressions;
+
+		emit_block_chain(to_block);
+
+		// Expression usage counts and invalid expressions
+		// are moot after returning from the continue block.
+		// Since we emit the same block multiple times,
+		// we don't want to invalidate ourselves.
+		expression_usage_counts = usage_counts;
+		invalid_expressions = invalid;
+	}
+	else
+	{
+		auto &from_block = get<SPIRBlock>(from);
+		bool outside_control_flow = false;
+		uint32_t loop_dominator = 0;
+
+		// FIXME: Refactor this to not use the old loop_dominator tracking.
+		if (from_block.merge_block)
+		{
+			// If we are a loop header, we don't set the loop dominator,
+			// so just use "self" here.
+			loop_dominator = from;
+		}
+		else if (from_block.loop_dominator != SPIRBlock::NoDominator)
+		{
+			loop_dominator = from_block.loop_dominator;
+		}
+
+		if (loop_dominator != 0)
+		{
+			auto &dominator = get<SPIRBlock>(loop_dominator);
+
+			// For non-complex continue blocks, we implicitly branch to the continue block
+			// by having the continue block be part of the loop header in for (; ; continue-block).
+			outside_control_flow = block_is_outside_flow_control_from_block(dominator, from_block);
+		}
+
+		// Some simplification for for-loops. We always end up with a useless continue;
+		// statement since we branch to a loop block.
+		// Walk the CFG, if we uncoditionally execute the block calling continue assuming we're in the loop block,
+		// we can avoid writing out an explicit continue statement.
+		// Similar optimization to return statements if we know we're outside flow control.
+		if (!outside_control_flow)
+			statement("continue;");
+	}
+}
+
 void CompilerGLSL::branch(uint32_t from, uint32_t to)
 {
 	flush_phi(from, to);
@@ -8329,64 +8386,17 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 		// and end the chain here.
 		statement("continue;");
 	}
-	else if (is_continue(to))
-	{
-		auto &to_block = get<SPIRBlock>(to);
-		if (to_block.complex_continue)
-		{
-			// Just emit the whole block chain as is.
-			auto usage_counts = expression_usage_counts;
-			auto invalid = invalid_expressions;
-
-			emit_block_chain(to_block);
-
-			// Expression usage counts and invalid expressions
-			// are moot after returning from the continue block.
-			// Since we emit the same block multiple times,
-			// we don't want to invalidate ourselves.
-			expression_usage_counts = usage_counts;
-			invalid_expressions = invalid;
-		}
-		else
-		{
-			auto &from_block = get<SPIRBlock>(from);
-			bool outside_control_flow = false;
-			uint32_t loop_dominator = 0;
-
-			// FIXME: Refactor this to not use the old loop_dominator tracking.
-			if (from_block.merge_block)
-			{
-				// If we are a loop header, we don't set the loop dominator,
-				// so just use "self" here.
-				loop_dominator = from;
-			}
-			else if (from_block.loop_dominator != SPIRBlock::NoDominator)
-			{
-				loop_dominator = from_block.loop_dominator;
-			}
-
-			if (loop_dominator != 0)
-			{
-				auto &dominator = get<SPIRBlock>(loop_dominator);
-
-				// For non-complex continue blocks, we implicitly branch to the continue block
-				// by having the continue block be part of the loop header in for (; ; continue-block).
-				outside_control_flow = block_is_outside_flow_control_from_block(dominator, from_block);
-			}
-
-			// Some simplification for for-loops. We always end up with a useless continue;
-			// statement since we branch to a loop block.
-			// Walk the CFG, if we uncoditionally execute the block calling continue assuming we're in the loop block,
-			// we can avoid writing out an explicit continue statement.
-			// Similar optimization to return statements if we know we're outside flow control.
-			if (!outside_control_flow)
-				statement("continue;");
-		}
-	}
 	else if (is_break(to))
 		statement("break;");
+	else if (is_continue(to))
+		branch_to_continue(from, to);
 	else if (!is_conditional(to))
 		emit_block_chain(get<SPIRBlock>(to));
+
+	// It is important that we check for break before continue.
+	// A block might serve two purposes, a break block for the inner scope, and
+	// a continue block in the outer scope.
+	// Inner scope always takes precedence.
 }
 
 void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uint32_t false_block)
@@ -8394,6 +8404,9 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 	// If we branch directly to a selection merge target, we don't really need a code path.
 	bool true_sub = !is_conditional(true_block);
 	bool false_sub = !is_conditional(false_block);
+
+	// It is possible that a selection merge target also serves as a break/continue block.
+	// We will not emit break or continue here, but defer that to the outer scope.
 
 	if (true_sub)
 	{
@@ -8420,7 +8433,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 	else if (false_sub && !true_sub)
 	{
 		// Only need false path, use negative conditional.
-		statement("if (!", to_expression(cond), ")");
+		statement("if (!", to_enclosed_expression(cond), ")");
 		begin_scope();
 		branch(from, false_block);
 		end_scope();
@@ -8959,7 +8972,23 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// that block after this. If we had selection merge, we already flushed phi variables.
 		if (block.merge != SPIRBlock::MergeSelection)
 			flush_phi(block.self, block.next_block);
-		emit_block_chain(get<SPIRBlock>(block.next_block));
+
+		// For merge selects we might have ignored the fact that a merge target
+		// could have been a break; or continue;
+		// We will need to deal with it here.
+		if (is_loop_break(block.next_block))
+		{
+			// Cannot check for just break, because switch statements will also use break.
+			assert(block.merge == SPIRBlock::MergeSelection);
+			statement("break;");
+		}
+		else if (is_continue(block.next_block))
+		{
+			assert(block.merge == SPIRBlock::MergeSelection);
+			branch_to_continue(block.self, block.next_block);
+		}
+		else
+			emit_block_chain(get<SPIRBlock>(block.next_block));
 	}
 
 	if (block.merge == SPIRBlock::MergeLoop)
@@ -8982,8 +9011,13 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		else
 			end_scope();
 
-		flush_phi(block.self, block.merge_block);
-		emit_block_chain(get<SPIRBlock>(block.merge_block));
+		// We cannot break out of two loops at once, so don't check for break; here.
+		// Using block.self as the "from" block isn't quite right, but it has the same scope
+		// and dominance structure, so it's fine.
+		if (is_continue(block.merge_block))
+			branch_to_continue(block.self, block.merge_block);
+		else
+			emit_block_chain(get<SPIRBlock>(block.merge_block));
 	}
 }
 

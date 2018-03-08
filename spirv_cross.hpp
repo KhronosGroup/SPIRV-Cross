@@ -585,6 +585,11 @@ protected:
 		       multiselect_merge_targets.find(next) != end(multiselect_merge_targets);
 	}
 
+	inline bool is_loop_break(uint32_t next) const
+	{
+		return loop_merge_targets.find(next) != end(loop_merge_targets);
+	}
+
 	inline bool is_conditional(uint32_t next) const
 	{
 		return selection_merge_targets.find(next) != end(selection_merge_targets) &&
