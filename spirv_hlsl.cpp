@@ -2299,6 +2299,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	if (i.offset + length > spirv.size())
 		SPIRV_CROSS_THROW("Compiler::parse() opcode out of range.");
 
+	vector<uint32_t> inherited_expressions;
+
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
 	uint32_t img = ops[2];
@@ -2310,6 +2312,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	const uint32_t *opt = nullptr;
 	auto *combined_image = maybe_get<SPIRCombinedImageSampler>(img);
 	auto img_expr = to_expression(combined_image ? combined_image->image : img);
+
+	inherited_expressions.push_back(coord);
 
 	switch (op)
 	{
@@ -2384,6 +2388,9 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		break;
 	}
 
+	if (dref)
+		inherited_expressions.push_back(dref);
+
 	if (proj)
 		coord_components++;
 	if (imgtype.image.arrayed)
@@ -2410,6 +2417,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		if (length && (flags & flag))
 		{
 			v = *opt++;
+			inherited_expressions.push_back(v);
 			length--;
 		}
 	};
@@ -2694,6 +2702,9 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	{
 		emit_op(result_type, id, expr, forward, false);
 	}
+
+	for (auto &inherit : inherited_expressions)
+		inherit_expression_dependencies(id, inherit);
 }
 
 string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
@@ -3911,6 +3922,10 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 			emit_op(result_type, id, imgexpr, false);
+
+		inherit_expression_dependencies(id, ops[2]);
+		if (type.image.ms)
+			inherit_expression_dependencies(id, ops[5]);
 		break;
 	}
 
