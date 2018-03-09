@@ -2108,7 +2108,7 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 	if (block.disable_block_optimization || block.complex_continue)
 		return false;
 
-	if (method == SPIRBlock::MergeToSelectForLoop)
+	if (method == SPIRBlock::MergeToSelectForLoop || method == SPIRBlock::MergeToSelectContinueForLoop)
 	{
 		// Try to detect common for loop pattern
 		// which the code backend can use to create cleaner code.
@@ -2117,6 +2117,9 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 		bool ret = block.terminator == SPIRBlock::Select && block.merge == SPIRBlock::MergeLoop &&
 		           block.true_block != block.merge_block && block.true_block != block.self &&
 		           block.false_block == block.merge_block;
+
+		if (ret && method == SPIRBlock::MergeToSelectContinueForLoop)
+			ret = block.true_block == block.continue_block;
 
 		// If we have OpPhi which depends on branches which came from our own block,
 		// we need to flush phi variables in else block instead of a trivial break,
