@@ -8438,9 +8438,6 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 	bool true_sub = !is_conditional(true_block);
 	bool false_sub = !is_conditional(false_block);
 
-	// It is possible that a selection merge target also serves as a break/continue block.
-	// We will not emit break or continue here, but defer that to the outer scope.
-
 	if (true_sub)
 	{
 		statement("if (", to_expression(cond), ")");
@@ -8448,7 +8445,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 		branch(from, true_block);
 		end_scope();
 
-		if (false_sub)
+		if (false_sub || is_continue(false_block) || is_break(false_block))
 		{
 			statement("else");
 			begin_scope();
@@ -8471,7 +8468,14 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 		branch(from, false_block);
 		end_scope();
 
-		if (flush_phi_required(from, true_block))
+		if (is_continue(true_block) || is_break(true_block))
+		{
+			statement("else");
+			begin_scope();
+			branch(from, true_block);
+			end_scope();
+		}
+		else if (flush_phi_required(from, true_block))
 		{
 			statement("else");
 			begin_scope();
