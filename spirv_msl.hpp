@@ -113,14 +113,26 @@ public:
 		}
 	};
 
+	SPIRV_CROSS_DEPRECATED("CompilerMSL::get_options() is obsolete, use get_msl_options() instead.")
 	const Options &get_options() const
 	{
-		return options;
+		return msl_options;
 	}
 
+	const Options &get_msl_options() const
+	{
+		return msl_options;
+	}
+
+	SPIRV_CROSS_DEPRECATED("CompilerMSL::set_options() is obsolete, use set_msl_options() instead.")
 	void set_options(Options &opts)
 	{
-		options = opts;
+		msl_options = opts;
+	}
+
+	void set_msl_options(const Options &opts)
+	{
+		msl_options = opts;
 	}
 
 	// An enum of SPIR-V functions that are implemented in additional
@@ -174,7 +186,7 @@ public:
 
 	// This legacy method is deprecated.
 	typedef Options MSLConfiguration;
-	SPIRV_CROSS_DEPRECATED("Please use get_options() and set_options() instead.")
+	SPIRV_CROSS_DEPRECATED("Please use get_msl_options() and set_msl_options() instead.")
 	std::string compile(MSLConfiguration &msl_cfg, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	                    std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
 
@@ -272,7 +284,7 @@ protected:
 	void build_implicit_builtins();
 	uint32_t builtin_frag_coord_id = 0;
 
-	Options options;
+	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
 	std::map<uint32_t, uint32_t> non_stage_in_input_var_ids;

@@ -5820,7 +5820,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		const auto * const elems = &ops[2];
+		const auto *const elems = &ops[2];
 		length -= 2;
 
 		bool forward = true;

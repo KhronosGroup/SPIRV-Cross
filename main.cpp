@@ -748,10 +748,10 @@ static int main_inner(int argc, char *argv[])
 		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
 
 		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
-		auto msl_opts = msl_comp->get_options();
+		auto msl_opts = msl_comp->get_msl_options();
 		if (args.set_msl_version)
 			msl_opts.msl_version = args.msl_version;
-		msl_comp->set_options(msl_opts);
+		msl_comp->set_msl_options(msl_opts);
 	}
 	else if (args.hlsl)
 		compiler = unique_ptr<CompilerHLSL>(new CompilerHLSL(read_spirv_file(args.input)));
@@ -851,14 +851,14 @@ static int main_inner(int argc, char *argv[])
 	if (!entry_point.empty())
 		compiler->set_entry_point(entry_point, model);
 
-	if (!args.set_version && !compiler->get_options().version)
+	if (!args.set_version && !compiler->get_common_options().version)
 	{
 		fprintf(stderr, "Didn't specify GLSL version and SPIR-V did not specify language.\n");
 		print_help();
 		return EXIT_FAILURE;
 	}
 
-	CompilerGLSL::Options opts = compiler->get_options();
+	CompilerGLSL::Options opts = compiler->get_common_options();
 	if (args.set_version)
 		opts.version = args.version;
 	if (args.set_es)
@@ -870,13 +870,13 @@ static int main_inner(int argc, char *argv[])
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.vertex.flip_vert_y = args.yflip;
-	compiler->set_options(opts);
+	compiler->set_common_options(opts);
 
 	// Set HLSL specific options.
 	if (args.hlsl)
 	{
 		auto *hlsl = static_cast<CompilerHLSL *>(compiler.get());
-		auto hlsl_opts = hlsl->get_options();
+		auto hlsl_opts = hlsl->get_hlsl_options();
 		if (args.set_shader_model)
 		{
 			if (args.shader_model < 30)
@@ -894,7 +894,7 @@ static int main_inner(int argc, char *argv[])
 			hlsl_opts.point_size_compat = true;
 			hlsl_opts.point_coord_compat = true;
 		}
-		hlsl->set_options(hlsl_opts);
+		hlsl->set_hlsl_options(hlsl_opts);
 	}
 
 	if (build_dummy_sampler)
