@@ -3239,6 +3239,8 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 		expr += join(cast_op0, " ", op, " ", cast_op1);
 
 	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1));
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
 }
 
 void CompilerGLSL::emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op)
@@ -3280,6 +3282,8 @@ void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t resul
 	}
 
 	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1));
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
 }
 
 void CompilerGLSL::emit_trinary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
@@ -3503,6 +3507,9 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		}
 
 		emit_op(result_type, id, expr, should_forward(left) && should_forward(right) && should_forward(lerp));
+		inherit_expression_dependencies(id, left);
+		inherit_expression_dependencies(id, right);
+		inherit_expression_dependencies(id, lerp);
 	}
 	else
 		emit_trinary_func_op(result_type, id, left, right, lerp, "mix");
@@ -3588,6 +3595,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	if (i.offset + length > spirv.size())
 		SPIRV_CROSS_THROW("Compiler::parse() opcode out of range.");
 
+	vector<uint32_t> inherited_expressions;
+
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
 	uint32_t img = ops[2];
@@ -3598,6 +3607,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	bool proj = false;
 	bool fetch = false;
 	const uint32_t *opt = nullptr;
+
+	inherited_expressions.push_back(coord);
 
 	switch (op)
 	{
@@ -3677,6 +3688,9 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		break;
 	}
 
+	if (dref)
+		inherited_expressions.push_back(dref);
+
 	if (proj)
 		coord_components++;
 	if (imgtype.image.arrayed)
@@ -3702,6 +3716,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 		if (length && (flags & flag))
 		{
 			v = *opt++;
+			inherited_expressions.push_back(v);
 			length--;
 		}
 	};
@@ -3725,6 +3740,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	expr += ")";
 
 	emit_op(result_type, id, expr, forward);
+	for (auto &inherit : inherited_expressions)
+		inherit_expression_dependencies(id, inherit);
 }
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
@@ -5803,7 +5820,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		const auto *elems = &ops[2];
+		const auto * const elems = &ops[2];
 		length -= 2;
 
 		bool forward = true;
@@ -5887,6 +5904,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		emit_op(result_type, id, constructor_op, forward);
+		for (uint32_t i = 0; i < length; i++)
+			inherit_expression_dependencies(id, elems[i]);
 		break;
 	}
 
@@ -5915,6 +5934,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto expr = access_chain_internal(ops[2], &ops[3], 1, false);
 		emit_op(result_type, id, expr, should_forward(ops[2]));
+		inherit_expression_dependencies(id, ops[2]);
+		inherit_expression_dependencies(id, ops[3]);
 		break;
 	}
 
@@ -5951,12 +5972,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// from expression causing it to be forced to an actual temporary in GLSL.
 			auto expr = access_chain_internal(ops[2], &ops[3], length, true, true);
 			auto &e = emit_op(result_type, id, expr, true, !expression_is_forwarded(ops[2]));
+			inherit_expression_dependencies(id, ops[2]);
 			e.base_expression = ops[2];
 		}
 		else
 		{
 			auto expr = access_chain_internal(ops[2], &ops[3], length, true);
 			emit_op(result_type, id, expr, should_forward(ops[2]), !expression_is_forwarded(ops[2]));
+			inherit_expression_dependencies(id, ops[2]);
 		}
 		break;
 	}
@@ -6008,6 +6031,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// For pointer types, we copy the pointer itself.
 			statement(declare_temporary(result_type, id), to_expression(rhs), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
+			inherit_expression_dependencies(id, rhs);
 		}
 		else
 		{
@@ -6082,6 +6106,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We inherit the forwardedness from our arguments to avoid flushing out to temporaries when it's not really needed.
 
 		emit_op(result_type, id, expr, should_fwd, trivial_forward);
+		inherit_expression_dependencies(id, vec0);
+		inherit_expression_dependencies(id, vec1);
 		break;
 	}
 
@@ -6483,6 +6509,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		emit_op(result_type, id, op, should_forward(arg));
+		inherit_expression_dependencies(id, arg);
 		break;
 	}
 
@@ -6960,6 +6987,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 			emit_op(result_type, id, imgexpr, false);
+
+		inherit_expression_dependencies(id, ops[2]);
+		if (type.image.ms)
+			inherit_expression_dependencies(id, ops[5]);
 		break;
 	}
 
@@ -8312,6 +8343,8 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 				if (!optimize_read_modify_write(lhs, rhs))
 					statement(lhs, " = ", rhs, ";");
 			}
+
+			register_write(phi.function_variable);
 		}
 	}
 }
@@ -8405,9 +8438,6 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 	bool true_sub = !is_conditional(true_block);
 	bool false_sub = !is_conditional(false_block);
 
-	// It is possible that a selection merge target also serves as a break/continue block.
-	// We will not emit break or continue here, but defer that to the outer scope.
-
 	if (true_sub)
 	{
 		statement("if (", to_expression(cond), ")");
@@ -8415,7 +8445,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 		branch(from, true_block);
 		end_scope();
 
-		if (false_sub)
+		if (false_sub || is_continue(false_block) || is_break(false_block))
 		{
 			statement("else");
 			begin_scope();
@@ -8438,7 +8468,14 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 		branch(from, false_block);
 		end_scope();
 
-		if (flush_phi_required(from, true_block))
+		if (is_continue(true_block) || is_break(true_block))
+		{
+			statement("else");
+			begin_scope();
+			branch(from, true_block);
+			end_scope();
+		}
+		else if (flush_phi_required(from, true_block))
 		{
 			statement("else");
 			begin_scope();

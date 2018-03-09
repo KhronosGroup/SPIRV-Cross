@@ -2647,6 +2647,14 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 	}
 
 	auto &e = get<SPIRExpression>(dst);
+	auto *phi = maybe_get<SPIRVariable>(source_expression);
+	if (phi && phi->phi_variable)
+	{
+		// We have used a phi variable, which can change at the end of the block,
+		// so make sure we take a dependency on this phi variable.
+		phi->dependees.push_back(dst);
+	}
+
 	auto *s = maybe_get<SPIRExpression>(source_expression);
 	if (!s)
 		return;
@@ -2659,6 +2667,7 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 	e_deps.insert(end(e_deps), begin(s_deps), end(s_deps));
 
 	// Eliminate duplicated dependencies.
+	sort(begin(e_deps), end(e_deps));
 	e_deps.erase(unique(begin(e_deps), end(e_deps)), end(e_deps));
 }
 
