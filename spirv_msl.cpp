@@ -110,9 +110,9 @@ string CompilerMSL::compile()
 	ClassicLocale classic_locale;
 
 	// Do not deal with GLES-isms like precision, older extensions and such.
-	CompilerGLSL::options.vulkan_semantics = true;
-	CompilerGLSL::options.es = false;
-	CompilerGLSL::options.version = 450;
+	options.vulkan_semantics = true;
+	options.es = false;
+	options.version = 450;
 	backend.float_literal_suffix = false;
 	backend.half_literal_suffix = "h";
 	backend.uint32_t_literal_suffix = true;
@@ -161,7 +161,7 @@ string CompilerMSL::compile()
 
 	// Metal does not allow dynamic array lengths.
 	// Resolve any specialization constants that are used for array lengths.
-	if (options.resolve_specialized_array_lengths)
+	if (msl_options.resolve_specialized_array_lengths)
 		resolve_specialized_array_lengths();
 
 	uint32_t pass_count = 0;
@@ -211,7 +211,7 @@ string CompilerMSL::compile(vector<MSLVertexAttr> *p_vtx_attrs, vector<MSLResour
 string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_vtx_attrs,
                             vector<MSLResourceBinding> *p_res_bindings)
 {
-	options = msl_cfg;
+	msl_options = msl_cfg;
 	return compile(p_vtx_attrs, p_res_bindings);
 }
 
@@ -1844,7 +1844,7 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	else
 		bar_stmt += "mem_none";
 
-	if (options.is_ios() && options.supports_msl_version(2))
+	if (msl_options.is_ios() && msl_options.supports_msl_version(2))
 	{
 		bar_stmt += ", ";
 
@@ -2628,11 +2628,11 @@ void CompilerMSL::emit_fixup()
 
 	if ((execution.model == ExecutionModelVertex) && stage_out_var_id && !qual_pos_var_name.empty())
 	{
-		if (CompilerGLSL::options.vertex.fixup_clipspace)
+		if (options.vertex.fixup_clipspace)
 			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
 			          ".w) * 0.5;       // Adjust clip-space for Metal");
 
-		if (CompilerGLSL::options.vertex.flip_vert_y)
+		if (options.vertex.flip_vert_y)
 			statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
 	}
 }
@@ -2717,7 +2717,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				// Some shaders may include a PointSize builtin even when used to render
 				// non-point topologies, and Metal will reject this builtin when compiling
 				// the shader into a render pipeline that uses a non-point topology.
-				return options.enable_point_size_builtin ? (string(" [[") + builtin_qualifier(builtin) + "]]") : "";
+				return msl_options.enable_point_size_builtin ? (string(" [[") + builtin_qualifier(builtin) + "]]") : "";
 
 			case BuiltInPosition:
 			case BuiltInLayer:

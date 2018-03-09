@@ -66,14 +66,26 @@ public:
 	{
 	}
 
+	SPIRV_CROSS_DEPRECATED("CompilerHLSL::get_options() is obsolete, use get_hlsl_options() instead.")
 	const Options &get_options() const
 	{
-		return options;
+		return hlsl_options;
 	}
 
+	const Options &get_hlsl_options() const
+	{
+		return hlsl_options;
+	}
+
+	SPIRV_CROSS_DEPRECATED("CompilerHLSL::get_options() is obsolete, use set_hlsl_options() instead.")
 	void set_options(Options &opts)
 	{
-		options = opts;
+		hlsl_options = opts;
+	}
+
+	void set_hlsl_options(const Options &opts)
+	{
+		hlsl_options = opts;
 	}
 
 	// Optionally specify a custom root constant layout.
@@ -151,7 +163,7 @@ private:
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 
-	Options options;
+	Options hlsl_options;
 	bool requires_op_fmod = false;
 	bool requires_textureProj = false;
 	bool requires_fp16_packing = false;
