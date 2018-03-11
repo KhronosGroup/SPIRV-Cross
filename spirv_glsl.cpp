@@ -3384,6 +3384,8 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	}
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
+	else if (op == "textureGrad")
+		return join("texture", type, "Grad");
 	else if (op == "textureProjLod")
 	{
 		if (use_explicit_lod)
