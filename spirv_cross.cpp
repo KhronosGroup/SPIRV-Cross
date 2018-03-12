@@ -351,6 +351,14 @@ void Compiler::flush_all_atomic_capable_variables()
 	flush_all_aliased_variables();
 }
 
+void Compiler::flush_control_dependent_expressions(uint32_t block_id)
+{
+	auto &block = get<SPIRBlock>(block_id);
+	for (auto &expr : block.invalidate_expressions)
+		invalid_expressions.insert(expr);
+	block.invalidate_expressions.clear();
+}
+
 void Compiler::flush_all_active_variables()
 {
 	// Invalidate all temporaries we read from variables in this block since they were forwarded.

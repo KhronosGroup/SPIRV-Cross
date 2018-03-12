@@ -1464,18 +1464,21 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpDPdxFine:
 	case OpDPdxCoarse:
 		UFOP(dfdx);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdy:
 	case OpDPdyFine:
 	case OpDPdyCoarse:
 		UFOP(dfdy);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidth:
 	case OpFwidthCoarse:
 	case OpFwidthFine:
 		UFOP(fwidth);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	// Bitfield
@@ -1874,6 +1877,10 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	bar_stmt += ");";
 
 	statement(bar_stmt);
+
+	assert(current_emitting_block);
+	flush_control_dependent_expressions(current_emitting_block->self);
+	flush_all_active_variables();
 }
 
 // Since MSL does not allow structs to be nested within the stage_in struct, the original input

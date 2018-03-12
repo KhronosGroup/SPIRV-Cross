@@ -3753,6 +3753,19 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	emit_op(result_type, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
 		inherit_expression_dependencies(id, inherit);
+
+	switch (op)
+	{
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
+		register_control_dependent_expression(id);
+		break;
+
+	default:
+		break;
+	}
 }
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
@@ -4307,18 +4320,22 @@ void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t 
 	{
 	case SwizzleInvocationsAMD:
 		emit_binary_func_op(result_type, id, args[0], args[1], "swizzleInvocationsAMD");
+		register_control_dependent_expression(id);
 		break;
 
 	case SwizzleInvocationsMaskedAMD:
 		emit_binary_func_op(result_type, id, args[0], args[1], "swizzleInvocationsMaskedAMD");
+		register_control_dependent_expression(id);
 		break;
 
 	case WriteInvocationAMD:
 		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "writeInvocationAMD");
+		register_control_dependent_expression(id);
 		break;
 
 	case MbcntAMD:
 		emit_unary_func_op(result_type, id, args[0], "mbcntAMD");
+		register_control_dependent_expression(id);
 		break;
 
 	default:
@@ -4423,6 +4440,7 @@ void CompilerGLSL::emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t id,
 	{
 		string expr = "timeAMD()";
 		emit_op(result_type, id, expr, true);
+		register_control_dependent_expression(id);
 		break;
 	}
 
@@ -5570,7 +5588,16 @@ bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &r
 	return true;
 }
 
-void CompilerGLSL::emit_block_instructions(const SPIRBlock &block)
+void CompilerGLSL::register_control_dependent_expression(uint32_t expr)
+{
+	if (forwarded_temporaries.find(expr) == end(forwarded_temporaries))
+		return;
+
+	assert(current_emitting_block);
+	current_emitting_block->invalidate_expressions.push_back(expr);
+}
+
+void CompilerGLSL::emit_block_instructions(SPIRBlock &block)
 {
 	current_emitting_block = &block;
 	for (auto &op : block.ops)
@@ -6529,12 +6556,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		UFOP(dFdx);
 		if (is_legacy_es())
 			require_extension("GL_OES_standard_derivatives");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdy:
 		UFOP(dFdy);
 		if (is_legacy_es())
 			require_extension("GL_OES_standard_derivatives");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdxFine:
@@ -6545,6 +6574,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		if (options.version < 450)
 			require_extension("GL_ARB_derivative_control");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdyFine:
@@ -6555,6 +6585,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		if (options.version < 450)
 			require_extension("GL_ARB_derivative_control");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdxCoarse:
@@ -6565,6 +6596,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		UFOP(dFdxCoarse);
 		if (options.version < 450)
 			require_extension("GL_ARB_derivative_control");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdyCoarse:
@@ -6575,12 +6607,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		if (options.version < 450)
 			require_extension("GL_ARB_derivative_control");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidth:
 		UFOP(fwidth);
 		if (is_legacy_es())
 			require_extension("GL_OES_standard_derivatives");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidthCoarse:
@@ -6591,6 +6625,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		if (options.version < 450)
 			require_extension("GL_ARB_derivative_control");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidthFine:
@@ -6601,6 +6636,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		if (options.version < 450)
 			require_extension("GL_ARB_derivative_control");
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	// Bitfield
@@ -6810,6 +6846,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("textureQueryLod not supported in ES profile.");
 		else
 			BFOP(textureQueryLod);
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7160,7 +7197,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We are synchronizing some memory or syncing execution,
 		// so we cannot forward any loads beyond the memory barrier.
 		if (semantics || opcode == OpControlBarrier)
+		{
+			assert(current_emitting_block);
+			flush_control_dependent_expressions(current_emitting_block->self);
 			flush_all_active_variables();
+		}
 
 		if (memory == ScopeWorkgroup) // Only need to consider memory within a group
 		{
@@ -7242,10 +7283,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		string expr;
-		expr = join("unpackUint2x32(ballotARB(" + to_expression(ops[2]) + "))");
+		expr = join("uvec4(unpackUint2x32(ballotARB(" + to_expression(ops[2]) + ")), 0u, 0u)");
 		emit_op(result_type, id, expr, true);
 
 		require_extension("GL_ARB_shader_ballot");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7256,6 +7298,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[2], "readFirstInvocationARB");
 
 		require_extension("GL_ARB_shader_ballot");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7266,6 +7309,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_binary_func_op(result_type, id, ops[2], ops[3], "readInvocationARB");
 
 		require_extension("GL_ARB_shader_ballot");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7276,6 +7320,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[2], "allInvocationsARB");
 
 		require_extension("GL_ARB_shader_group_vote");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7286,6 +7331,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[2], "anyInvocationARB");
 
 		require_extension("GL_ARB_shader_group_vote");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7296,6 +7342,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[2], "allInvocationsEqualARB");
 
 		require_extension("GL_ARB_shader_group_vote");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7307,6 +7354,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[4], "addInvocationsNonUniformAMD");
 
 		require_extension("GL_AMD_shader_ballot");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7319,6 +7367,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[4], "minInvocationsNonUniformAMD");
 
 		require_extension("GL_AMD_shader_ballot");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -7331,6 +7380,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op(result_type, id, ops[4], "maxInvocationsNonUniformAMD");
 
 		require_extension("GL_AMD_shader_ballot");
+		register_control_dependent_expression(ops[1]);
 		break;
 	}
 
@@ -8423,6 +8473,7 @@ void CompilerGLSL::branch_to_continue(uint32_t from, uint32_t to)
 void CompilerGLSL::branch(uint32_t from, uint32_t to)
 {
 	flush_phi(from, to);
+	flush_control_dependent_expressions(from);
 	flush_all_active_variables();
 
 	// This is only a continue if we branch to our loop dominator.

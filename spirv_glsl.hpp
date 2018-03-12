@@ -199,11 +199,10 @@ protected:
 	// Virtualize methods which need to be overridden by subclass targets like C++ and such.
 	virtual void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags);
 
-	// Kinda ugly way to let opcodes peek at their neighbor instructions for trivial peephole scenarios.
-	const SPIRBlock *current_emitting_block = nullptr;
+	SPIRBlock *current_emitting_block = nullptr;
 
 	virtual void emit_instruction(const Instruction &instr);
-	void emit_block_instructions(const SPIRBlock &block);
+	void emit_block_instructions(SPIRBlock &block);
 	virtual void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                          uint32_t count);
 	virtual void emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t result_id, uint32_t op,
@@ -517,6 +516,7 @@ protected:
 	bool args_will_forward(uint32_t id, const uint32_t *args, uint32_t num_args, bool pure);
 	void register_call_out_argument(uint32_t id);
 	void register_impure_function_call();
+	void register_control_dependent_expression(uint32_t expr);
 
 	// GL_EXT_shader_pixel_local_storage support.
 	std::vector<PlsRemap> pls_inputs;

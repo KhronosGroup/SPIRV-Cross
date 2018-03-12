@@ -2692,6 +2692,20 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	for (auto &inherit : inherited_expressions)
 		inherit_expression_dependencies(id, inherit);
+
+	switch (op)
+	{
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
+	case OpImageQueryLod:
+		register_control_dependent_expression(id);
+		break;
+
+	default:
+		break;
+	}
 }
 
 string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
@@ -3599,32 +3613,39 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	case OpDPdx:
 		UFOP(ddx);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdy:
 		UFOP(ddy);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdxFine:
 		UFOP(ddx_fine);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdyFine:
 		UFOP(ddy_fine);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdxCoarse:
 		UFOP(ddx_coarse);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdyCoarse:
 		UFOP(ddy_coarse);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidth:
 	case OpFwidthCoarse:
 	case OpFwidthFine:
 		UFOP(fwidth);
+		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpLogicalNot:
@@ -4031,7 +4052,11 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		// We are synchronizing some memory or syncing execution,
 		// so we cannot forward any loads beyond the memory barrier.
 		if (semantics || opcode == OpControlBarrier)
+		{
+			assert(current_emitting_block);
+			flush_control_dependent_expressions(current_emitting_block->self);
 			flush_all_active_variables();
+		}
 
 		if (opcode == OpControlBarrier)
 		{

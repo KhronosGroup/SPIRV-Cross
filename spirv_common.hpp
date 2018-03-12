@@ -662,6 +662,11 @@ struct SPIRBlock : IVariant
 	// fail to use a classic for-loop,
 	// we remove these variables, and fall back to regular variables outside the loop.
 	std::vector<uint32_t> loop_variables;
+
+	// Some expressions are control-flow dependent, i.e. any instruction which relies on derivatives or
+	// sub-group-like operations.
+	// Make sure that we only use these expressions in the original block.
+	std::vector<uint32_t> invalidate_expressions;
 };
 
 struct SPIRFunction : IVariant

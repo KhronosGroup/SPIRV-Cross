@@ -14,8 +14,8 @@ env:
 
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew upgrade python3; fi
-  - ./checkout_glslang_spirv_tools.sh
 
 script:
+  - ./checkout_glslang_spirv_tools.sh
   - make -j2
   - ./test_shaders.sh
