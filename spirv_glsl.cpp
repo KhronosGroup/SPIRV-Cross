@@ -1851,8 +1851,8 @@ void CompilerGLSL::fixup_image_load_store_access()
 
 void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionModel model)
 {
-	uint64_t emitted_builtins = 0;
-	uint64_t global_builtins = 0;
+	Bitset emitted_builtins;
+	Bitset global_builtins;
 	const SPIRVariable *block_var = nullptr;
 	bool emitted_block = false;
 	bool builtin_array = false;
@@ -1870,7 +1870,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		auto &var = id.get<SPIRVariable>();
 		auto &type = get<SPIRType>(var.basetype);
 		bool block = has_decoration(type.self, DecorationBlock);
-		uint64_t builtins = 0;
+		Bitset builtins;
 
 		if (var.storage == storage && block && is_builtin_variable(var))
 		{
@@ -1879,7 +1879,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			{
 				if (m.builtin)
 				{
-					builtins |= 1ull << m.builtin_type;
+					builtins.set(m.builtin_type);
 					if (m.builtin_type == BuiltInCullDistance)
 						cull_distance_size = get<SPIRType>(type.member_types[index]).array.front();
 					else if (m.builtin_type == BuiltInClipDistance)
@@ -1894,7 +1894,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			auto &m = meta[var.self].decoration;
 			if (m.builtin)
 			{
-				global_builtins |= 1ull << m.builtin_type;
+				global_builtins.set(m.builtin_type);
 				if (m.builtin_type == BuiltInCullDistance)
 					cull_distance_size = type.array.front();
 				else if (m.builtin_type == BuiltInClipDistance)
@@ -1902,7 +1902,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			}
 		}
 
-		if (!builtins)
+		if (builtins.empty())
 			continue;
 
 		if (emitted_block)
@@ -1914,15 +1914,18 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		block_var = &var;
 	}
 
-	global_builtins &= (1ull << BuiltInPosition) | (1ull << BuiltInPointSize) | (1ull << BuiltInClipDistance) |
-	                   (1ull << BuiltInCullDistance);
+	global_builtins = Bitset(global_builtins.get_lower() &
+	                         ((1ull << BuiltInPosition) |
+	                          (1ull << BuiltInPointSize) |
+	                          (1ull << BuiltInClipDistance) |
+	                          (1ull << BuiltInCullDistance)));
 
 	// Try to collect all other declared builtins.
 	if (!emitted_block)
 		emitted_builtins = global_builtins;
 
 	// Can't declare an empty interface block.
-	if (!emitted_builtins)
+	if (emitted_builtins.empty())
 		return;
 
 	if (storage == StorageClassOutput)
@@ -1931,13 +1934,13 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		statement("in gl_PerVertex");
 
 	begin_scope();
-	if (emitted_builtins & (1ull << BuiltInPosition))
+	if (emitted_builtins.get(BuiltInPosition))
 		statement("vec4 gl_Position;");
-	if (emitted_builtins & (1ull << BuiltInPointSize))
+	if (emitted_builtins.get(BuiltInPointSize))
 		statement("float gl_PointSize;");
-	if (emitted_builtins & (1ull << BuiltInClipDistance))
+	if (emitted_builtins.get(BuiltInClipDistance))
 		statement("float gl_ClipDistance[", clip_distance_size, "];");
-	if (emitted_builtins & (1ull << BuiltInCullDistance))
+	if (emitted_builtins.get(BuiltInCullDistance))
 		statement("float gl_CullDistance[", cull_distance_size, "];");
 
 	bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
