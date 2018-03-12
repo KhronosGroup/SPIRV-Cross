@@ -586,6 +586,12 @@ protected:
 		return continue_blocks.find(next) != end(continue_blocks);
 	}
 
+	inline bool is_single_block_loop(uint32_t next) const
+	{
+		auto &block = get<SPIRBlock>(next);
+		return block.merge == SPIRBlock::MergeLoop && block.continue_block == next;
+	}
+
 	inline bool is_break(uint32_t next) const
 	{
 		return loop_merge_targets.find(next) != end(loop_merge_targets) ||

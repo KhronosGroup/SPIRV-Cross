@@ -17,11 +17,9 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    float vec0[(c + 3)][8];
-    vec0[0][0] = 10.0f;
     Foo foo;
     foo.elems[c] = 10.0f;
-    FragColor = (((a + b).xxxx + vec0[0][0].xxxx) + 20.0f.xxxx) + foo.elems[c].xxxx;
+    FragColor = ((a + b).xxxx + 30.0f.xxxx) + foo.elems[c].xxxx;
 }
 
 SPIRV_Cross_Output main()

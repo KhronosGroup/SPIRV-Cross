@@ -1,9 +1,3 @@
-struct B
-{
-    float a;
-    float b;
-};
-
 void frag_main()
 {
 }

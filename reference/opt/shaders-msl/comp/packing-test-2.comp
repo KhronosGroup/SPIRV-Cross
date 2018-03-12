@@ -3,8 +3,6 @@
 
 using namespace metal;
 
-constant uint3 gl_WorkGroupSize = uint3(32u, 1u, 1u);
-
 struct T1
 {
     packed_float3 a;

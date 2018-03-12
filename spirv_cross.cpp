@@ -3757,6 +3757,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 		}
 
 		DominatorBuilder builder(cfg);
+		bool force_temporary = false;
 
 		// Figure out which block is dominating all accesses of those temporaries.
 		auto &blocks = var.second;
@@ -3768,6 +3769,11 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			// access up to loop header like we did for variables.
 			if (blocks.size() != 1 && this->is_continue(block))
 				builder.add_block(this->continue_block_to_loop_header[block]);
+			else if (blocks.size() != 1 && this->is_single_block_loop(block))
+			{
+				// Awkward case, because the loop header is also the continue block.
+				force_temporary = true;
+			}
 		}
 
 		uint32_t dominating_block = builder.get_dominator();
@@ -3777,7 +3783,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 			// SPIR-V normally mandates this, but we have extra cases for temporary use inside loops.
 			bool first_use_is_dominator = blocks.count(dominating_block) != 0;
 
-			if (!first_use_is_dominator)
+			if (!first_use_is_dominator || force_temporary)
 			{
 				// This should be very rare, but if we try to declare a temporary inside a loop,
 				// and that temporary is used outside the loop as well (spirv-opt inliner likes this)

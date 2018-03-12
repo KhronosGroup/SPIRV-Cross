@@ -9,9 +9,9 @@ layout(binding = 0, std430) buffer inputData
     float inputDataArray[];
 } _12;
 
-layout(binding = 1, std430) buffer outputData
+layout(binding = 1, std430) buffer _10_74
 {
-    float outputDataArray[];
+    float inputDataArray[];
 } _74;
 
 void main()
@@ -20,7 +20,7 @@ void main()
     bool _31 = _25 > 0.0;
     if (_31)
     {
-        _74.outputDataArray[mbcntAMD(packUint2x32(uvec2(unpackUint2x32(ballotARB(_31)).xy)))] = _25;
+        _74.inputDataArray[mbcntAMD(packUint2x32(uvec2(unpackUint2x32(ballotARB(_31)).xy)))] = _25;
     }
 }
 

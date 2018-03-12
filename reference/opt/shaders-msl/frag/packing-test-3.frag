@@ -3,18 +3,7 @@
 
 using namespace metal;
 
-struct VertexOutput
-{
-    float4 HPosition;
-};
-
 struct TestStruct
-{
-    float3 position;
-    float radius;
-};
-
-struct TestStruct_1
 {
     packed_float3 position;
     float radius;
@@ -22,7 +11,7 @@ struct TestStruct_1
 
 struct CB0
 {
-    TestStruct_1 CB0[16];
+    TestStruct CB0[16];
 };
 
 struct main0_out

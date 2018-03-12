@@ -3,19 +3,18 @@
 layout(location = 0) out vec4 FragColor;
 layout(location = 0) in vec4 v0;
 
-int _51;
-
 void main()
 {
     FragColor = vec4(1.0);
-    int _53;
-    int _52;
-    for (int _50 = 0; _50 < 4; _50++, _52 = _53)
+    int _50;
+    _50 = 0;
+    for (; _50 < 4; _50++)
     {
-        _53 = 0;
-        for (; _53 < 4; _53++)
+        for (int _53 = 0; _53 < 4; )
         {
             FragColor += vec4(v0[(_50 + _53) & 3]);
+            _53++;
+            continue;
         }
     }
 }

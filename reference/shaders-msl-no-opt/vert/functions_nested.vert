@@ -114,16 +114,16 @@ float4 fetch_attr(thread const attr_desc& desc, thread const int& vertex_id, thr
             }
         }
     }
-    float4 _209;
+    float4 _210;
     if (reverse_order)
     {
-        _209 = result.wzyx;
+        _210 = result.wzyx;
     }
     else
     {
-        _209 = result;
+        _210 = result;
     }
-    return _209;
+    return _210;
 }
 
 float4 read_location(thread const int& location, constant VertexBuffer& v_227, thread uint& gl_VertexIndex, thread texture2d<uint> buff_in_2, thread texture2d<uint> buff_in_1)

@@ -11,6 +11,8 @@ struct SPIRV_Cross_Input
     uint3 gl_WorkGroupID : SV_GroupID;
 };
 
+static uint3 _22 = gl_WorkGroupSize;
+
 void comp_main()
 {
     _8.Store(gl_WorkGroupID.x * 4 + 0, asuint(asfloat(_9.Load(gl_WorkGroupID.x * 4 + 0)) + asfloat(_8.Load(gl_WorkGroupID.x * 4 + 0))));

@@ -27,7 +27,6 @@ kernel void main0(device SSBO& _28 [[buffer(0)]], device SSBO2& _52 [[buffer(1)]
         if (i < 16)
         {
             _56 = _42;
-            continue;
         }
         else
         {

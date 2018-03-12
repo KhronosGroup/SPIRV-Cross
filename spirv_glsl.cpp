@@ -682,7 +682,7 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 	if (flags.get(DecorationInvariant))
 		res += "invariant ";
 	if (flags.get(DecorationExplicitInterpAMD))
-		res += "__explicitInterpAMD";
+		res += "__explicitInterpAMD ";
 
 	return res;
 }
@@ -8360,9 +8360,11 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 
 void CompilerGLSL::branch_to_continue(uint32_t from, uint32_t to)
 {
-	assert(is_continue(to));
-
 	auto &to_block = get<SPIRBlock>(to);
+	if (from == to)
+		return;
+
+	assert(is_continue(to));
 	if (to_block.complex_continue)
 	{
 		// Just emit the whole block chain as is.
@@ -8430,8 +8432,13 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 	}
 	else if (is_break(to))
 		statement("break;");
-	else if (is_continue(to))
+	else if (is_continue(to) || (from == to))
+	{
+		// For from == to case can happen for a do-while loop which branches into itself.
+		// We don't mark these cases as continue blocks, but the only possible way to branch into
+		// ourselves is through means of continue blocks.
 		branch_to_continue(from, to);
+	}
 	else if (!is_conditional(to))
 		emit_block_chain(get<SPIRBlock>(to));
 

@@ -18,6 +18,7 @@ void main()
             FragColor += vec4(v0[_54 & 1]);
             continue;
         }
+        continue;
     }
 }
 

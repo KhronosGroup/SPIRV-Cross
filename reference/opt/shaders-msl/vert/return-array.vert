@@ -3,8 +3,6 @@
 
 using namespace metal;
 
-constant float4 _20[2] = {float4(10.0), float4(20.0)};
-
 struct main0_in
 {
     float4 vInput1 [[attribute(1)]];

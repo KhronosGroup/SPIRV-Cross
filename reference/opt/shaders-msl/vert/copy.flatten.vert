@@ -16,13 +16,6 @@ struct UBO
     Light lights[4];
 };
 
-struct Light_1
-{
-    float3 Position;
-    float Radius;
-    float4 Color;
-};
-
 struct main0_in
 {
     float3 aNormal [[attribute(1)]];
@@ -40,10 +33,12 @@ vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _21 [[buffer(0)]]
     main0_out out = {};
     out.gl_Position = _21.uMVP * in.aVertex;
     out.vColor = float4(0.0);
-    for (int _103 = 0; _103 < 4; _103++)
+    for (int _96 = 0; _96 < 4; )
     {
-        float3 _68 = in.aVertex.xyz - _21.lights[_103].Position;
-        out.vColor += ((_21.lights[_103].Color * clamp(1.0 - (length(_68) / _21.lights[_103].Radius), 0.0, 1.0)) * dot(in.aNormal, normalize(_68)));
+        float3 _68 = in.aVertex.xyz - _21.lights[_96].Position;
+        out.vColor += ((_21.lights[_96].Color * clamp(1.0 - (length(_68) / _21.lights[_96].Radius), 0.0, 1.0)) * dot(in.aNormal, normalize(_68)));
+        _96++;
+        continue;
     }
     return out;
 }

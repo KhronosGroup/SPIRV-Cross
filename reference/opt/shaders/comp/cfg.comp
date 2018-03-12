@@ -31,26 +31,15 @@ void main()
             break;
         }
     }
-    switch (int(_11.data))
-    {
-        case 0:
-        {
-            break;
-        }
-        case 1:
-        {
-            break;
-        }
-    }
     float _181;
     _181 = _180;
-    for (int _179 = 0; _179 < 20; _179++, _181 += 10.0)
+    for (int _179 = 0; _179 < 20; )
     {
+        _179++;
+        _181 += 10.0;
+        continue;
     }
     _11.data = _181;
-    do
-    {
-    } while (_180 != 20.0);
     _11.data = _180;
 }
 
