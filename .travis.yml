@@ -13,6 +13,6 @@ before_script:
   - ./checkout_glslang_spirv_tools.sh
 
 script:
-  - ./build_glslang_spirv_tools.sh
+  - ./build_glslang_spirv_tools.sh Release 2
   - make -j2
   - ./test_shaders.sh
