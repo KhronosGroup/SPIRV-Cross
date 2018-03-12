@@ -7287,6 +7287,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_op(result_type, id, expr, true);
 
 		require_extension("GL_ARB_shader_ballot");
+		inherit_expression_dependencies(id, ops[2]);
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
