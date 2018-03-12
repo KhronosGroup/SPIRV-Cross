@@ -8,14 +8,11 @@ osx_image: xcode8.3
 sudo: required
 dist: trusty
 
-# We check out glslang and SPIRV-Tools at specific revisions to avoid test output mismatches
-env:
-  - PROFILE=plain
-
 before_script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew upgrade python3; fi
+  - ./checkout_glslang_spirv_tools.sh
 
 script:
-  - ./checkout_glslang_spirv_tools.sh
+  - ./build_glslang_spirv_tools.sh
   - make -j2
   - ./test_shaders.sh
