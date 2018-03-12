@@ -7284,7 +7284,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		string expr;
 		expr = join("uvec4(unpackUint2x32(ballotARB(" + to_expression(ops[2]) + ")), 0u, 0u)");
-		emit_op(result_type, id, expr, true);
+		emit_op(result_type, id, expr, should_forward(ops[2]));
 
 		require_extension("GL_ARB_shader_ballot");
 		inherit_expression_dependencies(id, ops[2]);

@@ -2081,9 +2081,14 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	case GLSLstd450PackUnorm2x16:
 		emit_unary_func_op(result_type, id, args[0], "pack_float_to_unorm2x16");
 		break;
+
 	case GLSLstd450PackHalf2x16:
-		emit_unary_func_op(result_type, id, args[0], "unsupported_GLSLstd450PackHalf2x16"); // Currently unsupported
+	{
+		auto expr = join("as_type<uint>(half2(", to_expression(args[0]), "))");
+		emit_op(result_type, id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(id, args[0]);
 		break;
+	}
 
 	case GLSLstd450UnpackSnorm4x8:
 		emit_unary_func_op(result_type, id, args[0], "unpack_snorm4x8_to_float");
@@ -2097,9 +2102,14 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	case GLSLstd450UnpackUnorm2x16:
 		emit_unary_func_op(result_type, id, args[0], "unpack_unorm2x16_to_float");
 		break;
+
 	case GLSLstd450UnpackHalf2x16:
-		emit_unary_func_op(result_type, id, args[0], "unsupported_GLSLstd450UnpackHalf2x16"); // Currently unsupported
+	{
+		auto expr = join("float2(as_type<half2>(", to_expression(args[0]), "))");
+		emit_op(result_type, id, expr, should_forward(args[0]));
+		inherit_expression_dependencies(id, args[0]);
 		break;
+	}
 
 	case GLSLstd450PackDouble2x32:
 		emit_unary_func_op(result_type, id, args[0], "unsupported_GLSLstd450PackDouble2x32"); // Currently unsupported
