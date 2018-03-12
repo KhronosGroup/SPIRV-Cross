@@ -181,7 +181,7 @@ string CompilerMSL::compile()
 		emit_specialization_constants();
 		emit_resources();
 		emit_custom_functions();
-		emit_function(get<SPIRFunction>(entry_point), 0);
+		emit_function(get<SPIRFunction>(entry_point), Bitset());
 
 		pass_count++;
 	} while (force_recompile);
@@ -623,7 +623,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				meta[p_var->self].decoration.qualified_alias = qual_var_name;
 
 				// Copy the variable location from the original variable to the member
-				if (get_decoration_mask(p_var->self) & (1ull << DecorationLocation))
+				if (get_decoration_bitset(p_var->self).get(DecorationLocation))
 				{
 					uint32_t locn = get_decoration(p_var->self, DecorationLocation);
 					set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
@@ -2147,7 +2147,7 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 
 // Emits the declaration signature of the specified function.
 // If this is the entry point function, Metal-specific return value and function arguments are added.
-void CompilerMSL::emit_function_prototype(SPIRFunction &func, uint64_t)
+void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 {
 	if (func.self != entry_point)
 		add_function_overload(func);
@@ -2542,7 +2542,7 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!(meta[id].decoration.decoration_flags & (1ull << DecorationRowMajor)))
+	if (!meta[id].decoration.decoration_flags.get(DecorationRowMajor))
 		return false;
 
 	// Generate a function that will swap matrix elements from row-major to column-major.
@@ -2810,7 +2810,7 @@ uint32_t CompilerMSL::get_ordered_member_location(uint32_t type_id, uint32_t ind
 	if (index < m.members.size())
 	{
 		auto &dec = m.members[index];
-		if (dec.decoration_flags & (1ull << DecorationLocation))
+		if (dec.decoration_flags.get(DecorationLocation))
 			return dec.location;
 	}
 
@@ -2876,9 +2876,9 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		entry_type = "vertex";
 		break;
 	case ExecutionModelFragment:
-		entry_type = (execution.flags & (1ull << ExecutionModeEarlyFragmentTests)) ?
-		                 "fragment [[ early_fragment_tests ]]" :
-		                 "fragment";
+		entry_type = execution.flags.get(ExecutionModeEarlyFragmentTests) ?
+		             "fragment [[ early_fragment_tests ]]" :
+		             "fragment";
 		break;
 	case ExecutionModelGLCompute:
 	case ExecutionModelKernel:
@@ -2909,10 +2909,10 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 	case StorageClassUniformConstant:
 	case StorageClassPushConstant:
 		if (type.basetype == SPIRType::Struct)
-			return ((meta[type.self].decoration.decoration_flags & (1ull << DecorationBufferBlock)) != 0 &&
-			        (meta[argument.self].decoration.decoration_flags & (1ull << DecorationNonWritable)) == 0) ?
-			           "device" :
-			           "constant";
+			return (meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock) &&
+			        !meta[argument.self].decoration.decoration_flags.get(DecorationNonWritable)) ?
+			       "device" :
+			       "constant";
 
 		break;
 
@@ -3545,9 +3545,9 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 
 	// Fragment function out
 	case BuiltInFragDepth:
-		if (execution.flags & (1ull << ExecutionModeDepthGreater))
+		if (execution.flags.get(ExecutionModeDepthGreater))
 			return "depth(greater)";
-		else if (execution.flags & (1ull << ExecutionModeDepthLess))
+		else if (execution.flags.get(ExecutionModeDepthLess))
 			return "depth(less)";
 		else
 			return "depth(any)";

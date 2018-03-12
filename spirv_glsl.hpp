@@ -192,12 +192,12 @@ public:
 
 protected:
 	void reset();
-	void emit_function(SPIRFunction &func, uint64_t return_flags);
+	void emit_function(SPIRFunction &func, const Bitset &return_flags);
 
 	bool has_extension(const std::string &ext) const;
 
 	// Virtualize methods which need to be overridden by subclass targets like C++ and such.
-	virtual void emit_function_prototype(SPIRFunction &func, uint64_t return_flags);
+	virtual void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags);
 
 	// Kinda ugly way to let opcodes peek at their neighbor instructions for trivial peephole scenarios.
 	const SPIRBlock *current_emitting_block = nullptr;
@@ -440,11 +440,11 @@ protected:
 	virtual std::string to_qualifiers_glsl(uint32_t id);
 	const char *to_precision_qualifiers_glsl(uint32_t id);
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
-	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, uint64_t flags);
+	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
 	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
-	virtual std::string to_interpolation_qualifiers(uint64_t flags);
-	uint64_t combined_decoration_for_member(const SPIRType &type, uint32_t index);
+	virtual std::string to_interpolation_qualifiers(const Bitset &flags);
+	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index);
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
 	virtual bool skip_argument(uint32_t id) const;
@@ -453,9 +453,9 @@ protected:
 	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing, uint32_t start_offset = 0,
 	                                uint32_t end_offset = std::numeric_limits<uint32_t>::max());
 	uint32_t type_to_packed_base_size(const SPIRType &type, BufferPackingStandard packing);
-	uint32_t type_to_packed_alignment(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
-	uint32_t type_to_packed_array_stride(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
-	uint32_t type_to_packed_size(const SPIRType &type, uint64_t flags, BufferPackingStandard packing);
+	uint32_t type_to_packed_alignment(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing);
+	uint32_t type_to_packed_array_stride(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing);
+	uint32_t type_to_packed_size(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing);
 
 	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
 	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);

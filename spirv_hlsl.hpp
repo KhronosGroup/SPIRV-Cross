@@ -121,7 +121,7 @@ private:
 	std::string image_type_hlsl(const SPIRType &type);
 	std::string image_type_hlsl_modern(const SPIRType &type);
 	std::string image_type_hlsl_legacy(const SPIRType &type);
-	void emit_function_prototype(SPIRFunction &func, uint64_t return_flags) override;
+	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;
 	void emit_resources();
@@ -143,7 +143,7 @@ private:
 	void emit_fixup() override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
 	std::string layout_for_member(const SPIRType &type, uint32_t index) override;
-	std::string to_interpolation_qualifiers(uint64_t flags) override;
+	std::string to_interpolation_qualifiers(const Bitset &flags) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_sampler_expression(uint32_t id);

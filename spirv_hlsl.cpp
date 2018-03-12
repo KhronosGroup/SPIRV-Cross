@@ -474,7 +474,7 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 	// These are emitted inside the interface structs.
 	auto &flags = meta[var.self].decoration.decoration_flags;
 	auto old_flags = flags;
-	flags = 0;
+	flags.reset();
 	statement("static ", variable_decl(var), ";");
 	flags = old_flags;
 }
@@ -495,11 +495,7 @@ const char *CompilerHLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 void CompilerHLSL::emit_builtin_outputs_in_struct()
 {
 	bool legacy = hlsl_options.shader_model <= 30;
-	for (uint32_t i = 0; i < 64; i++)
-	{
-		if (!(active_output_builtins & (1ull << i)))
-			continue;
-
+	active_output_builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
 		const char *semantic = nullptr;
 		auto builtin = static_cast<BuiltIn>(i);
@@ -563,17 +559,13 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		if (type && semantic)
 			statement(type, " ", builtin_to_glsl(builtin, StorageClassOutput), " : ", semantic, ";");
-	}
+	});
 }
 
 void CompilerHLSL::emit_builtin_inputs_in_struct()
 {
 	bool legacy = hlsl_options.shader_model <= 30;
-	for (uint32_t i = 0; i < 64; i++)
-	{
-		if (!(active_input_builtins & (1ull << i)))
-			continue;
-
+	active_input_builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
 		const char *semantic = nullptr;
 		auto builtin = static_cast<BuiltIn>(i);
@@ -682,7 +674,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 		if (type && semantic)
 			statement(type, " ", builtin_to_glsl(builtin, StorageClassInput), " : ", semantic, ";");
-	}
+	});
 }
 
 uint32_t CompilerHLSL::type_to_consumed_locations(const SPIRType &type) const
@@ -710,22 +702,22 @@ uint32_t CompilerHLSL::type_to_consumed_locations(const SPIRType &type) const
 	return elements;
 }
 
-string CompilerHLSL::to_interpolation_qualifiers(uint64_t flags)
+string CompilerHLSL::to_interpolation_qualifiers(const Bitset &flags)
 {
 	string res;
 	//if (flags & (1ull << DecorationSmooth))
 	//    res += "linear ";
-	if (flags & (1ull << DecorationFlat))
+	if (flags.get(DecorationFlat))
 		res += "nointerpolation ";
-	if (flags & (1ull << DecorationNoPerspective))
+	if (flags.get(DecorationNoPerspective))
 		res += "noperspective ";
-	if (flags & (1ull << DecorationCentroid))
+	if (flags.get(DecorationCentroid))
 		res += "centroid ";
-	if (flags & (1ull << DecorationPatch))
+	if (flags.get(DecorationPatch))
 		res += "patch "; // Seems to be different in actual HLSL.
-	if (flags & (1ull << DecorationSample))
+	if (flags.get(DecorationSample))
 		res += "sample ";
-	if (flags & (1ull << DecorationInvariant))
+	if (flags.get(DecorationInvariant))
 		res += "invariant "; // Not supported?
 
 	return res;
@@ -771,7 +763,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 		add_member_name(type, i);
 
 		auto &membertype = get<SPIRType>(type.member_types[i]);
-		statement(to_interpolation_qualifiers(get_member_decoration_mask(type.self, i)),
+		statement(to_interpolation_qualifiers(get_member_decoration_bitset(type.self, i)),
 		          variable_decl(membertype, to_member_name(type, i)), semantic, ";");
 	}
 
@@ -813,7 +805,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 
 		// If an explicit location exists, use it with TEXCOORD[N] semantic.
 		// Otherwise, pick a vacant location.
-		if (m.decoration_flags & (1ull << DecorationLocation))
+		if (m.decoration_flags.get(DecorationLocation))
 			location_number = m.location;
 		else
 			location_number = get_vacant_location();
@@ -831,14 +823,14 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			{
 				SPIRType newtype = type;
 				newtype.columns = 1;
-				statement(to_interpolation_qualifiers(get_decoration_mask(var.self)),
+				statement(to_interpolation_qualifiers(get_decoration_bitset(var.self)),
 				          variable_decl(newtype, join(name, "_", i)), " : ", semantic, "_", i, ";");
 				active_locations.insert(location_number++);
 			}
 		}
 		else
 		{
-			statement(to_interpolation_qualifiers(get_decoration_mask(var.self)), variable_decl(type, name), " : ",
+			statement(to_interpolation_qualifiers(get_decoration_bitset(var.self)), variable_decl(type, name), " : ",
 			          semantic, ";");
 
 			// Structs and arrays should consume more locations.
@@ -879,12 +871,11 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 
 void CompilerHLSL::emit_builtin_variables()
 {
-	// Emit global variables for the interface variables which are statically used by the shader.
-	for (uint32_t i = 0; i < 64; i++)
-	{
-		if (!((active_input_builtins | active_output_builtins) & (1ull << i)))
-			continue;
+	Bitset builtins = active_input_builtins;
+	builtins.merge_or(active_output_builtins);
 
+	// Emit global variables for the interface variables which are statically used by the shader.
+	builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
 		auto builtin = static_cast<BuiltIn>(i);
 		uint32_t array_size = 0;
@@ -952,7 +943,7 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 		}
 
-		StorageClass storage = (active_input_builtins & (1ull << i)) != 0 ? StorageClassInput : StorageClassOutput;
+		StorageClass storage = active_input_builtins.get(i) ? StorageClassInput : StorageClassOutput;
 		// FIXME: SampleMask can be both in and out with sample builtin,
 		// need to distinguish that when we add support for that.
 
@@ -963,7 +954,7 @@ void CompilerHLSL::emit_builtin_variables()
 			else
 				statement("static ", type, " ", builtin_to_glsl(builtin, storage), ";");
 		}
-	}
+	});
 }
 
 void CompilerHLSL::emit_composite_constants()
@@ -1045,8 +1036,8 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &type = id.get<SPIRType>();
 			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
-			    (meta[type.self].decoration.decoration_flags &
-			     ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) == 0)
+			    (!meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
+			     !meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
 			{
 				emit_struct(type);
 			}
@@ -1066,8 +1057,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
-			bool has_block_flags = (meta[type.self].decoration.decoration_flags &
-			                        ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+			bool has_block_flags = meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
+			                       meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
 			if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
 			    has_block_flags)
@@ -1131,7 +1122,7 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			// Do not emit I/O blocks here.
 			// I/O blocks can be arrayed, so we must deal with them separately to support geometry shaders
@@ -1163,7 +1154,7 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 				continue;
@@ -1231,8 +1222,10 @@ void CompilerHLSL::emit_resources()
 		return name1.compare(name2) < 0;
 	};
 
-	static const uint64_t implicit_builtins = (1ull << BuiltInNumWorkgroups) | (1ull << BuiltInPointCoord);
-	if (!input_variables.empty() || (active_input_builtins & ~implicit_builtins))
+	auto input_builtins = active_input_builtins;
+	input_builtins.clear(BuiltInNumWorkgroups);
+	input_builtins.clear(BuiltInPointCoord);
+	if (!input_variables.empty() || !input_builtins.empty())
 	{
 		require_input = true;
 		statement("struct SPIRV_Cross_Input");
@@ -1246,7 +1239,7 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
-	if (!output_variables.empty() || active_output_builtins)
+	if (!output_variables.empty() || !active_output_builtins.empty())
 	{
 		require_output = true;
 		statement("struct SPIRV_Cross_Output");
@@ -1721,17 +1714,17 @@ string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
 {
 	auto flags = combined_decoration_for_member(type, index);
 
-	bool is_block = (meta[type.self].decoration.decoration_flags &
-	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+	bool is_block = meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
+	                meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
 	if (!is_block)
 		return "";
 
 	// Flip the convention. HLSL is a bit odd in that the memory layout is column major ... but the language API is "row-major".
 	// The way to deal with this is to multiply everything in inverse order, and reverse the memory layout.
-	if (flags & (1ull << DecorationColMajor))
+	if (flags.get(DecorationColMajor))
 		return "row_major ";
-	else if (flags & (1ull << DecorationRowMajor))
+	else if (flags.get(DecorationRowMajor))
 		return "column_major ";
 
 	return "";
@@ -1742,14 +1735,15 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 {
 	auto &membertype = get<SPIRType>(member_type_id);
 
-	uint64_t memberflags = 0;
+	Bitset memberflags;
 	auto &memb = meta[type.self].members;
 	if (index < memb.size())
 		memberflags = memb[index].decoration_flags;
 
 	string qualifiers;
-	bool is_block = (meta[type.self].decoration.decoration_flags &
-	                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+	bool is_block = meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
+	                meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
@@ -1779,8 +1773,8 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 	if (is_uav)
 	{
-		uint64_t flags = get_buffer_block_flags(var);
-		bool is_readonly = (flags & (1ull << DecorationNonWritable)) != 0;
+		Bitset flags = get_buffer_block_flags(var);
+		bool is_readonly = flags.get(DecorationNonWritable);
 		add_resource_name(var.self);
 		statement(is_readonly ? "ByteAddressBuffer " : "RWByteAddressBuffer ", to_name(var.self),
 		          type_to_array_glsl(type), to_resource_binding(var), ";");
@@ -1932,7 +1926,7 @@ string CompilerHLSL::to_func_call_arg(uint32_t id)
 	return arg_str;
 }
 
-void CompilerHLSL::emit_function_prototype(SPIRFunction &func, uint64_t return_flags)
+void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
 {
 	if (func.self != entry_point)
 		add_function_overload(func);
@@ -2033,7 +2027,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 				continue;
@@ -2076,7 +2070,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		break;
 	}
 	case ExecutionModelFragment:
-		if (execution.flags & (1ull << ExecutionModeEarlyFragmentTests))
+		if (execution.flags.get(ExecutionModeEarlyFragmentTests))
 			statement("[earlydepthstencil]");
 		break;
 	default:
@@ -2088,11 +2082,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	bool legacy = hlsl_options.shader_model <= 30;
 
 	// Copy builtins from entry point arguments to globals.
-	for (uint32_t i = 0; i < 64; i++)
-	{
-		if (!(active_input_builtins & (1ull << i)))
-			continue;
-
+	active_input_builtins.for_each_bit([&](uint32_t i) {
 		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
 		switch (static_cast<BuiltIn>(i))
 		{
@@ -2134,7 +2124,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			statement(builtin, " = stage_input.", builtin, ";");
 			break;
 		}
-	}
+	});
 
 	// Copy from stage input struct to globals.
 	for (auto &id : ids)
@@ -2143,7 +2133,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassInput)
 				continue;
@@ -2193,7 +2183,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassOutput)
 				continue;
@@ -2213,14 +2203,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("SPIRV_Cross_Output stage_output;");
 
 		// Copy builtins from globals to return struct.
-		for (uint32_t i = 0; i < 64; i++)
-		{
-			if (!(active_output_builtins & (1ull << i)))
-				continue;
-
+		active_output_builtins.for_each_bit([&](uint32_t i) {
 			// PointSize doesn't exist in HLSL.
 			if (i == BuiltInPointSize)
-				continue;
+				return;
 
 			switch (static_cast<BuiltIn>(i))
 			{
@@ -2243,7 +2229,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				break;
 			}
 			}
-		}
+		});
 
 		for (auto &id : ids)
 		{
@@ -2251,7 +2237,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			{
 				auto &var = id.get<SPIRVariable>();
 				auto &type = get<SPIRType>(var.basetype);
-				bool block = (meta[type.self].decoration.decoration_flags & (1ull << DecorationBlock)) != 0;
+				bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 				if (var.storage != StorageClassOutput)
 					continue;
@@ -2743,8 +2729,8 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		{
 			if (has_decoration(type.self, DecorationBufferBlock))
 			{
-				uint64_t flags = get_buffer_block_flags(var);
-				bool is_readonly = (flags & (1ull << DecorationNonWritable)) != 0;
+				Bitset flags = get_buffer_block_flags(var);
+				bool is_readonly = flags.get(DecorationNonWritable);
 				space = is_readonly ? 't' : 'u'; // UAV
 			}
 			else if (has_decoration(type.self, DecorationBlock))
@@ -4187,7 +4173,7 @@ uint32_t CompilerHLSL::remap_num_workgroups_builtin()
 {
 	update_active_builtins();
 
-	if ((active_input_builtins & (1ull << BuiltInNumWorkgroups)) == 0)
+	if (!active_input_builtins.get(BuiltInNumWorkgroups))
 		return 0;
 
 	// Create a new, fake UBO.
@@ -4259,7 +4245,7 @@ string CompilerHLSL::compile()
 
 	// Subpass input needs SV_Position.
 	if (need_subpass_input)
-		active_input_builtins |= 1ull << BuiltInFragCoord;
+		active_input_builtins.set(BuiltInFragCoord);
 
 	uint32_t pass_count = 0;
 	do
@@ -4275,7 +4261,7 @@ string CompilerHLSL::compile()
 		emit_header();
 		emit_resources();
 
-		emit_function(get<SPIRFunction>(entry_point), 0);
+		emit_function(get<SPIRFunction>(entry_point), Bitset());
 		emit_hlsl_entry_point();
 
 		pass_count++;

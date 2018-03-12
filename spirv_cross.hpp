@@ -144,7 +144,9 @@ public:
 
 	// Gets a bitmask for the decorations which are applied to ID.
 	// I.e. (1ull << spv::DecorationFoo) | (1ull << spv::DecorationBar)
+	SPIRV_CROSS_DEPRECATED("Please use get_decoration_bitset instead.")
 	uint64_t get_decoration_mask(uint32_t id) const;
+	const Bitset &get_decoration_bitset(uint32_t id) const;
 
 	// Returns whether the decoration has been applied to the ID.
 	bool has_decoration(uint32_t id, spv::Decoration decoration) const;
@@ -195,7 +197,9 @@ public:
 	void set_member_qualified_name(uint32_t type_id, uint32_t index, const std::string &name);
 
 	// Gets the decoration mask for a member of a struct, similar to get_decoration_mask.
+	SPIRV_CROSS_DEPRECATED("Please use get_member_decoration_bitset instead.")
 	uint64_t get_member_decoration_mask(uint32_t id, uint32_t index) const;
+	const Bitset &get_member_decoration_bitset(uint32_t id, uint32_t index) const;
 
 	// Returns whether the decoration has been applied to a member of a struct.
 	bool has_member_decoration(uint32_t id, uint32_t index, spv::Decoration decoration) const;
@@ -311,7 +315,10 @@ public:
 	                                                 spv::ExecutionModel execution_model) const;
 
 	// Query and modify OpExecutionMode.
+	SPIRV_CROSS_DEPRECATED("Please use get_execution_mode_bitset instead.")
 	uint64_t get_execution_mode_mask() const;
+	const Bitset &get_execution_mode_bitset() const;
+
 	void unset_execution_mode(spv::ExecutionMode mode);
 	void set_execution_mode(spv::ExecutionMode mode, uint32_t arg0 = 0, uint32_t arg1 = 0, uint32_t arg2 = 0);
 
@@ -747,7 +754,7 @@ protected:
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 		Compiler &compiler;
 
-		void handle_builtin(const SPIRType &type, spv::BuiltIn builtin, uint64_t decoration_flags);
+		void handle_builtin(const SPIRType &type, spv::BuiltIn builtin, const Bitset &decoration_flags);
 	};
 
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
@@ -759,15 +766,15 @@ protected:
 
 	VariableTypeRemapCallback variable_remap_callback;
 
-	uint64_t get_buffer_block_flags(const SPIRVariable &var);
+	Bitset get_buffer_block_flags(const SPIRVariable &var);
 	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type);
 
 	std::unordered_set<uint32_t> forced_temporaries;
 	std::unordered_set<uint32_t> forwarded_temporaries;
 	std::unordered_set<uint32_t> hoisted_temporaries;
 
-	uint64_t active_input_builtins = 0;
-	uint64_t active_output_builtins = 0;
+	Bitset active_input_builtins;
+	Bitset active_output_builtins;
 	uint32_t clip_distance_count = 0;
 	uint32_t cull_distance_count = 0;
 	bool position_invariant = false;
