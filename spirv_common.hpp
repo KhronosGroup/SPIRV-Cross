@@ -739,6 +739,10 @@ struct SPIRFunction : IVariant
 		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
 	}
 
+	// Statements to be emitted when the function returns.
+	// Mostly used for lowering internal data structures onto flattened structures.
+	std::vector<std::string> fixup_statements;
+
 	bool active = false;
 	bool flush_undeclared = true;
 	bool do_combined_parameters = true;

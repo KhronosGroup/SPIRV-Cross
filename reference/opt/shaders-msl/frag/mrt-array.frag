@@ -13,7 +13,10 @@ struct main0_in
 
 struct main0_out
 {
-    float4 FragColor [[color(0)]][4];
+    float4 FragColor_0 [[color(0)]];
+    float4 FragColor_1 [[color(1)]];
+    float4 FragColor_2 [[color(2)]];
+    float4 FragColor_3 [[color(3)]];
 };
 
 // Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
@@ -26,10 +29,15 @@ Tx mod(Tx x, Ty y)
 fragment main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    out.FragColor[0] = mod(in.vA, in.vB);
-    out.FragColor[1] = in.vA + in.vB;
-    out.FragColor[2] = in.vA - in.vB;
-    out.FragColor[3] = in.vA * in.vB;
+    float4 FragColor[4];
+    FragColor[0] = mod(in.vA, in.vB);
+    FragColor[1] = in.vA + in.vB;
+    FragColor[2] = in.vA - in.vB;
+    FragColor[3] = in.vA * in.vB;
+    out.FragColor_0 = FragColor[0];
+    out.FragColor_1 = FragColor[1];
+    out.FragColor_2 = FragColor[2];
+    out.FragColor_3 = FragColor[3];
     return out;
 }
 

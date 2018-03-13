@@ -9063,6 +9063,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 
 	case SPIRBlock::Return:
+		for (auto &line : current_function->fixup_statements)
+			statement(line);
 		if (processing_entry_point)
 			emit_fixup();
 
