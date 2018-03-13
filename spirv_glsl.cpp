@@ -883,7 +883,8 @@ uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPack
 	}
 }
 
-uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing)
+uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bitset &flags,
+                                                BufferPackingStandard packing)
 {
 	if (!type.array.empty())
 	{
@@ -971,7 +972,8 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 	SPIRV_CROSS_THROW("Did not find suitable rule for type. Bogus decorations?");
 }
 
-uint32_t CompilerGLSL::type_to_packed_array_stride(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing)
+uint32_t CompilerGLSL::type_to_packed_array_stride(const SPIRType &type, const Bitset &flags,
+                                                   BufferPackingStandard packing)
 {
 	// Array stride is equal to aligned size of the underlying type.
 	uint32_t parent = type.parent_type;
@@ -1914,11 +1916,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		block_var = &var;
 	}
 
-	global_builtins = Bitset(global_builtins.get_lower() &
-	                         ((1ull << BuiltInPosition) |
-	                          (1ull << BuiltInPointSize) |
-	                          (1ull << BuiltInClipDistance) |
-	                          (1ull << BuiltInCullDistance)));
+	global_builtins =
+	    Bitset(global_builtins.get_lower() & ((1ull << BuiltInPosition) | (1ull << BuiltInPointSize) |
+	                                          (1ull << BuiltInClipDistance) | (1ull << BuiltInCullDistance)));
 
 	// Try to collect all other declared builtins.
 	if (!emitted_block)
@@ -9063,6 +9063,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 
 	case SPIRBlock::Return:
+		for (auto &line : current_function->fixup_statements)
+			statement(line);
 		if (processing_entry_point)
 			emit_fixup();
 

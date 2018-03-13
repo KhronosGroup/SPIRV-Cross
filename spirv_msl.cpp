@@ -550,8 +550,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
 
 				if (should_move_to_input_buffer(mbr_type_id, is_builtin, storage))
+				{
 					move_member_to_input_buffer(type, mbr_idx);
-
+				}
 				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					// Add a reference to the member to the interface struct.
@@ -604,38 +605,82 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
 
 			if (should_move_to_input_buffer(type_id, is_builtin, storage))
+			{
 				move_to_input_buffer(*p_var);
-
+			}
 			else if (!is_builtin || has_active_builtin(builtin, storage))
 			{
-				// Add a reference to the variable type to the interface struct.
-				uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-				type_id = ensure_correct_builtin_type(type_id, builtin);
-				p_var->basetype = type_id;
-				ib_type.member_types.push_back(type_id);
-
-				// Give the member a name
-				string mbr_name = ensure_valid_name(to_expression(p_var->self), "m");
-				set_member_name(ib_type_id, ib_mbr_idx, mbr_name);
-
-				// Update the original variable reference to include the structure reference
-				string qual_var_name = ib_var_ref + "." + mbr_name;
-				meta[p_var->self].decoration.qualified_alias = qual_var_name;
-
-				// Copy the variable location from the original variable to the member
-				if (get_decoration_bitset(p_var->self).get(DecorationLocation))
+				// Arrays of MRT output is not allowed in MSL, so need to handle it specially.
+				if (!is_builtin && storage == StorageClassOutput && get_entry_point().model == ExecutionModelFragment &&
+				    !type.array.empty())
 				{
-					uint32_t locn = get_decoration(p_var->self, DecorationLocation);
-					set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
-					mark_location_as_used_by_shader(locn, storage);
+					if (type.array.size() != 1)
+						SPIRV_CROSS_THROW("Cannot emit arrays-of-arrays with MRT.");
+
+					uint32_t num_mrts = type.array_size_literal.back() ? type.array.back() :
+					                                                     get<SPIRConstant>(type.array.back()).scalar();
+
+					auto *no_array_type = &type;
+					while (!no_array_type->array.empty())
+						no_array_type = &get<SPIRType>(no_array_type->parent_type);
+
+					auto &entry_func = get<SPIRFunction>(entry_point);
+					entry_func.add_local_variable(p_var->self);
+
+					for (uint32_t i = 0; i < num_mrts; i++)
+					{
+						// Add a reference to the variable type to the interface struct.
+						uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
+						ib_type.member_types.push_back(no_array_type->self);
+
+						// Give the member a name
+						string mbr_name = ensure_valid_name(join(to_expression(p_var->self), "_", i), "m");
+						set_member_name(ib_type_id, ib_mbr_idx, mbr_name);
+
+						// There is no qualified alias since we need to flatten the internal array on return.
+						if (get_decoration_bitset(p_var->self).get(DecorationLocation))
+						{
+							uint32_t locn = get_decoration(p_var->self, DecorationLocation) + i;
+							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
+							mark_location_as_used_by_shader(locn, storage);
+						}
+
+						// Lower the internal array to flattened output when entry point returns.
+						entry_func.fixup_statements.push_back(
+						    join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];"));
+					}
 				}
-
-				// Mark the member as builtin if needed
-				if (is_builtin)
+				else
 				{
-					set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
-					if (builtin == BuiltInPosition)
-						qual_pos_var_name = qual_var_name;
+					// Add a reference to the variable type to the interface struct.
+					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
+					type_id = ensure_correct_builtin_type(type_id, builtin);
+					p_var->basetype = type_id;
+					ib_type.member_types.push_back(type_id);
+
+					// Give the member a name
+					string mbr_name = ensure_valid_name(to_expression(p_var->self), "m");
+					set_member_name(ib_type_id, ib_mbr_idx, mbr_name);
+
+					// Update the original variable reference to include the structure reference
+					string qual_var_name = ib_var_ref + "." + mbr_name;
+					meta[p_var->self].decoration.qualified_alias = qual_var_name;
+
+					// Copy the variable location from the original variable to the member
+					if (get_decoration_bitset(p_var->self).get(DecorationLocation))
+					{
+						uint32_t locn = get_decoration(p_var->self, DecorationLocation);
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
+						mark_location_as_used_by_shader(locn, storage);
+					}
+
+					// Mark the member as builtin if needed
+					if (is_builtin)
+					{
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBuiltIn, builtin);
+						if (builtin == BuiltInPosition)
+							qual_pos_var_name = qual_var_name;
+					}
 				}
 			}
 		}
@@ -679,8 +724,8 @@ bool CompilerMSL::should_move_to_input_buffer(uint32_t type_id, bool is_builtin,
 			if (storage == StorageClassInput)
 				SPIRV_CROSS_THROW("The fragment function stage_in structure may not include a matrix or array.");
 
-			if (storage == StorageClassOutput)
-				SPIRV_CROSS_THROW("The fragment function output structure may not include a matrix or array.");
+			//if (storage == StorageClassOutput)
+			//	SPIRV_CROSS_THROW("The fragment function output structure may not include a matrix or array.");
 		}
 	}
 
@@ -2893,9 +2938,8 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		entry_type = "vertex";
 		break;
 	case ExecutionModelFragment:
-		entry_type = execution.flags.get(ExecutionModeEarlyFragmentTests) ?
-		             "fragment [[ early_fragment_tests ]]" :
-		             "fragment";
+		entry_type =
+		    execution.flags.get(ExecutionModeEarlyFragmentTests) ? "fragment [[ early_fragment_tests ]]" : "fragment";
 		break;
 	case ExecutionModelGLCompute:
 	case ExecutionModelKernel:
@@ -2928,8 +2972,8 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 		if (type.basetype == SPIRType::Struct)
 			return (meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock) &&
 			        !meta[argument.self].decoration.decoration_flags.get(DecorationNonWritable)) ?
-			       "device" :
-			       "constant";
+			           "device" :
+			           "constant";
 
 		break;
 
