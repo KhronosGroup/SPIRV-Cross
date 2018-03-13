@@ -4667,7 +4667,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	bool access_chain_is_arrayed = false;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
-	bool is_packed = false;
+	bool is_packed = has_decoration(base, DecorationCPacked);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
@@ -4826,22 +4826,21 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
 		{
-			if (is_packed)
-			{
-				expr = unpack_expression_type(expr, *type);
-				is_packed = false;
-			}
-
-			if (index_is_literal)
+			if (index_is_literal && !is_packed)
 			{
 				expr += ".";
 				expr += index_to_swizzle(index);
 			}
-			else if (ids[index].get_type() == TypeConstant)
+			else if (ids[index].get_type() == TypeConstant && !is_packed)
 			{
 				auto &c = get<SPIRConstant>(index);
 				expr += ".";
 				expr += index_to_swizzle(c.scalar());
+			}
+			else if (index_is_literal)
+			{
+				// For packed vectors, we can only access them as an array, not by swizzle.
+				expr += join("[", index, "]");
 			}
 			else
 			{
@@ -4850,6 +4849,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
+			is_packed = false;
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
 		}
@@ -5991,6 +5991,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Do not allow base expression for struct members. We risk doing "swizzle" optimizations in this case.
 		auto &composite_type = expression_type(ops[2]);
 		if (composite_type.basetype == SPIRType::Struct || !composite_type.array.empty())
+			allow_base_expression = false;
+
+		// Packed expressions cannot be split up.
+		if (has_decoration(ops[2], DecorationCPacked))
 			allow_base_expression = false;
 
 		// Only apply this optimization if result is scalar.

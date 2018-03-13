@@ -22,7 +22,7 @@ struct main0_out
 fragment main0_out main0(constant CB0& _26 [[buffer(0)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
-    out._entryPointOutput = float4(_26.CB0[1].position, _26.CB0[1].radius);
+    out._entryPointOutput = float4(_26.CB0[1].position[0], _26.CB0[1].position[1], _26.CB0[1].position[2], _26.CB0[1].radius);
     return out;
 }
 
