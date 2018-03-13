@@ -279,6 +279,7 @@ although there are a couple of convenience script for doing this:
 
 ```
 ./checkout_glslang_spirv_tools.sh # Checks out glslang and SPIRV-Tools at a fixed revision which matches the reference output.
+./build_glslang_spirv_tools.sh    # Builds glslang and SPIRV-Tools.
 ./test_shaders.sh                 # Runs over all changes and makes sure that there are no deltas compared to reference files.
 ```
 

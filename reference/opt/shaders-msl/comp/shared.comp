@@ -3,8 +3,6 @@
 
 using namespace metal;
 
-constant uint3 gl_WorkGroupSize = uint3(4u, 1u, 1u);
-
 struct SSBO
 {
     float in_data[1];
@@ -20,6 +18,6 @@ kernel void main0(device SSBO& _22 [[buffer(0)]], device SSBO2& _44 [[buffer(1)]
     threadgroup float sShared[4];
     sShared[gl_LocalInvocationIndex] = _22.in_data[gl_GlobalInvocationID.x];
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    _44.out_data[gl_GlobalInvocationID.x] = sShared[(4u - gl_LocalInvocationIndex) - 1u];
+    _44.out_data[gl_GlobalInvocationID.x] = sShared[3u - gl_LocalInvocationIndex];
 }
 

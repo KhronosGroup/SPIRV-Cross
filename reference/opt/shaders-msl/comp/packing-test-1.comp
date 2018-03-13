@@ -3,15 +3,7 @@
 
 using namespace metal;
 
-constant uint3 gl_WorkGroupSize = uint3(32u, 1u, 1u);
-
 struct T1
-{
-    float3 a;
-    float b;
-};
-
-struct T1_1
 {
     packed_float3 a;
     float b;
@@ -19,7 +11,7 @@ struct T1_1
 
 struct Buffer0
 {
-    T1_1 buf0[1];
+    T1 buf0[1];
 };
 
 struct Buffer1

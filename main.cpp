@@ -212,7 +212,7 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 	for (auto &res : resources)
 	{
 		auto &type = compiler.get_type(res.type_id);
-		auto mask = compiler.get_decoration_mask(res.id);
+		auto &mask = compiler.get_decoration_bitset(res.id);
 
 		if (print_ssbo && compiler.buffer_is_hlsl_counter_buffer(res.id))
 			continue;
@@ -221,8 +221,8 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		// for SSBOs and UBOs since those are the only meaningful names to use externally.
 		// Push constant blocks are still accessed by name and not block name, even though they are technically Blocks.
 		bool is_push_constant = compiler.get_storage_class(res.id) == StorageClassPushConstant;
-		bool is_block = (compiler.get_decoration_mask(type.self) &
-		                 ((1ull << DecorationBlock) | (1ull << DecorationBufferBlock))) != 0;
+		bool is_block = compiler.get_decoration_bitset(type.self).get(DecorationBlock) ||
+		                compiler.get_decoration_bitset(type.self).get(DecorationBufferBlock);
 		bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == StorageClassUniform ||
 		                                   compiler.get_storage_class(res.id) == StorageClassUniformConstant);
 		uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
@@ -238,17 +238,17 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		fprintf(stderr, " ID %03u : %s%s", res.id,
 		        !res.name.empty() ? res.name.c_str() : compiler.get_fallback_name(fallback_id).c_str(), array.c_str());
 
-		if (mask & (1ull << DecorationLocation))
+		if (mask.get(DecorationLocation))
 			fprintf(stderr, " (Location : %u)", compiler.get_decoration(res.id, DecorationLocation));
-		if (mask & (1ull << DecorationDescriptorSet))
+		if (mask.get(DecorationDescriptorSet))
 			fprintf(stderr, " (Set : %u)", compiler.get_decoration(res.id, DecorationDescriptorSet));
-		if (mask & (1ull << DecorationBinding))
+		if (mask.get(DecorationBinding))
 			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
-		if (mask & (1ull << DecorationInputAttachmentIndex))
+		if (mask.get(DecorationInputAttachmentIndex))
 			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
-		if (mask & (1ull << DecorationNonReadable))
+		if (mask.get(DecorationNonReadable))
 			fprintf(stderr, " writeonly");
-		if (mask & (1ull << DecorationNonWritable))
+		if (mask.get(DecorationNonWritable))
 			fprintf(stderr, " readonly");
 		if (is_sized_block)
 			fprintf(stderr, " (BlockSize : %u bytes)", block_size);
@@ -284,7 +284,7 @@ static const char *execution_model_to_str(spv::ExecutionModel model)
 
 static void print_resources(const Compiler &compiler, const ShaderResources &res)
 {
-	uint64_t modes = compiler.get_execution_mode_mask();
+	auto &modes = compiler.get_execution_mode_bitset();
 
 	fprintf(stderr, "Entry points:\n");
 	auto entry_points = compiler.get_entry_points_and_stages();
@@ -293,11 +293,7 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	fprintf(stderr, "\n");
 
 	fprintf(stderr, "Execution modes:\n");
-	for (unsigned i = 0; i < 64; i++)
-	{
-		if (!(modes & (1ull << i)))
-			continue;
-
+	modes.for_each_bit([&](uint32_t i) {
 		auto mode = static_cast<ExecutionMode>(i);
 		uint32_t arg0 = compiler.get_execution_mode_argument(mode, 0);
 		uint32_t arg1 = compiler.get_execution_mode_argument(mode, 1);
@@ -353,7 +349,7 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 		default:
 			break;
 		}
-	}
+	});
 	fprintf(stderr, "\n");
 
 	print_resources(compiler, "subpass inputs", res.subpass_inputs);
@@ -898,7 +894,15 @@ static int main_inner(int argc, char *argv[])
 	}
 
 	if (build_dummy_sampler)
-		compiler->build_dummy_sampler_for_combined_images();
+	{
+		uint32_t sampler = compiler->build_dummy_sampler_for_combined_images();
+		if (sampler != 0)
+		{
+			// Set some defaults to make validation happy.
+			compiler->set_decoration(sampler, DecorationDescriptorSet, 0);
+			compiler->set_decoration(sampler, DecorationBinding, 0);
+		}
+	}
 
 	ShaderResources res;
 	if (args.remove_unused)

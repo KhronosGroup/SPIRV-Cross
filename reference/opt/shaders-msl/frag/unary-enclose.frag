@@ -16,7 +16,7 @@ struct main0_out
 fragment main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    out.FragColor = -(-in.vIn);
+    out.FragColor = in.vIn;
     return out;
 }
 

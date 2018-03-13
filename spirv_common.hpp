@@ -19,6 +19,7 @@
 
 #include "spirv.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <functional>
@@ -27,6 +28,7 @@
 #include <sstream>
 #include <stack>
 #include <stdexcept>
+#include <stdint.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -91,6 +93,125 @@ void join_helper(std::ostringstream &stream, T &&t, Ts &&... ts)
 	join_helper(stream, std::forward<Ts>(ts)...);
 }
 }
+
+class Bitset
+{
+public:
+	Bitset() = default;
+	explicit inline Bitset(uint64_t lower_)
+		: lower(lower_)
+	{
+	}
+
+	inline bool get(uint32_t bit) const
+	{
+		if (bit < 64)
+			return (lower & (1ull << bit)) != 0;
+		else
+			return higher.count(bit) != 0;
+	}
+
+	inline void set(uint32_t bit)
+	{
+		if (bit < 64)
+			lower |= 1ull << bit;
+		else
+			higher.insert(bit);
+	}
+
+	inline void clear(uint32_t bit)
+	{
+		if (bit < 64)
+			lower &= ~(1ull << bit);
+		else
+			higher.erase(bit);
+	}
+
+	inline uint64_t get_lower() const
+	{
+		return lower;
+	}
+
+	inline void reset()
+	{
+		lower = 0;
+		higher.clear();
+	}
+
+	inline void merge_and(const Bitset &other)
+	{
+		lower &= other.lower;
+		std::unordered_set<uint32_t> tmp_set;
+		for (auto &v : higher)
+			if (other.higher.count(v) != 0)
+				tmp_set.insert(v);
+		higher = std::move(tmp_set);
+	}
+
+	inline void merge_or(const Bitset &other)
+	{
+		lower |= other.lower;
+		for (auto &v : other.higher)
+			higher.insert(v);
+	}
+
+	inline bool operator==(const Bitset &other) const
+	{
+		if (lower != other.lower)
+			return false;
+
+		if (higher.size() != other.higher.size())
+			return false;
+
+		for (auto &v : higher)
+			if (other.higher.count(v) == 0)
+				return false;
+
+		return true;
+	}
+
+	inline bool operator!=(const Bitset &other) const
+	{
+		return !(*this == other);
+	}
+
+	template <typename Op>
+	void for_each_bit(const Op &op) const
+	{
+		// TODO: Add ctz-based iteration.
+		for (uint32_t i = 0; i < 64; i++)
+		{
+			if (lower & (1ull << i))
+				op(i);
+		}
+
+		if (higher.empty())
+			return;
+
+		// Need to enforce an order here for reproducible results,
+		// but hitting this path should happen extremely rarely, so having this slow path is fine.
+		std::vector<uint32_t> bits;
+		bits.reserve(higher.size());
+		for (auto &v : higher)
+			bits.push_back(v);
+		std::sort(std::begin(bits), std::end(bits));
+
+		for (auto &v : bits)
+			op(v);
+	}
+
+	inline bool empty() const
+	{
+		return lower == 0 && higher.empty();
+	}
+
+private:
+	// The most common bits to set are all lower than 64,
+	// so optimize for this case. Bits spilling outside 64 go into a slower data structure.
+	// In almost all cases, higher data structure will not be used.
+	uint64_t lower = 0;
+	std::unordered_set<uint32_t> higher;
+};
 
 // Helper template to avoid lots of nasty string temporary munging.
 template <typename... Ts>
@@ -362,7 +483,7 @@ struct SPIREntryPoint
 	std::string orig_name;
 	std::vector<uint32_t> interface_variables;
 
-	uint64_t flags = 0;
+	Bitset flags;
 	struct
 	{
 		uint32_t x = 0, y = 0, z = 0;
@@ -541,6 +662,11 @@ struct SPIRBlock : IVariant
 	// fail to use a classic for-loop,
 	// we remove these variables, and fall back to regular variables outside the loop.
 	std::vector<uint32_t> loop_variables;
+
+	// Some expressions are control-flow dependent, i.e. any instruction which relies on derivatives or
+	// sub-group-like operations.
+	// Make sure that we only use these expressions in the original block.
+	std::vector<uint32_t> invalidate_expressions;
 };
 
 struct SPIRFunction : IVariant
@@ -1051,7 +1177,7 @@ struct Meta
 	{
 		std::string alias;
 		std::string qualified_alias;
-		uint64_t decoration_flags = 0;
+		Bitset decoration_flags;
 		spv::BuiltIn builtin_type;
 		uint32_t location = 0;
 		uint32_t set = 0;
@@ -1122,6 +1248,7 @@ static inline bool type_is_floating_point(const SPIRType &type)
 {
 	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
 }
+
 }
 
 #endif

@@ -3,18 +3,7 @@
 
 using namespace metal;
 
-struct VertexOutput
-{
-    float4 HPosition;
-};
-
 struct TestStruct
-{
-    float3 position;
-    float radius;
-};
-
-struct TestStruct_1
 {
     packed_float3 position;
     float radius;
@@ -22,7 +11,7 @@ struct TestStruct_1
 
 struct CB0
 {
-    TestStruct_1 CB0[16];
+    TestStruct CB0[16];
 };
 
 struct main0_out
@@ -33,7 +22,7 @@ struct main0_out
 fragment main0_out main0(constant CB0& _26 [[buffer(0)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
-    out._entryPointOutput = float4(_26.CB0[1].position, _26.CB0[1].radius);
+    out._entryPointOutput = float4(_26.CB0[1].position[0], _26.CB0[1].position[1], _26.CB0[1].position[2], _26.CB0[1].radius);
     return out;
 }
 
