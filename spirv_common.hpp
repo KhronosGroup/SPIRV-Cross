@@ -99,7 +99,7 @@ class Bitset
 public:
 	Bitset() = default;
 	explicit inline Bitset(uint64_t lower_)
-		: lower(lower_)
+	    : lower(lower_)
 	{
 	}
 
@@ -1252,7 +1252,6 @@ static inline bool type_is_floating_point(const SPIRType &type)
 {
 	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
 }
-
 }
 
 #endif

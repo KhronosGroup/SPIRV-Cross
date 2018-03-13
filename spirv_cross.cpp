@@ -3942,7 +3942,8 @@ bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &b
 	}
 }
 
-void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltIn builtin, const Bitset &decoration_flags)
+void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltIn builtin,
+                                                    const Bitset &decoration_flags)
 {
 	// If used, we will need to explicitly declare a new array size for these builtins.
 

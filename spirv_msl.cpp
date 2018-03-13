@@ -611,16 +611,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			else if (!is_builtin || has_active_builtin(builtin, storage))
 			{
 				// Arrays of MRT output is not allowed in MSL, so need to handle it specially.
-				if (!is_builtin &&
-				    storage == StorageClassOutput &&
-				    get_entry_point().model == ExecutionModelFragment &&
+				if (!is_builtin && storage == StorageClassOutput && get_entry_point().model == ExecutionModelFragment &&
 				    !type.array.empty())
 				{
 					if (type.array.size() != 1)
 						SPIRV_CROSS_THROW("Cannot emit arrays-of-arrays with MRT.");
 
-					uint32_t num_mrts =
-							type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+					uint32_t num_mrts = type.array_size_literal.back() ? type.array.back() :
+					                                                     get<SPIRConstant>(type.array.back()).scalar();
 
 					auto *no_array_type = &type;
 					while (!no_array_type->array.empty())
@@ -648,7 +646,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						}
 
 						// Lower the internal array to flattened output when entry point returns.
-						entry_func.fixup_statements.push_back(join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];"));
+						entry_func.fixup_statements.push_back(
+						    join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];"));
 					}
 				}
 				else
@@ -2939,9 +2938,8 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		entry_type = "vertex";
 		break;
 	case ExecutionModelFragment:
-		entry_type = execution.flags.get(ExecutionModeEarlyFragmentTests) ?
-		             "fragment [[ early_fragment_tests ]]" :
-		             "fragment";
+		entry_type =
+		    execution.flags.get(ExecutionModeEarlyFragmentTests) ? "fragment [[ early_fragment_tests ]]" : "fragment";
 		break;
 	case ExecutionModelGLCompute:
 	case ExecutionModelKernel:
@@ -2974,8 +2972,8 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 		if (type.basetype == SPIRType::Struct)
 			return (meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock) &&
 			        !meta[argument.self].decoration.decoration_flags.get(DecorationNonWritable)) ?
-			       "device" :
-			       "constant";
+			           "device" :
+			           "constant";
 
 		break;
 
