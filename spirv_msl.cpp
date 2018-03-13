@@ -604,8 +604,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
 
 			if (should_move_to_input_buffer(type_id, is_builtin, storage))
+			{
 				move_to_input_buffer(*p_var);
-
+			}
 			else if (!is_builtin || has_active_builtin(builtin, storage))
 			{
 				// Add a reference to the variable type to the interface struct.
@@ -679,8 +680,8 @@ bool CompilerMSL::should_move_to_input_buffer(uint32_t type_id, bool is_builtin,
 			if (storage == StorageClassInput)
 				SPIRV_CROSS_THROW("The fragment function stage_in structure may not include a matrix or array.");
 
-			if (storage == StorageClassOutput)
-				SPIRV_CROSS_THROW("The fragment function output structure may not include a matrix or array.");
+			//if (storage == StorageClassOutput)
+			//	SPIRV_CROSS_THROW("The fragment function output structure may not include a matrix or array.");
 		}
 	}
 
