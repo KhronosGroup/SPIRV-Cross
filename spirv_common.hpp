@@ -1185,6 +1185,7 @@ struct Meta
 	{
 		std::string alias;
 		std::string qualified_alias;
+		std::string hlsl_semantic;
 		Bitset decoration_flags;
 		spv::BuiltIn builtin_type;
 		uint32_t location = 0;
@@ -1212,6 +1213,11 @@ struct Meta
 	// is not a valid identifier in any high-level language.
 	std::string hlsl_magic_counter_buffer_name;
 	bool hlsl_magic_counter_buffer_candidate = false;
+
+	// For SPV_GOOGLE_hlsl_functionality1, this avoids the workaround.
+	bool hlsl_is_magic_counter_buffer = false;
+	// ID for the sibling counter buffer.
+	uint32_t hlsl_magic_counter_buffer = 0;
 };
 
 // A user callback that remaps the type of any variable.

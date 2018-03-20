@@ -1012,6 +1012,7 @@ void Compiler::set_name(uint32_t id, const std::string &name)
 
 	// glslang uses identifiers to pass along meaningful information
 	// about HLSL reflection.
+	// FIXME: This should be deprecated eventually.
 	auto &m = meta.at(id);
 	if (source.hlsl && name.size() >= 6 && name.find("@count") == name.size() - 6)
 	{
@@ -1039,6 +1040,24 @@ const SPIRType &Compiler::get_type(uint32_t id) const
 const SPIRType &Compiler::get_type_from_variable(uint32_t id) const
 {
 	return get<SPIRType>(get<SPIRVariable>(id).basetype);
+}
+
+void Compiler::set_member_decoration_string(uint32_t id, uint32_t index, spv::Decoration decoration,
+                                            const std::string &argument)
+{
+	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
+	auto &dec = meta.at(id).members[index];
+	dec.decoration_flags.set(decoration);
+
+	switch (decoration)
+	{
+	case DecorationHlslSemanticGOOGLE:
+		dec.hlsl_semantic = argument;
+		break;
+
+	default:
+		break;
+	}
 }
 
 void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration decoration, uint32_t argument)
@@ -1206,6 +1225,26 @@ void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration d
 		dec.spec_id = 0;
 		break;
 
+	case DecorationHlslSemanticGOOGLE:
+		dec.hlsl_semantic.clear();
+		break;
+
+	default:
+		break;
+	}
+}
+
+void Compiler::set_decoration_string(uint32_t id, spv::Decoration decoration, const std::string &argument)
+{
+	auto &dec = meta.at(id).decoration;
+	dec.decoration_flags.set(decoration);
+
+	switch (decoration)
+	{
+	case DecorationHlslSemanticGOOGLE:
+		dec.hlsl_semantic = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -1259,6 +1298,11 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.index = argument;
 		break;
 
+	case DecorationHlslCounterBufferGOOGLE:
+		meta.at(id).hlsl_magic_counter_buffer = argument;
+		meta.at(argument).hlsl_is_magic_counter_buffer = true;
+		break;
+
 	default:
 		break;
 	}
@@ -1302,6 +1346,24 @@ const Bitset &Compiler::get_decoration_bitset(uint32_t id) const
 bool Compiler::has_decoration(uint32_t id, Decoration decoration) const
 {
 	return get_decoration_bitset(id).get(decoration);
+}
+
+const string &Compiler::get_decoration_string(uint32_t id, spv::Decoration decoration) const
+{
+	auto &dec = meta.at(id).decoration;
+	static const string empty;
+
+	if (!dec.decoration_flags.get(decoration))
+		return empty;
+
+	switch (decoration)
+	{
+	case DecorationHlslSemanticGOOGLE:
+		return dec.hlsl_semantic;
+
+	default:
+		return empty;
+	}
 }
 
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
@@ -1370,6 +1432,21 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 	case DecorationSpecId:
 		dec.spec_id = 0;
 		break;
+
+	case DecorationHlslSemanticGOOGLE:
+		dec.hlsl_semantic.clear();
+		break;
+
+	case DecorationHlslCounterBufferGOOGLE:
+	{
+		auto &counter = meta.at(id).hlsl_magic_counter_buffer;
+		if (counter)
+		{
+			meta.at(counter).hlsl_is_magic_counter_buffer = false;
+			counter = 0;
+		}
+		break;
+	}
 
 	default:
 		break;
@@ -1548,6 +1625,7 @@ void Compiler::parse(const Instruction &instruction)
 	}
 
 	case OpDecorate:
+	case OpDecorateId:
 	{
 		uint32_t id = ops[0];
 
@@ -1563,6 +1641,14 @@ void Compiler::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpDecorateStringGOOGLE:
+	{
+		uint32_t id = ops[0];
+		auto decoration = static_cast<Decoration>(ops[1]);
+		set_decoration_string(id, decoration, extract_string(spirv, instruction.offset + 2));
+		break;
+	}
+
 	case OpMemberDecorate:
 	{
 		uint32_t id = ops[0];
@@ -1572,6 +1658,15 @@ void Compiler::parse(const Instruction &instruction)
 			set_member_decoration(id, member, decoration, ops[3]);
 		else
 			set_member_decoration(id, member, decoration);
+		break;
+	}
+
+	case OpMemberDecorateStringGOOGLE:
+	{
+		uint32_t id = ops[0];
+		uint32_t member = ops[1];
+		auto decoration = static_cast<Decoration>(ops[2]);
+		set_member_decoration_string(id, member, decoration, extract_string(spirv, instruction.offset + 3));
 		break;
 	}
 
@@ -4239,6 +4334,13 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 
 bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 {
+	// First, check for the proper decoration.
+	if (meta.at(id).hlsl_is_magic_counter_buffer)
+		return true;
+
+	// Check for legacy fallback method.
+	// FIXME: This should be deprecated eventually.
+
 	if (meta.at(id).hlsl_magic_counter_buffer_candidate)
 	{
 		auto *var = maybe_get<SPIRVariable>(id);
@@ -4252,6 +4354,16 @@ bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 
 bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const
 {
+	// First, check for the proper decoration.
+	if (meta[id].hlsl_magic_counter_buffer != 0)
+	{
+		counter_id = meta[id].hlsl_magic_counter_buffer;
+		return true;
+	}
+
+	// Check for legacy fallback method.
+	// FIXME: This should be deprecated eventually.
+
 	auto &name = get_name(id);
 	uint32_t id_bound = get_current_id_bound();
 	for (uint32_t i = 0; i < id_bound; i++)
