@@ -8972,9 +8972,6 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		get<SPIRBlock>(block.continue_block).complex_continue = true;
 		continue_type = SPIRBlock::ComplexLoop;
 
-		sort(begin(block.potential_declare_temporary), end(block.potential_declare_temporary),
-		     [](const pair<uint32_t, uint32_t> &a, const pair<uint32_t, uint32_t> &b) { return a.second < b.second; });
-
 		// We have some temporaries where the loop header is the dominator.
 		// We risk a case where we have code like:
 		// for (;;) { create-temporary; break; } consume-temporary;
