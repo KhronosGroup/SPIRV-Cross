@@ -10,10 +10,10 @@ void main()
     _50 = 0;
     for (; _50 < 4; _50++)
     {
-        for (int _53 = 0; _53 < 4; )
+        for (int _51 = 0; _51 < 4; )
         {
-            FragColor += vec4(v0[(_50 + _53) & 3]);
-            _53++;
+            FragColor += vec4(v0[(_50 + _51) & 3]);
+            _51++;
             continue;
         }
     }

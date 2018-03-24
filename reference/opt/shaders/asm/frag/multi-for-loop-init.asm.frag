@@ -14,8 +14,8 @@ void main()
     {
         FragColor += vec4(float(_53));
         FragColor += vec4(float(_54));
-        _53 += counter;
         _54 += uint(counter);
+        _53 += counter;
         continue;
     }
 }

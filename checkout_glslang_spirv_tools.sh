@@ -1,7 +1,7 @@
 #!/bin/bash
 
-GLSLANG_REV=845860d56513d95e15fe4820df7272f9687d076e
-SPIRV_TOOLS_REV=340370eddbb9f0e7d26b6a4f7e22c1b98150e5e1
+GLSLANG_REV=7cec64fc42eba4587d2f3d73c03cb68ceb18dca4
+SPIRV_TOOLS_REV=fe9121f72144f1e1657cd21a55a1fec07c940e56
 
 if [ -d external/glslang ]; then
 	echo "Updating glslang to revision $GLSLANG_REV."
