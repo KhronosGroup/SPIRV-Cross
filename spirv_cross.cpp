@@ -3802,6 +3802,16 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto &block_temporaries = this->get<SPIRBlock>(dominating_block).declare_temporary;
 				block_temporaries.emplace_back(handler.result_id_to_type[var.first], var.first);
 			}
+			else if (blocks.size() > 1)
+			{
+				// Keep track of the temporary as we might have to declare this temporary.
+				// This can happen if the loop header dominates a temporary, but we have a complex fallback loop.
+				// In this case, the header is actually inside the for (;;) {} block, and we have problems.
+				// What we need to do is hoist the temporaries outside the for (;;) {} block in case the header block
+				// declares the temporary.
+				auto &block_temporaries = this->get<SPIRBlock>(dominating_block).potential_declare_temporary;
+				block_temporaries.emplace_back(handler.result_id_to_type[var.first], var.first);
+			}
 		}
 	}
 

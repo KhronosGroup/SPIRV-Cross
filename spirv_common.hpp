@@ -636,6 +636,10 @@ struct SPIRBlock : IVariant
 	// Used for handling complex continue blocks which have side effects.
 	std::vector<std::pair<uint32_t, uint32_t>> declare_temporary;
 
+	// Declare these temporaries, but only conditionally if this block turns out to be
+	// a complex loop header.
+	std::vector<std::pair<uint32_t, uint32_t>> potential_declare_temporary;
+
 	struct Case
 	{
 		uint32_t value;

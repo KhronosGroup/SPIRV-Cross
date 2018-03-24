@@ -3,6 +3,8 @@
 
 using namespace metal;
 
+constant uint3 gl_WorkGroupSize = uint3(4u, 4u, 1u);
+
 struct SSBO
 {
     float out_data[1];

@@ -8874,6 +8874,28 @@ void CompilerGLSL::flush_undeclared_variables(SPIRBlock &block)
 	}
 }
 
+void CompilerGLSL::emit_hoisted_temporaries(vector<pair<uint32_t, uint32_t>> &temporaries)
+{
+	// If we need to force temporaries for certain IDs due to continue blocks, do it before starting loop header.
+	// Need to sort these to ensure that reference output is stable.
+	sort(begin(temporaries), end(temporaries),
+	     [](const pair<uint32_t, uint32_t> &a, const pair<uint32_t, uint32_t> &b) { return a.second < b.second; });
+
+	for (auto &tmp : temporaries)
+	{
+		add_local_variable_name(tmp.second);
+		auto flags = meta[tmp.second].decoration.decoration_flags;
+		auto &type = get<SPIRType>(tmp.first);
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
+
+		hoisted_temporaries.insert(tmp.second);
+		forced_temporaries.insert(tmp.second);
+
+		// The temporary might be read from before it's assigned, set up the expression now.
+		set<SPIRExpression>(tmp.second, to_name(tmp.second), tmp.first, true);
+	}
+}
+
 void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 {
 	propagate_loop_dominators(block);
@@ -8883,21 +8905,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	bool emitted_for_loop_header = false;
 	bool force_complex_continue_block = false;
 
-	// If we need to force temporaries for certain IDs due to continue blocks, do it before starting loop header.
-	// Need to sort these to ensure that reference output is stable.
-	sort(begin(block.declare_temporary), end(block.declare_temporary),
-	     [](const pair<uint32_t, uint32_t> &a, const pair<uint32_t, uint32_t> &b) { return a.second < b.second; });
-
-	for (auto &tmp : block.declare_temporary)
-	{
-		add_local_variable_name(tmp.second);
-		auto flags = meta[tmp.second].decoration.decoration_flags;
-		auto &type = get<SPIRType>(tmp.first);
-		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
-
-		// The temporary might be read from before it's assigned, set up the expression now.
-		set<SPIRExpression>(tmp.second, to_name(tmp.second), tmp.first, true);
-	}
+	emit_hoisted_temporaries(block.declare_temporary);
 
 	SPIRBlock::ContinueBlockType continue_type = SPIRBlock::ContinueNone;
 	if (block.continue_block)
@@ -8946,6 +8954,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	else if (continue_type == SPIRBlock::DoWhileLoop)
 	{
 		flush_undeclared_variables(block);
+		// We have some temporaries where the loop header is the dominator.
+		// We risk a case where we have code like:
+		// for (;;) { create-temporary; break; } consume-temporary;
+		// so force-declare temporaries here.
+		emit_hoisted_temporaries(block.potential_declare_temporary);
 		statement("do");
 		begin_scope();
 
@@ -8959,6 +8972,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		get<SPIRBlock>(block.continue_block).complex_continue = true;
 		continue_type = SPIRBlock::ComplexLoop;
 
+		sort(begin(block.potential_declare_temporary), end(block.potential_declare_temporary),
+		     [](const pair<uint32_t, uint32_t> &a, const pair<uint32_t, uint32_t> &b) { return a.second < b.second; });
+
+		// We have some temporaries where the loop header is the dominator.
+		// We risk a case where we have code like:
+		// for (;;) { create-temporary; break; } consume-temporary;
+		// so force-declare temporaries here.
+		emit_hoisted_temporaries(block.potential_declare_temporary);
 		statement("for (;;)");
 		begin_scope();
 

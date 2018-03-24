@@ -366,6 +366,7 @@ protected:
 	void emit_interface_block(const SPIRVariable &type);
 	void emit_flattened_io_block(const SPIRVariable &var, const char *qual);
 	void emit_block_chain(SPIRBlock &block);
+	void emit_hoisted_temporaries(std::vector<std::pair<uint32_t, uint32_t>> &temporaries);
 	void emit_specialization_constant(const SPIRConstant &constant);
 	std::string emit_continue_block(uint32_t continue_block);
 	bool attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method);

@@ -13,14 +13,14 @@ void main()
     vec4 values3[2 * 3 * 1];
     for (; _92 < 2; _92++)
     {
-        int _96;
-        _96 = 0;
-        for (; _96 < 3; _96++)
+        int _93;
+        _93 = 0;
+        for (; _93 < 3; _93++)
         {
-            for (int _98 = 0; _98 < 1; )
+            for (int _95 = 0; _95 < 1; )
             {
-                values3[_92 * 3 * 1 + _96 * 1 + _98] = texture(uTextures[_92 * 3 * 1 + _96 * 1 + _98], vUV);
-                _98++;
+                values3[_92 * 3 * 1 + _93 * 1 + _95] = texture(uTextures[_92 * 3 * 1 + _93 * 1 + _95], vUV);
+                _95++;
                 continue;
             }
         }
