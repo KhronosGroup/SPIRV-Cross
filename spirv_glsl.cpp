@@ -3091,6 +3091,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 	else
 	{
 		// The result_id has not been made into an expression yet, so use flags interface.
+		add_local_variable_name(result_id);
 		return join(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), " = ");
 	}
 }
@@ -8889,6 +8890,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	for (auto &tmp : block.declare_temporary)
 	{
+		add_local_variable_name(tmp.second);
 		auto flags = meta[tmp.second].decoration.decoration_flags;
 		auto &type = get<SPIRType>(tmp.first);
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
