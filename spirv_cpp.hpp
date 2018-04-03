@@ -72,6 +72,6 @@ private:
 
 	std::string interface_name;
 };
-}
+} // namespace spirv_cross
 
 #endif

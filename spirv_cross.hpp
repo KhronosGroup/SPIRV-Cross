@@ -847,6 +847,6 @@ private:
 	void fixup_type_alias();
 	bool type_is_block_like(const SPIRType &type) const;
 };
-}
+} // namespace spirv_cross
 
 #endif

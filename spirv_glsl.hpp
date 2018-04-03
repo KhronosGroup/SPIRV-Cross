@@ -562,6 +562,6 @@ private:
 		}
 	}
 };
-}
+} // namespace spirv_cross
 
 #endif

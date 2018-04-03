@@ -3224,10 +3224,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &type = expression_type(arg.id);
 	bool constref = !arg.alias_global_variable && (!type.pointer || arg.write_count == 0);
 
-	bool type_is_image =
-			type.basetype == SPIRType::Image ||
-			type.basetype == SPIRType::SampledImage ||
-			type.basetype == SPIRType::Sampler;
+	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
+	                     type.basetype == SPIRType::Sampler;
 
 	// Arrays of images/samplers in MSL are always const.
 	if (!type.array.empty() && type_is_image)
@@ -3464,8 +3462,8 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 			parent = &get<SPIRType>(parent->parent_type);
 		parent = &get<SPIRType>(parent->parent_type);
 
-		uint32_t array_size = type.array_size_literal.back() ?
-		                      type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		uint32_t array_size =
+		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
 
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
@@ -3486,7 +3484,8 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			parent = &get<SPIRType>(parent->parent_type);
 		parent = &get<SPIRType>(parent->parent_type);
 
-		uint32_t array_size = type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		uint32_t array_size =
+		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
 		return join("array<", image_type_glsl(*parent, id), ", ", array_size, ">");

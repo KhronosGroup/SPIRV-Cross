@@ -77,7 +77,8 @@ public:
 	// Options for compiling to Metal Shading Language
 	struct Options
 	{
-		typedef enum {
+		typedef enum
+		{
 			iOS,
 			macOS,
 		} Platform;
@@ -346,6 +347,6 @@ protected:
 		SortAspect sort_aspect;
 	};
 };
-}
+} // namespace spirv_cross
 
 #endif
