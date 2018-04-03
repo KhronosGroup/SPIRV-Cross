@@ -3262,8 +3262,13 @@ string CompilerMSL::ensure_valid_name(string name, string pfx)
 // Replace all names that match MSL keywords or Metal Standard Library functions.
 void CompilerMSL::replace_illegal_names()
 {
+	// FIXME: MSL and GLSL are doing two different things here.
+	// Agree on convention and remove this override.
 	static const unordered_set<string> keywords = {
 		"kernel",
+		"vertex",
+		"fragment",
+		"compute",
 		"bias",
 	};
 
@@ -3318,6 +3323,8 @@ void CompilerMSL::replace_illegal_names()
 		// Always write this because entry point might have been renamed earlier.
 		meta[entry.first].decoration.alias = ep_name;
 	}
+
+	CompilerGLSL::replace_illegal_names();
 }
 
 string CompilerMSL::to_qualifiers_glsl(uint32_t id)

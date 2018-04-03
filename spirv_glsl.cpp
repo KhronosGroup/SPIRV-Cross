@@ -1700,7 +1700,7 @@ void CompilerGLSL::replace_illegal_names()
 		"uimageCubeArray", "uint", "uniform", "union", "unsigned", "usampler1D", "usampler1DArray", "usampler2D", "usampler2DArray",
 		"usampler2DMS", "usampler2DMSArray", "usampler2DRect", "usampler3D", "usamplerBuffer", "usamplerCube",
 		"usamplerCubeArray", "using", "uvec2", "uvec3", "uvec4", "varying", "vec2", "vec3", "vec4", "void", "volatile", "volatile",
-		"while", "writeonly", "texture"
+		"while", "writeonly", "texture",
 	};
 	// clang-format on
 
