@@ -2443,13 +2443,15 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	}
 
 	// LOD Options
-	if (bias)
+	// Metal does not support LOD for 1D textures.
+	if (bias && imgtype.image.dim != Dim1D)
 	{
 		forward = forward && should_forward(bias);
 		farg_str += ", bias(" + to_expression(bias) + ")";
 	}
 
-	if (lod)
+	// Metal does not support LOD for 1D textures.
+	if (lod && imgtype.image.dim != Dim1D)
 	{
 		forward = forward && should_forward(lod);
 		if (is_fetch)
@@ -2462,7 +2464,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		}
 	}
 
-	if (grad_x || grad_y)
+	// Metal does not support LOD for 1D textures.
+	if ((grad_x || grad_y) && imgtype.image.dim != Dim1D)
 	{
 		forward = forward && should_forward(grad_x);
 		forward = forward && should_forward(grad_y);
@@ -2502,17 +2505,21 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		switch (imgtype.image.dim)
 		{
+		case Dim1D:
+			if (coord_type.vecsize > 1)
+				offset_expr = enclose_expression(offset_expr) + ".x";
+			farg_str += ", " + offset_expr;
+			break;
+
 		case Dim2D:
 			if (coord_type.vecsize > 2)
-				offset_expr += ".xy";
-
+				offset_expr = enclose_expression(offset_expr) + ".xy";
 			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
 			if (coord_type.vecsize > 3)
-				offset_expr += ".xyz";
-
+				offset_expr = enclose_expression(offset_expr) + ".xyz";
 			farg_str += ", " + offset_expr;
 			break;
 
