@@ -1074,6 +1074,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.matrix_stride = argument;
 		break;
 
+	case DecorationIndex:
+		dec.index = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -1146,6 +1150,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.offset;
 	case DecorationSpecId:
 		return dec.spec_id;
+	case DecorationIndex:
+		return dec.index;
 	default:
 		return 1;
 	}
@@ -1249,6 +1255,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		dec.spec_id = argument;
 		break;
 
+	case DecorationIndex:
+		dec.index = argument;
+		break;
+
 	default:
 		break;
 	}
@@ -1320,6 +1330,8 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.array_stride;
 	case DecorationMatrixStride:
 		return dec.matrix_stride;
+	case DecorationIndex:
+		return dec.index;
 	default:
 		return 1;
 	}
