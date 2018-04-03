@@ -1229,7 +1229,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	else
 		can_use_binding = options.enable_420pack_extension || (options.version >= 420);
 
-	if (!can_use_buffer_blocks)
+	// Make sure we don't emit binding layout for a classic uniform on GLSL 1.30.
+	if (!can_use_buffer_blocks && var.storage == StorageClassUniform)
 		can_use_binding = false;
 
 	if (can_use_binding && flags.get(DecorationBinding))
