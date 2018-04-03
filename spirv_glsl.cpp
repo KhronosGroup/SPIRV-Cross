@@ -1220,11 +1220,17 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("set = ", dec.set));
 	}
 
+	// GL 3.0/GLSL 1.30 is not considered legacy, but it doesn't have UBOs ...
+	bool can_use_buffer_blocks = (options.es && options.version >= 300) || (!options.es && options.version >= 140);
+
 	bool can_use_binding;
 	if (options.es)
 		can_use_binding = options.version >= 310;
 	else
 		can_use_binding = options.enable_420pack_extension || (options.version >= 420);
+
+	if (!can_use_buffer_blocks)
+		can_use_binding = false;
 
 	if (can_use_binding && flags.get(DecorationBinding))
 		attr.push_back(join("binding = ", dec.binding));
@@ -1238,7 +1244,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
-	if (var.storage == StorageClassUniform && typeflags.get(DecorationBlock))
+	if (can_use_buffer_blocks && var.storage == StorageClassUniform && typeflags.get(DecorationBlock))
 	{
 		if (buffer_is_packing_standard(type, BufferPackingStd140))
 			attr.push_back("std140");
@@ -1268,7 +1274,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			                  "support a more flexible layout.");
 		}
 	}
-	else if (push_constant_block || ssbo_block)
+	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block))
 	{
 		if (buffer_is_packing_standard(type, BufferPackingStd430))
 			attr.push_back("std430");
@@ -1374,7 +1380,7 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	if (flattened_buffer_blocks.count(var.self))
 		emit_buffer_block_flattened(var);
-	else if (is_legacy())
+	else if (is_legacy() || (!options.es && options.version == 130))
 		emit_buffer_block_legacy(var);
 	else
 		emit_buffer_block_native(var);
