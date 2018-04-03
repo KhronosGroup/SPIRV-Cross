@@ -2292,11 +2292,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		// Manufacture automatic sampler arg for SampledImage texture
 		auto &arg_type = get<SPIRType>(arg.type);
 		if (arg_type.basetype == SPIRType::SampledImage && arg_type.image.dim != DimBuffer)
-		{
-			//const char *reference = arg_type.array.empty() ? "& " : " ";
-			const char *reference = " ";
-			decl += join(", thread const ", sampler_type(arg_type), reference, to_sampler_expression(arg.id));
-		}
+			decl += join(", thread const ", sampler_type(arg_type), " ", to_sampler_expression(arg.id));
 
 		if (&arg != &func.arguments.back())
 			decl += ", ";
@@ -3119,13 +3115,13 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		case SPIRType::Sampler:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += type_to_glsl(type) + " " + r.name;
+			ep_args += sampler_type(type) + " " + r.name;
 			ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
 			break;
 		case SPIRType::Image:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += type_to_glsl(type, var_id) + " " + r.name;
+			ep_args += image_type_glsl(type, var_id) + " " + r.name;
 			ep_args += " [[texture(" + convert_to_string(r.index) + ")]]";
 			break;
 		default:
@@ -3456,6 +3452,9 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 {
 	if (!type.array.empty())
 	{
+		if (!msl_options.supports_msl_version(2))
+			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of samplers.");
+
 		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
 		auto *parent = &type;
 		while (parent->pointer)
@@ -3478,6 +3477,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
 	if (!type.array.empty())
 	{
+		if (!msl_options.supports_msl_version(2))
+			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of textures.");
+
 		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
 		auto *parent = &type;
 		while (parent->pointer)
