@@ -1209,6 +1209,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("location = ", dec.location));
 	}
 
+	if (flags.get(DecorationIndex))
+		attr.push_back(join("index = ", dec.index));
+
 	// set = 0 is the default. Do not emit set = decoration in regular GLSL output, but
 	// we should preserve it in Vulkan GLSL mode.
 	if (var.storage != StorageClassPushConstant)

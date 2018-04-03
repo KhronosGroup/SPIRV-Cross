@@ -645,6 +645,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 							mark_location_as_used_by_shader(locn, storage);
 						}
 
+						if (get_decoration_bitset(p_var->self).get(DecorationIndex))
+						{
+							uint32_t index = get_decoration(p_var->self, DecorationIndex);
+							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationIndex, index);
+						}
+
 						// Lower the internal array to flattened output when entry point returns.
 						entry_func.fixup_statements.push_back(
 						    join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];"));
@@ -672,6 +678,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						uint32_t locn = get_decoration(p_var->self, DecorationLocation);
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
+					}
+
+					if (get_decoration_bitset(p_var->self).get(DecorationIndex))
+					{
+						uint32_t index = get_decoration(p_var->self, DecorationIndex);
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationIndex, index);
 					}
 
 					// Mark the member as builtin if needed
@@ -2835,8 +2847,14 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			}
 		}
 		uint32_t locn = get_ordered_member_location(type.self, index);
-		if (locn != k_unknown_location)
-			return string(" [[color(") + convert_to_string(locn) + ")]]";
+		if (locn != k_unknown_location && has_member_decoration(type.self, index, DecorationIndex))
+			return join(" [[color(", locn, "), index(", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+		else if (locn != k_unknown_location)
+			return join(" [[color(", locn, ")]]");
+		else if (has_member_decoration(type.self, index, DecorationIndex))
+			return join(" [[index(", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+		else
+			return "";
 	}
 
 	// Compute function inputs

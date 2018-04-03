@@ -1195,6 +1195,7 @@ struct Meta
 		uint32_t matrix_stride = 0;
 		uint32_t input_attachment = 0;
 		uint32_t spec_id = 0;
+		uint32_t index = 0;
 		bool builtin = false;
 	};
 
