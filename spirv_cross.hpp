@@ -136,6 +136,7 @@ public:
 
 	// Applies a decoration to an ID. Effectively injects OpDecorate.
 	void set_decoration(uint32_t id, spv::Decoration decoration, uint32_t argument = 0);
+	void set_decoration_string(uint32_t id, spv::Decoration decoration, const std::string &argument);
 
 	// Overrides the identifier OpName of an ID.
 	// Identifiers beginning with underscores or identifiers which contain double underscores
@@ -157,6 +158,7 @@ public:
 	// If decoration doesn't exist or decoration is not recognized,
 	// 0 will be returned.
 	uint32_t get_decoration(uint32_t id, spv::Decoration decoration) const;
+	const std::string &get_decoration_string(uint32_t id, spv::Decoration decoration) const;
 
 	// Removes the decoration for a an ID.
 	void unset_decoration(uint32_t id, spv::Decoration decoration);
@@ -185,6 +187,7 @@ public:
 
 	// Given an OpTypeStruct in ID, obtain the OpMemberDecoration for member number "index".
 	uint32_t get_member_decoration(uint32_t id, uint32_t index, spv::Decoration decoration) const;
+	const std::string &get_member_decoration_string(uint32_t id, uint32_t index, spv::Decoration decoration) const;
 
 	// Sets the member identifier for OpTypeStruct ID, member number "index".
 	void set_member_name(uint32_t id, uint32_t index, const std::string &name);
@@ -206,6 +209,8 @@ public:
 
 	// Similar to set_decoration, but for struct members.
 	void set_member_decoration(uint32_t id, uint32_t index, spv::Decoration decoration, uint32_t argument = 0);
+	void set_member_decoration_string(uint32_t id, uint32_t index, spv::Decoration decoration,
+	                                  const std::string &argument);
 
 	// Unsets a member decoration, similar to unset_decoration.
 	void unset_member_decoration(uint32_t id, uint32_t index, spv::Decoration decoration);
@@ -441,14 +446,18 @@ public:
 	// which lets us link the two buffers together.
 
 	// Queries if a variable ID is a counter buffer which "belongs" to a regular buffer object.
-	// NOTE: This query is purely based on OpName identifiers as found in the SPIR-V module, and will
+
+	// If SPV_GOOGLE_hlsl_functionality1 is used, this can be used even with a stripped SPIR-V module.
+	// Otherwise, this query is purely based on OpName identifiers as found in the SPIR-V module, and will
 	// only return true if OpSource was reported HLSL.
 	// To rely on this functionality, ensure that the SPIR-V module is not stripped.
+
 	bool buffer_is_hlsl_counter_buffer(uint32_t id) const;
 
 	// Queries if a buffer object has a neighbor "counter" buffer.
 	// If so, the ID of that counter buffer will be returned in counter_id.
-	// NOTE: This query is purely based on OpName identifiers as found in the SPIR-V module, and will
+	// If SPV_GOOGLE_hlsl_functionality1 is used, this can be used even with a stripped SPIR-V module.
+	// Otherwise, this query is purely based on OpName identifiers as found in the SPIR-V module, and will
 	// only return true if OpSource was reported HLSL.
 	// To rely on this functionality, ensure that the SPIR-V module is not stripped.
 	bool buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const;
