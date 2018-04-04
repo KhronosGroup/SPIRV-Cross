@@ -2292,7 +2292,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		// Manufacture automatic sampler arg for SampledImage texture
 		auto &arg_type = get<SPIRType>(arg.type);
 		if (arg_type.basetype == SPIRType::SampledImage && arg_type.image.dim != DimBuffer)
-			decl += ", thread const sampler& " + to_sampler_expression(arg.id);
+			decl += join(", thread const ", sampler_type(arg_type), " ", to_sampler_expression(arg.id));
 
 		if (&arg != &func.arguments.back())
 			decl += ", ";
@@ -2443,13 +2443,15 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	}
 
 	// LOD Options
-	if (bias)
+	// Metal does not support LOD for 1D textures.
+	if (bias && imgtype.image.dim != Dim1D)
 	{
 		forward = forward && should_forward(bias);
 		farg_str += ", bias(" + to_expression(bias) + ")";
 	}
 
-	if (lod)
+	// Metal does not support LOD for 1D textures.
+	if (lod && imgtype.image.dim != Dim1D)
 	{
 		forward = forward && should_forward(lod);
 		if (is_fetch)
@@ -2462,7 +2464,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		}
 	}
 
-	if (grad_x || grad_y)
+	// Metal does not support LOD for 1D textures.
+	if ((grad_x || grad_y) && imgtype.image.dim != Dim1D)
 	{
 		forward = forward && should_forward(grad_x);
 		forward = forward && should_forward(grad_y);
@@ -2502,17 +2505,21 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		switch (imgtype.image.dim)
 		{
+		case Dim1D:
+			if (coord_type.vecsize > 1)
+				offset_expr = enclose_expression(offset_expr) + ".x";
+			farg_str += ", " + offset_expr;
+			break;
+
 		case Dim2D:
 			if (coord_type.vecsize > 2)
-				offset_expr += ".xy";
-
+				offset_expr = enclose_expression(offset_expr) + ".xy";
 			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
 			if (coord_type.vecsize > 3)
-				offset_expr += ".xyz";
-
+				offset_expr = enclose_expression(offset_expr) + ".xyz";
 			farg_str += ", " + offset_expr;
 			break;
 
@@ -2587,14 +2594,9 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 	string arg_str = CompilerGLSL::to_func_call_arg(id);
 
 	// Manufacture automatic sampler arg if the arg is a SampledImage texture.
-	Variant &id_v = ids[id];
-	if (id_v.get_type() == TypeVariable)
-	{
-		auto &var = id_v.get<SPIRVariable>();
-		auto &type = get<SPIRType>(var.basetype);
-		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
-			arg_str += ", " + to_sampler_expression(id);
-	}
+	auto &type = expression_type(id);
+	if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
+		arg_str += ", " + to_sampler_expression(id);
 
 	return arg_str;
 }
@@ -2604,8 +2606,18 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 // by appending a suffix to the expression constructed from the ID.
 string CompilerMSL::to_sampler_expression(uint32_t id)
 {
+	auto expr = to_expression(id);
+	auto index = expr.find_first_of('[');
 	uint32_t samp_id = meta[id].sampler;
-	return samp_id ? to_expression(samp_id) : to_expression(id) + sampler_name_suffix;
+
+	if (index == string::npos)
+		return samp_id ? to_expression(samp_id) : expr + sampler_name_suffix;
+	else
+	{
+		auto image_expr = expr.substr(0, index);
+		auto array_expr = expr.substr(index);
+		return samp_id ? to_expression(samp_id) : (image_expr + sampler_name_suffix + array_expr);
+	}
 }
 
 // Checks whether the ID is a row_major matrix that requires conversion before use
@@ -3103,13 +3115,13 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		case SPIRType::Sampler:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += "sampler " + r.name;
+			ep_args += sampler_type(type) + " " + r.name;
 			ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
 			break;
 		case SPIRType::Image:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += type_to_glsl(type, var_id) + " " + r.name;
+			ep_args += image_type_glsl(type, var_id) + " " + r.name;
 			ep_args += " [[texture(" + convert_to_string(r.index) + ")]]";
 			break;
 		default:
@@ -3182,18 +3194,36 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		}
 	}
 
+	// If there is no explicit mapping of bindings to MSL, use the declared binding.
+	if (has_decoration(var.self, DecorationBinding))
+		return get_decoration(var.self, DecorationBinding);
+
+	uint32_t binding_stride = 1;
+	auto &type = get<SPIRType>(var.basetype);
+	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
+		binding_stride *= type.array_size_literal[i] ? type.array[i] : get<SPIRConstant>(type.array[i]).scalar();
+
 	// If a binding has not been specified, revert to incrementing resource indices
+	uint32_t resource_index;
 	switch (basetype)
 	{
 	case SPIRType::Struct:
-		return next_metal_resource_index.msl_buffer++;
+		resource_index = next_metal_resource_index.msl_buffer;
+		next_metal_resource_index.msl_buffer += binding_stride;
+		break;
 	case SPIRType::Image:
-		return next_metal_resource_index.msl_texture++;
+		resource_index = next_metal_resource_index.msl_texture;
+		next_metal_resource_index.msl_texture += binding_stride;
+		break;
 	case SPIRType::Sampler:
-		return next_metal_resource_index.msl_sampler++;
+		resource_index = next_metal_resource_index.msl_sampler;
+		next_metal_resource_index.msl_sampler += binding_stride;
+		break;
 	default:
-		return 0;
+		resource_index = 0;
+		break;
 	}
+	return resource_index;
 }
 
 // Returns the name of the entry point of this shader
@@ -3208,6 +3238,13 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &type = expression_type(arg.id);
 	bool constref = !arg.alias_global_variable && (!type.pointer || arg.write_count == 0);
 
+	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
+	                     type.basetype == SPIRType::Sampler;
+
+	// Arrays of images/samplers in MSL are always const.
+	if (!type.array.empty() && type_is_image)
+		constref = true;
+
 	// TODO: Check if this arg is an uniform pointer
 	bool pointer = type.storage == StorageClassUniformConstant;
 
@@ -3220,7 +3257,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else
 		decl += type_to_glsl(type, arg.id);
 
-	if (is_array(type))
+	// Arrays of images and samplers are special cased.
+	if (is_array(type) && !type_is_image)
 	{
 		decl += " (&";
 		decl += to_expression(var.self);
@@ -3376,7 +3414,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return image_type_glsl(type, id);
 
 	case SPIRType::Sampler:
-		return "sampler";
+		return sampler_type(type);
 
 	case SPIRType::Void:
 		return "void";
@@ -3428,9 +3466,51 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	return type_name;
 }
 
+std::string CompilerMSL::sampler_type(const SPIRType &type)
+{
+	if (!type.array.empty())
+	{
+		if (!msl_options.supports_msl_version(2))
+			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of samplers.");
+
+		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
+		auto *parent = &type;
+		while (parent->pointer)
+			parent = &get<SPIRType>(parent->parent_type);
+		parent = &get<SPIRType>(parent->parent_type);
+
+		uint32_t array_size =
+		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+
+		if (array_size == 0)
+			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
+		return join("array<", sampler_type(*parent), ", ", array_size, ">");
+	}
+	else
+		return "sampler";
+}
+
 // Returns an MSL string describing  the SPIR-V image type
 string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
+	if (!type.array.empty())
+	{
+		if (!msl_options.supports_msl_version(2))
+			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of textures.");
+
+		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
+		auto *parent = &type;
+		while (parent->pointer)
+			parent = &get<SPIRType>(parent->parent_type);
+		parent = &get<SPIRType>(parent->parent_type);
+
+		uint32_t array_size =
+		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		if (array_size == 0)
+			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
+		return join("array<", image_type_glsl(*parent, id), ", ", array_size, ">");
+	}
+
 	string img_type_name;
 
 	// Bypass pointers because we need the real image struct

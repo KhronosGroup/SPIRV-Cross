@@ -48,4 +48,4 @@ void rename_interface_variable(spirv_cross::Compiler &compiler, const std::vecto
 		compiler.set_name(v.id, name);
 	}
 }
-}
+} // namespace spirv_cross_util

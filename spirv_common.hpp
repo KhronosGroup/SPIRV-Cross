@@ -92,7 +92,7 @@ void join_helper(std::ostringstream &stream, T &&t, Ts &&... ts)
 	stream << std::forward<T>(t);
 	join_helper(stream, std::forward<Ts>(ts)...);
 }
-}
+} // namespace inner
 
 class Bitset
 {
@@ -1257,6 +1257,6 @@ static inline bool type_is_floating_point(const SPIRType &type)
 {
 	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Float || type.basetype == SPIRType::Double;
 }
-}
+} // namespace spirv_cross
 
 #endif

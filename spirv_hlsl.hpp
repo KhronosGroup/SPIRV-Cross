@@ -219,6 +219,6 @@ private:
 	// when translating push constant ranges.
 	std::vector<RootConstants> root_constants_layout;
 };
-}
+} // namespace spirv_cross
 
 #endif

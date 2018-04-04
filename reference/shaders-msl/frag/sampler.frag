@@ -16,7 +16,7 @@ struct main0_out
     float4 FragColor [[color(0)]];
 };
 
-float4 sample_texture(thread const texture2d<float> tex, thread const sampler& texSmplr, thread const float2& uv)
+float4 sample_texture(thread const texture2d<float> tex, thread const sampler texSmplr, thread const float2& uv)
 {
     return tex.sample(texSmplr, uv);
 }

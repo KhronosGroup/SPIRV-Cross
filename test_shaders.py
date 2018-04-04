@@ -74,10 +74,11 @@ def print_msl_compiler_version():
 
 def validate_shader_msl(shader, opt):
     msl_path = reference_path(shader[0], shader[1], opt)
+    msl2 = '.msl2.' in msl_path
     try:
         msl_os = 'macosx'
 #        msl_os = 'iphoneos'
-        subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', '-std=osx-metal1.2', '-Werror', '-Wno-unused-variable', msl_path])
+        subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', '-std=osx-metal{}'.format('2.0' if msl2 else '1.2'), '-Werror', '-Wno-unused-variable', msl_path])
         print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
     except OSError as oe:
         if (oe.errno != os.errno.ENOENT):   # Ignore xcrun not found error
@@ -87,6 +88,7 @@ def validate_shader_msl(shader, opt):
         sys.exit(1)
 
 def cross_compile_msl(shader, spirv, opt):
+    msl2 = '.msl2.' in shader
     spirv_f, spirv_path = tempfile.mkstemp()
     msl_f, msl_path = tempfile.mkstemp(suffix = os.path.basename(shader))
     os.close(spirv_f)
@@ -101,7 +103,13 @@ def cross_compile_msl(shader, spirv, opt):
         subprocess.check_call(['spirv-opt', '-O', '-o', spirv_path, spirv_path])
 
     spirv_cross_path = './spirv-cross'
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl'])
+
+    msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl']
+    if msl2:
+        msl_args.append('--msl-version')
+        msl_args.append('20000')
+
+    subprocess.check_call(msl_args)
     subprocess.check_call(['spirv-val', spirv_path])
     return (spirv_path, msl_path)
 

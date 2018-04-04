@@ -77,7 +77,8 @@ public:
 	// Options for compiling to Metal Shading Language
 	struct Options
 	{
-		typedef enum {
+		typedef enum
+		{
 			iOS,
 			macOS,
 		} Platform;
@@ -202,6 +203,7 @@ protected:
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
+	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
 	std::string constant_expression(const SPIRConstant &c) override;
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
@@ -345,6 +347,6 @@ protected:
 		SortAspect sort_aspect;
 	};
 };
-}
+} // namespace spirv_cross
 
 #endif

@@ -118,7 +118,7 @@ struct SSBO0
     float array[1];
 };
 
-kernel void main0(device SSBO1& ssbo_430 [[buffer(0)]], device SSBO0& ssbo_140 [[buffer(1)]])
+kernel void main0(device SSBO0& ssbo_140 [[buffer(0)]], device SSBO1& ssbo_430 [[buffer(1)]])
 {
     ssbo_430.content.m0s[0].a[0] = ssbo_140.content.m0s[0].a[0];
     ssbo_430.content.m0s[0].b = ssbo_140.content.m0s[0].b;
