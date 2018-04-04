@@ -3194,18 +3194,36 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		}
 	}
 
+	// If there is no explicit mapping of bindings to MSL, use the declared binding.
+	if (has_decoration(var.self, DecorationBinding))
+		return get_decoration(var.self, DecorationBinding);
+
+	uint32_t binding_stride = 1;
+	auto &type = get<SPIRType>(var.basetype);
+	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
+		binding_stride *= type.array_size_literal[i] ? type.array[i] : get<SPIRConstant>(type.array[i]).scalar();
+
 	// If a binding has not been specified, revert to incrementing resource indices
+	uint32_t resource_index;
 	switch (basetype)
 	{
 	case SPIRType::Struct:
-		return next_metal_resource_index.msl_buffer++;
+		resource_index = next_metal_resource_index.msl_buffer;
+		next_metal_resource_index.msl_buffer += binding_stride;
+		break;
 	case SPIRType::Image:
-		return next_metal_resource_index.msl_texture++;
+		resource_index = next_metal_resource_index.msl_texture;
+		next_metal_resource_index.msl_texture += binding_stride;
+		break;
 	case SPIRType::Sampler:
-		return next_metal_resource_index.msl_sampler++;
+		resource_index = next_metal_resource_index.msl_sampler;
+		next_metal_resource_index.msl_sampler += binding_stride;
+		break;
 	default:
-		return 0;
+		resource_index = 0;
+		break;
 	}
+	return resource_index;
 }
 
 // Returns the name of the entry point of this shader

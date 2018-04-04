@@ -73,8 +73,8 @@ def print_msl_compiler_version():
             raise
 
 def validate_shader_msl(shader, opt):
-    msl2 = '.msl2.' in shader
     msl_path = reference_path(shader[0], shader[1], opt)
+    msl2 = '.msl2.' in msl_path
     try:
         msl_os = 'macosx'
 #        msl_os = 'iphoneos'
