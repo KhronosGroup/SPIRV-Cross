@@ -195,6 +195,7 @@ protected:
 	void emit_function(SPIRFunction &func, const Bitset &return_flags);
 
 	bool has_extension(const std::string &ext) const;
+	void require_extension_internal(const std::string &ext);
 
 	// Virtualize methods which need to be overridden by subclass targets like C++ and such.
 	virtual void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags);
@@ -353,6 +354,7 @@ protected:
 		bool can_return_array = true;
 		bool allow_truncated_access_chain = false;
 		bool supports_extensions = false;
+		bool supports_empty_struct = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

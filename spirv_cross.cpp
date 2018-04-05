@@ -2477,6 +2477,9 @@ uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32
 
 size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 {
+	if (type.member_types.empty())
+		SPIRV_CROSS_THROW("Declared struct in block cannot be empty.");
+
 	uint32_t last = uint32_t(type.member_types.size() - 1);
 	size_t offset = type_struct_member_offset(type, last);
 	size_t size = get_declared_struct_member_size(type, last);
@@ -2485,6 +2488,9 @@ size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 
 size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
+	if (struct_type.member_types.empty())
+		SPIRV_CROSS_THROW("Declared struct in block cannot be empty.");
+
 	auto &flags = get_member_decoration_bitset(struct_type.self, index);
 	auto &type = get<SPIRType>(struct_type.member_types[index]);
 

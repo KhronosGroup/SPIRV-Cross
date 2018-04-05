@@ -309,7 +309,7 @@ void CompilerGLSL::find_static_extensions()
 				if (options.es)
 					SPIRV_CROSS_THROW("FP64 not supported in ES profile.");
 				if (!options.es && options.version < 400)
-					require_extension("GL_ARB_gpu_shader_fp64");
+					require_extension_internal("GL_ARB_gpu_shader_fp64");
 			}
 
 			if (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64)
@@ -317,11 +317,11 @@ void CompilerGLSL::find_static_extensions()
 				if (options.es)
 					SPIRV_CROSS_THROW("64-bit integers not supported in ES profile.");
 				if (!options.es)
-					require_extension("GL_ARB_gpu_shader_int64");
+					require_extension_internal("GL_ARB_gpu_shader_int64");
 			}
 
 			if (type.basetype == SPIRType::Half)
-				require_extension("GL_AMD_gpu_shader_half_float");
+				require_extension_internal("GL_AMD_gpu_shader_half_float");
 		}
 	}
 
@@ -330,31 +330,31 @@ void CompilerGLSL::find_static_extensions()
 	{
 	case ExecutionModelGLCompute:
 		if (!options.es && options.version < 430)
-			require_extension("GL_ARB_compute_shader");
+			require_extension_internal("GL_ARB_compute_shader");
 		if (options.es && options.version < 310)
 			SPIRV_CROSS_THROW("At least ESSL 3.10 required for compute shaders.");
 		break;
 
 	case ExecutionModelGeometry:
 		if (options.es && options.version < 320)
-			require_extension("GL_EXT_geometry_shader");
+			require_extension_internal("GL_EXT_geometry_shader");
 		if (!options.es && options.version < 150)
-			require_extension("GL_ARB_geometry_shader4");
+			require_extension_internal("GL_ARB_geometry_shader4");
 
 		if (execution.flags.get(ExecutionModeInvocations) && execution.invocations != 1)
 		{
 			// Instanced GS is part of 400 core or this extension.
 			if (!options.es && options.version < 400)
-				require_extension("GL_ARB_gpu_shader5");
+				require_extension_internal("GL_ARB_gpu_shader5");
 		}
 		break;
 
 	case ExecutionModelTessellationEvaluation:
 	case ExecutionModelTessellationControl:
 		if (options.es && options.version < 320)
-			require_extension("GL_EXT_tessellation_shader");
+			require_extension_internal("GL_EXT_tessellation_shader");
 		if (!options.es && options.version < 400)
-			require_extension("GL_ARB_tessellation_shader");
+			require_extension_internal("GL_ARB_tessellation_shader");
 		break;
 
 	default:
@@ -362,10 +362,10 @@ void CompilerGLSL::find_static_extensions()
 	}
 
 	if (!pls_inputs.empty() || !pls_outputs.empty())
-		require_extension("GL_EXT_shader_pixel_local_storage");
+		require_extension_internal("GL_EXT_shader_pixel_local_storage");
 
 	if (options.separate_shader_objects && !options.es && options.version < 410)
-		require_extension("GL_ARB_separate_shader_objects");
+		require_extension_internal("GL_ARB_separate_shader_objects");
 }
 
 string CompilerGLSL::compile()
@@ -430,7 +430,7 @@ void CompilerGLSL::emit_header()
 		}
 		// Needed for: layout(early_fragment_tests) in;
 		if (execution.flags.get(ExecutionModeEarlyFragmentTests))
-			require_extension("GL_ARB_shader_image_load_store");
+			require_extension_internal("GL_ARB_shader_image_load_store");
 	}
 
 	for (auto &ext : forced_extensions)
@@ -619,12 +619,6 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
 		return;
 
-	// Don't declare empty structs in GLSL, this is not allowed.
-	// Empty structs is a corner case of HLSL output, and only sensible thing to do is avoiding to declare
-	// these types.
-	if (type_is_empty(type))
-		return;
-
 	add_resource_name(type.self);
 	auto name = type_to_glsl(type);
 
@@ -642,6 +636,14 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 		i++;
 		emitted = true;
 	}
+
+	// Don't declare empty structs in GLSL, this is not allowed.
+	if (type_is_empty(type) && !backend.supports_empty_struct)
+	{
+		statement("int empty_struct_member;");
+		emitted = true;
+	}
+
 	end_scope_decl();
 
 	if (emitted)
@@ -1259,7 +1261,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
 				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
-				require_extension("GL_ARB_enhanced_layouts");
+				require_extension_internal("GL_ARB_enhanced_layouts");
 
 			// This is a very last minute to check for this, but use this unused decoration to mark that we should emit
 			// explicit offsets for this block type.
@@ -1292,7 +1294,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
 				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
-				require_extension("GL_ARB_enhanced_layouts");
+				require_extension_internal("GL_ARB_enhanced_layouts");
 
 			set_decoration(type.self, DecorationCPacked);
 		}
@@ -1303,7 +1305,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
 				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
-				require_extension("GL_ARB_enhanced_layouts");
+				require_extension_internal("GL_ARB_enhanced_layouts");
 
 			set_decoration(type.self, DecorationCPacked);
 		}
@@ -1571,7 +1573,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			{
 				// Geometry and tessellation extensions imply this extension.
 				if (!has_extension("GL_EXT_geometry_shader") && !has_extension("GL_EXT_tessellation_shader"))
-					require_extension("GL_EXT_shader_io_blocks");
+					require_extension_internal("GL_EXT_shader_io_blocks");
 			}
 
 			// Block names should never alias.
@@ -1626,7 +1628,7 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	if (type.basetype == SPIRType::Image && type.image.sampled == 2)
 	{
 		if (!options.es && options.version < 420)
-			require_extension("GL_ARB_shader_image_load_store");
+			require_extension_internal("GL_ARB_shader_image_load_store");
 		else if (options.es && options.version < 310)
 			SPIRV_CROSS_THROW("At least ESSL 3.10 required for shader image load store.");
 	}
@@ -1746,7 +1748,7 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 		m.alias = join("gl_FragData[", location, "]");
 
 		if (is_legacy_es() && location != 0)
-			require_extension("GL_EXT_draw_buffers");
+			require_extension_internal("GL_EXT_draw_buffers");
 	}
 	else if (type.array.size() == 1)
 	{
@@ -1759,7 +1761,7 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 			                  "This is unimplemented in SPIRV-Cross.");
 
 		if (is_legacy_es())
-			require_extension("GL_EXT_draw_buffers");
+			require_extension_internal("GL_EXT_draw_buffers");
 	}
 	else
 		SPIRV_CROSS_THROW("Array-of-array output variable used. This cannot be implemented in legacy GLSL.");
@@ -2164,11 +2166,6 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-
-			// HLSL output from glslang may emit interface variables which are "empty".
-			// Just avoid declaring them.
-			if (type_is_empty(type))
-				continue;
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
@@ -2758,7 +2755,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 
 			if (options.es)
 				SPIRV_CROSS_THROW("64-bit integers/float not supported in ES profile.");
-			require_extension("GL_ARB_gpu_shader_int64");
+			require_extension_internal("GL_ARB_gpu_shader_int64");
 
 			char print_buffer[64];
 			sprintf(print_buffer, "0x%llx%s", static_cast<unsigned long long>(u64_value),
@@ -2770,7 +2767,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 			if (options.es)
 				SPIRV_CROSS_THROW("FP64 not supported in ES profile.");
 			if (options.version < 400)
-				require_extension("GL_ARB_gpu_shader_fp64");
+				require_extension_internal("GL_ARB_gpu_shader_fp64");
 
 			if (double_value == numeric_limits<double>::infinity())
 			{
@@ -3387,10 +3384,10 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		if (is_legacy_es())
 		{
 			if (use_explicit_lod)
-				require_extension("GL_EXT_shader_texture_lod");
+				require_extension_internal("GL_EXT_shader_texture_lod");
 		}
 		else if (is_legacy())
-			require_extension("GL_ARB_shader_texture_lod");
+			require_extension_internal("GL_ARB_shader_texture_lod");
 	}
 
 	if (op == "texture")
@@ -4315,7 +4312,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
                                                  uint32_t)
 {
-	require_extension("GL_AMD_shader_ballot");
+	require_extension_internal("GL_AMD_shader_ballot");
 
 	enum AMDShaderBallot
 	{
@@ -4358,7 +4355,7 @@ void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t 
 void CompilerGLSL::emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t result_type, uint32_t id, uint32_t eop,
                                                                     const uint32_t *args, uint32_t)
 {
-	require_extension("GL_AMD_shader_explicit_vertex_parameter");
+	require_extension_internal("GL_AMD_shader_explicit_vertex_parameter");
 
 	enum AMDShaderExplicitVertexParameter
 	{
@@ -4382,7 +4379,7 @@ void CompilerGLSL::emit_spv_amd_shader_explicit_vertex_parameter_op(uint32_t res
 void CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t id, uint32_t eop,
                                                          const uint32_t *args, uint32_t)
 {
-	require_extension("GL_AMD_shader_trinary_minmax");
+	require_extension_internal("GL_AMD_shader_trinary_minmax");
 
 	enum AMDShaderTrinaryMinMax
 	{
@@ -4428,7 +4425,7 @@ void CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, u
 void CompilerGLSL::emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
                                               uint32_t)
 {
-	require_extension("GL_AMD_gcn_shader");
+	require_extension_internal("GL_AMD_gcn_shader");
 
 	enum AMDGCNShader
 	{
@@ -4600,14 +4597,14 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 
 	case BuiltInSampleId:
 		if (options.es && options.version < 320)
-			require_extension("GL_OES_sample_variables");
+			require_extension_internal("GL_OES_sample_variables");
 		if (!options.es && options.version < 400)
 			SPIRV_CROSS_THROW("gl_SampleID not supported before GLSL 400.");
 		return "gl_SampleID";
 
 	case BuiltInSampleMask:
 		if (options.es && options.version < 320)
-			require_extension("GL_OES_sample_variables");
+			require_extension_internal("GL_OES_sample_variables");
 		if (!options.es && options.version < 400)
 			SPIRV_CROSS_THROW("gl_SampleMask/gl_SampleMaskIn not supported before GLSL 400.");
 
@@ -4618,7 +4615,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 
 	case BuiltInSamplePosition:
 		if (options.es && options.version < 320)
-			require_extension("GL_OES_sample_variables");
+			require_extension_internal("GL_OES_sample_variables");
 		if (!options.es && options.version < 400)
 			SPIRV_CROSS_THROW("gl_SamplePosition not supported before GLSL 400.");
 		return "gl_SamplePosition";
@@ -4626,12 +4623,12 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInViewIndex:
 		if (options.vulkan_semantics)
 		{
-			require_extension("GL_EXT_multiview");
+			require_extension_internal("GL_EXT_multiview");
 			return "gl_ViewIndex";
 		}
 		else
 		{
-			require_extension("GL_OVR_multiview2");
+			require_extension_internal("GL_OVR_multiview2");
 			return "gl_ViewID_OVR";
 		}
 
@@ -5877,33 +5874,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			forward = forward && should_forward(elems[i]);
 
 		auto &out_type = get<SPIRType>(result_type);
-
-		if (!length)
-		{
-			if (out_type.basetype == SPIRType::Struct)
-			{
-				// It is technically allowed to make a blank struct,
-				// but we cannot make a meaningful expression out of it in high level languages,
-				// so make it a blank expression.
-				emit_op(result_type, id, "", forward);
-				break;
-			}
-			else
-				SPIRV_CROSS_THROW("Invalid input to OpCompositeConstruct.");
-		}
-
-		auto &in_type = expression_type(elems[0]);
+		auto *in_type = length > 0 ? &expression_type(elems[0]) : nullptr;
 
 		// Only splat if we have vector constructors.
 		// Arrays and structs must be initialized properly in full.
 		bool composite = !out_type.array.empty() || out_type.basetype == SPIRType::Struct;
-		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
-		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
 
-		if (ids[elems[0]].get_type() == TypeConstant && !type_is_floating_point(in_type))
+		bool splat = false;
+		bool swizzle_splat = false;
+
+		if (in_type)
 		{
-			// Cannot swizzle literal integers as a special case.
-			swizzle_splat = false;
+			splat = in_type->vecsize == 1 && in_type->columns == 1 && !composite && backend.use_constructor_splatting;
+			swizzle_splat = in_type->vecsize == 1 && in_type->columns == 1 && backend.can_swizzle_scalar;
+
+			if (ids[elems[0]].get_type() == TypeConstant && !type_is_floating_point(*in_type))
+			{
+				// Cannot swizzle literal integers as a special case.
+				swizzle_splat = false;
+			}
 		}
 
 		if (splat || swizzle_splat)
@@ -5923,6 +5912,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			forward = false;
 		if (!out_type.array.empty() && !backend.can_declare_arrays_inline)
 			forward = false;
+		if (type_is_empty(out_type) && !backend.supports_empty_struct)
+			forward = false;
 
 		string constructor_op;
 		if (backend.use_initializer_list && composite)
@@ -5932,7 +5923,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (backend.use_typed_initializer_list)
 				constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
 			constructor_op += "{ ";
-			if (splat)
+			if (type_is_empty(out_type) && !backend.supports_empty_struct)
+				constructor_op += "0";
+			else if (splat)
 				constructor_op += to_expression(elems[0]);
 			else
 				constructor_op += build_composite_combiner(result_type, elems, length);
@@ -5945,7 +5938,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
-			if (splat)
+			if (type_is_empty(out_type) && !backend.supports_empty_struct)
+				constructor_op += "0";
+			else if (splat)
 				constructor_op += to_expression(elems[0]);
 			else
 				constructor_op += build_composite_combiner(result_type, elems, length);
@@ -6570,14 +6565,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpDPdx:
 		UFOP(dFdx);
 		if (is_legacy_es())
-			require_extension("GL_OES_standard_derivatives");
+			require_extension_internal("GL_OES_standard_derivatives");
 		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdy:
 		UFOP(dFdy);
 		if (is_legacy_es())
-			require_extension("GL_OES_standard_derivatives");
+			require_extension_internal("GL_OES_standard_derivatives");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6588,7 +6583,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
 		}
 		if (options.version < 450)
-			require_extension("GL_ARB_derivative_control");
+			require_extension_internal("GL_ARB_derivative_control");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6599,7 +6594,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
 		}
 		if (options.version < 450)
-			require_extension("GL_ARB_derivative_control");
+			require_extension_internal("GL_ARB_derivative_control");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6610,7 +6605,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		UFOP(dFdxCoarse);
 		if (options.version < 450)
-			require_extension("GL_ARB_derivative_control");
+			require_extension_internal("GL_ARB_derivative_control");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6621,14 +6616,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
 		}
 		if (options.version < 450)
-			require_extension("GL_ARB_derivative_control");
+			require_extension_internal("GL_ARB_derivative_control");
 		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidth:
 		UFOP(fwidth);
 		if (is_legacy_es())
-			require_extension("GL_OES_standard_derivatives");
+			require_extension_internal("GL_OES_standard_derivatives");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6639,7 +6634,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
 		}
 		if (options.version < 450)
-			require_extension("GL_ARB_derivative_control");
+			require_extension_internal("GL_ARB_derivative_control");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6650,7 +6645,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
 		}
 		if (options.version < 450)
-			require_extension("GL_ARB_derivative_control");
+			require_extension_internal("GL_ARB_derivative_control");
 		register_control_dependent_expression(ops[1]);
 		break;
 
@@ -6853,7 +6848,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		if (!options.es && options.version < 400)
 		{
-			require_extension("GL_ARB_texture_query_lod");
+			require_extension_internal("GL_ARB_texture_query_lod");
 			// For some reason, the ARB spec is all-caps.
 			BFOP(textureQueryLOD);
 		}
@@ -6871,7 +6866,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 
 		if (!options.es && options.version < 430)
-			require_extension("GL_ARB_texture_query_levels");
+			require_extension_internal("GL_ARB_texture_query_levels");
 		if (options.es)
 			SPIRV_CROSS_THROW("textureQueryLevels not supported in ES profile.");
 
@@ -7301,7 +7296,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		expr = join("uvec4(unpackUint2x32(ballotARB(" + to_expression(ops[2]) + ")), 0u, 0u)");
 		emit_op(result_type, id, expr, should_forward(ops[2]));
 
-		require_extension("GL_ARB_shader_ballot");
+		require_extension_internal("GL_ARB_shader_ballot");
 		inherit_expression_dependencies(id, ops[2]);
 		register_control_dependent_expression(ops[1]);
 		break;
@@ -7313,7 +7308,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "readFirstInvocationARB");
 
-		require_extension("GL_ARB_shader_ballot");
+		require_extension_internal("GL_ARB_shader_ballot");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7324,7 +7319,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_binary_func_op(result_type, id, ops[2], ops[3], "readInvocationARB");
 
-		require_extension("GL_ARB_shader_ballot");
+		require_extension_internal("GL_ARB_shader_ballot");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7335,7 +7330,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "allInvocationsARB");
 
-		require_extension("GL_ARB_shader_group_vote");
+		require_extension_internal("GL_ARB_shader_group_vote");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7346,7 +7341,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "anyInvocationARB");
 
-		require_extension("GL_ARB_shader_group_vote");
+		require_extension_internal("GL_ARB_shader_group_vote");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7357,7 +7352,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[2], "allInvocationsEqualARB");
 
-		require_extension("GL_ARB_shader_group_vote");
+		require_extension_internal("GL_ARB_shader_group_vote");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7369,7 +7364,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[4], "addInvocationsNonUniformAMD");
 
-		require_extension("GL_AMD_shader_ballot");
+		require_extension_internal("GL_AMD_shader_ballot");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7382,7 +7377,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[4], "minInvocationsNonUniformAMD");
 
-		require_extension("GL_AMD_shader_ballot");
+		require_extension_internal("GL_AMD_shader_ballot");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7395,7 +7390,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		emit_unary_func_op(result_type, id, ops[4], "maxInvocationsNonUniformAMD");
 
-		require_extension("GL_AMD_shader_ballot");
+		require_extension_internal("GL_AMD_shader_ballot");
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -7415,7 +7410,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			emit_binary_func_op(result_type, id, ops[2], ops[3], "fragmentMaskFetchAMD");
 		}
 
-		require_extension("GL_AMD_shader_fragment_mask");
+		require_extension_internal("GL_AMD_shader_fragment_mask");
 		break;
 	}
 
@@ -7434,7 +7429,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			emit_trinary_func_op(result_type, id, ops[2], ops[3], ops[4], "fragmentFetchAMD");
 		}
 
-		require_extension("GL_AMD_shader_fragment_mask");
+		require_extension_internal("GL_AMD_shader_fragment_mask");
 		break;
 	}
 
@@ -7812,7 +7807,7 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 		if (type.array.size() > 1)
 		{
 			if (!options.es && options.version < 430)
-				require_extension("GL_ARB_arrays_of_arrays");
+				require_extension_internal("GL_ARB_arrays_of_arrays");
 			else if (options.es && options.version < 310)
 				SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310. "
 				                  "Try using --flatten-multidimensional-arrays or set "
@@ -7880,9 +7875,9 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 
 	case DimBuffer:
 		if (options.es && options.version < 320)
-			require_extension("GL_OES_texture_buffer");
+			require_extension_internal("GL_OES_texture_buffer");
 		else if (!options.es && options.version < 300)
-			require_extension("GL_EXT_texture_buffer_object");
+			require_extension_internal("GL_EXT_texture_buffer_object");
 		res += "Buffer";
 		break;
 
@@ -7898,7 +7893,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 	if (type.image.arrayed)
 	{
 		if (is_legacy_desktop())
-			require_extension("GL_EXT_texture_array");
+			require_extension_internal("GL_EXT_texture_array");
 		res += "Array";
 	}
 
@@ -7916,7 +7911,7 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 		if (options.flatten_multidimensional_arrays)
 			SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
 		else if (!options.es && options.version < 430)
-			require_extension("GL_ARB_arrays_of_arrays");
+			require_extension_internal("GL_ARB_arrays_of_arrays");
 		else if (options.es && options.version < 310)
 			SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310.");
 	}
@@ -8095,7 +8090,13 @@ bool CompilerGLSL::has_extension(const std::string &ext) const
 	return itr != end(forced_extensions);
 }
 
-void CompilerGLSL::require_extension(const string &ext)
+void CompilerGLSL::require_extension(const std::string &ext)
+{
+	if (!has_extension(ext))
+		forced_extensions.push_back(ext);
+}
+
+void CompilerGLSL::require_extension_internal(const string &ext)
 {
 	if (backend.supports_extensions && !has_extension(ext))
 	{
@@ -8129,7 +8130,7 @@ bool CompilerGLSL::check_atomic_image(uint32_t id)
 	if (type.storage == StorageClassImage)
 	{
 		if (options.es && options.version < 320)
-			require_extension("GL_OES_shader_image_atomic");
+			require_extension_internal("GL_OES_shader_image_atomic");
 
 		auto *var = maybe_get_backing_variable(id);
 		if (var)
@@ -8341,10 +8342,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 				// Don't declare variable until first use to declutter the GLSL output quite a lot.
 				// If we don't touch the variable before first branch,
 				// declare it then since we need variable declaration to be in top scope.
-				// Never declare empty structs. They have no meaningful representation.
-				auto &type = get<SPIRType>(var.basetype);
-				bool empty_struct = type.basetype == SPIRType::Struct && type.member_types.empty();
-				var.deferred_declaration = !empty_struct;
+				var.deferred_declaration = true;
 			}
 		}
 		else
