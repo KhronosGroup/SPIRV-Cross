@@ -619,12 +619,6 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
 		return;
 
-	// Don't declare empty structs in GLSL, this is not allowed.
-	// Empty structs is a corner case of HLSL output, and only sensible thing to do is avoiding to declare
-	// these types.
-	if (type_is_empty(type))
-		return;
-
 	add_resource_name(type.self);
 	auto name = type_to_glsl(type);
 
@@ -642,6 +636,14 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 		i++;
 		emitted = true;
 	}
+
+	// Don't declare empty structs in GLSL, this is not allowed.
+	if (type_is_empty(type) && !backend.supports_empty_struct)
+	{
+		statement("int empty_struct_member;");
+		emitted = true;
+	}
+
 	end_scope_decl();
 
 	if (emitted)
@@ -2164,11 +2166,6 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-
-			// HLSL output from glslang may emit interface variables which are "empty".
-			// Just avoid declaring them.
-			if (type_is_empty(type))
-				continue;
 
 			if (var.storage != StorageClassFunction && type.pointer &&
 			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
@@ -5877,33 +5874,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			forward = forward && should_forward(elems[i]);
 
 		auto &out_type = get<SPIRType>(result_type);
-
-		if (!length)
-		{
-			if (out_type.basetype == SPIRType::Struct)
-			{
-				// It is technically allowed to make a blank struct,
-				// but we cannot make a meaningful expression out of it in high level languages,
-				// so make it a blank expression.
-				emit_op(result_type, id, "", forward);
-				break;
-			}
-			else
-				SPIRV_CROSS_THROW("Invalid input to OpCompositeConstruct.");
-		}
-
-		auto &in_type = expression_type(elems[0]);
+		auto *in_type = length > 0 ? &expression_type(elems[0]) : nullptr;
 
 		// Only splat if we have vector constructors.
 		// Arrays and structs must be initialized properly in full.
 		bool composite = !out_type.array.empty() || out_type.basetype == SPIRType::Struct;
-		bool splat = in_type.vecsize == 1 && in_type.columns == 1 && !composite && backend.use_constructor_splatting;
-		bool swizzle_splat = in_type.vecsize == 1 && in_type.columns == 1 && backend.can_swizzle_scalar;
 
-		if (ids[elems[0]].get_type() == TypeConstant && !type_is_floating_point(in_type))
+		bool splat = false;
+		bool swizzle_splat = false;
+
+		if (in_type)
 		{
-			// Cannot swizzle literal integers as a special case.
-			swizzle_splat = false;
+			splat = in_type->vecsize == 1 && in_type->columns == 1 && !composite && backend.use_constructor_splatting;
+			swizzle_splat = in_type->vecsize == 1 && in_type->columns == 1 && backend.can_swizzle_scalar;
+
+			if (ids[elems[0]].get_type() == TypeConstant && !type_is_floating_point(*in_type))
+			{
+				// Cannot swizzle literal integers as a special case.
+				swizzle_splat = false;
+			}
 		}
 
 		if (splat || swizzle_splat)
@@ -5923,6 +5912,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			forward = false;
 		if (!out_type.array.empty() && !backend.can_declare_arrays_inline)
 			forward = false;
+		if (type_is_empty(out_type) && !backend.supports_empty_struct)
+			forward = false;
 
 		string constructor_op;
 		if (backend.use_initializer_list && composite)
@@ -5932,7 +5923,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (backend.use_typed_initializer_list)
 				constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
 			constructor_op += "{ ";
-			if (splat)
+			if (type_is_empty(out_type) && !backend.supports_empty_struct)
+				constructor_op += "0";
+			else if (splat)
 				constructor_op += to_expression(elems[0]);
 			else
 				constructor_op += build_composite_combiner(result_type, elems, length);
@@ -5945,7 +5938,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			constructor_op = type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
-			if (splat)
+			if (type_is_empty(out_type) && !backend.supports_empty_struct)
+				constructor_op += "0";
+			else if (splat)
 				constructor_op += to_expression(elems[0]);
 			else
 				constructor_op += build_composite_combiner(result_type, elems, length);
@@ -8347,10 +8342,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 				// Don't declare variable until first use to declutter the GLSL output quite a lot.
 				// If we don't touch the variable before first branch,
 				// declare it then since we need variable declaration to be in top scope.
-				// Never declare empty structs. They have no meaningful representation.
-				auto &type = get<SPIRType>(var.basetype);
-				bool empty_struct = type.basetype == SPIRType::Struct && type.member_types.empty();
-				var.deferred_declaration = !empty_struct;
+				var.deferred_declaration = true;
 			}
 		}
 		else

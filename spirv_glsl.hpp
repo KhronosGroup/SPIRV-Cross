@@ -354,6 +354,7 @@ protected:
 		bool can_return_array = true;
 		bool allow_truncated_access_chain = false;
 		bool supports_extensions = false;
+		bool supports_empty_struct = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
