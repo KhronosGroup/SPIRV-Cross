@@ -4466,6 +4466,142 @@ void CompilerGLSL::emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t id,
 	}
 }
 
+void CompilerGLSL::emit_subgroup_op(const Instruction &i)
+{
+	const uint32_t *ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+
+	if (!options.vulkan_semantics)
+		SPIRV_CROSS_THROW("Can only use subgroup operations in Vulkan semantics.");
+
+	switch (op)
+	{
+	case OpGroupNonUniformElect:
+		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		break;
+
+	case OpGroupNonUniformBroadcast:
+	case OpGroupNonUniformBroadcastFirst:
+	case OpGroupNonUniformBallot:
+	case OpGroupNonUniformInverseBallot:
+	case OpGroupNonUniformBallotBitExtract:
+	case OpGroupNonUniformBallotBitCount:
+	case OpGroupNonUniformBallotFindLSB:
+	case OpGroupNonUniformBallotFindMSB:
+		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		break;
+
+	case OpGroupNonUniformShuffle:
+	case OpGroupNonUniformShuffleXor:
+		require_extension_internal("GL_KHR_shader_subgroup_shuffle");
+		break;
+
+	case OpGroupNonUniformShuffleUp:
+	case OpGroupNonUniformShuffleDown:
+		require_extension_internal("GL_KHR_shader_subgroup_shuffle_relative");
+		break;
+
+	case OpGroupNonUniformAll:
+	case OpGroupNonUniformAny:
+	case OpGroupNonUniformAllEqual:
+		require_extension_internal("GL_KHR_shader_subgroup_vote");
+		break;
+
+	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformFMin:
+	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformBitwiseAnd:
+	case OpGroupNonUniformBitwiseOr:
+	case OpGroupNonUniformBitwiseXor:
+	{
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationClusteredReduce)
+		{
+			require_extension_internal("GL_KHR_shader_subgroup_clustered");
+		}
+		else if (operation == GroupOperationExclusiveScan ||
+		         operation == GroupOperationInclusiveScan ||
+		         operation == GroupOperationReduce)
+		{
+			require_extension_internal("GL_KHR_shader_subgroup_arithmetic");
+		}
+		else
+			SPIRV_CROSS_THROW("Invalid group operation.");
+		break;
+	}
+
+	case OpGroupNonUniformQuadSwap:
+	case OpGroupNonUniformQuadBroadcast:
+		require_extension_internal("GL_KHR_shader_subgroup_quad");
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Invalid opcode for subgroup.");
+	}
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+
+	auto scope = static_cast<Scope>(get<SPIRConstant>(ops[2]).scalar());
+	if (scope != ScopeSubgroup)
+		SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+
+	switch (op)
+	{
+	case OpGroupNonUniformElect:
+		emit_op(result_type, id, "subgroupElect()", true);
+		break;
+
+	case OpGroupNonUniformBroadcast:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupBroadcast");
+		break;
+
+	case OpGroupNonUniformBroadcastFirst:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupBroadcastFirst");
+		break;
+
+	case OpGroupNonUniformBallot:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupBallot");
+		break;
+
+	case OpGroupNonUniformInverseBallot:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupInverseBallot");
+		break;
+
+	case OpGroupNonUniformBallotBitExtract:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupBallotBitExtract");
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	case OpGroupNonUniformBallotFindLSB:
+	case OpGroupNonUniformBallotFindMSB:
+	case OpGroupNonUniformShuffle:
+	case OpGroupNonUniformShuffleXor:
+	case OpGroupNonUniformShuffleUp:
+	case OpGroupNonUniformShuffleDown:
+	case OpGroupNonUniformAll:
+	case OpGroupNonUniformAny:
+	case OpGroupNonUniformAllEqual:
+	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformFMin:
+	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformBitwiseAnd:
+	case OpGroupNonUniformBitwiseOr:
+	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformQuadSwap:
+	case OpGroupNonUniformQuadBroadcast:
+		emit_op(result_type, id, "subgroupRandom()", false);
+		return;
+
+	default:
+		SPIRV_CROSS_THROW("Invalid opcode for subgroup.");
+	}
+
+	register_control_dependent_expression(id);
+}
+
 string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
@@ -4639,6 +4775,60 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			require_extension_internal("GL_OVR_multiview2");
 			return "gl_ViewID_OVR";
 		}
+
+	case BuiltInNumSubgroups:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		return "gl_NumSubgroups";
+
+	case BuiltInSubgroupId:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		return "gl_SubgroupID";
+
+	case BuiltInSubgroupSize:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		return "gl_SubgroupSize";
+
+	case BuiltInSubgroupLocalInvocationId:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		return "gl_SubgroupInvocationID";
+
+	case BuiltInSubgroupEqMask:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		return "gl_SubgroupEqMask";
+
+	case BuiltInSubgroupGeMask:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		return "gl_SubgroupGeMask";
+
+	case BuiltInSubgroupGtMask:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		return "gl_SubgroupGtMask";
+
+	case BuiltInSubgroupLeMask:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		return "gl_SubgroupLeMask";
+
+	case BuiltInSubgroupLtMask:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
+		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		return "gl_SubgroupLtMask";
 
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
@@ -7150,14 +7340,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpControlBarrier:
 	case OpMemoryBarrier:
 	{
-		if (get_entry_point().model == ExecutionModelTessellationControl)
-		{
-			// Control shaders only have barriers, and it implies memory barriers.
-			if (opcode == OpControlBarrier)
-				statement("barrier();");
-			break;
-		}
-
+		uint32_t execution_scope = 0;
 		uint32_t memory;
 		uint32_t semantics;
 
@@ -7168,8 +7351,24 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
+			execution_scope = get<SPIRConstant>(ops[0]).scalar();
 			memory = get<SPIRConstant>(ops[1]).scalar();
 			semantics = get<SPIRConstant>(ops[2]).scalar();
+		}
+
+		if (execution_scope == ScopeSubgroup || memory == ScopeSubgroup)
+		{
+			if (!options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Can only use subgroup operations in Vulkan semantics.");
+			require_extension_internal("GL_KHR_shader_subgroup_basic");
+		}
+
+		if (execution_scope != ScopeSubgroup && get_entry_point().model == ExecutionModelTessellationControl)
+		{
+			// Control shaders only have barriers, and it implies memory barriers.
+			if (opcode == OpControlBarrier)
+				statement("barrier();");
+			break;
 		}
 
 		// We only care about these flags, acquire/release and friends are not relevant to GLSL.
@@ -7228,6 +7427,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else if (semantics != 0)
 				statement("groupMemoryBarrier();");
 		}
+		else if (memory == ScopeSubgroup)
+		{
+			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
+			                              MemorySemanticsImageMemoryMask;
+
+			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
+			{
+				// These are not relevant for GLSL, but assume it means memoryBarrier().
+				// memoryBarrier() does everything, so no need to test anything else.
+				statement("subgroupMemoryBarrier();");
+			}
+			else if ((semantics & all_barriers) == all_barriers)
+			{
+				// Short-hand instead of emitting 3 barriers.
+				statement("subgroupMemoryBarrier();");
+			}
+			else
+			{
+				// Pick out individual barriers.
+				if (semantics & MemorySemanticsWorkgroupMemoryMask)
+					statement("subgroupMemoryBarrierShared();");
+				if (semantics & MemorySemanticsUniformMemoryMask)
+					statement("subgroupMemoryBarrierBuffer();");
+				if (semantics & MemorySemanticsImageMemoryMask)
+					statement("subgroupMemoryBarrierImage();");
+			}
+		}
 		else
 		{
 			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
@@ -7259,7 +7485,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		if (opcode == OpControlBarrier)
-			statement("barrier();");
+		{
+			if (execution_scope == ScopeSubgroup)
+				statement("subgroupBarrier();");
+			else
+				statement("barrier();");
+		}
 		break;
 	}
 
@@ -7296,6 +7527,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	// Legacy sub-group stuff ...
 	case OpSubgroupBallotKHR:
 	{
 		uint32_t result_type = ops[0];
@@ -7440,6 +7672,35 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		require_extension_internal("GL_AMD_shader_fragment_mask");
 		break;
 	}
+
+	// Vulkan 1.1 sub-group stuff ...
+	case OpGroupNonUniformElect:
+	case OpGroupNonUniformBroadcast:
+	case OpGroupNonUniformBroadcastFirst:
+	case OpGroupNonUniformBallot:
+	case OpGroupNonUniformInverseBallot:
+	case OpGroupNonUniformBallotBitExtract:
+	case OpGroupNonUniformBallotBitCount:
+	case OpGroupNonUniformBallotFindLSB:
+	case OpGroupNonUniformBallotFindMSB:
+	case OpGroupNonUniformShuffle:
+	case OpGroupNonUniformShuffleXor:
+	case OpGroupNonUniformShuffleUp:
+	case OpGroupNonUniformShuffleDown:
+	case OpGroupNonUniformAll:
+	case OpGroupNonUniformAny:
+	case OpGroupNonUniformAllEqual:
+	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformFMin:
+	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformBitwiseAnd:
+	case OpGroupNonUniformBitwiseOr:
+	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformQuadSwap:
+	case OpGroupNonUniformQuadBroadcast:
+		emit_subgroup_op(instruction);
+		break;
 
 	default:
 		statement("// unimplemented op ", instruction.op);
@@ -9203,6 +9464,9 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		else
 			emit_block_chain(get<SPIRBlock>(block.merge_block));
 	}
+
+	// Forget about control dependent expressions now.
+	block.invalidate_expressions.clear();
 }
 
 void CompilerGLSL::begin_scope()
