@@ -3493,6 +3493,14 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 // Returns an MSL string describing  the SPIR-V image type
 string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (var && var->basevariable)
+	{
+		// For comparison images, check against the base variable,
+		// and not the fake ID which might have been generated for this variable.
+		id = var->basevariable;
+	}
+
 	if (!type.array.empty())
 	{
 		if (!msl_options.supports_msl_version(2))
