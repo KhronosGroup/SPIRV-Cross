@@ -4511,6 +4511,12 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	case OpGroupNonUniformFMul:
 	case OpGroupNonUniformFMin:
 	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformIAdd:
+	case OpGroupNonUniformIMul:
+	case OpGroupNonUniformSMin:
+	case OpGroupNonUniformSMax:
+	case OpGroupNonUniformUMin:
+	case OpGroupNonUniformUMax:
 	case OpGroupNonUniformBitwiseAnd:
 	case OpGroupNonUniformBitwiseOr:
 	case OpGroupNonUniformBitwiseXor:
@@ -4573,27 +4579,106 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupBallotBitExtract");
 		break;
 
-	case OpGroupNonUniformBallotBitCount:
 	case OpGroupNonUniformBallotFindLSB:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupBallotFindLSB");
+		break;
+
 	case OpGroupNonUniformBallotFindMSB:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupBallotFindMSB");
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	{
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+			emit_unary_func_op(result_type, id, ops[4], "subgroupBallotBitCount");
+		else if (operation == GroupOperationInclusiveScan)
+			emit_unary_func_op(result_type, id, ops[4], "subgroupBallotInclusiveBitCount");
+		else if (operation == GroupOperationExclusiveScan)
+			emit_unary_func_op(result_type, id, ops[4], "subgroupBallotExclusiveBitCount");
+		else
+			SPIRV_CROSS_THROW("Invalid BitCount operation.");
+		break;
+	}
+
 	case OpGroupNonUniformShuffle:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffle");
+		break;
+
 	case OpGroupNonUniformShuffleXor:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleXor");
+		break;
+
 	case OpGroupNonUniformShuffleUp:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleUp");
+		break;
+
 	case OpGroupNonUniformShuffleDown:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleDown");
+		break;
+
 	case OpGroupNonUniformAll:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupAll");
+		break;
+
 	case OpGroupNonUniformAny:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupAny");
+		break;
+
 	case OpGroupNonUniformAllEqual:
-	case OpGroupNonUniformFAdd:
-	case OpGroupNonUniformFMul:
-	case OpGroupNonUniformFMin:
-	case OpGroupNonUniformFMax:
-	case OpGroupNonUniformBitwiseAnd:
-	case OpGroupNonUniformBitwiseOr:
-	case OpGroupNonUniformBitwiseXor:
+		emit_unary_func_op(result_type, id, ops[3], "subgroupAllEqual");
+		break;
+
+#define GROUP_OP(op, glsl_op) \
+case OpGroupNonUniform##op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_unary_func_op(result_type, id, ops[4], "subgroup" #glsl_op); \
+		else if (operation == GroupOperationInclusiveScan) \
+			emit_unary_func_op(result_type, id, ops[4], "subgroupInclusive" #glsl_op); \
+		else if (operation == GroupOperationExclusiveScan) \
+			emit_unary_func_op(result_type, id, ops[4], "subgroupExclusive" #glsl_op); \
+		else if (operation == GroupOperationClusteredReduce) \
+			emit_binary_func_op(result_type, id, ops[4], ops[5], "subgroupClustered" #glsl_op); \
+		else \
+			SPIRV_CROSS_THROW("Invalid group operation."); \
+		break; \
+	}
+	GROUP_OP(FAdd, Add)
+	GROUP_OP(FMul, Mul)
+	GROUP_OP(FMin, Min)
+	GROUP_OP(FMax, Max)
+	GROUP_OP(IAdd, Add)
+	GROUP_OP(IMul, Mul)
+	GROUP_OP(SMin, Min)
+	GROUP_OP(SMax, Max)
+	GROUP_OP(UMin, Min)
+	GROUP_OP(UMax, Max)
+	GROUP_OP(BitwiseAnd, And)
+	GROUP_OP(BitwiseOr, Or)
+	GROUP_OP(BitwiseXor, Xor)
+#undef GROUP_OP
+
 	case OpGroupNonUniformQuadSwap:
+	{
+		uint32_t direction = get<SPIRConstant>(ops[4]).scalar();
+		if (direction == 0)
+			emit_unary_func_op(result_type, id, ops[3], "subgroupQuadSwapHorizontal");
+		else if (direction == 1)
+			emit_unary_func_op(result_type, id, ops[3], "subgroupQuadSwapVertical");
+		else if (direction == 2)
+			emit_unary_func_op(result_type, id, ops[3], "subgroupQuadSwapDiagonal");
+		else
+			SPIRV_CROSS_THROW("Invalid quad swap direction.");
+		break;
+	}
+
 	case OpGroupNonUniformQuadBroadcast:
-		emit_op(result_type, id, "subgroupRandom()", false);
-		return;
+	{
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupQuadBroadcast");
+		break;
+	}
 
 	default:
 		SPIRV_CROSS_THROW("Invalid opcode for subgroup.");
@@ -7691,9 +7776,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupNonUniformAny:
 	case OpGroupNonUniformAllEqual:
 	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformIAdd:
 	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformIMul:
 	case OpGroupNonUniformFMin:
 	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformSMin:
+	case OpGroupNonUniformSMax:
+	case OpGroupNonUniformUMin:
+	case OpGroupNonUniformUMax:
 	case OpGroupNonUniformBitwiseAnd:
 	case OpGroupNonUniformBitwiseOr:
 	case OpGroupNonUniformBitwiseXor:
