@@ -2860,7 +2860,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		}
 		uint32_t locn = get_ordered_member_location(type.self, index);
 		if (locn != k_unknown_location && has_member_decoration(type.self, index, DecorationIndex))
-			return join(" [[color(", locn, "), index(", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+			return join(" [[color(", locn, "), index(", get_member_decoration(type.self, index, DecorationIndex),
+			            ")]]");
 		else if (locn != k_unknown_location)
 			return join(" [[color(", locn, ")]]");
 		else if (has_member_decoration(type.self, index, DecorationIndex))
@@ -3321,11 +3322,7 @@ void CompilerMSL::replace_illegal_names()
 	// FIXME: MSL and GLSL are doing two different things here.
 	// Agree on convention and remove this override.
 	static const unordered_set<string> keywords = {
-		"kernel",
-		"vertex",
-		"fragment",
-		"compute",
-		"bias",
+		"kernel", "vertex", "fragment", "compute", "bias",
 	};
 
 	static const unordered_set<string> illegal_func_names = {
@@ -3493,6 +3490,14 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 // Returns an MSL string describing  the SPIR-V image type
 string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (var && var->basevariable)
+	{
+		// For comparison images, check against the base variable,
+		// and not the fake ID which might have been generated for this variable.
+		id = var->basevariable;
+	}
+
 	if (!type.array.empty())
 	{
 		if (!msl_options.supports_msl_version(2))
