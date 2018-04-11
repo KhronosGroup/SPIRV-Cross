@@ -625,6 +625,13 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			break;
 
 		case BuiltInNumWorkgroups:
+		case BuiltInSubgroupSize:
+		case BuiltInSubgroupLocalInvocationId:
+		case BuiltInSubgroupEqMask:
+		case BuiltInSubgroupLtMask:
+		case BuiltInSubgroupLeMask:
+		case BuiltInSubgroupGtMask:
+		case BuiltInSubgroupGeMask:
 			// Handled specially.
 			break;
 
@@ -864,6 +871,11 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 	case BuiltInPointCoord:
 		// Crude hack, but there is no real alternative. This path is only enabled if point_coord_compat is set.
 		return "float2(0.5f, 0.5f)";
+	case BuiltInSubgroupLocalInvocationId:
+		return "WaveGetLaneIndex()";
+	case BuiltInSubgroupSize:
+		return "WaveGetLaneCount()";
+
 	default:
 		return CompilerGLSL::builtin_to_glsl(builtin, storage);
 	}
@@ -928,6 +940,22 @@ void CompilerHLSL::emit_builtin_variables()
 			// Handled specially.
 			break;
 
+		case BuiltInSubgroupLocalInvocationId:
+		case BuiltInSubgroupSize:
+			if (hlsl_options.shader_model < 60)
+				SPIRV_CROSS_THROW("Need SM 6.0 for Wave ops.");
+			break;
+
+		case BuiltInSubgroupEqMask:
+		case BuiltInSubgroupLtMask:
+		case BuiltInSubgroupLeMask:
+		case BuiltInSubgroupGtMask:
+		case BuiltInSubgroupGeMask:
+			if (hlsl_options.shader_model < 60)
+				SPIRV_CROSS_THROW("Need SM 6.0 for Wave ops.");
+			type = "uint4";
+			break;
+
 		case BuiltInClipDistance:
 			array_size = clip_distance_count;
 			type = "float";
@@ -940,7 +968,6 @@ void CompilerHLSL::emit_builtin_variables()
 
 		default:
 			SPIRV_CROSS_THROW(join("Unsupported builtin in HLSL: ", unsigned(builtin)));
-			break;
 		}
 
 		StorageClass storage = active_input_builtins.get(i) ? StorageClassInput : StorageClassOutput;
@@ -1225,6 +1252,14 @@ void CompilerHLSL::emit_resources()
 	auto input_builtins = active_input_builtins;
 	input_builtins.clear(BuiltInNumWorkgroups);
 	input_builtins.clear(BuiltInPointCoord);
+	input_builtins.clear(BuiltInSubgroupSize);
+	input_builtins.clear(BuiltInSubgroupLocalInvocationId);
+	input_builtins.clear(BuiltInSubgroupEqMask);
+	input_builtins.clear(BuiltInSubgroupLtMask);
+	input_builtins.clear(BuiltInSubgroupLeMask);
+	input_builtins.clear(BuiltInSubgroupGtMask);
+	input_builtins.clear(BuiltInSubgroupGeMask);
+
 	if (!input_variables.empty() || !input_builtins.empty())
 	{
 		require_input = true;
@@ -2106,6 +2141,70 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		case BuiltInNumWorkgroups:
 		case BuiltInPointCoord:
+		case BuiltInSubgroupSize:
+		case BuiltInSubgroupLocalInvocationId:
+			break;
+
+		case BuiltInSubgroupEqMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("gl_SubgroupEqMask = 1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96));");
+			statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupEqMask.x = 0;");
+			statement("if (WaveGetLaneIndex() >= 64 || WaveGetLaneIndex() < 32) gl_SubgroupEqMask.y = 0;");
+			statement("if (WaveGetLaneIndex() >= 96 || WaveGetLaneIndex() < 64) gl_SubgroupEqMask.z = 0;");
+			statement("if (WaveGetLaneIndex() < 96) gl_SubgroupEqMask.w = 0;");
+			break;
+
+		case BuiltInSubgroupGeMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("gl_SubgroupGeMask = ~((1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96))) - 1u);");
+			statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupGeMask.x = 0u;");
+			statement("if (WaveGetLaneIndex() >= 64) gl_SubgroupGeMask.y = 0u;");
+			statement("if (WaveGetLaneIndex() >= 96) gl_SubgroupGeMask.z = 0u;");
+			statement("if (WaveGetLaneIndex() < 32) gl_SubgroupGeMask.y = ~0u;");
+			statement("if (WaveGetLaneIndex() < 64) gl_SubgroupGeMask.z = ~0u;");
+			statement("if (WaveGetLaneIndex() < 96) gl_SubgroupGeMask.w = ~0u;");
+			break;
+
+		case BuiltInSubgroupGtMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("uint gt_lane_index = WaveGetLaneIndex() + 1;");
+			statement("gl_SubgroupGtMask = ~((1u << (gt_lane_index - uint4(0, 32, 64, 96))) - 1u);");
+			statement("if (gt_lane_index >= 32) gl_SubgroupGtMask.x = 0u;");
+			statement("if (gt_lane_index >= 64) gl_SubgroupGtMask.y = 0u;");
+			statement("if (gt_lane_index >= 96) gl_SubgroupGtMask.z = 0u;");
+			statement("if (gt_lane_index >= 128) gl_SubgroupGtMask.w = 0u;");
+			statement("if (gt_lane_index < 32) gl_SubgroupGtMask.y = ~0u;");
+			statement("if (gt_lane_index < 64) gl_SubgroupGtMask.z = ~0u;");
+			statement("if (gt_lane_index < 96) gl_SubgroupGtMask.w = ~0u;");
+			break;
+
+		case BuiltInSubgroupLeMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("uint le_lane_index = WaveGetLaneIndex() + 1;");
+			statement("gl_SubgroupLeMask = (1u << (le_lane_index - uint4(0, 32, 64, 96))) - 1u;");
+			statement("if (le_lane_index >= 32) gl_SubgroupLeMask.x = ~0u;");
+			statement("if (le_lane_index >= 64) gl_SubgroupLeMask.y = ~0u;");
+			statement("if (le_lane_index >= 96) gl_SubgroupLeMask.z = ~0u;");
+			statement("if (le_lane_index >= 128) gl_SubgroupLeMask.w = ~0u;");
+			statement("if (le_lane_index < 32) gl_SubgroupLeMask.y = 0u;");
+			statement("if (le_lane_index < 64) gl_SubgroupLeMask.z = 0u;");
+			statement("if (le_lane_index < 96) gl_SubgroupLeMask.w = 0u;");
+			break;
+
+		case BuiltInSubgroupLtMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("gl_SubgroupLtMask = (1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96))) - 1u;");
+			statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupLtMask.x = ~0u;");
+			statement("if (WaveGetLaneIndex() >= 64) gl_SubgroupLtMask.y = ~0u;");
+			statement("if (WaveGetLaneIndex() >= 96) gl_SubgroupLtMask.z = ~0u;");
+			statement("if (WaveGetLaneIndex() < 32) gl_SubgroupLtMask.y = 0u;");
+			statement("if (WaveGetLaneIndex() < 64) gl_SubgroupLtMask.z = 0u;");
+			statement("if (WaveGetLaneIndex() < 96) gl_SubgroupLtMask.w = 0u;");
 			break;
 
 		case BuiltInClipDistance:
@@ -3528,6 +3627,176 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 	register_read(ops[1], ops[2], should_forward(ops[2]));
 }
 
+void CompilerHLSL::emit_subgroup_op(const Instruction &i)
+{
+	if (hlsl_options.shader_model < 60)
+		SPIRV_CROSS_THROW("Wave ops requires SM 6.0 or higher.");
+
+	const uint32_t *ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+
+	uint32_t result_type = ops[0];
+	uint32_t id = ops[1];
+
+	auto scope = static_cast<Scope>(get<SPIRConstant>(ops[2]).scalar());
+	if (scope != ScopeSubgroup)
+		SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+
+	const auto make_inclusive_Sum = [&](const string &expr) -> string {
+		return join(expr, " + ", to_expression(ops[4]));
+	};
+
+	const auto make_inclusive_Product = [&](const string &expr) -> string {
+		return join(expr, " * ", to_expression(ops[4]));
+	};
+
+#define make_inclusive_BitAnd(expr) ""
+#define make_inclusive_BitOr(expr) ""
+#define make_inclusive_BitXor(expr) ""
+#define make_inclusive_Min(expr) ""
+#define make_inclusive_Max(expr) ""
+
+	switch (op)
+	{
+	case OpGroupNonUniformElect:
+		emit_op(result_type, id, "WaveIsFirstLane()", true);
+		break;
+
+	case OpGroupNonUniformBroadcast:
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "WaveReadLaneAt");
+		break;
+
+	case OpGroupNonUniformBroadcastFirst:
+		emit_unary_func_op(result_type, id, ops[3], "WaveReadLaneFirst");
+		break;
+
+	case OpGroupNonUniformBallot:
+		emit_unary_func_op(result_type, id, ops[3], "WaveActiveBallot");
+		break;
+
+	case OpGroupNonUniformInverseBallot:
+		SPIRV_CROSS_THROW("Cannot trivially implement InverseBallot in HLSL.");
+		break;
+
+	case OpGroupNonUniformBallotBitExtract:
+		SPIRV_CROSS_THROW("Cannot trivially implement BallotBitExtract in HLSL.");
+		break;
+
+	case OpGroupNonUniformBallotFindLSB:
+		SPIRV_CROSS_THROW("Cannot trivially implement BallotFindLSB in HLSL.");
+		break;
+
+	case OpGroupNonUniformBallotFindMSB:
+		SPIRV_CROSS_THROW("Cannot trivially implement BallotFindMSB in HLSL.");
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	{
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+		{
+			bool forward = should_forward(ops[4]);
+			auto left = join("countbits(", to_enclosed_expression(ops[4]), ".x) + countbits(", to_enclosed_expression(ops[4]), ".y)");
+			auto right = join("countbits(", to_enclosed_expression(ops[4]), ".z) + countbits(", to_enclosed_expression(ops[4]), ".w)");
+			emit_op(result_type, id, join(left, " + ", right), forward);
+			inherit_expression_dependencies(id, ops[4]);
+		}
+		else if (operation == GroupOperationInclusiveScan)
+			SPIRV_CROSS_THROW("Cannot trivially implement BallotBitCount Inclusive Scan in HLSL.");
+		else if (operation == GroupOperationExclusiveScan)
+			SPIRV_CROSS_THROW("Cannot trivially implement BallotBitCount Exclusive Scan in HLSL.");
+		else
+			SPIRV_CROSS_THROW("Invalid BitCount operation.");
+		break;
+	}
+
+	case OpGroupNonUniformShuffle:
+		SPIRV_CROSS_THROW("Cannot trivially implement Shuffle in HLSL.");
+	case OpGroupNonUniformShuffleXor:
+		SPIRV_CROSS_THROW("Cannot trivially implement ShuffleXor in HLSL.");
+	case OpGroupNonUniformShuffleUp:
+		SPIRV_CROSS_THROW("Cannot trivially implement ShuffleUp in HLSL.");
+	case OpGroupNonUniformShuffleDown:
+		SPIRV_CROSS_THROW("Cannot trivially implement ShuffleDown in HLSL.");
+
+	case OpGroupNonUniformAll:
+		emit_unary_func_op(result_type, id, ops[3], "WaveActiveAllTrue");
+		break;
+
+	case OpGroupNonUniformAny:
+		emit_unary_func_op(result_type, id, ops[3], "WaveActiveAnyTrue");
+		break;
+
+	case OpGroupNonUniformAllEqual:
+	{
+		auto &type = get<SPIRType>(result_type);
+		emit_unary_func_op(result_type, id, ops[3],
+		                   type.basetype == SPIRType::Boolean ? "WaveActiveAllEqualBool" : "WaveActiveAllEqual");
+		break;
+	}
+
+#define GROUP_OP(op, hlsl_op, supports_scan) \
+case OpGroupNonUniform##op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_unary_func_op(result_type, id, ops[4], "WaveActive" #hlsl_op); \
+		else if (operation == GroupOperationInclusiveScan && supports_scan) \
+        { \
+			bool forward = should_forward(ops[4]); \
+			emit_op(result_type, id, make_inclusive_##hlsl_op (join("WavePrefix" #hlsl_op, "(", to_expression(ops[4]), ")")), forward); \
+			inherit_expression_dependencies(id, ops[4]); \
+        } \
+		else if (operation == GroupOperationExclusiveScan && supports_scan) \
+			emit_unary_func_op(result_type, id, ops[4], "WavePrefix" #hlsl_op); \
+		else if (operation == GroupOperationClusteredReduce) \
+			SPIRV_CROSS_THROW("Cannot trivially implement ClusteredReduce in HLSL."); \
+		else \
+			SPIRV_CROSS_THROW("Invalid group operation."); \
+		break; \
+	}
+	GROUP_OP(FAdd, Sum, true)
+	GROUP_OP(FMul, Product, true)
+	GROUP_OP(FMin, Min, false)
+	GROUP_OP(FMax, Max, false)
+	GROUP_OP(IAdd, Sum, true)
+	GROUP_OP(IMul, Product, true)
+	GROUP_OP(SMin, Min, false)
+	GROUP_OP(SMax, Max, false)
+	GROUP_OP(UMin, Min, false)
+	GROUP_OP(UMax, Max, false)
+	GROUP_OP(BitwiseAnd, BitAnd, false)
+	GROUP_OP(BitwiseOr, BitOr, false)
+	GROUP_OP(BitwiseXor, BitXor, false)
+#undef GROUP_OP
+
+	case OpGroupNonUniformQuadSwap:
+	{
+		uint32_t direction = get<SPIRConstant>(ops[4]).scalar();
+		if (direction == 0)
+			emit_unary_func_op(result_type, id, ops[3], "QuadReadAcrossX");
+		else if (direction == 1)
+			emit_unary_func_op(result_type, id, ops[3], "QuadReadAcrossY");
+		else if (direction == 2)
+			emit_unary_func_op(result_type, id, ops[3], "QuadReadAcrossDiagonal");
+		else
+			SPIRV_CROSS_THROW("Invalid quad swap direction.");
+		break;
+	}
+
+	case OpGroupNonUniformQuadBroadcast:
+	{
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "QuadReadLaneAt");
+		break;
+	}
+
+	default:
+		SPIRV_CROSS_THROW("Invalid opcode for subgroup.");
+	}
+
+	register_control_dependent_expression(id);
+}
+
 void CompilerHLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -4002,6 +4271,12 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		{
 			memory = get<SPIRConstant>(ops[1]).scalar();
 			semantics = get<SPIRConstant>(ops[2]).scalar();
+		}
+
+		if (memory == ScopeSubgroup)
+		{
+			// No Wave-barriers in HLSL.
+			break;
 		}
 
 		// We only care about these flags, acquire/release and friends are not relevant to GLSL.

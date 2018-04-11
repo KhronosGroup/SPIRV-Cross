@@ -155,7 +155,9 @@ def validate_shader_hlsl(shader):
             sys.exit(1)
 
 def shader_to_sm(shader):
-    if '.sm51.' in shader:
+    if '.sm60.' in shader:
+        return '60'
+    elif '.sm51.' in shader:
         return '51'
     elif '.sm20.' in shader:
         return '20'
