@@ -1164,6 +1164,14 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage)
 			return false;
 	}
 
+	if(storage == StorageClassUniformConstant)
+	{
+		if (options.es && options.version < 310)
+			return false;
+		else if (!options.es && options.version < 430)
+			return false;
+	}
+
 	return true;
 }
 
