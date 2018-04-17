@@ -1151,7 +1151,7 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage)
 	if ((get_execution_model() != ExecutionModelVertex && storage == StorageClassInput) ||
 	    (get_execution_model() != ExecutionModelFragment && storage == StorageClassOutput))
 	{
-		if (!options.es && options.version < 410 && !options.separate_shader_objects)
+		if (!options.es && options.version < 440 && !options.separate_shader_objects)
 			return false;
 		else if (options.es && options.version < 310)
 			return false;
