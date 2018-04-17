@@ -4219,5 +4219,7 @@ void CompilerMSL::remap_constexpr_sampler(uint32_t id, const spirv_cross::MSLCon
 	auto &type = get<SPIRType>(get<SPIRVariable>(id).basetype);
 	if (type.basetype != SPIRType::SampledImage && type.basetype != SPIRType::Sampler)
 		SPIRV_CROSS_THROW("Can only remap SampledImage and Sampler type.");
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Can not remap array of samplers.");
 	constexpr_samplers[id] = sampler;
 }
