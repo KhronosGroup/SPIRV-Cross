@@ -3075,7 +3075,8 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 						// Fake unsigned constant literals with signed ones if possible.
 						// Things like array sizes, etc, tend to be unsigned even though they could just as easily be signed.
 						if (c.scalar_i32(vector, i) < 0)
-							SPIRV_CROSS_THROW("Tried to convert uint literal into int, but this made the literal negative.");
+							SPIRV_CROSS_THROW(
+							    "Tried to convert uint literal into int, but this made the literal negative.");
 					}
 					else if (backend.uint32_t_literal_suffix)
 						res += "u";
@@ -4585,8 +4586,7 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 		{
 			require_extension_internal("GL_KHR_shader_subgroup_clustered");
 		}
-		else if (operation == GroupOperationExclusiveScan ||
-		         operation == GroupOperationInclusiveScan ||
+		else if (operation == GroupOperationExclusiveScan || operation == GroupOperationInclusiveScan ||
 		         operation == GroupOperationReduce)
 		{
 			require_extension_internal("GL_KHR_shader_subgroup_arithmetic");
@@ -4688,6 +4688,7 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 		emit_unary_func_op(result_type, id, ops[3], "subgroupAllEqual");
 		break;
 
+		// clang-format off
 #define GROUP_OP(op, glsl_op) \
 case OpGroupNonUniform##op: \
 	{ \
@@ -4718,6 +4719,7 @@ case OpGroupNonUniform##op: \
 	GROUP_OP(BitwiseOr, Or)
 	GROUP_OP(BitwiseXor, Xor)
 #undef GROUP_OP
+		// clang-format on
 
 	case OpGroupNonUniformQuadSwap:
 	{
@@ -7573,8 +7575,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else if (memory == ScopeSubgroup)
 		{
-			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
-			                              MemorySemanticsImageMemoryMask;
+			const uint32_t all_barriers =
+			    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
 
 			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
 			{

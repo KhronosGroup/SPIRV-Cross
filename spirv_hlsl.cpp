@@ -3696,8 +3696,10 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 		if (operation == GroupOperationReduce)
 		{
 			bool forward = should_forward(ops[4]);
-			auto left = join("countbits(", to_enclosed_expression(ops[4]), ".x) + countbits(", to_enclosed_expression(ops[4]), ".y)");
-			auto right = join("countbits(", to_enclosed_expression(ops[4]), ".z) + countbits(", to_enclosed_expression(ops[4]), ".w)");
+			auto left = join("countbits(", to_enclosed_expression(ops[4]), ".x) + countbits(",
+			                 to_enclosed_expression(ops[4]), ".y)");
+			auto right = join("countbits(", to_enclosed_expression(ops[4]), ".z) + countbits(",
+			                  to_enclosed_expression(ops[4]), ".w)");
 			emit_op(result_type, id, join(left, " + ", right), forward);
 			inherit_expression_dependencies(id, ops[4]);
 		}
@@ -3735,6 +3737,7 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 		break;
 	}
 
+	// clang-format off
 #define GROUP_OP(op, hlsl_op, supports_scan) \
 case OpGroupNonUniform##op: \
 	{ \
@@ -3769,6 +3772,7 @@ case OpGroupNonUniform##op: \
 	GROUP_OP(BitwiseOr, BitOr, false)
 	GROUP_OP(BitwiseXor, BitXor, false)
 #undef GROUP_OP
+		// clang-format on
 
 	case OpGroupNonUniformQuadSwap:
 	{
