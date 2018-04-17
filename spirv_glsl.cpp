@@ -322,6 +322,9 @@ void CompilerGLSL::find_static_extensions()
 
 			if (type.basetype == SPIRType::Half)
 				require_extension_internal("GL_AMD_gpu_shader_half_float");
+
+			if (type.basetype == SPIRType::UInt && is_legacy())
+				SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
 		}
 	}
 
