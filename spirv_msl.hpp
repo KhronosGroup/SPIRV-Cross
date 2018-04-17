@@ -59,6 +59,72 @@ struct MSLResourceBinding
 	bool used_by_shader = false;
 };
 
+enum MSLSamplerCoord
+{
+	MSL_SAMPLER_COORD_NORMALIZED,
+	MSL_SAMPLER_COORD_PIXEL
+};
+
+enum MSLSamplerFilter
+{
+	MSL_SAMPLER_FILTER_NEAREST,
+	MSL_SAMPLER_FILTER_LINEAR
+};
+
+enum MSLSamplerMipFilter
+{
+	MSL_SAMPLER_MIP_FILTER_NONE,
+	MSL_SAMPLER_MIP_FILTER_NEAREST,
+	MSL_SAMPLER_MIP_FILTER_LINEAR,
+};
+
+enum MSLSamplerAddress
+{
+	MSL_SAMPLER_ADDRESS_CLAMP_TO_ZERO,
+	MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE,
+	MSL_SAMPLER_ADDRESS_CLAMP_TO_BORDER,
+	MSL_SAMPLER_ADDRESS_REPEAT,
+	MSL_SAMPLER_ADDRESS_MIRRORED_REPEAT
+};
+
+enum MSLSamplerCompareFunc
+{
+	MSL_SAMPLER_COMPARE_FUNC_NONE,
+	MSL_SAMPLER_COMPARE_FUNC_LESS,
+	MSL_SAMPLER_COMPARE_FUNC_LESS_EQUAL,
+	MSL_SAMPLER_COMPARE_FUNC_GREATER,
+	MSL_SAMPLER_COMPARE_FUNC_GREATER_EQUAL,
+	MSL_SAMPLER_COMPARE_FUNC_EQUAL,
+	MSL_SAMPLER_COMPARE_FUNC_NOT_EQUAL
+};
+
+enum MSLSamplerBorderColor
+{
+	MSL_SAMPLER_BORDER_COLOR_TRANSPARENT_BLACK,
+	MSL_SAMPLER_BORDER_COLOR_OPAQUE_BLACK,
+	MSL_SAMPLER_BORDER_COLOR_OPAQUE_WHITE
+};
+
+struct MSLConstexprSampler
+{
+	MSLSamplerCoord coord;
+	MSLSamplerFilter min_filter;
+	MSLSamplerFilter mag_filter;
+	MSLSamplerMipFilter mip_filter;
+	MSLSamplerAddress s_address;
+	MSLSamplerAddress t_address;
+	MSLSamplerAddress r_address;
+	MSLSamplerCompareFunc compare_func;
+	MSLSamplerBorderColor border_color;
+	float lod_clamp_min;
+	float lod_clamp_max;
+	int max_anisotropy;
+
+	bool compare_enable;
+	bool lod_clamp_enable;
+	bool anisotropy_enable;
+};
+
 // Tracks the type ID and member index of a struct member
 using MSLStructMemberKey = uint64_t;
 
@@ -191,6 +257,14 @@ public:
 	std::string compile(MSLConfiguration &msl_cfg, std::vector<MSLVertexAttr> *p_vtx_attrs = nullptr,
 	                    std::vector<MSLResourceBinding> *p_res_bindings = nullptr);
 
+	// Remap a sampler with ID to a constexpr sampler.
+	// Older iOS targets must use constexpr samplers in certain cases (PCF),
+	// so a static sampler must be used.
+	// The sampler will not consume a binding, but be declared in the entry point as a constexpr sampler.
+	// This can be used on both combined image/samplers (sampler2D) or standalone samplers.
+	// The remapped sampler must not be an array of samplers.
+	void remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler &sampler);
+
 protected:
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
@@ -284,6 +358,7 @@ protected:
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
 	void emit_array_copy(const std::string &lhs, uint32_t rhs_id) override;
 	void build_implicit_builtins();
+	void emit_entry_point_declarations() override;
 	uint32_t builtin_frag_coord_id = 0;
 
 	Options msl_options;
@@ -306,6 +381,8 @@ protected:
 	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
 	spv::Op previous_instruction_opcode = spv::OpNop;
+
+	std::unordered_map<uint32_t, MSLConstexprSampler> constexpr_samplers;
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
