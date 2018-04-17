@@ -26,6 +26,45 @@ using namespace spv;
 using namespace spirv_cross;
 using namespace std;
 
+static bool is_unsigned_opcode(Op op)
+{
+	// Don't have to be exhaustive, only relevant for legacy target checking ...
+	switch (op)
+	{
+	case OpShiftRightLogical:
+	case OpUGreaterThan:
+	case OpUGreaterThanEqual:
+	case OpULessThan:
+	case OpULessThanEqual:
+	case OpUConvert:
+	case OpUDiv:
+	case OpUMod:
+	case OpUMulExtended:
+	case OpConvertUToF:
+	case OpConvertFToU:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+static bool is_unsigned_glsl_opcode(GLSLstd450 op)
+{
+	// Don't have to be exhaustive, only relevant for legacy target checking ...
+	switch (op)
+	{
+	case GLSLstd450UClamp:
+	case GLSLstd450UMin:
+	case GLSLstd450UMax:
+	case GLSLstd450FindUMsb:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
 static bool packing_is_vec4_padded(BufferPackingStandard packing)
 {
 	switch (packing)
@@ -322,9 +361,6 @@ void CompilerGLSL::find_static_extensions()
 
 			if (type.basetype == SPIRType::Half)
 				require_extension_internal("GL_AMD_gpu_shader_half_float");
-
-			if (type.basetype == SPIRType::UInt && is_legacy())
-				SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
 		}
 	}
 
@@ -2441,6 +2477,9 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	bool unary = false;
 	string op;
 
+	if (is_legacy() && is_unsigned_opcode(cop.opcode))
+		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
+
 	// TODO: Find a clean way to reuse emit_instruction.
 	switch (cop.opcode)
 	{
@@ -3012,7 +3051,14 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		if (splat)
 		{
 			res += convert_to_string(c.scalar(vector, 0));
-			if (backend.uint32_t_literal_suffix)
+			if (is_legacy())
+			{
+				// Fake unsigned constant literals with signed ones if possible.
+				// Things like array sizes, etc, tend to be unsigned even though they could just as easily be signed.
+				if (c.scalar_i32(vector, 0) < 0)
+					SPIRV_CROSS_THROW("Tried to convert uint literal into int, but this made the literal negative.");
+			}
+			else if (backend.uint32_t_literal_suffix)
 				res += "u";
 		}
 		else
@@ -3024,7 +3070,14 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				else
 				{
 					res += convert_to_string(c.scalar(vector, i));
-					if (backend.uint32_t_literal_suffix)
+					if (is_legacy())
+					{
+						// Fake unsigned constant literals with signed ones if possible.
+						// Things like array sizes, etc, tend to be unsigned even though they could just as easily be signed.
+						if (c.scalar_i32(vector, i) < 0)
+							SPIRV_CROSS_THROW("Tried to convert uint literal into int, but this made the literal negative.");
+					}
+					else if (backend.uint32_t_literal_suffix)
 						res += "u";
 				}
 
@@ -4043,7 +4096,10 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 
 void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
 {
-	GLSLstd450 op = static_cast<GLSLstd450>(eop);
+	auto op = static_cast<GLSLstd450>(eop);
+
+	if (is_legacy() && is_unsigned_glsl_opcode(op))
+		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy GLSL targets.");
 
 	switch (op)
 	{
@@ -4108,8 +4164,8 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 
 	// Minmax
-	case GLSLstd450FMin:
 	case GLSLstd450UMin:
+	case GLSLstd450FMin:
 	case GLSLstd450SMin:
 		emit_binary_func_op(result_type, id, args[0], args[1], "min");
 		break;
@@ -8316,6 +8372,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	default:
 		break;
 	}
+
+	if (type.basetype == SPIRType::UInt && is_legacy())
+		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
 
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
 	{
