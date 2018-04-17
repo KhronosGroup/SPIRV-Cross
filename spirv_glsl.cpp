@@ -728,7 +728,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	//if (flags & (1ull << DecorationColMajor))
 	//    attr.push_back("column_major");
 
-	if (dec.decoration_flags.get(DecorationLocation) && can_use_io_location(type.storage))
+	if (dec.decoration_flags.get(DecorationLocation) && can_use_io_location(type.storage, true))
 		attr.push_back(join("location = ", dec.location));
 
 	// DecorationCPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
@@ -1144,14 +1144,17 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	return true;
 }
 
-bool CompilerGLSL::can_use_io_location(StorageClass storage)
+bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 {
 	// Location specifiers are must have in SPIR-V, but they aren't really supported in earlier versions of GLSL.
 	// Be very explicit here about how to solve the issue.
 	if ((get_execution_model() != ExecutionModelVertex && storage == StorageClassInput) ||
 	    (get_execution_model() != ExecutionModelFragment && storage == StorageClassOutput))
 	{
-		if (!options.es && options.version < 410 && !options.separate_shader_objects)
+		uint32_t minimum_desktop_version = block ? 440 : 410;
+		// ARB_enhanced_layouts vs ARB_separate_shader_objects ...
+
+		if (!options.es && options.version < minimum_desktop_version && !options.separate_shader_objects)
 			return false;
 		else if (options.es && options.version < 310)
 			return false;
@@ -1207,7 +1210,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("input_attachment_index = ", dec.input_attachment));
 	}
 
-	if (flags.get(DecorationLocation) && can_use_io_location(var.storage))
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	if (flags.get(DecorationLocation) && can_use_io_location(var.storage, is_block))
 	{
 		Bitset combined_decoration;
 		for (uint32_t i = 0; i < meta[type.self].members.size(); i++)
