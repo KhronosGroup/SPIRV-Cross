@@ -239,7 +239,10 @@ void CompilerMSL::emit_entry_point_declarations()
 		if (s.anisotropy_enable)
 			args.push_back(join("max_anisotropy(", s.max_anisotropy, ")"));
 		if (s.lod_clamp_enable)
-			args.push_back(join("lod_clamp(", s.lod_clamp_min, ", ", s.lod_clamp_max, ")"));
+		{
+			args.push_back(
+			    join("lod_clamp(", convert_to_string(s.lod_clamp_min), ", ", convert_to_string(s.lod_clamp_max), ")"));
+		}
 
 		statement("constexpr sampler ",
 		          type.basetype == SPIRType::SampledImage ? to_sampler_expression(samp.first) : to_name(samp.first),
