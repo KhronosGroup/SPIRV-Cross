@@ -104,6 +104,152 @@ void CompilerMSL::build_implicit_builtins()
 	}
 }
 
+static string create_sampler_address(const char *prefix, MSLSamplerAddress addr)
+{
+	switch (addr)
+	{
+	case MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE:
+		return join(prefix, "address::clamp_to_edge");
+	case MSL_SAMPLER_ADDRESS_CLAMP_TO_ZERO:
+		return join(prefix, "address::clamp_to_zero");
+	case MSL_SAMPLER_ADDRESS_CLAMP_TO_BORDER:
+		return join(prefix, "address::clamp_to_border");
+	case MSL_SAMPLER_ADDRESS_REPEAT:
+		return join(prefix, "address::repeat");
+	case MSL_SAMPLER_ADDRESS_MIRRORED_REPEAT:
+		return join(prefix, "address::mirrored_repeat");
+	default:
+		SPIRV_CROSS_THROW("Invalid sampler addressing mode.");
+	}
+}
+
+void CompilerMSL::emit_entry_point_declarations()
+{
+	// FIXME: Get test coverage here ...
+
+	// Emit constexpr samplers here.
+	for (auto &samp : constexpr_samplers)
+	{
+		auto &var = get<SPIRVariable>(samp.first);
+		auto &type = get<SPIRType>(var.basetype);
+		if (type.basetype == SPIRType::Sampler)
+			add_resource_name(samp.first);
+
+		vector<string> args;
+		auto &s = samp.second;
+
+		if (s.coord != MSL_SAMPLER_COORD_NORMALIZED)
+			args.push_back("coord::pixel");
+
+		if (s.min_filter == s.mag_filter)
+		{
+			if (s.min_filter != MSL_SAMPLER_FILTER_NEAREST)
+				args.push_back("filter::linear");
+		}
+		else
+		{
+			if (s.min_filter != MSL_SAMPLER_FILTER_NEAREST)
+				args.push_back("min_filter::linear");
+			if (s.mag_filter != MSL_SAMPLER_FILTER_NEAREST)
+				args.push_back("mag_filter::linear");
+		}
+
+		switch (s.mip_filter)
+		{
+		case MSL_SAMPLER_MIP_FILTER_NONE:
+			// Default
+			break;
+		case MSL_SAMPLER_MIP_FILTER_NEAREST:
+			args.push_back("mip_filter::nearest");
+			break;
+		case MSL_SAMPLER_MIP_FILTER_LINEAR:
+			args.push_back("mip_filter::linear");
+			break;
+		default:
+			SPIRV_CROSS_THROW("Invalid mip filter.");
+		}
+
+		if (s.s_address == s.t_address && s.s_address == s.r_address)
+		{
+			if (s.s_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("", s.s_address));
+		}
+		else
+		{
+			if (s.s_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("s_", s.s_address));
+			if (s.t_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("t_", s.t_address));
+			if (s.r_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("r_", s.r_address));
+		}
+
+		if (s.compare_enable)
+		{
+			switch (s.compare_func)
+			{
+			case MSL_SAMPLER_COMPARE_FUNC_ALWAYS:
+				args.push_back("compare_func::always");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_NEVER:
+				args.push_back("compare_func::never");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_EQUAL:
+				args.push_back("compare_func::equal");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_NOT_EQUAL:
+				args.push_back("compare_func::not_equal");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_LESS:
+				args.push_back("compare_func::less");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_LESS_EQUAL:
+				args.push_back("compare_func::less_equal");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_GREATER:
+				args.push_back("compare_func::greater");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_GREATER_EQUAL:
+				args.push_back("compare_func::greater_equal");
+				break;
+			default:
+				SPIRV_CROSS_THROW("Invalid sampler compare function.");
+			}
+		}
+
+		if (s.s_address == MSL_SAMPLER_ADDRESS_CLAMP_TO_BORDER || s.t_address == MSL_SAMPLER_ADDRESS_CLAMP_TO_BORDER ||
+		    s.r_address == MSL_SAMPLER_ADDRESS_CLAMP_TO_BORDER)
+		{
+			switch (s.border_color)
+			{
+			case MSL_SAMPLER_BORDER_COLOR_OPAQUE_BLACK:
+				args.push_back("border_color::opaque_black");
+				break;
+			case MSL_SAMPLER_BORDER_COLOR_OPAQUE_WHITE:
+				args.push_back("border_color::opaque_white");
+				break;
+			case MSL_SAMPLER_BORDER_COLOR_TRANSPARENT_BLACK:
+				args.push_back("border_color::transparent_black");
+				break;
+			default:
+				SPIRV_CROSS_THROW("Invalid sampler border color.");
+			}
+		}
+
+		if (s.anisotropy_enable)
+			args.push_back(join("max_anisotropy(", s.max_anisotropy, ")"));
+		if (s.lod_clamp_enable)
+		{
+			args.push_back(
+			    join("lod_clamp(", convert_to_string(s.lod_clamp_min), ", ", convert_to_string(s.lod_clamp_max), ")"));
+		}
+
+		statement("constexpr sampler ",
+		          type.basetype == SPIRType::SampledImage ? to_sampler_expression(samp.first) : to_name(samp.first),
+		          "(", merge(args), ");");
+	}
+}
+
 string CompilerMSL::compile()
 {
 	// Force a classic "C" locale, reverts when function returns
@@ -3076,12 +3222,15 @@ string CompilerMSL::entry_point_args(bool append_comma)
 					resources.push_back(
 					    { &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
 
-					if (type.image.dim != DimBuffer)
+					if (type.image.dim != DimBuffer && constexpr_samplers.count(var_id) == 0)
+					{
 						resources.push_back({ &id, to_sampler_expression(var_id), SPIRType::Sampler,
 						                      get_metal_resource_index(var, SPIRType::Sampler) });
+					}
 				}
-				else
+				else if (constexpr_samplers.count(var_id) == 0)
 				{
+					// constexpr samplers are not declared as resources.
 					resources.push_back(
 					    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
 				}
@@ -4086,4 +4235,14 @@ CompilerMSL::MemberSorter::MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
 {
 	// Ensure enough meta info is available
 	meta.members.resize(max(type.member_types.size(), meta.members.size()));
+}
+
+void CompilerMSL::remap_constexpr_sampler(uint32_t id, const spirv_cross::MSLConstexprSampler &sampler)
+{
+	auto &type = get<SPIRType>(get<SPIRVariable>(id).basetype);
+	if (type.basetype != SPIRType::SampledImage && type.basetype != SPIRType::Sampler)
+		SPIRV_CROSS_THROW("Can only remap SampledImage and Sampler type.");
+	if (!type.array.empty())
+		SPIRV_CROSS_THROW("Can not remap array of samplers.");
+	constexpr_samplers[id] = sampler;
 }

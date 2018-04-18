@@ -1715,6 +1715,10 @@ void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 	}
 }
 
+void CompilerGLSL::emit_entry_point_declarations()
+{
+}
+
 void CompilerGLSL::replace_illegal_names()
 {
 	// clang-format off
@@ -8717,6 +8721,9 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 
 	emit_function_prototype(func, return_flags);
 	begin_scope();
+
+	if (func.self == entry_point)
+		emit_entry_point_declarations();
 
 	current_function = &func;
 	auto &entry_block = get<SPIRBlock>(func.entry_block);
