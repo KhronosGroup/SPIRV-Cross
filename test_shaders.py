@@ -140,16 +140,20 @@ def shader_to_win_path(shader):
 
     return shader
 
+ignore_fxc = False
 def validate_shader_hlsl(shader):
     subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader])
     is_no_fxc = '.nofxc.' in shader
-    if (not force_no_external_validation) and (not is_no_fxc):
+    global ignore_fxc
+    if (not ignore_fxc) and (not force_no_external_validation) and (not is_no_fxc):
         try:
             win_path = shader_to_win_path(shader)
             subprocess.check_call(['fxc', '-nologo', shader_model_hlsl(shader), win_path])
         except OSError as oe:
             if (oe.errno != os.errno.ENOENT): # Ignore not found errors
                 raise
+            else:
+                ignore_fxc = True
         except subprocess.CalledProcessError:
             print('Failed compiling HLSL shader:', shader, 'with FXC.')
             sys.exit(1)
