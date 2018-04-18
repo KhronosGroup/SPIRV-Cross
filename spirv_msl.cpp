@@ -125,6 +125,8 @@ static string create_sampler_address(const char *prefix, MSLSamplerAddress addr)
 
 void CompilerMSL::emit_entry_point_declarations()
 {
+	// FIXME: Get test coverage here ...
+
 	// Emit constexpr samplers here.
 	for (auto &samp : constexpr_samplers)
 	{
@@ -136,20 +138,26 @@ void CompilerMSL::emit_entry_point_declarations()
 		vector<string> args;
 		auto &s = samp.second;
 
-		args.push_back(s.coord == MSL_SAMPLER_COORD_NORMALIZED ? "coord::normalized" : "coord::pixel");
+		if (s.coord != MSL_SAMPLER_COORD_NORMALIZED)
+			args.push_back("coord::pixel");
 
 		if (s.min_filter == s.mag_filter)
-			args.push_back(s.min_filter == MSL_SAMPLER_FILTER_NEAREST ? "filter::nearest" : "filter::linear");
+		{
+			if (s.min_filter != MSL_SAMPLER_FILTER_NEAREST)
+				args.push_back("filter::linear");
+		}
 		else
 		{
-			args.push_back(s.min_filter == MSL_SAMPLER_FILTER_NEAREST ? "min_filter::nearest" : "min_filter::linear");
-			args.push_back(s.mag_filter == MSL_SAMPLER_FILTER_NEAREST ? "mag_filter::nearest" : "mag_filter::linear");
+			if (s.min_filter != MSL_SAMPLER_FILTER_NEAREST)
+				args.push_back("min_filter::linear");
+			if (s.mag_filter != MSL_SAMPLER_FILTER_NEAREST)
+				args.push_back("mag_filter::linear");
 		}
 
 		switch (s.mip_filter)
 		{
 		case MSL_SAMPLER_MIP_FILTER_NONE:
-			args.push_back("mip_filter::none");
+			// Default
 			break;
 		case MSL_SAMPLER_MIP_FILTER_NEAREST:
 			args.push_back("mip_filter::nearest");
@@ -162,18 +170,30 @@ void CompilerMSL::emit_entry_point_declarations()
 		}
 
 		if (s.s_address == s.t_address && s.s_address == s.r_address)
-			args.push_back(create_sampler_address("", s.s_address));
+		{
+			if (s.s_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("", s.s_address));
+		}
 		else
 		{
-			args.push_back(create_sampler_address("s_", s.s_address));
-			args.push_back(create_sampler_address("t_", s.t_address));
-			args.push_back(create_sampler_address("r_", s.r_address));
+			if (s.s_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("s_", s.s_address));
+			if (s.t_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("t_", s.t_address));
+			if (s.r_address != MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE)
+				args.push_back(create_sampler_address("r_", s.r_address));
 		}
 
 		if (s.compare_enable)
 		{
 			switch (s.compare_func)
 			{
+			case MSL_SAMPLER_COMPARE_FUNC_ALWAYS:
+				args.push_back("compare_func::always");
+				break;
+			case MSL_SAMPLER_COMPARE_FUNC_NEVER:
+				args.push_back("compare_func::never");
+				break;
 			case MSL_SAMPLER_COMPARE_FUNC_EQUAL:
 				args.push_back("compare_func::equal");
 				break;

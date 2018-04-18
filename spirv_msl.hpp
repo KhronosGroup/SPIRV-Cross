@@ -89,13 +89,14 @@ enum MSLSamplerAddress
 
 enum MSLSamplerCompareFunc
 {
-	MSL_SAMPLER_COMPARE_FUNC_NONE,
+	MSL_SAMPLER_COMPARE_FUNC_NEVER,
 	MSL_SAMPLER_COMPARE_FUNC_LESS,
 	MSL_SAMPLER_COMPARE_FUNC_LESS_EQUAL,
 	MSL_SAMPLER_COMPARE_FUNC_GREATER,
 	MSL_SAMPLER_COMPARE_FUNC_GREATER_EQUAL,
 	MSL_SAMPLER_COMPARE_FUNC_EQUAL,
-	MSL_SAMPLER_COMPARE_FUNC_NOT_EQUAL
+	MSL_SAMPLER_COMPARE_FUNC_NOT_EQUAL,
+	MSL_SAMPLER_COMPARE_FUNC_ALWAYS
 };
 
 enum MSLSamplerBorderColor
@@ -107,22 +108,22 @@ enum MSLSamplerBorderColor
 
 struct MSLConstexprSampler
 {
-	MSLSamplerCoord coord;
-	MSLSamplerFilter min_filter;
-	MSLSamplerFilter mag_filter;
-	MSLSamplerMipFilter mip_filter;
-	MSLSamplerAddress s_address;
-	MSLSamplerAddress t_address;
-	MSLSamplerAddress r_address;
-	MSLSamplerCompareFunc compare_func;
-	MSLSamplerBorderColor border_color;
-	float lod_clamp_min;
-	float lod_clamp_max;
-	int max_anisotropy;
+	MSLSamplerCoord coord = MSL_SAMPLER_COORD_NORMALIZED;
+	MSLSamplerFilter min_filter = MSL_SAMPLER_FILTER_NEAREST;
+	MSLSamplerFilter mag_filter = MSL_SAMPLER_FILTER_NEAREST;
+	MSLSamplerMipFilter mip_filter = MSL_SAMPLER_MIP_FILTER_NONE;
+	MSLSamplerAddress s_address = MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+	MSLSamplerAddress t_address = MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+	MSLSamplerAddress r_address = MSL_SAMPLER_ADDRESS_CLAMP_TO_EDGE;
+	MSLSamplerCompareFunc compare_func = MSL_SAMPLER_COMPARE_FUNC_NEVER;
+	MSLSamplerBorderColor border_color = MSL_SAMPLER_BORDER_COLOR_TRANSPARENT_BLACK;
+	float lod_clamp_min = 0.0f;
+	float lod_clamp_max = 1000.0f;
+	int max_anisotropy = 1;
 
-	bool compare_enable;
-	bool lod_clamp_enable;
-	bool anisotropy_enable;
+	bool compare_enable = false;
+	bool lod_clamp_enable = false;
+	bool anisotropy_enable = false;
 };
 
 // Tracks the type ID and member index of a struct member
