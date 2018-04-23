@@ -6165,15 +6165,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			uint32_t image_id = combined.global_image ? combined.image_id : arg[combined.image_id];
 			uint32_t sampler_id = combined.global_sampler ? combined.sampler_id : arg[combined.sampler_id];
-
-			auto *image = maybe_get_backing_variable(image_id);
-			if (image)
-				image_id = image->self;
-
-			auto *samp = maybe_get_backing_variable(sampler_id);
-			if (samp)
-				sampler_id = samp->self;
-
 			arglist.push_back(to_combined_image_sampler(image_id, sampler_id));
 		}
 
