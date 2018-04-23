@@ -384,6 +384,8 @@ public:
 	// so this can be added before compile() if desired.
 	//
 	// Combined image samplers originating from this set are always considered active variables.
+	// Arrays of separate samplers are not supported, but arrays of separate images are supported.
+	// Array of images + sampler -> Array of combined image samplers.
 	void build_combined_image_samplers();
 
 	// Gets a remapping for the combined image samplers.

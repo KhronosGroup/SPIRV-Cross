@@ -3176,12 +3176,17 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 		if (length < 3)
 			return false;
 
-		auto &type = compiler.get<SPIRType>(args[0]);
+		uint32_t result_type = args[0];
+		auto &type = compiler.get<SPIRType>(result_type);
 		bool separate_image =
 		    type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer;
-		if (separate_image)
-			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate images. This is not possible to "
-			                  "statically remap to plain GLSL.");
+		if (!separate_image)
+			return true;
+
+		uint32_t id = args[1];
+		uint32_t ptr = args[2];
+		compiler.set<SPIRExpression>(id, "", result_type, true);
+		compiler.register_read(id, ptr, true);
 		break;
 	}
 
@@ -3233,16 +3238,23 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		// but this seems ridiculously complicated for a problem which is easy to work around.
 		// Checking access chains like this assumes we don't have samplers or textures inside uniform structs, but this makes no sense.
 
-		auto &type = compiler.get<SPIRType>(args[0]);
+		uint32_t result_type = args[0];
+
+		auto &type = compiler.get<SPIRType>(result_type);
 		bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
 		bool separate_sampler = type.basetype == SPIRType::Sampler;
-		if (separate_image)
-			SPIRV_CROSS_THROW("Attempting to use arrays or structs of separate images. This is not possible to "
-			                  "statically remap to plain GLSL.");
 		if (separate_sampler)
 			SPIRV_CROSS_THROW(
 			    "Attempting to use arrays or structs of separate samplers. This is not possible to statically "
 			    "remap to plain GLSL.");
+
+		if (separate_image)
+		{
+			uint32_t id = args[1];
+			uint32_t ptr = args[2];
+			compiler.set<SPIRExpression>(id, "", result_type, true);
+			compiler.register_read(id, ptr, true);
+		}
 		return true;
 	}
 
@@ -3353,6 +3365,15 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		new_flags.reset();
 		if (old_flags.get(DecorationRelaxedPrecision))
 			new_flags.set(DecorationRelaxedPrecision);
+
+		// Propagate the array type for the original image as well.
+		auto *var = compiler.maybe_get_backing_variable(image_id);
+		if (var)
+		{
+			auto &parent_type = compiler.get<SPIRType>(var->basetype);
+			type.array = parent_type.array;
+			type.array_size_literal = parent_type.array_size_literal;
+		}
 
 		compiler.combined_image_samplers.push_back({ combined_id, image_id, sampler_id });
 	}
