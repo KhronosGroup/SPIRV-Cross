@@ -3681,9 +3681,15 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	{
 		emit_binary_func_op(result_type, result_id, image_id, samp_id,
 		                    type_to_glsl(get<SPIRType>(result_type)).c_str());
+
+		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
+		forwarded_temporaries.erase(result_id);
 	}
 	else
-		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true);
+	{
+		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
+	}
 }
 
 void CompilerGLSL::emit_texture_op(const Instruction &i)
