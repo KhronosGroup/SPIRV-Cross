@@ -4078,6 +4078,11 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 			}
 		}
 	}
+	else if (is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+	{
+		// Lod argument is optional in OpImageFetch, but we require a LOD value, pick 0 as the default.
+		farg_str += ", 0";
+	}
 
 	if (coffset)
 	{

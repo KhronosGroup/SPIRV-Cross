@@ -2714,8 +2714,9 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	if (op == OpImageFetch)
 	{
 		auto &coordtype = expression_type(coord);
-		if (imgtype.image.dim != DimBuffer)
-			coord_expr = join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", to_expression(lod), ")");
+		if (imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+			coord_expr =
+			    join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", lod ? to_expression(lod) : string("0"), ")");
 	}
 	else
 		expr += ", ";
