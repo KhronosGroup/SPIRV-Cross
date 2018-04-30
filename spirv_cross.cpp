@@ -3157,8 +3157,12 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 	}
 
 	case OpImageFetch:
+	case OpImageQuerySizeLod:
+	case OpImageQuerySize:
+	case OpImageQueryLevels:
+	case OpImageQuerySamples:
 	{
-		// If we are fetching from a plain OpTypeImage, we must pre-combine with our dummy sampler.
+		// If we are fetching or querying LOD from a plain OpTypeImage, we must pre-combine with our dummy sampler.
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
 		if (var)
 		{
@@ -3259,8 +3263,12 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	}
 
 	case OpImageFetch:
+	case OpImageQuerySizeLod:
+	case OpImageQuerySize:
+	case OpImageQueryLevels:
+	case OpImageQuerySamples:
 	{
-		// If we are fetching from a plain OpTypeImage, we must pre-combine with our dummy sampler.
+		// If we are fetching from a plain OpTypeImage or querying LOD, we must pre-combine with our dummy sampler.
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
 		if (!var)
 			return true;
@@ -3287,9 +3295,6 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	default:
 		return true;
 	}
-
-	if (length < 4)
-		return false;
 
 	// Registers sampler2D calls used in case they are parameters so
 	// that their callees know which combined image samplers to propagate down the call stack.
@@ -3337,6 +3342,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 			type = compiler.expression_type(args[2]);
 			type.self = sampled_type;
 			type.basetype = SPIRType::SampledImage;
+			type.image.depth = false;
 		}
 		else
 		{
