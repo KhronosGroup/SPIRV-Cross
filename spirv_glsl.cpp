@@ -3922,14 +3922,14 @@ std::string CompilerGLSL::convert_separate_image_to_combined(uint32_t id)
 		{
 			if (!dummy_sampler_id)
 				SPIRV_CROSS_THROW(
-						"Cannot find dummy sampler ID. Was build_dummy_sampler_for_combined_images() called?");
+				    "Cannot find dummy sampler ID. Was build_dummy_sampler_for_combined_images() called?");
 
 			if (options.vulkan_semantics)
 			{
 				auto sampled_type = imgtype;
 				sampled_type.basetype = SPIRType::SampledImage;
-				return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ",
-				            to_expression(dummy_sampler_id), ")");
+				return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ", to_expression(dummy_sampler_id),
+				            ")");
 			}
 			else
 				return to_combined_image_sampler(id, dummy_sampler_id);
@@ -3940,10 +3940,10 @@ std::string CompilerGLSL::convert_separate_image_to_combined(uint32_t id)
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
-                                      uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
-                                      uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
-                                      uint32_t comp, uint32_t sample, bool *p_forward)
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
+                                      bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
+                                      uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset,
+                                      uint32_t bias, uint32_t comp, uint32_t sample, bool *p_forward)
 {
 	string farg_str;
 	if (is_fetch)
@@ -3998,7 +3998,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 		forward = forward && should_forward(dref);
 
 		// SPIR-V splits dref and coordinate.
-		if (coord_components == 4) // GLSL also splits the arguments in two.
+		if (is_gather || coord_components == 4) // GLSL also splits the arguments in two. Same for textureGather.
 		{
 			farg_str += ", ";
 			farg_str += to_expression(coord);
@@ -7279,7 +7279,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto expr = join("textureSize(", convert_separate_image_to_combined(ops[2]), ", ", bitcast_expression(SPIRType::Int, ops[3]), ")");
+		auto expr = join("textureSize(", convert_separate_image_to_combined(ops[2]), ", ",
+		                 bitcast_expression(SPIRType::Int, ops[3]), ")");
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
 		emit_op(result_type, id, expr, true);
