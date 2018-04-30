@@ -3940,7 +3940,7 @@ std::string CompilerGLSL::convert_separate_image_to_combined(uint32_t id)
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
+string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
                                       uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
                                       uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
                                       uint32_t comp, uint32_t sample, bool *p_forward)
@@ -3998,7 +3998,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 		forward = forward && should_forward(dref);
 
 		// SPIR-V splits dref and coordinate.
-		if (coord_components == 4) // GLSL also splits the arguments in two.
+		if (is_gather || coord_components == 4) // GLSL also splits the arguments in two. Same for textureGather.
 		{
 			farg_str += ", ";
 			farg_str += to_expression(coord);
