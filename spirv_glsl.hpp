@@ -556,6 +556,8 @@ protected:
 	std::string convert_float_to_string(const SPIRConstant &value, uint32_t col, uint32_t row);
 	std::string convert_double_to_string(const SPIRConstant &value, uint32_t col, uint32_t row);
 
+	std::string convert_separate_image_to_combined(uint32_t id);
+
 private:
 	void init()
 	{

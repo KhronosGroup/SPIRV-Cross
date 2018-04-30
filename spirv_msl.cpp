@@ -2609,6 +2609,13 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			farg_str += ", level(" + to_expression(lod) + ")";
 		}
 	}
+	else if (is_fetch && !lod && imgtype.image.dim != Dim1D && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
+	         imgtype.image.sampled != 2)
+	{
+		// Lod argument is optional in OpImageFetch, but we require a LOD value, pick 0 as the default.
+		// Check for sampled type as well, because is_fetch is also used for OpImageRead in MSL.
+		farg_str += ", 0";
+	}
 
 	// Metal does not support LOD for 1D textures.
 	if ((grad_x || grad_y) && imgtype.image.dim != Dim1D)

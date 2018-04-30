@@ -3909,40 +3909,47 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 	return is_legacy() ? legacy_tex_op(fname, imgtype, lod) : fname;
 }
 
+std::string CompilerGLSL::convert_separate_image_to_combined(uint32_t id)
+{
+	auto &imgtype = expression_type(id);
+	auto *var = maybe_get_backing_variable(id);
+
+	// If we are fetching from a plain OpTypeImage, we must combine with a dummy sampler.
+	if (var)
+	{
+		auto &type = get<SPIRType>(var->basetype);
+		if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
+		{
+			if (!dummy_sampler_id)
+				SPIRV_CROSS_THROW(
+						"Cannot find dummy sampler ID. Was build_dummy_sampler_for_combined_images() called?");
+
+			if (options.vulkan_semantics)
+			{
+				auto sampled_type = imgtype;
+				sampled_type.basetype = SPIRType::SampledImage;
+				return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ",
+				            to_expression(dummy_sampler_id), ")");
+			}
+			else
+				return to_combined_image_sampler(id, dummy_sampler_id);
+		}
+	}
+
+	return to_expression(id);
+}
+
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
 string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
                                       uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
                                       uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
                                       uint32_t comp, uint32_t sample, bool *p_forward)
 {
-	string farg_str = to_expression(img);
-
+	string farg_str;
 	if (is_fetch)
-	{
-		auto *var = maybe_get_backing_variable(img);
-
-		// If we are fetching from a plain OpTypeImage, we must combine with a dummy sampler.
-		if (var)
-		{
-			auto &type = get<SPIRType>(var->basetype);
-			if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
-			{
-				if (!dummy_sampler_id)
-					SPIRV_CROSS_THROW(
-					    "Cannot find dummy sampler ID. Was build_dummy_sampler_for_combined_images() called?");
-
-				if (options.vulkan_semantics)
-				{
-					auto sampled_type = imgtype;
-					sampled_type.basetype = SPIRType::SampledImage;
-					farg_str = join(type_to_glsl(sampled_type), "(", to_expression(img), ", ",
-					                to_expression(dummy_sampler_id), ")");
-				}
-				else
-					farg_str = to_combined_image_sampler(img, dummy_sampler_id);
-			}
-		}
-	}
+		farg_str = convert_separate_image_to_combined(img);
+	else
+		farg_str = to_expression(img);
 
 	bool swizz_func = backend.swizzle_is_function;
 	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
@@ -4077,6 +4084,11 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 				farg_str += to_expression(lod);
 			}
 		}
+	}
+	else if (is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+	{
+		// Lod argument is optional in OpImageFetch, but we require a LOD value, pick 0 as the default.
+		farg_str += ", 0";
 	}
 
 	if (coffset)
@@ -7229,7 +7241,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (options.es)
 			SPIRV_CROSS_THROW("textureQueryLevels not supported in ES profile.");
 
-		auto expr = join("textureQueryLevels(", to_expression(ops[2]), ")");
+		auto expr = join("textureQueryLevels(", convert_separate_image_to_combined(ops[2]), ")");
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
 		emit_op(result_type, id, expr, true);
@@ -7246,7 +7258,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (type.image.sampled == 2)
 			expr = join("imageSamples(", to_expression(ops[2]), ")");
 		else
-			expr = join("textureSamples(", to_expression(ops[2]), ")");
+			expr = join("textureSamples(", convert_separate_image_to_combined(ops[2]), ")");
 
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
@@ -7267,7 +7279,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto expr = join("textureSize(", to_expression(ops[2]), ", ", bitcast_expression(SPIRType::Int, ops[3]), ")");
+		auto expr = join("textureSize(", convert_separate_image_to_combined(ops[2]), ", ", bitcast_expression(SPIRType::Int, ops[3]), ")");
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
 		emit_op(result_type, id, expr, true);
@@ -7485,7 +7497,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 			{
 				// This path is hit for samplerBuffers and multisampled images which do not have LOD.
-				expr = join("textureSize(", to_expression(ops[2]), ")");
+				expr = join("textureSize(", convert_separate_image_to_combined(ops[2]), ")");
 			}
 
 			auto &restype = get<SPIRType>(ops[0]);
