@@ -2658,21 +2658,17 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		switch (imgtype.image.dim)
 		{
-		case Dim1D:
-			if (coord_type.vecsize > 1)
-				offset_expr = enclose_expression(offset_expr) + ".x";
-			farg_str += ", " + offset_expr;
-			break;
-
 		case Dim2D:
 			if (coord_type.vecsize > 2)
 				offset_expr = enclose_expression(offset_expr) + ".xy";
+
 			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
 			if (coord_type.vecsize > 3)
 				offset_expr = enclose_expression(offset_expr) + ".xyz";
+
 			farg_str += ", " + offset_expr;
 			break;
 
@@ -2683,6 +2679,10 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	if (comp)
 	{
+		// If 2D has gather component, ensure it also has an offset arg
+		if (imgtype.image.dim == Dim2D && offset_expr.empty())
+			farg_str += ", int2(0)";
+
 		forward = forward && should_forward(comp);
 		farg_str += ", " + to_component_argument(comp);
 	}
