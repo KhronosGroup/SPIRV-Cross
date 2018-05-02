@@ -1,0 +1,69 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct SSBO0
+{
+    float4 as[1];
+};
+
+struct SSBO1
+{
+    float4 bs[1];
+};
+
+struct Composite
+{
+    float4 a[2];
+    float4 b[2];
+};
+
+constant float4 _66[2] = {float4(10.0), float4(30.0)};
+constant float _91[3] = {1.0, 1.0, 1.0};
+constant float _93[3] = {2.0, 2.0, 2.0};
+constant float _94[2][3] = {{1.0, 1.0, 1.0}, {2.0, 2.0, 2.0}};
+
+// Implementation of an array copy function to cover GLSL's ability to copy an array via assignment.
+template<typename T, uint N>
+void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])
+{
+    for (uint i = 0; i < N; dst[i] = src[i], i++);
+}
+
+// An overload for constant arrays.
+template<typename T, uint N>
+void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])
+{
+    for (uint i = 0; i < N; dst[i] = src[i], i++);
+}
+
+float4 summe(thread const float4 (&values)[3][2])
+{
+    return ((values[0][0] + values[2][1]) + values[0][1]) + values[1][0];
+}
+
+kernel void main0(device SSBO0& _41 [[buffer(0)]], device SSBO1& _55 [[buffer(1)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    float4 _60[2] = { _41.as[gl_GlobalInvocationID.x], _55.bs[gl_GlobalInvocationID.x] };
+    float4 values[2];
+    spvArrayCopy(values, _60);
+    float4 const_values[2] = {float4(10.0), float4(30.0)};
+    float4 copy_values[2];
+    spvArrayCopy(copy_values, const_values);
+    float4 copy_values2[2];
+    spvArrayCopy(copy_values2, values);
+    float4 _76[3][2] = { values, copy_values, copy_values2 };
+    float4 param[3][2];
+    spvArrayCopy(param, _76);
+    _41.as[gl_GlobalInvocationID.x] = summe(param);
+    Composite c = Composite{ values, copy_values };
+    float arrayofarray[2][3] = {{1.0, 1.0, 1.0}, {2.0, 2.0, 2.0}};
+    float b = 10.0;
+    float _105[4] = { b, b, b, b };
+    float values_scalar[4];
+    spvArrayCopy(values_scalar, _105);
+}
+
