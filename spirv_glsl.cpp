@@ -6289,7 +6289,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			// Only use this path if we are building composites.
 			// This path cannot be used for arithmetic.
-			if (backend.use_typed_initializer_list)
+			if (backend.use_typed_initializer_list && out_type.basetype == SPIRType::Struct)
 				constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
 			constructor_op += "{ ";
 			if (type_is_empty(out_type) && !backend.supports_empty_struct)
