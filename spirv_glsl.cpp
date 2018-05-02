@@ -8616,6 +8616,21 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
 		}
+
+		if (!combined_image_samplers.empty())
+		{
+			// If we have combined image samplers, we cannot really trust the image and sampler arguments
+			// we pass down to callees, because they may be shuffled around.
+			// Ignore these arguments, to make sure that functions need to differ in some other way
+			// to be considered different overloads.
+			if (type->basetype == SPIRType::SampledImage ||
+			    (type->basetype == SPIRType::Image && type->image.sampled == 1) ||
+			    type->basetype == SPIRType::Sampler)
+			{
+				continue;
+			}
+		}
+
 		hasher.u32(type_id);
 	}
 	uint64_t types_hash = hasher.get();
