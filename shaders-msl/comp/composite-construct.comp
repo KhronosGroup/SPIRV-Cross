@@ -11,30 +11,21 @@ layout(std430, binding = 1) buffer SSBO1
    vec4 bs[];
 };
 
-vec4 summe(vec4 values[3][2])
-{
-   return values[0][0] + values[2][1] + values[0][1] + values[1][0];
-}
-
 struct Composite
 {
-   vec4 a[2];
-   vec4 b[2];
+   vec4 a;
+   vec4 b;
 };
+
+const vec4 const_values[2] = vec4[](vec4(20.0), vec4(40.0));
 
 void main()
 {
    vec4 values[2] = vec4[](as[gl_GlobalInvocationID.x], bs[gl_GlobalInvocationID.x]);
-   vec4 const_values[2] = vec4[](vec4(10.0), vec4(30.0));
    vec4 copy_values[2];
    copy_values = const_values;
-   vec4 copy_values2[2] = values;
-   as[gl_GlobalInvocationID.x] = summe(vec4[][](values, copy_values, copy_values2));
+   Composite c = Composite(values[0], copy_values[1]);
 
-   Composite c = Composite(values, copy_values);
-
-   float arrayofarray[2][3] = float[][](float[](1.0, 1.0, 1.0), float[](2.0, 2.0, 2.0));
-
-   float b = 10.0;
-   float values_scalar[4] = float[](b, b, b, b);
+   as[0] = values[gl_LocalInvocationIndex];
+   bs[1] = c.b;
 }
