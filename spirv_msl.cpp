@@ -364,8 +364,6 @@ string CompilerMSL::compile(MSLConfiguration &msl_cfg, vector<MSLVertexAttr> *p_
 // Register the need to output any custom functions.
 void CompilerMSL::preprocess_op_codes()
 {
-	spv_function_implementations.clear();
-
 	OpCodePreprocessor preproc(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), preproc);
 
