@@ -5943,11 +5943,16 @@ bool CompilerGLSL::skip_argument(uint32_t id) const
 	return false;
 }
 
-bool CompilerGLSL::optimize_read_modify_write(const string &lhs, const string &rhs)
+bool CompilerGLSL::optimize_read_modify_write(const SPIRType &type, const string &lhs, const string &rhs)
 {
 	// Do this with strings because we have a very clear pattern we can check for and it avoids
 	// adding lots of special cases to the code emission.
 	if (rhs.size() < lhs.size() + 3)
+		return false;
+
+	// Do not optimize matrices. They are a bit awkward to reason about in general
+	// (in which order does operation happen?), and it does not work on MSL anyways.
+	if (type.vecsize > 1 && type.columns > 1)
 		return false;
 
 	auto index = rhs.find(lhs);
@@ -6105,7 +6110,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				// While this is purely cosmetic, this is important for legacy ESSL where loop
 				// variable increments must be in either i++ or i += const-expr.
 				// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
-				if (!optimize_read_modify_write(lhs, rhs))
+				if (!optimize_read_modify_write(expression_type(ops[1]), lhs, rhs))
 					statement(lhs, " = ", rhs, ";");
 				register_write(ops[0]);
 			}
@@ -8886,7 +8891,7 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 				// use this to emit ESSL 1.0 compliant increments/decrements.
 				auto lhs = to_expression(phi.function_variable);
 				auto rhs = to_expression(phi.local_variable);
-				if (!optimize_read_modify_write(lhs, rhs))
+				if (!optimize_read_modify_write(get<SPIRType>(var.basetype), lhs, rhs))
 					statement(lhs, " = ", rhs, ";");
 			}
 
