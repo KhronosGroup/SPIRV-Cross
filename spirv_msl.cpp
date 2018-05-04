@@ -2801,7 +2801,7 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!has_member_decoration(type.self, index, DecorationRowMajor))
+	if (!combined_decoration_for_member(type, index).get(DecorationRowMajor))
 		return false;
 
 	// Generate a function that will swap matrix elements from row-major to column-major.
@@ -2838,7 +2838,10 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 
 	auto rslt = spv_function_implementations.insert(spv_func);
 	if (rslt.second)
+	{
 		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+		force_recompile = true;
+	}
 }
 
 // Wraps the expression string in a function call that converts the
