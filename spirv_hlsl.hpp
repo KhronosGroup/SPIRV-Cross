@@ -163,6 +163,7 @@ private:
 	                        uint32_t base_offset = 0) override;
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
+	void replace_illegal_names() override;
 
 	Options hlsl_options;
 	bool requires_op_fmod = false;

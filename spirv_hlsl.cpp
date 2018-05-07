@@ -1047,6 +1047,29 @@ void CompilerHLSL::emit_specialization_constants()
 		statement("");
 }
 
+void CompilerHLSL::replace_illegal_names() {
+	static const unordered_set<string> keywords = {
+		// Additional HLSL specific keywords.
+		"line", "linear", "matrix", "point", "row_major", "sampler",
+	};
+
+	for (auto &id : ids)
+	{
+		if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			if (!is_hidden_variable(var))
+			{
+				auto &m = meta[var.self].decoration;
+				if (keywords.find(m.alias) != end(keywords))
+					m.alias = join("_", m.alias);
+			}
+		}
+	}
+
+	CompilerGLSL::replace_illegal_names();
+}
+
 void CompilerHLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
