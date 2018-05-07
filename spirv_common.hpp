@@ -867,6 +867,7 @@ struct SPIRConstant : IVariant
 		// Workaround for MSVC 2013, initializing an array breaks.
 		ConstantVector()
 		{
+			memset(r, 0, sizeof(r));
 			for (unsigned i = 0; i < 4; i++)
 				id[i] = 0;
 		}
@@ -1005,7 +1006,7 @@ struct SPIRConstant : IVariant
 
 	inline void make_null(const SPIRType &constant_type_)
 	{
-		std::memset(&m, 0, sizeof(m));
+		m = {};
 		m.columns = constant_type_.columns;
 		for (auto &c : m.c)
 			c.vecsize = constant_type_.vecsize;
