@@ -5051,7 +5051,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		type = &get<SPIRType>(type->parent_type);
 	}
 
-	bool access_chain_is_arrayed = false;
+	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 	bool is_packed = has_decoration(base, DecorationCPacked);
 	bool pending_array_enclose = false;
