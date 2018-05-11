@@ -104,7 +104,13 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	            meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
-	bool is_restrict = meta[v.self].decoration.decoration_flags.get(DecorationRestrict);
+
+	bool is_restrict;
+	if (ssbo)
+		is_restrict = get_buffer_block_flags(v).get(DecorationRestrict);
+	else
+		is_restrict = has_decoration(v.self, DecorationRestrict);
+
 	return !is_restrict && (ssbo || image || counter);
 }
 
@@ -3191,6 +3197,9 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 		uint32_t ptr = args[2];
 		compiler.set<SPIRExpression>(id, "", result_type, true);
 		compiler.register_read(id, ptr, true);
+
+		// Other backends might use SPIRAccessChain for this later.
+		compiler.ids[id].set_allow_type_rewrite();
 		break;
 	}
 
@@ -3696,6 +3705,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 					notify_variable_access(args[i], current_block->self);
 
 				// The result of an access chain is a fixed expression and is not really considered a temporary.
+				auto &e = compiler.set<SPIRExpression>(args[1], "", args[0], true);
+				auto *backing_variable = compiler.maybe_get_backing_variable(ptr);
+				e.loaded_from = backing_variable ? backing_variable->self : 0;
+				compiler.ids[args[1]].set_allow_type_rewrite();
 				break;
 			}
 

@@ -85,7 +85,7 @@ struct Content_1
     S4_1 m3s[8];
 };
 
-layout(binding = 1, std430) buffer SSBO1
+layout(binding = 1, std430) restrict buffer SSBO1
 {
     Content content;
     Content content1[2];
@@ -101,7 +101,7 @@ layout(binding = 1, std430) buffer SSBO1
     float array[];
 } ssbo_430;
 
-layout(binding = 0, std140) buffer SSBO0
+layout(binding = 0, std140) restrict buffer SSBO0
 {
     Content_1 content;
     Content_1 content1[2];
