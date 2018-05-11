@@ -8085,11 +8085,7 @@ const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 		// Vulkan GLSL supports precision qualifiers, even in desktop profiles, which is convenient.
 		// The default is highp however, so only emit mediump in the rare case that a shader has these.
 		if (flags.get(DecorationRelaxedPrecision))
-		{
-			bool can_use_mediump =
-			    type.basetype == SPIRType::Float || type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt;
-			return can_use_mediump ? "mediump " : "";
-		}
+			return "mediump ";
 		else
 			return "";
 	}
