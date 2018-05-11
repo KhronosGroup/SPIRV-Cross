@@ -3708,6 +3708,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 				auto &e = compiler.set<SPIRExpression>(args[1], "", args[0], true);
 				auto *backing_variable = compiler.maybe_get_backing_variable(ptr);
 				e.loaded_from = backing_variable ? backing_variable->self : 0;
+
+				// Other backends might use SPIRAccessChain for this later.
 				compiler.ids[args[1]].set_allow_type_rewrite();
 				break;
 			}
