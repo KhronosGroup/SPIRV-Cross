@@ -1111,9 +1111,10 @@ public:
 	void set(std::unique_ptr<IVariant> val, uint32_t new_type)
 	{
 		holder = std::move(val);
-		if (type != TypeNone && type != new_type)
+		if (!allow_type_rewrite && type != TypeNone && type != new_type)
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
 		type = new_type;
+		allow_type_rewrite = false;
 	}
 
 	template <typename T>
@@ -1154,9 +1155,15 @@ public:
 		type = TypeNone;
 	}
 
+	void set_allow_type_rewrite()
+	{
+		allow_type_rewrite = true;
+	}
+
 private:
 	std::unique_ptr<IVariant> holder;
 	uint32_t type = TypeNone;
+	bool allow_type_rewrite = false;
 };
 
 template <typename T>

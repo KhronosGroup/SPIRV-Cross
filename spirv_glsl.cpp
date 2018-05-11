@@ -6073,7 +6073,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool need_transpose, result_is_packed;
 		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &need_transpose, &result_is_packed);
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
-		expr.loaded_from = ops[2];
+
+		auto *backing_variable = maybe_get_backing_variable(ops[2]);
+		expr.loaded_from = backing_variable ? backing_variable->self : ops[2];
 		expr.need_transpose = need_transpose;
 
 		// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
