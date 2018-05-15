@@ -1034,6 +1034,13 @@ void CompilerHLSL::emit_specialization_constants()
 			statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
+		else if (id.get_type() == TypeConstantOp)
+		{
+			auto &c = id.get<SPIRConstantOp>();
+			auto &type = get<SPIRType>(c.basetype);
+			auto name = to_name(c.self);
+			statement("static const ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
+		}
 	}
 
 	if (workgroup_size_id)
@@ -1047,7 +1054,8 @@ void CompilerHLSL::emit_specialization_constants()
 		statement("");
 }
 
-void CompilerHLSL::replace_illegal_names() {
+void CompilerHLSL::replace_illegal_names()
+{
 	static const unordered_set<string> keywords = {
 		// Additional HLSL specific keywords.
 		"line", "linear", "matrix", "point", "row_major", "sampler",

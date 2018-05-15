@@ -1688,6 +1688,13 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), variable_decl(var), ";");
 }
 
+void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constant)
+{
+	auto &type = get<SPIRType>(constant.basetype);
+	auto name = to_name(constant.self);
+	statement("const ", variable_decl(type, name), " = ", constant_op_expression(constant), ";");
+}
+
 void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 {
 	auto &type = get<SPIRType>(constant.constant_type);
@@ -2121,6 +2128,11 @@ void CompilerGLSL::emit_resources()
 				emit_specialization_constant(c);
 				emitted = true;
 			}
+			else if (id.get_type() == TypeConstantOp)
+			{
+				emit_specialization_constant_op(id.get<SPIRConstantOp>());
+				emitted = true;
+			}
 		}
 	}
 
@@ -2433,7 +2445,10 @@ string CompilerGLSL::to_expression(uint32_t id)
 	}
 
 	case TypeConstantOp:
-		return constant_op_expression(get<SPIRConstantOp>(id));
+		if (options.vulkan_semantics)
+			return to_name(id);
+		else
+			return constant_op_expression(get<SPIRConstantOp>(id));
 
 	case TypeVariable:
 	{
@@ -2558,6 +2573,41 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		}
 		break;
 	}
+
+	case OpVectorShuffle:
+	{
+		string expr = type_to_glsl_constructor(type);
+		expr += "(";
+
+		uint32_t left_components = expression_type(cop.arguments[0]).vecsize;
+		string left_arg = to_enclosed_expression(cop.arguments[0]);
+		string right_arg = to_enclosed_expression(cop.arguments[1]);
+
+		for (uint32_t i = 2; i < uint32_t(cop.arguments.size()); i++)
+		{
+			uint32_t index = cop.arguments[i];
+			if (index >= left_components)
+				expr += right_arg + "." + "xyzw"[index - left_components];
+			else
+				expr += left_arg + "." + "xyzw"[index];
+
+			if (i + 1 < uint32_t(cop.arguments.size()))
+				expr += ", ";
+		}
+
+		expr += ")";
+		return expr;
+	}
+
+	case OpCompositeExtract:
+	{
+		auto expr =
+		    access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1), true, false);
+		return expr;
+	}
+
+	case OpCompositeInsert:
+		SPIRV_CROSS_THROW("OpCompositeInsert spec constant op is not supported.");
 
 	default:
 		// Some opcodes are unimplemented here, these are currently not possible to test from glslang.
@@ -8627,8 +8677,7 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 			// Ignore these arguments, to make sure that functions need to differ in some other way
 			// to be considered different overloads.
 			if (type->basetype == SPIRType::SampledImage ||
-			    (type->basetype == SPIRType::Image && type->image.sampled == 1) ||
-			    type->basetype == SPIRType::Sampler)
+			    (type->basetype == SPIRType::Image && type->image.sampled == 1) || type->basetype == SPIRType::Sampler)
 			{
 				continue;
 			}
