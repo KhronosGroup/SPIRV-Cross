@@ -2559,6 +2559,41 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		break;
 	}
 
+	case OpVectorShuffle:
+	{
+		string expr = type_to_glsl_constructor(type);
+		expr += "(";
+
+		uint32_t left_components = expression_type(cop.arguments[0]).vecsize;
+		string left_arg = to_enclosed_expression(cop.arguments[0]);
+		string right_arg = to_enclosed_expression(cop.arguments[1]);
+
+		for (uint32_t i = 2; i < uint32_t(cop.arguments.size()); i++)
+		{
+			uint32_t index = cop.arguments[i];
+			if (index >= left_components)
+				expr += right_arg + "." + "xyzw"[index - left_components];
+			else
+				expr += left_arg + "." + "xyzw"[index];
+
+			if (i + 1 < uint32_t(cop.arguments.size()))
+				expr += ", ";
+		}
+
+		expr += ")";
+		return expr;
+	}
+
+	case OpCompositeExtract:
+	{
+		auto expr = access_chain_internal(cop.arguments[0], &cop.arguments[1],
+		                                  uint32_t(cop.arguments.size() - 1), true, false);
+		return expr;
+	}
+
+	case OpCompositeInsert:
+		SPIRV_CROSS_THROW("OpCompositeInsert spec constant op is not supported.");
+
 	default:
 		// Some opcodes are unimplemented here, these are currently not possible to test from glslang.
 		SPIRV_CROSS_THROW("Unimplemented spec constant op.");

@@ -1017,6 +1017,8 @@ struct SPIRConstant : IVariant
 	{
 	}
 
+	SPIRConstant() = default;
+
 	SPIRConstant(uint32_t constant_type_, const uint32_t *elements, uint32_t num_elements, bool specialized)
 	    : constant_type(constant_type_)
 	    , specialization(specialized)
@@ -1080,9 +1082,11 @@ struct SPIRConstant : IVariant
 
 	uint32_t constant_type;
 	ConstantMatrix m;
-	bool specialization = false; // If this constant is a specialization constant (i.e. created with OpSpecConstant*).
-	bool is_used_as_array_length =
-	    false; // If this constant is used as an array length which creates specialization restrictions on some backends.
+
+	// If this constant is a specialization constant (i.e. created with OpSpecConstant*).
+	bool specialization = false;
+	// If this constant is used as an array length which creates specialization restrictions on some backends.
+	bool is_used_as_array_length = false;
 
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;

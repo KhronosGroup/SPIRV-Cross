@@ -2023,9 +2023,27 @@ void Compiler::parse(const Instruction &instruction)
 			if (elements > 4)
 				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 elements.");
 
+			SPIRConstant remapped_constant_ops[4];
 			const SPIRConstant *c[4];
 			for (uint32_t i = 0; i < elements; i++)
-				c[i] = &get<SPIRConstant>(ops[2 + i]);
+			{
+				// Specialization constants operations can also be part of this.
+				// We do not know their value, so any attempt to query SPIRConstant later
+				// will fail. We can only propagate the ID of the expression and use to_expression on it.
+				auto *constant_op = maybe_get<SPIRConstantOp>(ops[2 + i]);
+				if (constant_op)
+				{
+					if (op == OpConstantComposite)
+						SPIRV_CROSS_THROW("Specialization constant operation used in OpConstantComposite.");
+
+					remapped_constant_ops[i].make_null(get<SPIRType>(constant_op->basetype));
+					remapped_constant_ops[i].self = constant_op->self;
+					remapped_constant_ops[i].constant_type = constant_op->basetype;
+					c[i] = &remapped_constant_ops[i];
+				}
+				else
+					c[i] = &get<SPIRConstant>(ops[2 + i]);
+			}
 			set<SPIRConstant>(id, type, c, elements, op == OpSpecConstantComposite);
 		}
 		break;
