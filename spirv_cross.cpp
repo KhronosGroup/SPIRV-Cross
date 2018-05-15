@@ -3471,10 +3471,8 @@ vector<SpecializationConstant> Compiler::get_specialization_constants() const
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
-			if (c.specialization)
-			{
+			if (c.specialization && has_decoration(c.self, DecorationSpecId))
 				spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
-			}
 		}
 	}
 	return spec_consts;
