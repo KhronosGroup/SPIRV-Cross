@@ -1584,11 +1584,9 @@ void CompilerMSL::emit_specialization_constants()
 			{
 				uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
 				// Only scalar, non-composite values can be function constants.
-				statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
-				          constant_id, ")]];");
+				statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(", constant_id, ")]];");
 				statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name,
-				          ") ? ",
-				          sc_tmp_name, " : ", constant_expression(c), ";");
+				          ") ? ", sc_tmp_name, " : ", constant_expression(c), ";");
 			}
 			else
 			{
