@@ -2586,8 +2586,8 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 
 	case OpCompositeExtract:
 	{
-		auto expr = access_chain_internal(cop.arguments[0], &cop.arguments[1],
-		                                  uint32_t(cop.arguments.size() - 1), true, false);
+		auto expr =
+		    access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1), true, false);
 		return expr;
 	}
 
@@ -8662,8 +8662,7 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 			// Ignore these arguments, to make sure that functions need to differ in some other way
 			// to be considered different overloads.
 			if (type->basetype == SPIRType::SampledImage ||
-			    (type->basetype == SPIRType::Image && type->image.sampled == 1) ||
-			    type->basetype == SPIRType::Sampler)
+			    (type->basetype == SPIRType::Image && type->image.sampled == 1) || type->basetype == SPIRType::Sampler)
 			{
 				continue;
 			}

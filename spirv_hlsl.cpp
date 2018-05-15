@@ -1047,7 +1047,8 @@ void CompilerHLSL::emit_specialization_constants()
 		statement("");
 }
 
-void CompilerHLSL::replace_illegal_names() {
+void CompilerHLSL::replace_illegal_names()
+{
 	static const unordered_set<string> keywords = {
 		// Additional HLSL specific keywords.
 		"line", "linear", "matrix", "point", "row_major", "sampler",
