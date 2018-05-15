@@ -1034,6 +1034,13 @@ void CompilerHLSL::emit_specialization_constants()
 			statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
+		else if (id.get_type() == TypeConstantOp)
+		{
+			auto &c = id.get<SPIRConstantOp>();
+			auto &type = get<SPIRType>(c.basetype);
+			auto name = to_name(c.self);
+			statement("static const ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
+		}
 	}
 
 	if (workgroup_size_id)

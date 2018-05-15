@@ -1688,6 +1688,13 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), variable_decl(var), ";");
 }
 
+void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constant)
+{
+	auto &type = get<SPIRType>(constant.basetype);
+	auto name = to_name(constant.self);
+	statement("const ", variable_decl(type, name), " = ", constant_op_expression(constant), ";");
+}
+
 void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
 {
 	auto &type = get<SPIRType>(constant.constant_type);
@@ -2121,6 +2128,11 @@ void CompilerGLSL::emit_resources()
 				emit_specialization_constant(c);
 				emitted = true;
 			}
+			else if (id.get_type() == TypeConstantOp)
+			{
+				emit_specialization_constant_op(id.get<SPIRConstantOp>());
+				emitted = true;
+			}
 		}
 	}
 
@@ -2433,7 +2445,10 @@ string CompilerGLSL::to_expression(uint32_t id)
 	}
 
 	case TypeConstantOp:
-		return constant_op_expression(get<SPIRConstantOp>(id));
+		if (options.vulkan_semantics)
+			return to_name(id);
+		else
+			return constant_op_expression(get<SPIRConstantOp>(id));
 
 	case TypeVariable:
 	{

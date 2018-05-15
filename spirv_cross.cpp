@@ -2039,6 +2039,7 @@ void Compiler::parse(const Instruction &instruction)
 					remapped_constant_ops[i].make_null(get<SPIRType>(constant_op->basetype));
 					remapped_constant_ops[i].self = constant_op->self;
 					remapped_constant_ops[i].constant_type = constant_op->basetype;
+					remapped_constant_ops[i].specialization = true;
 					c[i] = &remapped_constant_ops[i];
 				}
 				else

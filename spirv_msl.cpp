@@ -1559,35 +1559,51 @@ void CompilerMSL::emit_resources()
 // Emit declarations for the specialization Metal function constants
 void CompilerMSL::emit_specialization_constants()
 {
-	const vector<SpecializationConstant> spec_consts = get_specialization_constants();
-
 	SpecializationConstant wg_x, wg_y, wg_z;
 	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+	bool emitted = false;
 
-	for (auto &sc : spec_consts)
+	for (auto &id : ids)
 	{
-		// If WorkGroupSize is a specialization constant, it will be declared explicitly below.
-		if (sc.id == workgroup_size_id)
-			continue;
-
-		auto &type = expression_type(sc.id);
-		string sc_type_name = type_to_glsl(type);
-		string sc_name = to_name(sc.id);
-		string sc_tmp_name = to_name(sc.id) + "_tmp";
-
-		if (type.vecsize == 1 && type.columns == 1 && type.basetype != SPIRType::Struct && type.array.empty())
+		if (id.get_type() == TypeConstant)
 		{
-			// Only scalar, non-composite values can be function constants.
-			statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
-			          convert_to_string(sc.constant_id), ")]];");
-			statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name, ") ? ",
-			          sc_tmp_name, " : ", constant_expression(get<SPIRConstant>(sc.id)), ";");
+			auto &c = id.get<SPIRConstant>();
+			if (!c.specialization)
+				continue;
+
+			// If WorkGroupSize is a specialization constant, it will be declared explicitly below.
+			if (c.self == workgroup_size_id)
+				continue;
+
+			auto &type = get<SPIRType>(c.constant_type);
+			string sc_type_name = type_to_glsl(type);
+			string sc_name = to_name(c.self);
+			string sc_tmp_name = sc_name + "_tmp";
+
+			if (has_decoration(c.self, DecorationSpecId))
+			{
+				uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
+				// Only scalar, non-composite values can be function constants.
+				statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(",
+				          constant_id, ")]];");
+				statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name,
+				          ") ? ",
+				          sc_tmp_name, " : ", constant_expression(c), ";");
+			}
+			else
+			{
+				// Composite specialization constants must be built from other specialization constants.
+				statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(c), ";");
+			}
+			emitted = true;
 		}
-		else
+		else if (id.get_type() == TypeConstantOp)
 		{
-			// Composite specialization constants must be built from other specialization constants.
-			statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(get<SPIRConstant>(sc.id)),
-			          ";");
+			auto &c = id.get<SPIRConstantOp>();
+			auto &type = get<SPIRType>(c.basetype);
+			auto name = to_name(c.self);
+			statement("constant ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
+			emitted = true;
 		}
 	}
 
@@ -1595,10 +1611,13 @@ void CompilerMSL::emit_specialization_constants()
 	// the work group size at compile time in SPIR-V, and [[threads_per_threadgroup]] would need to be passed around as a global.
 	// The work group size may be a specialization constant.
 	if (workgroup_size_id)
+	{
 		statement("constant uint3 ", builtin_to_glsl(BuiltInWorkgroupSize, StorageClassWorkgroup), " = ",
 		          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+		emitted = true;
+	}
 
-	if (!spec_consts.empty() || workgroup_size_id)
+	if (emitted)
 		statement("");
 }
 
