@@ -389,7 +389,6 @@ void CompilerMSL::localize_global_variables()
 		auto &var = get<SPIRVariable>(v_id);
 		if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup)
 		{
-			var.storage = StorageClassFunction;
 			entry_func.add_local_variable(v_id);
 			iter = global_variables.erase(iter);
 		}
@@ -1734,7 +1733,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpAtomicCompareExchange:
-	case OpAtomicCompareExchangeWeak:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -1747,6 +1745,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		                    ptr, comp, true, val);
 		break;
 	}
+
+	case OpAtomicCompareExchangeWeak:
+		SPIRV_CROSS_THROW("OpAtomicCompareExchangeWeak is only supported in kernel profile.");
 
 	case OpAtomicLoad:
 	{
@@ -2207,52 +2208,62 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 {
 	forced_temporaries.insert(result_id);
 
-	bool fwd_obj = should_forward(obj);
-	bool fwd_op1 = op1 ? should_forward(op1) : true;
-	bool fwd_op2 = op2 ? should_forward(op2) : true;
-
-	bool forward = fwd_obj && fwd_op1 && fwd_op2;
-
 	string exp = string(op) + "(";
 
 	auto &type = expression_type(obj);
 	exp += "(volatile ";
-	exp += "device";
+	auto *var = maybe_get_backing_variable(obj);
+	if (!var)
+		SPIRV_CROSS_THROW("No backing variable for atomic operation.");
+	exp += get_argument_address_space(*var);
 	exp += " atomic_";
 	exp += type_to_glsl(type);
 	exp += "*)";
 
-	exp += "&(";
-	exp += to_expression(obj);
-	exp += ")";
+	exp += "&";
+	exp += to_enclosed_expression(obj);
 
-	if (op1)
+	bool is_atomic_compare_exchange_strong = op1_is_pointer && op1;
+
+	if (is_atomic_compare_exchange_strong)
 	{
-		if (op1_is_pointer)
-		{
-			statement(declare_temporary(expression_type(op2).self, op1), to_expression(op1), ";");
-			exp += ", &(" + to_name(op1) + ")";
-		}
-		else
-			exp += ", " + to_expression(op1);
+		assert(strcmp(op, "atomic_compare_exchange_weak_explicit") == 0);
+		assert(op2);
+		assert(has_mem_order_2);
+		exp += ", &";
+		exp += to_name(result_id);
+		exp += ", ";
+		exp += to_expression(op2);
+		exp += ", ";
+		exp += get_memory_order(mem_order_1);
+		exp += ", ";
+		exp += get_memory_order(mem_order_2);
+		exp += ")";
+
+		// MSL only supports the weak atomic compare exchange,
+		// so emit a CAS loop here.
+		statement(variable_decl(type, to_name(result_id)), ";");
+		statement("do");
+		begin_scope();
+		statement(to_name(result_id), " = ", to_expression(op1), ";");
+		end_scope_decl(join("while (!", exp, ")"));
+		set<SPIRExpression>(result_id, to_name(result_id), result_type, true);
 	}
+	else
+	{
+		assert(strcmp(op, "atomic_compare_exchange_weak_explicit") != 0);
+		if (op1)
+			exp += ", " + to_expression(op1);
+		if (op2)
+			exp += ", " + to_expression(op2);
 
-	if (op2)
-		exp += ", " + to_expression(op2);
+		exp += string(", ") + get_memory_order(mem_order_1);
+		if (has_mem_order_2)
+			exp += string(", ") + get_memory_order(mem_order_2);
 
-	exp += string(", ") + get_memory_order(mem_order_1);
-
-	if (has_mem_order_2)
-		exp += string(", ") + get_memory_order(mem_order_2);
-
-	exp += ")";
-	emit_op(result_type, result_id, exp, forward);
-
-	inherit_expression_dependencies(result_id, obj);
-	if (op1)
-		inherit_expression_dependencies(result_id, op1);
-	if (op2)
-		inherit_expression_dependencies(result_id, op2);
+		exp += ")";
+		emit_op(result_type, result_id, exp, false);
+	}
 
 	flush_all_atomic_capable_variables();
 }

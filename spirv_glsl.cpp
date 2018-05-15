@@ -8853,7 +8853,16 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 	for (auto &v : func.local_variables)
 	{
 		auto &var = get<SPIRVariable>(v);
-		if (expression_is_lvalue(v))
+		if (var.storage == StorageClassWorkgroup)
+		{
+			// Special variable type which cannot have initializer,
+			// need to be declared as standalone variables.
+			// Comes from MSL which can push global variables as local variables in main function.
+			add_local_variable_name(var.self);
+			statement(variable_decl(var), ";");
+			var.deferred_declaration = false;
+		}
+		else if (expression_is_lvalue(v))
 		{
 			add_local_variable_name(var.self);
 
