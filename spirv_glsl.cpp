@@ -8862,6 +8862,20 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			statement(variable_decl(var), ";");
 			var.deferred_declaration = false;
 		}
+		else if (var.storage == StorageClassPrivate)
+		{
+			// These variables will not have had their CFG usage analyzed, so move it to the entry block.
+			// Comes from MSL which can push global variables as local variables in main function.
+			// We could just declare them right now, but we would miss out on an important initialization case which is
+			// LUT declaration in MSL.
+			// If we don't declare the variable when it is assigned we're forced to go through a helper function
+			// which copies elements one by one.
+			add_local_variable_name(var.self);
+			auto &dominated = entry_block.dominated_variables;
+			if (find(begin(dominated), end(dominated), var.self) == end(dominated))
+				entry_block.dominated_variables.push_back(var.self);
+			var.deferred_declaration = true;
+		}
 		else if (expression_is_lvalue(v))
 		{
 			add_local_variable_name(var.self);

@@ -416,7 +416,6 @@ void CompilerMSL::resolve_specialized_array_lengths()
 // extract that variable and add it as an argument to that function.
 void CompilerMSL::extract_global_variables_from_functions()
 {
-
 	// Uniforms
 	unordered_set<uint32_t> global_var_ids;
 	for (auto &id : ids)
@@ -433,10 +432,11 @@ void CompilerMSL::extract_global_variables_from_functions()
 		}
 	}
 
-	// Local vars that are declared in the main function and accessed directy by a function
+	// Local vars that are declared in the main function and accessed directly by a function
 	auto &entry_func = get<SPIRFunction>(entry_point);
 	for (auto &var : entry_func.local_variables)
-		global_var_ids.insert(var);
+		if (get<SPIRVariable>(var).storage != StorageClassFunction)
+			global_var_ids.insert(var);
 
 	std::set<uint32_t> added_arg_ids;
 	unordered_set<uint32_t> processed_func_ids;
@@ -491,6 +491,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 				break;
 			}
+
 			case OpFunctionCall:
 			{
 				// First see if any of the function call args are globals
@@ -510,9 +511,21 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				break;
 			}
 
+			case OpStore:
+			{
+				uint32_t base_id = ops[0];
+				if (global_var_ids.find(base_id) != global_var_ids.end())
+					added_arg_ids.insert(base_id);
+				break;
+			}
+
 			default:
 				break;
 			}
+
+			// TODO: Add all other operations which can affect memory.
+			// We should consider a more unified system here to reduce boiler-plate.
+			// This kind of analysis is done in several places ...
 		}
 	}
 
