@@ -6664,6 +6664,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		UFOP(transpose);
 		break;
 
+	case OpSRem:
+		BOP_CAST(%, SPIRType::Int);
+		break;
+
 	case OpSDiv:
 		BOP_CAST(/, SPIRType::Int);
 		break;
