@@ -483,6 +483,7 @@ struct CLIArguments
 	bool flatten_multidimensional_arrays = false;
 	bool use_420pack_extension = true;
 	bool remove_unused = false;
+	bool combined_samplers_inherit_bindings = false;
 };
 
 static void print_help()
@@ -522,6 +523,7 @@ static void print_help()
 	                "\t[--rename-interface-variable <in|out> <location> <new_variable_name>]\n"
 	                "\t[--set-hlsl-vertex-input-semantic <location> <semantic>]\n"
 	                "\t[--rename-entry-point <old> <new> <stage>]\n"
+	                "\t[--combined-samplers-inherit-bindings]"
 	                "\n");
 }
 
@@ -727,6 +729,7 @@ static int main_inner(int argc, char *argv[])
 	});
 
 	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
+	cbs.add("--combined-samplers-inherit-bindings", [&args](CLIParser &) { args.combined_samplers_inherit_bindings = true; });
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };
@@ -985,6 +988,9 @@ static int main_inner(int argc, char *argv[])
 	if (combined_image_samplers)
 	{
 		compiler->build_combined_image_samplers();
+		if (args.combined_samplers_inherit_bindings)
+			spirv_cross_util::inherit_combined_sampler_bindings(*compiler);
+
 		// Give the remapped combined samplers new names.
 		for (auto &remap : compiler->get_combined_image_samplers())
 		{
