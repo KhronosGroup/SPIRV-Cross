@@ -19,7 +19,6 @@
                OpDecorate %vA Location 0
                OpDecorate %vB Flat
                OpDecorate %vB Location 1
-               OpDecorate %22 RelaxedPrecision
        %void = OpTypeVoid
           %3 = OpTypeFunction %void
       %float = OpTypeFloat 32
