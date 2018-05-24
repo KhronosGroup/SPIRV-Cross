@@ -3502,7 +3502,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 
 	bool use_explicit_lod = check_explicit_lod_allowed(lod);
 
-	if (op == "textureLod" || op == "textureProjLod")
+	if (op == "textureLod" || op == "textureProjLod" || op == "textureGrad")
 	{
 		if (is_legacy_es())
 		{
@@ -3525,7 +3525,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	else if (op == "textureProj")
 		return join("texture", type, "Proj");
 	else if (op == "textureGrad")
-		return join("texture", type, "Grad");
+		return join("texture", type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
 	else if (op == "textureProjLod")
 	{
 		if (use_explicit_lod)
