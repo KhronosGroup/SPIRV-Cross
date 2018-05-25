@@ -1855,6 +1855,7 @@ string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_comp
 		return join(type_to_glsl(out_type), "(", expr, ")");
 	else
 	{
+		// FIXME: This will not work with packed expressions.
 		auto e = enclose_expression(expr) + ".";
 		// Just clamp the swizzle index if we have more outputs than inputs.
 		for (uint32_t c = 0; c < out_type.vecsize; c++)
@@ -2370,6 +2371,15 @@ string CompilerGLSL::enclose_expression(const string &expr)
 string CompilerGLSL::to_enclosed_expression(uint32_t id)
 {
 	return enclose_expression(to_expression(id));
+}
+
+string CompilerGLSL::to_extract_component_expression(uint32_t id, uint32_t index)
+{
+	auto expr = to_enclosed_expression(id);
+	if (has_decoration(id, DecorationCPacked))
+		return join(expr, "[", index, "]");
+	else
+		return join(expr, ".", index_to_swizzle(index));
 }
 
 string CompilerGLSL::to_expression(uint32_t id)
@@ -3278,9 +3288,7 @@ void CompilerGLSL::emit_unrolled_unary_op(uint32_t result_type, uint32_t result_
 		// Make sure to call to_expression multiple times to ensure
 		// that these expressions are properly flushed to temporaries if needed.
 		expr += op;
-		expr += to_enclosed_expression(operand);
-		expr += '.';
-		expr += index_to_swizzle(i);
+		expr += to_extract_component_expression(operand, i);
 
 		if (i + 1 < type.vecsize)
 			expr += ", ";
@@ -3301,15 +3309,11 @@ void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result
 	{
 		// Make sure to call to_expression multiple times to ensure
 		// that these expressions are properly flushed to temporaries if needed.
-		expr += to_enclosed_expression(op0);
-		expr += '.';
-		expr += index_to_swizzle(i);
+		expr += to_extract_component_expression(op0, i);
 		expr += ' ';
 		expr += op;
 		expr += ' ';
-		expr += to_enclosed_expression(op1);
-		expr += '.';
-		expr += index_to_swizzle(i);
+		expr += to_extract_component_expression(op1, i);
 
 		if (i + 1 < type.vecsize)
 			expr += ", ";
@@ -3630,7 +3634,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		else
 		{
 			auto swiz = [this](uint32_t expression, uint32_t i) {
-				return join(to_enclosed_expression(expression), ".", index_to_swizzle(i));
+				return to_extract_component_expression(expression, i);
 			};
 
 			expr = type_to_glsl_constructor(restype);
@@ -6538,6 +6542,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (elems[i] >= type0.vecsize)
 				shuffle = true;
 
+		// Cannot use swizzles with packed expressions, force shuffle path.
+		if (!shuffle && has_decoration(vec0, DecorationCPacked))
+			shuffle = true;
+
 		string expr;
 		bool should_fwd, trivial_forward;
 
@@ -6551,9 +6559,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			for (uint32_t i = 0; i < length; i++)
 			{
 				if (elems[i] >= type0.vecsize)
-					args.push_back(join(to_enclosed_expression(vec1), ".", index_to_swizzle(elems[i] - type0.vecsize)));
+					args.push_back(to_extract_component_expression(vec1, elems[i] - type0.vecsize));
 				else
-					args.push_back(join(to_enclosed_expression(vec0), ".", index_to_swizzle(elems[i])));
+					args.push_back(to_extract_component_expression(vec0, elems[i]));
 			}
 			expr += join(type_to_glsl_constructor(get<SPIRType>(result_type)), "(", merge(args), ")");
 		}
