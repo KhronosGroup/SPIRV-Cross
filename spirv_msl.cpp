@@ -3190,17 +3190,25 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 		return "threadgroup";
 
 	case StorageClassStorageBuffer:
-		return "device";
+	{
+		auto flags = get_buffer_block_flags(argument);
+		return flags.get(DecorationNonWritable) ? "const device" : "device";
+	}
 
 	case StorageClassUniform:
 	case StorageClassUniformConstant:
 	case StorageClassPushConstant:
 		if (type.basetype == SPIRType::Struct)
-			return (meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock) &&
-			        !meta[argument.self].decoration.decoration_flags.get(DecorationNonWritable)) ?
-			           "device" :
-			           "constant";
-
+		{
+			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
+			if (!ssbo)
+				return "constant";
+			else
+			{
+				bool readonly = get_buffer_block_flags(argument).get(DecorationNonWritable);
+				return readonly ? "const device" : "device";
+			}
+		}
 		break;
 
 	default:
