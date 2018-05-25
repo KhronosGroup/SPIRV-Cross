@@ -729,7 +729,8 @@ static int main_inner(int argc, char *argv[])
 	});
 
 	cbs.add("--remove-unused-variables", [&args](CLIParser &) { args.remove_unused = true; });
-	cbs.add("--combined-samplers-inherit-bindings", [&args](CLIParser &) { args.combined_samplers_inherit_bindings = true; });
+	cbs.add("--combined-samplers-inherit-bindings",
+	        [&args](CLIParser &) { args.combined_samplers_inherit_bindings = true; });
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };
