@@ -2613,11 +2613,23 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	// If fetch from cube, add face explicitly
 	if (is_cube_fetch)
-		farg_str += ", uint(" + round_fp_tex_coords(coord_expr + ".z", coord_is_fp) + ")";
+	{
+		// Special case for cube arrays, face and layer are packed in one dimension.
+		if (imgtype.image.arrayed)
+			farg_str += ", uint(" + join(coord_expr, ".z) % 6u");
+		else
+			farg_str += ", uint(" + round_fp_tex_coords(coord_expr + ".z", coord_is_fp) + ")";
+	}
 
 	// If array, use alt coord
 	if (imgtype.image.arrayed)
-		farg_str += ", uint(" + round_fp_tex_coords(coord_expr + alt_coord, coord_is_fp) + ")";
+	{
+		// Special case for cube arrays, face and layer are packed in one dimension.
+		if (imgtype.image.dim == DimCube && is_fetch)
+			farg_str += ", uint(" + join(coord_expr, ".z) / 6u");
+		else
+			farg_str += ", uint(" + round_fp_tex_coords(coord_expr + alt_coord, coord_is_fp) + ")";
+	}
 
 	// Depth compare reference value
 	if (dref)
