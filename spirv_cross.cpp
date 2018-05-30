@@ -1192,7 +1192,7 @@ const Bitset &Compiler::get_member_decoration_bitset(uint32_t id, uint32_t index
 	auto &m = meta.at(id);
 	if (index >= m.members.size())
 	{
-		static const Bitset cleared;
+		static const Bitset cleared = {};
 		return cleared;
 	}
 
