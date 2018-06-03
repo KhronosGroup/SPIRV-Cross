@@ -11,6 +11,7 @@ import hashlib
 import shutil
 import argparse
 import codecs
+import json
 
 force_no_external_validation = False
 
@@ -199,6 +200,24 @@ def cross_compile_hlsl(shader, spirv, opt):
     
     return (spirv_path, hlsl_path)
 
+def cross_compile_reflect(shader, spirv, opt):
+    spirv_path = create_temporary()
+    reflect_path = create_temporary(os.path.basename(shader))
+
+    if spirv:
+        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+    else:
+        subprocess.check_call(['glslangValidator', '--target-env', 'vulkan1.1', '-V', '-o', spirv_path, shader])
+
+    if opt:
+        subprocess.check_call(['spirv-opt', '-O', '-o', spirv_path, spirv_path])
+
+    spirv_cross_path = './spirv-cross'
+
+    sm = shader_to_sm(shader)
+    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', reflect_path, spirv_path, '--reflect'])
+    return (spirv_path, reflect_path)
+
 def validate_shader(shader, vulkan):
     if vulkan:
         subprocess.check_call(['glslangValidator', '--target-env', 'vulkan1.1', '-V', shader])
@@ -277,6 +296,58 @@ def reference_path(directory, relpath, opt):
     reference_dir = os.path.join(reference_dir, split_paths[1])
     return os.path.join(reference_dir, relpath)
 
+def json_ordered(obj):
+    if isinstance(obj, dict):
+        return sorted((k, json_ordered(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return sorted(json_ordered(x) for x in obj)
+    else:
+        return obj
+    
+def json_compare(json_a, json_b):
+    return json_ordered(json_a) == json_ordered(json_b)
+
+def regression_check_reflect(shader, json_file, update, keep, opt):
+    reference = reference_path(shader[0], shader[1], opt) + '.json'
+    joined_path = os.path.join(shader[0], shader[1])
+    print('Reference shader reflection path:', reference)
+    if os.path.exists(reference):
+        actual = ''
+        expected = ''
+        with open(json_file) as f:
+            actual_json = f.read();
+            actual = json.loads(actual_json)
+        with open(reference) as f:
+            expected = json.load(f)
+        if (json_compare(actual, expected) != True):
+            if update:
+                print('Generated reflection json has changed for {}!'.format(reference))
+                # If we expect changes, update the reference file.
+                if os.path.exists(reference):
+                    remove_file(reference)
+                make_reference_dir(reference)
+                shutil.move(json_file, reference)
+            else:
+                print('Generated reflection json in {} does not match reference {}!'.format(json_file, reference))
+                with open(json_file, 'r') as f:
+                    print('')
+                    print('Generated:')
+                    print('======================')
+                    print(f.read())
+                    print('======================')
+                    print('')
+
+                # Otherwise, fail the test. Keep the shader file around so we can inspect.
+                if not keep:
+                    remove_file(json_file)
+                sys.exit(1)
+        else:
+            remove_file(json_file)
+    else:
+        print('Found new shader {}. Placing generated source code in {}'.format(joined_path, reference))
+        make_reference_dir(reference)
+        shutil.move(json_file, reference)
+    
 def regression_check(shader, glsl, update, keep, opt):
     reference = reference_path(shader[0], shader[1], opt)
     joined_path = os.path.join(shader[0], shader[1])
@@ -410,6 +481,15 @@ def test_shader_hlsl(stats, shader, update, keep, opt):
     regression_check(shader, hlsl, update, keep, opt)
     remove_file(spirv)
 
+def test_shader_reflect(stats, shader, update, keep, opt):
+    joined_path = os.path.join(shader[0], shader[1])
+    print('Testing shader reflection:', joined_path)
+    is_spirv = shader_is_spirv(shader[1])
+    noopt = shader_is_noopt(shader[1])
+    spirv, reflect = cross_compile_reflect(joined_path, is_spirv, opt and (not noopt))
+    regression_check_reflect(shader, reflect, update, keep, opt)
+    remove_file(spirv)
+
 def test_shaders_helper(stats, shader_dir, update, malisc, keep, opt, backend):
     for root, dirs, files in os.walk(os.path.join(shader_dir)):
         files = [ f for f in files if not f.startswith(".") ]   #ignore system files (esp OSX)
@@ -420,6 +500,8 @@ def test_shaders_helper(stats, shader_dir, update, malisc, keep, opt, backend):
                 test_shader_msl(stats, (shader_dir, relpath), update, keep, opt)
             elif backend == 'hlsl':
                 test_shader_hlsl(stats, (shader_dir, relpath), update, keep, opt)
+            elif backend == 'reflect':
+                test_shader_reflect(stats, (shader_dir, relpath), update, keep, opt)
             else:
                 test_shader(stats, (shader_dir, relpath), update, keep, opt)
 
@@ -459,6 +541,9 @@ def main():
     parser.add_argument('--opt',
             action = 'store_true',
             help = 'Run SPIRV-Tools optimization passes as well.')
+    parser.add_argument('--reflect',
+            action = 'store_true',
+            help = 'Test reflection backend.')
     args = parser.parse_args()
 
     if not args.folder:
@@ -470,8 +555,15 @@ def main():
 
     global force_no_external_validation
     force_no_external_validation = args.force_no_external_validation
+    backend = 'glsl'
+    if (args.msl or args.metal): 
+        backend = 'msl'
+    elif args.hlsl: 
+        backend = 'hlsl'
+    elif args.reflect:
+        backend = 'reflect'
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep, args.opt, 'msl' if (args.msl or args.metal) else ('hlsl' if args.hlsl else 'glsl'))
+    test_shaders(args.folder, args.update, args.malisc, args.keep, args.opt, backend)
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')

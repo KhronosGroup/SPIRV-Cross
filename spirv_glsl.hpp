@@ -259,6 +259,11 @@ protected:
 		statement_inner(std::forward<Ts>(ts)...);
 	}
 
+	inline void statement_indent() {
+		for (uint32_t i = 0; i < indent; i++)
+			(*buffer) << "    ";
+	}
+
 	template <typename... Ts>
 	inline void statement(Ts &&... ts)
 	{
@@ -274,9 +279,7 @@ protected:
 			redirect_statement->push_back(join(std::forward<Ts>(ts)...));
 		else
 		{
-			for (uint32_t i = 0; i < indent; i++)
-				(*buffer) << "    ";
-
+			statement_indent();
 			statement_inner(std::forward<Ts>(ts)...);
 			(*buffer) << '\n';
 		}

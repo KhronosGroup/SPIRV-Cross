@@ -19,6 +19,7 @@
 #include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
+#include "spirv_reflect.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -147,6 +148,22 @@ struct CLIParser
 		argv++;
 
 		return val;
+	}
+
+	// Return a string only if it's not prefixed with `--`, otherwise return the default value
+	const char *next_value_string(const char *defaultValue)
+	{
+		if (!argc)
+		{
+			return defaultValue;
+		}
+
+		if (0 == strncmp("--", *argv, 2))
+		{
+			return defaultValue;
+		}
+
+		return next_string();
 	}
 
 	const char *next_string()
@@ -481,6 +498,7 @@ struct CLIArguments
 
 	uint32_t iterations = 1;
 	bool cpp = false;
+	string reflect;
 	bool msl = false;
 	bool hlsl = false;
 	bool hlsl_compat = false;
@@ -508,6 +526,7 @@ static void print_help()
 	                "\t[--flip-vert-y]\n"
 	                "\t[--iterations iter]\n"
 	                "\t[--cpp]\n"
+	                "\t[--cppi]\n"
 	                "\t[--cpp-interface-name <name>]\n"
 	                "\t[--msl]\n"
 	                "\t[--msl-version <MMmmpp>]\n"
@@ -663,6 +682,11 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flip-vert-y", [&args](CLIParser &) { args.yflip = true; });
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
+	cbs.add("--reflect", [&args](CLIParser &parser) {
+		// force vulkan semantics for reflection
+		args.vulkan_semantics = true;
+		args.reflect = parser.next_value_string("json");
+	});
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
@@ -767,6 +791,13 @@ static int main_inner(int argc, char *argv[])
 		compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
 		if (args.cpp_interface_name)
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
+	}
+	else if (!args.reflect.empty())
+	{
+		combined_image_samplers = !args.vulkan_semantics;
+		build_dummy_sampler = true;
+		compiler = unique_ptr<CompilerGLSL>(new CompilerReflection(read_spirv_file(args.input)));
+		static_cast<CompilerReflection *>(compiler.get())->set_format(args.reflect);
 	}
 	else if (args.msl)
 	{
