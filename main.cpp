@@ -122,7 +122,7 @@ struct CLIParser
 			THROW("Tried to parse uint, but nothing left in arguments");
 		}
 
-		uint32_t val = stoul(*argv);
+		uint64_t val = stoul(*argv);
 		if (val > numeric_limits<uint32_t>::max())
 		{
 			THROW("next_uint() out of range");
@@ -131,7 +131,7 @@ struct CLIParser
 		argc--;
 		argv++;
 
-		return val;
+		return uint32_t(val);
 	}
 
 	double next_double()
@@ -212,7 +212,6 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 	for (auto &res : resources)
 	{
 		auto &type = compiler.get_type(res.type_id);
-		auto &mask = compiler.get_decoration_bitset(res.id);
 
 		if (print_ssbo && compiler.buffer_is_hlsl_counter_buffer(res.id))
 			continue;
@@ -230,6 +229,12 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		uint32_t block_size = 0;
 		if (is_sized_block)
 			block_size = uint32_t(compiler.get_declared_struct_size(compiler.get_type(res.base_type_id)));
+
+		Bitset mask;
+		if (print_ssbo)
+			mask = compiler.get_buffer_block_flags(res.id);
+		else
+			mask = compiler.get_decoration_bitset(res.id);
 
 		string array;
 		for (auto arr : type.array)

@@ -483,6 +483,12 @@ public:
 	// ID is the name of a variable as returned by Resource::id, and must be a variable with a Block-like type.
 	std::string get_remapped_declared_block_name(uint32_t id) const;
 
+	// For buffer block variables, get the decorations for that variable.
+	// Sometimes, decorations for buffer blocks are found in member decorations instead
+	// of direct decorations on the variable itself.
+	// The most common use here is to check if a buffer is readonly or writeonly.
+	Bitset get_buffer_block_flags(uint32_t id) const;
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -784,7 +790,7 @@ protected:
 
 	VariableTypeRemapCallback variable_remap_callback;
 
-	Bitset get_buffer_block_flags(const SPIRVariable &var);
+	Bitset get_buffer_block_flags(const SPIRVariable &var) const;
 	bool get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type);
 
 	std::unordered_set<uint32_t> forced_temporaries;

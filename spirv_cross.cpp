@@ -4078,7 +4078,12 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	}
 }
 
-Bitset Compiler::get_buffer_block_flags(const SPIRVariable &var)
+Bitset Compiler::get_buffer_block_flags(uint32_t id) const
+{
+	return get_buffer_block_flags(get<SPIRVariable>(id));
+}
+
+Bitset Compiler::get_buffer_block_flags(const SPIRVariable &var) const
 {
 	auto &type = get<SPIRType>(var.basetype);
 	assert(type.basetype == SPIRType::Struct);
