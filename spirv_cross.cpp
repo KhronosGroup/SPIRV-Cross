@@ -998,12 +998,27 @@ void Compiler::update_name_cache(unordered_set<string> &cache, string &name)
 	uint32_t counter = 0;
 	auto tmpname = name;
 
+	bool use_linked_underscore = true;
+
+	if (tmpname == "_")
+	{
+		// We cannot just append numbers, as we will end up creating internally reserved names.
+		// Make it like _0_<counter> instead.
+		tmpname += "0";
+	}
+	else if (tmpname.back() == '_')
+	{
+		// The last_character is an underscore, so we don't need to link in underscore.
+		// This would violate double underscore rules.
+		use_linked_underscore = false;
+	}
+
 	// If there is a collision (very rare),
 	// keep tacking on extra identifier until it's unique.
 	do
 	{
 		counter++;
-		name = tmpname + "_" + convert_to_string(counter);
+		name = tmpname + (use_linked_underscore ? "_" : "") + convert_to_string(counter);
 	} while (cache.find(name) != end(cache));
 	cache.insert(name);
 }

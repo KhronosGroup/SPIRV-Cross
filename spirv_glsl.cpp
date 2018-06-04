@@ -8591,6 +8591,9 @@ void CompilerGLSL::add_variable(unordered_set<string> &variables, string &name)
 		return;
 	}
 
+	// Avoid double underscores.
+	name = sanitize_underscores(name);
+
 	update_name_cache(variables, name);
 }
 
