@@ -31,7 +31,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _18 [[buffer(0)]]
     main0_out out = {};
     out.gl_Position = _18.mvp * in.aVertex;
     out.vNormal = in.aNormal;
-    out.vColor = _18.color * _18.opacity;
+    out.vColor = float3(_18.color) * _18.opacity;
     out.vSize = _18.targSize * _18.opacity;
     return out;
 }

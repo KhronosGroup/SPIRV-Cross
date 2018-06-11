@@ -3280,15 +3280,15 @@ SPIRExpression &CompilerGLSL::emit_op(uint32_t result_type, uint32_t result_id, 
 void CompilerGLSL::emit_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op)
 {
 	bool forward = should_forward(op0);
-	emit_op(result_type, result_id, join(op, to_enclosed_expression(op0)), forward);
+	emit_op(result_type, result_id, join(op, to_enclosed_unpacked_expression(op0)), forward);
 	inherit_expression_dependencies(result_id, op0);
 }
 
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(to_enclosed_expression(op0), " ", op, " ", to_enclosed_expression(op1)),
-	        forward);
+	emit_op(result_type, result_id,
+	        join(to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1)), forward);
 
 	inherit_expression_dependencies(result_id, op0);
 	inherit_expression_dependencies(result_id, op1);
@@ -3368,8 +3368,8 @@ SPIRType CompilerGLSL::binary_op_bitcast_helper(string &cast_op0, string &cast_o
 	else
 	{
 		// If we don't cast, our actual input type is that of the first (or second) argument.
-		cast_op0 = to_enclosed_expression(op0);
-		cast_op1 = to_enclosed_expression(op1);
+		cast_op0 = to_enclosed_unpacked_expression(op0);
+		cast_op1 = to_enclosed_unpacked_expression(op1);
 		input_type = type0.basetype;
 	}
 
