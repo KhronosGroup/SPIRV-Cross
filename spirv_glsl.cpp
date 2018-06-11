@@ -2373,6 +2373,22 @@ string CompilerGLSL::to_enclosed_expression(uint32_t id)
 	return enclose_expression(to_expression(id));
 }
 
+string CompilerGLSL::to_unpacked_expression(uint32_t id)
+{
+	if (has_decoration(id, DecorationCPacked))
+		return unpack_expression_type(to_expression(id), expression_type(id));
+	else
+		return to_expression(id);
+}
+
+string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id)
+{
+	if (has_decoration(id, DecorationCPacked))
+		return unpack_expression_type(to_expression(id), expression_type(id));
+	else
+		return to_enclosed_expression(id);
+}
+
 string CompilerGLSL::to_extract_component_expression(uint32_t id, uint32_t index)
 {
 	auto expr = to_enclosed_expression(id);
@@ -3390,7 +3406,7 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 void CompilerGLSL::emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op)
 {
 	bool forward = should_forward(op0);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ")"), forward);
+	emit_op(result_type, result_id, join(op, "(", to_unpacked_expression(op0), ")"), forward);
 	inherit_expression_dependencies(result_id, op0);
 }
 
@@ -3398,7 +3414,8 @@ void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id,
                                        const char *op)
 {
 	bool forward = should_forward(op0) && should_forward(op1);
-	emit_op(result_type, result_id, join(op, "(", to_expression(op0), ", ", to_expression(op1), ")"), forward);
+	emit_op(result_type, result_id, join(op, "(", to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ")"),
+	        forward);
 	inherit_expression_dependencies(result_id, op0);
 	inherit_expression_dependencies(result_id, op1);
 }
@@ -3435,7 +3452,9 @@ void CompilerGLSL::emit_trinary_func_op(uint32_t result_type, uint32_t result_id
 {
 	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2);
 	emit_op(result_type, result_id,
-	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ")"), forward);
+	        join(op, "(", to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ", ",
+	             to_unpacked_expression(op2), ")"),
+	        forward);
 
 	inherit_expression_dependencies(result_id, op0);
 	inherit_expression_dependencies(result_id, op1);
@@ -3447,8 +3466,8 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 {
 	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2) && should_forward(op3);
 	emit_op(result_type, result_id,
-	        join(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(op2), ", ",
-	             to_expression(op3), ")"),
+	        join(op, "(", to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ", ",
+	             to_unpacked_expression(op2), ", ", to_unpacked_expression(op3), ")"),
 	        forward);
 
 	inherit_expression_dependencies(result_id, op0);
@@ -6572,10 +6591,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			// We only source from first vector, so can use swizzle.
 			// If the vector is packed, unpack it before applying a swizzle (needed for MSL)
-			expr += to_enclosed_expression(vec0);
-			if (has_decoration(vec0, DecorationCPacked))
-				expr = unpack_expression_type(expr, expression_type(vec0));
-
+			expr += to_enclosed_unpacked_expression(vec0);
 			expr += ".";
 			for (uint32_t i = 0; i < length; i++)
 				expr += index_to_swizzle(elems[i]);
