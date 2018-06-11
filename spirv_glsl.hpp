@@ -436,6 +436,8 @@ protected:
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id);
 	std::string to_enclosed_expression(uint32_t id);
+	std::string to_unpacked_expression(uint32_t id);
+	std::string to_enclosed_unpacked_expression(uint32_t id);
 	std::string to_extract_component_expression(uint32_t id, uint32_t index);
 	std::string enclose_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
