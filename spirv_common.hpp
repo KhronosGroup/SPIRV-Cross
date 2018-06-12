@@ -745,7 +745,11 @@ struct SPIRFunction : IVariant
 
 	// Statements to be emitted when the function returns.
 	// Mostly used for lowering internal data structures onto flattened structures.
-	std::vector<std::string> fixup_statements;
+	std::vector<std::string> fixup_statements_out;
+
+	// Statements to be emitted when the function begins.
+	// Mostly used for populating internal data structures from flattened structures.
+	std::vector<std::string> fixup_statements_in;
 
 	bool active = false;
 	bool flush_undeclared = true;

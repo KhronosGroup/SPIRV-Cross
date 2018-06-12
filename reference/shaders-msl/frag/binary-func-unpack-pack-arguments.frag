@@ -9,14 +9,14 @@ struct UBO
     float v;
 };
 
-struct main0_in
-{
-    float3 vIn [[user(locn0)]];
-};
-
 struct main0_out
 {
     float FragColor [[color(0)]];
+};
+
+struct main0_in
+{
+    float3 vIn [[user(locn0)]];
 };
 
 fragment main0_out main0(main0_in in [[stage_in]], constant UBO& _15 [[buffer(0)]])

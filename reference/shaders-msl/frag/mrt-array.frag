@@ -5,18 +5,18 @@
 
 using namespace metal;
 
-struct main0_in
-{
-    float4 vB [[user(locn1)]];
-    float4 vA [[user(locn0)]];
-};
-
 struct main0_out
 {
     float4 FragColor_0 [[color(0)]];
     float4 FragColor_1 [[color(1)]];
     float4 FragColor_2 [[color(2)]];
     float4 FragColor_3 [[color(3)]];
+};
+
+struct main0_in
+{
+    float4 vA [[user(locn0)]];
+    float4 vB [[user(locn1)]];
 };
 
 // Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
@@ -40,7 +40,7 @@ void write_in_function(thread float4 (&FragColor)[4], thread float4& vA, thread 
 fragment main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    float4 FragColor[4];
+    float4 FragColor[4] = {};
     FragColor[0] = mod(in.vA, in.vB);
     FragColor[1] = in.vA + in.vB;
     write_in_function(FragColor, in.vA, in.vB);

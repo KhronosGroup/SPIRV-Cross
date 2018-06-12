@@ -83,22 +83,22 @@ constant float4 _192 = {};
 constant float4 _219 = {};
 constant float4 _297 = {};
 
-struct main0_in
-{
-    float IN_studIndex [[user(locn8)]];
-    float4 IN_PosLightSpace_Reflectance [[user(locn7)]];
-    float3 IN_Tangent [[user(locn6)]];
-    float4 IN_Normal_SpecPower [[user(locn5)]];
-    float4 IN_View_Depth [[user(locn4)]];
-    float4 IN_LightPosition_Fog [[user(locn3)]];
-    float4 IN_Color [[user(locn2)]];
-    float4 IN_UvStuds_EdgeDistance2 [[user(locn1)]];
-    float4 IN_Uv_EdgeDistance1 [[user(locn0)]];
-};
-
 struct main0_out
 {
     float4 _entryPointOutput [[color(0)]];
+};
+
+struct main0_in
+{
+    float4 IN_Uv_EdgeDistance1 [[user(locn0)]];
+    float4 IN_UvStuds_EdgeDistance2 [[user(locn1)]];
+    float4 IN_Color [[user(locn2)]];
+    float4 IN_LightPosition_Fog [[user(locn3)]];
+    float4 IN_View_Depth [[user(locn4)]];
+    float4 IN_Normal_SpecPower [[user(locn5)]];
+    float3 IN_Tangent [[user(locn6)]];
+    float4 IN_PosLightSpace_Reflectance [[user(locn7)]];
+    float IN_studIndex [[user(locn8)]];
 };
 
 fragment main0_out main0(main0_in in [[stage_in]], constant CB0& _19 [[buffer(0)]], texture2d<float> StudsMapTexture [[texture(0)]], texture2d<float> ShadowMapTexture [[texture(1)]], texturecube<float> EnvironmentMapTexture [[texture(2)]], texture2d<float> DiffuseMapTexture [[texture(3)]], texture2d<float> NormalMapTexture [[texture(4)]], texture2d<float> SpecularMapTexture [[texture(5)]], texture3d<float> LightMapTexture [[texture(6)]], texture2d<float> NormalDetailMapTexture [[texture(8)]], sampler StudsMapSampler [[sampler(0)]], sampler ShadowMapSampler [[sampler(1)]], sampler EnvironmentMapSampler [[sampler(2)]], sampler DiffuseMapSampler [[sampler(3)]], sampler NormalMapSampler [[sampler(4)]], sampler SpecularMapSampler [[sampler(5)]], sampler LightMapSampler [[sampler(6)]], sampler NormalDetailMapSampler [[sampler(8)]], float4 gl_FragCoord [[position]])

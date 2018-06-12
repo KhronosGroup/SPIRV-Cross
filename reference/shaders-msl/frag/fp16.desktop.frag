@@ -13,10 +13,10 @@ struct ResType
 
 struct main0_in
 {
-    half4 v4 [[user(locn3)]];
-    half3 v3 [[user(locn2)]];
-    half2 v2 [[user(locn1)]];
     half v1 [[user(locn0)]];
+    half2 v2 [[user(locn1)]];
+    half3 v3 [[user(locn2)]];
+    half4 v4 [[user(locn3)]];
 };
 
 // Implementation of the GLSL mod() function, which is slightly different than Metal fmod()

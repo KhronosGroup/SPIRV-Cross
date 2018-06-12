@@ -3,16 +3,16 @@
 
 using namespace metal;
 
-struct main0_in
-{
-    float2 FP32 [[user(locn1)]];
-    uint FP16 [[user(locn0)]];
-};
-
 struct main0_out
 {
     float2 FP32Out [[color(0)]];
     uint FP16Out [[color(1)]];
+};
+
+struct main0_in
+{
+    uint FP16 [[user(locn0)]];
+    float2 FP32 [[user(locn1)]];
 };
 
 fragment main0_out main0(main0_in in [[stage_in]])
