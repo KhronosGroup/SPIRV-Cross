@@ -2375,7 +2375,10 @@ string CompilerGLSL::to_enclosed_expression(uint32_t id)
 
 string CompilerGLSL::to_unpacked_expression(uint32_t id)
 {
-	if (has_decoration(id, DecorationCPacked))
+	// If we need to transpose, it will also take care of unpacking rules.
+	auto *e = maybe_get<SPIRExpression>(id);
+	bool need_transpose = e && e->need_transpose;
+	if (!need_transpose && has_decoration(id, DecorationCPacked))
 		return unpack_expression_type(to_expression(id), expression_type(id));
 	else
 		return to_expression(id);
@@ -2383,7 +2386,10 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id)
 
 string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id)
 {
-	if (has_decoration(id, DecorationCPacked))
+	// If we need to transpose, it will also take care of unpacking rules.
+	auto *e = maybe_get<SPIRExpression>(id);
+	bool need_transpose = e && e->need_transpose;
+	if (!need_transpose && has_decoration(id, DecorationCPacked))
 		return unpack_expression_type(to_expression(id), expression_type(id));
 	else
 		return to_enclosed_expression(id);
