@@ -1913,7 +1913,16 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (e && e->need_transpose && (t.columns == t.vecsize || is_packed))
 		{
 			e->need_transpose = false;
+
+			// This is important for matrices. Packed matrices
+			// are generally transposed, so unpacking using a constructor argument
+			// will result in an error.
+			// The simplest solution for now is to just avoid unpacking the matrix in this operation.
+			unset_decoration(mtx_id, DecorationCPacked);
+
 			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			if (is_packed)
+				set_decoration(mtx_id, DecorationCPacked);
 			e->need_transpose = true;
 		}
 		else

@@ -40,7 +40,7 @@ struct main0_in
 vertex main0_out main0(main0_in in [[stage_in]], constant _42& _44 [[buffer(12)]], constant _15& _17 [[buffer(13)]])
 {
     main0_out out = {};
-    float4 _70 = _44._m0 * float4(_44._m3 + (in.m_25.xyz * (_44._m6 + _44._m7)), 1.0);
+    float4 _70 = _44._m0 * float4(float3(_44._m3) + (in.m_25.xyz * (_44._m6 + _44._m7)), 1.0);
     out.m_72 = normalize(float4(in.m_25.xyz, 0.0) * _17._m1);
     float4 _95 = _70;
     _95.y = -_70.y;
