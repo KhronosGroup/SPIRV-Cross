@@ -5,15 +5,15 @@
 
 using namespace metal;
 
-struct main0_in
-{
-    int vIndex [[user(locn1)]];
-    float2 vTex [[user(locn0)]];
-};
-
 struct main0_out
 {
     float4 FragColor [[color(0)]];
+};
+
+struct main0_in
+{
+    float2 vTex [[user(locn0)]];
+    int vIndex [[user(locn1)]];
 };
 
 float4 sample_from_global(thread int& vIndex, thread float2& vTex, thread const array<texture2d<float>, 4> uSampler, thread const array<sampler, 4> uSamplerSmplr)

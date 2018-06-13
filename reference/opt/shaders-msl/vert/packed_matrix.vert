@@ -26,15 +26,15 @@ struct _42
     float2 _m9;
 };
 
-struct main0_in
-{
-    float4 m_25 [[attribute(0)]];
-};
-
 struct main0_out
 {
     float3 m_72 [[user(locn0)]];
     float4 gl_Position [[position]];
+};
+
+struct main0_in
+{
+    float4 m_25 [[attribute(0)]];
 };
 
 vertex main0_out main0(main0_in in [[stage_in]], constant _42& _44 [[buffer(12)]], constant _15& _17 [[buffer(13)]])

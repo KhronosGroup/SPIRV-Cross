@@ -278,7 +278,6 @@ string CompilerMSL::compile()
 
 	replace_illegal_names();
 
-	non_stage_in_input_var_ids.clear();
 	struct_member_padding.clear();
 
 	update_active_builtins();
@@ -292,10 +291,11 @@ string CompilerMSL::compile()
 	// Preprocess OpCodes to extract the need to output additional header content
 	preprocess_op_codes();
 
-	// Create structs to hold input, output and uniform variables
+	// Create structs to hold input, output and uniform variables.
+	// Do output first to ensure out. is declared at top of entry function.
 	qual_pos_var_name = "";
-	stage_in_var_id = add_interface_block(StorageClassInput);
 	stage_out_var_id = add_interface_block(StorageClassOutput);
+	stage_in_var_id = add_interface_block(StorageClassInput);
 	stage_uniforms_var_id = add_interface_block(StorageClassUniformConstant);
 
 	// Convert the use of global variables to recursively-passed function parameters
@@ -423,9 +423,9 @@ void CompilerMSL::extract_global_variables_from_functions()
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-			if (var.storage == StorageClassInput || var.storage == StorageClassUniform ||
-			    var.storage == StorageClassUniformConstant || var.storage == StorageClassPushConstant ||
-			    var.storage == StorageClassStorageBuffer)
+			if (var.storage == StorageClassInput || var.storage == StorageClassOutput ||
+			    var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
+			    var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer)
 			{
 				global_var_ids.insert(var.self);
 			}
@@ -664,9 +664,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	{
 		ib_var_ref = stage_out_var_name;
 
-		// Add the output interface struct as a local variable to the entry function,
-		// and force the entry function to return the output interface struct from
-		// any blocks that perform a function return.
+		// Add the output interface struct as a local variable to the entry function, force
+		// the entry function to return the output interface struct from any blocks that perform
+		// a function return, and indicate the output var requires early initialization
 		auto &entry_func = get<SPIRFunction>(entry_point);
 		entry_func.add_local_variable(ib_var_id);
 		for (auto &blk_id : entry_func.blocks)
@@ -675,6 +675,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			if (blk.terminator == SPIRBlock::Return)
 				blk.return_value = ib_var_id;
 		}
+		vars_needing_early_declaration.push_back(ib_var_id);
 		break;
 	}
 
@@ -689,7 +690,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		break;
 	}
 
-	set_name(ib_type_id, get_entry_point_name() + "_" + ib_var_ref);
+	set_name(ib_type_id, to_name(entry_point) + "_" + ib_var_ref);
 	set_name(ib_var_id, ib_var_ref);
 
 	for (auto p_var : vars)
@@ -705,11 +706,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				BuiltIn builtin;
 				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
 
-				if (should_move_to_input_buffer(mbr_type_id, is_builtin, storage))
-				{
-					move_member_to_input_buffer(type, mbr_idx);
-				}
-				else if (!is_builtin || has_active_builtin(builtin, storage))
+				if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					// Add a reference to the member to the interface struct.
 					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -760,34 +757,45 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			bool is_builtin = is_builtin_variable(*p_var);
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
 
-			if (should_move_to_input_buffer(type_id, is_builtin, storage))
+			if (!is_builtin || has_active_builtin(builtin, storage))
 			{
-				move_to_input_buffer(*p_var);
-			}
-			else if (!is_builtin || has_active_builtin(builtin, storage))
-			{
-				// Arrays of MRT output is not allowed in MSL, so need to handle it specially.
-				if (!is_builtin && storage == StorageClassOutput && get_entry_point().model == ExecutionModelFragment &&
-				    !type.array.empty())
+				// MSL does not allow matrices or arrays in input or output variables, so need to handle it specially.
+				if (!is_builtin && (storage == StorageClassInput || storage == StorageClassOutput) &&
+				    (is_matrix(type) || is_array(type)))
 				{
-					if (type.array.size() != 1)
-						SPIRV_CROSS_THROW("Cannot emit arrays-of-arrays with MRT.");
+					uint32_t elem_cnt = 0;
 
-					uint32_t num_mrts = type.array_size_literal.back() ? type.array.back() :
-					                                                     get<SPIRConstant>(type.array.back()).scalar();
+					if (is_matrix(type))
+					{
+						if (is_array(type))
+							SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
 
-					auto *no_array_type = &type;
-					while (!no_array_type->array.empty())
-						no_array_type = &get<SPIRType>(no_array_type->parent_type);
+						elem_cnt = type.columns;
+					}
+					else if (is_array(type))
+					{
+						if (type.array.size() != 1)
+							SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
+
+						elem_cnt = type.array_size_literal.back() ? type.array.back() :
+						                                            get<SPIRConstant>(type.array.back()).scalar();
+					}
+
+					auto *usable_type = &type;
+					while (is_array(*usable_type) || is_matrix(*usable_type))
+						usable_type = &get<SPIRType>(usable_type->parent_type);
 
 					auto &entry_func = get<SPIRFunction>(entry_point);
 					entry_func.add_local_variable(p_var->self);
 
-					for (uint32_t i = 0; i < num_mrts; i++)
+					// We need to declare the variable early and at entry-point scope.
+					vars_needing_early_declaration.push_back(p_var->self);
+
+					for (uint32_t i = 0; i < elem_cnt; i++)
 					{
 						// Add a reference to the variable type to the interface struct.
 						uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-						ib_type.member_types.push_back(no_array_type->self);
+						ib_type.member_types.push_back(usable_type->self);
 
 						// Give the member a name
 						string mbr_name = ensure_valid_name(join(to_expression(p_var->self), "_", i), "m");
@@ -807,9 +815,21 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationIndex, index);
 						}
 
-						// Lower the internal array to flattened output when entry point returns.
-						entry_func.fixup_statements.push_back(
-						    join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];"));
+						switch (storage)
+						{
+						case StorageClassInput:
+							entry_func.fixup_statements_in.push_back(
+							    join(to_name(p_var->self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";"));
+							break;
+
+						case StorageClassOutput:
+							entry_func.fixup_statements_out.push_back(
+							    join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];"));
+							break;
+
+						default:
+							break;
+						}
 					}
 				}
 				else
@@ -855,155 +875,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	}
 
 	// Sort the members of the structure by their locations.
-	// Oddly, Metal handles inputs better if they are sorted in reverse order.
-	MemberSorter::SortAspect sort_aspect =
-	    (storage == StorageClassInput) ? MemberSorter::LocationReverse : MemberSorter::Location;
-	MemberSorter member_sorter(ib_type, meta[ib_type_id], sort_aspect);
+	MemberSorter member_sorter(ib_type, meta[ib_type_id], MemberSorter::Location);
 	member_sorter.sort();
 
-	return ib_var_id;
-}
-
-// Returns whether a variable of type and storage class should be moved from an interface
-// block to a secondary input buffer block.
-// This is the case for matrixes and arrays that appear in the stage_in interface block
-// of a vertex function, and true is returned.
-// Other types do not need to move, and false is returned.
-// Matrices and arrays are not permitted in the output of a vertex function or the input
-// or output of a fragment function, and in those cases, an exception is thrown.
-bool CompilerMSL::should_move_to_input_buffer(uint32_t type_id, bool is_builtin, StorageClass storage)
-{
-	auto &type = get<SPIRType>(type_id);
-
-	if ((is_matrix(type) || is_array(type)) && !is_builtin)
-	{
-		auto &execution = get_entry_point();
-
-		if (execution.model == ExecutionModelVertex)
-		{
-			if (storage == StorageClassInput)
-				return true;
-
-			if (storage == StorageClassOutput)
-				SPIRV_CROSS_THROW("The vertex function output structure may not include a matrix or array.");
-		}
-		else if (execution.model == ExecutionModelFragment)
-		{
-			if (storage == StorageClassInput)
-				SPIRV_CROSS_THROW("The fragment function stage_in structure may not include a matrix or array.");
-
-			//if (storage == StorageClassOutput)
-			//	SPIRV_CROSS_THROW("The fragment function output structure may not include a matrix or array.");
-		}
-	}
-
-	return false;
-}
-
-// Excludes the specified variable from an interface block structure.
-// Instead, for the variable is added to a block variable corresponding to a secondary MSL buffer.
-// The use case for this is when a vertex stage_in variable contains a matrix or array.
-void CompilerMSL::move_to_input_buffer(SPIRVariable &var)
-{
-	uint32_t var_id = var.self;
-
-	if (!has_decoration(var_id, DecorationLocation))
-		return;
-
-	uint32_t mbr_type_id = var.basetype;
-	string mbr_name = ensure_valid_name(to_expression(var_id), "m");
-	uint32_t mbr_locn = get_decoration(var_id, DecorationLocation);
-	meta[var_id].decoration.qualified_alias = add_input_buffer_block_member(mbr_type_id, mbr_name, mbr_locn);
-}
-
-// Excludes the specified type member from the stage_in block structure.
-// Instead, for the variable is added to a block variable corresponding to a secondary MSL buffer.
-// The use case for this is when a vertex stage_in variable contains a matrix or array.
-void CompilerMSL::move_member_to_input_buffer(const SPIRType &type, uint32_t index)
-{
-	uint32_t type_id = type.self;
-
-	if (!has_member_decoration(type_id, index, DecorationLocation))
-		return;
-
-	uint32_t mbr_type_id = type.member_types[index];
-	string mbr_name = ensure_valid_name(to_qualified_member_name(type, index), "m");
-	uint32_t mbr_locn = get_member_decoration(type_id, index, DecorationLocation);
-	string qual_name = add_input_buffer_block_member(mbr_type_id, mbr_name, mbr_locn);
-	set_member_qualified_name(type_id, index, qual_name);
-}
-
-// Adds a member to the input buffer block that corresponds to the MTLBuffer used by an attribute location
-string CompilerMSL::add_input_buffer_block_member(uint32_t mbr_type_id, string mbr_name, uint32_t mbr_locn)
-{
-	mark_location_as_used_by_shader(mbr_locn, StorageClassInput);
-
-	MSLVertexAttr *p_va = vtx_attrs_by_location[mbr_locn];
-	if (!p_va)
-		return "";
-
-	if (p_va->per_instance)
-		needs_instance_idx_arg = true;
-	else
-		needs_vertex_idx_arg = true;
-
-	// The variable that is the block struct.
-	// Record the stride of this struct in its offset decoration.
-	uint32_t ib_var_id = get_input_buffer_block_var_id(p_va->msl_buffer);
-	auto &ib_var = get<SPIRVariable>(ib_var_id);
-	uint32_t ib_type_id = ib_var.basetype;
-	auto &ib_type = get<SPIRType>(ib_type_id);
-	set_decoration(ib_type_id, DecorationOffset, p_va->msl_stride);
-
-	// Add a reference to the variable type to the interface struct.
-	uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-	ib_type.member_types.push_back(mbr_type_id);
-
-	// Give the member a name
-	set_member_name(ib_type_id, ib_mbr_idx, mbr_name);
-
-	// Set MSL buffer and offset decorations, and indicate no valid attribute location
-	set_member_decoration(ib_type_id, ib_mbr_idx, DecorationBinding, p_va->msl_buffer);
-	set_member_decoration(ib_type_id, ib_mbr_idx, DecorationOffset, p_va->msl_offset);
-	set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, k_unknown_location);
-
-	// Update the original variable reference to include the structure and index reference
-	string idx_var_name =
-	    builtin_to_glsl(p_va->per_instance ? BuiltInInstanceIndex : BuiltInVertexIndex, StorageClassInput);
-	return get_name(ib_var_id) + "[" + idx_var_name + "]." + mbr_name;
-}
-
-// Returns the ID of the input block that will use the specified MSL buffer index,
-// lazily creating an input block variable and type if needed.
-//
-// The use of this block applies only to input variables that have been excluded from the stage_in
-// block, which typically only occurs if an attempt to pass a matrix in the stage_in block.
-uint32_t CompilerMSL::get_input_buffer_block_var_id(uint32_t msl_buffer)
-{
-	uint32_t ib_var_id = non_stage_in_input_var_ids[msl_buffer];
-	if (!ib_var_id)
-	{
-		// No interface block exists yet. Create a new typed variable for this interface block.
-		// The initializer expression is allocated here, but populated when the function
-		// declaraion is emitted, because it is cleared after each compilation pass.
-		uint32_t next_id = increase_bound_by(3);
-		uint32_t ib_type_id = next_id++;
-		auto &ib_type = set<SPIRType>(ib_type_id);
-		ib_type.basetype = SPIRType::Struct;
-		ib_type.storage = StorageClassInput;
-		set_decoration(ib_type_id, DecorationBlock);
-
-		ib_var_id = next_id++;
-		auto &var = set<SPIRVariable>(ib_var_id, ib_type_id, StorageClassInput, 0);
-		var.initializer = next_id++;
-
-		string ib_var_name = stage_in_var_name + convert_to_string(msl_buffer);
-		set_name(ib_var_id, ib_var_name);
-		set_name(ib_type_id, get_entry_point_name() + "_" + ib_var_name);
-
-		// Add the variable to the map of buffer blocks, accessed by the Metal buffer index.
-		non_stage_in_input_var_ids[msl_buffer] = ib_var_id;
-	}
 	return ib_var_id;
 }
 
@@ -1560,11 +1434,8 @@ void CompilerMSL::emit_resources()
 	declare_undefined_values();
 
 	// Output interface structs.
-	emit_interface_block(stage_in_var_id);
-	for (auto &nsi_var : non_stage_in_input_var_ids)
-		emit_interface_block(nsi_var.second);
-
 	emit_interface_block(stage_out_var_id);
+	emit_interface_block(stage_in_var_id);
 	emit_interface_block(stage_uniforms_var_id);
 }
 
@@ -2456,14 +2327,17 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 	{
 		decl += entry_point_args(!func.arguments.empty());
 
-		// If entry point function has a output interface struct, set its initializer.
-		// This is done at this late stage because the initialization expression is
-		// cleared after each compilation pass.
-		if (stage_out_var_id)
+		// If entry point function has variables that require early declaration,
+		// ensure they each have an empty initializer, creating one if needed.
+		// This is done at this late stage because the initialization expression
+		// is cleared after each compilation pass.
+		for (auto var_id : vars_needing_early_declaration)
 		{
-			auto &so_var = get<SPIRVariable>(stage_out_var_id);
-			auto &so_type = get<SPIRType>(so_var.basetype);
-			set<SPIRExpression>(so_var.initializer, "{}", so_type.self, true);
+			auto &ed_var = get<SPIRVariable>(var_id);
+			if (!ed_var.initializer)
+				ed_var.initializer = increase_bound_by(1);
+
+			set<SPIRExpression>(ed_var.initializer, "{}", ed_var.basetype, true);
 		}
 	}
 
@@ -3256,19 +3130,6 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		ep_args += type_to_glsl(type) + " " + to_name(var.self) + " [[stage_in]]";
 	}
 
-	// Non-stage-in vertex attribute structures
-	for (auto &nsi_var : non_stage_in_input_var_ids)
-	{
-		auto &var = get<SPIRVariable>(nsi_var.second);
-		auto &type = get<SPIRType>(var.basetype);
-
-		if (!ep_args.empty())
-			ep_args += ", ";
-
-		ep_args += "device " + type_to_glsl(type) + "* " + to_name(var.self) + " [[buffer(" +
-		           convert_to_string(nsi_var.first) + ")]]";
-	}
-
 	// Output resources, sorted by resource index & type
 	// We need to sort to work around a bug on macOS 10.13 with NVidia drivers where switching between shaders
 	// with different order of buffers can result in issues with buffer assignments inside the driver.
@@ -3452,12 +3313,6 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		break;
 	}
 	return resource_index;
-}
-
-// Returns the name of the entry point of this shader
-string CompilerMSL::get_entry_point_name()
-{
-	return to_name(entry_point);
 }
 
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)

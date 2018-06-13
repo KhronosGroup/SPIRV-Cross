@@ -10,15 +10,15 @@ struct Block
     float2x3 var[3][4];
 };
 
-struct main0_in
-{
-    float4 a_position [[attribute(0)]];
-};
-
 struct main0_out
 {
     float v_vtxResult [[user(locn0)]];
     float4 gl_Position [[position]];
+};
+
+struct main0_in
+{
+    float4 a_position [[attribute(0)]];
 };
 
 // Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.

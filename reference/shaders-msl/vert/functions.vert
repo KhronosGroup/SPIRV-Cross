@@ -13,12 +13,6 @@ struct UBO
     int2 bits;
 };
 
-struct main0_in
-{
-    float3 aNormal [[attribute(1)]];
-    float4 aVertex [[attribute(0)]];
-};
-
 struct main0_out
 {
     float3 vNormal [[user(locn0)]];
@@ -27,6 +21,12 @@ struct main0_out
     int2 vLSB [[user(locn3)]];
     int2 vMSB [[user(locn4)]];
     float4 gl_Position [[position]];
+};
+
+struct main0_in
+{
+    float4 aVertex [[attribute(0)]];
+    float3 aNormal [[attribute(1)]];
 };
 
 // Implementation of the GLSL radians() function

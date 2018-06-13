@@ -5,14 +5,14 @@
 
 using namespace metal;
 
-struct main0_in
-{
-    float3 vUV [[user(locn0)]];
-};
-
 struct main0_out
 {
     float FragColor [[color(0)]];
+};
+
+struct main0_in
+{
+    float3 vUV [[user(locn0)]];
 };
 
 float Samp(thread const float3& uv, thread depth2d<float> uTex, thread sampler uSamp)
