@@ -526,7 +526,6 @@ static void print_help()
 	                "\t[--flip-vert-y]\n"
 	                "\t[--iterations iter]\n"
 	                "\t[--cpp]\n"
-	                "\t[--cppi]\n"
 	                "\t[--cpp-interface-name <name>]\n"
 	                "\t[--msl]\n"
 	                "\t[--msl-version <MMmmpp>]\n"

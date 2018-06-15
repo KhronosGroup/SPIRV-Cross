@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef SPIRV_CROSS_CPPI_HPP
-#define SPIRV_CROSS_CPPI_HPP
+#ifndef SPIRV_CROSS_REFLECT_HPP
+#define SPIRV_CROSS_REFLECT_HPP
 
 #include "spirv_cross.hpp"
 #include "spirv_glsl.hpp"
-//#include "json/json.hpp"
 #include <utility>
 #include <vector>
 
@@ -90,7 +89,6 @@ private:
     }
 
     enum class JsonType {
-        WaitType,
         Object,
         Array,
     };
