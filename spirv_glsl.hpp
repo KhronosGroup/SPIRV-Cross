@@ -190,6 +190,9 @@ public:
 	// The name of the uniform array will be the same as the interface block name.
 	void flatten_buffer_block(uint32_t id);
 
+	// Static helper functions for non-GLSL based compilers that still need to use GLSL identifiers (i.e. reflection)
+	const char *format_to_glsl(spv::ImageFormat format);
+
 protected:
 	void reset();
 	void emit_function(SPIRFunction &func, const Bitset &return_flags);
@@ -259,7 +262,8 @@ protected:
 		statement_inner(std::forward<Ts>(ts)...);
 	}
 
-	inline void statement_indent() {
+	inline void statement_indent()
+	{
 		for (uint32_t i = 0; i < indent; i++)
 			(*buffer) << "    ";
 	}
@@ -451,10 +455,8 @@ protected:
 	const char *to_precision_qualifiers_glsl(uint32_t id);
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
 	const char *flags_to_precision_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
-	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	virtual std::string to_interpolation_qualifiers(const Bitset &flags);
-	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index);
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
 	virtual bool skip_argument(uint32_t id) const;

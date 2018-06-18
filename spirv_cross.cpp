@@ -4567,3 +4567,292 @@ bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &resul
 			return false;
 	}
 }
+
+Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t index) const
+{
+	Bitset flags;
+	auto &memb = meta[type.self].members;
+	if (index >= memb.size())
+		return flags;
+	auto &dec = memb[index];
+
+	// If our type is a struct, traverse all the members as well recursively.
+	flags.merge_or(dec.decoration_flags);
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+		flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
+
+	return flags;
+}
+
+// The optional id parameter indicates the object whose type we are trying
+// to find the description for. It is optional. Most type descriptions do not
+// depend on a specific object's use of that type.
+string Compiler::type_to_string(const SPIRType &type)
+{
+	switch (type.basetype)
+	{
+	case SPIRType::Struct:
+		return to_name(type.self);
+
+	case SPIRType::Image:
+	case SPIRType::SampledImage:
+		return image_type_to_string(type);
+
+	case SPIRType::Sampler:
+		// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
+		// this distinction into the type system.
+		return "sampler";
+
+	case SPIRType::Void:
+		return "void";
+
+	default:
+		break;
+	}
+
+	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return "bool";
+		case SPIRType::Int:
+			return "int";
+		case SPIRType::UInt:
+			return "uint";
+		case SPIRType::AtomicCounter:
+			return "atomic_uint";
+		case SPIRType::Half:
+			return "float16_t";
+		case SPIRType::Float:
+			return "float";
+		case SPIRType::Double:
+			return "double";
+		case SPIRType::Int64:
+			return "int64_t";
+		case SPIRType::UInt64:
+			return "uint64_t";
+		default:
+			return "???";
+		}
+	}
+	else if (type.vecsize > 1 && type.columns == 1) // Vector builtin
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return join("bvec", type.vecsize);
+		case SPIRType::Int:
+			return join("ivec", type.vecsize);
+		case SPIRType::UInt:
+			return join("uvec", type.vecsize);
+		case SPIRType::Half:
+			return join("f16vec", type.vecsize);
+		case SPIRType::Float:
+			return join("vec", type.vecsize);
+		case SPIRType::Double:
+			return join("dvec", type.vecsize);
+		case SPIRType::Int64:
+			return join("i64vec", type.vecsize);
+		case SPIRType::UInt64:
+			return join("u64vec", type.vecsize);
+		default:
+			return "???";
+		}
+	}
+	else if (type.vecsize == type.columns) // Simple Matrix builtin
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return join("bmat", type.vecsize);
+		case SPIRType::Int:
+			return join("imat", type.vecsize);
+		case SPIRType::UInt:
+			return join("umat", type.vecsize);
+		case SPIRType::Half:
+			return join("f16mat", type.vecsize);
+		case SPIRType::Float:
+			return join("mat", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.vecsize);
+			// Matrix types not supported for int64/uint64.
+		default:
+			return "???";
+		}
+	}
+	else
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::Boolean:
+			return join("bmat", type.columns, "x", type.vecsize);
+		case SPIRType::Int:
+			return join("imat", type.columns, "x", type.vecsize);
+		case SPIRType::UInt:
+			return join("umat", type.columns, "x", type.vecsize);
+		case SPIRType::Half:
+			return join("f16mat", type.columns, "x", type.vecsize);
+		case SPIRType::Float:
+			return join("mat", type.columns, "x", type.vecsize);
+		case SPIRType::Double:
+			return join("dmat", type.columns, "x", type.vecsize);
+			// Matrix types not supported for int64/uint64.
+		default:
+			return "???";
+		}
+	}
+}
+
+string Compiler::image_type_to_string(const SPIRType &type)
+{
+	auto &imagetype = get<SPIRType>(type.image.type);
+	string res;
+
+	switch (imagetype.basetype)
+	{
+	case SPIRType::Int:
+		res = "i";
+		break;
+	case SPIRType::UInt:
+		res = "u";
+		break;
+	default:
+		break;
+	}
+
+	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+		return res + "subpassInput" + (type.image.ms ? "MS" : "");
+	else
+		res += "sampler";
+
+	switch (type.image.dim)
+	{
+	case Dim1D:
+		res += "1D";
+		break;
+	case Dim2D:
+		res += "2D";
+		break;
+	case Dim3D:
+		res += "3D";
+		break;
+	case DimCube:
+		res += "Cube";
+		break;
+
+	case DimBuffer:
+		res += "Buffer";
+		break;
+
+	case DimSubpassData:
+		res += "2D";
+		break;
+	default:
+		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+	}
+
+	if (type.image.ms)
+		res += "MS";
+
+	if (type.image.arrayed)
+	{
+		res += "Array";
+	}
+
+	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
+	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) && type.image.depth)
+		res += "Shadow";
+
+	return res;
+}
+
+const char *Compiler::format_to_string(spv::ImageFormat format)
+{
+	switch (format)
+	{
+	case ImageFormatRgba32f:
+		return "rgba32f";
+	case ImageFormatRgba16f:
+		return "rgba16f";
+	case ImageFormatR32f:
+		return "r32f";
+	case ImageFormatRgba8:
+		return "rgba8";
+	case ImageFormatRgba8Snorm:
+		return "rgba8_snorm";
+	case ImageFormatRg32f:
+		return "rg32f";
+	case ImageFormatRg16f:
+		return "rg16f";
+
+	case ImageFormatRgba32i:
+		return "rgba32i";
+	case ImageFormatRgba16i:
+		return "rgba16i";
+	case ImageFormatR32i:
+		return "r32i";
+	case ImageFormatRgba8i:
+		return "rgba8i";
+	case ImageFormatRg32i:
+		return "rg32i";
+	case ImageFormatRg16i:
+		return "rg16i";
+
+	case ImageFormatRgba32ui:
+		return "rgba32ui";
+	case ImageFormatRgba16ui:
+		return "rgba16ui";
+	case ImageFormatR32ui:
+		return "r32ui";
+	case ImageFormatRgba8ui:
+		return "rgba8ui";
+	case ImageFormatRg32ui:
+		return "rg32ui";
+	case ImageFormatRg16ui:
+		return "rg16ui";
+	case ImageFormatR11fG11fB10f:
+		return "r11f_g11f_b10f";
+	case ImageFormatR16f:
+		return "r16f";
+	case ImageFormatRgb10A2:
+		return "rgb10_a2";
+	case ImageFormatR8:
+		return "r8";
+	case ImageFormatRg8:
+		return "rg8";
+	case ImageFormatR16:
+		return "r16";
+	case ImageFormatRg16:
+		return "rg16";
+	case ImageFormatRgba16:
+		return "rgba16";
+	case ImageFormatR16Snorm:
+		return "r16_snorm";
+	case ImageFormatRg16Snorm:
+		return "rg16_snorm";
+	case ImageFormatRgba16Snorm:
+		return "rgba16_snorm";
+	case ImageFormatR8Snorm:
+		return "r8_snorm";
+	case ImageFormatRg8Snorm:
+		return "rg8_snorm";
+	case ImageFormatR8ui:
+		return "r8ui";
+	case ImageFormatRg8ui:
+		return "rg8ui";
+	case ImageFormatR16ui:
+		return "r16ui";
+	case ImageFormatRgb10a2ui:
+		return "rgb10_a2ui";
+	case ImageFormatR8i:
+		return "r8i";
+	case ImageFormatRg8i:
+		return "rg8i";
+	case ImageFormatR16i:
+		return "r16i";
+	default:
+	case ImageFormatUnknown:
+		return nullptr;
+	}
+}

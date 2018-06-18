@@ -489,6 +489,10 @@ public:
 	// The most common use here is to check if a buffer is readonly or writeonly.
 	Bitset get_buffer_block_flags(uint32_t id) const;
 
+	std::string type_to_string(const SPIRType &type);
+	std::string image_type_to_string(const SPIRType &type);
+	static const char *format_to_string(spv::ImageFormat format);
+
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -855,6 +859,8 @@ protected:
 
 	bool instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op, const uint32_t *args,
 	                                uint32_t length);
+
+	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index) const;
 
 private:
 	// Used only to implement the old deprecated get_entry_point() interface.

@@ -780,8 +780,20 @@ static int main_inner(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	unique_ptr<CompilerGLSL> compiler;
+	// Special case reflection because it has little to do with the path followed by code-outputting compilers
+	if (!args.reflect.empty())
+	{
+		CompilerReflection compiler(read_spirv_file(args.input));
+		compiler.set_format(args.reflect);
+		auto json = compiler.compile();
+		if (args.output)
+			write_string_to_file(args.output, json.c_str());
+		else
+			printf("%s", json.c_str());
+		return EXIT_SUCCESS;
+	}
 
+	unique_ptr<CompilerGLSL> compiler;
 	bool combined_image_samplers = false;
 	bool build_dummy_sampler = false;
 
@@ -790,13 +802,6 @@ static int main_inner(int argc, char *argv[])
 		compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
 		if (args.cpp_interface_name)
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
-	}
-	else if (!args.reflect.empty())
-	{
-		combined_image_samplers = !args.vulkan_semantics;
-		build_dummy_sampler = true;
-		compiler = unique_ptr<CompilerGLSL>(new CompilerReflection(read_spirv_file(args.input)));
-		static_cast<CompilerReflection *>(compiler.get())->set_format(args.reflect);
 	}
 	else if (args.msl)
 	{

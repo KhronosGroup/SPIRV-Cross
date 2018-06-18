@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2018 ARM Limited
+ * Copyright 2018 Bradley Austin Davis
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,83 +18,51 @@
 #define SPIRV_CROSS_REFLECT_HPP
 
 #include "spirv_cross.hpp"
-#include "spirv_glsl.hpp"
 #include <utility>
 #include <vector>
 
+namespace simple_json
+{
+class Stream;
+}
+
 namespace spirv_cross
 {
-class CompilerReflection : public CompilerGLSL
+class CompilerReflection : public Compiler
 {
-    using Parent = CompilerGLSL;
-
+	using Parent = Compiler;
 
 public:
-    CompilerReflection(std::vector<uint32_t> spirv_)
-        : Parent(move(spirv_))
-    {
-    }
+	CompilerReflection(std::vector<uint32_t> spirv_)
+	    : Parent(move(spirv_))
+	{
+	}
 
-    CompilerReflection(const uint32_t *ir, size_t word_count)
-        : Parent(ir, word_count)
-    {
-    }
+	CompilerReflection(const uint32_t *ir, size_t word_count)
+	    : Parent(ir, word_count)
+	{
+	}
 
-    void set_format(const std::string& format);
-    std::string compile() override;
+	void set_format(const std::string &format);
+	std::string compile() override;
 
 private:
-    static const char *execution_model_to_str(spv::ExecutionModel model);
-    
-    void emit_entry_points();
-    void emit_types();
-    void emit_resources();
-    void emit_extensions();
+	static const char *execution_model_to_str(spv::ExecutionModel model);
 
-    void emit_type(const SPIRType &type, bool& emitted_open_tag);
-    void emit_type_member(const SPIRType &type, uint32_t index);
-    void emit_type_member_qualifiers(const SPIRType &type, uint32_t index);
-    void emit_type_array(const SPIRType &type);
-    void emit_resources(const char *tag, const std::vector<Resource> &resources);
+	void emit_entry_points();
+	void emit_types();
+	void emit_resources();
+	void emit_extensions();
 
-    void begin_json_object();
-    void end_json_object();
-    void emit_json_key(const std::string& key);
-    // FIXME switch to templated types with specialization for string?
-    void emit_json_key_value(const std::string& key, const std::string& value);
-    void emit_json_key_value(const std::string& key, bool value);
-    void emit_json_key_value(const std::string& key, uint32_t value);
-    void emit_json_key_object(const std::string& key);
-    void emit_json_key_array(const std::string& key);
-    void emit_json_array_value(const std::string& value);
-    void emit_json_array_value(uint32_t value);
-    void begin_json_array();
-    void end_json_array();
+	void emit_type(const SPIRType &type, bool &emitted_open_tag);
+	void emit_type_member(const SPIRType &type, uint32_t index);
+	void emit_type_member_qualifiers(const SPIRType &type, uint32_t index);
+	void emit_type_array(const SPIRType &type);
+	void emit_resources(const char *tag, const std::vector<Resource> &resources);
 
-    template <typename... Ts>
-    inline void statement_no_return(Ts &&... ts) {
-        if (force_recompile) {
-            // Do not bother emitting code while force_recompile is active.
-            // We will compile again.
-            statement_count++;
-            return;
-        }
+	std::string to_member_name(const SPIRType &type, uint32_t index) const;
 
-        if (redirect_statement)
-            redirect_statement->push_back(join(std::forward<Ts>(ts)...));
-        else {
-            statement_indent();
-            statement_inner(std::forward<Ts>(ts)...);
-        }
-    }
-
-    enum class JsonType {
-        Object,
-        Array,
-    };
-
-    using JsonState = std::pair<JsonType, bool>;
-    std::stack<JsonState> json_state;
+	std::shared_ptr<simple_json::Stream> json_stream;
 };
 
 } // namespace spirv_cross

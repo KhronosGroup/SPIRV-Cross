@@ -689,22 +689,6 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 		statement("");
 }
 
-Bitset CompilerGLSL::combined_decoration_for_member(const SPIRType &type, uint32_t index)
-{
-	Bitset flags;
-	auto &memb = meta[type.self].members;
-	if (index >= memb.size())
-		return flags;
-	auto &dec = memb[index];
-
-	// If our type is a struct, traverse all the members as well recursively.
-	flags.merge_or(dec.decoration_flags);
-	for (uint32_t i = 0; i < type.member_types.size(); i++)
-		flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
-
-	return flags;
-}
-
 string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 {
 	string res;
@@ -786,122 +770,36 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 {
-	auto check_desktop = [this] {
-		if (options.es)
-			SPIRV_CROSS_THROW("Attempting to use image format not supported in ES profile.");
-	};
-
 	switch (format)
 	{
-	case ImageFormatRgba32f:
-		return "rgba32f";
-	case ImageFormatRgba16f:
-		return "rgba16f";
-	case ImageFormatR32f:
-		return "r32f";
-	case ImageFormatRgba8:
-		return "rgba8";
-	case ImageFormatRgba8Snorm:
-		return "rgba8_snorm";
-	case ImageFormatRg32f:
-		return "rg32f";
-	case ImageFormatRg16f:
-		return "rg16f";
-
-	case ImageFormatRgba32i:
-		return "rgba32i";
-	case ImageFormatRgba16i:
-		return "rgba16i";
-	case ImageFormatR32i:
-		return "r32i";
-	case ImageFormatRgba8i:
-		return "rgba8i";
-	case ImageFormatRg32i:
-		return "rg32i";
-	case ImageFormatRg16i:
-		return "rg16i";
-
-	case ImageFormatRgba32ui:
-		return "rgba32ui";
-	case ImageFormatRgba16ui:
-		return "rgba16ui";
-	case ImageFormatR32ui:
-		return "r32ui";
-	case ImageFormatRgba8ui:
-		return "rgba8ui";
-	case ImageFormatRg32ui:
-		return "rg32ui";
-	case ImageFormatRg16ui:
-		return "rg16ui";
-
-	// Desktop-only formats
+		// Desktop-only formats
 	case ImageFormatR11fG11fB10f:
-		check_desktop();
-		return "r11f_g11f_b10f";
 	case ImageFormatR16f:
-		check_desktop();
-		return "r16f";
 	case ImageFormatRgb10A2:
-		check_desktop();
-		return "rgb10_a2";
 	case ImageFormatR8:
-		check_desktop();
-		return "r8";
 	case ImageFormatRg8:
-		check_desktop();
-		return "rg8";
 	case ImageFormatR16:
-		check_desktop();
-		return "r16";
 	case ImageFormatRg16:
-		check_desktop();
-		return "rg16";
 	case ImageFormatRgba16:
-		check_desktop();
-		return "rgba16";
 	case ImageFormatR16Snorm:
-		check_desktop();
-		return "r16_snorm";
 	case ImageFormatRg16Snorm:
-		check_desktop();
-		return "rg16_snorm";
 	case ImageFormatRgba16Snorm:
-		check_desktop();
-		return "rgba16_snorm";
 	case ImageFormatR8Snorm:
-		check_desktop();
-		return "r8_snorm";
 	case ImageFormatRg8Snorm:
-		check_desktop();
-		return "rg8_snorm";
-
 	case ImageFormatR8ui:
-		check_desktop();
-		return "r8ui";
 	case ImageFormatRg8ui:
-		check_desktop();
-		return "rg8ui";
 	case ImageFormatR16ui:
-		check_desktop();
-		return "r16ui";
 	case ImageFormatRgb10a2ui:
-		check_desktop();
-		return "rgb10_a2ui";
-
 	case ImageFormatR8i:
-		check_desktop();
-		return "r8i";
 	case ImageFormatRg8i:
-		check_desktop();
-		return "rg8i";
 	case ImageFormatR16i:
-		check_desktop();
-		return "r16i";
-
+		if (options.es)
+			SPIRV_CROSS_THROW("Attempting to use image format not supported in ES profile.");
 	default:
-	case ImageFormatUnknown:
-		return nullptr;
+		break;
 	}
+
+	return format_to_string(format);
 }
 
 uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPackingStandard)
@@ -6749,7 +6647,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST (^, type);
+		BOP_CAST(^, type);
 		break;
 	}
 
