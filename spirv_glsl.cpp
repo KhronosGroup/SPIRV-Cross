@@ -772,7 +772,7 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 {
 	switch (format)
 	{
-		// Desktop-only formats
+	// Desktop-only formats
 	case ImageFormatR11fG11fB10f:
 	case ImageFormatR16f:
 	case ImageFormatRgb10A2:
@@ -8373,6 +8373,8 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 // The optional id parameter indicates the object whose type we are trying
 // to find the description for. It is optional. Most type descriptions do not
 // depend on a specific object's use of that type.
+// FIXME refactor in terms of `Compiler::type_to_string` as 90% of this code 
+// is duplicated there
 string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
