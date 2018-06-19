@@ -12,8 +12,11 @@ import shutil
 import argparse
 import codecs
 import json
+import multiprocessing
+from functools import partial
 
-force_no_external_validation = False
+backend = 'glsl'
+args = {}
 
 def remove_file(path):
     #print('Removing file:', path)
@@ -153,7 +156,7 @@ def validate_shader_hlsl(shader):
     subprocess.check_call(['glslangValidator', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader])
     is_no_fxc = '.nofxc.' in shader
     global ignore_fxc
-    if (not ignore_fxc) and (not force_no_external_validation) and (not is_no_fxc):
+    if (not ignore_fxc) and (not args.force_no_external_validation) and (not is_no_fxc):
         try:
             win_path = shader_to_win_path(shader)
             subprocess.check_call(['fxc', '-nologo', shader_model_hlsl(shader), win_path])
@@ -467,7 +470,7 @@ def test_shader_msl(stats, shader, update, keep, opt):
     # executable from Xcode using args: `--msl --entry main --output msl_path spirv_path`.
 #    print('SPRIV shader: ' + spirv)
 
-    if not force_no_external_validation:
+    if not args.force_no_external_validation:
         validate_shader_msl(shader, opt)
 
     remove_file(spirv)
@@ -490,28 +493,41 @@ def test_shader_reflect(stats, shader, update, keep, opt):
     regression_check_reflect(shader, reflect, update, keep, opt)
     remove_file(spirv)
 
-def test_shaders_helper(stats, shader_dir, update, malisc, keep, opt, backend):
-    for root, dirs, files in os.walk(os.path.join(shader_dir)):
+def test_shader_file(relpath, stats, shader_dir, update, keep, opt, backend):
+    if backend == 'msl':
+        test_shader_msl(stats, (shader_dir, relpath), update, keep, opt)
+    elif backend == 'hlsl':
+        test_shader_hlsl(stats, (shader_dir, relpath), update, keep, opt)
+    elif backend == 'reflect':
+        test_shader_reflect(stats, (shader_dir, relpath), update, keep, opt)
+    else:
+        test_shader(stats, (shader_dir, relpath), update, keep, opt)
+
+def test_shaders_helper(stats):
+    all_files = []
+    for root, dirs, files in os.walk(os.path.join(args.folder)):
         files = [ f for f in files if not f.startswith(".") ]   #ignore system files (esp OSX)
         for i in files:
             path = os.path.join(root, i)
-            relpath = os.path.relpath(path, shader_dir)
-            if backend == 'msl':
-                test_shader_msl(stats, (shader_dir, relpath), update, keep, opt)
-            elif backend == 'hlsl':
-                test_shader_hlsl(stats, (shader_dir, relpath), update, keep, opt)
-            elif backend == 'reflect':
-                test_shader_reflect(stats, (shader_dir, relpath), update, keep, opt)
-            else:
-                test_shader(stats, (shader_dir, relpath), update, keep, opt)
+            relpath = os.path.relpath(path, args.folder)
+            all_files.append(relpath)
 
-def test_shaders(shader_dir, update, malisc, keep, opt, backend):
-    if malisc:
+    # The child processes in parallel execution mode don't have the proper state for the global args variable, so 
+    # at this point we need to switch to explicit arguments
+    if args.parallel:
+        pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        pool.map(partial(test_shader_file, stats=stats, shader_dir=args.folder, update=args.update, keep=args.keep, opt=args.opt, backend=backend), all_files)
+    else:
+        for i in all_files:
+            test_shader_file(relpath, stats, args.folder, args.update, args.keep, args.opt, backend) 
+
+def test_shaders():
+    if args.malisc:
         with open('stats.csv', 'w') as stats:
             print('Shader,OrigRegs,OrigUniRegs,OrigALUShort,OrigLSShort,OrigTEXShort,OrigALULong,OrigLSLong,OrigTEXLong,CrossRegs,CrossUniRegs,CrossALUShort,CrossLSShort,CrossTEXShort,CrossALULong,CrossLSLong,CrossTEXLong', file = stats)
-            test_shaders_helper(stats, shader_dir, update, malisc, keep, backend)
+            test_shaders_helper(stats)
     else:
-        test_shaders_helper(None, shader_dir, update, malisc, keep, opt, backend)
+        test_shaders_helper(None)
 
 def main():
     parser = argparse.ArgumentParser(description = 'Script for regression testing.')
@@ -544,18 +560,24 @@ def main():
     parser.add_argument('--reflect',
             action = 'store_true',
             help = 'Test reflection backend.')
+    parser.add_argument('--parallel',
+            action = 'store_true',
+            help = 'Execute tests in parallel.  Useful for doing regression quickly, but bad for debugging and stat output.')
+    
+    global args;
     args = parser.parse_args()
-
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
+    if (args.parallel and (args.malisc or args.force_no_external_validation)):
+        sys.stderr.write('Parallel execution is not supported with the flags --malisc or --force-no-external-validation.  Disabling parallel.\n')
+        args.parallel = False
+        
     if args.msl:
         print_msl_compiler_version()
 
-    global force_no_external_validation
-    force_no_external_validation = args.force_no_external_validation
-    backend = 'glsl'
+    global backend
     if (args.msl or args.metal): 
         backend = 'msl'
     elif args.hlsl: 
@@ -563,7 +585,7 @@ def main():
     elif args.reflect:
         backend = 'reflect'
 
-    test_shaders(args.folder, args.update, args.malisc, args.keep, args.opt, backend)
+    test_shaders()
     if args.malisc:
         print('Stats in stats.csv!')
     print('Tests completed!')

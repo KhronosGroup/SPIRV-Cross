@@ -8275,81 +8275,23 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 
 string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 {
-	auto &imagetype = get<SPIRType>(type.image.type);
-	string res;
-
-	switch (imagetype.basetype)
+	if (type.image.dim == DimBuffer)
 	{
-	case SPIRType::Int:
-		res = "i";
-		break;
-	case SPIRType::UInt:
-		res = "u";
-		break;
-	default:
-		break;
-	}
-
-	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && options.vulkan_semantics)
-		return res + "subpassInput" + (type.image.ms ? "MS" : "");
-
-	// If we're emulating subpassInput with samplers, force sampler2D
-	// so we don't have to specify format.
-	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
-	{
-		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
-		if (type.image.dim == DimBuffer && type.image.sampled == 1)
-			res += "sampler";
-		else
-			res += type.image.sampled == 2 ? "image" : "texture";
-	}
-	else
-		res += "sampler";
-
-	switch (type.image.dim)
-	{
-	case Dim1D:
-		res += "1D";
-		break;
-	case Dim2D:
-		res += "2D";
-		break;
-	case Dim3D:
-		res += "3D";
-		break;
-	case DimCube:
-		res += "Cube";
-		break;
-
-	case DimBuffer:
 		if (options.es && options.version < 320)
 			require_extension_internal("GL_OES_texture_buffer");
 		else if (!options.es && options.version < 300)
 			require_extension_internal("GL_EXT_texture_buffer_object");
-		res += "Buffer";
-		break;
-
-	case DimSubpassData:
-		res += "2D";
-		break;
-	default:
-		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
 	}
 
-	if (type.image.ms)
-		res += "MS";
-	if (type.image.arrayed)
+	if (type.image.arrayed && is_legacy_desktop())
+		require_extension_internal("GL_EXT_texture_array");
+
+	if (!options.vulkan_semantics && type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
 	{
-		if (is_legacy_desktop())
-			require_extension_internal("GL_EXT_texture_array");
-		res += "Array";
+		return image_type_prefix(type) + "sampler" + image_type_suffix(type);
 	}
 
-	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
-	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) && type.image.depth)
-		res += "Shadow";
-
-	return res;
+	return image_type_to_string(type);
 }
 
 string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
@@ -8373,36 +8315,19 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 // The optional id parameter indicates the object whose type we are trying
 // to find the description for. It is optional. Most type descriptions do not
 // depend on a specific object's use of that type.
-// FIXME refactor in terms of `Compiler::type_to_string` as 90% of this code 
-// is duplicated there
 string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
+	if (type.basetype == SPIRType::Struct && backend.explicit_struct_type)
+		return join("struct ", type_to_string(type));
 
-	switch (type.basetype)
-	{
-	case SPIRType::Struct:
-		// Need OpName lookup here to get a "sensible" name for a struct.
-		if (backend.explicit_struct_type)
-			return join("struct ", to_name(type.self));
-		else
-			return to_name(type.self);
+	// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
+	// this distinction into the type system.
+	if (type.basetype == SPIRType::Sampler && comparison_samplers.count(id))
+		return "samplerShadow";
 
-	case SPIRType::Image:
-	case SPIRType::SampledImage:
+	if (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage)
 		return image_type_glsl(type, id);
-
-	case SPIRType::Sampler:
-		// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
-		// this distinction into the type system.
-		return comparison_samplers.count(id) ? "samplerShadow" : "sampler";
-
-	case SPIRType::Void:
-		return "void";
-
-	default:
-		break;
-	}
 
 	if (type.basetype == SPIRType::UInt && is_legacy())
 		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
@@ -8411,94 +8336,16 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	{
 		switch (type.basetype)
 		{
-		case SPIRType::Boolean:
-			return "bool";
 		case SPIRType::Int:
 			return backend.basic_int_type;
 		case SPIRType::UInt:
 			return backend.basic_uint_type;
-		case SPIRType::AtomicCounter:
-			return "atomic_uint";
-		case SPIRType::Half:
-			return "float16_t";
-		case SPIRType::Float:
-			return "float";
-		case SPIRType::Double:
-			return "double";
-		case SPIRType::Int64:
-			return "int64_t";
-		case SPIRType::UInt64:
-			return "uint64_t";
 		default:
-			return "???";
+			break;
 		}
 	}
-	else if (type.vecsize > 1 && type.columns == 1) // Vector builtin
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-			return join("bvec", type.vecsize);
-		case SPIRType::Int:
-			return join("ivec", type.vecsize);
-		case SPIRType::UInt:
-			return join("uvec", type.vecsize);
-		case SPIRType::Half:
-			return join("f16vec", type.vecsize);
-		case SPIRType::Float:
-			return join("vec", type.vecsize);
-		case SPIRType::Double:
-			return join("dvec", type.vecsize);
-		case SPIRType::Int64:
-			return join("i64vec", type.vecsize);
-		case SPIRType::UInt64:
-			return join("u64vec", type.vecsize);
-		default:
-			return "???";
-		}
-	}
-	else if (type.vecsize == type.columns) // Simple Matrix builtin
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-			return join("bmat", type.vecsize);
-		case SPIRType::Int:
-			return join("imat", type.vecsize);
-		case SPIRType::UInt:
-			return join("umat", type.vecsize);
-		case SPIRType::Half:
-			return join("f16mat", type.vecsize);
-		case SPIRType::Float:
-			return join("mat", type.vecsize);
-		case SPIRType::Double:
-			return join("dmat", type.vecsize);
-		// Matrix types not supported for int64/uint64.
-		default:
-			return "???";
-		}
-	}
-	else
-	{
-		switch (type.basetype)
-		{
-		case SPIRType::Boolean:
-			return join("bmat", type.columns, "x", type.vecsize);
-		case SPIRType::Int:
-			return join("imat", type.columns, "x", type.vecsize);
-		case SPIRType::UInt:
-			return join("umat", type.columns, "x", type.vecsize);
-		case SPIRType::Half:
-			return join("f16mat", type.columns, "x", type.vecsize);
-		case SPIRType::Float:
-			return join("mat", type.columns, "x", type.vecsize);
-		case SPIRType::Double:
-			return join("dmat", type.columns, "x", type.vecsize);
-		// Matrix types not supported for int64/uint64.
-		default:
-			return "???";
-		}
-	}
+
+	return type_to_string(type);
 }
 
 void CompilerGLSL::add_variable(unordered_set<string> &variables, string &name)

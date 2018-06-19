@@ -306,8 +306,8 @@ void CompilerReflection::emit_type(const SPIRType &type, bool &emitted_open_tag)
 	json_stream->emit_json_key_object(std::to_string(type.self));
 	json_stream->emit_json_key_value("name", name);
 
-    // FIXME I'd like to emit the size here, but it triggers a crash in some shaders
-    // due to a missing offset decoration.
+	// FIXME I'd like to emit the size here, but it triggers a crash in some shaders
+	// due to a missing offset decoration.
 #if 0 
     json_stream->emit_json_key_value("size", uint32_t(get_declared_struct_size(type)));
 #endif

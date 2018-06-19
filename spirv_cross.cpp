@@ -4587,7 +4587,7 @@ Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t i
 // The optional id parameter indicates the object whose type we are trying
 // to find the description for. It is optional. Most type descriptions do not
 // depend on a specific object's use of that type.
-string Compiler::type_to_string(const SPIRType &type)
+string Compiler::type_to_string(const SPIRType &type) const
 {
 	switch (type.basetype)
 	{
@@ -4704,28 +4704,47 @@ string Compiler::type_to_string(const SPIRType &type)
 	}
 }
 
-string Compiler::image_type_to_string(const SPIRType &type)
+string Compiler::image_type_to_string(const SPIRType &type) const
 {
-	auto &imagetype = get<SPIRType>(type.image.type);
-	string res;
-
-	switch (imagetype.basetype)
-	{
-	case SPIRType::Int:
-		res = "i";
-		break;
-	case SPIRType::UInt:
-		res = "u";
-		break;
-	default:
-		break;
-	}
+	string res = image_type_prefix(type);
 
 	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
 		return res + "subpassInput" + (type.image.ms ? "MS" : "");
+
+	// If we're emulating subpassInput with samplers, force sampler2D
+	// so we don't have to specify format.
+	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+	{
+		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
+		if (type.image.dim == DimBuffer && type.image.sampled == 1)
+			res += "sampler";
+		else
+			res += type.image.sampled == 2 ? "image" : "texture";
+	}
 	else
 		res += "sampler";
 
+	res += image_type_suffix(type);
+	return res;
+}
+
+string Compiler::image_type_prefix(const SPIRType &type) const
+{
+	auto imagetype = get<SPIRType>(type.image.type);
+	switch (imagetype.basetype)
+	{
+	case SPIRType::Int:
+		return "i";
+	case SPIRType::UInt:
+		return "u";
+	default:
+		return "";
+	}
+}
+
+string Compiler::image_type_suffix(const SPIRType &type)
+{
+	string res;
 	switch (type.image.dim)
 	{
 	case Dim1D:
@@ -4756,9 +4775,7 @@ string Compiler::image_type_to_string(const SPIRType &type)
 		res += "MS";
 
 	if (type.image.arrayed)
-	{
 		res += "Array";
-	}
 
 	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
 	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) && type.image.depth)
