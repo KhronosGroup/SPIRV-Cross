@@ -54,6 +54,7 @@ private:
 	void emit_entry_points();
 	void emit_types();
 	void emit_resources();
+	void emit_specialization_constants();
 
 	void emit_type(const SPIRType &type, bool &emitted_open_tag);
 	void emit_type_member(const SPIRType &type, uint32_t index);

@@ -16,7 +16,7 @@
 
 #include "spirv_reflect.hpp"
 #include "spirv_glsl.hpp"
-#include <cassert>
+#include <iomanip>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -46,6 +46,8 @@ public:
 	void emit_json_key_value(const std::string &key, const std::string &value);
 	void emit_json_key_value(const std::string &key, bool value);
 	void emit_json_key_value(const std::string &key, uint32_t value);
+	void emit_json_key_value(const std::string &key, int32_t value);
+	void emit_json_key_value(const std::string &key, float value);
 	void emit_json_key_object(const std::string &key);
 	void emit_json_key_array(const std::string &key);
 
@@ -201,6 +203,18 @@ void Stream::emit_json_key_value(const std::string &key, uint32_t value)
 	statement_inner(value);
 }
 
+void Stream::emit_json_key_value(const std::string &key, int32_t value)
+{
+	emit_json_key(key);
+	statement_inner(value);
+}
+
+void Stream::emit_json_key_value(const std::string &key, float value)
+{
+	emit_json_key(key);
+	statement_inner(value);
+}
+
 void Stream::emit_json_key_value(const std::string &key, bool value)
 {
 	emit_json_key(key);
@@ -242,6 +256,7 @@ string CompilerReflection::compile()
 	emit_entry_points();
 	emit_types();
 	emit_resources();
+	emit_specialization_constants();
 	json_stream->end_json_object();
 	return json_stream->str();
 }
@@ -407,7 +422,7 @@ void CompilerReflection::emit_resources()
 	emit_resources("images", res.storage_images);
 	emit_resources("ssbos", res.storage_buffers);
 	emit_resources("ubos", res.uniform_buffers);
-	emit_resources("push", res.push_constant_buffers);
+	emit_resources("push_constants", res.push_constant_buffers);
 	emit_resources("counters", res.atomic_counters);
 }
 
@@ -503,6 +518,43 @@ void CompilerReflection::emit_resources(const char *tag, const vector<Resource> 
 			const char *fmt = format_to_glsl(type.image.format);
 			if (fmt != nullptr)
 				json_stream->emit_json_key_value("format", std::string(fmt));
+		}
+		json_stream->end_json_object();
+	}
+	json_stream->end_json_array();
+}
+
+void CompilerReflection::emit_specialization_constants()
+{
+	auto specialization_constants = get_specialization_constants();
+	if (specialization_constants.empty())
+		return;
+
+	json_stream->emit_json_key_array("specialization_constants");
+	for (const auto spec_const : specialization_constants)
+	{
+		auto &c = get<SPIRConstant>(spec_const.id);
+		auto type = get<SPIRType>(c.constant_type);
+		json_stream->begin_json_object();
+		json_stream->emit_json_key_value("id", spec_const.constant_id);
+		json_stream->emit_json_key_value("type", type_to_glsl(type));
+		switch (type.basetype)
+		{
+		case SPIRType::UInt:
+			json_stream->emit_json_key_value("default_value", c.scalar());
+			break;
+
+		case SPIRType::Int:
+			json_stream->emit_json_key_value("default_value", c.scalar_i32());
+			break;
+
+		case SPIRType::Float:
+			json_stream->emit_json_key_value("default_value", c.scalar_f32());
+			break;
+
+		case SPIRType::Boolean:
+			json_stream->emit_json_key_value("default_value", c.scalar() != 0);
+			break;
 		}
 		json_stream->end_json_object();
 	}
