@@ -151,16 +151,16 @@ struct CLIParser
 	}
 
 	// Return a string only if it's not prefixed with `--`, otherwise return the default value
-	const char *next_value_string(const char *defaultValue)
+	const char *next_value_string(const char *default_value)
 	{
 		if (!argc)
 		{
-			return defaultValue;
+			return default_value;
 		}
 
 		if (0 == strncmp("--", *argv, 2))
 		{
-			return defaultValue;
+			return default_value;
 		}
 
 		return next_string();

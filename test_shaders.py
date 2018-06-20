@@ -564,14 +564,14 @@ def main():
             action = 'store_true',
             help = 'Execute tests in parallel.  Useful for doing regression quickly, but bad for debugging and stat output.')
     
-    global args;
+    global args
     args = parser.parse_args()
     if not args.folder:
         sys.stderr.write('Need shader folder.\n')
         sys.exit(1)
 
-    if (args.parallel and (args.malisc or args.force_no_external_validation)):
-        sys.stderr.write('Parallel execution is not supported with the flags --malisc or --force-no-external-validation.  Disabling parallel.\n')
+    if (args.parallel and (args.malisc or args.force_no_external_validation or args.update)):
+        sys.stderr.write('Parallel execution is disabled when using the flags --update, --malisc or --force-no-external-validation\n')
         args.parallel = False
         
     if args.msl:

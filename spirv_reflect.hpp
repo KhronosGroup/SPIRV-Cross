@@ -17,7 +17,7 @@
 #ifndef SPIRV_CROSS_REFLECT_HPP
 #define SPIRV_CROSS_REFLECT_HPP
 
-#include "spirv_cross.hpp"
+#include "spirv_glsl.hpp"
 #include <utility>
 #include <vector>
 
@@ -28,31 +28,32 @@ class Stream;
 
 namespace spirv_cross
 {
-class CompilerReflection : public Compiler
+class CompilerReflection : public CompilerGLSL
 {
-	using Parent = Compiler;
+	using Parent = CompilerGLSL;
 
 public:
 	CompilerReflection(std::vector<uint32_t> spirv_)
 	    : Parent(move(spirv_))
 	{
+		options.vulkan_semantics = true;
 	}
 
 	CompilerReflection(const uint32_t *ir, size_t word_count)
 	    : Parent(ir, word_count)
 	{
+		options.vulkan_semantics = true;
 	}
 
 	void set_format(const std::string &format);
 	std::string compile() override;
 
 private:
-	static const char *execution_model_to_str(spv::ExecutionModel model);
+	static std::string execution_model_to_str(spv::ExecutionModel model);
 
 	void emit_entry_points();
 	void emit_types();
 	void emit_resources();
-	void emit_extensions();
 
 	void emit_type(const SPIRType &type, bool &emitted_open_tag);
 	void emit_type_member(const SPIRType &type, uint32_t index);

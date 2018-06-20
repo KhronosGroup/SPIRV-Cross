@@ -233,32 +233,17 @@ void CompilerReflection::set_format(const std::string &format)
 
 string CompilerReflection::compile()
 {
-
 	// Force a classic "C" locale, reverts when function returns
 	ClassicLocale classic_locale;
 
 	// Move constructor for this type is broken on GCC 4.9 ...
-	json_stream = unique_ptr<simple_json::Stream>(new simple_json::Stream());
+	json_stream = std::make_shared<simple_json::Stream>();
 	json_stream->begin_json_object();
-	emit_extensions();
+	emit_entry_points();
 	emit_types();
 	emit_resources();
 	json_stream->end_json_object();
-
 	return json_stream->str();
-}
-
-void CompilerReflection::emit_extensions()
-{
-#if 0 
-	if (forced_extensions.empty())
-		return;
-
-	json_stream->emit_json_key_array("extensions");
-	for (const auto &ext : forced_extensions)
-		json_stream->emit_json_array_value(ext);
-	json_stream->end_json_array();
-#endif
 }
 
 void CompilerReflection::emit_types()
@@ -285,18 +270,10 @@ void CompilerReflection::emit_types()
 
 void CompilerReflection::emit_type(const SPIRType &type, bool &emitted_open_tag)
 {
-	auto name = type_to_string(type);
+	auto name = type_to_glsl(type);
 
-	// Struct types can be stamped out multiple times
-	// with just different offsets, matrix layouts, etc ...
-	// Type-punning with these types is legal, which complicates things
-	// when we are storing struct and array types in an SSBO for example.
-	// If the type master is packed however, we can no longer assume that the struct declaration will be redundant.
-	if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
+	if (type.type_alias != 0)
 		return;
-
-	//add_resource_name(type.self);
-	//type.member_name_cache.clear();
 
 	if (!emitted_open_tag)
 	{
@@ -305,14 +282,18 @@ void CompilerReflection::emit_type(const SPIRType &type, bool &emitted_open_tag)
 	}
 	json_stream->emit_json_key_object(std::to_string(type.self));
 	json_stream->emit_json_key_value("name", name);
-
-	// FIXME I'd like to emit the size here, but it triggers a crash in some shaders
-	// due to a missing offset decoration.
-#if 0 
-    json_stream->emit_json_key_value("size", uint32_t(get_declared_struct_size(type)));
-#endif
-
 	json_stream->emit_json_key_array("members");
+	// FIXME ideally we'd like to emit the size of a structure as a
+	// convenience to people parsing the reflected JSON.  The problem
+	// is that there's no implicit size for a type.  It's final size
+	// will be determined by the top level declaration in which it's
+	// included.  So there might be one size for the struct if it's
+	// included in a std140 uniform block and another if it's included
+	// in a std430 uniform block.
+	// The solution is to include *all* potential sizes as a map of
+	// layout type name to integer, but that will probably require
+	// some additional logic being written in this class, or in the
+	// parent CompilerGLSL class.
 	auto size = type.member_types.size();
 	for (uint32_t i = 0; i < size; ++i)
 	{
@@ -327,6 +308,8 @@ void CompilerReflection::emit_type_member(const SPIRType &type, uint32_t index)
 	auto &membertype = get<SPIRType>(type.member_types[index]);
 	json_stream->begin_json_object();
 	auto name = to_member_name(type, index);
+	// FIXME we'd like to emit the offset of each member, but such offsets are
+	// context dependent.  See the comment above regarding structure sizes
 	json_stream->emit_json_key_value("name", name);
 	if (membertype.basetype == SPIRType::Struct)
 	{
@@ -334,7 +317,7 @@ void CompilerReflection::emit_type_member(const SPIRType &type, uint32_t index)
 	}
 	else
 	{
-		json_stream->emit_json_key_value("type", type_to_string(membertype));
+		json_stream->emit_json_key_value("type", type_to_glsl(membertype));
 	}
 	emit_type_member_qualifiers(type, index);
 	json_stream->end_json_object();
@@ -345,6 +328,9 @@ void CompilerReflection::emit_type_array(const SPIRType &type)
 	if (!type.array.empty())
 	{
 		json_stream->emit_json_key_array("array");
+		// Note that we emit the zeros here as a means of identifying
+		// unbounded arrays.  This is necessary as otherwise there would
+		// be no way of differentiating between float[4] and float[4][]
 		for (const auto &value : type.array)
 			json_stream->emit_json_array_value(value);
 		json_stream->end_json_array();
@@ -370,22 +356,22 @@ void CompilerReflection::emit_type_member_qualifiers(const SPIRType &type, uint3
 	}
 }
 
-const char *CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
+string CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
 {
 	switch (model)
 	{
 	case spv::ExecutionModelVertex:
-		return "vertex";
+		return "vert";
 	case spv::ExecutionModelTessellationControl:
-		return "tessellation control";
+		return "tesc";
 	case ExecutionModelTessellationEvaluation:
-		return "tessellation evaluation";
+		return "tese";
 	case ExecutionModelGeometry:
-		return "geometry";
+		return "geom";
 	case ExecutionModelFragment:
-		return "fragment";
+		return "frag";
 	case ExecutionModelGLCompute:
-		return "compute";
+		return "comp";
 	default:
 		return "???";
 	}
@@ -457,7 +443,7 @@ void CompilerReflection::emit_resources(const char *tag, const vector<Resource> 
 		}
 		else
 		{
-			json_stream->emit_json_key_value("type", type_to_string(type));
+			json_stream->emit_json_key_value("type", type_to_glsl(type));
 		}
 
 		json_stream->emit_json_key_value("name", !res.name.empty() ? res.name : get_fallback_name(fallback_id));
@@ -514,7 +500,7 @@ void CompilerReflection::emit_resources(const char *tag, const vector<Resource> 
 		// Only emit the format for storage images.
 		if (type.basetype == SPIRType::Image && type.image.sampled == 2)
 		{
-			const char *fmt = format_to_string(type.image.format);
+			const char *fmt = format_to_glsl(type.image.format);
 			if (fmt != nullptr)
 				json_stream->emit_json_key_value("format", std::string(fmt));
 		}

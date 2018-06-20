@@ -857,11 +857,7 @@ protected:
 	                                uint32_t length);
 
 	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index) const;
-	std::string type_to_string(const SPIRType &type) const;
-	std::string image_type_to_string(const SPIRType &type) const;
-	std::string image_type_prefix(const SPIRType &type) const;
-	static std::string image_type_suffix(const SPIRType &type);
-	static const char *format_to_string(spv::ImageFormat format);
+	static bool is_desktop_only_format(spv::ImageFormat format);
 
 private:
 	// Used only to implement the old deprecated get_entry_point() interface.
