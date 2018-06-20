@@ -1,0 +1,474 @@
+{
+    "entryPoints" : [
+        {
+            "name" : "main",
+            "mode" : "comp"
+        }
+    ],
+    "types" : {
+        "11" : {
+            "name" : "S0",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec2",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 8
+                }
+            ]
+        },
+        "14" : {
+            "name" : "S1",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec3",
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 12
+                }
+            ]
+        },
+        "17" : {
+            "name" : "S2",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec3",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 16
+                }
+            ]
+        },
+        "19" : {
+            "name" : "S3",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec2",
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 8
+                }
+            ]
+        },
+        "20" : {
+            "name" : "S4",
+            "members" : [
+                {
+                    "name" : "c",
+                    "type" : "vec2",
+                    "offset" : 0
+                }
+            ]
+        },
+        "23" : {
+            "name" : "Content",
+            "members" : [
+                {
+                    "name" : "m0s",
+                    "type" : "11",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 0
+                },
+                {
+                    "name" : "m1s",
+                    "type" : "14",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 16
+                },
+                {
+                    "name" : "m2s",
+                    "type" : "17",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 32
+                },
+                {
+                    "name" : "m0",
+                    "type" : "11",
+                    "offset" : 64
+                },
+                {
+                    "name" : "m1",
+                    "type" : "14",
+                    "offset" : 80
+                },
+                {
+                    "name" : "m2",
+                    "type" : "17",
+                    "offset" : 96
+                },
+                {
+                    "name" : "m3",
+                    "type" : "19",
+                    "offset" : 128
+                },
+                {
+                    "name" : "m4",
+                    "type" : "float",
+                    "offset" : 144
+                },
+                {
+                    "name" : "m3s",
+                    "type" : "20",
+                    "array" : [
+                        8
+                    ],
+                    "offset" : 152
+                }
+            ]
+        },
+        "36" : {
+            "name" : "SSBO1",
+            "members" : [
+                {
+                    "name" : "content",
+                    "type" : "23",
+                    "offset" : 0
+                },
+                {
+                    "name" : "content1",
+                    "type" : "23",
+                    "array" : [
+                        2
+                    ],
+                    "offset" : 224
+                },
+                {
+                    "name" : "content2",
+                    "type" : "23",
+                    "offset" : 672
+                },
+                {
+                    "name" : "m0",
+                    "type" : "mat2",
+                    "offset" : 896
+                },
+                {
+                    "name" : "m1",
+                    "type" : "mat2",
+                    "offset" : 912
+                },
+                {
+                    "name" : "m2",
+                    "type" : "mat2x3",
+                    "array" : [
+                        4
+                    ],
+                    "offset" : 928
+                },
+                {
+                    "name" : "m3",
+                    "type" : "mat3x2",
+                    "offset" : 1056
+                },
+                {
+                    "name" : "m4",
+                    "type" : "mat2",
+                    "row_major" : true,
+                    "offset" : 1080
+                },
+                {
+                    "name" : "m5",
+                    "type" : "mat2",
+                    "row_major" : true,
+                    "array" : [
+                        9
+                    ],
+                    "offset" : 1096
+                },
+                {
+                    "name" : "m6",
+                    "type" : "mat2x3",
+                    "row_major" : true,
+                    "array" : [
+                        2,
+                        4
+                    ],
+                    "offset" : 1240
+                },
+                {
+                    "name" : "m7",
+                    "type" : "mat3x2",
+                    "row_major" : true,
+                    "offset" : 1440
+                },
+                {
+                    "name" : "array",
+                    "type" : "float",
+                    "array" : [
+                        0
+                    ],
+                    "offset" : 1472
+                }
+            ]
+        },
+        "42" : {
+            "name" : "S0",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec2",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 16
+                }
+            ]
+        },
+        "44" : {
+            "name" : "S1",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec3",
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 12
+                }
+            ]
+        },
+        "47" : {
+            "name" : "S2",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec3",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 16
+                }
+            ]
+        },
+        "49" : {
+            "name" : "S3",
+            "members" : [
+                {
+                    "name" : "a",
+                    "type" : "vec2",
+                    "offset" : 0
+                },
+                {
+                    "name" : "b",
+                    "type" : "float",
+                    "offset" : 8
+                }
+            ]
+        },
+        "50" : {
+            "name" : "S4",
+            "members" : [
+                {
+                    "name" : "c",
+                    "type" : "vec2",
+                    "offset" : 0
+                }
+            ]
+        },
+        "52" : {
+            "name" : "Content",
+            "members" : [
+                {
+                    "name" : "m0s",
+                    "type" : "42",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 0
+                },
+                {
+                    "name" : "m1s",
+                    "type" : "44",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 32
+                },
+                {
+                    "name" : "m2s",
+                    "type" : "47",
+                    "array" : [
+                        1
+                    ],
+                    "offset" : 48
+                },
+                {
+                    "name" : "m0",
+                    "type" : "42",
+                    "offset" : 80
+                },
+                {
+                    "name" : "m1",
+                    "type" : "44",
+                    "offset" : 112
+                },
+                {
+                    "name" : "m2",
+                    "type" : "47",
+                    "offset" : 128
+                },
+                {
+                    "name" : "m3",
+                    "type" : "49",
+                    "offset" : 160
+                },
+                {
+                    "name" : "m4",
+                    "type" : "float",
+                    "offset" : 176
+                },
+                {
+                    "name" : "m3s",
+                    "type" : "50",
+                    "array" : [
+                        8
+                    ],
+                    "offset" : 192
+                }
+            ]
+        },
+        "59" : {
+            "name" : "SSBO0",
+            "members" : [
+                {
+                    "name" : "content",
+                    "type" : "52",
+                    "offset" : 0
+                },
+                {
+                    "name" : "content1",
+                    "type" : "52",
+                    "array" : [
+                        2
+                    ],
+                    "offset" : 320
+                },
+                {
+                    "name" : "content2",
+                    "type" : "52",
+                    "offset" : 960
+                },
+                {
+                    "name" : "m0",
+                    "type" : "mat2",
+                    "offset" : 1280
+                },
+                {
+                    "name" : "m1",
+                    "type" : "mat2",
+                    "offset" : 1312
+                },
+                {
+                    "name" : "m2",
+                    "type" : "mat2x3",
+                    "array" : [
+                        4
+                    ],
+                    "offset" : 1344
+                },
+                {
+                    "name" : "m3",
+                    "type" : "mat3x2",
+                    "offset" : 1472
+                },
+                {
+                    "name" : "m4",
+                    "type" : "mat2",
+                    "row_major" : true,
+                    "offset" : 1520
+                },
+                {
+                    "name" : "m5",
+                    "type" : "mat2",
+                    "row_major" : true,
+                    "array" : [
+                        9
+                    ],
+                    "offset" : 1552
+                },
+                {
+                    "name" : "m6",
+                    "type" : "mat2x3",
+                    "row_major" : true,
+                    "array" : [
+                        2,
+                        4
+                    ],
+                    "offset" : 1840
+                },
+                {
+                    "name" : "m7",
+                    "type" : "mat3x2",
+                    "row_major" : true,
+                    "offset" : 2224
+                },
+                {
+                    "name" : "array",
+                    "type" : "float",
+                    "array" : [
+                        0
+                    ],
+                    "offset" : 2256
+                }
+            ]
+        }
+    },
+    "ssbos" : [
+        {
+            "type" : "36",
+            "name" : "SSBO1",
+            "restrict" : true,
+            "block_size" : 1472,
+            "set" : 0,
+            "binding" : 1
+        },
+        {
+            "type" : "59",
+            "name" : "SSBO0",
+            "restrict" : true,
+            "block_size" : 2256,
+            "set" : 0,
+            "binding" : 0
+        }
+    ]
+}

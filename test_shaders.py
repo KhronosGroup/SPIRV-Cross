@@ -519,7 +519,7 @@ def test_shaders_helper(stats):
         pool.map(partial(test_shader_file, stats=stats, shader_dir=args.folder, update=args.update, keep=args.keep, opt=args.opt, backend=backend), all_files)
     else:
         for i in all_files:
-            test_shader_file(relpath, stats, args.folder, args.update, args.keep, args.opt, backend) 
+            test_shader_file(i, stats, args.folder, args.update, args.keep, args.opt, backend) 
 
 def test_shaders():
     if args.malisc:
