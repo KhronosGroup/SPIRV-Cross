@@ -9657,32 +9657,61 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		statement("switch (", to_expression(block.condition), ")");
 		begin_scope();
 
+		// Multiple case labels can branch to same block, so find all unique blocks.
+		bool emitted_default = false;
+		unordered_set<uint32_t> emitted_blocks;
+
 		for (auto &c : block.cases)
 		{
-			auto case_value =
-			    uint32_t_case ? convert_to_string(uint32_t(c.value)) : convert_to_string(int32_t(c.value));
-			statement("case ", case_value, ":");
+			if (emitted_blocks.count(c.block) != 0)
+				continue;
+
+			// Emit all case labels which branch to our target.
+			// FIXME: O(n^2), revisit if we hit shaders with 100++ case labels ...
+			for (auto &other_case : block.cases)
+			{
+				if (other_case.block == c.block)
+				{
+					auto case_value = uint32_t_case ? convert_to_string(uint32_t(other_case.value)) :
+					                                  convert_to_string(int32_t(other_case.value));
+					statement("case ", case_value, ":");
+				}
+			}
+
+			// Maybe we share with default block?
+			if (block.default_block == c.block)
+			{
+				statement("default:");
+				emitted_default = true;
+			}
+
+			// Complete the target.
+			emitted_blocks.insert(c.block);
+
 			begin_scope();
 			branch(block.self, c.block);
 			end_scope();
 		}
 
-		if (block.default_block != block.next_block)
+		if (!emitted_default)
 		{
-			statement("default:");
-			begin_scope();
-			if (is_break(block.default_block))
-				SPIRV_CROSS_THROW("Cannot break; out of a switch statement and out of a loop at the same time ...");
-			branch(block.self, block.default_block);
-			end_scope();
-		}
-		else if (flush_phi_required(block.self, block.next_block))
-		{
-			statement("default:");
-			begin_scope();
-			flush_phi(block.self, block.next_block);
-			statement("break;");
-			end_scope();
+			if (block.default_block != block.next_block)
+			{
+				statement("default:");
+				begin_scope();
+				if (is_break(block.default_block))
+					SPIRV_CROSS_THROW("Cannot break; out of a switch statement and out of a loop at the same time ...");
+				branch(block.self, block.default_block);
+				end_scope();
+			}
+			else if (flush_phi_required(block.self, block.next_block))
+			{
+				statement("default:");
+				begin_scope();
+				flush_phi(block.self, block.next_block);
+				statement("break;");
+				end_scope();
+			}
 		}
 
 		end_scope();
