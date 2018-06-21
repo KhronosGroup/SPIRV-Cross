@@ -6,7 +6,7 @@
         }
     ],
     "types" : {
-        "19" : {
+        "_19" : {
             "name" : "Foo",
             "members" : [
                 {
@@ -16,12 +16,12 @@
                 }
             ]
         },
-        "21" : {
+        "_21" : {
             "name" : "SSBO2",
             "members" : [
                 {
                     "name" : "out_data",
-                    "type" : "19",
+                    "type" : "_19",
                     "array" : [
                         0
                     ],
@@ -29,12 +29,12 @@
                 }
             ]
         },
-        "28" : {
+        "_28" : {
             "name" : "SSBO",
             "members" : [
                 {
                     "name" : "in_data",
-                    "type" : "19",
+                    "type" : "_19",
                     "array" : [
                         0
                     ],
@@ -45,7 +45,7 @@
     },
     "ssbos" : [
         {
-            "type" : "21",
+            "type" : "_21",
             "name" : "SSBO2",
             "writeonly" : true,
             "block_size" : 0,
@@ -53,7 +53,7 @@
             "binding" : 1
         },
         {
-            "type" : "28",
+            "type" : "_28",
             "name" : "SSBO",
             "readonly" : true,
             "block_size" : 0,

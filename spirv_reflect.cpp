@@ -295,7 +295,7 @@ void CompilerReflection::emit_type(const SPIRType &type, bool &emitted_open_tag)
 		json_stream->emit_json_key_object("types");
 		emitted_open_tag = true;
 	}
-	json_stream->emit_json_key_object(std::to_string(type.self));
+	json_stream->emit_json_key_object("_" + std::to_string(type.self));
 	json_stream->emit_json_key_value("name", name);
 	json_stream->emit_json_key_array("members");
 	// FIXME ideally we'd like to emit the size of a structure as a
@@ -328,7 +328,7 @@ void CompilerReflection::emit_type_member(const SPIRType &type, uint32_t index)
 	json_stream->emit_json_key_value("name", name);
 	if (membertype.basetype == SPIRType::Struct)
 	{
-		json_stream->emit_json_key_value("type", std::to_string(membertype.self));
+		json_stream->emit_json_key_value("type", "_" + std::to_string(membertype.self));
 	}
 	else
 	{
@@ -454,7 +454,7 @@ void CompilerReflection::emit_resources(const char *tag, const vector<Resource> 
 
 		if (type.basetype == SPIRType::Struct)
 		{
-			json_stream->emit_json_key_value("type", std::to_string(res.base_type_id));
+			json_stream->emit_json_key_value("type", "_" + std::to_string(res.base_type_id));
 		}
 		else
 		{

@@ -6,7 +6,7 @@
         }
     ],
     "types" : {
-        "8" : {
+        "_8" : {
             "name" : "gl_PerVertex",
             "members" : [
                 {
