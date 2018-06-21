@@ -681,11 +681,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flip-vert-y", [&args](CLIParser &) { args.yflip = true; });
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
-	cbs.add("--reflect", [&args](CLIParser &parser) {
-		// force vulkan semantics for reflection
-		args.vulkan_semantics = true;
-		args.reflect = parser.next_value_string("json");
-	});
+	cbs.add("--reflect", [&args](CLIParser &parser) { args.reflect = parser.next_value_string("json"); });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
