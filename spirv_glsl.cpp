@@ -3947,7 +3947,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
-	if (is_legacy() && ((imgtype.basetype == SPIRType::SampledImage) || (imgtype.basetype == SPIRType::Sampler)) && imgtype.image.depth)
+	if (is_legacy() && imgtype.image.depth)
 		expr += ".r";
 
 	emit_op(result_type, id, expr, forward);
