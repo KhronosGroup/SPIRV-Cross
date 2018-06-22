@@ -478,6 +478,7 @@ struct CLIArguments
 	bool fixup = false;
 	bool yflip = false;
 	bool sso = false;
+	bool support_nonzero_baseinstance = true;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -530,6 +531,7 @@ static void print_help()
 	                "\t[--msl]\n"
 	                "\t[--msl-version <MMmmpp>]\n"
 	                "\t[--hlsl]\n"
+	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
 	                "\t[--hlsl-enable-compat]\n"
 	                "\t[--separate-shader-objects]\n"
@@ -546,7 +548,8 @@ static void print_help()
 	                "\t[--rename-interface-variable <in|out> <location> <new_variable_name>]\n"
 	                "\t[--set-hlsl-vertex-input-semantic <location> <semantic>]\n"
 	                "\t[--rename-entry-point <old> <new> <stage>]\n"
-	                "\t[--combined-samplers-inherit-bindings]"
+	                "\t[--combined-samplers-inherit-bindings]\n"
+	                "\t[--no-support-nonzero-baseinstance]\n"
 	                "\n");
 }
 
@@ -756,6 +759,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--combined-samplers-inherit-bindings",
 	        [&args](CLIParser &) { args.combined_samplers_inherit_bindings = true; });
 
+	cbs.add("--no-support-nonzero-baseinstance", [&](CLIParser &) { args.support_nonzero_baseinstance = false; });
+
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };
 
@@ -926,6 +931,7 @@ static int main_inner(int argc, char *argv[])
 	opts.vulkan_semantics = args.vulkan_semantics;
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.vertex.flip_vert_y = args.yflip;
+	opts.vertex.support_nonzero_base_instance = args.support_nonzero_baseinstance;
 	compiler->set_common_options(opts);
 
 	// Set HLSL specific options.

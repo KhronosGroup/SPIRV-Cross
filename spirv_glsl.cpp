@@ -2201,7 +2201,8 @@ void CompilerGLSL::emit_resources()
 			{
 				// For gl_InstanceIndex emulation on GLES, the API user needs to
 				// supply this uniform.
-				if (meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
+				if (options.vertex.support_nonzero_base_instance &&
+				    meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
 				{
 					statement("uniform int SPIRV_Cross_BaseInstance;");
 					emitted = true;
@@ -4916,8 +4917,10 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInInstanceIndex:
 		if (options.vulkan_semantics)
 			return "gl_InstanceIndex";
-		else
+		else if (options.vertex.support_nonzero_base_instance)
 			return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
+		else
+			return "gl_InstanceID";
 	case BuiltInPrimitiveId:
 		return "gl_PrimitiveID";
 	case BuiltInInvocationId:
