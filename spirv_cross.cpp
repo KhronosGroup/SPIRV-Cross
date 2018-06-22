@@ -4567,3 +4567,52 @@ bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &resul
 			return false;
 	}
 }
+
+Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t index) const
+{
+	Bitset flags;
+	auto &memb = meta[type.self].members;
+	if (index >= memb.size())
+		return flags;
+	auto &dec = memb[index];
+
+	// If our type is a struct, traverse all the members as well recursively.
+	flags.merge_or(dec.decoration_flags);
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+		flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
+
+	return flags;
+}
+
+bool Compiler::is_desktop_only_format(spv::ImageFormat format)
+{
+	switch (format)
+	{
+	// Desktop-only formats
+	case ImageFormatR11fG11fB10f:
+	case ImageFormatR16f:
+	case ImageFormatRgb10A2:
+	case ImageFormatR8:
+	case ImageFormatRg8:
+	case ImageFormatR16:
+	case ImageFormatRg16:
+	case ImageFormatRgba16:
+	case ImageFormatR16Snorm:
+	case ImageFormatRg16Snorm:
+	case ImageFormatRgba16Snorm:
+	case ImageFormatR8Snorm:
+	case ImageFormatRg8Snorm:
+	case ImageFormatR8ui:
+	case ImageFormatRg8ui:
+	case ImageFormatR16ui:
+	case ImageFormatRgb10a2ui:
+	case ImageFormatR8i:
+	case ImageFormatRg8i:
+	case ImageFormatR16i:
+		return true;
+	default:
+		break;
+	}
+
+	return false;
+}

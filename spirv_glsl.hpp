@@ -276,7 +276,6 @@ protected:
 		{
 			for (uint32_t i = 0; i < indent; i++)
 				(*buffer) << "    ";
-
 			statement_inner(std::forward<Ts>(ts)...);
 			(*buffer) << '\n';
 		}
@@ -451,7 +450,6 @@ protected:
 	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	virtual std::string to_interpolation_qualifiers(const Bitset &flags);
-	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index);
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(uint32_t image_id, uint32_t samp_id);
 	virtual bool skip_argument(uint32_t id) const;
