@@ -3542,6 +3542,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			require_extension_internal("GL_ARB_shader_texture_lod");
 	}
 
+	// texture
 	if (op == "texture")
 		return join("texture", type);
 	else if (op == "textureLod")
@@ -3561,6 +3562,27 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 		else
 			return join("texture", type);
+	}
+	// shadow
+	else if (op == "shadow")
+		return join("shadow", type);
+	else if (op == "shadowLodOffset")
+	{
+		if (use_explicit_lod)
+			return join("shadow", type, "LodOffset");
+		else
+			return join("shadow", type);
+	}
+	else if (op == "shadowProjGrad")
+		return join("shadow", type, "ProjGrad");
+	else if (op == "shadowGrad")
+		return join("shadow", type, "Grad");
+	else if (op == "shadowProjLodOffset")
+	{
+		if (use_explicit_lod)
+			return join("shadow", type, "ProjLodOffset");
+		else
+			return join("shadow", type);
 	}
 	else
 	{
@@ -3924,6 +3946,10 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	                         coffset, offset, bias, comp, sample, &forward);
 	expr += ")";
 
+	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
+	if (is_legacy() && ((imgtype.basetype == SPIRType::SampledImage) || (imgtype.basetype == SPIRType::Sampler)) && imgtype.image.depth)
+		expr += ".r";
+
 	emit_op(result_type, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
 		inherit_expression_dependencies(id, inherit);
@@ -3968,7 +3994,10 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 		fname += "texelFetch";
 	else
 	{
-		fname += "texture";
+		if (is_legacy() && ((imgtype.basetype == SPIRType::SampledImage) || (imgtype.basetype == SPIRType::Sampler)) && imgtype.image.depth)
+			fname += "shadow";
+		else
+			fname += "texture";
 
 		if (is_gather)
 			fname += "Gather";
