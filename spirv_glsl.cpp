@@ -3542,47 +3542,43 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			require_extension_internal("GL_ARB_shader_texture_lod");
 	}
 
-	// texture
+	std::string type_prefix = imgtype.image.depth ? "shadow" : "texture";
+
 	if (op == "texture")
-		return join("texture", type);
+		return join(type_prefix, type);
 	else if (op == "textureLod")
 	{
 		if (use_explicit_lod)
-			return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+			return join(type_prefix, type, is_legacy_es() ? "LodEXT" : "Lod");
 		else
-			return join("texture", type);
+			return join(type_prefix, type);
 	}
 	else if (op == "textureProj")
-		return join("texture", type, "Proj");
+		return join(type_prefix, type, "Proj");
 	else if (op == "textureGrad")
-		return join("texture", type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
+		return join(type_prefix, type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
 	else if (op == "textureProjLod")
 	{
 		if (use_explicit_lod)
-			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
+			return join(type_prefix, type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 		else
-			return join("texture", type);
+			return join(type_prefix, type);
 	}
-	// shadow
-	else if (op == "shadow")
-		return join("shadow", type);
-	else if (op == "shadowLodOffset")
+	else if (op == "textureLodOffset")
 	{
 		if (use_explicit_lod)
-			return join("shadow", type, "LodOffset");
+			return join(type_prefix, type, "LodOffset");
 		else
-			return join("shadow", type);
+			return join(type_prefix, type);
 	}
-	else if (op == "shadowProjGrad")
-		return join("shadow", type, "ProjGrad");
-	else if (op == "shadowGrad")
-		return join("shadow", type, "Grad");
-	else if (op == "shadowProjLodOffset")
+	else if (op == "textureProjGrad")
+		return join(type_prefix, type, "ProjGrad");
+	else if (op == "textureProjLodOffset")
 	{
 		if (use_explicit_lod)
-			return join("shadow", type, "ProjLodOffset");
+			return join(type_prefix, type, "ProjLodOffset");
 		else
-			return join("shadow", type);
+			return join(type_prefix, type);
 	}
 	else
 	{
@@ -3994,10 +3990,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 		fname += "texelFetch";
 	else
 	{
-		if (is_legacy() && ((imgtype.basetype == SPIRType::SampledImage) || (imgtype.basetype == SPIRType::Sampler)) && imgtype.image.depth)
-			fname += "shadow";
-		else
-			fname += "texture";
+		fname += "texture";
 
 		if (is_gather)
 			fname += "Gather";
