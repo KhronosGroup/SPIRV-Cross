@@ -4922,7 +4922,10 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		else
 			return "gl_InstanceID";
 	case BuiltInPrimitiveId:
-		return "gl_PrimitiveID";
+		if (storage == StorageClassInput && get_entry_point().model == ExecutionModelGeometry)
+			return "gl_PrimitiveIDIn";
+		else
+			return "gl_PrimitiveID";
 	case BuiltInInvocationId:
 		return "gl_InvocationID";
 	case BuiltInLayer:
@@ -6083,6 +6086,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto expr = to_expression(ptr);
 
+		// We might need to bitcast in order to load from a builtin.
+		bitcast_from_builtin_load(ptr, expr, get<SPIRType>(result_type));
+
 		if (ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
 
@@ -6140,10 +6146,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			auto rhs = to_expression(ops[1]);
+
 			// Statements to OpStore may be empty if it is a struct with zero members. Just forward the store to /dev/null.
 			if (!rhs.empty())
 			{
 				auto lhs = to_expression(ops[0]);
+
+				// We might need to bitcast in order to store to a builtin.
+				bitcast_to_builtin_store(ops[0], rhs, expression_type(ops[1]));
 
 				// Tries to optimize assignments like "<lhs> = <lhs> op expr".
 				// While this is purely cosmetic, this is important for legacy ESSL where loop
@@ -9860,4 +9870,67 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
+}
+
+void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &expr,
+                                             const spirv_cross::SPIRType &expr_type)
+{
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(source_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+
+	// TODO: Fill in for more builtins.
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInPrimitiveId:
+	case BuiltInViewportIndex:
+	case BuiltInInstanceId:
+	case BuiltInInstanceIndex:
+	case BuiltInVertexId:
+	case BuiltInVertexIndex:
+	case BuiltInSampleId:
+		expected_type = SPIRType::Int;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+		expr = bitcast_expression(expr_type, expected_type, expr);
+}
+
+void CompilerGLSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr,
+                                            const spirv_cross::SPIRType &expr_type)
+{
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(target_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+
+	// TODO: Fill in for more builtins.
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInPrimitiveId:
+	case BuiltInViewportIndex:
+		expected_type = SPIRType::Int;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+	{
+		auto type = expr_type;
+		type.basetype = expected_type;
+		expr = bitcast_expression(type, expr_type.basetype, expr);
+	}
 }

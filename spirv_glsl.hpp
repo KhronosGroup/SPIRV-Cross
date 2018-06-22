@@ -565,6 +565,12 @@ protected:
 
 	std::string convert_separate_image_to_combined(uint32_t id);
 
+	// Builtins in GLSL are always specific signedness, but the SPIR-V can declare them
+	// as either unsigned or signed.
+	// Sometimes we will need to automatically perform bitcasts on load and store to make this work.
+	virtual void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type);
+	virtual void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type);
+
 private:
 	void init()
 	{
