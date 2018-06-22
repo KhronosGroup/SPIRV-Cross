@@ -395,11 +395,11 @@ string CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
 // FIXME include things like the local_size dimensions, geometry output vertex count, etc
 void CompilerReflection::emit_entry_points()
 {
-	auto entry_points = get_entry_points_and_stages();
-	if (!entry_points.empty())
+	auto entries = get_entry_points_and_stages();
+	if (!entries.empty())
 	{
 		json_stream->emit_json_key_array("entryPoints");
-		for (auto &e : entry_points)
+		for (auto &e : entries)
 		{
 			json_stream->begin_json_object();
 			json_stream->emit_json_key_value("name", e.name);
@@ -438,7 +438,6 @@ void CompilerReflection::emit_resources(const char *tag, const vector<Resource> 
 	{
 		auto &type = get_type(res.type_id);
 		auto typeflags = meta[type.self].decoration.decoration_flags;
-		auto &dec = meta[type.self].decoration;
 		auto &mask = get_decoration_bitset(res.id);
 
 		// If we don't have a name, use the fallback for the type instead of the variable
@@ -554,6 +553,9 @@ void CompilerReflection::emit_specialization_constants()
 
 		case SPIRType::Boolean:
 			json_stream->emit_json_key_value("default_value", c.scalar() != 0);
+			break;
+
+		default:
 			break;
 		}
 		json_stream->end_json_object();

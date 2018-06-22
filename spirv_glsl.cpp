@@ -6704,7 +6704,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST(^, type);
+		BOP_CAST (^, type);
 		break;
 	}
 
