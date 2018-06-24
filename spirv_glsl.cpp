@@ -5119,16 +5119,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	if (!chain_only)
 		expr = to_enclosed_expression(base);
 
-	uint32_t type_id = expression_type_id(base);
-	const auto *type = &get<SPIRType>(type_id);
-
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
-	while (type->pointer)
-	{
-		assert(type->parent_type);
-		type = &get<SPIRType>(type->parent_type);
-	}
+	uint32_t type_id = expression_type_id(base);
+	const auto *type = &get_non_pointer_type(type_id);
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
@@ -5571,14 +5565,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
                                                                              bool *need_transpose,
                                                                              uint32_t *out_matrix_stride)
 {
-	const auto *type = &basetype;
-
 	// Start traversing type hierarchy at the proper non-pointer types.
-	while (type->pointer)
-	{
-		assert(type->parent_type);
-		type = &get<SPIRType>(type->parent_type);
-	}
+	const auto *type = &get_non_pointer_type(basetype);
 
 	// This holds the type of the current pointer which we are traversing through.
 	// We always start out from a struct type which is the block.
@@ -6749,7 +6737,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		BOP_CAST (^, type);
+		BOP_CAST(^, type);
 		break;
 	}
 
@@ -8713,13 +8701,8 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 		// Parameters can vary with pointer type or not,
 		// but that will not change the signature in GLSL/HLSL,
 		// so strip the pointer type before hashing.
-		uint32_t type_id = arg.type;
-		auto *type = &get<SPIRType>(type_id);
-		while (type->pointer)
-		{
-			type_id = type->parent_type;
-			type = &get<SPIRType>(type_id);
-		}
+		uint32_t type_id = get_non_pointer_type_id(arg.type);
+		auto &type = get<SPIRType>(type_id);
 
 		if (!combined_image_samplers.empty())
 		{
@@ -8727,8 +8710,8 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 			// we pass down to callees, because they may be shuffled around.
 			// Ignore these arguments, to make sure that functions need to differ in some other way
 			// to be considered different overloads.
-			if (type->basetype == SPIRType::SampledImage ||
-			    (type->basetype == SPIRType::Image && type->image.sampled == 1) || type->basetype == SPIRType::Sampler)
+			if (type.basetype == SPIRType::SampledImage ||
+			    (type.basetype == SPIRType::Image && type.image.sampled == 1) || type.basetype == SPIRType::Sampler)
 			{
 				continue;
 			}
