@@ -9101,6 +9101,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 
 	if (true_sub)
 	{
+		emit_block_hints(get<SPIRBlock>(from));
 		statement("if (", to_expression(cond), ")");
 		begin_scope();
 		branch(from, true_block);
@@ -9124,6 +9125,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 	else if (false_sub && !true_sub)
 	{
 		// Only need false path, use negative conditional.
+		emit_block_hints(get<SPIRBlock>(from));
 		statement("if (!", to_enclosed_expression(cond), ")");
 		begin_scope();
 		branch(from, false_block);
@@ -9352,6 +9354,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			{
 				// This block may be a dominating block, so make sure we flush undeclared variables before building the for loop header.
 				flush_undeclared_variables(block);
+				emit_block_hints(block);
 
 				// Important that we do this in this order because
 				// emitting the continue block can invalidate the condition expression.
@@ -9370,6 +9373,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			case SPIRBlock::WhileLoop:
 				// This block may be a dominating block, so make sure we flush undeclared variables before building the while loop header.
 				flush_undeclared_variables(block);
+				emit_block_hints(block);
 				statement("while (", to_expression(block.condition), ")");
 				break;
 
@@ -9417,11 +9421,13 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(child.condition);
 				auto continue_block = emit_continue_block(block.continue_block);
+				emit_block_hints(block);
 				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
 				break;
 			}
 
 			case SPIRBlock::WhileLoop:
+				emit_block_hints(block);
 				statement("while (", to_expression(child.condition), ")");
 				break;
 
@@ -9632,6 +9638,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		auto &type = expression_type(block.condition);
 		bool uint32_t_case = type.basetype == SPIRType::UInt;
 
+		emit_block_hints(block);
 		statement("switch (", to_expression(block.condition), ")");
 		begin_scope();
 
@@ -9943,4 +9950,8 @@ void CompilerGLSL::bitcast_to_builtin_store(uint32_t target_id, std::string &exp
 		type.basetype = expected_type;
 		expr = bitcast_expression(type, expr_type.basetype, expr);
 	}
+}
+
+void CompilerGLSL::emit_block_hints(const SPIRBlock &)
+{
 }
