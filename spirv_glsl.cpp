@@ -3531,7 +3531,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 
 	bool use_explicit_lod = check_explicit_lod_allowed(lod);
 
-	if (op == "textureLod" || op == "textureProjLod" || op == "textureGrad")
+	if (op == "textureLod" || op == "textureProjLod" || op == "textureGrad" || op == "textureProjGrad")
 	{
 		if (is_legacy_es())
 		{
@@ -3542,10 +3542,30 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			require_extension_internal("GL_ARB_shader_texture_lod");
 	}
 
+	if (op == "textureLodOffset" || op == "textureProjLodOffset")
+	{
+		if (is_legacy_es())
+			SPIRV_CROSS_THROW(join(op, " not allowed in legacy ES"));
+
+		require_extension_internal("GL_EXT_gpu_shader4");
+	}
+
+	// GLES has very limited support for shadow samplers. 
+	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
+	// everything else can just throw
+	if (imgtype.image.depth && is_legacy_es())
+	{
+		if (op == "texture" || op == "textureProj")
+			require_extension_internal("GL_EXT_shadow_samplers");
+		else
+			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
+	}
+
+	bool is_es_and_depth = (is_legacy_es() && imgtype.image.depth);
 	std::string type_prefix = imgtype.image.depth ? "shadow" : "texture";
 
 	if (op == "texture")
-		return join(type_prefix, type);
+		return is_es_and_depth ? join(type_prefix, type, "EXT") : join(type_prefix, type);
 	else if (op == "textureLod")
 	{
 		if (use_explicit_lod)
@@ -3554,7 +3574,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			return join(type_prefix, type);
 	}
 	else if (op == "textureProj")
-		return join(type_prefix, type, "Proj");
+		return join(type_prefix, type, is_es_and_depth ? "ProjEXT" : "Proj");
 	else if (op == "textureGrad")
 		return join(type_prefix, type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
 	else if (op == "textureProjLod")
@@ -3572,7 +3592,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			return join(type_prefix, type);
 	}
 	else if (op == "textureProjGrad")
-		return join(type_prefix, type, "ProjGrad");
+		return join(type_prefix, type, is_legacy_es() ? "ProjGradEXT" : is_legacy_desktop() ? "ProjGradARB" : "ProjGrad");
 	else if (op == "textureProjLodOffset")
 	{
 		if (use_explicit_lod)
