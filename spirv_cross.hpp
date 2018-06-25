@@ -865,6 +865,9 @@ protected:
 	bool instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op, const uint32_t *args,
 	                                uint32_t length);
 
+	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index) const;
+	static bool is_desktop_only_format(spv::ImageFormat format);
+
 private:
 	// Used only to implement the old deprecated get_entry_point() interface.
 	const SPIREntryPoint &get_first_entry_point(const std::string &name) const;

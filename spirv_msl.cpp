@@ -4197,3 +4197,12 @@ void CompilerMSL::remap_constexpr_sampler(uint32_t id, const spirv_cross::MSLCon
 		SPIRV_CROSS_THROW("Can not remap array of samplers.");
 	constexpr_samplers[id] = sampler;
 }
+
+// MSL always declares builtins with their SPIR-V type.
+void CompilerMSL::bitcast_from_builtin_load(uint32_t, std::string &, const spirv_cross::SPIRType &)
+{
+}
+
+void CompilerMSL::bitcast_to_builtin_store(uint32_t, std::string &, const spirv_cross::SPIRType &)
+{
+}

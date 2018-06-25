@@ -2249,6 +2249,14 @@ void Compiler::parse(const Instruction &instruction)
 		current_block->next_block = ops[0];
 		current_block->merge = SPIRBlock::MergeSelection;
 		selection_merge_targets.insert(current_block->next_block);
+
+		if (length >= 2)
+		{
+			if (ops[1] & SelectionControlFlattenMask)
+				current_block->hint = SPIRBlock::HintFlatten;
+			else if (ops[1] & SelectionControlDontFlattenMask)
+				current_block->hint = SPIRBlock::HintDontFlatten;
+		}
 		break;
 	}
 
@@ -2271,6 +2279,14 @@ void Compiler::parse(const Instruction &instruction)
 		// they are treated as continues.
 		if (current_block->continue_block != current_block->self)
 			continue_blocks.insert(current_block->continue_block);
+
+		if (length >= 3)
+		{
+			if (ops[2] & LoopControlUnrollMask)
+				current_block->hint = SPIRBlock::HintUnroll;
+			else if (ops[2] & LoopControlDontUnrollMask)
+				current_block->hint = SPIRBlock::HintDontUnroll;
+		}
 		break;
 	}
 
@@ -4588,4 +4604,53 @@ bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &resul
 		else
 			return false;
 	}
+}
+
+Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t index) const
+{
+	Bitset flags;
+	auto &memb = meta[type.self].members;
+	if (index >= memb.size())
+		return flags;
+	auto &dec = memb[index];
+
+	// If our type is a struct, traverse all the members as well recursively.
+	flags.merge_or(dec.decoration_flags);
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+		flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
+
+	return flags;
+}
+
+bool Compiler::is_desktop_only_format(spv::ImageFormat format)
+{
+	switch (format)
+	{
+	// Desktop-only formats
+	case ImageFormatR11fG11fB10f:
+	case ImageFormatR16f:
+	case ImageFormatRgb10A2:
+	case ImageFormatR8:
+	case ImageFormatRg8:
+	case ImageFormatR16:
+	case ImageFormatRg16:
+	case ImageFormatRgba16:
+	case ImageFormatR16Snorm:
+	case ImageFormatRg16Snorm:
+	case ImageFormatRgba16Snorm:
+	case ImageFormatR8Snorm:
+	case ImageFormatRg8Snorm:
+	case ImageFormatR8ui:
+	case ImageFormatRg8ui:
+	case ImageFormatR16ui:
+	case ImageFormatRgb10a2ui:
+	case ImageFormatR8i:
+	case ImageFormatRg8i:
+	case ImageFormatR16i:
+		return true;
+	default:
+		break;
+	}
+
+	return false;
 }

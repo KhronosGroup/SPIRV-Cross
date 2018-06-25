@@ -689,22 +689,6 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 		statement("");
 }
 
-Bitset CompilerGLSL::combined_decoration_for_member(const SPIRType &type, uint32_t index)
-{
-	Bitset flags;
-	auto &memb = meta[type.self].members;
-	if (index >= memb.size())
-		return flags;
-	auto &dec = memb[index];
-
-	// If our type is a struct, traverse all the members as well recursively.
-	flags.merge_or(dec.decoration_flags);
-	for (uint32_t i = 0; i < type.member_types.size(); i++)
-		flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
-
-	return flags;
-}
-
 string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 {
 	string res;
@@ -786,10 +770,8 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 {
-	auto check_desktop = [this] {
-		if (options.es)
-			SPIRV_CROSS_THROW("Attempting to use image format not supported in ES profile.");
-	};
+	if (options.es && is_desktop_only_format(format))
+		SPIRV_CROSS_THROW("Attempting to use image format not supported in ES profile.");
 
 	switch (format)
 	{
@@ -807,7 +789,6 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 		return "rg32f";
 	case ImageFormatRg16f:
 		return "rg16f";
-
 	case ImageFormatRgba32i:
 		return "rgba32i";
 	case ImageFormatRgba16i:
@@ -820,7 +801,6 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 		return "rg32i";
 	case ImageFormatRg16i:
 		return "rg16i";
-
 	case ImageFormatRgba32ui:
 		return "rgba32ui";
 	case ImageFormatRgba16ui:
@@ -833,71 +813,46 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 		return "rg32ui";
 	case ImageFormatRg16ui:
 		return "rg16ui";
-
-	// Desktop-only formats
 	case ImageFormatR11fG11fB10f:
-		check_desktop();
 		return "r11f_g11f_b10f";
 	case ImageFormatR16f:
-		check_desktop();
 		return "r16f";
 	case ImageFormatRgb10A2:
-		check_desktop();
 		return "rgb10_a2";
 	case ImageFormatR8:
-		check_desktop();
 		return "r8";
 	case ImageFormatRg8:
-		check_desktop();
 		return "rg8";
 	case ImageFormatR16:
-		check_desktop();
 		return "r16";
 	case ImageFormatRg16:
-		check_desktop();
 		return "rg16";
 	case ImageFormatRgba16:
-		check_desktop();
 		return "rgba16";
 	case ImageFormatR16Snorm:
-		check_desktop();
 		return "r16_snorm";
 	case ImageFormatRg16Snorm:
-		check_desktop();
 		return "rg16_snorm";
 	case ImageFormatRgba16Snorm:
-		check_desktop();
 		return "rgba16_snorm";
 	case ImageFormatR8Snorm:
-		check_desktop();
 		return "r8_snorm";
 	case ImageFormatRg8Snorm:
-		check_desktop();
 		return "rg8_snorm";
-
 	case ImageFormatR8ui:
-		check_desktop();
 		return "r8ui";
 	case ImageFormatRg8ui:
-		check_desktop();
 		return "rg8ui";
 	case ImageFormatR16ui:
-		check_desktop();
 		return "r16ui";
 	case ImageFormatRgb10a2ui:
-		check_desktop();
 		return "rgb10_a2ui";
-
 	case ImageFormatR8i:
-		check_desktop();
 		return "r8i";
 	case ImageFormatRg8i:
-		check_desktop();
 		return "rg8i";
 	case ImageFormatR16i:
-		check_desktop();
 		return "r16i";
-
 	default:
 	case ImageFormatUnknown:
 		return nullptr;
@@ -2246,7 +2201,8 @@ void CompilerGLSL::emit_resources()
 			{
 				// For gl_InstanceIndex emulation on GLES, the API user needs to
 				// supply this uniform.
-				if (meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
+				if (options.vertex.support_nonzero_base_instance &&
+				    meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
 				{
 					statement("uniform int SPIRV_Cross_BaseInstance;");
 					emitted = true;
@@ -2597,11 +2553,14 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		// In order to preserve its compile-time constness in Vulkan GLSL,
 		// we need to reduce the OpSelect expression back to this simplified model.
 		// If we cannot, fail.
-		if (!to_trivial_mix_op(type, op, cop.arguments[2], cop.arguments[1], cop.arguments[0]))
+		if (to_trivial_mix_op(type, op, cop.arguments[2], cop.arguments[1], cop.arguments[0]))
 		{
-			SPIRV_CROSS_THROW(
-			    "Cannot implement specialization constant op OpSelect. "
-			    "Need trivial select implementation which can be resolved to a simple cast from boolean.");
+			// Implement as a simple cast down below.
+		}
+		else
+		{
+			// Implement a ternary and pray the compiler understands it :)
+			return to_ternary_expression(type, cop.arguments[0], cop.arguments[1], cop.arguments[2]);
 		}
 		break;
 	}
@@ -3531,7 +3490,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 
 	bool use_explicit_lod = check_explicit_lod_allowed(lod);
 
-	if (op == "textureLod" || op == "textureProjLod" || op == "textureGrad")
+	if (op == "textureLod" || op == "textureProjLod" || op == "textureGrad" || op == "textureProjGrad")
 	{
 		if (is_legacy_es())
 		{
@@ -3542,25 +3501,63 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			require_extension_internal("GL_ARB_shader_texture_lod");
 	}
 
+	if (op == "textureLodOffset" || op == "textureProjLodOffset")
+	{
+		if (is_legacy_es())
+			SPIRV_CROSS_THROW(join(op, " not allowed in legacy ES"));
+
+		require_extension_internal("GL_EXT_gpu_shader4");
+	}
+
+	// GLES has very limited support for shadow samplers. 
+	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
+	// everything else can just throw
+	if (imgtype.image.depth && is_legacy_es())
+	{
+		if (op == "texture" || op == "textureProj")
+			require_extension_internal("GL_EXT_shadow_samplers");
+		else
+			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
+	}
+
+	bool is_es_and_depth = (is_legacy_es() && imgtype.image.depth);
+	std::string type_prefix = imgtype.image.depth ? "shadow" : "texture";
+
 	if (op == "texture")
-		return join("texture", type);
+		return is_es_and_depth ? join(type_prefix, type, "EXT") : join(type_prefix, type);
 	else if (op == "textureLod")
 	{
 		if (use_explicit_lod)
-			return join("texture", type, is_legacy_es() ? "LodEXT" : "Lod");
+			return join(type_prefix, type, is_legacy_es() ? "LodEXT" : "Lod");
 		else
-			return join("texture", type);
+			return join(type_prefix, type);
 	}
 	else if (op == "textureProj")
-		return join("texture", type, "Proj");
+		return join(type_prefix, type, is_es_and_depth ? "ProjEXT" : "Proj");
 	else if (op == "textureGrad")
-		return join("texture", type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
+		return join(type_prefix, type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
 	else if (op == "textureProjLod")
 	{
 		if (use_explicit_lod)
-			return join("texture", type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
+			return join(type_prefix, type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 		else
-			return join("texture", type);
+			return join(type_prefix, type, "Proj");
+	}
+	else if (op == "textureLodOffset")
+	{
+		if (use_explicit_lod)
+			return join(type_prefix, type, "LodOffset");
+		else
+			return join(type_prefix, type);
+	}
+	else if (op == "textureProjGrad")
+		return join(type_prefix, type, is_legacy_es() ? "ProjGradEXT" : is_legacy_desktop() ? "ProjGradARB" : "ProjGrad");
+	else if (op == "textureProjLodOffset")
+	{
+		if (use_explicit_lod)
+			return join(type_prefix, type, "ProjLodOffset");
+		else
+			return join(type_prefix, type, "ProjOffset");
 	}
 	else
 	{
@@ -3622,6 +3619,37 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 	return ret;
 }
 
+string CompilerGLSL::to_ternary_expression(const SPIRType &restype, uint32_t select, uint32_t true_value,
+                                           uint32_t false_value)
+{
+	string expr;
+	auto &lerptype = expression_type(select);
+
+	if (lerptype.vecsize == 1)
+		expr = join(to_enclosed_expression(select), " ? ", to_enclosed_expression(true_value), " : ",
+		            to_enclosed_expression(false_value));
+	else
+	{
+		auto swiz = [this](uint32_t expression, uint32_t i) { return to_extract_component_expression(expression, i); };
+
+		expr = type_to_glsl_constructor(restype);
+		expr += "(";
+		for (uint32_t i = 0; i < restype.vecsize; i++)
+		{
+			expr += swiz(select, i);
+			expr += " ? ";
+			expr += swiz(true_value, i);
+			expr += " : ";
+			expr += swiz(false_value, i);
+			if (i + 1 < restype.vecsize)
+				expr += ", ";
+		}
+		expr += ")";
+	}
+
+	return expr;
+}
+
 void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp)
 {
 	auto &lerptype = expression_type(lerp);
@@ -3652,31 +3680,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		// Could use GL_EXT_shader_integer_mix on desktop at least,
 		// but Apple doesn't support it. :(
 		// Just implement it as ternary expressions.
-		string expr;
-		if (lerptype.vecsize == 1)
-			expr = join(to_enclosed_expression(lerp), " ? ", to_enclosed_expression(right), " : ",
-			            to_enclosed_expression(left));
-		else
-		{
-			auto swiz = [this](uint32_t expression, uint32_t i) {
-				return to_extract_component_expression(expression, i);
-			};
-
-			expr = type_to_glsl_constructor(restype);
-			expr += "(";
-			for (uint32_t i = 0; i < restype.vecsize; i++)
-			{
-				expr += swiz(lerp, i);
-				expr += " ? ";
-				expr += swiz(right, i);
-				expr += " : ";
-				expr += swiz(left, i);
-				if (i + 1 < restype.vecsize)
-					expr += ", ";
-			}
-			expr += ")";
-		}
-
+		auto expr = to_ternary_expression(get<SPIRType>(result_type), lerp, right, left);
 		emit_op(result_type, id, expr, should_forward(left) && should_forward(right) && should_forward(lerp));
 		inherit_expression_dependencies(id, left);
 		inherit_expression_dependencies(id, right);
@@ -3923,6 +3927,10 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
 	                         coffset, offset, bias, comp, sample, &forward);
 	expr += ")";
+
+	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
+	if (is_legacy() && imgtype.image.depth)
+		expr += ".r";
 
 	emit_op(result_type, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
@@ -4961,10 +4969,15 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInInstanceIndex:
 		if (options.vulkan_semantics)
 			return "gl_InstanceIndex";
-		else
+		else if (options.vertex.support_nonzero_base_instance)
 			return "(gl_InstanceID + SPIRV_Cross_BaseInstance)"; // ... but not gl_InstanceID.
+		else
+			return "gl_InstanceID";
 	case BuiltInPrimitiveId:
-		return "gl_PrimitiveID";
+		if (storage == StorageClassInput && get_entry_point().model == ExecutionModelGeometry)
+			return "gl_PrimitiveIDIn";
+		else
+			return "gl_PrimitiveID";
 	case BuiltInInvocationId:
 		return "gl_InvocationID";
 	case BuiltInLayer:
@@ -6113,6 +6126,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto expr = to_expression(ptr);
 
+		// We might need to bitcast in order to load from a builtin.
+		bitcast_from_builtin_load(ptr, expr, get<SPIRType>(result_type));
+
 		if (ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
 
@@ -6170,10 +6186,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			auto rhs = to_expression(ops[1]);
+
 			// Statements to OpStore may be empty if it is a struct with zero members. Just forward the store to /dev/null.
 			if (!rhs.empty())
 			{
 				auto lhs = to_expression(ops[0]);
+
+				// We might need to bitcast in order to store to a builtin.
+				bitcast_to_builtin_store(ops[0], rhs, expression_type(ops[1]));
 
 				// Tries to optimize assignments like "<lhs> = <lhs> op expr".
 				// While this is purely cosmetic, this is important for legacy ESSL where loop
@@ -9106,6 +9126,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 
 	if (true_sub)
 	{
+		emit_block_hints(get<SPIRBlock>(from));
 		statement("if (", to_expression(cond), ")");
 		begin_scope();
 		branch(from, true_block);
@@ -9129,6 +9150,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 	else if (false_sub && !true_sub)
 	{
 		// Only need false path, use negative conditional.
+		emit_block_hints(get<SPIRBlock>(from));
 		statement("if (!", to_enclosed_expression(cond), ")");
 		begin_scope();
 		branch(from, false_block);
@@ -9357,6 +9379,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			{
 				// This block may be a dominating block, so make sure we flush undeclared variables before building the for loop header.
 				flush_undeclared_variables(block);
+				emit_block_hints(block);
 
 				// Important that we do this in this order because
 				// emitting the continue block can invalidate the condition expression.
@@ -9375,6 +9398,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			case SPIRBlock::WhileLoop:
 				// This block may be a dominating block, so make sure we flush undeclared variables before building the while loop header.
 				flush_undeclared_variables(block);
+				emit_block_hints(block);
 				statement("while (", to_expression(block.condition), ")");
 				break;
 
@@ -9422,11 +9446,13 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(child.condition);
 				auto continue_block = emit_continue_block(block.continue_block);
+				emit_block_hints(block);
 				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
 				break;
 			}
 
 			case SPIRBlock::WhileLoop:
+				emit_block_hints(block);
 				statement("while (", to_expression(child.condition), ")");
 				break;
 
@@ -9637,6 +9663,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		auto &type = expression_type(block.condition);
 		bool uint32_t_case = type.basetype == SPIRType::UInt;
 
+		emit_block_hints(block);
 		statement("switch (", to_expression(block.condition), ")");
 		begin_scope();
 
@@ -9885,4 +9912,71 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
+}
+
+void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &expr,
+                                             const spirv_cross::SPIRType &expr_type)
+{
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(source_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+
+	// TODO: Fill in for more builtins.
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInPrimitiveId:
+	case BuiltInViewportIndex:
+	case BuiltInInstanceId:
+	case BuiltInInstanceIndex:
+	case BuiltInVertexId:
+	case BuiltInVertexIndex:
+	case BuiltInSampleId:
+		expected_type = SPIRType::Int;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+		expr = bitcast_expression(expr_type, expected_type, expr);
+}
+
+void CompilerGLSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr,
+                                            const spirv_cross::SPIRType &expr_type)
+{
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(target_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+
+	// TODO: Fill in for more builtins.
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInPrimitiveId:
+	case BuiltInViewportIndex:
+		expected_type = SPIRType::Int;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+	{
+		auto type = expr_type;
+		type.basetype = expected_type;
+		expr = bitcast_expression(type, expr_type.basetype, expr);
+	}
+}
+
+void CompilerGLSL::emit_block_hints(const SPIRBlock &)
+{
 }
