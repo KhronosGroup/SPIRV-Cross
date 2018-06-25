@@ -2553,11 +2553,14 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		// In order to preserve its compile-time constness in Vulkan GLSL,
 		// we need to reduce the OpSelect expression back to this simplified model.
 		// If we cannot, fail.
-		if (!to_trivial_mix_op(type, op, cop.arguments[2], cop.arguments[1], cop.arguments[0]))
+		if (to_trivial_mix_op(type, op, cop.arguments[2], cop.arguments[1], cop.arguments[0]))
 		{
-			SPIRV_CROSS_THROW(
-			    "Cannot implement specialization constant op OpSelect. "
-			    "Need trivial select implementation which can be resolved to a simple cast from boolean.");
+			// Implement as a simple cast down below.
+		}
+		else
+		{
+			// Implement a ternary and pray the compiler understands it :)
+			return to_ternary_expression(type, cop.arguments[0], cop.arguments[1], cop.arguments[2]);
 		}
 		break;
 	}
@@ -3578,6 +3581,37 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 	return ret;
 }
 
+string CompilerGLSL::to_ternary_expression(const SPIRType &restype, uint32_t select, uint32_t true_value,
+                                           uint32_t false_value)
+{
+	string expr;
+	auto &lerptype = expression_type(select);
+
+	if (lerptype.vecsize == 1)
+		expr = join(to_enclosed_expression(select), " ? ", to_enclosed_expression(true_value), " : ",
+		            to_enclosed_expression(false_value));
+	else
+	{
+		auto swiz = [this](uint32_t expression, uint32_t i) { return to_extract_component_expression(expression, i); };
+
+		expr = type_to_glsl_constructor(restype);
+		expr += "(";
+		for (uint32_t i = 0; i < restype.vecsize; i++)
+		{
+			expr += swiz(select, i);
+			expr += " ? ";
+			expr += swiz(true_value, i);
+			expr += " : ";
+			expr += swiz(false_value, i);
+			if (i + 1 < restype.vecsize)
+				expr += ", ";
+		}
+		expr += ")";
+	}
+
+	return expr;
+}
+
 void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp)
 {
 	auto &lerptype = expression_type(lerp);
@@ -3608,31 +3642,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		// Could use GL_EXT_shader_integer_mix on desktop at least,
 		// but Apple doesn't support it. :(
 		// Just implement it as ternary expressions.
-		string expr;
-		if (lerptype.vecsize == 1)
-			expr = join(to_enclosed_expression(lerp), " ? ", to_enclosed_expression(right), " : ",
-			            to_enclosed_expression(left));
-		else
-		{
-			auto swiz = [this](uint32_t expression, uint32_t i) {
-				return to_extract_component_expression(expression, i);
-			};
-
-			expr = type_to_glsl_constructor(restype);
-			expr += "(";
-			for (uint32_t i = 0; i < restype.vecsize; i++)
-			{
-				expr += swiz(lerp, i);
-				expr += " ? ";
-				expr += swiz(right, i);
-				expr += " : ";
-				expr += swiz(left, i);
-				if (i + 1 < restype.vecsize)
-					expr += ", ";
-			}
-			expr += ")";
-		}
-
+		auto expr = to_ternary_expression(get<SPIRType>(result_type), lerp, right, left);
 		emit_op(result_type, id, expr, should_forward(left) && should_forward(right) && should_forward(lerp));
 		inherit_expression_dependencies(id, left);
 		inherit_expression_dependencies(id, right);
