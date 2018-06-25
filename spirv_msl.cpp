@@ -534,19 +534,44 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 	// Add the global variables as arguments to the function
 	if (func_id != entry_point)
 	{
-		uint32_t next_id = increase_bound_by(uint32_t(added_arg_ids.size()));
 		for (uint32_t arg_id : added_arg_ids)
 		{
-			auto var = get<SPIRVariable>(arg_id);
+			auto &var = get<SPIRVariable>(arg_id);
 			uint32_t type_id = var.basetype;
-			func.add_parameter(type_id, next_id, true);
-			set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
+			auto *p_type = &get<SPIRType>(type_id);
 
-			// Ensure the existing variable has a valid name and the new variable has all the same meta info
-			set_name(arg_id, ensure_valid_name(to_name(arg_id), "v"));
-			meta[next_id] = meta[arg_id];
+			if (is_builtin_variable(var) && p_type->basetype == SPIRType::Struct)
+			{
+				// Get the non-pointer type
+				type_id = get_non_pointer_type_id(type_id);
+				p_type = &get<SPIRType>(type_id);
 
-			next_id++;
+				uint32_t mbr_idx = 0;
+				for (auto &mbr_type_id : p_type->member_types)
+				{
+					BuiltIn builtin;
+					bool is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
+					if (is_builtin && has_active_builtin(builtin, var.storage))
+					{
+						// Add a arg variable with the same type and decorations as the member
+						uint32_t next_id = increase_bound_by(1);
+						func.add_parameter(mbr_type_id, next_id, true);
+						set<SPIRVariable>(next_id, mbr_type_id, StorageClassFunction);
+						meta[next_id].decoration = meta[type_id].members[mbr_idx];
+					}
+					mbr_idx++;
+				}
+			}
+			else
+			{
+				uint32_t next_id = increase_bound_by(1);
+				func.add_parameter(type_id, next_id, true);
+				set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
+
+				// Ensure the existing variable has a valid name and the new variable has all the same meta info
+				set_name(arg_id, ensure_valid_name(to_name(arg_id), "v"));
+				meta[next_id] = meta[arg_id];
+			}
 		}
 	}
 }
@@ -1703,7 +1728,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpAtomicXor:
-		AFMO (xor);
+		AFMO(xor);
 		break;
 
 	// Images
@@ -3553,17 +3578,13 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of samplers.");
 
 		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
-		auto *parent = &type;
-		while (parent->pointer)
-			parent = &get<SPIRType>(parent->parent_type);
-		parent = &get<SPIRType>(parent->parent_type);
-
 		uint32_t array_size =
 		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
-
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
-		return join("array<", sampler_type(*parent), ", ", array_size, ">");
+
+		auto &parent = get<SPIRType>(get_non_pointer_type(type).parent_type);
+		return join("array<", sampler_type(parent), ", ", array_size, ">");
 	}
 	else
 		return "sampler";
@@ -3586,16 +3607,13 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of textures.");
 
 		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
-		auto *parent = &type;
-		while (parent->pointer)
-			parent = &get<SPIRType>(parent->parent_type);
-		parent = &get<SPIRType>(parent->parent_type);
-
 		uint32_t array_size =
 		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
-		return join("array<", image_type_glsl(*parent, id), ", ", array_size, ">");
+
+		auto &parent = get<SPIRType>(get_non_pointer_type(type).parent_type);
+		return join("array<", image_type_glsl(parent, id), ", ", array_size, ">");
 	}
 
 	string img_type_name;

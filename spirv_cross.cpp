@@ -1063,6 +1063,34 @@ const SPIRType &Compiler::get_type_from_variable(uint32_t id) const
 	return get<SPIRType>(get<SPIRVariable>(id).basetype);
 }
 
+uint32_t Compiler::get_non_pointer_type_id(uint32_t type_id) const
+{
+	auto *p_type = &get<SPIRType>(type_id);
+	while (p_type->pointer)
+	{
+		assert(p_type->parent_type);
+		type_id = p_type->parent_type;
+		p_type = &get<SPIRType>(type_id);
+	}
+	return type_id;
+}
+
+const SPIRType &Compiler::get_non_pointer_type(const SPIRType &type) const
+{
+	auto *p_type = &type;
+	while (p_type->pointer)
+	{
+		assert(p_type->parent_type);
+		p_type = &get<SPIRType>(p_type->parent_type);
+	}
+	return *p_type;
+}
+
+const SPIRType &Compiler::get_non_pointer_type(uint32_t type_id) const
+{
+	return get_non_pointer_type(get<SPIRType>(type_id));
+}
+
 void Compiler::set_member_decoration_string(uint32_t id, uint32_t index, spv::Decoration decoration,
                                             const std::string &argument)
 {
@@ -4259,14 +4287,8 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		// Required if we access chain into builtins like gl_GlobalInvocationID.
 		add_if_builtin(args[2]);
 
-		auto *type = &compiler.get<SPIRType>(var->basetype);
-
 		// Start traversing type hierarchy at the proper non-pointer types.
-		while (type->pointer)
-		{
-			assert(type->parent_type);
-			type = &compiler.get<SPIRType>(type->parent_type);
-		}
+		auto *type = &compiler.get_non_pointer_type(var->basetype);
 
 		auto &flags =
 		    type->storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;

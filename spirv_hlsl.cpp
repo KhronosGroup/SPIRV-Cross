@@ -3529,14 +3529,8 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		else
 			base = to_expression(ops[2]);
 
-		auto *basetype = &type;
-
 		// Start traversing type hierarchy at the proper non-pointer types.
-		while (basetype->pointer)
-		{
-			assert(basetype->parent_type);
-			basetype = &get<SPIRType>(basetype->parent_type);
-		}
+		auto *basetype = &get_non_pointer_type(type);
 
 		// Traverse the type hierarchy down to the actual buffer types.
 		for (uint32_t i = 0; i < to_plain_buffer_length; i++)
