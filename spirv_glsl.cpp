@@ -3562,7 +3562,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		if (use_explicit_lod)
 			return join(type_prefix, type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
 		else
-			return join(type_prefix, type);
+			return join(type_prefix, type, "Proj");
 	}
 	else if (op == "textureLodOffset")
 	{
@@ -3578,7 +3578,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		if (use_explicit_lod)
 			return join(type_prefix, type, "ProjLodOffset");
 		else
-			return join(type_prefix, type);
+			return join(type_prefix, type, "ProjOffset");
 	}
 	else
 	{
