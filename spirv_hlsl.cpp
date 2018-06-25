@@ -1838,9 +1838,10 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	{
 		Bitset flags = get_buffer_block_flags(var);
 		bool is_readonly = flags.get(DecorationNonWritable);
+		bool is_coherent = flags.get(DecorationCoherent);
 		add_resource_name(var.self);
-		statement(is_readonly ? "ByteAddressBuffer " : "RWByteAddressBuffer ", to_name(var.self),
-		          type_to_array_glsl(type), to_resource_binding(var), ";");
+		statement(is_coherent ? "globallycoherent " : "", is_readonly ? "ByteAddressBuffer " : "RWByteAddressBuffer ",
+		          to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 	}
 	else
 	{
@@ -2922,8 +2923,12 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	case SPIRType::SampledImage:
 	case SPIRType::Image:
 	{
-		statement(image_type_hlsl_modern(type), " ", to_name(var.self), type_to_array_glsl(type),
-		          to_resource_binding(var), ";");
+		bool is_coherent = false;
+		if (type.basetype == SPIRType::Image && type.image.sampled == 2)
+			is_coherent = has_decoration(var.self, DecorationCoherent);
+
+		statement(is_coherent ? "globallycoherent " : "", image_type_hlsl_modern(type), " ", to_name(var.self),
+		          type_to_array_glsl(type), to_resource_binding(var), ";");
 
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
