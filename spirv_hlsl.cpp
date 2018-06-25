@@ -4605,3 +4605,24 @@ string CompilerHLSL::compile()
 
 	return buffer->str();
 }
+
+void CompilerHLSL::emit_block_hints(const SPIRBlock &block)
+{
+	switch (block.hint)
+	{
+	case SPIRBlock::HintFlatten:
+		statement("[flatten]");
+		break;
+	case SPIRBlock::HintDontFlatten:
+		statement("[branch]");
+		break;
+	case SPIRBlock::HintUnroll:
+		statement("[unroll]");
+		break;
+	case SPIRBlock::HintDontUnroll:
+		statement("[loop]");
+		break;
+	default:
+		break;
+	}
+}

@@ -2221,6 +2221,14 @@ void Compiler::parse(const Instruction &instruction)
 		current_block->next_block = ops[0];
 		current_block->merge = SPIRBlock::MergeSelection;
 		selection_merge_targets.insert(current_block->next_block);
+
+		if (length >= 2)
+		{
+			if (ops[1] & SelectionControlFlattenMask)
+				current_block->hint = SPIRBlock::HintFlatten;
+			else if (ops[1] & SelectionControlDontFlattenMask)
+				current_block->hint = SPIRBlock::HintDontFlatten;
+		}
 		break;
 	}
 
@@ -2243,6 +2251,14 @@ void Compiler::parse(const Instruction &instruction)
 		// they are treated as continues.
 		if (current_block->continue_block != current_block->self)
 			continue_blocks.insert(current_block->continue_block);
+
+		if (length >= 3)
+		{
+			if (ops[2] & LoopControlUnrollMask)
+				current_block->hint = SPIRBlock::HintUnroll;
+			else if (ops[2] & LoopControlDontUnrollMask)
+				current_block->hint = SPIRBlock::HintDontUnroll;
+		}
 		break;
 	}
 
