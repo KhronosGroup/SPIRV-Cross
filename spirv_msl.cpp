@@ -551,7 +551,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				{
 					BuiltIn builtin;
 					bool is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
-					if (!is_builtin || has_active_builtin(builtin, var.storage))
+					if (is_builtin && has_active_builtin(builtin, var.storage))
 					{
 						// Add a arg variable with the same type and decorations as the member
 						uint32_t next_id = increase_bound_by(1);
