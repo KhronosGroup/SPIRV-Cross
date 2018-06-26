@@ -152,6 +152,7 @@ public:
 
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
+		uint32_t texture_width_max = 4096;
 		bool enable_point_size_builtin = true;
 		bool resolve_specialized_array_lengths = true;
 
@@ -215,6 +216,7 @@ public:
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
 		SPVFuncImplArrayCopy,
+		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
