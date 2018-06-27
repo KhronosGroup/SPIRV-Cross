@@ -152,7 +152,7 @@ public:
 
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
-		uint32_t texture_width_max = 4096;
+		uint32_t texel_buffer_texture_width = 4096;		// Width of 2D Metal textures used as 1D texel buffers
 		bool enable_point_size_builtin = true;
 		bool resolve_specialized_array_lengths = true;
 

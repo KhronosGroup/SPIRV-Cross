@@ -1175,11 +1175,11 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplTexelBufferCoords:
 		{
-			string max_width_str = convert_to_string(msl_options.texture_width_max);
+			string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
 			statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
 			statement("uint2 spvTexelBufferCoord(uint tc)");
 			begin_scope();
-			statement(join("return uint2(tc % ", max_width_str, ", tc / ", max_width_str, ");"));
+			statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
 			end_scope();
 			statement("");
 			break;
@@ -2466,7 +2466,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		if (coord_type.vecsize > 1)
 			tex_coords += ".x";
 
-		// Metal texel buffer textures are 2D
+		// Metal texel buffer textures are 2D, so convert 1D coord to 2D.
 		if (is_fetch)
 			tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
