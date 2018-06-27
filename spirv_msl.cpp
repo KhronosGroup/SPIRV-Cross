@@ -1173,6 +1173,18 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplTexelBufferCoords:
+		{
+			string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
+			statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
+			statement("uint2 spvTexelBufferCoord(uint tc)");
+			begin_scope();
+			statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
+			end_scope();
+			statement("");
+			break;
+		}
+
 		case SPVFuncImplInverse4x4:
 			statement("// Returns the determinant of a 2x2 matrix.");
 			statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
@@ -2454,8 +2466,9 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		if (coord_type.vecsize > 1)
 			tex_coords += ".x";
 
+		// Metal texel buffer textures are 2D, so convert 1D coord to 2D.
 		if (is_fetch)
-			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ", 0)"; // Metal textures are 2D
+			tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
 		alt_coord = ".y";
 
@@ -4053,8 +4066,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		auto &return_type = compiler.get<SPIRType>(args[0]);
 		if (!return_type.array.empty())
 			return SPVFuncImplArrayCopy;
-		else
-			return SPVFuncImplNone;
+
+		break;
 	}
 
 	case OpStore:
@@ -4072,14 +4085,24 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		else
 		{
 			// Or ... an expression.
-			if (result_types[id_rhs] != 0)
-				type = &compiler.get<SPIRType>(result_types[id_rhs]);
+			uint32_t tid = result_types[id_rhs];
+			if (tid)
+				type = &compiler.get<SPIRType>(tid);
 		}
 
 		if (type && compiler.is_array(*type))
 			return SPVFuncImplArrayCopy;
-		else
-			return SPVFuncImplNone;
+
+		break;
+	}
+
+	case OpImageFetch:
+	{
+		// Retrieve the image type, and if it's a Buffer, emit a texel coordinate function
+		uint32_t tid = result_types[args[2]];
+		if (tid && compiler.get<SPIRType>(tid).image.dim == DimBuffer)
+			return SPVFuncImplTexelBufferCoords;
+
 		break;
 	}
 
