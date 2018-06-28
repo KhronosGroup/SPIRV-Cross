@@ -1543,16 +1543,16 @@ void CompilerMSL::emit_specialization_constants()
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
 
-#define BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BOP_CAST(op, type) \
+#define MSL_BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define MSL_BOP_CAST(op, type) \
 	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
-#define UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
-#define QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
-#define TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
-#define BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
-#define BFOP_CAST(op, type) \
+#define MSL_UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
+#define MSL_QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
+#define MSL_TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
+#define MSL_BFOP(op) emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define MSL_BFOP_CAST(op, type) \
 	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
-#define UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
+#define MSL_UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
 
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
@@ -1564,81 +1564,81 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpIEqual:
 	case OpLogicalEqual:
 	case OpFOrdEqual:
-		BOP(==);
+		MSL_BOP(==);
 		break;
 
 	case OpINotEqual:
 	case OpLogicalNotEqual:
 	case OpFOrdNotEqual:
-		BOP(!=);
+		MSL_BOP(!=);
 		break;
 
 	case OpUGreaterThan:
 	case OpSGreaterThan:
 	case OpFOrdGreaterThan:
-		BOP(>);
+		MSL_BOP(>);
 		break;
 
 	case OpUGreaterThanEqual:
 	case OpSGreaterThanEqual:
 	case OpFOrdGreaterThanEqual:
-		BOP(>=);
+		MSL_BOP(>=);
 		break;
 
 	case OpULessThan:
 	case OpSLessThan:
 	case OpFOrdLessThan:
-		BOP(<);
+		MSL_BOP(<);
 		break;
 
 	case OpULessThanEqual:
 	case OpSLessThanEqual:
 	case OpFOrdLessThanEqual:
-		BOP(<=);
+		MSL_BOP(<=);
 		break;
 
 	// Derivatives
 	case OpDPdx:
 	case OpDPdxFine:
 	case OpDPdxCoarse:
-		UFOP(dfdx);
+		MSL_UFOP(dfdx);
 		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpDPdy:
 	case OpDPdyFine:
 	case OpDPdyCoarse:
-		UFOP(dfdy);
+		MSL_UFOP(dfdy);
 		register_control_dependent_expression(ops[1]);
 		break;
 
 	case OpFwidth:
 	case OpFwidthCoarse:
 	case OpFwidthFine:
-		UFOP(fwidth);
+		MSL_UFOP(fwidth);
 		register_control_dependent_expression(ops[1]);
 		break;
 
 	// Bitfield
 	case OpBitFieldInsert:
-		QFOP(insert_bits);
+		MSL_QFOP(insert_bits);
 		break;
 
 	case OpBitFieldSExtract:
 	case OpBitFieldUExtract:
-		TFOP(extract_bits);
+		MSL_TFOP(extract_bits);
 		break;
 
 	case OpBitReverse:
-		UFOP(reverse_bits);
+		MSL_UFOP(reverse_bits);
 		break;
 
 	case OpBitCount:
-		UFOP(popcount);
+		MSL_UFOP(popcount);
 		break;
 
 	case OpFRem:
-		BFOP(fmod);
+		MSL_BFOP(fmod);
 		break;
 
 	// Atomics
@@ -1691,7 +1691,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-#define AFMOImpl(op, valsrc)                                                                                      \
+#define MSL_AFMO_IMPL(op, valsrc)                                                                                 \
 	do                                                                                                            \
 	{                                                                                                             \
 		uint32_t result_type = ops[0];                                                                            \
@@ -1702,45 +1702,45 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op "_explicit", mem_sem, mem_sem, false, ptr, val); \
 	} while (false)
 
-#define AFMO(op) AFMOImpl(op, ops[5])
-#define AFMIO(op) AFMOImpl(op, 1)
+#define MSL_AFMO(op) MSL_AFMO_IMPL(op, ops[5])
+#define MSL_AFMIO(op) MSL_AFMO_IMPL(op, 1)
 
 	case OpAtomicIIncrement:
-		AFMIO(add);
+		MSL_AFMIO(add);
 		break;
 
 	case OpAtomicIDecrement:
-		AFMIO(sub);
+		MSL_AFMIO(sub);
 		break;
 
 	case OpAtomicIAdd:
-		AFMO(add);
+		MSL_AFMO(add);
 		break;
 
 	case OpAtomicISub:
-		AFMO(sub);
+		MSL_AFMO(sub);
 		break;
 
 	case OpAtomicSMin:
 	case OpAtomicUMin:
-		AFMO(min);
+		MSL_AFMO(min);
 		break;
 
 	case OpAtomicSMax:
 	case OpAtomicUMax:
-		AFMO(max);
+		MSL_AFMO(max);
 		break;
 
 	case OpAtomicAnd:
-		AFMO(and);
+		MSL_AFMO(and);
 		break;
 
 	case OpAtomicOr:
-		AFMO(or);
+		MSL_AFMO(or);
 		break;
 
 	case OpAtomicXor:
-		AFMO(xor);
+		MSL_AFMO(xor);
 		break;
 
 	// Images
@@ -1864,7 +1864,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-#define ImgQry(qrytype)                                                                     \
+#define MSL_ImgQry(qrytype)                                                                 \
 	do                                                                                      \
 	{                                                                                       \
 		uint32_t rslt_type_id = ops[0];                                                     \
@@ -1877,11 +1877,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	} while (false)
 
 	case OpImageQueryLevels:
-		ImgQry(mip_levels);
+		MSL_ImgQry(mip_levels);
 		break;
 
 	case OpImageQuerySamples:
-		ImgQry(samples);
+		MSL_ImgQry(samples);
 		break;
 
 	// Casting
@@ -1963,7 +1963,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			e->need_transpose = true;
 		}
 		else
-			BOP(*);
+			MSL_BOP(*);
 		break;
 	}
 
