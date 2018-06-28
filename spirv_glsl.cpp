@@ -2501,15 +2501,15 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		break;
 
 #define GLSL_BOP(opname, x) \
-	case Op##opname:   \
-		binary = true; \
-		op = x;        \
+	case Op##opname:        \
+		binary = true;      \
+		op = x;             \
 		break
 
 #define GLSL_UOP(opname, x) \
-	case Op##opname:   \
-		unary = true;  \
-		op = x;        \
+	case Op##opname:        \
+		unary = true;       \
+		op = x;             \
 		break
 
 		GLSL_UOP(SNegate, "-");
@@ -3509,7 +3509,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		require_extension_internal("GL_EXT_gpu_shader4");
 	}
 
-	// GLES has very limited support for shadow samplers. 
+	// GLES has very limited support for shadow samplers.
 	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
 	// everything else can just throw
 	if (imgtype.image.depth && is_legacy_es())
@@ -3551,7 +3551,8 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			return join(type_prefix, type);
 	}
 	else if (op == "textureProjGrad")
-		return join(type_prefix, type, is_legacy_es() ? "ProjGradEXT" : is_legacy_desktop() ? "ProjGradARB" : "ProjGrad");
+		return join(type_prefix, type,
+		            is_legacy_es() ? "ProjGradEXT" : is_legacy_desktop() ? "ProjGradARB" : "ProjGrad");
 	else if (op == "textureProjLodOffset")
 	{
 		if (use_explicit_lod)
@@ -6757,7 +6758,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		GLSL_BOP_CAST(^, type);
+		GLSL_BOP_CAST (^, type);
 		break;
 	}
 

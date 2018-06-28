@@ -1740,7 +1740,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpAtomicXor:
-		MSL_AFMO(xor);
+		MSL_AFMO (xor);
 		break;
 
 	// Images
