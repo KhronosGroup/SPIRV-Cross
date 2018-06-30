@@ -1842,7 +1842,7 @@ void Compiler::parse(const Instruction &instruction)
 		type.basetype = SPIRType::Image;
 		type.image.type = ops[1];
 		type.image.dim = static_cast<Dim>(ops[2]);
-		type.image.depth = ops[3] != 0;
+		type.image.depth = ops[3] == 1;
 		type.image.arrayed = ops[4] != 0;
 		type.image.ms = ops[5] != 0;
 		type.image.sampled = ops[6];
