@@ -13,6 +13,7 @@ import argparse
 import codecs
 import json
 import multiprocessing
+import errno
 from functools import partial
 
 backend = 'glsl'
@@ -82,7 +83,7 @@ def print_msl_compiler_version():
         subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '--version'])
         print('...are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
     except OSError as e:
-        if (e.errno != os.errno.ENOENT):    # Ignore xcrun not found error
+        if (e.errno != errno.ENOENT):    # Ignore xcrun not found error
             raise
 
 def validate_shader_msl(shader, opt):
@@ -94,7 +95,7 @@ def validate_shader_msl(shader, opt):
         subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', '-std=osx-metal{}'.format('2.0' if msl2 else '1.2'), '-Werror', '-Wno-unused-variable', msl_path])
         print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
     except OSError as oe:
-        if (oe.errno != os.errno.ENOENT):   # Ignore xcrun not found error
+        if (oe.errno != errno.ENOENT):   # Ignore xcrun not found error
             raise
     except subprocess.CalledProcessError:
         print('Error compiling Metal shader: ' + msl_path)
@@ -144,7 +145,7 @@ def shader_to_win_path(shader):
             stdout_data, stderr_data = f.communicate()
             return stdout_data.decode('utf-8')
     except OSError as oe:
-        if (oe.errno != os.errno.ENOENT): # Ignore not found errors
+        if (oe.errno != errno.ENOENT): # Ignore not found errors
             return shader
     except subprocess.CalledProcessError:
         raise
@@ -161,7 +162,7 @@ def validate_shader_hlsl(shader):
             win_path = shader_to_win_path(shader)
             subprocess.check_call(['fxc', '-nologo', shader_model_hlsl(shader), win_path])
         except OSError as oe:
-            if (oe.errno != os.errno.ENOENT): # Ignore not found errors
+            if (oe.errno != errno.ENOENT): # Ignore not found errors
                 raise
             else:
                 ignore_fxc = True
