@@ -4493,6 +4493,16 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_binary_func_op(result_type, id, args[0], args[1], "interpolateAtOffset");
 		break;
 
+	case GLSLstd450NMin:
+		emit_binary_func_op(result_type, id, args[0], args[1], "unsupported_glsl450_nmin");
+		break;
+	case GLSLstd450NMax:
+		emit_binary_func_op(result_type, id, args[0], args[1], "unsupported_glsl450_nmax");
+		break;
+	case GLSLstd450NClamp:
+		emit_binary_func_op(result_type, id, args[0], args[1], "unsupported_glsl450_nclamp");
+		break;
+
 	default:
 		statement("// unimplemented GLSL op ", eop);
 		break;
@@ -7994,6 +8004,30 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupNonUniformQuadSwap:
 	case OpGroupNonUniformQuadBroadcast:
 		emit_subgroup_op(instruction);
+		break;
+
+	case OpFUnordEqual:
+		GLSL_BFOP(unsupported_FUnordEqual);
+		break;
+
+	case OpFUnordNotEqual:
+		GLSL_BFOP(unsupported_FUnordNotEqual);
+		break;
+
+	case OpFUnordLessThan:
+		GLSL_BFOP(unsupported_FUnordLessThan);
+		break;
+
+	case OpFUnordGreaterThan:
+		GLSL_BFOP(unsupported_FUnordGreaterThan);
+		break;
+
+	case OpFUnordLessThanEqual:
+		GLSL_BFOP(unsupported_FUnordLessThanEqual);
+		break;
+
+	case OpFUnordGreaterThanEqual:
+		GLSL_BFOP(unsupported_FUnordGreaterThanEqual);
 		break;
 
 	default:
