@@ -19,10 +19,10 @@
 
 #include "spirv.hpp"
 #include "spirv_common.hpp"
+#include "spirv_cfg.hpp"
 
 namespace spirv_cross
 {
-class CFG;
 struct Resource
 {
 	// Resources are identified with their SPIR-V ID.
@@ -867,6 +867,18 @@ protected:
 
 		void add_hierarchy_to_comparison_ids(uint32_t ids);
 		bool need_subpass_input = false;
+	};
+
+	void build_function_control_flow_graphs();
+	std::unordered_map<uint32_t, std::unique_ptr<CFG>> function_cfgs;
+	struct CFGBuilder : OpcodeHandler
+	{
+		CFGBuilder(Compiler &compiler_);
+
+		bool follow_function_call(const SPIRFunction &func) override;
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
+		Compiler &compiler;
+		std::unordered_map<uint32_t, std::unique_ptr<CFG>> function_cfgs;
 	};
 
 	struct AnalyzeVariableScopeAccessHandler : OpcodeHandler

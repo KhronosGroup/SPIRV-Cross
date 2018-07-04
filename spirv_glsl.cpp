@@ -418,6 +418,7 @@ string CompilerGLSL::compile()
 	backend.supports_extensions = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
+	build_function_control_flow_graphs();
 	find_static_extensions();
 	fixup_image_load_store_access();
 	update_active_builtins();

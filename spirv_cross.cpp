@@ -3927,8 +3927,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	// Essentially a map of block -> { variables accessed in the basic block }
 	traverse_all_reachable_opcodes(entry, handler);
 
-	// Compute the control flow graph for this function.
-	CFG cfg(*this, entry);
+	auto &cfg = *function_cfgs.find(entry.self)->second;
 
 	// Analyze if there are parameters which need to be implicitly preserved with an "in" qualifier.
 	analyze_parameter_preservation(entry, cfg, handler.accessed_variables_to_block,
@@ -4413,6 +4412,35 @@ bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uin
 	}
 
 	return true;
+}
+
+void Compiler::build_function_control_flow_graphs()
+{
+	CFGBuilder handler(*this);
+	handler.function_cfgs[entry_point].reset(new CFG(*this, get<SPIRFunction>(entry_point)));
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	function_cfgs = move(handler.function_cfgs);
+}
+
+Compiler::CFGBuilder::CFGBuilder(spirv_cross::Compiler &compiler_)
+	: compiler(compiler_)
+{
+}
+
+bool Compiler::CFGBuilder::handle(spv::Op, const uint32_t *, uint32_t)
+{
+	return true;
+}
+
+bool Compiler::CFGBuilder::follow_function_call(const SPIRFunction &func)
+{
+	if (function_cfgs.find(func.self) == end(function_cfgs))
+	{
+		function_cfgs[func.self].reset(new CFG(compiler, func));
+		return true;
+	}
+	else
+		return false;
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
