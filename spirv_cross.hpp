@@ -869,6 +869,27 @@ protected:
 		bool need_subpass_input = false;
 	};
 
+	struct AnalyzeVariableScopeAccessHandler : OpcodeHandler
+	{
+		AnalyzeVariableScopeAccessHandler(Compiler &compiler_, SPIRFunction &entry_);
+
+		bool follow_function_call(const SPIRFunction &) override;
+		void set_current_block(const SPIRBlock &block) override;
+
+		void notify_variable_access(uint32_t id, uint32_t block);
+		bool id_is_phi_variable(uint32_t id) const;
+		bool id_is_potential_temporary(uint32_t id) const;
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+		SPIRFunction &entry;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_temporaries_to_block;
+		std::unordered_map<uint32_t, uint32_t> result_id_to_type;
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
+		const SPIRBlock *current_block = nullptr;
+	};
+
 	void make_constant_null(uint32_t id, uint32_t type);
 
 	std::vector<spv::Capability> declared_capabilities;
