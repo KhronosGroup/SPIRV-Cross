@@ -224,7 +224,7 @@ static bool hlsl_opcode_is_sign_invariant(Op opcode)
 	}
 }
 
-string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
+string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type, uint32_t)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	const char *dim = nullptr;
@@ -275,7 +275,7 @@ string CompilerHLSL::image_type_hlsl_modern(const SPIRType &type)
 	            ">");
 }
 
-string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
+string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type, uint32_t id)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	string res;
@@ -338,18 +338,18 @@ string CompilerHLSL::image_type_hlsl_legacy(const SPIRType &type)
 		res += "MS";
 	if (type.image.arrayed)
 		res += "Array";
-	if (type.image.depth)
+	if (image_is_comparison(type, id))
 		res += "Shadow";
 
 	return res;
 }
 
-string CompilerHLSL::image_type_hlsl(const SPIRType &type)
+string CompilerHLSL::image_type_hlsl(const SPIRType &type, uint32_t id)
 {
 	if (hlsl_options.shader_model <= 30)
-		return image_type_hlsl_legacy(type);
+		return image_type_hlsl_legacy(type, id);
 	else
-		return image_type_hlsl_modern(type);
+		return image_type_hlsl_modern(type, id);
 }
 
 // The optional id parameter indicates the object whose type we are trying
@@ -370,10 +370,10 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
-		return image_type_hlsl(type);
+		return image_type_hlsl(type, id);
 
 	case SPIRType::Sampler:
-		return comparison_samplers.count(id) ? "SamplerComparisonState" : "SamplerState";
+		return comparison_ids.count(id) ? "SamplerComparisonState" : "SamplerState";
 
 	case SPIRType::Void:
 		return "void";
@@ -2060,7 +2060,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
 			decl += ", ";
-			decl += join(arg_type.image.depth ? "SamplerComparisonState " : "SamplerState ",
+			decl += join(image_is_comparison(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
 			             to_sampler_expression(arg.id), type_to_array_glsl(arg_type));
 		}
 
@@ -2575,7 +2575,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		{
 			texop += img_expr;
 
-			if (imgtype.image.depth)
+			if (image_is_comparison(imgtype, img))
 			{
 				if (gather)
 				{
@@ -2927,13 +2927,13 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 		if (type.basetype == SPIRType::Image && type.image.sampled == 2)
 			is_coherent = has_decoration(var.self, DecorationCoherent);
 
-		statement(is_coherent ? "globallycoherent " : "", image_type_hlsl_modern(type), " ", to_name(var.self),
-		          type_to_array_glsl(type), to_resource_binding(var), ";");
+		statement(is_coherent ? "globallycoherent " : "", image_type_hlsl_modern(type, var.self), " ",
+		          to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
 
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
-			if (type.image.depth)
+			if (image_is_comparison(type, var.self))
 				statement("SamplerComparisonState ", to_sampler_expression(var.self), type_to_array_glsl(type),
 				          to_resource_binding_sampler(var), ";");
 			else
@@ -2944,7 +2944,7 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 	}
 
 	case SPIRType::Sampler:
-		if (comparison_samplers.count(var.self))
+		if (comparison_ids.count(var.self))
 			statement("SamplerComparisonState ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var),
 			          ";");
 		else

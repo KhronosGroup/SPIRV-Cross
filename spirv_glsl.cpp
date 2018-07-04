@@ -3460,7 +3460,7 @@ bool CompilerGLSL::check_explicit_lod_allowed(uint32_t lod)
 	return allowed;
 }
 
-string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod)
+string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod, uint32_t tex)
 {
 	const char *type;
 	switch (imgtype.image.dim)
@@ -3512,7 +3512,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	// GLES has very limited support for shadow samplers.
 	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
 	// everything else can just throw
-	if (imgtype.image.depth && is_legacy_es())
+	if (image_is_comparison(imgtype, tex) && is_legacy_es())
 	{
 		if (op == "texture" || op == "textureProj")
 			require_extension_internal("GL_EXT_shadow_samplers");
@@ -3520,8 +3520,8 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
 	}
 
-	bool is_es_and_depth = (is_legacy_es() && imgtype.image.depth);
-	std::string type_prefix = imgtype.image.depth ? "shadow" : "texture";
+	bool is_es_and_depth = is_legacy_es() && image_is_comparison(imgtype, tex);
+	std::string type_prefix = image_is_comparison(imgtype, tex) ? "shadow" : "texture";
 
 	if (op == "texture")
 		return is_es_and_depth ? join(type_prefix, type, "EXT") : join(type_prefix, type);
@@ -3764,7 +3764,7 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	if (options.vulkan_semantics && combined_image_samplers.empty())
 	{
 		emit_binary_func_op(result_type, result_id, image_id, samp_id,
-		                    type_to_glsl(get<SPIRType>(result_type)).c_str());
+		                    type_to_glsl(get<SPIRType>(result_type), result_id).c_str());
 
 		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
 		forwarded_temporaries.erase(result_id);
@@ -3930,7 +3930,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
-	if (is_legacy() && imgtype.image.depth)
+	if (is_legacy() && image_is_comparison(imgtype, img))
 		expr += ".r";
 
 	emit_op(result_type, id, expr, forward);
@@ -3953,8 +3953,9 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
-string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                      bool has_array_offsets, bool has_offset, bool has_grad, bool, uint32_t lod)
+string CompilerGLSL::to_function_name(uint32_t tex, const SPIRType &imgtype, bool is_fetch, bool is_gather,
+                                      bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad, bool,
+                                      uint32_t lod)
 {
 	string fname;
 
@@ -3964,7 +3965,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    imgtype.image.depth && lod)
+	    image_is_comparison(imgtype, tex) && lod)
 	{
 		auto *constant_lod = maybe_get<SPIRConstant>(lod);
 		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
@@ -3994,7 +3995,7 @@ string CompilerGLSL::to_function_name(uint32_t, const SPIRType &imgtype, bool is
 	if (has_offset)
 		fname += "Offset";
 
-	return is_legacy() ? legacy_tex_op(fname, imgtype, lod) : fname;
+	return is_legacy() ? legacy_tex_op(fname, imgtype, lod, tex) : fname;
 }
 
 std::string CompilerGLSL::convert_separate_image_to_combined(uint32_t id)
@@ -4079,7 +4080,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad =
 	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    imgtype.image.depth && lod;
+	    image_is_comparison(imgtype, img) && lod;
 
 	if (dref)
 	{
@@ -8418,7 +8419,7 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
-string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
+string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	string res;
@@ -8491,8 +8492,11 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t /* id */)
 	}
 
 	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
-	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) && type.image.depth)
+	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) &&
+	    image_is_comparison(type, id))
+	{
 		res += "Shadow";
+	}
 
 	return res;
 }
@@ -8538,7 +8542,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	case SPIRType::Sampler:
 		// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
 		// this distinction into the type system.
-		return comparison_samplers.count(id) ? "samplerShadow" : "sampler";
+		return comparison_ids.count(id) ? "samplerShadow" : "sampler";
 
 	case SPIRType::Void:
 		return "void";
