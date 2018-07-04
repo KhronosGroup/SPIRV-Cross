@@ -4367,11 +4367,43 @@ bool Compiler::has_active_builtin(BuiltIn builtin, StorageClass storage)
 
 void Compiler::analyze_image_and_sampler_usage()
 {
-	CombinedImageSamplerUsageHandler handler(*this);
+	CombinedImageSamplerDrefHandler dref_handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), dref_handler);
+
+	CombinedImageSamplerUsageHandler handler(*this, dref_handler.dref_combined_samplers);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
-	comparison_samplers = move(handler.comparison_samplers);
-	comparison_images = move(handler.comparison_images);
+	comparison_ids = move(handler.comparison_ids);
 	need_subpass_input = handler.need_subpass_input;
+
+	// Forward information from separate images and samplers into combined image samplers.
+	for (auto &combined : combined_image_samplers)
+		if (comparison_ids.count(combined.sampler_id))
+			comparison_ids.insert(combined.combined_id);
+}
+
+bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uint32_t *args, uint32_t)
+{
+	// Mark all sampled images which are used with Dref.
+	switch (opcode)
+	{
+	case OpImageSampleDrefExplicitLod:
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleProjDrefExplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
+	case OpImageSparseSampleProjDrefImplicitLod:
+	case OpImageSparseSampleDrefImplicitLod:
+	case OpImageSparseSampleProjDrefExplicitLod:
+	case OpImageSparseSampleDrefExplicitLod:
+	case OpImageDrefGather:
+	case OpImageSparseDrefGather:
+		dref_combined_samplers.insert(args[2]);
+		return true;
+
+	default:
+		break;
+	}
+
+	return true;
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
@@ -4392,20 +4424,12 @@ bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint
 	return true;
 }
 
-void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_images(uint32_t image)
+void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids(uint32_t id)
 {
-	// Traverse the variable dependency hierarchy and tag everything in its path with comparison images.
-	comparison_images.insert(image);
-	for (auto &img : dependency_hierarchy[image])
-		add_hierarchy_to_comparison_images(img);
-}
-
-void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_samplers(uint32_t sampler)
-{
-	// Traverse the variable dependency hierarchy and tag everything in its path with comparison samplers.
-	comparison_samplers.insert(sampler);
-	for (auto &samp : dependency_hierarchy[sampler])
-		add_hierarchy_to_comparison_samplers(samp);
+	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
+	comparison_ids.insert(id);
+	for (auto &dep_id : dependency_hierarchy[id])
+		add_hierarchy_to_comparison_ids(dep_id);
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
@@ -4425,6 +4449,10 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		auto &type = compiler.get<SPIRType>(args[0]);
 		if (type.image.dim == DimSubpassData)
 			need_subpass_input = true;
+
+		// If we load a SampledImage and it will be used with Dref, propagate the state up.
+		if (dref_combined_samplers.count(args[1]) != 0)
+			add_hierarchy_to_comparison_ids(args[1]);
 		break;
 	}
 
@@ -4434,16 +4462,20 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 			return false;
 
 		uint32_t result_type = args[0];
+		uint32_t result_id = args[1];
 		auto &type = compiler.get<SPIRType>(result_type);
-		if (type.image.depth)
+		if (type.image.depth || dref_combined_samplers.count(result_id) != 0)
 		{
 			// This image must be a depth image.
 			uint32_t image = args[2];
-			add_hierarchy_to_comparison_images(image);
+			add_hierarchy_to_comparison_ids(image);
 
-			// This sampler must be a SamplerComparisionState, and not a regular SamplerState.
+			// This sampler must be a SamplerComparisonState, and not a regular SamplerState.
 			uint32_t sampler = args[3];
-			add_hierarchy_to_comparison_samplers(sampler);
+			add_hierarchy_to_comparison_ids(sampler);
+
+			// Mark the OpSampledImage itself as being comparison state.
+			comparison_ids.insert(result_id);
 		}
 		return true;
 	}
@@ -4653,4 +4685,9 @@ bool Compiler::is_desktop_only_format(spv::ImageFormat format)
 	}
 
 	return false;
+}
+
+bool Compiler::image_is_comparison(const spirv_cross::SPIRType &type, uint32_t id) const
+{
+	return type.image.depth || (comparison_ids.count(id) != 0);
 }

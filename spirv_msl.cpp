@@ -3633,9 +3633,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	// Bypass pointers because we need the real image struct
 	auto &img_type = get<SPIRType>(type.self).image;
-	bool shadow_image = comparison_images.count(id) != 0;
-
-	if (img_type.depth || shadow_image)
+	if (image_is_comparison(type, id))
 	{
 		switch (img_type.dim)
 		{
