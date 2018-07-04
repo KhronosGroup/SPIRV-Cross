@@ -3750,12 +3750,16 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 
 		uint32_t ptr = args[0];
 		auto *var = compiler.maybe_get_backing_variable(ptr);
-		if (var && var->storage == StorageClassFunction)
-			accessed_variables_to_block[var->self].insert(current_block->self);
 
 		// If we store through an access chain, we have a partial write.
-		if (var && var->self == ptr && var->storage == StorageClassFunction)
-			complete_write_variables_to_block[var->self].insert(current_block->self);
+		if (var)
+		{
+			accessed_variables_to_block[var->self].insert(current_block->self);
+			if (var->self == ptr)
+				complete_write_variables_to_block[var->self].insert(current_block->self);
+			else
+				partial_write_variables_to_block[var->self].insert(current_block->self);
+		}
 
 		// Might try to store a Phi variable here.
 		notify_variable_access(args[1], current_block->self);
@@ -3770,7 +3774,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get<SPIRVariable>(ptr);
-		if (var && var->storage == StorageClassFunction)
+		if (var)
 			accessed_variables_to_block[var->self].insert(current_block->self);
 
 		for (uint32_t i = 3; i < length; i++)
@@ -3794,15 +3798,19 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		uint32_t lhs = args[0];
 		uint32_t rhs = args[1];
 		auto *var = compiler.maybe_get_backing_variable(lhs);
-		if (var && var->storage == StorageClassFunction)
-			accessed_variables_to_block[var->self].insert(current_block->self);
 
 		// If we store through an access chain, we have a partial write.
-		if (var && var->self == lhs)
-			complete_write_variables_to_block[var->self].insert(current_block->self);
+		if (var)
+		{
+			accessed_variables_to_block[var->self].insert(current_block->self);
+			if (var->self == lhs)
+				complete_write_variables_to_block[var->self].insert(current_block->self);
+			else
+				partial_write_variables_to_block[var->self].insert(current_block->self);
+		}
 
 		var = compiler.maybe_get_backing_variable(rhs);
-		if (var && var->storage == StorageClassFunction)
+		if (var)
 			accessed_variables_to_block[var->self].insert(current_block->self);
 		break;
 	}
@@ -3813,7 +3821,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 			return false;
 
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
-		if (var && var->storage == StorageClassFunction)
+		if (var)
 			accessed_variables_to_block[var->self].insert(current_block->self);
 
 		// Might try to copy a Phi variable here.
@@ -3827,7 +3835,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 			return false;
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get_backing_variable(ptr);
-		if (var && var->storage == StorageClassFunction)
+		if (var)
 			accessed_variables_to_block[var->self].insert(current_block->self);
 
 		// Loaded value is a temporary.
@@ -3840,13 +3848,19 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
+		bool is_pure = compiler.function_is_pure(compiler.get<SPIRFunction>(args[2]));
 		length -= 3;
 		args += 3;
+
 		for (uint32_t i = 0; i < length; i++)
 		{
 			auto *var = compiler.maybe_get_backing_variable(args[i]);
-			if (var && var->storage == StorageClassFunction)
+			if (var)
+			{
 				accessed_variables_to_block[var->self].insert(current_block->self);
+				if (!is_pure) // Assume we can get partial writes to this variable.
+					partial_write_variables_to_block[var->self].insert(current_block->self);
+			}
 
 			// Cannot easily prove if argument we pass to a function is completely written.
 			// Usually, functions write to a dummy variable,
@@ -3925,6 +3939,10 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry)
 	// For each variable which is statically accessed.
 	for (auto &var : handler.accessed_variables_to_block)
 	{
+		// Only deal with variables which are considered local variables in this function.
+		if (find(begin(entry.local_variables), end(entry.local_variables), var.first) == end(entry.local_variables))
+			continue;
+
 		DominatorBuilder builder(cfg);
 		auto &blocks = var.second;
 		auto &type = expression_type(var.first);
