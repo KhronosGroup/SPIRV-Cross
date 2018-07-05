@@ -4222,7 +4222,7 @@ CompilerMSL::MemberSorter::MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
 	meta.members.resize(max(type.member_types.size(), meta.members.size()));
 }
 
-void CompilerMSL::remap_constexpr_sampler(uint32_t id, const spirv_cross::MSLConstexprSampler &sampler)
+void CompilerMSL::remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler &sampler)
 {
 	auto &type = get<SPIRType>(get<SPIRVariable>(id).basetype);
 	if (type.basetype != SPIRType::SampledImage && type.basetype != SPIRType::Sampler)
@@ -4233,10 +4233,22 @@ void CompilerMSL::remap_constexpr_sampler(uint32_t id, const spirv_cross::MSLCon
 }
 
 // MSL always declares builtins with their SPIR-V type.
-void CompilerMSL::bitcast_from_builtin_load(uint32_t, std::string &, const spirv_cross::SPIRType &)
+void CompilerMSL::bitcast_from_builtin_load(uint32_t, std::string &, const SPIRType &)
 {
 }
 
-void CompilerMSL::bitcast_to_builtin_store(uint32_t, std::string &, const spirv_cross::SPIRType &)
+void CompilerMSL::bitcast_to_builtin_store(uint32_t, std::string &, const SPIRType &)
 {
+}
+
+std::string CompilerMSL::to_initializer_expression(const SPIRVariable &var)
+{
+	// We risk getting an array initializer here with MSL. If we have an array.
+	// FIXME: We cannot handle non-constant arrays being initialized.
+	// We will need to inject spvArrayCopy here somehow ...
+	auto &type = get<SPIRType>(var.basetype);
+	if (ids[var.initializer].get_type() == TypeConstant && (!type.array.empty() || type.basetype == SPIRType::Struct))
+		return constant_expression(get<SPIRConstant>(var.initializer));
+	else
+		return CompilerGLSL::to_initializer_expression(var);
 }

@@ -463,6 +463,7 @@ protected:
 	virtual bool skip_argument(uint32_t id) const;
 	virtual void emit_array_copy(const std::string &lhs, uint32_t rhs_id);
 	virtual void emit_block_hints(const SPIRBlock &block);
+	virtual std::string to_initializer_expression(const SPIRVariable &var);
 
 	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing, uint32_t start_offset = 0,
 	                                uint32_t end_offset = std::numeric_limits<uint32_t>::max());

@@ -8296,6 +8296,11 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id), arg.id));
 }
 
+string CompilerGLSL::to_initializer_expression(const SPIRVariable &var)
+{
+	return to_expression(var.initializer);
+}
+
 string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 {
 	// Ignore the pointer type since GLSL doesn't have pointers.
@@ -8313,7 +8318,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	{
 		uint32_t expr = variable.initializer;
 		if (ids[expr].get_type() != TypeUndef)
-			res += join(" = ", to_expression(variable.initializer));
+			res += join(" = ", to_initializer_expression(variable));
 	}
 	return res;
 }
