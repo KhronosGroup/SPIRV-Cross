@@ -24,6 +24,6 @@ void main()
     Foobar param = Foobar(10.0, 20.0);
     Foobar indexable[2] = Foobar[](Foobar(10.0, 40.0), Foobar(90.0, 70.0));
     Foobar param_1 = indexable[index];
-    FragColor = ((_37[index] + (_55[index][index + 1])) + resolve(param)) + resolve(param_1);
+    FragColor = ((_37[index] + _55[index][index + 1]) + resolve(param)) + resolve(param_1);
 }
 

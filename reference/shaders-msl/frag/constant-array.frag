@@ -52,7 +52,7 @@ fragment main0_out main0(main0_in in [[stage_in]])
     Foobar param = {10.0, 20.0};
     Foobar indexable[2] = {{10.0, 40.0}, {90.0, 70.0}};
     Foobar param_1 = indexable[in.index];
-    out.FragColor = ((_37[in.index] + (_55[in.index][in.index + 1])) + resolve(param)) + resolve(param_1);
+    out.FragColor = ((_37[in.index] + _55[in.index][in.index + 1]) + resolve(param)) + resolve(param_1);
     return out;
 }
 
