@@ -764,7 +764,6 @@ struct SPIRFunction : IVariant
 	bool active = false;
 	bool flush_undeclared = true;
 	bool do_combined_parameters = true;
-	bool analyzed_variable_scope = false;
 };
 
 struct SPIRAccessChain : IVariant

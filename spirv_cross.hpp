@@ -869,7 +869,7 @@ protected:
 		bool need_subpass_input = false;
 	};
 
-	void build_function_control_flow_graphs();
+	void build_function_control_flow_graphs_and_analyze();
 	std::unordered_map<uint32_t, std::unique_ptr<CFG>> function_cfgs;
 	struct CFGBuilder : OpcodeHandler
 	{

@@ -280,7 +280,7 @@ string CompilerMSL::compile()
 
 	struct_member_padding.clear();
 
-	build_function_control_flow_graphs();
+	build_function_control_flow_graphs_and_analyze();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
 	build_implicit_builtins();

@@ -3647,20 +3647,20 @@ void Compiler::analyze_parameter_preservation(
 	}
 }
 
-Compiler::AnalyzeVariableScopeAccessHandler::AnalyzeVariableScopeAccessHandler(spirv_cross::Compiler &compiler_,
-                                                                               spirv_cross::SPIRFunction &entry_)
+Compiler::AnalyzeVariableScopeAccessHandler::AnalyzeVariableScopeAccessHandler(Compiler &compiler_,
+                                                                               SPIRFunction &entry_)
     : compiler(compiler_)
     , entry(entry_)
 {
 }
 
-bool Compiler::AnalyzeVariableScopeAccessHandler::follow_function_call(const spirv_cross::SPIRFunction &)
+bool Compiler::AnalyzeVariableScopeAccessHandler::follow_function_call(const SPIRFunction &)
 {
 	// Only analyze within this function.
 	return false;
 }
 
-void Compiler::AnalyzeVariableScopeAccessHandler::set_current_block(const spirv_cross::SPIRBlock &block)
+void Compiler::AnalyzeVariableScopeAccessHandler::set_current_block(const SPIRBlock &block)
 {
 	current_block = &block;
 
@@ -3848,7 +3848,6 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
-		bool is_pure = compiler.function_is_pure(compiler.get<SPIRFunction>(args[2]));
 		length -= 3;
 		args += 3;
 
@@ -3858,8 +3857,8 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 			if (var)
 			{
 				accessed_variables_to_block[var->self].insert(current_block->self);
-				if (!is_pure) // Assume we can get partial writes to this variable.
-					partial_write_variables_to_block[var->self].insert(current_block->self);
+				// Assume we can get partial writes to this variable.
+				partial_write_variables_to_block[var->self].insert(current_block->self);
 			}
 
 			// Cannot easily prove if argument we pass to a function is completely written.
@@ -4414,12 +4413,47 @@ bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uin
 	return true;
 }
 
-void Compiler::build_function_control_flow_graphs()
+void Compiler::build_function_control_flow_graphs_and_analyze()
 {
 	CFGBuilder handler(*this);
 	handler.function_cfgs[entry_point].reset(new CFG(*this, get<SPIRFunction>(entry_point)));
 	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
 	function_cfgs = move(handler.function_cfgs);
+
+	for (auto &f : function_cfgs)
+	{
+		auto &func = get<SPIRFunction>(f.first);
+		analyze_variable_scope(func);
+
+		// Check if we can actually use the loop variables we found in analyze_variable_scope.
+		// To use multiple initializers, we need the same type and qualifiers.
+		for (auto block : func.blocks)
+		{
+			auto &b = get<SPIRBlock>(block);
+			if (b.loop_variables.size() < 2)
+				continue;
+
+			auto &flags = get_decoration_bitset(b.loop_variables.front());
+			uint32_t type = get<SPIRVariable>(b.loop_variables.front()).basetype;
+			bool invalid_initializers = false;
+			for (auto loop_variable : b.loop_variables)
+			{
+				if (flags != get_decoration_bitset(loop_variable) ||
+				    type != get<SPIRVariable>(b.loop_variables.front()).basetype)
+				{
+					invalid_initializers = true;
+					break;
+				}
+			}
+
+			if (invalid_initializers)
+			{
+				for (auto loop_variable : b.loop_variables)
+					get<SPIRVariable>(loop_variable).loop_variable = false;
+				b.loop_variables.clear();
+			}
+		}
+	}
 }
 
 Compiler::CFGBuilder::CFGBuilder(spirv_cross::Compiler &compiler_)

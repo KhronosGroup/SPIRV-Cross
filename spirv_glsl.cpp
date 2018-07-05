@@ -418,7 +418,7 @@ string CompilerGLSL::compile()
 	backend.supports_extensions = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
-	build_function_control_flow_graphs();
+	build_function_control_flow_graphs_and_analyze();
 	find_static_extensions();
 	fixup_image_load_store_access();
 	update_active_builtins();
@@ -8908,41 +8908,6 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 
 	current_function = &func;
 	auto &entry_block = get<SPIRBlock>(func.entry_block);
-
-	if (!func.analyzed_variable_scope)
-	{
-		analyze_variable_scope(func);
-
-		// Check if we can actually use the loop variables we found in analyze_variable_scope.
-		// To use multiple initializers, we need the same type and qualifiers.
-		for (auto block : func.blocks)
-		{
-			auto &b = get<SPIRBlock>(block);
-			if (b.loop_variables.size() < 2)
-				continue;
-
-			auto &flags = get_decoration_bitset(b.loop_variables.front());
-			uint32_t type = get<SPIRVariable>(b.loop_variables.front()).basetype;
-			bool invalid_initializers = false;
-			for (auto loop_variable : b.loop_variables)
-			{
-				if (flags != get_decoration_bitset(loop_variable) ||
-				    type != get<SPIRVariable>(b.loop_variables.front()).basetype)
-				{
-					invalid_initializers = true;
-					break;
-				}
-			}
-
-			if (invalid_initializers)
-			{
-				for (auto loop_variable : b.loop_variables)
-					get<SPIRVariable>(loop_variable).loop_variable = false;
-				b.loop_variables.clear();
-			}
-		}
-		func.analyzed_variable_scope = true;
-	}
 
 	for (auto &v : func.local_variables)
 	{
