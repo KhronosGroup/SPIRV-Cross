@@ -4078,6 +4078,7 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	{
 		// Get the result type of the RHS. Since this is run as a pre-processing stage,
 		// we must extract the result type directly from the Instruction, rather than the ID.
+		uint32_t id_lhs = args[0];
 		uint32_t id_rhs = args[1];
 
 		const SPIRType *type = nullptr;
@@ -4094,7 +4095,13 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 				type = &compiler.get<SPIRType>(tid);
 		}
 
-		if (type && compiler.is_array(*type))
+		auto *var = compiler.maybe_get<SPIRVariable>(id_lhs);
+
+		// Are we simply assigning to a statically assigned variable which takes a constant?
+		// Don't bother emitting this function.
+		bool static_expression_lhs =
+		    var && var->storage == StorageClassFunction && var->statically_assigned && var->remapped_variable;
+		if (type && compiler.is_array(*type) && !static_expression_lhs)
 			return SPVFuncImplArrayCopy;
 
 		break;
