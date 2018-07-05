@@ -1651,7 +1651,7 @@ void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constan
 	statement("const ", variable_decl(type, name), " = ", constant_op_expression(constant), ";");
 }
 
-void CompilerGLSL::emit_specialization_constant(const SPIRConstant &constant)
+void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 {
 	auto &type = get<SPIRType>(constant.constant_type);
 	auto name = to_name(constant.self);
@@ -2072,24 +2072,25 @@ void CompilerGLSL::emit_resources()
 	//
 	// TODO: If we have the fringe case that we create a spec constant which depends on a struct type,
 	// we'll have to deal with that, but there's currently no known way to express that.
-	if (options.vulkan_semantics)
+	for (auto &id : ids)
 	{
-		for (auto &id : ids)
+		if (id.get_type() == TypeConstant)
 		{
-			if (id.get_type() == TypeConstant)
-			{
-				auto &c = id.get<SPIRConstant>();
-				if (!c.specialization)
-					continue;
+			auto &c = id.get<SPIRConstant>();
 
-				emit_specialization_constant(c);
-				emitted = true;
-			}
-			else if (id.get_type() == TypeConstantOp)
+			bool needs_declaration = (c.specialization && options.vulkan_semantics) ||
+			                         c.is_used_as_lut;
+
+			if (needs_declaration)
 			{
-				emit_specialization_constant_op(id.get<SPIRConstantOp>());
+				emit_constant(c);
 				emitted = true;
 			}
+		}
+		else if (options.vulkan_semantics && id.get_type() == TypeConstantOp)
+		{
+			emit_specialization_constant_op(id.get<SPIRConstantOp>());
+			emitted = true;
 		}
 	}
 
@@ -2424,6 +2425,8 @@ string CompilerGLSL::to_expression(uint32_t id)
 		if (dec.builtin)
 			return builtin_to_glsl(dec.builtin_type, StorageClassGeneric);
 		else if (c.specialization && options.vulkan_semantics)
+			return to_name(id);
+		else if (c.is_used_as_lut)
 			return to_name(id);
 		else if (type.basetype == SPIRType::Struct && !backend.can_declare_struct_inline)
 			return to_name(id);
@@ -6191,6 +6194,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			var->static_expression = ops[1];
 		else if (var && var->loop_variable && !var->loop_variable_enable)
 			var->static_expression = ops[1];
+		else if (var && var->remapped_variable)
+		{
+			// Skip the write.
+		}
 		else if (var && flattened_structs.count(ops[0]))
 		{
 			store_flattened_struct(*var, ops[1]);
@@ -8934,6 +8941,11 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			if (find(begin(dominated), end(dominated), var.self) == end(dominated))
 				entry_block.dominated_variables.push_back(var.self);
 			var.deferred_declaration = true;
+		}
+		else if (var.storage == StorageClassFunction && var.remapped_variable && var.static_expression)
+		{
+			// No need to declare this variable, it has a static expression.
+			var.deferred_declaration = false;
 		}
 		else if (expression_is_lvalue(v))
 		{

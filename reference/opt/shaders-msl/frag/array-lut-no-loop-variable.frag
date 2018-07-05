@@ -29,11 +29,10 @@ void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])
 fragment main0_out main0()
 {
     main0_out out = {};
-    float lut[5] = {1.0, 2.0, 3.0, 4.0, 5.0};
     for (int _46 = 0; _46 < 4; )
     {
         int _33 = _46 + 1;
-        out.FragColor += float4(lut[_33]);
+        out.FragColor += float4(_17[_33]);
         _46 = _33;
         continue;
     }

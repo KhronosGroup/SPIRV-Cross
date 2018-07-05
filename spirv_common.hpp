@@ -1101,6 +1101,9 @@ struct SPIRConstant : IVariant
 	// If this constant is used as an array length which creates specialization restrictions on some backends.
 	bool is_used_as_array_length = false;
 
+	// If true, this is a LUT, and should always be declared in the outer scope.
+	bool is_used_as_lut = false;
+
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;
 };

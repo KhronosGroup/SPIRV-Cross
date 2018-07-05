@@ -676,8 +676,6 @@ protected:
 			variable_remap_callback(type, var_name, type_name);
 	}
 
-	void analyze_variable_scope(SPIRFunction &function);
-
 	void parse();
 	void parse(const Instruction &i);
 
@@ -902,6 +900,21 @@ protected:
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> partial_write_variables_to_block;
 		const SPIRBlock *current_block = nullptr;
 	};
+
+	struct StaticExpressionAccessHandler : OpcodeHandler
+	{
+		StaticExpressionAccessHandler(Compiler &compiler_, uint32_t variable_id_);
+		bool follow_function_call(const SPIRFunction &) override;
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+		uint32_t variable_id;
+		uint32_t static_expression = 0;
+		uint32_t write_count = 0;
+	};
+
+	void analyze_variable_scope(SPIRFunction &function, AnalyzeVariableScopeAccessHandler &handler);
+	void find_function_local_luts(SPIRFunction &function, const AnalyzeVariableScopeAccessHandler &handler);
 
 	void make_constant_null(uint32_t id, uint32_t type);
 

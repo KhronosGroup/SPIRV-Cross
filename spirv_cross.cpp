@@ -3918,10 +3918,150 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 	return true;
 }
 
-void Compiler::analyze_variable_scope(SPIRFunction &entry)
+Compiler::StaticExpressionAccessHandler::StaticExpressionAccessHandler(Compiler &compiler_,
+                                                                       uint32_t variable_id_)
+	: compiler(compiler_), variable_id(variable_id_)
 {
-	AnalyzeVariableScopeAccessHandler handler(*this, entry);
+}
 
+bool Compiler::StaticExpressionAccessHandler::follow_function_call(const SPIRFunction &)
+{
+	return false;
+}
+
+bool Compiler::StaticExpressionAccessHandler::handle(spv::Op op, const uint32_t *args, uint32_t length)
+{
+	switch (op)
+	{
+	case OpStore:
+		if (length < 2)
+			return false;
+		if (args[0] == variable_id)
+		{
+			static_expression = args[1];
+			write_count++;
+		}
+		break;
+
+	case OpLoad:
+		if (length < 3)
+			return false;
+		if (args[2] == variable_id && static_expression == 0) // Tried to read from variable before it was initialized.
+			return false;
+		break;
+
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
+		if (length < 3)
+			return false;
+		if (args[2] == variable_id) // If we try to access chain our candidate variable before we store to it, bail.
+			return false;
+		break;
+
+	default:
+		break;
+	}
+
+	return true;
+}
+
+void Compiler::find_function_local_luts(SPIRFunction &entry,
+                                        const AnalyzeVariableScopeAccessHandler &handler)
+{
+	auto &cfg = *function_cfgs.find(entry.self)->second;
+
+	// For each variable which is statically accessed.
+	for (auto &accessed_var : handler.accessed_variables_to_block)
+	{
+		auto &blocks = accessed_var.second;
+		auto &var = get<SPIRVariable>(accessed_var.first);
+		auto &type = expression_type(accessed_var.first);
+
+		// Only consider function local variables here.
+		if (var.storage != StorageClassFunction)
+			continue;
+
+		// We cannot be a phi variable.
+		if (var.phi_variable)
+			continue;
+
+		// Only consider arrays here.
+		if (type.array.empty())
+			continue;
+
+		// HACK: Do not consider structs. This is a quirk with how types are currently being emitted.
+		// Structs are emitted after specialization constants and composite constants.
+		// FIXME: Fix declaration order so declared constants can have struct types.
+		if (type.basetype == SPIRType::Struct)
+			continue;
+
+		// If the variable has an initializer, make sure it is a constant expression.
+		uint32_t static_constant_expression = 0;
+		if (var.initializer)
+		{
+			if (ids[var.initializer].get_type() != TypeConstant)
+				continue;
+			static_constant_expression = var.initializer;
+
+			// There can be no stores to this variable, we have now proved we have a LUT.
+			if (handler.complete_write_variables_to_block.count(var.self) != 0 ||
+			    handler.partial_write_variables_to_block.count(var.self) != 0)
+				continue;
+		}
+		else
+		{
+			// We can have one, and only one write to the variable, and that write needs to be a constant.
+
+			// No partial writes allowed.
+			if (handler.partial_write_variables_to_block.count(var.self) != 0)
+				continue;
+
+			auto itr = handler.complete_write_variables_to_block.find(var.self);
+
+			// No writes?
+			if (itr == end(handler.complete_write_variables_to_block))
+				continue;
+
+			// We write to the variable in more than one block.
+			auto &write_blocks = itr->second;
+			if (write_blocks.size() != 1)
+				continue;
+
+			// The write needs to happen in the dominating block.
+			DominatorBuilder builder(cfg);
+			for (auto &block : blocks)
+				builder.add_block(block);
+			uint32_t dominator = builder.get_dominator();
+
+			// The complete write happened in a branch or similar, cannot deduce static expression.
+			if (write_blocks.count(dominator) == 0)
+				continue;
+
+			// Find the static expression for this variable.
+			StaticExpressionAccessHandler static_expression_handler(*this, var.self);
+			traverse_all_reachable_opcodes(get<SPIRBlock>(dominator), static_expression_handler);
+
+			// We want one, and exactly one write
+			if (static_expression_handler.write_count != 1 || static_expression_handler.static_expression == 0)
+				continue;
+
+			// Is it a constant expression?
+			if (ids[static_expression_handler.static_expression].get_type() != TypeConstant)
+				continue;
+
+			// We found a LUT!
+			static_constant_expression = static_expression_handler.static_expression;
+		}
+
+		get<SPIRConstant>(static_constant_expression).is_used_as_lut = true;
+		var.static_expression = static_constant_expression;
+		var.statically_assigned = true;
+		var.remapped_variable = true;
+	}
+}
+
+void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeAccessHandler &handler)
+{
 	// First, we map out all variable access within a function.
 	// Essentially a map of block -> { variables accessed in the basic block }
 	traverse_all_reachable_opcodes(entry, handler);
@@ -4423,7 +4563,9 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 	for (auto &f : function_cfgs)
 	{
 		auto &func = get<SPIRFunction>(f.first);
-		analyze_variable_scope(func);
+		AnalyzeVariableScopeAccessHandler scope_handler(*this, func);
+		analyze_variable_scope(func, scope_handler);
+		find_function_local_luts(func, scope_handler);
 
 		// Check if we can actually use the loop variables we found in analyze_variable_scope.
 		// To use multiple initializers, we need the same type and qualifiers.

@@ -39,7 +39,6 @@ fragment main0_out main0()
     float4 b = float4(0.0);
     float2x3 c = float2x3(float3(0.0), float3(0.0));
     D d = {float4(0.0), 0.0};
-    float4 e[4] = {float4(0.0), float4(0.0), float4(0.0), float4(0.0)};
     out.FragColor = a;
     return out;
 }
