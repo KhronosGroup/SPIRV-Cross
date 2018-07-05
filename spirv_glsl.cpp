@@ -2300,9 +2300,9 @@ string CompilerGLSL::enclose_expression(const string &expr)
 		uint32_t paren_count = 0;
 		for (auto c : expr)
 		{
-			if (c == '(')
+			if (c == '(' || c == '[')
 				paren_count++;
-			else if (c == ')')
+			else if (c == ')' || c == ']')
 			{
 				assert(paren_count);
 				paren_count--;
