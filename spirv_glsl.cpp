@@ -2078,8 +2078,7 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &c = id.get<SPIRConstant>();
 
-			bool needs_declaration = (c.specialization && options.vulkan_semantics) ||
-			                         c.is_used_as_lut;
+			bool needs_declaration = (c.specialization && options.vulkan_semantics) || c.is_used_as_lut;
 
 			if (needs_declaration)
 			{

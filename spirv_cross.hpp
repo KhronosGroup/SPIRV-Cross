@@ -18,8 +18,8 @@
 #define SPIRV_CROSS_HPP
 
 #include "spirv.hpp"
-#include "spirv_common.hpp"
 #include "spirv_cfg.hpp"
+#include "spirv_common.hpp"
 
 namespace spirv_cross
 {

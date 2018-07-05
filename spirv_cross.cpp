@@ -3918,9 +3918,9 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 	return true;
 }
 
-Compiler::StaticExpressionAccessHandler::StaticExpressionAccessHandler(Compiler &compiler_,
-                                                                       uint32_t variable_id_)
-	: compiler(compiler_), variable_id(variable_id_)
+Compiler::StaticExpressionAccessHandler::StaticExpressionAccessHandler(Compiler &compiler_, uint32_t variable_id_)
+    : compiler(compiler_)
+    , variable_id(variable_id_)
 {
 }
 
@@ -3965,8 +3965,7 @@ bool Compiler::StaticExpressionAccessHandler::handle(spv::Op op, const uint32_t 
 	return true;
 }
 
-void Compiler::find_function_local_luts(SPIRFunction &entry,
-                                        const AnalyzeVariableScopeAccessHandler &handler)
+void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariableScopeAccessHandler &handler)
 {
 	auto &cfg = *function_cfgs.find(entry.self)->second;
 
@@ -4599,7 +4598,7 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 }
 
 Compiler::CFGBuilder::CFGBuilder(spirv_cross::Compiler &compiler_)
-	: compiler(compiler_)
+    : compiler(compiler_)
 {
 }
 
