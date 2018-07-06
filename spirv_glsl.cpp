@@ -6147,8 +6147,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
 
-		// Suppress usage tracking since using same expression multiple times does not imply any extra work.
-		auto &e = emit_op(result_type, id, expr, forward, true);
+		// By default, suppress usage tracking since using same expressio multiple times does not imply any extra work.
+		// However, if we try to load a complex, composite object from a flattened buffer,
+		// we should avoid emitting the same code over and over and lower the result to a temporary.
+		auto &type = get<SPIRType>(result_type);
+		bool usage_tracking = ptr_expression && flattened_buffer_blocks.count(ptr_expression->loaded_from) != 0 &&
+		                      (type.basetype == SPIRType::Struct || (type.columns > 1));
+
+		auto &e = emit_op(result_type, id, expr, forward, !usage_tracking);
 		e.need_transpose = need_transpose;
 		register_read(id, ptr, forward);
 
@@ -6168,8 +6174,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// If the base is immutable, the access chain pointer must also be.
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
-		bool need_transpose, result_is_packed;
+		bool need_transpose = false;
+		bool result_is_packed = false;
 		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &need_transpose, &result_is_packed);
+
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 
 		auto *backing_variable = maybe_get_backing_variable(ops[2]);
