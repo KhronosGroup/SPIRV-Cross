@@ -6147,7 +6147,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
 
-		// By default, suppress usage tracking since using same expressio multiple times does not imply any extra work.
+		// By default, suppress usage tracking since using same expression multiple times does not imply any extra work.
 		// However, if we try to load a complex, composite object from a flattened buffer,
 		// we should avoid emitting the same code over and over and lower the result to a temporary.
 		auto &type = get<SPIRType>(result_type);

@@ -3519,6 +3519,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 	if (need_byte_access_chain)
 	{
 		uint32_t to_plain_buffer_length = static_cast<uint32_t>(type.array.size());
+		auto *backing_variable = maybe_get_backing_variable(ops[2]);
 
 		string base;
 		if (to_plain_buffer_length != 0)
@@ -3557,6 +3558,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		e.row_major_matrix = row_major_matrix;
 		e.matrix_stride = matrix_stride;
 		e.immutable = should_forward(ops[2]);
+		e.loaded_from = backing_variable ? backing_variable->self : 0;
 
 		if (chain)
 		{
