@@ -299,6 +299,11 @@ string CompilerMSL::compile()
 	stage_in_var_id = add_interface_block(StorageClassInput);
 	stage_uniforms_var_id = add_interface_block(StorageClassUniformConstant);
 
+	// Metal vertex functions that define no output must disable rasterization and return void.
+	// Provide feedback to calling API to allow runtime to disable pipeline rasterization.
+	if (!stage_out_var_id && (get_entry_point().model == ExecutionModelVertex))
+		msl_options.disable_rasterization = true;
+
 	// Convert the use of global variables to recursively-passed function parameters
 	localize_global_variables();
 	extract_global_variables_from_functions();
@@ -376,6 +381,11 @@ void CompilerMSL::preprocess_op_codes()
 		add_header_line("#include <metal_atomic>");
 		add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"");
 	}
+
+	// Metal vertex functions that write to textures must disable rasterization and return void.
+	// Provide feedback to calling API to allow runtime to disable pipeline rasterization.
+	if (preproc.uses_image_write && get_entry_point().model == ExecutionModelVertex)
+		msl_options.disable_rasterization = true;
 }
 
 // Move the Private and Workgroup global variables to the entry function.
@@ -634,8 +644,7 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, StorageClass storage)
 {
 	MSLVertexAttr *p_va;
-	auto &execution = get_entry_point();
-	if ((execution.model == ExecutionModelVertex) && (storage == StorageClassInput) &&
+	if ((get_entry_point().model == ExecutionModelVertex) && (storage == StorageClassInput) &&
 	    (p_va = vtx_attrs_by_location[location]))
 		p_va->used_by_shader = true;
 }
@@ -690,16 +699,20 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	{
 		ib_var_ref = stage_out_var_name;
 
-		// Add the output interface struct as a local variable to the entry function, force
-		// the entry function to return the output interface struct from any blocks that perform
-		// a function return, and indicate the output var requires early initialization
+		// Add the output interface struct as a local variable to the entry function.
+		// If the entry point should return the output struct, set the entry function
+		// to return the output interface struct, otherwise to return nothing.
+		// Indicate the output var requires early initialization.
+		bool ep_should_return_output =
+		    !((get_entry_point().model == ExecutionModelVertex) && msl_options.disable_rasterization);
+		uint32_t rtn_id = ep_should_return_output ? ib_var_id : 0;
 		auto &entry_func = get<SPIRFunction>(entry_point);
 		entry_func.add_local_variable(ib_var_id);
 		for (auto &blk_id : entry_func.blocks)
 		{
 			auto &blk = get<SPIRBlock>(blk_id);
 			if (blk.terminator == SPIRBlock::Return)
-				blk.return_value = ib_var_id;
+				blk.return_value = rtn_id;
 		}
 		vars_needing_early_declaration.push_back(ib_var_id);
 		break;
@@ -1741,7 +1754,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpAtomicXor:
-		MSL_AFMO (xor);
+		MSL_AFMO(xor);
 		break;
 
 	// Images
@@ -2844,9 +2857,7 @@ string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp
 // Called automatically at the end of the entry point function
 void CompilerMSL::emit_fixup()
 {
-	auto &execution = get_entry_point();
-
-	if ((execution.model == ExecutionModelVertex) && stage_out_var_id && !qual_pos_var_name.empty())
+	if ((get_entry_point().model == ExecutionModelVertex) && stage_out_var_id && !qual_pos_var_name.empty())
 	{
 		if (options.vertex.fixup_clipspace)
 			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
@@ -3081,14 +3092,15 @@ string CompilerMSL::constant_expression(const SPIRConstant &c)
 // entry type if the current function is the entry point function
 string CompilerMSL::func_type_decl(SPIRType &type)
 {
-	auto &execution = get_entry_point();
 	// The regular function return type. If not processing the entry point function, that's all we need
 	string return_type = type_to_glsl(type) + type_to_array_glsl(type);
 	if (!processing_entry_point)
 		return return_type;
 
-	// If an outgoing interface block has been defined, override the entry point return type
-	if (stage_out_var_id)
+	// If an outgoing interface block has been defined, and it should be returned, override the entry point return type
+	bool ep_should_return_output =
+	    !((get_entry_point().model == ExecutionModelVertex) && msl_options.disable_rasterization);
+	if (stage_out_var_id && ep_should_return_output)
 	{
 		auto &so_var = get<SPIRVariable>(stage_out_var_id);
 		auto &so_type = get<SPIRType>(so_var.basetype);
@@ -3097,6 +3109,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 
 	// Prepend a entry type, based on the execution model
 	string entry_type;
+	auto &execution = get_entry_point();
 	switch (execution.model)
 	{
 	case ExecutionModelVertex:
@@ -3609,7 +3622,7 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 		return "sampler";
 }
 
-// Returns an MSL string describing  the SPIR-V image type
+// Returns an MSL string describing the SPIR-V image type
 string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {
 	auto *var = maybe_get<SPIRVariable>(id);
@@ -4025,6 +4038,10 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 
 	case OpFunctionCall:
 		suppress_missing_prototypes = true;
+		break;
+
+	case OpImageWrite:
+		uses_image_write = true;
 		break;
 
 	case OpAtomicExchange:
