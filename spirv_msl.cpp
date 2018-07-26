@@ -276,6 +276,8 @@ string CompilerMSL::compile()
 	backend.boolean_mix_support = false;
 	backend.allow_truncated_access_chain = true;
 
+	is_rasterization_disabled = msl_options.disable_rasterization;
+
 	replace_illegal_names();
 
 	struct_member_padding.clear();
@@ -300,9 +302,8 @@ string CompilerMSL::compile()
 	stage_uniforms_var_id = add_interface_block(StorageClassUniformConstant);
 
 	// Metal vertex functions that define no output must disable rasterization and return void.
-	// Provide feedback to calling API to allow runtime to disable pipeline rasterization.
-	if (!stage_out_var_id && (get_entry_point().model == ExecutionModelVertex))
-		msl_options.disable_rasterization = true;
+	if (!stage_out_var_id)
+		is_rasterization_disabled = true;
 
 	// Convert the use of global variables to recursively-passed function parameters
 	localize_global_variables();
@@ -383,9 +384,8 @@ void CompilerMSL::preprocess_op_codes()
 	}
 
 	// Metal vertex functions that write to textures must disable rasterization and return void.
-	// Provide feedback to calling API to allow runtime to disable pipeline rasterization.
-	if (preproc.uses_image_write && get_entry_point().model == ExecutionModelVertex)
-		msl_options.disable_rasterization = true;
+	if (preproc.uses_image_write)
+		is_rasterization_disabled = true;
 }
 
 // Move the Private and Workgroup global variables to the entry function.
@@ -703,8 +703,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		// If the entry point should return the output struct, set the entry function
 		// to return the output interface struct, otherwise to return nothing.
 		// Indicate the output var requires early initialization.
-		bool ep_should_return_output =
-		    !((get_entry_point().model == ExecutionModelVertex) && msl_options.disable_rasterization);
+		bool ep_should_return_output = !get_is_rasterization_disabled();
 		uint32_t rtn_id = ep_should_return_output ? ib_var_id : 0;
 		auto &entry_func = get<SPIRFunction>(entry_point);
 		entry_func.add_local_variable(ib_var_id);
@@ -3098,8 +3097,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		return return_type;
 
 	// If an outgoing interface block has been defined, and it should be returned, override the entry point return type
-	bool ep_should_return_output =
-	    !((get_entry_point().model == ExecutionModelVertex) && msl_options.disable_rasterization);
+	bool ep_should_return_output = !get_is_rasterization_disabled();
 	if (stage_out_var_id && ep_should_return_output)
 	{
 		auto &so_var = get<SPIRVariable>(stage_out_var_id);
