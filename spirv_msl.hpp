@@ -153,6 +153,7 @@ public:
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
 		bool enable_point_size_builtin = true;
+		bool disable_rasterization = false; // Used as both input and output
 		bool resolve_specialized_array_lengths = true;
 
 		bool is_ios()
@@ -399,6 +400,7 @@ protected:
 		std::unordered_map<uint32_t, uint32_t> result_types;
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
+		bool uses_image_write = false;
 	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
