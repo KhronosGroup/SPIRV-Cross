@@ -403,12 +403,13 @@ protected:
 
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 		CompilerMSL::SPVFuncImpl get_spv_func_impl(spv::Op opcode, const uint32_t *args);
+		void check_resource_write(uint32_t var_id);
 
 		CompilerMSL &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
-		bool uses_image_write = false;
+		bool uses_resource_write = false;
 	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
