@@ -383,8 +383,8 @@ void CompilerMSL::preprocess_op_codes()
 		add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"");
 	}
 
-	// Metal vertex functions that write to textures must disable rasterization and return void.
-	if (preproc.uses_image_write)
+	// Metal vertex functions that write to resources must disable rasterization and return void.
+	if (preproc.uses_resource_write)
 		is_rasterization_disabled = true;
 }
 
@@ -3141,8 +3141,8 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 
 	case StorageClassStorageBuffer:
 	{
-		auto flags = get_buffer_block_flags(argument);
-		return flags.get(DecorationNonWritable) ? "const device" : "device";
+		bool readonly = get_buffer_block_flags(argument).get(DecorationNonWritable);
+		return readonly ? "const device" : "device";
 	}
 
 	case StorageClassUniform:
@@ -3151,13 +3151,13 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 		if (type.basetype == SPIRType::Struct)
 		{
 			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
-			if (!ssbo)
-				return "constant";
-			else
+			if (ssbo)
 			{
 				bool readonly = get_buffer_block_flags(argument).get(DecorationNonWritable);
 				return readonly ? "const device" : "device";
 			}
+			else
+				return "constant";
 		}
 		break;
 
@@ -4039,13 +4039,16 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		break;
 
 	case OpImageWrite:
-		uses_image_write = true;
+		uses_resource_write = true;
+		break;
+
+	case OpStore:
+		check_resource_write(args[0]);
 		break;
 
 	case OpAtomicExchange:
 	case OpAtomicCompareExchange:
 	case OpAtomicCompareExchangeWeak:
-	case OpAtomicLoad:
 	case OpAtomicIIncrement:
 	case OpAtomicIDecrement:
 	case OpAtomicIAdd:
@@ -4057,6 +4060,11 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpAtomicAnd:
 	case OpAtomicOr:
 	case OpAtomicXor:
+		uses_atomics = true;
+		check_resource_write(args[2]);
+		break;
+
+	case OpAtomicLoad:
 		uses_atomics = true;
 		break;
 
@@ -4070,6 +4078,15 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		result_types[result_id] = result_type;
 
 	return true;
+}
+
+// If the variable is a Uniform or StorageBuffer, mark that a resource has been written to.
+void CompilerMSL::OpCodePreprocessor::check_resource_write(uint32_t var_id)
+{
+	auto *p_var = compiler.maybe_get_backing_variable(var_id);
+	StorageClass sc = p_var ? p_var->storage : StorageClassMax;
+	if (sc == StorageClassUniform || sc == StorageClassStorageBuffer)
+		uses_resource_write = true;
 }
 
 // Returns an enumeration of a SPIR-V function that needs to be output for certain Op codes.
