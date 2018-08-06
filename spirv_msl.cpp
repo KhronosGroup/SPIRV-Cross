@@ -565,10 +565,20 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					if (is_builtin && has_active_builtin(builtin, var.storage))
 					{
 						// Add a arg variable with the same type and decorations as the member
-						uint32_t next_id = increase_bound_by(1);
-						func.add_parameter(mbr_type_id, next_id, true);
-						set<SPIRVariable>(next_id, mbr_type_id, StorageClassFunction);
-						meta[next_id].decoration = meta[type_id].members[mbr_idx];
+						uint32_t next_ids = increase_bound_by(2);
+						uint32_t ptr_type_id = next_ids + 0;
+						uint32_t var_id = next_ids + 1;
+
+						// Make sure we have an actual pointer type,
+						// so that we will get the appropriate address space when declaring these builtins.
+						auto &ptr = set<SPIRType>(ptr_type_id, get<SPIRType>(mbr_type_id));
+						ptr.self = mbr_type_id;
+						ptr.storage = var.storage;
+						ptr.pointer = true;
+
+						func.add_parameter(mbr_type_id, var_id, true);
+						set<SPIRVariable>(var_id, ptr_type_id, StorageClassFunction);
+						meta[var_id].decoration = meta[type_id].members[mbr_idx];
 					}
 					mbr_idx++;
 				}
@@ -2400,8 +2410,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 	{
 		add_local_variable_name(arg.id);
 
-		string address_space = "thread";
-
+		string address_space;
 		auto *var = maybe_get<SPIRVariable>(arg.id);
 		if (var)
 		{
@@ -2409,7 +2418,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 			address_space = get_argument_address_space(*var);
 		}
 
-		decl += address_space + " ";
+		if (!address_space.empty())
+			decl += address_space + " ";
 		decl += argument_decl(arg);
 
 		// Manufacture automatic sampler arg for SampledImage texture
@@ -3161,6 +3171,11 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 		}
 		break;
 
+	case StorageClassFunction:
+	case StorageClassGeneric:
+		// No address space for plain values.
+		return type.pointer ? "thread" : "";
+
 	default:
 		break;
 	}
@@ -3374,7 +3389,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	auto &var = get<SPIRVariable>(arg.id);
 	auto &type = expression_type(arg.id);
-	bool constref = !arg.alias_global_variable && (!type.pointer || arg.write_count == 0);
+
+	bool constref = !arg.alias_global_variable && type.pointer && arg.write_count == 0;
 
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
@@ -3383,27 +3399,34 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (!type.array.empty() && type_is_image)
 		constref = true;
 
-	// TODO: Check if this arg is an uniform pointer
-	bool pointer = type.storage == StorageClassUniformConstant;
-
 	string decl;
 	if (constref)
 		decl += "const ";
 
-	if (is_builtin_variable(var))
+	bool builtin = is_builtin_variable(var);
+	if (builtin)
 		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)));
 	else
 		decl += type_to_glsl(type, arg.id);
 
-	// Arrays of images and samplers are special cased.
-	if (is_array(type) && !type_is_image)
+	bool opaque_handle = type.storage == StorageClassUniformConstant;
+
+	if (!builtin && !opaque_handle && !type.pointer &&
+	    (type.storage == StorageClassFunction || type.storage == StorageClassGeneric))
 	{
+		// If the argument is a pure value and not an opaque type, we will pass by value.
+		decl += " ";
+		decl += to_expression(var.self);
+	}
+	else if (is_array(type) && !type_is_image)
+	{
+		// Arrays of images and samplers are special cased.
 		decl += " (&";
 		decl += to_expression(var.self);
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
-	else if (!pointer)
+	else if (!opaque_handle)
 	{
 		decl += "&";
 		decl += " ";
