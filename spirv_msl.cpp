@@ -2556,13 +2556,21 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		// Fetch offsets must be applied directly to the coordinate.
 		forward = forward && should_forward(offset);
-		tex_coords += " + " + to_enclosed_expression(offset);
+		auto &type = expression_type(offset);
+		if (type.basetype != SPIRType::UInt)
+			tex_coords += " + " + bitcast_expression(SPIRType::UInt, offset);
+		else
+			tex_coords += " + " + to_enclosed_expression(offset);
 	}
 	else if (is_fetch && coffset)
 	{
 		// Fetch offsets must be applied directly to the coordinate.
 		forward = forward && should_forward(coffset);
-		tex_coords += " + " + to_enclosed_expression(coffset);
+		auto &type = expression_type(coffset);
+		if (type.basetype != SPIRType::UInt)
+			tex_coords += " + " + bitcast_expression(SPIRType::UInt, coffset);
+		else
+			tex_coords += " + " + to_enclosed_expression(coffset);
 	}
 
 	// If projection, use alt coord as divisor
