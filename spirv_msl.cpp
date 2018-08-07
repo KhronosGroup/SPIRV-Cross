@@ -2552,6 +2552,27 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		break;
 	}
 
+	if (is_fetch && offset)
+	{
+		// Fetch offsets must be applied directly to the coordinate.
+		forward = forward && should_forward(offset);
+		auto &type = expression_type(offset);
+		if (type.basetype != SPIRType::UInt)
+			tex_coords += " + " + bitcast_expression(SPIRType::UInt, offset);
+		else
+			tex_coords += " + " + to_enclosed_expression(offset);
+	}
+	else if (is_fetch && coffset)
+	{
+		// Fetch offsets must be applied directly to the coordinate.
+		forward = forward && should_forward(coffset);
+		auto &type = expression_type(coffset);
+		if (type.basetype != SPIRType::UInt)
+			tex_coords += " + " + bitcast_expression(SPIRType::UInt, coffset);
+		else
+			tex_coords += " + " + to_enclosed_expression(coffset);
+	}
+
 	// If projection, use alt coord as divisor
 	if (is_proj)
 		tex_coords += " / " + coord_expr + alt_coord;
@@ -2643,12 +2664,12 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	// Add offsets
 	string offset_expr;
-	if (coffset)
+	if (coffset && !is_fetch)
 	{
 		forward = forward && should_forward(coffset);
 		offset_expr = to_expression(coffset);
 	}
-	else if (offset)
+	else if (offset && !is_fetch)
 	{
 		forward = forward && should_forward(offset);
 		offset_expr = to_expression(offset);
