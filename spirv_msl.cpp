@@ -2134,7 +2134,7 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	auto *var = maybe_get<SPIRVariable>(id_lhs);
 
 	// Is this a remapped, static constant? Don't do anything.
-	if (var->remapped_variable && var->statically_assigned)
+	if (var && var->remapped_variable && var->statically_assigned)
 		return true;
 
 	if (ids[id_rhs].get_type() == TypeConstant && var && var->deferred_declaration)
