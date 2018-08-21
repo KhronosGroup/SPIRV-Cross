@@ -1601,10 +1601,15 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 
 			// Shaders never use the block by interface name, so we don't
 			// have to track this other than updating name caches.
-			if (block_namespace.find(block_name) != end(block_namespace))
+			if (block_name.empty() || block_namespace.find(block_name) != end(block_namespace))
 				block_name = get_fallback_name(type.self);
 			else
 				block_namespace.insert(block_name);
+
+			// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
+			// This cannot conflict with anything else, so we're safe now.
+			if (block_name.empty())
+				block_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
 
 			// Instance names cannot alias block names.
 			resource_names.insert(block_name);
