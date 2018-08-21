@@ -325,6 +325,10 @@ protected:
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
+	std::unordered_set<std::string> block_input_names;
+	std::unordered_set<std::string> block_output_names;
+	std::unordered_set<std::string> block_ubo_names;
+	std::unordered_set<std::string> block_ssbo_names;
 	std::unordered_map<std::string, std::unordered_set<uint64_t>> function_overloads;
 
 	bool processing_entry_point = false;

@@ -284,6 +284,10 @@ void CompilerGLSL::reset()
 	forwarded_temporaries.clear();
 
 	resource_names.clear();
+	block_input_names.clear();
+	block_output_names.clear();
+	block_ubo_names.clear();
+	block_ssbo_names.clear();
 	function_overloads.clear();
 
 	for (auto &id : ids)
@@ -1432,18 +1436,23 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
 	auto buffer_name = to_name(type.self, false);
 
+	auto &block_namespace = ssbo ? block_ssbo_names : block_ubo_names;
+
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
-	if (meta[type.self].decoration.alias.empty() || resource_names.find(buffer_name) != end(resource_names))
+	if (meta[type.self].decoration.alias.empty() || block_namespace.find(buffer_name) != end(block_namespace))
 		buffer_name = get_block_fallback_name(var.self);
 
 	// Make sure we get something unique.
-	add_variable(resource_names, buffer_name);
+	add_variable(block_namespace, buffer_name);
 
 	// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
 	// This cannot conflict with anything else, so we're safe now.
 	if (buffer_name.empty())
 		buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
+
+	// Instance names cannot alias block names.
+	resource_names.insert(buffer_name);
 
 	// Save for post-reflection later.
 	declared_block_names[var.self] = buffer_name;
@@ -1587,12 +1596,18 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			// Block names should never alias.
 			auto block_name = to_name(type.self, false);
 
+			// The namespace for I/O blocks is separate from other variables in GLSL.
+			auto &block_namespace = type.storage == StorageClassInput ? block_input_names : block_output_names;
+
 			// Shaders never use the block by interface name, so we don't
 			// have to track this other than updating name caches.
-			if (resource_names.find(block_name) != end(resource_names))
+			if (block_namespace.find(block_name) != end(block_namespace))
 				block_name = get_fallback_name(type.self);
 			else
-				resource_names.insert(block_name);
+				block_namespace.insert(block_name);
+
+			// Instance names cannot alias block names.
+			resource_names.insert(block_name);
 
 			statement(layout_for_variable(var), qual, block_name);
 			begin_scope();
