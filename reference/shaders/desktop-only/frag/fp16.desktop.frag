@@ -1,5 +1,11 @@
 #version 450
+#if defined(GL_AMD_gpu_shader_half_float)
 #extension GL_AMD_gpu_shader_half_float : require
+#elif defined(GL_NV_gpu_shader5)
+#extension GL_NV_gpu_shader5 : require
+#else
+#error No extension available for FP16.
+#endif
 
 struct ResType
 {

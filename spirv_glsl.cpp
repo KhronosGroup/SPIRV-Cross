@@ -479,7 +479,22 @@ void CompilerGLSL::emit_header()
 	}
 
 	for (auto &ext : forced_extensions)
-		statement("#extension ", ext, " : require");
+	{
+		if (ext == "GL_AMD_gpu_shader_half_float" && !options.vulkan_semantics)
+		{
+			// Special case, this extension has a potential fallback to another vendor extension in normal GLSL.
+			// GL_AMD_gpu_shader_half_float is a superset, so try that first.
+			statement("#if defined(GL_AMD_gpu_shader_half_float)");
+			statement("#extension GL_AMD_gpu_shader_half_float : require");
+			statement("#elif defined(GL_NV_gpu_shader5)");
+			statement("#extension GL_NV_gpu_shader5 : require");
+			statement("#else");
+			statement("#error No extension available for FP16.");
+			statement("#endif");
+		}
+		else
+			statement("#extension ", ext, " : require");
+	}
 
 	for (auto &header : header_lines)
 		statement(header);
