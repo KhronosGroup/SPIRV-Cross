@@ -2408,15 +2408,22 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	for (auto &arg : func.arguments)
 	{
-		add_local_variable_name(arg.id);
+		uint32_t name_id = arg.id;
 
 		string address_space;
 		auto *var = maybe_get<SPIRVariable>(arg.id);
 		if (var)
 		{
+			// If we need to modify the name of the variable, make sure we modify the original variable.
+			// Our alias is just a shadow variable.
+			if (arg.alias_global_variable && var->basevariable)
+				name_id = var->basevariable;
+
 			var->parameter = &arg; // Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 			address_space = get_argument_address_space(*var);
 		}
+
+		add_local_variable_name(name_id);
 
 		if (!address_space.empty())
 			decl += address_space + " ";
@@ -3408,8 +3415,15 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
+
 	auto &var = get<SPIRVariable>(arg.id);
 	auto &type = expression_type(arg.id);
+
+	// If we need to modify the name of the variable, make sure we use the original variable.
+	// Our alias is just a shadow variable.
+	uint32_t name_id = var.self;
+	if (arg.alias_global_variable && var.basevariable)
+		name_id = var.basevariable;
 
 	bool constref = !arg.alias_global_variable && type.pointer && arg.write_count == 0;
 
@@ -3437,13 +3451,13 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
 		decl += " ";
-		decl += to_expression(var.self);
+		decl += to_expression(name_id);
 	}
 	else if (is_array(type) && !type_is_image)
 	{
 		// Arrays of images and samplers are special cased.
 		decl += " (&";
-		decl += to_expression(var.self);
+		decl += to_expression(name_id);
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
@@ -3451,12 +3465,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		decl += "&";
 		decl += " ";
-		decl += to_expression(var.self);
+		decl += to_expression(name_id);
 	}
 	else
 	{
 		decl += " ";
-		decl += to_expression(var.self);
+		decl += to_expression(name_id);
 	}
 
 	return decl;

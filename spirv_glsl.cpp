@@ -2271,7 +2271,12 @@ void CompilerGLSL::emit_resources()
 // Subclasses may override to modify the return value.
 string CompilerGLSL::to_func_call_arg(uint32_t id)
 {
-	return to_expression(id);
+	// Make sure that we use the name of the original variable, and not the parameter alias.
+	uint32_t name_id = id;
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (var && var->basevariable)
+		name_id = var->basevariable;
+	return to_expression(name_id);
 }
 
 void CompilerGLSL::handle_invalid_expression(uint32_t id)
@@ -8104,13 +8109,14 @@ void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t in
 	{
 		auto &arg = args[arg_idx];
 		assert(arg.alias_global_variable);
-		arglist.push_back(to_func_call_arg(arg.id));
 
 		// If the underlying variable needs to be declared
 		// (ie. a local variable with deferred declaration), do so now.
 		uint32_t var_id = get<SPIRVariable>(arg.id).basevariable;
 		if (var_id)
 			flush_variable_declaration(var_id);
+
+		arglist.push_back(to_func_call_arg(arg.id));
 	}
 }
 
