@@ -3967,6 +3967,10 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 	case BuiltInSampleMask:
 		return "uint";
 
+	// Fragment function out
+	case BuiltInFragDepth:
+		return "float";
+
 	// Compute function in
 	case BuiltInGlobalInvocationId:
 	case BuiltInLocalInvocationId:
