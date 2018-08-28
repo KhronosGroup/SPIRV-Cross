@@ -2960,8 +2960,11 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			{
 			case BuiltInVertexId:
 			case BuiltInVertexIndex:
+			case BuiltInBaseVertex:
 			case BuiltInInstanceId:
 			case BuiltInInstanceIndex:
+			case BuiltInBaseInstance:
+			case BuiltInDrawIndex:
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
 			default:
@@ -3839,6 +3842,12 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_VertexIndex";
 	case BuiltInInstanceIndex:
 		return "gl_InstanceIndex";
+	case BuiltInBaseVertex:
+		return "gl_BaseVertex";
+	case BuiltInBaseInstance:
+		return "gl_BaseInstance";
+	case BuiltInDrawIndex:
+		return "gl_DrawID";
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	// Test storage class as NOT Input, as output builtins might be part of generic type.
@@ -3873,10 +3882,17 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		return "vertex_id";
 	case BuiltInVertexIndex:
 		return "vertex_id";
+	case BuiltInBaseVertex:
+		return "base_vertex";
 	case BuiltInInstanceId:
 		return "instance_id";
 	case BuiltInInstanceIndex:
 		return "instance_id";
+	case BuiltInBaseInstance:
+		return "base_instance";
+	case BuiltInDrawIndex:
+		// FIXME: Metal needs real support for this.
+		return "buffer(15)";
 
 	// Vertex function out
 	case BuiltInClipDistance:
@@ -3940,10 +3956,16 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "uint";
 	case BuiltInVertexIndex:
 		return "uint";
+	case BuiltInBaseVertex:
+		return "uint";
 	case BuiltInInstanceId:
 		return "uint";
 	case BuiltInInstanceIndex:
 		return "uint";
+	case BuiltInBaseInstance:
+		return "uint";
+	case BuiltInDrawIndex:
+		return "device uint *";
 
 	// Vertex function out
 	case BuiltInClipDistance:

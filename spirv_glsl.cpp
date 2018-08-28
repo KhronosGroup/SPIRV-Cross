@@ -5066,6 +5066,30 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_GlobalInvocationID";
 	case BuiltInLocalInvocationIndex:
 		return "gl_LocalInvocationIndex";
+	case BuiltInBaseVertex:
+		if (options.es)
+			SPIRV_CROSS_THROW("BaseVertex not supported in ES profile.");
+		if (options.version < 460) {
+			require_extension_internal("GL_ARB_shader_draw_parameters");
+			return "gl_BaseVertexARB";
+		}
+		return "gl_BaseVertex";
+	case BuiltInBaseInstance:
+		if (options.es)
+			SPIRV_CROSS_THROW("BaseInstance not supported in ES profile.");
+		if (options.version < 460) {
+			require_extension_internal("GL_ARB_shader_draw_parameters");
+			return "gl_BaseInstanceARB";
+		}
+		return "gl_BaseInstance";
+	case BuiltInDrawIndex:
+		if (options.es)
+			SPIRV_CROSS_THROW("DrawIndex not supported in ES profile.");
+		if (options.version < 460) {
+			require_extension_internal("GL_ARB_shader_draw_parameters");
+			return "gl_DrawIDARB";
+		}
+		return "gl_DrawID";
 
 	case BuiltInSampleId:
 		if (options.es && options.version < 320)
@@ -10020,6 +10044,9 @@ void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &ex
 	case BuiltInVertexId:
 	case BuiltInVertexIndex:
 	case BuiltInSampleId:
+	case BuiltInBaseVertex:
+	case BuiltInBaseInstance:
+	case BuiltInDrawIndex:
 		expected_type = SPIRType::Int;
 		break;
 
