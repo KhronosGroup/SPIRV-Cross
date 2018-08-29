@@ -2964,8 +2964,10 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			case BuiltInInstanceId:
 			case BuiltInInstanceIndex:
 			case BuiltInBaseInstance:
-			case BuiltInDrawIndex:
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
+
+			case BuiltInDrawIndex:
+				SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
 			default:
 				return "";
@@ -3847,7 +3849,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInBaseInstance:
 		return "gl_BaseInstance";
 	case BuiltInDrawIndex:
-		return "gl_DrawID";
+		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	// Test storage class as NOT Input, as output builtins might be part of generic type.
