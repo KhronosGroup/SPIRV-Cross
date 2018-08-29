@@ -1,10 +1,5 @@
 #version 450
-#extension GL_ARB_shader_draw_parameters : enable
-
-out gl_PerVertex
-{
-    vec4 gl_Position;
-};
+#extension GL_ARB_shader_draw_parameters : require
 
 void main()
 {
