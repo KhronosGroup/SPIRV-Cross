@@ -5069,7 +5069,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInBaseVertex:
 		if (options.es)
 			SPIRV_CROSS_THROW("BaseVertex not supported in ES profile.");
-		if (options.version < 460) {
+		if (options.version < 460)
+		{
 			require_extension_internal("GL_ARB_shader_draw_parameters");
 			return "gl_BaseVertexARB";
 		}
@@ -5077,7 +5078,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInBaseInstance:
 		if (options.es)
 			SPIRV_CROSS_THROW("BaseInstance not supported in ES profile.");
-		if (options.version < 460) {
+		if (options.version < 460)
+		{
 			require_extension_internal("GL_ARB_shader_draw_parameters");
 			return "gl_BaseInstanceARB";
 		}
@@ -5085,7 +5087,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInDrawIndex:
 		if (options.es)
 			SPIRV_CROSS_THROW("DrawIndex not supported in ES profile.");
-		if (options.version < 460) {
+		if (options.version < 460)
+		{
 			require_extension_internal("GL_ARB_shader_draw_parameters");
 			return "gl_DrawIDARB";
 		}
