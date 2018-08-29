@@ -3,5 +3,7 @@
 
 void main()
 {
-    gl_Position = vec4(float(gl_BaseVertexARB), float(gl_BaseInstanceARB), float(gl_DrawIDARB), 1);
+    gl_Position = vec4(float(gl_BaseVertexARB), float(gl_BaseInstanceARB), float(gl_DrawIDARB), 1.0);
 }
+
+

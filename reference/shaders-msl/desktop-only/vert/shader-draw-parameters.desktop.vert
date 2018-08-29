@@ -17,7 +17,7 @@ struct main0_in
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    out.gl_Position = float4(float(in.gl_BaseVertex), float(in.gl_BaseInstance), 0, 1);
+    out.gl_Position = float4(float(in.gl_BaseVertex), float(in.gl_BaseInstance), 0.0f, 1.0f);
     return out;
 }
 
