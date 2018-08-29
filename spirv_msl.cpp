@@ -3891,8 +3891,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInBaseInstance:
 		return "base_instance";
 	case BuiltInDrawIndex:
-		// FIXME: Metal needs real support for this.
-		return "buffer(15)";
+		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
 	// Vertex function out
 	case BuiltInClipDistance:
@@ -3965,7 +3964,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 	case BuiltInBaseInstance:
 		return "uint";
 	case BuiltInDrawIndex:
-		return "device uint *";
+		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
 	// Vertex function out
 	case BuiltInClipDistance:
