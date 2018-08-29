@@ -10,14 +10,14 @@ struct main0_out
 
 struct main0_in
 {
-    uint gl_BaseVertex;
-    uint gl_BaseInstance;
+    uint gl_BaseVertex [[base_vertex]];
+    uint gl_BaseInstance [[base_instance]];
 };
 
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    out.gl_Position = float4(in.gl_BaseVertex, in.gl_BaseInstance, 0, 1);
+    out.gl_Position = float4(float(in.gl_BaseVertex), float(in.gl_BaseInstance), 0, 1);
     return out;
 }
 

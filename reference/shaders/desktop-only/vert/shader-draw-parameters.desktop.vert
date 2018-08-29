@@ -1,5 +1,4 @@
-#version 450
-#extension GL_ARB_shader_draw_parameters : enable
+#version 460
 
 out gl_PerVertex
 {
@@ -8,5 +7,5 @@ out gl_PerVertex
 
 void main()
 {
-    gl_Position = vec4(gl_BaseVertexARB, gl_BaseInstanceARB, gl_DrawIDARB, 1);
+    gl_Position = vec4(float(gl_BaseVertex), float(gl_BaseInstance), float(gl_DrawID), 1);
 }
