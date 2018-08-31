@@ -276,6 +276,7 @@ public:
 	void remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler &sampler);
 
 protected:
+	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
