@@ -1562,6 +1562,20 @@ void CompilerMSL::emit_specialization_constants()
 		statement("");
 }
 
+void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                       const char *op)
+{
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id,
+	        join("(isunordered(", to_enclosed_unpacked_expression(op0), ", ", to_enclosed_unpacked_expression(op1),
+	             ") || ", to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1),
+	             ")"),
+	        forward);
+
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
 // Override for MSL-specific syntax instructions
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
@@ -1576,6 +1590,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 #define MSL_BFOP_CAST(op, type) \
 	emit_binary_func_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define MSL_UFOP(op) emit_unary_func_op(ops[0], ops[1], ops[2], #op)
+#define MSL_UNORD_BOP(op) emit_binary_unord_op(ops[0], ops[1], ops[2], ops[3], #op)
 
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
@@ -1618,6 +1633,30 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpSLessThanEqual:
 	case OpFOrdLessThanEqual:
 		MSL_BOP(<=);
+		break;
+
+	case OpFUnordEqual:
+		MSL_UNORD_BOP(==);
+		break;
+
+	case OpFUnordNotEqual:
+		MSL_UNORD_BOP(!=);
+		break;
+
+	case OpFUnordGreaterThan:
+		MSL_UNORD_BOP(>);
+		break;
+
+	case OpFUnordGreaterThanEqual:
+		MSL_UNORD_BOP(>=);
+		break;
+
+	case OpFUnordLessThan:
+		MSL_UNORD_BOP(<);
+		break;
+
+	case OpFUnordLessThanEqual:
+		MSL_UNORD_BOP(<=);
 		break;
 
 	// Derivatives
