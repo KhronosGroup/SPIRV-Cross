@@ -4,9 +4,9 @@
 ; Bound: 205
 ; Schema: 0
                OpCapability Shader
+               OpExtension "SPV_AMD_gpu_shader_half_float"
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
-               OpExtension "SPV_AMD_gpu_shader_half_float"
                OpCapability Float16
                OpEntryPoint Fragment %main "main" %v1 %v2 %v3 %v4 %h1 %h2 %h3 %h4
                OpExecutionMode %main OriginUpperLeft
