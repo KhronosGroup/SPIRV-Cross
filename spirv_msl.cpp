@@ -3760,6 +3760,8 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			img_type_name += "depth1d_unsupported_by_metal";
 			break;
 		case Dim2D:
+			if (img_type.ms && img_type.arrayed)
+				SPIRV_CROSS_THROW("Multisampled array textures are not yet supported in MSL.");
 			img_type_name += (img_type.ms ? "depth2d_ms" : (img_type.arrayed ? "depth2d_array" : "depth2d"));
 			break;
 		case Dim3D:
@@ -3783,6 +3785,8 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		case DimBuffer:
 		case Dim2D:
 		case DimSubpassData:
+			if (img_type.ms && img_type.arrayed)
+				SPIRV_CROSS_THROW("Multisampled array textures are not yet supported in MSL.");
 			img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
 			break;
 		case Dim3D:
