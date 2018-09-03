@@ -3760,7 +3760,18 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			img_type_name += "depth1d_unsupported_by_metal";
 			break;
 		case Dim2D:
-			img_type_name += (img_type.ms ? "depth2d_ms" : (img_type.arrayed ? "depth2d_array" : "depth2d"));
+			if (img_type.ms && img_type.arrayed)
+			{
+				if (!msl_options.supports_msl_version(2, 1))
+					SPIRV_CROSS_THROW("Multisampled array textures are supported from 2.1.");
+				img_type_name += "depth2d_ms_array";
+			}
+			else if (img_type.ms)
+				img_type_name += "depth2d_ms";
+			else if (img_type.arrayed)
+				img_type_name += "depth2d_array";
+			else
+				img_type_name += "depth2d";
 			break;
 		case Dim3D:
 			img_type_name += "depth3d_unsupported_by_metal";
@@ -3783,7 +3794,18 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		case DimBuffer:
 		case Dim2D:
 		case DimSubpassData:
-			img_type_name += (img_type.ms ? "texture2d_ms" : (img_type.arrayed ? "texture2d_array" : "texture2d"));
+			if (img_type.ms && img_type.arrayed)
+			{
+				if (!msl_options.supports_msl_version(2, 1))
+					SPIRV_CROSS_THROW("Multisampled array textures are supported from 2.1.");
+				img_type_name += "texture2d_ms_array";
+			}
+			else if (img_type.ms)
+				img_type_name += "texture2d_ms";
+			else if (img_type.arrayed)
+				img_type_name += "texture2d_array";
+			else
+				img_type_name += "texture2d";
 			break;
 		case Dim3D:
 			img_type_name += "texture3d";
