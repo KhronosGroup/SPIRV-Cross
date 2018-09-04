@@ -2364,6 +2364,53 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 	}
 
+	case GLSLstd450FMin:
+		// If the result type isn't float, don't bother calling the specific
+		// precise::/fast:: version. Metal doesn't have those for half and
+		// double types.
+		if (get<SPIRType>(result_type).basetype != SPIRType::Float)
+			emit_binary_func_op(result_type, id, args[0], args[1], "min");
+		else
+			emit_binary_func_op(result_type, id, args[0], args[1], "fast::min");
+		break;
+
+	case GLSLstd450FMax:
+		if (get<SPIRType>(result_type).basetype != SPIRType::Float)
+			emit_binary_func_op(result_type, id, args[0], args[1], "max");
+		else
+			emit_binary_func_op(result_type, id, args[0], args[1], "fast::max");
+		break;
+
+	case GLSLstd450FClamp:
+		// TODO: If args[1] is 0 and args[2] is 1, emit a saturate() call.
+		if (get<SPIRType>(result_type).basetype != SPIRType::Float)
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "clamp");
+		else
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "fast::clamp");
+		break;
+
+	case GLSLstd450NMin:
+		if (get<SPIRType>(result_type).basetype != SPIRType::Float)
+			emit_binary_func_op(result_type, id, args[0], args[1], "min");
+		else
+			emit_binary_func_op(result_type, id, args[0], args[1], "precise::min");
+		break;
+
+	case GLSLstd450NMax:
+		if (get<SPIRType>(result_type).basetype != SPIRType::Float)
+			emit_binary_func_op(result_type, id, args[0], args[1], "max");
+		else
+			emit_binary_func_op(result_type, id, args[0], args[1], "precise::max");
+		break;
+
+	case GLSLstd450NClamp:
+		// TODO: If args[1] is 0 and args[2] is 1, emit a saturate() call.
+		if (get<SPIRType>(result_type).basetype != SPIRType::Float)
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "clamp");
+		else
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "precise::clamp");
+		break;
+
 		// TODO:
 		//        GLSLstd450InterpolateAtCentroid (centroid_no_perspective qualifier)
 		//        GLSLstd450InterpolateAtSample (sample_no_perspective qualifier)
