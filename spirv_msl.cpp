@@ -753,6 +753,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			{
 				BuiltIn builtin;
 				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
+				bool is_flat = has_member_decoration(type.self, mbr_idx, DecorationFlat);
+				bool is_noperspective = has_member_decoration(type.self, mbr_idx, DecorationNoPerspective);
+				bool is_centroid = has_member_decoration(type.self, mbr_idx, DecorationCentroid);
+				bool is_sample = has_member_decoration(type.self, mbr_idx, DecorationSample);
 
 				if (!is_builtin || has_active_builtin(builtin, storage))
 				{
@@ -793,6 +797,16 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						if (builtin == BuiltInPosition)
 							qual_pos_var_name = qual_var_name;
 					}
+
+					// Copy interpolation decorations if needed
+					if (is_flat)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationFlat);
+					if (is_noperspective)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationNoPerspective);
+					if (is_centroid)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationCentroid);
+					if (is_sample)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationSample);
 				}
 				mbr_idx++;
 			}
@@ -804,6 +818,10 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 		{
 			bool is_builtin = is_builtin_variable(*p_var);
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
+			bool is_flat = has_decoration(p_var->self, DecorationFlat);
+			bool is_noperspective = has_decoration(p_var->self, DecorationNoPerspective);
+			bool is_centroid = has_decoration(p_var->self, DecorationCentroid);
+			bool is_sample = has_decoration(p_var->self, DecorationSample);
 
 			if (!is_builtin || has_active_builtin(builtin, storage))
 			{
@@ -863,6 +881,16 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationIndex, index);
 						}
 
+						// Copy interpolation decorations if needed
+						if (is_flat)
+							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationFlat);
+						if (is_noperspective)
+							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationNoPerspective);
+						if (is_centroid)
+							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationCentroid);
+						if (is_sample)
+							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationSample);
+
 						switch (storage)
 						{
 						case StorageClassInput:
@@ -917,6 +945,16 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						if (builtin == BuiltInPosition)
 							qual_pos_var_name = qual_var_name;
 					}
+
+					// Copy interpolation decorations if needed
+					if (is_flat)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationFlat);
+					if (is_noperspective)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationNoPerspective);
+					if (is_centroid)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationCentroid);
+					if (is_sample)
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationSample);
 				}
 			}
 		}
@@ -3095,6 +3133,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	// Fragment function inputs
 	if (execution.model == ExecutionModelFragment && type.storage == StorageClassInput)
 	{
+		string quals = "";
 		if (is_builtin)
 		{
 			switch (builtin)
@@ -3105,15 +3144,56 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			case BuiltInSampleId:
 			case BuiltInSampleMask:
 			case BuiltInLayer:
-				return string(" [[") + builtin_qualifier(builtin) + "]]";
+				quals = builtin_qualifier(builtin);
 
 			default:
-				return "";
+				break;
 			}
 		}
-		uint32_t locn = get_ordered_member_location(type.self, index);
-		if (locn != k_unknown_location)
-			return string(" [[user(locn") + convert_to_string(locn) + ")]]";
+		else
+		{
+			uint32_t locn = get_ordered_member_location(type.self, index);
+			if (locn != k_unknown_location)
+				quals = string("user(locn") + convert_to_string(locn) + ")";
+		}
+		// Don't bother decorating integers with the 'flat' attribute; it's
+		// the default (in fact, the only option). Also don't bother with the
+		// FragCoord builtin; it's always noperspective on Metal.
+		if (!type_is_integral(mbr_type) && (!is_builtin || builtin != BuiltInFragCoord))
+		{
+			if (has_member_decoration(type.self, index, DecorationFlat))
+			{
+				if (!quals.empty())
+					quals += ", ";
+				quals += "flat";
+			}
+			else if (has_member_decoration(type.self, index, DecorationCentroid))
+			{
+				if (!quals.empty())
+					quals += ", ";
+				if (has_member_decoration(type.self, index, DecorationNoPerspective))
+					quals += "centroid_no_perspective";
+				else
+					quals += "centroid_perspective";
+			}
+			else if (has_member_decoration(type.self, index, DecorationSample))
+			{
+				if (!quals.empty())
+					quals += ", ";
+				if (has_member_decoration(type.self, index, DecorationNoPerspective))
+					quals += "sample_no_perspective";
+				else
+					quals += "sample_perspective";
+			}
+			else if (has_member_decoration(type.self, index, DecorationNoPerspective))
+			{
+				if (!quals.empty())
+					quals += ", ";
+				quals += "center_no_perspective";
+			}
+		}
+		if (!quals.empty())
+			return " [[" + quals + "]]";
 	}
 
 	// Fragment function outputs
