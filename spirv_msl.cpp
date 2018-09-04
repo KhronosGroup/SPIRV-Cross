@@ -4333,9 +4333,10 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	}
 
 	case OpImageFetch:
+	case OpImageWrite:
 	{
 		// Retrieve the image type, and if it's a Buffer, emit a texel coordinate function
-		uint32_t tid = result_types[args[2]];
+		uint32_t tid = result_types[args[opcode == OpImageWrite ? 0 : 2]];
 		if (tid && compiler.get<SPIRType>(tid).image.dim == DimBuffer)
 			return SPVFuncImplTexelBufferCoords;
 
