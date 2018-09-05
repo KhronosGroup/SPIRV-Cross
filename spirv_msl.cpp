@@ -1833,7 +1833,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t coord_id = ops[1];
 		uint32_t texel_id = ops[2];
 		const uint32_t *opt = &ops[3];
-		uint32_t length = instruction.length - 4;
+		uint32_t length = instruction.length - 3;
 
 		// Bypass pointers because we need the real image struct
 		auto &type = expression_type(img_id);
