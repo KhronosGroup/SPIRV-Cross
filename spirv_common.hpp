@@ -1217,6 +1217,7 @@ struct Meta
 		Bitset decoration_flags;
 		spv::BuiltIn builtin_type;
 		uint32_t location = 0;
+		uint32_t component = 0;
 		uint32_t set = 0;
 		uint32_t binding = 0;
 		uint32_t offset = 0;

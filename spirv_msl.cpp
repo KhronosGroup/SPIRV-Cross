@@ -26,6 +26,7 @@ using namespace spirv_cross;
 using namespace std;
 
 static const uint32_t k_unknown_location = ~0u;
+static const uint32_t k_unknown_component = ~0u;
 
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_attrs,
                          vector<MSLResourceBinding> *p_res_bindings)
@@ -794,6 +795,13 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						mark_location_as_used_by_shader(locn, storage);
 					}
 
+					// Copy the component location, if present.
+					if (has_member_decoration(type_id, mbr_idx, DecorationComponent))
+					{
+						uint32_t comp = get_member_decoration(type_id, mbr_idx, DecorationComponent);
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationComponent, comp);
+					}
+
 					// Mark the member as builtin if needed
 					if (is_builtin)
 					{
@@ -934,6 +942,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						uint32_t locn = get_decoration(p_var->self, DecorationLocation);
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
+					}
+
+					if (get_decoration_bitset(p_var->self).get(DecorationComponent))
+					{
+						uint32_t comp = get_decoration(p_var->self, DecorationComponent);
+						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationComponent, comp);
 					}
 
 					if (get_decoration_bitset(p_var->self).get(DecorationIndex))
@@ -3129,9 +3143,15 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return "";
 			}
 		}
-		uint32_t locn = get_ordered_member_location(type.self, index);
+		uint32_t comp;
+		uint32_t locn = get_ordered_member_location(type.self, index, &comp);
 		if (locn != k_unknown_location)
-			return string(" [[user(locn") + convert_to_string(locn) + ")]]";
+		{
+			if (comp != k_unknown_component)
+				return string(" [[user(locn") + convert_to_string(locn) + "_" + convert_to_string(comp) + ")]]";
+			else
+				return string(" [[user(locn") + convert_to_string(locn) + ")]]";
+		}
 	}
 
 	// Fragment function inputs
@@ -3156,9 +3176,15 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		}
 		else
 		{
-			uint32_t locn = get_ordered_member_location(type.self, index);
+			uint32_t comp;
+			uint32_t locn = get_ordered_member_location(type.self, index, &comp);
 			if (locn != k_unknown_location)
-				quals = string("user(locn") + convert_to_string(locn) + ")";
+			{
+				if (comp != k_unknown_component)
+					quals = string("user(locn") + convert_to_string(locn) + "_" + convert_to_string(comp) + ")";
+				else
+					quals = string("user(locn") + convert_to_string(locn) + ")";
+			}
 		}
 		// Don't bother decorating integers with the 'flat' attribute; it's
 		// the default (in fact, the only option). Also don't bother with the
@@ -3254,12 +3280,19 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 // If the location of the member has been explicitly set, that location is used. If not, this
 // function assumes the members are ordered in their location order, and simply returns the
 // index as the location.
-uint32_t CompilerMSL::get_ordered_member_location(uint32_t type_id, uint32_t index)
+uint32_t CompilerMSL::get_ordered_member_location(uint32_t type_id, uint32_t index, uint32_t *comp)
 {
 	auto &m = meta.at(type_id);
 	if (index < m.members.size())
 	{
 		auto &dec = m.members[index];
+		if (comp)
+		{
+			if (dec.decoration_flags.get(DecorationComponent))
+				*comp = dec.component;
+			else
+				*comp = k_unknown_component;
+		}
 		if (dec.decoration_flags.get(DecorationLocation))
 			return dec.location;
 	}
