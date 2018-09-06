@@ -753,10 +753,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			{
 				BuiltIn builtin;
 				bool is_builtin = is_member_builtin(type, mbr_idx, &builtin);
-				bool is_flat = has_member_decoration(type.self, mbr_idx, DecorationFlat);
-				bool is_noperspective = has_member_decoration(type.self, mbr_idx, DecorationNoPerspective);
-				bool is_centroid = has_member_decoration(type.self, mbr_idx, DecorationCentroid);
-				bool is_sample = has_member_decoration(type.self, mbr_idx, DecorationSample);
+				bool is_flat = has_member_decoration(type.self, mbr_idx, DecorationFlat) ||
+				               has_decoration(p_var->self, DecorationFlat);
+				bool is_noperspective = has_member_decoration(type.self, mbr_idx, DecorationNoPerspective) ||
+				                        has_decoration(p_var->self, DecorationNoPerspective);
+				bool is_centroid = has_member_decoration(type.self, mbr_idx, DecorationCentroid) ||
+				                   has_decoration(p_var->self, DecorationCentroid);
+				bool is_sample = has_member_decoration(type.self, mbr_idx, DecorationSample) ||
+				                 has_decoration(p_var->self, DecorationSample);
 
 				if (!is_builtin || has_active_builtin(builtin, storage))
 				{
