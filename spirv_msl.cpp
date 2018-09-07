@@ -1565,7 +1565,10 @@ void CompilerMSL::emit_specialization_constants()
 			string sc_name = to_name(c.self);
 			string sc_tmp_name = sc_name + "_tmp";
 
-			if (has_decoration(c.self, DecorationSpecId))
+			// Function constants are only supported in MSL 1.2 and later.
+			// If we don't support it just declare the "default" directly.
+			// This "default" value can be overridden to the true specialization constant by the API user.
+			if (msl_options.supports_msl_version(1, 2) && has_decoration(c.self, DecorationSpecId))
 			{
 				uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
 				// Only scalar, non-composite values can be function constants.

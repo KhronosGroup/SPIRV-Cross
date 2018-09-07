@@ -86,14 +86,22 @@ def print_msl_compiler_version():
         if (e.errno != errno.ENOENT):    # Ignore xcrun not found error
             raise
 
+def path_to_msl_standard(shader):
+    if '.msl2.' in shader:
+        return '-std=macos-metal2.0'
+    elif '.msl21.' in shader:
+        return '-std=macos-metal2.1'
+    elif '.msl11.' in shader:
+        return '-std=macos-metal1.1'
+    else:
+        return '-std=macos-metal1.2'
+
 def validate_shader_msl(shader, opt):
     msl_path = reference_path(shader[0], shader[1], opt)
-    msl2 = '.msl2.' in msl_path
-    msl21 = '.msl21.' in msl_path
     try:
         msl_os = 'macosx'
 #        msl_os = 'iphoneos'
-        subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', '-std=macos-metal{}'.format('2.1' if msl21 else ('2.0' if msl2 else '1.2')), '-Werror', '-Wno-unused-variable', msl_path])
+        subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', path_to_msl_standard(msl_path), '-Werror', '-Wno-unused-variable', msl_path])
         print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
     except OSError as oe:
         if (oe.errno != errno.ENOENT):   # Ignore xcrun not found error
