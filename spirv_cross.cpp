@@ -1126,6 +1126,10 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.location = argument;
 		break;
 
+	case DecorationComponent:
+		dec.component = argument;
+		break;
+
 	case DecorationBinding:
 		dec.binding = argument;
 		break;
@@ -1212,6 +1216,8 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.builtin_type;
 	case DecorationLocation:
 		return dec.location;
+	case DecorationComponent:
+		return dec.component;
 	case DecorationBinding:
 		return dec.binding;
 	case DecorationOffset:
@@ -1266,6 +1272,10 @@ void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration d
 		dec.location = 0;
 		break;
 
+	case DecorationComponent:
+		dec.component = 0;
+		break;
+
 	case DecorationOffset:
 		dec.offset = 0;
 		break;
@@ -1313,6 +1323,10 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 
 	case DecorationLocation:
 		dec.location = argument;
+		break;
+
+	case DecorationComponent:
+		dec.component = argument;
 		break;
 
 	case DecorationOffset:
@@ -1427,6 +1441,8 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.builtin_type;
 	case DecorationLocation:
 		return dec.location;
+	case DecorationComponent:
+		return dec.component;
 	case DecorationOffset:
 		return dec.offset;
 	case DecorationBinding:
@@ -1460,6 +1476,10 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 	case DecorationLocation:
 		dec.location = 0;
+		break;
+
+	case DecorationComponent:
+		dec.component = 0;
 		break;
 
 	case DecorationOffset:

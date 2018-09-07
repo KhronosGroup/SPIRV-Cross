@@ -11,10 +11,10 @@ struct main0_out
 struct main0_in
 {
     float2 m_2 [[user(locn1)]];
-    float m_3 [[user(locn1)]];
+    float m_3 [[user(locn1_2)]];
     float m_4 [[user(locn2), flat]];
-    uint m_5 [[user(locn2)]];
-    uint m_6 [[user(locn2)]];
+    uint m_5 [[user(locn2_1)]];
+    uint m_6 [[user(locn2_2)]];
 };
 
 fragment main0_out main0(main0_in in [[stage_in]])
