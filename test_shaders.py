@@ -86,14 +86,32 @@ def print_msl_compiler_version():
         if (e.errno != errno.ENOENT):    # Ignore xcrun not found error
             raise
 
+def path_to_msl_standard(shader):
+    if '.msl2.' in shader:
+        return '-std=macos-metal2.0'
+    elif '.msl21.' in shader:
+        return '-std=macos-metal2.1'
+    elif '.msl11.' in shader:
+        return '-std=macos-metal1.1'
+    else:
+        return '-std=macos-metal1.2'
+
+def path_to_msl_standard_cli(shader):
+    if '.msl2.' in shader:
+        return '20000'
+    elif '.msl21.' in shader:
+        return '20100'
+    elif '.msl11.' in shader:
+        return '10100'
+    else:
+        return '10200'
+
 def validate_shader_msl(shader, opt):
     msl_path = reference_path(shader[0], shader[1], opt)
-    msl2 = '.msl2.' in msl_path
-    msl21 = '.msl21.' in msl_path
     try:
         msl_os = 'macosx'
 #        msl_os = 'iphoneos'
-        subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', '-std=macos-metal{}'.format('2.1' if msl21 else ('2.0' if msl2 else '1.2')), '-Werror', '-Wno-unused-variable', msl_path])
+        subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', path_to_msl_standard(msl_path), '-Werror', '-Wno-unused-variable', msl_path])
         print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
     except OSError as oe:
         if (oe.errno != errno.ENOENT):   # Ignore xcrun not found error
@@ -103,8 +121,6 @@ def validate_shader_msl(shader, opt):
         sys.exit(1)
 
 def cross_compile_msl(shader, spirv, opt):
-    msl2 = '.msl2.' in shader
-    msl21 = '.msl21.' in shader
     spirv_path = create_temporary()
     msl_path = create_temporary(os.path.basename(shader))
 
@@ -119,12 +135,8 @@ def cross_compile_msl(shader, spirv, opt):
     spirv_cross_path = './spirv-cross'
 
     msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl']
-    if msl2:
-        msl_args.append('--msl-version')
-        msl_args.append('20000')
-    elif msl21:
-        msl_args.append('--msl-version')
-        msl_args.append('20100')
+    msl_args.append('--msl-version')
+    msl_args.append(path_to_msl_standard_cli(shader))
 
     subprocess.check_call(msl_args)
 
