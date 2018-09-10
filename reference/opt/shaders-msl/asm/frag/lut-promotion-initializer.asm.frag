@@ -5,9 +5,9 @@
 
 using namespace metal;
 
-constant float _46[16] = {1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0};
-constant float4 _76[4] = {float4(0.0), float4(1.0), float4(8.0), float4(5.0)};
-constant float4 _90[4] = {float4(20.0), float4(30.0), float4(50.0), float4(60.0)};
+constant float _46[16] = { 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0, 1.0, 2.0, 3.0, 4.0 };
+constant float4 _76[4] = { float4(0.0), float4(1.0), float4(8.0), float4(5.0) };
+constant float4 _90[4] = { float4(20.0), float4(30.0), float4(50.0), float4(60.0) };
 
 struct main0_out
 {
@@ -35,8 +35,8 @@ void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])
 
 fragment main0_out main0(main0_in in [[stage_in]])
 {
-    float4 foobar[4] = {float4(0.0), float4(1.0), float4(8.0), float4(5.0)};
-    float4 baz[4] = {float4(0.0), float4(1.0), float4(8.0), float4(5.0)};
+    float4 foobar[4] = { float4(0.0), float4(1.0), float4(8.0), float4(5.0) };
+    float4 baz[4] = { float4(0.0), float4(1.0), float4(8.0), float4(5.0) };
     main0_out out = {};
     out.FragColor = _46[in.index];
     if (in.index < 10)
