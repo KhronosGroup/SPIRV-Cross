@@ -775,6 +775,21 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	if (dec.decoration_flags.get(DecorationLocation) && can_use_io_location(type.storage, true))
 		attr.push_back(join("location = ", dec.location));
 
+	// Can only declare component if we can declare location.
+	if (dec.decoration_flags.get(DecorationComponent) && can_use_io_location(type.storage, true))
+	{
+		if (!options.es)
+		{
+			if (options.version < 440 && options.version >= 140)
+				require_extension_internal("GL_ARB_enhanced_layouts");
+			else if (options.version < 140)
+				SPIRV_CROSS_THROW("Component decoration is not supported in targets below GLSL 1.40.");
+			attr.push_back(join("component = ", dec.component));
+		}
+		else
+			SPIRV_CROSS_THROW("Component decoration is not supported in ES targets.");
+	}
+
 	// DecorationCPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
 	// This is only done selectively in GLSL as needed.
 	if (has_decoration(type.self, DecorationCPacked) && dec.decoration_flags.get(DecorationOffset))
@@ -1236,6 +1251,21 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		// emit location decorations at the top as well (looks weird).
 		if (!combined_decoration.get(DecorationLocation))
 			attr.push_back(join("location = ", dec.location));
+	}
+
+	// Can only declare Component if we can declare location.
+	if (flags.get(DecorationComponent) && can_use_io_location(var.storage, is_block))
+	{
+		if (!options.es)
+		{
+			if (options.version < 440 && options.version >= 140)
+				require_extension_internal("GL_ARB_enhanced_layouts");
+			else if (options.version < 140)
+				SPIRV_CROSS_THROW("Component decoration is not supported in targets below GLSL 1.40.");
+			attr.push_back(join("component = ", dec.component));
+		}
+		else
+			SPIRV_CROSS_THROW("Component decoration is not supported in ES targets.");
 	}
 
 	if (flags.get(DecorationIndex))
