@@ -4610,7 +4610,7 @@ std::string CompilerMSL::to_expression(uint32_t id)
 		case BuiltInNumWorkgroups:
 		case BuiltInWorkgroupId:
 			if (type.basetype != SPIRType::UInt)
-				expr = join("as_type<", type_to_glsl(type), ">(", expr, ")");
+				expr = join(type_to_glsl(type), "(", expr, ")");
 			break;
 		default:
 			break;
