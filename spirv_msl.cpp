@@ -3303,39 +3303,6 @@ uint32_t CompilerMSL::get_ordered_member_location(uint32_t type_id, uint32_t ind
 	return index;
 }
 
-string CompilerMSL::constant_expression(const SPIRConstant &c)
-{
-	if (!c.subconstants.empty())
-	{
-		// Handles Arrays and structures.
-		string res = "{";
-		for (auto &elem : c.subconstants)
-		{
-			res += constant_expression(get<SPIRConstant>(elem));
-			if (&elem != &c.subconstants.back())
-				res += ", ";
-		}
-		res += "}";
-		return res;
-	}
-	else if (c.columns() == 1)
-	{
-		return constant_expression_vector(c, 0);
-	}
-	else
-	{
-		string res = type_to_glsl(get<SPIRType>(c.constant_type)) + "(";
-		for (uint32_t col = 0; col < c.columns(); col++)
-		{
-			res += constant_expression_vector(c, col);
-			if (col + 1 < c.columns())
-				res += ", ";
-		}
-		res += ")";
-		return res;
-	}
-}
-
 // Returns the type declaration for a function, including the
 // entry type if the current function is the entry point function
 string CompilerMSL::func_type_decl(SPIRType &type)
