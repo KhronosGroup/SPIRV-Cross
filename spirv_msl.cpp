@@ -1784,7 +1784,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t val = ops[6];
 		uint32_t comp = ops[7];
 		emit_atomic_func_op(result_type, id, "atomic_compare_exchange_weak_explicit", mem_sem_pass, mem_sem_fail, true,
-		                    ptr, comp, true, val);
+		                    ptr, comp, true, false, val);
 		break;
 	}
 
@@ -1812,19 +1812,20 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-#define MSL_AFMO_IMPL(op, valsrc)                                                                                 \
-	do                                                                                                            \
-	{                                                                                                             \
-		uint32_t result_type = ops[0];                                                                            \
-		uint32_t id = ops[1];                                                                                     \
-		uint32_t ptr = ops[2];                                                                                    \
-		uint32_t mem_sem = ops[4];                                                                                \
-		uint32_t val = valsrc;                                                                                    \
-		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op "_explicit", mem_sem, mem_sem, false, ptr, val); \
+#define MSL_AFMO_IMPL(op, valsrc, valconst)                                                                      \
+	do                                                                                                           \
+	{                                                                                                            \
+		uint32_t result_type = ops[0];                                                                           \
+		uint32_t id = ops[1];                                                                                    \
+		uint32_t ptr = ops[2];                                                                                   \
+		uint32_t mem_sem = ops[4];                                                                               \
+		uint32_t val = valsrc;                                                                                   \
+		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op "_explicit", mem_sem, mem_sem, false, ptr, val, \
+		                    false, valconst);                                                                    \
 	} while (false)
 
-#define MSL_AFMO(op) MSL_AFMO_IMPL(op, ops[5])
-#define MSL_AFMIO(op) MSL_AFMO_IMPL(op, 1)
+#define MSL_AFMO(op) MSL_AFMO_IMPL(op, ops[5], false)
+#define MSL_AFMIO(op) MSL_AFMO_IMPL(op, 1, true)
 
 	case OpAtomicIIncrement:
 		MSL_AFMIO(add);
@@ -2260,7 +2261,7 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 // Emits one of the atomic functions. In MSL, the atomic functions operate on pointers
 void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
                                       uint32_t mem_order_2, bool has_mem_order_2, uint32_t obj, uint32_t op1,
-                                      bool op1_is_pointer, uint32_t op2)
+                                      bool op1_is_pointer, bool op1_is_constant, uint32_t op2)
 {
 	forced_temporaries.insert(result_id);
 
@@ -2309,7 +2310,12 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	{
 		assert(strcmp(op, "atomic_compare_exchange_weak_explicit") != 0);
 		if (op1)
-			exp += ", " + to_expression(op1);
+		{
+			if (op1_is_constant)
+				exp += join(", ", op1);
+			else
+				exp += ", " + to_expression(op1);
+		}
 		if (op2)
 			exp += ", " + to_expression(op2);
 
