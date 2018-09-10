@@ -239,6 +239,18 @@ public:
 	// Returns the effective size of a buffer block.
 	size_t get_declared_struct_size(const SPIRType &struct_type) const;
 
+	// Returns the effective size of a buffer block, with a given array size
+	// for a runtime array.
+	// SSBOs are typically declared as runtime arrays. get_declared_struct_size() will return 0 for the size.
+	// This is not very helpful for applications which might need to know the array stride of its last member.
+	// This can be done through the API, but it is not very intuitive how to accomplish this, so here we provide a helper function
+	// to query the size of the buffer, assuming that the last member has a certain size.
+	// If the buffer does not contain a runtime array, array_size is ignored, and the function will behave as
+	// get_declared_struct_size().
+	// To get the array stride of the last member, something like:
+	// get_declared_struct_size_runtime_array(type, 1) - get_declared_struct_size_runtime_array(type, 0) will work.
+	size_t get_declared_struct_size_runtime_array(const SPIRType &struct_type, size_t array_size) const;
+
 	// Returns the effective size of a buffer block struct member.
 	virtual size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const;
 

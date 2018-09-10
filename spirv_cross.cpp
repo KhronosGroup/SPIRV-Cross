@@ -2596,6 +2596,19 @@ size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 	return offset + size;
 }
 
+size_t Compiler::get_declared_struct_size_runtime_array(const SPIRType &type, size_t array_size) const
+{
+	if (type.member_types.empty())
+		SPIRV_CROSS_THROW("Declared struct in block cannot be empty.");
+
+	size_t size = get_declared_struct_size(type);
+	auto &last_type = get<SPIRType>(type.member_types.back());
+	if (!last_type.array.empty() && last_type.array_size_literal[0] && last_type.array[0] == 0) // Runtime array
+		size += array_size * type_struct_member_array_stride(type, uint32_t(type.member_types.size() - 1));
+
+	return size;
+}
+
 size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
 {
 	if (struct_type.member_types.empty())

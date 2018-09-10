@@ -244,8 +244,14 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
 
 		uint32_t block_size = 0;
+		uint32_t runtime_array_stride = 0;
 		if (is_sized_block)
-			block_size = uint32_t(compiler.get_declared_struct_size(compiler.get_type(res.base_type_id)));
+		{
+			auto &base_type = compiler.get_type(res.base_type_id);
+			block_size = uint32_t(compiler.get_declared_struct_size(base_type));
+			runtime_array_stride = uint32_t(compiler.get_declared_struct_size_runtime_array(base_type, 1) -
+			                                compiler.get_declared_struct_size_runtime_array(base_type, 0));
+		}
 
 		Bitset mask;
 		if (print_ssbo)
@@ -273,7 +279,11 @@ static void print_resources(const Compiler &compiler, const char *tag, const vec
 		if (mask.get(DecorationNonWritable))
 			fprintf(stderr, " readonly");
 		if (is_sized_block)
+		{
 			fprintf(stderr, " (BlockSize : %u bytes)", block_size);
+			if (runtime_array_stride)
+				fprintf(stderr, " (Unsized array stride: %u bytes)", runtime_array_stride);
+		}
 
 		uint32_t counter_id = 0;
 		if (print_ssbo && compiler.buffer_get_hlsl_counter_buffer(res.id, counter_id))
