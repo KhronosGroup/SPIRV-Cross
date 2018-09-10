@@ -2713,9 +2713,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 
 		// Handles Arrays and structures.
 		string res;
-		if (backend.use_initializer_list &&
-		    backend.use_typed_initializer_list &&
-		    type.basetype == SPIRType::Struct &&
+		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
 		    type.array.empty())
 		{
 			res = type_to_glsl_constructor(type) + "{ ";
