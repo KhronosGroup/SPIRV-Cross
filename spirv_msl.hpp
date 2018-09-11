@@ -222,7 +222,15 @@ public:
 		SPVFuncImplFindILsb,
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
-		SPVFuncImplArrayCopy,
+		SPVFuncImplArrayCopyMultidimBase,
+		// Unfortunately, we cannot use recursive templates in the MSL compiler properly,
+		// so stamp out variants up to some arbitrary maximum.
+		SPVFuncImplArrayCopy = SPVFuncImplArrayCopyMultidimBase + 1,
+		SPVFuncImplArrayOfArrayCopy2Dim = SPVFuncImplArrayCopyMultidimBase + 2,
+		SPVFuncImplArrayOfArrayCopy3Dim = SPVFuncImplArrayCopyMultidimBase + 3,
+		SPVFuncImplArrayOfArrayCopy4Dim = SPVFuncImplArrayCopyMultidimBase + 4,
+		SPVFuncImplArrayOfArrayCopy5Dim = SPVFuncImplArrayCopyMultidimBase + 5,
+		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
@@ -233,6 +241,7 @@ public:
 		SPVFuncImplRowMajor3x4,
 		SPVFuncImplRowMajor4x2,
 		SPVFuncImplRowMajor4x3,
+		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
 	// Constructs an instance to compile the SPIR-V code into Metal Shading Language,
