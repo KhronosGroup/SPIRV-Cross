@@ -2917,14 +2917,7 @@ void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id
 // Manufacture automatic sampler arg for SampledImage texture.
 string CompilerMSL::to_func_call_arg(uint32_t id)
 {
-	// Make sure that we use the name of the original variable, and not the parameter alias.
-	uint32_t name_id = id;
-	auto *var = maybe_get<SPIRVariable>(id);
-	if (var && var->basevariable)
-		name_id = var->basevariable;
-	// Use base to_expression in case this is a builtin. We don't want the
-	// bitcast here.
-	string arg_str = CompilerGLSL::to_expression(name_id);
+	string arg_str = CompilerGLSL::to_func_call_arg(id);
 
 	// Manufacture automatic sampler arg if the arg is a SampledImage texture.
 	auto &type = expression_type(id);
@@ -3550,7 +3543,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 					ep_args += ", ";
 
 				BuiltIn bi_type = meta[var_id].decoration.builtin_type;
-				ep_args += builtin_type_decl(bi_type) + " " + CompilerGLSL::to_expression(var_id);
+				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
 			}
 		}
@@ -3675,7 +3668,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		// Arrays of images and samplers are special cased.
 		decl += " (&";
-		decl += builtin ? CompilerGLSL::to_expression(name_id) : to_expression(name_id);
+		decl += to_expression(name_id);
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
@@ -3683,12 +3676,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	{
 		decl += "&";
 		decl += " ";
-		decl += builtin ? CompilerGLSL::to_expression(name_id) : to_expression(name_id);
+		decl += to_expression(name_id);
 	}
 	else
 	{
 		decl += " ";
-		decl += builtin ? CompilerGLSL::to_expression(name_id) : to_expression(name_id);
+		decl += to_expression(name_id);
 	}
 
 	return decl;
@@ -4585,38 +4578,40 @@ void CompilerMSL::remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler
 	constexpr_samplers[id] = sampler;
 }
 
-// MSL always declares builtins with their SPIR-V type.
-void CompilerMSL::bitcast_from_builtin_load(uint32_t, std::string &, const SPIRType &)
+void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
 {
+	auto *var = maybe_get_backing_variable(source_id);
+	if (var)
+		source_id = var->self;
+
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(source_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+	switch (builtin)
+	{
+	case BuiltInGlobalInvocationId:
+	case BuiltInLocalInvocationId:
+	case BuiltInWorkgroupId:
+	case BuiltInLocalInvocationIndex:
+	case BuiltInWorkgroupSize:
+	case BuiltInNumWorkgroups:
+		expected_type = SPIRType::UInt;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+		expr = bitcast_expression(expr_type, expected_type, expr);
 }
 
+// MSL always declares output builtins with the SPIR-V type.
 void CompilerMSL::bitcast_to_builtin_store(uint32_t, std::string &, const SPIRType &)
 {
-}
-
-std::string CompilerMSL::to_expression(uint32_t id)
-{
-	std::string expr = CompilerGLSL::to_expression(id);
-	if (has_decoration(id, DecorationBuiltIn))
-	{
-		auto &type = expression_type(id);
-		uint32_t builtin = get_decoration(id, DecorationBuiltIn);
-		// If this is one of the vector builtins that may have a different type
-		// from SPIR-V, we'll have to insert a cast.
-		switch (builtin)
-		{
-		case BuiltInGlobalInvocationId:
-		case BuiltInLocalInvocationId:
-		case BuiltInNumWorkgroups:
-		case BuiltInWorkgroupId:
-			if (type.basetype != SPIRType::UInt)
-				expr = join(type_to_glsl(type), "(", expr, ")");
-			break;
-		default:
-			break;
-		}
-	}
-	return expr;
 }
 
 std::string CompilerMSL::to_initializer_expression(const SPIRVariable &var)
