@@ -147,9 +147,15 @@ def cross_compile_msl(shader, spirv, opt):
 
 def shader_model_hlsl(shader):
     if '.vert' in shader:
-        return '-Tvs_5_1'
+        if '.sm30.' in shader:
+            return '-Tvs_3_0'
+        else:
+            return '-Tvs_5_1'
     elif '.frag' in shader:
-        return '-Tps_5_1'
+        if '.sm30.' in shader:
+            return '-Tps_3_0'
+        else:
+            return '-Tps_5_1'
     elif '.comp' in shader:
         return '-Tcs_5_1'
     else:
