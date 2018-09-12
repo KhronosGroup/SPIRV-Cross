@@ -374,6 +374,7 @@ protected:
 	void build_implicit_builtins();
 	void emit_entry_point_declarations() override;
 	uint32_t builtin_frag_coord_id = 0;
+	uint32_t builtin_sample_id_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
