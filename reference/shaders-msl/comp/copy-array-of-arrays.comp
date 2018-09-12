@@ -8,6 +8,8 @@ using namespace metal;
 struct BUF
 {
     int a;
+    float b;
+    float c;
 };
 
 constant float _16[2] = { 1.0, 2.0 };
@@ -69,5 +71,23 @@ kernel void main0(device BUF& o [[buffer(0)]])
     float c[2][2][2];
     spvArrayCopyFromConstant3(c, _21);
     o.a = int(c[1][1][1]);
+    float _43[2] = { o.b, o.c };
+    float _48[2] = { o.b, o.b };
+    float _49[2][2];
+    spvArrayCopyFromStack1(_49[0], _43);
+    spvArrayCopyFromStack1(_49[1], _48);
+    float _54[2] = { o.c, o.c };
+    float _59[2] = { o.c, o.b };
+    float _60[2][2];
+    spvArrayCopyFromStack1(_60[0], _54);
+    spvArrayCopyFromStack1(_60[1], _59);
+    float _61[2][2][2];
+    spvArrayCopyFromStack2(_61[0], _49);
+    spvArrayCopyFromStack2(_61[1], _60);
+    float d[2][2][2];
+    spvArrayCopyFromStack3(d, _61);
+    float e[2][2][2];
+    spvArrayCopyFromStack3(e, d);
+    o.b = e[1][0][1];
 }
 

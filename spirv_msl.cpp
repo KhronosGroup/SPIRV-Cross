@@ -276,6 +276,7 @@ string CompilerMSL::compile()
 	backend.can_return_array = false;
 	backend.boolean_mix_support = false;
 	backend.allow_truncated_access_chain = true;
+	backend.array_is_value_type = false;
 
 	is_rasterization_disabled = msl_options.disable_rasterization;
 
@@ -4511,6 +4512,14 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		if (tid && compiler.get<SPIRType>(tid).image.dim == DimBuffer)
 			return SPVFuncImplTexelBufferCoords;
 
+		break;
+	}
+
+	case OpCompositeConstruct:
+	{
+		auto &type = compiler.get<SPIRType>(args[0]);
+		if (type.array.size() > 1) // We need to use copies to build the composite.
+			return static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + type.array.size() - 1);
 		break;
 	}
 
