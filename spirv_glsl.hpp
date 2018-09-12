@@ -363,6 +363,7 @@ protected:
 		bool allow_truncated_access_chain = false;
 		bool supports_extensions = false;
 		bool supports_empty_struct = false;
+		bool array_is_value_type = true;
 	} backend;
 
 	void emit_struct(SPIRType &type);

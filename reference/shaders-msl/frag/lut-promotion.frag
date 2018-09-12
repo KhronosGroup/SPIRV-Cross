@@ -21,14 +21,13 @@ struct main0_in
 
 // Implementation of an array copy function to cover GLSL's ability to copy an array via assignment.
 template<typename T, uint N>
-void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])
+void spvArrayCopyFromStack1(thread T (&dst)[N], thread const T (&src)[N])
 {
     for (uint i = 0; i < N; dst[i] = src[i], i++);
 }
 
-// An overload for constant arrays.
 template<typename T, uint N>
-void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])
+void spvArrayCopyFromConstant1(thread T (&dst)[N], constant T (&src)[N])
 {
     for (uint i = 0; i < N; dst[i] = src[i], i++);
 }
@@ -60,7 +59,7 @@ fragment main0_out main0(main0_in in [[stage_in]])
     }
     out.FragColor += foobar[in.index & 3].z;
     float4 baz[4] = { float4(0.0), float4(1.0), float4(8.0), float4(5.0) };
-    spvArrayCopyConstant(baz, _104);
+    spvArrayCopyFromConstant1(baz, _104);
     out.FragColor += baz[in.index & 3].z;
     return out;
 }

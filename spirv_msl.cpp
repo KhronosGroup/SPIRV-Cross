@@ -276,6 +276,7 @@ string CompilerMSL::compile()
 	backend.can_return_array = false;
 	backend.boolean_mix_support = false;
 	backend.allow_truncated_access_chain = true;
+	backend.array_is_value_type = false;
 
 	is_rasterization_disabled = msl_options.disable_rasterization;
 
@@ -1168,6 +1169,10 @@ void CompilerMSL::add_typedef_line(const string &line)
 // Emits any needed custom function bodies.
 void CompilerMSL::emit_custom_functions()
 {
+	for (uint32_t i = SPVFuncImplArrayCopyMultidimMax; i >= 2; i--)
+		if (spv_function_implementations.count(static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + i)))
+			spv_function_implementations.insert(static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + i - 1));
+
 	for (auto &spv_func : spv_function_implementations)
 	{
 		switch (spv_func)
@@ -1237,20 +1242,69 @@ void CompilerMSL::emit_custom_functions()
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
 			          "assignment.");
 			statement("template<typename T, uint N>");
-			statement("void spvArrayCopy(thread T (&dst)[N], thread const T (&src)[N])");
+			statement("void spvArrayCopyFromStack1(thread T (&dst)[N], thread const T (&src)[N])");
 			begin_scope();
 			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
 			end_scope();
 			statement("");
 
-			statement("// An overload for constant arrays.");
 			statement("template<typename T, uint N>");
-			statement("void spvArrayCopyConstant(thread T (&dst)[N], constant T (&src)[N])");
+			statement("void spvArrayCopyFromConstant1(thread T (&dst)[N], constant T (&src)[N])");
 			begin_scope();
 			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
 			end_scope();
 			statement("");
 			break;
+
+		case SPVFuncImplArrayOfArrayCopy2Dim:
+		case SPVFuncImplArrayOfArrayCopy3Dim:
+		case SPVFuncImplArrayOfArrayCopy4Dim:
+		case SPVFuncImplArrayOfArrayCopy5Dim:
+		case SPVFuncImplArrayOfArrayCopy6Dim:
+		{
+			static const char *function_name_tags[] = {
+				"FromStack",
+				"FromConstant",
+			};
+
+			static const char *src_address_space[] = {
+				"thread const",
+				"constant",
+			};
+
+			for (uint32_t variant = 0; variant < 2; variant++)
+			{
+				uint32_t dimensions = spv_func - SPVFuncImplArrayCopyMultidimBase;
+				string tmp = "template<typename T";
+				for (uint32_t i = 0; i < dimensions; i++)
+				{
+					tmp += ", uint ";
+					tmp += 'A' + i;
+				}
+				tmp += ">";
+				statement(tmp);
+
+				string array_arg;
+				for (uint32_t i = 0; i < dimensions; i++)
+				{
+					array_arg += "[";
+					array_arg += 'A' + i;
+					array_arg += "]";
+				}
+
+				statement("void spvArrayCopy", function_name_tags[variant], dimensions, "(thread T (&dst)", array_arg,
+				          ", ", src_address_space[variant], " T (&src)", array_arg, ")");
+
+				begin_scope();
+				statement("for (uint i = 0; i < A; i++)");
+				begin_scope();
+				statement("spvArrayCopy", function_name_tags[variant], dimensions - 1, "(dst[i], src[i]);");
+				end_scope();
+				end_scope();
+				statement("");
+			}
+			break;
+		}
 
 		case SPVFuncImplTexelBufferCoords:
 		{
@@ -2212,10 +2266,24 @@ bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t i
 void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 {
 	// Assignment from an array initializer is fine.
+	auto &type = expression_type(rhs_id);
+	auto *var = maybe_get_backing_variable(rhs_id);
+
+	// Unfortunately, we cannot template on address space in MSL,
+	// so explicit address space redirection it is ...
+	bool is_constant = false;
 	if (ids[rhs_id].get_type() == TypeConstant)
-		statement("spvArrayCopyConstant(", lhs, ", ", to_expression(rhs_id), ");");
-	else
-		statement("spvArrayCopy(", lhs, ", ", to_expression(rhs_id), ");");
+	{
+		is_constant = true;
+	}
+	else if (var && var->remapped_variable && var->statically_assigned &&
+	         ids[var->static_expression].get_type() == TypeConstant)
+	{
+		is_constant = true;
+	}
+
+	const char *tag = is_constant ? "FromConstant" : "FromStack";
+	statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
 }
 
 // Since MSL does not allow arrays to be copied via simple variable assignment,
@@ -4380,7 +4448,13 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpFunctionCall:
 	{
 		auto &return_type = compiler.get<SPIRType>(args[0]);
-		if (!return_type.array.empty())
+		if (return_type.array.size() > 1)
+		{
+			if (return_type.array.size() > SPVFuncImplArrayCopyMultidimMax)
+				SPIRV_CROSS_THROW("Cannot support this many dimensions for arrays of arrays.");
+			return static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + return_type.array.size());
+		}
+		else if (return_type.array.size() > 0)
 			return SPVFuncImplArrayCopy;
 
 		break;
@@ -4414,7 +4488,16 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		bool static_expression_lhs =
 		    var && var->storage == StorageClassFunction && var->statically_assigned && var->remapped_variable;
 		if (type && compiler.is_array(*type) && !static_expression_lhs)
-			return SPVFuncImplArrayCopy;
+		{
+			if (type->array.size() > 1)
+			{
+				if (type->array.size() > SPVFuncImplArrayCopyMultidimMax)
+					SPIRV_CROSS_THROW("Cannot support this many dimensions for arrays of arrays.");
+				return static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + type->array.size());
+			}
+			else
+				return SPVFuncImplArrayCopy;
+		}
 
 		break;
 	}
@@ -4427,6 +4510,14 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		if (tid && compiler.get<SPIRType>(tid).image.dim == DimBuffer)
 			return SPVFuncImplTexelBufferCoords;
 
+		break;
+	}
+
+	case OpCompositeConstruct:
+	{
+		auto &type = compiler.get<SPIRType>(args[0]);
+		if (type.array.size() > 1) // We need to use copies to build the composite.
+			return static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + type.array.size() - 1);
 		break;
 	}
 
