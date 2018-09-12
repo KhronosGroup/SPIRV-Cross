@@ -6521,8 +6521,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// as value types. Need to declare the array-of-arrays, and copy in elements one by one.
 			forced_temporaries.insert(id);
 			auto flags = meta[id].decoration.decoration_flags;
-			statement(flags_to_precision_qualifiers_glsl(out_type, flags),
-			          variable_decl(out_type, to_name(id)), ";");
+			statement(flags_to_precision_qualifiers_glsl(out_type, flags), variable_decl(out_type, to_name(id)), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
 			for (uint32_t i = 0; i < length; i++)
 				emit_array_copy(join(to_expression(id), "[", i, "]"), elems[i]);

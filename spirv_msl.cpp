@@ -1292,10 +1292,8 @@ void CompilerMSL::emit_custom_functions()
 					array_arg += "]";
 				}
 
-				statement("void spvArrayCopy", function_name_tags[variant], dimensions,
-				          "(thread T (&dst)", array_arg,
-				          ", ", src_address_space[variant], " T (&src)", array_arg,
-				          ")");
+				statement("void spvArrayCopy", function_name_tags[variant], dimensions, "(thread T (&dst)", array_arg,
+				          ", ", src_address_space[variant], " T (&src)", array_arg, ")");
 
 				begin_scope();
 				statement("for (uint i = 0; i < A; i++)");
