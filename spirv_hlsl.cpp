@@ -784,7 +784,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unordered_set<uint32_t> &active_locations)
 {
 	auto &execution = get_entry_point();
-	auto &type = get<SPIRType>(var.basetype);
+	auto type = get<SPIRType>(var.basetype);
 
 	string binding;
 	bool use_location_number = true;
@@ -793,6 +793,8 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 	{
 		binding = join(legacy ? "COLOR" : "SV_Target", get_decoration(var.self, DecorationLocation));
 		use_location_number = false;
+		if (legacy) // COLOR must be a four-component vector on legacy shader model targets (HLSL ERR_COLOR_4COMP)
+			type.vecsize = 4;
 	}
 
 	const auto get_vacant_location = [&]() -> uint32_t {
@@ -2374,7 +2376,19 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				    !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self))
 				{
 					auto name = to_name(var.self);
-					statement("stage_output.", name, " = ", name, ";");
+
+					if (legacy && execution.model == ExecutionModelFragment)
+					{
+						string output_filler;
+						for (uint32_t size = type.vecsize; size < 4; ++size)
+							output_filler += ", 0.0";
+
+						statement("stage_output.", name, " = float4(", name, output_filler, ");");
+					}
+					else
+					{
+						statement("stage_output.", name, " = ", name, ";");
+					}
 				}
 			}
 		}
