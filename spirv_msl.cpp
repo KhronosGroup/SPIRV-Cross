@@ -2261,7 +2261,7 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 // Emits one of the atomic functions. In MSL, the atomic functions operate on pointers
 void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
                                       uint32_t mem_order_2, bool has_mem_order_2, uint32_t obj, uint32_t op1,
-                                      bool op1_is_pointer, bool op1_is_constant, uint32_t op2)
+                                      bool op1_is_pointer, bool op1_is_literal, uint32_t op2)
 {
 	forced_temporaries.insert(result_id);
 
@@ -2311,7 +2311,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		assert(strcmp(op, "atomic_compare_exchange_weak_explicit") != 0);
 		if (op1)
 		{
-			if (op1_is_constant)
+			if (op1_is_literal)
 				exp += join(", ", op1);
 			else
 				exp += ", " + to_expression(op1);
