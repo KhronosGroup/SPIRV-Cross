@@ -33,7 +33,15 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    out.FragColor = float4(in.Input_v0.x + in.Input_v1.y, in.Input_v2.xy, ((in.Input_v3.w * in.Input_v4) + in.Input_v5) - in.Input_v6);
+    Input inp = {};
+    inp.v0 = in.Input_v0;
+    inp.v1 = in.Input_v1;
+    inp.v2 = in.Input_v2;
+    inp.v3 = in.Input_v3;
+    inp.v4 = in.Input_v4;
+    inp.v5 = in.Input_v5;
+    inp.v6 = in.Input_v6;
+    out.FragColor = float4(inp.v0.x + inp.v1.y, inp.v2.xy, ((inp.v3.w * inp.v4) + inp.v5) - inp.v6);
     return out;
 }
 

@@ -21,8 +21,10 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
+    VOUT Clip = {};
+    Clip.a = in.VOUT_a;
     VOUT tmp;
-    tmp.a = in.VOUT_a;
+    tmp.a = _13.a;
     tmp.a += float4(1.0);
     out.FragColor = tmp.a;
     return out;

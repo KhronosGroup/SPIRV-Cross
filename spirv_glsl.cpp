@@ -9115,7 +9115,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 	}
 
 	for (auto &line : current_function->fixup_statements_in)
-		statement(line);
+		statement(line());
 
 	entry_block.loop_dominator = SPIRBlock::NoDominator;
 	emit_block_chain(entry_block);
@@ -9897,7 +9897,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	case SPIRBlock::Return:
 		for (auto &line : current_function->fixup_statements_out)
-			statement(line);
+			statement(line());
 
 		if (processing_entry_point)
 			emit_fixup();

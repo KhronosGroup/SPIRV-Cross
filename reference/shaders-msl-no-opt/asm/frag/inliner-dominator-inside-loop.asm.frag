@@ -59,14 +59,14 @@ struct Globals
     float4 ShadowMatrix2;
 };
 
-struct Params
-{
-    float4 LqmatFarTilingFactor;
-};
-
 struct CB0
 {
     Globals CB0;
+};
+
+struct Params
+{
+    float4 LqmatFarTilingFactor;
 };
 
 struct CB2
