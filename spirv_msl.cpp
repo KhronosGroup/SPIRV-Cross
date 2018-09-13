@@ -2039,6 +2039,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpImageQueryLod:
+		SPIRV_CROSS_THROW("MSL does not support textureQueryLod().");
+
 #define MSL_ImgQry(qrytype)                                                                 \
 	do                                                                                      \
 	{                                                                                       \
