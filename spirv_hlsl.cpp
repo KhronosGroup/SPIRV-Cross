@@ -3591,10 +3591,23 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 {
 	const char *atomic_op = nullptr;
-	auto value_expr = to_expression(ops[op == OpAtomicCompareExchange ? 6 : 5]);
+
+	string value_expr;
+	if (op != OpAtomicIDecrement && op != OpAtomicIIncrement)
+		value_expr = to_expression(ops[op == OpAtomicCompareExchange ? 6 : 5]);
 
 	switch (op)
 	{
+	case OpAtomicIIncrement:
+		atomic_op = "InterlockedAdd";
+		value_expr = "1";
+		break;
+
+	case OpAtomicIDecrement:
+		atomic_op = "InterlockedAdd";
+		value_expr = "-1";
+		break;
+
 	case OpAtomicISub:
 		atomic_op = "InterlockedAdd";
 		value_expr = join("-", enclose_expression(value_expr));
@@ -3640,9 +3653,6 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 	default:
 		SPIRV_CROSS_THROW("Unknown atomic opcode.");
 	}
-
-	if (length < 6)
-		SPIRV_CROSS_THROW("Not enough data for opcode.");
 
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
@@ -4301,6 +4311,8 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicOr:
 	case OpAtomicXor:
 	case OpAtomicIAdd:
+	case OpAtomicIIncrement:
+	case OpAtomicIDecrement:
 	{
 		emit_atomic(ops, instruction.length, opcode);
 		break;

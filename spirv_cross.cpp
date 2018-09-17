@@ -487,17 +487,22 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	return hidden;
 }
 
-bool Compiler::is_builtin_variable(const SPIRVariable &var) const
+bool Compiler::is_builtin_type(const SPIRType &type) const
 {
-	if (var.compat_builtin || meta[var.self].decoration.builtin)
-		return true;
-
 	// We can have builtin structs as well. If one member of a struct is builtin, the struct must also be builtin.
-	for (auto &m : meta[get<SPIRType>(var.basetype).self].members)
+	for (auto &m : meta[type.self].members)
 		if (m.builtin)
 			return true;
 
 	return false;
+}
+
+bool Compiler::is_builtin_variable(const SPIRVariable &var) const
+{
+	if (var.compat_builtin || meta[var.self].decoration.builtin)
+		return true;
+	else
+		return is_builtin_type(get<SPIRType>(var.basetype));
 }
 
 bool Compiler::is_member_builtin(const SPIRType &type, uint32_t index, BuiltIn *builtin) const

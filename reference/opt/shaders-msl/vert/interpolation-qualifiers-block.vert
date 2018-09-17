@@ -34,14 +34,22 @@ struct main0_in
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    out.Output_v0 = in.Position.xy;
-    out.Output_v1 = in.Position.zw;
-    out.Output_v2 = float3(in.Position.x, in.Position.z * in.Position.y, in.Position.x);
-    out.Output_v3 = in.Position.xxyy;
-    out.Output_v4 = in.Position.w;
-    out.Output_v5 = in.Position.y;
-    out.Output_v6 = in.Position.x * in.Position.w;
+    Output outp = {};
+    outp.v0 = in.Position.xy;
+    outp.v1 = in.Position.zw;
+    outp.v2 = float3(in.Position.x, in.Position.z * in.Position.y, in.Position.x);
+    outp.v3 = in.Position.xxyy;
+    outp.v4 = in.Position.w;
+    outp.v5 = in.Position.y;
+    outp.v6 = in.Position.x * in.Position.w;
     out.gl_Position = in.Position;
+    out.Output_v0 = outp.v0;
+    out.Output_v1 = outp.v1;
+    out.Output_v2 = outp.v2;
+    out.Output_v3 = outp.v3;
+    out.Output_v4 = outp.v4;
+    out.Output_v5 = outp.v5;
+    out.Output_v6 = outp.v6;
     return out;
 }
 
