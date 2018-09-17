@@ -11,7 +11,8 @@ struct main0_out
 fragment main0_out main0(uint gl_SampleID [[sample_id]])
 {
     main0_out out = {};
-    out.FragColor = float4(get_sample_position(gl_SampleID), float(gl_SampleID), 1.0);
+    float2 gl_SamplePosition = get_sample_position(gl_SampleID);
+    out.FragColor = float4(gl_SamplePosition, float(gl_SampleID), 1.0);
     return out;
 }
 

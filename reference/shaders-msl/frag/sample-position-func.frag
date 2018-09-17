@@ -15,7 +15,7 @@ struct main0_in
     int index [[user(locn0)]];
 };
 
-float4 getColor(thread const int& i, thread float2 gl_SamplePosition)
+float4 getColor(thread const int& i, thread float2& gl_SamplePosition)
 {
     return float4(gl_SamplePosition, float(i), 1.0);
 }
@@ -23,8 +23,9 @@ float4 getColor(thread const int& i, thread float2 gl_SamplePosition)
 fragment main0_out main0(main0_in in [[stage_in]], uint gl_SampleID [[sample_id]])
 {
     main0_out out = {};
+    float2 gl_SamplePosition = get_sample_position(gl_SampleID);
     int param = in.index;
-    out.FragColor = getColor(param, get_sample_position(gl_SampleID));
+    out.FragColor = getColor(param, gl_SamplePosition);
     return out;
 }
 

@@ -3598,13 +3598,24 @@ string CompilerMSL::entry_point_args(bool append_comma)
 
 			// Don't emit SamplePosition as a separate parameter. In the entry
 			// point, we get that by calling get_sample_position() on the sample ID.
-			if (var.storage == StorageClassInput && is_builtin_variable(var) && bi_type != BuiltInSamplePosition)
+			if (var.storage == StorageClassInput && is_builtin_variable(var))
 			{
-				if (!ep_args.empty())
-					ep_args += ", ";
+				if (bi_type != BuiltInSamplePosition)
+				{
+					if (!ep_args.empty())
+						ep_args += ", ";
 
-				ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
-				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
+					ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
+					ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
+				}
+				else
+				{
+					auto &entry_func = get<SPIRFunction>(entry_point);
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = get_sample_position(",
+						          to_expression(builtin_sample_id_id), ");");
+					});
+				}
 			}
 		}
 	}
@@ -3696,13 +3707,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (arg.alias_global_variable && var.basevariable)
 		name_id = var.basevariable;
 
-	bool builtin = is_builtin_variable(var);
-	BuiltIn builtin_kind;
-	if (builtin)
-		builtin_kind = static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn));
-	bool sample_pos = builtin && builtin_kind == BuiltInSamplePosition;
-
-	bool constref = !arg.alias_global_variable && type.pointer && arg.write_count == 0 && !sample_pos;
+	bool constref = !arg.alias_global_variable && type.pointer && arg.write_count == 0;
 
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
@@ -3715,8 +3720,9 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (constref)
 		decl += "const ";
 
+	bool builtin = is_builtin_variable(var);
 	if (builtin)
-		decl += builtin_type_decl(builtin_kind);
+		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)));
 	else
 		decl += type_to_glsl(type, arg.id);
 
@@ -3737,7 +3743,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += ")";
 		decl += type_to_array_glsl(type);
 	}
-	else if (!opaque_handle && !sample_pos)
+	else if (!opaque_handle)
 	{
 		decl += "&";
 		decl += " ";
@@ -4157,13 +4163,6 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
 
 		break;
-
-	// This one is a strange beast, because it requires a function call in
-	// Metal--at least, in the entry point function. In other functions,
-	// we can handle it normally.
-	case BuiltInSamplePosition:
-		if (storage == StorageClassInput && current_function && (current_function->self == entry_point))
-			return "get_sample_position(" + to_expression(builtin_sample_id_id) + ")";
 
 	default:
 		break;
