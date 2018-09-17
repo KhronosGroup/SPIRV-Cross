@@ -753,13 +753,15 @@ struct SPIRFunction : IVariant
 		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
 	}
 
-	// Statements to be emitted when the function returns.
+	// Hooks to be run when the function returns.
 	// Mostly used for lowering internal data structures onto flattened structures.
-	std::vector<std::string> fixup_statements_out;
+	// Need to defer this, because they might rely on things which change during compilation.
+	std::vector<std::function<void()>> fixup_hooks_out;
 
-	// Statements to be emitted when the function begins.
+	// Hooks to be run when the function begins.
 	// Mostly used for populating internal data structures from flattened structures.
-	std::vector<std::string> fixup_statements_in;
+	// Need to defer this, because they might rely on things which change during compilation.
+	std::vector<std::function<void()>> fixup_hooks_in;
 
 	bool active = false;
 	bool flush_undeclared = true;
