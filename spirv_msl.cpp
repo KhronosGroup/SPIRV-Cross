@@ -1643,7 +1643,6 @@ void CompilerMSL::emit_resources()
 	declare_undefined_values();
 
 	// Emit the special [[stage_in]] and [[stage_out]] interface blocks which we created.
-	// If these contain built
 	emit_interface_block(stage_out_var_id);
 	emit_interface_block(stage_in_var_id);
 }
