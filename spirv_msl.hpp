@@ -340,7 +340,6 @@ protected:
 	void emit_resources();
 	void emit_specialization_constants();
 	void emit_interface_block(uint32_t ib_var_id);
-	bool maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	void add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows);
 

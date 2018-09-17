@@ -2134,9 +2134,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpStore:
-		if (maybe_emit_input_struct_assignment(ops[0], ops[1]))
-			break;
-
 		if (maybe_emit_array_assignment(ops[0], ops[1]))
 			break;
 
@@ -2247,62 +2244,6 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	assert(current_emitting_block);
 	flush_control_dependent_expressions(current_emitting_block->self);
 	flush_all_active_variables();
-}
-
-// Since MSL does not allow structs to be nested within the stage_in struct, the original input
-// structs are flattened into a single stage_in struct by add_interface_block. As a result,
-// if the LHS and RHS represent an assignment of an entire input struct, we must perform this
-// member-by-member, mapping each RHS member to its name in the flattened stage_in struct.
-// Returns whether the struct assignment was emitted.
-bool CompilerMSL::maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs)
-{
-	// We only care about assignments of an entire struct
-	uint32_t type_id = expression_type_id(id_rhs);
-	auto &type = get<SPIRType>(type_id);
-	if (type.basetype != SPIRType::Struct)
-		return false;
-
-	// We only care about assignments from Input variables
-	auto *p_v_rhs = maybe_get_backing_variable(id_rhs);
-	if (!(p_v_rhs && p_v_rhs->storage == StorageClassInput))
-		return false;
-
-	// Get the ID of the type of the underlying RHS variable.
-	// This will be an Input OpTypePointer containing the qualified member names.
-	uint32_t tid_v_rhs = p_v_rhs->basetype;
-
-	// Ensure the LHS variable has been declared
-	auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
-	if (p_v_lhs)
-		flush_variable_declaration(p_v_lhs->self);
-
-	size_t mbr_cnt = type.member_types.size();
-	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
-	{
-		string expr;
-
-		//LHS
-		expr += to_name(id_lhs);
-		expr += ".";
-		expr += to_member_name(type, mbr_idx);
-
-		expr += " = ";
-
-		//RHS
-		string qual_mbr_name = get_member_qualified_name(tid_v_rhs, mbr_idx);
-		if (qual_mbr_name.empty())
-		{
-			expr += to_name(id_rhs);
-			expr += ".";
-			expr += to_member_name(type, mbr_idx);
-		}
-		else
-			expr += qual_mbr_name;
-
-		statement(expr, ";");
-	}
-
-	return true;
 }
 
 void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
