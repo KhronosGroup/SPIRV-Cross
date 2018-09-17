@@ -798,16 +798,16 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						switch (storage)
 						{
 						case StorageClassInput:
-							entry_func.fixup_statements_in.push_back([=]() -> string {
-								return join(to_name(p_var->self), ".", to_member_name(type, mbr_idx), " = ",
-								            qual_var_name, ";");
+							entry_func.fixup_hooks_in.push_back([=]() {
+								statement(to_name(p_var->self), ".", to_member_name(type, mbr_idx), " = ",
+								          qual_var_name, ";");
 							});
 							break;
 
 						case StorageClassOutput:
-							entry_func.fixup_statements_out.push_back([=]() -> string {
-								return join(qual_var_name, " = ", to_name(p_var->self), ".",
-								            to_member_name(type, mbr_idx), ";");
+							entry_func.fixup_hooks_out.push_back([=]() {
+								statement(qual_var_name, " = ", to_name(p_var->self), ".",
+								          to_member_name(type, mbr_idx), ";");
 							});
 							break;
 
@@ -942,14 +942,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						switch (storage)
 						{
 						case StorageClassInput:
-							entry_func.fixup_statements_in.push_back([=]() -> string {
-								return join(to_name(p_var->self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";");
+							entry_func.fixup_hooks_in.push_back([=]() {
+								statement(to_name(p_var->self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";");
 							});
 							break;
 
 						case StorageClassOutput:
-							entry_func.fixup_statements_out.push_back([=]() -> string {
-								return join(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];");
+							entry_func.fixup_hooks_out.push_back([=]() {
+								statement(ib_var_ref, ".", mbr_name, " = ", to_name(p_var->self), "[", i, "];");
 							});
 							break;
 
