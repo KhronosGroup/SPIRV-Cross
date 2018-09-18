@@ -664,6 +664,9 @@ struct SPIRBlock : IVariant
 	// If the continue block is complex, fallback to "dumb" for loops.
 	bool complex_continue = false;
 
+	// Do we need a ladder variable to defer breaking out of a loop construct after a switch block?
+	bool need_ladder_break = false;
+
 	// The dominating block which this block might be within.
 	// Used in continue; blocks to determine if we really need to write continue.
 	uint32_t loop_dominator = 0;

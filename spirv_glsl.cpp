@@ -9276,7 +9276,26 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 		statement("continue;");
 	}
 	else if (is_break(to))
+	{
+		// Very dirty workaround.
+		// Switch constructs are able to break, but they cannot break out of a loop at the same time.
+		// Only sensible solution is to make a ladder variable, which we declare at the top of the switch block,
+		// write to the ladder here, and defer the break.
+		// The loop we're breaking out of must dominate the switch block, or there is no ladder breaking case.
+		if (current_emitting_switch && is_loop_break(to) &&
+		    current_emitting_switch->loop_dominator != -1u &&
+		    get<SPIRBlock>(current_emitting_switch->loop_dominator).merge_block == to)
+		{
+			if (!current_emitting_switch->need_ladder_break)
+			{
+				force_recompile = true;
+				current_emitting_switch->need_ladder_break = true;
+			}
+
+			statement("_", current_emitting_switch->self, "_ladder_break = true;");
+		}
 		statement("break;");
+	}
 	else if (is_continue(to) || (from == to))
 	{
 		// For from == to case can happen for a do-while loop which branches into itself.
@@ -9374,6 +9393,8 @@ void CompilerGLSL::propagate_loop_dominators(const SPIRBlock &block)
 			set_dominator(block.false_block, dominator);
 		if (block.next_block)
 			set_dominator(block.next_block, dominator);
+		if (block.default_block)
+			set_dominator(block.default_block, dominator);
 
 		for (auto &c : block.cases)
 			set_dominator(c.block, dominator);
@@ -9852,6 +9873,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		auto &type = expression_type(block.condition);
 		bool uint32_t_case = type.basetype == SPIRType::UInt;
 
+		SPIRBlock *old_emitting_switch = current_emitting_switch;
+		current_emitting_switch = &block;
+
+		if (block.need_ladder_break)
+			statement("bool _", block.self, "_ladder_break = false;");
+
 		emit_block_hints(block);
 		statement("switch (", to_expression(block.condition), ")");
 		begin_scope();
@@ -9914,6 +9941,16 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		}
 
 		end_scope();
+
+		if (block.need_ladder_break)
+		{
+			statement("if (_", block.self, "_ladder_break)");
+			begin_scope();
+			statement("break;");
+			end_scope();
+		}
+
+		current_emitting_switch = old_emitting_switch;
 		break;
 	}
 
