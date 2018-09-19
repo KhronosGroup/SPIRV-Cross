@@ -1066,7 +1066,8 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 {
 	auto &type = get<SPIRType>(type_id);
 
-	if (builtin == BuiltInSampleMask && is_array(type))
+	if ((builtin == BuiltInSampleMask && is_array(type)) ||
+	    ((builtin == BuiltInLayer || builtin == BuiltInViewportIndex) && type.basetype != SPIRType::UInt))
 	{
 		uint32_t next_id = increase_bound_by(type.pointer ? 2 : 1);
 		uint32_t base_type_id = next_id++;
@@ -3228,6 +3229,10 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				// the shader into a render pipeline that uses a non-point topology.
 				return msl_options.enable_point_size_builtin ? (string(" [[") + builtin_qualifier(builtin) + "]]") : "";
 
+			case BuiltInViewportIndex:
+				if (!msl_options.supports_msl_version(2, 0))
+					SPIRV_CROSS_THROW("ViewportIndex requires Metal 2.0.");
+				/* fallthrough */
 			case BuiltInPosition:
 			case BuiltInLayer:
 			case BuiltInClipDistance:
@@ -4152,6 +4157,10 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 
 	// When used in the entry function, output builtins are qualified with output struct name.
 	// Test storage class as NOT Input, as output builtins might be part of generic type.
+	case BuiltInViewportIndex:
+		if (!msl_options.supports_msl_version(2, 0))
+			SPIRV_CROSS_THROW("ViewportIndex requires Metal 2.0.");
+		/* fallthrough */
 	case BuiltInPosition:
 	case BuiltInPointSize:
 	case BuiltInClipDistance:
@@ -4203,6 +4212,10 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		return "position";
 	case BuiltInLayer:
 		return "render_target_array_index";
+	case BuiltInViewportIndex:
+		if (!msl_options.supports_msl_version(2, 0))
+			SPIRV_CROSS_THROW("ViewportIndex requires Metal 2.0.");
+		return "viewport_array_index";
 
 	// Fragment function in
 	case BuiltInFrontFacing:
@@ -4278,6 +4291,10 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 	case BuiltInPosition:
 		return "float4";
 	case BuiltInLayer:
+		return "uint";
+	case BuiltInViewportIndex:
+		if (!msl_options.supports_msl_version(2, 0))
+			SPIRV_CROSS_THROW("ViewportIndex requires Metal 2.0.");
 		return "uint";
 
 	// Fragment function in
@@ -4697,6 +4714,8 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	case BuiltInLocalInvocationIndex:
 	case BuiltInWorkgroupSize:
 	case BuiltInNumWorkgroups:
+	case BuiltInLayer:
+	case BuiltInViewportIndex:
 		expected_type = SPIRType::UInt;
 		break;
 
@@ -4708,9 +4727,31 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 		expr = bitcast_expression(expr_type, expected_type, expr);
 }
 
-// MSL always declares output builtins with the SPIR-V type.
-void CompilerMSL::bitcast_to_builtin_store(uint32_t, std::string &, const SPIRType &)
+void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(target_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInViewportIndex:
+		expected_type = SPIRType::UInt;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+	{
+		auto type = expr_type;
+		type.basetype = expected_type;
+		expr = bitcast_expression(type, expr_type.basetype, expr);
+	}
 }
 
 std::string CompilerMSL::to_initializer_expression(const SPIRVariable &var)
