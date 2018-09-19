@@ -18,7 +18,7 @@ vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
     out.gl_Position = in.coord;
-    out.gl_Layer = int(in.coord.z);
+    out.gl_Layer = uint(int(in.coord.z));
     return out;
 }
 

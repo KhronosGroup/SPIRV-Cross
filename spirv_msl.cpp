@@ -4714,6 +4714,8 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	case BuiltInLocalInvocationIndex:
 	case BuiltInWorkgroupSize:
 	case BuiltInNumWorkgroups:
+	case BuiltInLayer:
+	case BuiltInViewportIndex:
 		expected_type = SPIRType::UInt;
 		break;
 
@@ -4725,9 +4727,31 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 		expr = bitcast_expression(expr_type, expected_type, expr);
 }
 
-// MSL always declares output builtins with the SPIR-V type.
-void CompilerMSL::bitcast_to_builtin_store(uint32_t, std::string &, const SPIRType &)
+void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
+	// Only interested in standalone builtin variables.
+	if (!has_decoration(target_id, DecorationBuiltIn))
+		return;
+
+	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
+	auto expected_type = expr_type.basetype;
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInViewportIndex:
+		expected_type = SPIRType::UInt;
+		break;
+
+	default:
+		break;
+	}
+
+	if (expected_type != expr_type.basetype)
+	{
+		auto type = expr_type;
+		type.basetype = expected_type;
+		expr = bitcast_expression(type, expr_type.basetype, expr);
+	}
 }
 
 std::string CompilerMSL::to_initializer_expression(const SPIRVariable &var)
