@@ -1350,7 +1350,7 @@ void CompilerMSL::emit_custom_functions()
 			{
 				uint32_t dimensions = spv_func - SPVFuncImplArrayCopyMultidimBase;
 				string tmp = "template<typename T";
-				for (uint32_t i = 0; i < dimensions; i++)
+				for (uint8_t i = 0; i < dimensions; i++)
 				{
 					tmp += ", uint ";
 					tmp += 'A' + i;
@@ -1359,7 +1359,7 @@ void CompilerMSL::emit_custom_functions()
 				statement(tmp);
 
 				string array_arg;
-				for (uint32_t i = 0; i < dimensions; i++)
+				for (uint8_t i = 0; i < dimensions; i++)
 				{
 					array_arg += "[";
 					array_arg += 'A' + i;
