@@ -152,9 +152,11 @@ public:
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
+		uint32_t swizzle_constants_buffer_index = 0;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool resolve_specialized_array_lengths = true;
+		bool swizzle_texture_samples = false;
 
 		bool is_ios()
 		{
@@ -241,6 +243,7 @@ public:
 		SPVFuncImplRowMajor3x4,
 		SPVFuncImplRowMajor4x2,
 		SPVFuncImplRowMajor4x3,
+		SPVFuncImplTextureSwizzle,
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 

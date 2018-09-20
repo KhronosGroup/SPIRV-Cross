@@ -1584,6 +1584,113 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplTextureSwizzle:
+			statement("enum class spvSwizzle : uint");
+			begin_scope();
+			statement("none = 0,");
+			statement("zero,");
+			statement("one,");
+			statement("red,");
+			statement("green,");
+			statement("blue,");
+			statement("alpha");
+			end_scope_decl("");
+			statement("");
+			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
+			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");
+			statement("template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };");
+			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
+			          "spvRemoveReference<T>::type& x)");
+			begin_scope();
+			statement("return static_cast<thread T&&>(x);");
+			end_scope();
+			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
+			          "spvRemoveReference<T>::type&& x)");
+			begin_scope();
+			statement("return static_cast<thread T&&>(x);");
+			end_scope();
+			statement("");
+			statement("template<typename T>");
+			statement("inline T spvGetSwizzle(vec<T, 4> x, spvSwizzle s)");
+			begin_scope();
+			statement("switch (s)");
+			begin_scope();
+			statement("case spvSwizzle::zero:");
+			statement("    return 0;");
+			statement("case spvSwizzle::one:");
+			statement("    return 1;");
+			statement("case spvSwizzle::red:");
+			statement("    return x.r;");
+			statement("case spvSwizzle::green:");
+			statement("    return x.g;");
+			statement("case spvSwizzle::blue:");
+			statement("    return x.b;");
+			statement("case spvSwizzle::alpha:");
+			statement("    return x.a;");
+			statement("default:");
+			statement("    break;");
+			end_scope();
+			statement("return 0;");
+			end_scope();
+			statement("");
+			statement("// Wrapper function that swizzles texture samples and fetches.");
+			statement("template<typename T>");
+			statement("inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)");
+			begin_scope();
+			statement("if (!s)");
+			statement("    return x;");
+			statement(
+			    "return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 3) & "
+			    "0x7)), spvGetSwizzle(x, spvSwizzle((s >> 6) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 9) & 0x7)));");
+			end_scope();
+			statement("");
+			statement("template<typename T>");
+			statement("inline T spvTextureSwizzle(T x, uint s)");
+			begin_scope();
+			statement("return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;");
+			end_scope();
+			statement("");
+			statement("// Wrapper function that swizzles texture gathers.");
+			statement("template<typename T, typename Tex, typename... Ts>");
+			statement("inline vec<T, 4> spvGatherSwizzle(sampler s, thread Tex& t, Ts... params, component c, uint sw) "
+			          "METAL_CONST_ARG(c)");
+			begin_scope();
+			statement("if (sw)");
+			begin_scope();
+			statement("switch (spvSwizzle((sw >> (uint(c) * 3)) & 0x7))");
+			begin_scope();
+			statement("case spvSwizzle::none:");
+			statement("    break;");
+			statement("case spvSwizzle::zero:");
+			statement("    return vec<T, 4>(0, 0, 0, 0);");
+			statement("case spvSwizzle::one:");
+			statement("    return vec<T, 4>(1, 1, 1, 1);");
+			statement("case spvSwizzle::red:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::x);");
+			statement("case spvSwizzle::green:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::y);");
+			statement("case spvSwizzle::blue:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::z);");
+			statement("case spvSwizzle::alpha:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::w);");
+			end_scope();
+			end_scope();
+			// texture::gather insists on its component parameter being a constant
+			// expression, so we need this silly workaround just to compile the shader.
+			statement("switch (c)");
+			begin_scope();
+			statement("case component::x:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::x);");
+			statement("case component::y:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::y);");
+			statement("case component::z:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::z);");
+			statement("case component::w:");
+			statement("    return t.gather(s, spvForward<Ts>(params)..., component::w);");
+			end_scope();
+			end_scope();
+			statement("");
+
 		default:
 			break;
 		}
@@ -2680,11 +2787,41 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 }
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
-string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fetch, bool is_gather, bool, bool, bool,
-                                     bool, bool has_dref, uint32_t)
+string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool, bool,
+                                     bool, bool, bool has_dref, uint32_t)
 {
+	// Special-case gather. We have to alter the component being looked up
+	// in the swizzle case.
+	if (msl_options.swizzle_texture_samples && is_gather && !imgtype.image.depth)
+	{
+		string fname = "spvGatherSwizzle<" + type_to_glsl(get<SPIRType>(imgtype.image.type)) + ", " + type_to_glsl(imgtype);
+		// Add the arg types ourselves. Yes, this sucks, but Clang can't
+		// deduce template pack parameters in the middle of an argument list.
+		switch (imgtype.image.dim)
+		{
+		case Dim2D:
+			fname += ", float2";
+			if (imgtype.image.arrayed)
+				fname += ", uint";
+			fname += ", int2";
+			break;
+		case DimCube:
+			fname += ", float3";
+			if (imgtype.image.arrayed)
+				fname += ", uint";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Invalid texture dimension for gather op.");
+		}
+		fname += ">";
+		return fname;
+	}
+
 	// Texture reference
 	string fname = to_expression(img) + ".";
+	if (msl_options.swizzle_texture_samples && !is_gather && imgtype.image.sampled == 1 &&
+	    imgtype.image.dim != DimBuffer)
+		fname = "spvTextureSwizzle(" + fname;
 
 	// Texture function and sampler
 	if (is_fetch)
@@ -2701,7 +2838,7 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &, bool is_fet
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool, bool is_proj,
+string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
                                      uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
                                      uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
                                      uint32_t sample, bool *p_forward)
@@ -2709,6 +2846,13 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	string farg_str;
 	if (!is_fetch)
 		farg_str += to_sampler_expression(img);
+
+	if (msl_options.swizzle_texture_samples && is_gather && !imgtype.image.depth)
+	{
+		if (!farg_str.empty())
+			farg_str += ", ";
+		farg_str += to_expression(img);
+	}
 
 	// Texture coordinates
 	bool forward = should_forward(coord);
@@ -2958,6 +3102,22 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		farg_str += to_expression(sample);
 	}
 
+	if (msl_options.swizzle_texture_samples && imgtype.image.sampled == 1 && imgtype.image.dim != DimBuffer &&
+	    (!is_gather || !imgtype.image.depth))
+	{
+		// Add the swizzle constant from the swizzle buffer.
+		if (!is_gather)
+			farg_str += ")";
+		// Get the original input variable for this image.
+		uint32_t img_var = img;
+		if (meta[img].image)
+			img_var = meta[img].image;
+		if (auto *var = maybe_get_backing_variable(img_var))
+			img_var = var->self;
+		farg_str += ", spvSwizzleConst[" +
+		            convert_to_string(get_metal_resource_index(get<SPIRVariable>(img_var), SPIRType::Image)) + "]";
+	}
+
 	*p_forward = forward;
 
 	return farg_str;
@@ -3003,6 +3163,7 @@ void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id
 {
 	set<SPIRExpression>(result_id, to_expression(image_id), result_type, true);
 	meta[result_id].sampler = samp_id;
+	meta[result_id].image = image_id;
 }
 
 // Returns a string representation of the ID, usable as a function arg.
@@ -3514,6 +3675,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	};
 
 	vector<Resource> resources;
+	bool has_sampled_image = false;
 
 	for (auto &id : ids)
 	{
@@ -3530,6 +3692,9 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (type.basetype == SPIRType::SampledImage)
 				{
+					if (type.image.dim != DimBuffer)
+						has_sampled_image = true;
+
 					resources.push_back(
 					    { &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
 
@@ -3542,6 +3707,9 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				else if (constexpr_samplers.count(var_id) == 0)
 				{
 					// constexpr samplers are not declared as resources.
+					if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
+						has_sampled_image = true;
+
 					resources.push_back(
 					    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
 				}
@@ -3552,6 +3720,15 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	std::sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
 		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
 	});
+
+	if (msl_options.swizzle_texture_samples && has_sampled_image)
+	{
+		// Declare a buffer to hold the swizzle constants.
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += "constant uint32_t* spvSwizzleConst [[buffer(" +
+		           convert_to_string(msl_options.swizzle_constants_buffer_index) + ")]]";
+	}
 
 	for (auto &r : resources)
 	{
@@ -4568,8 +4745,24 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		if (tid && compiler.get<SPIRType>(tid).image.dim == DimBuffer)
 			return SPVFuncImplTexelBufferCoords;
 
+		if (opcode == OpImageFetch && compiler.msl_options.swizzle_texture_samples)
+			return SPVFuncImplTextureSwizzle;
+
 		break;
 	}
+
+	case OpImageSampleExplicitLod:
+	case OpImageSampleProjExplicitLod:
+	case OpImageSampleDrefExplicitLod:
+	case OpImageSampleProjDrefExplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
+	case OpImageGather:
+		if (compiler.msl_options.swizzle_texture_samples)
+			return SPVFuncImplTextureSwizzle;
+		break;
 
 	case OpCompositeConstruct:
 	{

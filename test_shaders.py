@@ -137,6 +137,8 @@ def cross_compile_msl(shader, spirv, opt):
     msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl']
     msl_args.append('--msl-version')
     msl_args.append(path_to_msl_standard_cli(shader))
+    if '.swizzle.' in shader:
+        msl_args.append('--msl-swizzle-texture-samples')
 
     subprocess.check_call(msl_args)
 
