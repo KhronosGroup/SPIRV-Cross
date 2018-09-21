@@ -1594,7 +1594,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("green,");
 			statement("blue,");
 			statement("alpha");
-			end_scope_decl("");
+			end_scope_decl();
 			statement("");
 			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");

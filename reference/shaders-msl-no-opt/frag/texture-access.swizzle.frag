@@ -20,7 +20,7 @@ enum class spvSwizzle : uint
     green,
     blue,
     alpha
-} ;
+};
 
 template<typename T> struct spvRemoveReference { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
