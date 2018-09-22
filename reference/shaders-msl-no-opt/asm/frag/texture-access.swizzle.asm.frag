@@ -63,7 +63,7 @@ inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
 {
     if (!s)
         return x;
-    return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 3) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 6) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 9) & 0x7)));
+    return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 8) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 16) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 24) & 0xFF)));
 }
 
 template<typename T>
@@ -78,7 +78,7 @@ inline vec<T, 4> spvGatherSwizzle(sampler s, thread Tex& t, Ts... params, compon
 {
     if (sw)
     {
-        switch (spvSwizzle((sw >> (uint(c) * 3)) & 0x7))
+        switch (spvSwizzle((sw >> (uint(c) * 8)) & 0xFF))
         {
             case spvSwizzle::none:
                 break;

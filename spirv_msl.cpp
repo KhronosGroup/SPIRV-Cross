@@ -1639,9 +1639,9 @@ void CompilerMSL::emit_custom_functions()
 			begin_scope();
 			statement("if (!s)");
 			statement("    return x;");
-			statement(
-			    "return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 3) & "
-			    "0x7)), spvGetSwizzle(x, spvSwizzle((s >> 6) & 0x7)), spvGetSwizzle(x, spvSwizzle((s >> 9) & 0x7)));");
+			statement("return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0xFF)), "
+			          "spvGetSwizzle(x, spvSwizzle((s >> 8) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 16) & 0xFF)), "
+			          "spvGetSwizzle(x, spvSwizzle((s >> 24) & 0xFF)));");
 			end_scope();
 			statement("");
 			statement("template<typename T>");
@@ -1657,7 +1657,7 @@ void CompilerMSL::emit_custom_functions()
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();
-			statement("switch (spvSwizzle((sw >> (uint(c) * 3)) & 0x7))");
+			statement("switch (spvSwizzle((sw >> (uint(c) * 8)) & 0xFF))");
 			begin_scope();
 			statement("case spvSwizzle::none:");
 			statement("    break;");
