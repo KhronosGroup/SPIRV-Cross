@@ -28,6 +28,8 @@ using namespace std;
 static const uint32_t k_unknown_location = ~0u;
 static const uint32_t k_unknown_component = ~0u;
 
+static const uint32_t k_aux_mbr_idx_swizzle_const = 0u;
+
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_attrs,
                          vector<MSLResourceBinding> *p_res_bindings)
     : CompilerGLSL(move(spirv_))
@@ -138,6 +140,53 @@ void CompilerMSL::build_implicit_builtins()
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleId);
 			builtin_sample_id_id = var_id;
 		}
+	}
+
+	if (msl_options.swizzle_texture_samples && has_sampled_images)
+	{
+		uint32_t offset = increase_bound_by(5);
+		uint32_t type_id = offset;
+		uint32_t type_arr_id = offset + 1;
+		uint32_t struct_id = offset + 2;
+		uint32_t struct_ptr_id = offset + 3;
+		uint32_t var_id = offset + 4;
+
+		// Create a buffer to hold the swizzle constants.
+		SPIRType uint_type;
+		uint_type.basetype = SPIRType::UInt;
+		uint_type.width = 32;
+		set<SPIRType>(type_id, uint_type);
+
+		SPIRType uint_type_arr = uint_type;
+		uint_type_arr.array.push_back(0);
+		uint_type_arr.array_size_literal.push_back(true);
+		uint_type_arr.parent_type = type_id;
+		set<SPIRType>(type_arr_id, uint_type_arr);
+		set_decoration(type_arr_id, DecorationArrayStride, 4);
+
+		SPIRType struct_type;
+		struct_type.basetype = SPIRType::Struct;
+		struct_type.member_types.push_back(type_arr_id);
+		auto &type = set<SPIRType>(struct_id, struct_type);
+		type.self = struct_id;
+		set_decoration(struct_id, DecorationBlock);
+		set_name(struct_id, "spvAux");
+		set_member_name(struct_id, 0, "swizzleConst");
+		set_member_decoration(struct_id, 0, DecorationOffset, 0);
+
+		SPIRType struct_type_ptr = struct_type;
+		struct_type_ptr.pointer = true;
+		struct_type_ptr.parent_type = struct_id;
+		struct_type_ptr.storage = StorageClassUniform;
+		auto &ptr_type = set<SPIRType>(struct_ptr_id, struct_type_ptr);
+		ptr_type.self = struct_id;
+
+		set<SPIRVariable>(var_id, struct_ptr_id, StorageClassUniform);
+		set_name(var_id, "spvAuxBuffer");
+		// This should never match anything.
+		set_decoration(var_id, DecorationDescriptorSet, 0xFFFFFFFE);
+		set_decoration(var_id, DecorationBinding, msl_options.aux_buffer_index);
+		aux_buffer_id = var_id;
 	}
 }
 
@@ -328,6 +377,8 @@ string CompilerMSL::compile()
 	fixup_image_load_store_access();
 
 	set_enabled_interface_variables(get_active_interface_variables());
+	if (aux_buffer_id)
+		active_interface_variables.insert(aux_buffer_id);
 
 	// Preprocess OpCodes to extract the need to output additional header content
 	preprocess_op_codes();
@@ -535,6 +586,15 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					// Implicitly reads gl_FragCoord.
 					assert(builtin_frag_coord_id != 0);
 					added_arg_ids.insert(builtin_frag_coord_id);
+				}
+
+				if (msl_options.swizzle_texture_samples &&
+				    (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage) &&
+				    type.image.sampled == 1 && type.image.dim != DimBuffer)
+				{
+					// Implicitly reads spvAuxBuffer.
+					assert(aux_buffer_id != 0);
+					added_arg_ids.insert(aux_buffer_id);
 				}
 
 				break;
@@ -2794,7 +2854,8 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 	// in the swizzle case.
 	if (msl_options.swizzle_texture_samples && is_gather && !imgtype.image.depth)
 	{
-		string fname = "spvGatherSwizzle<" + type_to_glsl(get<SPIRType>(imgtype.image.type)) + ", " + type_to_glsl(imgtype);
+		string fname =
+		    "spvGatherSwizzle<" + type_to_glsl(get<SPIRType>(imgtype.image.type)) + ", " + type_to_glsl(imgtype);
 		// Add the arg types ourselves. Yes, this sucks, but Clang can't
 		// deduce template pack parameters in the middle of an argument list.
 		switch (imgtype.image.dim)
@@ -3114,7 +3175,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			img_var = meta[img].image;
 		if (auto *var = maybe_get_backing_variable(img_var))
 			img_var = var->self;
-		farg_str += ", spvSwizzleConst[" +
+		auto &aux_type = expression_type(aux_buffer_id);
+		farg_str += ", " + to_name(aux_buffer_id) + "." + to_member_name(aux_type, k_aux_mbr_idx_swizzle_const) + "[" +
 		            convert_to_string(get_metal_resource_index(get<SPIRVariable>(img_var), SPIRType::Image)) + "]";
 	}
 
@@ -3675,7 +3737,6 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	};
 
 	vector<Resource> resources;
-	bool has_sampled_image = false;
 
 	for (auto &id : ids)
 	{
@@ -3692,9 +3753,6 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (type.basetype == SPIRType::SampledImage)
 				{
-					if (type.image.dim != DimBuffer)
-						has_sampled_image = true;
-
 					resources.push_back(
 					    { &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
 
@@ -3707,9 +3765,6 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				else if (constexpr_samplers.count(var_id) == 0)
 				{
 					// constexpr samplers are not declared as resources.
-					if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
-						has_sampled_image = true;
-
 					resources.push_back(
 					    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
 				}
@@ -3720,15 +3775,6 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	std::sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
 		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
 	});
-
-	if (msl_options.swizzle_texture_samples && has_sampled_image)
-	{
-		// Declare a buffer to hold the swizzle constants.
-		if (!ep_args.empty())
-			ep_args += ", ";
-		ep_args += "constant uint32_t* spvSwizzleConst [[buffer(" +
-		           convert_to_string(msl_options.swizzle_constants_buffer_index) + ")]]";
-	}
 
 	for (auto &r : resources)
 	{
@@ -4597,6 +4643,59 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 bool CompilerMSL::skip_argument(uint32_t) const
 {
 	return false;
+}
+
+void CompilerMSL::analyze_image_and_sampler_usage()
+{
+	Compiler::analyze_image_and_sampler_usage();
+	if (msl_options.swizzle_texture_samples)
+	{
+		SampledImageScanner scanner(*this);
+		traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), scanner);
+	}
+}
+
+bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
+{
+	switch (opcode)
+	{
+	case OpLoad:
+	case OpImage:
+	case OpSampledImage:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+		auto &type = compiler.get<SPIRType>(result_type);
+		if ((type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage) || type.image.sampled != 1)
+			return true;
+
+		uint32_t id = args[1];
+		compiler.set<SPIRExpression>(id, "", result_type, true);
+		break;
+	}
+	case OpImageSampleExplicitLod:
+	case OpImageSampleProjExplicitLod:
+	case OpImageSampleDrefExplicitLod:
+	case OpImageSampleProjDrefExplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
+	case OpImageFetch:
+	case OpImageGather:
+		compiler.has_sampled_images |= is_sampled_image_type(compiler.expression_type(args[2]));
+		break;
+	default:
+		break;
+	}
+	return true;
+}
+
+bool CompilerMSL::SampledImageScanner::is_sampled_image_type(const SPIRType &type)
+{
+	return type.image.sampled == 1 && type.image.dim != DimBuffer;
 }
 
 bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, uint32_t length)

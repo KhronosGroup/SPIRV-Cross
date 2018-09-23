@@ -152,7 +152,7 @@ public:
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
-		uint32_t swizzle_constants_buffer_index = 0;
+		uint32_t aux_buffer_index = 0;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool resolve_specialized_array_lengths = true;
@@ -377,9 +377,12 @@ protected:
 	void emit_entry_point_declarations() override;
 	uint32_t builtin_frag_coord_id = 0;
 	uint32_t builtin_sample_id_id = 0;
+	uint32_t aux_buffer_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
+
+	void analyze_image_and_sampler_usage() override;
 
 	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
@@ -392,6 +395,7 @@ protected:
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
+	bool has_sampled_images = false;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
 	bool is_rasterization_disabled = false;
@@ -420,6 +424,20 @@ protected:
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_resource_write = false;
+	};
+
+	// OpcodeHandler that scans for uses of sampled images
+	struct SampledImageScanner : OpcodeHandler
+	{
+		SampledImageScanner(CompilerMSL &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t) override;
+		bool is_sampled_image_type(const SPIRType &type);
+
+		CompilerMSL &compiler;
 	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting
