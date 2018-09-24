@@ -372,6 +372,7 @@ string CompilerMSL::compile()
 	build_function_control_flow_graphs_and_analyze();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
+	analyze_sampled_image_usage();
 	build_implicit_builtins();
 
 	fixup_image_load_store_access();
@@ -4645,9 +4646,8 @@ bool CompilerMSL::skip_argument(uint32_t) const
 	return false;
 }
 
-void CompilerMSL::analyze_image_and_sampler_usage()
+void CompilerMSL::analyze_sampled_image_usage()
 {
-	Compiler::analyze_image_and_sampler_usage();
 	if (msl_options.swizzle_texture_samples)
 	{
 		SampledImageScanner scanner(*this);

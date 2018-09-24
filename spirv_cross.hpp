@@ -845,7 +845,7 @@ protected:
 	// so we need to workaround by having the application inject a dummy sampler.
 	uint32_t dummy_sampler_id = 0;
 
-	virtual void analyze_image_and_sampler_usage();
+	void analyze_image_and_sampler_usage();
 
 	struct CombinedImageSamplerDrefHandler : OpcodeHandler
 	{

@@ -382,7 +382,7 @@ protected:
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
 
-	void analyze_image_and_sampler_usage() override;
+	void analyze_sampled_image_usage();
 
 	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
