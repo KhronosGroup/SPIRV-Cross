@@ -213,6 +213,13 @@ public:
 		return is_rasterization_disabled && (get_entry_point().model == spv::ExecutionModelVertex);
 	}
 
+	// Provide feedback to calling API to allow it to pass an auxiliary
+	// buffer if the shader needs it.
+	bool needs_aux_buffer() const
+	{
+		return used_aux_buffer;
+	}
+
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
 	enum SPVFuncImpl
@@ -399,6 +406,7 @@ protected:
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
 	bool is_rasterization_disabled = false;
+	bool used_aux_buffer = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";

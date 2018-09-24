@@ -3180,6 +3180,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		auto &aux_type = expression_type(aux_buffer_id);
 		farg_str += ", " + to_name(aux_buffer_id) + "." + to_member_name(aux_type, k_aux_mbr_idx_swizzle_const) + "[" +
 		            convert_to_string(get_metal_resource_index(get<SPIRVariable>(img_var), SPIRType::Image)) + "]";
+		used_aux_buffer = true;
 	}
 
 	*p_forward = forward;
