@@ -435,7 +435,6 @@ protected:
 		}
 
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t) override;
-		bool is_sampled_image_type(const SPIRType &type);
 
 		CompilerMSL &compiler;
 	};

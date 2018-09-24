@@ -4685,17 +4685,13 @@ bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *ar
 	case OpImageSampleProjDrefImplicitLod:
 	case OpImageFetch:
 	case OpImageGather:
-		compiler.has_sampled_images |= is_sampled_image_type(compiler.expression_type(args[2]));
+		compiler.has_sampled_images = compiler.has_sampled_images ||
+			compiler.is_sampled_image_type(compiler.expression_type(args[2]));
 		break;
 	default:
 		break;
 	}
 	return true;
-}
-
-bool CompilerMSL::SampledImageScanner::is_sampled_image_type(const SPIRType &type)
-{
-	return type.image.sampled == 1 && type.image.dim != DimBuffer;
 }
 
 bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, uint32_t length)

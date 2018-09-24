@@ -179,6 +179,9 @@ public:
 	// Gets the SPIR-V type underlying the given type_id, which might be a pointer.
 	const SPIRType &get_non_pointer_type(uint32_t type_id) const;
 
+	// Returns if the given type refers to a sampled image.
+	bool is_sampled_image_type(const SPIRType &type);
+
 	// Gets the underlying storage class for an OpVariable.
 	spv::StorageClass get_storage_class(uint32_t id) const;
 
