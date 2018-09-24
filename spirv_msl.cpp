@@ -589,9 +589,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(builtin_frag_coord_id);
 				}
 
-				if (msl_options.swizzle_texture_samples &&
-				    (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage) &&
-				    type.image.sampled == 1 && type.image.dim != DimBuffer)
+				if (msl_options.swizzle_texture_samples && is_sampled_image_type(type))
 				{
 					// Implicitly reads spvAuxBuffer.
 					assert(aux_buffer_id != 0);
@@ -2881,8 +2879,7 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 
 	// Texture reference
 	string fname = to_expression(img) + ".";
-	if (msl_options.swizzle_texture_samples && !is_gather && imgtype.image.sampled == 1 &&
-	    imgtype.image.dim != DimBuffer)
+	if (msl_options.swizzle_texture_samples && !is_gather && is_sampled_image_type(imgtype))
 		fname = "spvTextureSwizzle(" + fname;
 
 	// Texture function and sampler
@@ -3164,7 +3161,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		farg_str += to_expression(sample);
 	}
 
-	if (msl_options.swizzle_texture_samples && imgtype.image.sampled == 1 && imgtype.image.dim != DimBuffer &&
+	if (msl_options.swizzle_texture_samples && is_sampled_image_type(imgtype) &&
 	    (!is_gather || !imgtype.image.depth))
 	{
 		// Add the swizzle constant from the swizzle buffer.
