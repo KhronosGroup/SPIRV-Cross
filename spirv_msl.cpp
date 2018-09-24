@@ -3172,7 +3172,11 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		if (meta[img].image)
 			img_var = meta[img].image;
 		if (auto *var = maybe_get_backing_variable(img_var))
+		{
+			if (var->parameter && !var->parameter->alias_global_variable)
+				SPIRV_CROSS_THROW("Cannot yet map non-aliased parameter to Metal resource!");
 			img_var = var->self;
+		}
 		auto &aux_type = expression_type(aux_buffer_id);
 		farg_str += ", " + to_name(aux_buffer_id) + "." + to_member_name(aux_type, k_aux_mbr_idx_swizzle_const) + "[" +
 		            convert_to_string(get_metal_resource_index(get<SPIRVariable>(img_var), SPIRType::Image)) + "]";
