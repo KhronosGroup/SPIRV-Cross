@@ -489,6 +489,7 @@ struct CLIArguments
 	bool yflip = false;
 	bool sso = false;
 	bool support_nonzero_baseinstance = true;
+	bool msl_swizzle_texture_samples = false;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -703,6 +704,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
+	cbs.add("--msl-swizzle-texture-samples", [&args](CLIParser &) { args.msl_swizzle_texture_samples = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
@@ -822,6 +824,7 @@ static int main_inner(int argc, char *argv[])
 		auto msl_opts = msl_comp->get_msl_options();
 		if (args.set_msl_version)
 			msl_opts.msl_version = args.msl_version;
+		msl_opts.swizzle_texture_samples = args.msl_swizzle_texture_samples;
 		msl_comp->set_msl_options(msl_opts);
 	}
 	else if (args.hlsl)

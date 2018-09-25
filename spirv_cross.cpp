@@ -1096,6 +1096,12 @@ const SPIRType &Compiler::get_non_pointer_type(uint32_t type_id) const
 	return get_non_pointer_type(get<SPIRType>(type_id));
 }
 
+bool Compiler::is_sampled_image_type(const SPIRType &type)
+{
+	return (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage) &&
+		type.image.sampled == 1 && type.image.dim != DimBuffer;
+}
+
 void Compiler::set_member_decoration_string(uint32_t id, uint32_t index, spv::Decoration decoration,
                                             const std::string &argument)
 {
