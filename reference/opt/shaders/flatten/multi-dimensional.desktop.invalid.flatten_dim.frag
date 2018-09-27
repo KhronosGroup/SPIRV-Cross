@@ -8,20 +8,14 @@ layout(location = 0) flat in int vIndex;
 
 void main()
 {
-    int _92;
-    _92 = 0;
     vec4 values3[2 * 3 * 1];
-    for (; _92 < 2; _92++)
+    for (int z = 0; z < 2; z++)
     {
-        int _93;
-        _93 = 0;
-        for (; _93 < 3; _93++)
+        for (int y = 0; y < 3; y++)
         {
-            for (int _95 = 0; _95 < 1; )
+            for (int x = 0; x < 1; x++)
             {
-                values3[_92 * 3 * 1 + _93 * 1 + _95] = texture(uTextures[_92 * 3 * 1 + _93 * 1 + _95], vUV);
-                _95++;
-                continue;
+                values3[z * 3 * 1 + y * 1 + x] = texture(uTextures[z * 3 * 1 + y * 1 + x], vUV);
             }
         }
     }

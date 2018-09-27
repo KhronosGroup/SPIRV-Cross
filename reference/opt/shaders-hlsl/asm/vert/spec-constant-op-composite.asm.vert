@@ -17,11 +17,11 @@ struct SPIRV_Cross_Output
 
 void vert_main()
 {
-    float4 _64 = 0.0f.xxxx;
-    _64.y = float(_20);
-    float4 _68 = _64;
-    _68.z = float(_25);
-    float4 _52 = _68 + float4(_30);
+    float4 _63 = 0.0f.xxxx;
+    _63.y = float(_20);
+    float4 _66 = _63;
+    _66.z = float(_25);
+    float4 _52 = _66 + float4(_30);
     float2 _56 = _52.xy + float2(_32);
     gl_Position = float4(_56.x, _56.y, _52.z, _52.w);
     _4 = _33;

@@ -4,49 +4,49 @@ precision highp int;
 
 layout(location = 0) out vec4 fragColor;
 
-vec4 _83;
+vec4 _80;
 
 void main()
 {
-    mediump int _18 = int(_83.x);
-    highp vec4 _85;
-    _85 = _83;
-    highp vec4 _92;
-    for (int _84 = 0; _84 < _18; _85 = _92, _84++)
+    mediump int _18 = int(_80.x);
+    vec4 _82;
+    _82 = _80;
+    vec4 _89;
+    for (mediump int _81 = 0; _81 < _18; _82 = _89, _81++)
     {
-        highp vec4 _86;
+        vec4 _83;
         switch (_18)
         {
             case 0:
             {
-                highp vec4 _76 = _85;
-                _76.y = 0.0;
-                _86 = _76;
+                vec4 _74 = _82;
+                _74.y = 0.0;
+                _83 = _74;
                 break;
             }
             case 1:
             {
-                highp vec4 _78 = _85;
-                _78.y = 1.0;
-                _86 = _78;
+                vec4 _76 = _82;
+                _76.y = 1.0;
+                _83 = _76;
                 break;
             }
             default:
             {
-                int _87;
-                highp vec4 _91;
-                _91 = _85;
-                _87 = 0;
+                mediump int _84;
+                vec4 _88;
+                _88 = _82;
+                _84 = 0;
                 mediump int _50;
                 for (;;)
                 {
-                    _50 = _87 + 1;
-                    if (_87 < _18)
+                    _50 = _84 + 1;
+                    if (_84 < _18)
                     {
-                        highp vec4 _74 = _91;
-                        _74.y = _91.y + 0.5;
-                        _91 = _74;
-                        _87 = _50;
+                        vec4 _72 = _88;
+                        _72.y = _88.y + 0.5;
+                        _88 = _72;
+                        _84 = _50;
                         continue;
                     }
                     else
@@ -54,15 +54,15 @@ void main()
                         break;
                     }
                 }
-                _92 = _91;
+                _89 = _88;
                 continue;
             }
         }
-        highp vec4 _82 = _86;
-        _82.y = _86.y + 0.5;
-        _92 = _82;
+        vec4 _79 = _83;
+        _79.y = _83.y + 0.5;
+        _89 = _79;
         continue;
     }
-    fragColor = _85;
+    fragColor = _82;
 }
 

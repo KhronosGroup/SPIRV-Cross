@@ -60,9 +60,7 @@ fragment main0_out main0(main0_in in [[stage_in]])
     }
     int _91 = in.index & 3;
     out.FragColor += foobar[_91].z;
-    float4 baz[4] = { float4(0.0), float4(1.0), float4(8.0), float4(5.0) };
-    spvArrayCopyFromConstant1(baz, _104);
-    out.FragColor += baz[_91].z;
+    out.FragColor += _104[_91].z;
     return out;
 }
 
