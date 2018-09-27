@@ -24,15 +24,12 @@ struct SPIRV_Cross_Input
     uint gl_LocalInvocationIndex : SV_GroupIndex;
 };
 
-static Data data[2];
-static Data data2[2];
-
 void comp_main()
 {
-    data = _25;
+    Data data[2] = _25;
     Data _28 = { X, 2.0f };
     Data _31[2] = { _28, _30 };
-    data2 = _31;
+    Data data2[2] = _31;
     if (gl_LocalInvocationIndex == 0u)
     {
         _61.Store(gl_WorkGroupID.x * 8 + 0, asuint(data[gl_LocalInvocationID.x].a + data2[gl_LocalInvocationID.x].a));
