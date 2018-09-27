@@ -454,6 +454,7 @@ protected:
 	std::string enclose_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
+	virtual std::string to_member_reference(const SPIRVariable *var, const SPIRType &type, uint32_t index);
 	std::string type_to_glsl_constructor(const SPIRType &type);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	virtual std::string to_qualifiers_glsl(uint32_t id);

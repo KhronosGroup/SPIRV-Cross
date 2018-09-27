@@ -5389,10 +5389,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!qual_mbr_name.empty())
 					expr = qual_mbr_name;
 				else
-				{
-					expr += ".";
-					expr += to_member_name(*type, index);
-				}
+					expr += to_member_reference(maybe_get_backing_variable(base), *type, index);
 			}
 
 			is_packed = member_is_packed_type(*type, index);
@@ -8233,6 +8230,11 @@ string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
 		return join("_m", index);
 }
 
+string CompilerGLSL::to_member_reference(const SPIRVariable *, const SPIRType &type, uint32_t index)
+{
+	return join(".", to_member_name(type, index));
+}
+
 void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
 {
 	auto &memb = meta[type.self].members;
@@ -9282,8 +9284,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 		// Only sensible solution is to make a ladder variable, which we declare at the top of the switch block,
 		// write to the ladder here, and defer the break.
 		// The loop we're breaking out of must dominate the switch block, or there is no ladder breaking case.
-		if (current_emitting_switch && is_loop_break(to) &&
-		    current_emitting_switch->loop_dominator != -1u &&
+		if (current_emitting_switch && is_loop_break(to) && current_emitting_switch->loop_dominator != -1u &&
 		    get<SPIRBlock>(current_emitting_switch->loop_dominator).merge_block == to)
 		{
 			if (!current_emitting_switch->need_ladder_break)

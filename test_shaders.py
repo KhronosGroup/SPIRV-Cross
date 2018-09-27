@@ -87,14 +87,26 @@ def print_msl_compiler_version():
             raise
 
 def path_to_msl_standard(shader):
-    if '.msl2.' in shader:
-        return '-std=macos-metal2.0'
-    elif '.msl21.' in shader:
-        return '-std=macos-metal2.1'
-    elif '.msl11.' in shader:
-        return '-std=macos-metal1.1'
+    if '.ios.' in shader:
+        if '.msl2.' in shader:
+            return '-std=ios-metal2.0'
+        elif '.msl21.' in shader:
+            return '-std=ios-metal2.1'
+        elif '.msl11.' in shader:
+            return '-std=ios-metal1.1'
+        elif '.msl10.' in shader:
+            return '-std=ios-metal1.0'
+        else:
+            return '-std=ios-metal1.2'
     else:
-        return '-std=macos-metal1.2'
+        if '.msl2.' in shader:
+            return '-std=macos-metal2.0'
+        elif '.msl21.' in shader:
+            return '-std=macos-metal2.1'
+        elif '.msl11.' in shader:
+            return '-std=macos-metal1.1'
+        else:
+            return '-std=macos-metal1.2'
 
 def path_to_msl_standard_cli(shader):
     if '.msl2.' in shader:
@@ -109,8 +121,10 @@ def path_to_msl_standard_cli(shader):
 def validate_shader_msl(shader, opt):
     msl_path = reference_path(shader[0], shader[1], opt)
     try:
-        msl_os = 'macosx'
-#        msl_os = 'iphoneos'
+        if '.ios.' in msl_path:
+            msl_os = 'iphoneos'
+        else:
+            msl_os = 'macosx'
         subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', path_to_msl_standard(msl_path), '-Werror', '-Wno-unused-variable', msl_path])
         print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
     except OSError as oe:
@@ -139,6 +153,8 @@ def cross_compile_msl(shader, spirv, opt):
     msl_args.append(path_to_msl_standard_cli(shader))
     if '.swizzle.' in shader:
         msl_args.append('--msl-swizzle-texture-samples')
+    if '.ios.' in shader:
+        msl_args.append('--msl-ios')
 
     subprocess.check_call(msl_args)
 

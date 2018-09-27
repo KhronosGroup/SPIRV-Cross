@@ -323,6 +323,7 @@ protected:
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool skip_argument(uint32_t id) const override;
+	std::string to_member_reference(const SPIRVariable *var, const SPIRType &type, uint32_t index) override;
 	std::string to_qualifiers_glsl(uint32_t id) override;
 	void replace_illegal_names() override;
 	void declare_undefined_values() override;
@@ -414,6 +415,7 @@ protected:
 	spv::Op previous_instruction_opcode = spv::OpNop;
 
 	std::unordered_map<uint32_t, MSLConstexprSampler> constexpr_samplers;
+	std::vector<uint32_t> buffer_arrays;
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
