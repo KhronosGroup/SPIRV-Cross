@@ -832,7 +832,8 @@ static int main_inner(int argc, char *argv[])
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
-		build_dummy_sampler = true;
+		if (!args.vulkan_semantics)
+			build_dummy_sampler = true;
 		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
 	}
 
