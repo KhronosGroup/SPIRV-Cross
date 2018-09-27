@@ -3161,8 +3161,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		farg_str += to_expression(sample);
 	}
 
-	if (msl_options.swizzle_texture_samples && is_sampled_image_type(imgtype) &&
-	    (!is_gather || !imgtype.image.depth))
+	if (msl_options.swizzle_texture_samples && is_sampled_image_type(imgtype) && (!is_gather || !imgtype.image.depth))
 	{
 		// Add the swizzle constant from the swizzle buffer.
 		if (!is_gather)
@@ -4687,8 +4686,8 @@ bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *ar
 	case OpImageSampleProjDrefImplicitLod:
 	case OpImageFetch:
 	case OpImageGather:
-		compiler.has_sampled_images = compiler.has_sampled_images ||
-			compiler.is_sampled_image_type(compiler.expression_type(args[2]));
+		compiler.has_sampled_images =
+		    compiler.has_sampled_images || compiler.is_sampled_image_type(compiler.expression_type(args[2]));
 		break;
 	default:
 		break;
