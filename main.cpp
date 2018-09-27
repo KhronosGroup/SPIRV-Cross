@@ -490,6 +490,7 @@ struct CLIArguments
 	bool sso = false;
 	bool support_nonzero_baseinstance = true;
 	bool msl_swizzle_texture_samples = false;
+	bool msl_ios = false;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -541,6 +542,8 @@ static void print_help()
 	                "\t[--cpp-interface-name <name>]\n"
 	                "\t[--msl]\n"
 	                "\t[--msl-version <MMmmpp>]\n"
+	                "\t[--msl-swizzle-texture-samples]\n"
+	                "\t[--msl-ios]\n"
 	                "\t[--hlsl]\n"
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
@@ -705,6 +708,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
 	cbs.add("--msl-swizzle-texture-samples", [&args](CLIParser &) { args.msl_swizzle_texture_samples = true; });
+	cbs.add("--msl-ios", [&args](CLIParser &) { args.msl_ios = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
@@ -825,6 +829,8 @@ static int main_inner(int argc, char *argv[])
 		if (args.set_msl_version)
 			msl_opts.msl_version = args.msl_version;
 		msl_opts.swizzle_texture_samples = args.msl_swizzle_texture_samples;
+		if (args.msl_ios)
+			msl_opts.platform = CompilerMSL::Options::iOS;
 		msl_comp->set_msl_options(msl_opts);
 	}
 	else if (args.hlsl)

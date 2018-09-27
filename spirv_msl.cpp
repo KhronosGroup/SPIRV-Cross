@@ -334,6 +334,22 @@ void CompilerMSL::emit_entry_point_declarations()
 		          type.basetype == SPIRType::SampledImage ? to_sampler_expression(samp.first) : to_name(samp.first),
 		          "(", merge(args), ");");
 	}
+
+	// Emit buffer arrays here.
+	for (uint32_t array_id : buffer_arrays)
+	{
+		const auto &var = get<SPIRVariable>(array_id);
+		const auto &type = get<SPIRType>(var.basetype);
+		string name = get_name(array_id);
+		statement(get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + name + "[] =");
+		begin_scope();
+		for (uint32_t i = 0; i < type.array[0]; ++i)
+			statement(name + "_" + convert_to_string(i) + ",");
+		end_scope_decl();
+		statement("");
+	}
+	// For some reason, without this, we end up emitting the arrays twice.
+	buffer_arrays.clear();
 }
 
 string CompilerMSL::compile()
@@ -3792,10 +3808,37 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			auto &m = meta.at(type.self);
 			if (m.members.size() == 0)
 				break;
-			if (!ep_args.empty())
-				ep_args += ", ";
-			ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + r.name;
-			ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			if (!type.array.empty())
+			{
+				if (type.array.size() > 1)
+					SPIRV_CROSS_THROW("Arrays of arrays of buffers are not supported.");
+
+				// Metal doesn't directly support this, so we must expand the
+				// array. We'll declare a local array to hold these elements
+				// later.
+				uint32_t array_size =
+				    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+
+				if (array_size == 0)
+					SPIRV_CROSS_THROW("Unsized arrays of buffers are not supported in MSL.");
+
+				buffer_arrays.push_back(var_id);
+				for (uint32_t i = 0; i < array_size; ++i)
+				{
+					if (!ep_args.empty())
+						ep_args += ", ";
+					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + r.name + "_" +
+					           convert_to_string(i);
+					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")]]";
+				}
+			}
+			else
+			{
+				if (!ep_args.empty())
+					ep_args += ", ";
+				ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + r.name;
+				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			}
 			break;
 		}
 		case SPIRType::Sampler:
@@ -3968,6 +4011,11 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else if (is_array(type) && !type_is_image)
 	{
 		// Arrays of images and samplers are special cased.
+		if (get<SPIRVariable>(name_id).storage == StorageClassUniform ||
+		    get<SPIRVariable>(name_id).storage == StorageClassStorageBuffer)
+			// If an array of buffers, declare an array of pointers, since we
+			// can't have an array of references.
+			decl += "*";
 		decl += " (&";
 		decl += to_expression(name_id);
 		decl += ")";
@@ -4087,6 +4135,16 @@ void CompilerMSL::replace_illegal_names()
 	CompilerGLSL::replace_illegal_names();
 }
 
+string CompilerMSL::to_member_reference(const SPIRVariable *var, const SPIRType &type, uint32_t index)
+{
+	// If this is a buffer array, we have to dereference the buffer pointers.
+	if (var && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer) &&
+	    !get<SPIRType>(var->basetype).array.empty())
+		return join("->", to_member_name(type, index));
+	else
+		return join(".", to_member_name(type, index));
+}
+
 string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 {
 	string quals;
@@ -4177,6 +4235,9 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 		if (!msl_options.supports_msl_version(2))
 			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of samplers.");
 
+		if (type.array.size() > 1)
+			SPIRV_CROSS_THROW("Arrays of arrays of samplers are not supported in MSL.");
+
 		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
 		uint32_t array_size =
 		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
@@ -4203,8 +4264,22 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	if (!type.array.empty())
 	{
-		if (!msl_options.supports_msl_version(2))
-			SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of textures.");
+		uint32_t major = 2, minor = 0;
+		if (msl_options.is_ios())
+		{
+			major = 1;
+			minor = 2;
+		}
+		if (!msl_options.supports_msl_version(major, minor))
+		{
+			if (msl_options.is_ios())
+				SPIRV_CROSS_THROW("MSL 1.2 or greater is required for arrays of textures.");
+			else
+				SPIRV_CROSS_THROW("MSL 2.0 or greater is required for arrays of textures.");
+		}
+
+		if (type.array.size() > 1)
+			SPIRV_CROSS_THROW("Arrays of arrays of textures are not supported in MSL.");
 
 		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
 		uint32_t array_size =

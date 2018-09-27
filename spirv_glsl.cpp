@@ -5391,10 +5391,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!qual_mbr_name.empty())
 					expr = qual_mbr_name;
 				else
-				{
-					expr += ".";
-					expr += to_member_name(*type, index);
-				}
+					expr += to_member_reference(maybe_get_backing_variable(base), *type, index);
 			}
 
 			is_packed = member_is_packed_type(*type, index);
@@ -8233,6 +8230,11 @@ string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
 		return memb[index].alias;
 	else
 		return join("_m", index);
+}
+
+string CompilerGLSL::to_member_reference(const SPIRVariable *, const SPIRType &type, uint32_t index)
+{
+	return join(".", to_member_name(type, index));
 }
 
 void CompilerGLSL::add_member_name(SPIRType &type, uint32_t index)
