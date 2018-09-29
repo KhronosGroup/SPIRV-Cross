@@ -605,7 +605,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(builtin_frag_coord_id);
 				}
 
-				if (msl_options.swizzle_texture_samples && is_sampled_image_type(type))
+				if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
 				{
 					// Implicitly reads spvAuxBuffer.
 					assert(aux_buffer_id != 0);
@@ -1765,6 +1765,29 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			end_scope();
 			statement("");
+			statement("// Wrapper function that swizzles depth texture gathers.");
+			statement("template<typename T, typename Tex, typename... Ts>");
+			statement("inline vec<T, 4> spvGatherCompareSwizzle(sampler s, thread Tex& t, Ts... params, uint sw) ");
+			begin_scope();
+			statement("if (sw)");
+			begin_scope();
+			statement("switch (spvSwizzle(sw & 0xFF))");
+			begin_scope();
+			statement("case spvSwizzle::none:");
+			statement("case spvSwizzle::red:");
+			statement("    break;");
+			statement("case spvSwizzle::zero:");
+			statement("case spvSwizzle::green:");
+			statement("case spvSwizzle::blue:");
+			statement("case spvSwizzle::alpha:");
+			statement("    return vec<T, 4>(0, 0, 0, 0);");
+			statement("case spvSwizzle::one:");
+			statement("    return vec<T, 4>(1, 1, 1, 1);");
+			end_scope();
+			end_scope();
+			statement("return t.gather_compare(s, spvForward<Ts>(params)...);");
+			end_scope();
+			statement("");
 
 		default:
 			break;
@@ -2863,14 +2886,14 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
 string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool, bool,
-                                     bool, bool, bool has_dref, uint32_t)
+                                     bool has_offset, bool, bool has_dref, uint32_t)
 {
 	// Special-case gather. We have to alter the component being looked up
 	// in the swizzle case.
-	if (msl_options.swizzle_texture_samples && is_gather && !imgtype.image.depth)
+	if (msl_options.swizzle_texture_samples && is_gather)
 	{
-		string fname =
-		    "spvGatherSwizzle<" + type_to_glsl(get<SPIRType>(imgtype.image.type)) + ", " + type_to_glsl(imgtype);
+		string fname = imgtype.image.depth ? "spvGatherCompareSwizzle" : "spvGatherSwizzle";
+		fname += "<" + type_to_glsl(get<SPIRType>(imgtype.image.type)) + ", metal::" + type_to_glsl(imgtype);
 		// Add the arg types ourselves. Yes, this sucks, but Clang can't
 		// deduce template pack parameters in the middle of an argument list.
 		switch (imgtype.image.dim)
@@ -2879,12 +2902,17 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 			fname += ", float2";
 			if (imgtype.image.arrayed)
 				fname += ", uint";
-			fname += ", int2";
+			if (imgtype.image.depth)
+				fname += ", float";
+			if (!imgtype.image.depth || has_offset)
+				fname += ", int2";
 			break;
 		case DimCube:
 			fname += ", float3";
 			if (imgtype.image.arrayed)
 				fname += ", uint";
+			if (imgtype.image.depth)
+				fname += ", float";
 			break;
 		default:
 			SPIRV_CROSS_THROW("Invalid texture dimension for gather op.");
@@ -2922,7 +2950,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	if (!is_fetch)
 		farg_str += to_sampler_expression(img);
 
-	if (msl_options.swizzle_texture_samples && is_gather && !imgtype.image.depth)
+	if (msl_options.swizzle_texture_samples && is_gather)
 	{
 		if (!farg_str.empty())
 			farg_str += ", ";
@@ -3177,7 +3205,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		farg_str += to_expression(sample);
 	}
 
-	if (msl_options.swizzle_texture_samples && is_sampled_image_type(imgtype) && (!is_gather || !imgtype.image.depth))
+	if (msl_options.swizzle_texture_samples && is_sampled_image_type(imgtype))
 	{
 		// Add the swizzle constant from the swizzle buffer.
 		if (!is_gather)
@@ -4761,6 +4789,7 @@ bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *ar
 	case OpImageSampleProjDrefImplicitLod:
 	case OpImageFetch:
 	case OpImageGather:
+	case OpImageDrefGather:
 		compiler.has_sampled_images =
 		    compiler.has_sampled_images || compiler.is_sampled_image_type(compiler.expression_type(args[2]));
 		break;
@@ -4932,6 +4961,7 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpImageSampleDrefImplicitLod:
 	case OpImageSampleProjDrefImplicitLod:
 	case OpImageGather:
+	case OpImageDrefGather:
 		if (compiler.msl_options.swizzle_texture_samples)
 			return SPVFuncImplTextureSwizzle;
 		break;
