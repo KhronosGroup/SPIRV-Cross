@@ -2320,6 +2320,24 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		MSL_ImgQry(samples);
 		break;
 
+	case OpImage:
+	{
+		uint32_t id = ops[1];
+		uint32_t arg = ops[2];
+
+		CompilerGLSL::emit_instruction(instruction);
+		auto &expr = get<SPIRExpression>(id);
+		if (expr.loaded_from == 0)
+		{
+			// This means the operand is the result of an OpSampledImage.
+			// In that case, we need to get the original image from the
+			// OpSampledImage.
+			auto *var = maybe_get_backing_variable(meta[arg].image);
+			expr.loaded_from = var ? var->self : 0;
+		}
+		break;
+	}
+
 	// Casting
 	case OpQuantizeToF16:
 	{
