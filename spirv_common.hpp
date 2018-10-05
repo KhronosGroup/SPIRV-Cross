@@ -1236,8 +1236,6 @@ struct Meta
 
 	Decoration decoration;
 	std::vector<Decoration> members;
-	uint32_t sampler = 0;
-	uint32_t image = 0;
 
 	std::unordered_map<uint32_t, uint32_t> decoration_word_offset;
 
