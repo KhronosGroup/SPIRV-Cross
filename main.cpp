@@ -19,6 +19,7 @@
 #include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
+#include "spirv_parser.hpp"
 #include "spirv_reflect.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -190,7 +191,7 @@ static vector<uint32_t> read_spirv_file(const char *path)
 	FILE *file = fopen(path, "rb");
 	if (!file)
 	{
-		fprintf(stderr, "Failed to open SPIRV file: %s\n", path);
+		fprintf(stderr, "Failed to open SPIR-V file: %s\n", path);
 		return {};
 	}
 
@@ -797,10 +798,17 @@ static int main_inner(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
+	auto spirv_file = read_spirv_file(args.input);
+	if (spirv_file.empty())
+		return EXIT_FAILURE;
+	Parser spirv_parser(move(spirv_file));
+
+	spirv_parser.parse();
+
 	// Special case reflection because it has little to do with the path followed by code-outputting compilers
 	if (!args.reflect.empty())
 	{
-		CompilerReflection compiler(read_spirv_file(args.input));
+		CompilerReflection compiler(move(spirv_parser.get_parsed_ir()));
 		compiler.set_format(args.reflect);
 		auto json = compiler.compile();
 		if (args.output)
@@ -816,13 +824,13 @@ static int main_inner(int argc, char *argv[])
 
 	if (args.cpp)
 	{
-		compiler = unique_ptr<CompilerGLSL>(new CompilerCPP(read_spirv_file(args.input)));
+		compiler.reset(new CompilerCPP(move(spirv_parser.get_parsed_ir())));
 		if (args.cpp_interface_name)
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
 	}
 	else if (args.msl)
 	{
-		compiler = unique_ptr<CompilerMSL>(new CompilerMSL(read_spirv_file(args.input)));
+		compiler.reset(new CompilerMSL(move(spirv_parser.get_parsed_ir())));
 
 		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
 		auto msl_opts = msl_comp->get_msl_options();
@@ -834,13 +842,13 @@ static int main_inner(int argc, char *argv[])
 		msl_comp->set_msl_options(msl_opts);
 	}
 	else if (args.hlsl)
-		compiler = unique_ptr<CompilerHLSL>(new CompilerHLSL(read_spirv_file(args.input)));
+		compiler.reset(new CompilerHLSL(move(spirv_parser.get_parsed_ir())));
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
 		if (!args.vulkan_semantics)
 			build_dummy_sampler = true;
-		compiler = unique_ptr<CompilerGLSL>(new CompilerGLSL(read_spirv_file(args.input)));
+		compiler.reset(new CompilerGLSL(move(spirv_parser.get_parsed_ir())));
 	}
 
 	if (!args.variable_type_remaps.empty())

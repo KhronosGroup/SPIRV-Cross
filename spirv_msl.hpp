@@ -271,6 +271,13 @@ public:
 	CompilerMSL(const uint32_t *ir, size_t word_count, MSLVertexAttr *p_vtx_attrs = nullptr, size_t vtx_attrs_count = 0,
 	            MSLResourceBinding *p_res_bindings = nullptr, size_t res_bindings_count = 0);
 
+	// Alternate constructors taking pre-parsed IR directly.
+	CompilerMSL(const ParsedIR &ir, MSLVertexAttr *p_vtx_attrs = nullptr, size_t vtx_attrs_count = 0,
+	            MSLResourceBinding *p_res_bindings = nullptr, size_t res_bindings_count = 0);
+
+	CompilerMSL(ParsedIR &&ir, MSLVertexAttr *p_vtx_attrs = nullptr, size_t vtx_attrs_count = 0,
+	            MSLResourceBinding *p_res_bindings = nullptr, size_t res_bindings_count = 0);
+
 	// Compiles the SPIR-V code into Metal Shading Language.
 	std::string compile() override;
 

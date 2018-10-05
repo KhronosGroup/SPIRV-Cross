@@ -42,8 +42,8 @@ namespace spirv_cross
 #ifndef _MSC_VER
 [[noreturn]]
 #endif
-    inline void
-    report_and_abort(const std::string &msg)
+inline void
+report_and_abort(const std::string &msg)
 {
 #ifdef NDEBUG
 	(void)msg;
@@ -66,6 +66,17 @@ public:
 };
 
 #define SPIRV_CROSS_THROW(x) throw CompilerError(x)
+#endif
+
+//#define SPIRV_CROSS_COPY_CONSTRUCTOR_SANITIZE
+
+// MSVC 2013 does not have noexcept. We need this for Variant to get move constructor to work correctly
+// instead of copy constructor.
+// MSVC 2013 ignores that move constructors cannot throw in std::vector, so just don't define it.
+#if defined(_MSC_VER) && _MSC_VER < 1900
+#define SPIRV_CROSS_NOEXCEPT
+#else
+#define SPIRV_CROSS_NOEXCEPT noexcept
 #endif
 
 #if __cplusplus >= 201402l
@@ -282,20 +293,26 @@ inline std::string convert_to_string(double t)
 
 struct Instruction
 {
-	Instruction(const std::vector<uint32_t> &spirv, uint32_t &index);
-
-	uint16_t op;
-	uint16_t count;
-	uint32_t offset;
-	uint32_t length;
+	uint16_t op = 0;
+	uint16_t count = 0;
+	uint32_t offset = 0;
+	uint32_t length = 0;
 };
 
 // Helper for Variant interface.
 struct IVariant
 {
 	virtual ~IVariant() = default;
+	virtual std::unique_ptr<IVariant> clone() = 0;
+
 	uint32_t self = 0;
 };
+
+#define SPIRV_CROSS_DECLARE_CLONE(T)                    \
+	std::unique_ptr<IVariant> clone() override          \
+	{                                                   \
+		return std::unique_ptr<IVariant>(new T(*this)); \
+	}
 
 enum Types
 {
@@ -326,6 +343,8 @@ struct SPIRUndef : IVariant
 	{
 	}
 	uint32_t basetype;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRUndef)
 };
 
 // This type is only used by backends which need to access the combined image and sampler IDs separately after
@@ -345,6 +364,8 @@ struct SPIRCombinedImageSampler : IVariant
 	uint32_t combined_type;
 	uint32_t image;
 	uint32_t sampler;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRCombinedImageSampler)
 };
 
 struct SPIRConstantOp : IVariant
@@ -364,6 +385,8 @@ struct SPIRConstantOp : IVariant
 	spv::Op opcode;
 	std::vector<uint32_t> arguments;
 	uint32_t basetype;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRConstantOp)
 };
 
 struct SPIRType : IVariant
@@ -438,6 +461,8 @@ struct SPIRType : IVariant
 
 	// Used in backends to avoid emitting members with conflicting names.
 	std::unordered_set<std::string> member_name_cache;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRType)
 };
 
 struct SPIRExtension : IVariant
@@ -463,6 +488,7 @@ struct SPIRExtension : IVariant
 	}
 
 	Extension ext;
+	SPIRV_CROSS_DECLARE_CLONE(SPIRExtension)
 };
 
 // SPIREntryPoint is not a variant since its IDs are used to decorate OpFunction,
@@ -533,6 +559,8 @@ struct SPIRExpression : IVariant
 
 	// A list of expressions which this expression depends on.
 	std::vector<uint32_t> expression_dependencies;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRExpression)
 };
 
 struct SPIRFunctionPrototype : IVariant
@@ -549,6 +577,8 @@ struct SPIRFunctionPrototype : IVariant
 
 	uint32_t return_type;
 	std::vector<uint32_t> parameter_types;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRFunctionPrototype)
 };
 
 struct SPIRBlock : IVariant
@@ -684,6 +714,8 @@ struct SPIRBlock : IVariant
 	// sub-group-like operations.
 	// Make sure that we only use these expressions in the original block.
 	std::vector<uint32_t> invalidate_expressions;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRBlock)
 };
 
 struct SPIRFunction : IVariant
@@ -769,6 +801,8 @@ struct SPIRFunction : IVariant
 	bool active = false;
 	bool flush_undeclared = true;
 	bool do_combined_parameters = true;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRFunction)
 };
 
 struct SPIRAccessChain : IVariant
@@ -803,6 +837,8 @@ struct SPIRAccessChain : IVariant
 	uint32_t matrix_stride = 0;
 	bool row_major_matrix = false;
 	bool immutable = false;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRAccessChain)
 };
 
 struct SPIRVariable : IVariant
@@ -856,6 +892,8 @@ struct SPIRVariable : IVariant
 	bool loop_variable_enable = false;
 
 	SPIRFunction::Parameter *parameter = nullptr;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRVariable)
 };
 
 struct SPIRConstant : IVariant
@@ -1111,6 +1149,8 @@ struct SPIRConstant : IVariant
 
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;
+
+	SPIRV_CROSS_DECLARE_CLONE(SPIRConstant)
 };
 
 class Variant
@@ -1118,17 +1158,46 @@ class Variant
 public:
 	// MSVC 2013 workaround, we shouldn't need these constructors.
 	Variant() = default;
-	Variant(Variant &&other)
+
+	// Marking custom move constructor as noexcept is important.
+	Variant(Variant &&other) SPIRV_CROSS_NOEXCEPT
 	{
 		*this = std::move(other);
 	}
-	Variant &operator=(Variant &&other)
+
+	Variant(const Variant &variant)
+	{
+		*this = variant;
+	}
+
+	// Marking custom move constructor as noexcept is important.
+	Variant &operator=(Variant &&other) SPIRV_CROSS_NOEXCEPT
 	{
 		if (this != &other)
 		{
-			holder = move(other.holder);
+			holder = std::move(other.holder);
 			type = other.type;
+			allow_type_rewrite = other.allow_type_rewrite;
 			other.type = TypeNone;
+		}
+		return *this;
+	}
+
+	// This copy/clone should only be called in the Compiler constructor.
+	// If this is called inside ::compile(), we invalidate any references we took higher in the stack.
+	// This should never happen.
+	Variant &operator=(const Variant &other)
+	{
+#ifdef SPIRV_CROSS_COPY_CONSTRUCTOR_SANITIZE
+		abort();
+#endif
+		if (this != &other)
+		{
+			holder.reset();
+			if (other.holder)
+				holder = other.holder->clone();
+			type = other.type;
+			allow_type_rewrite = other.allow_type_rewrite;
 		}
 		return *this;
 	}
@@ -1166,14 +1235,17 @@ public:
 	{
 		return type;
 	}
+
 	uint32_t get_id() const
 	{
 		return holder ? holder->self : 0;
 	}
+
 	bool empty() const
 	{
 		return !holder;
 	}
+
 	void reset()
 	{
 		holder.reset();

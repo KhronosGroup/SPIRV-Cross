@@ -131,6 +131,8 @@
     <ClCompile Include="..\spirv_hlsl.cpp" />
     <ClCompile Include="..\spirv_msl.cpp" />
     <ClCompile Include="..\spirv_cfg.cpp" />
+    <ClCompile Include="..\spirv_parser.cpp" />
+    <ClCompile Include="..\spirv_cross_parsed_ir.cpp" />
     <ClCompile Include="..\spirv_cross_util.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -144,6 +146,8 @@
     <ClInclude Include="..\spirv_hlsl.hpp" />
     <ClInclude Include="..\spirv_msl.hpp" />
     <ClInclude Include="..\spirv_cfg.hpp" />
+    <ClCompile Include="..\spirv_parser.hpp" />
+    <ClCompile Include="..\spirv_cross_parsed_ir.hpp" />
     <ClInclude Include="..\spirv_cross_util.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
