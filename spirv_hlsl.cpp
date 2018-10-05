@@ -3933,10 +3933,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		auto *combined = maybe_get<SPIRCombinedImageSampler>(ops[2]);
+
 		if (combined)
-			emit_op(result_type, id, to_expression(combined->image), true, true);
+		{
+			auto &e = emit_op(result_type, id, to_expression(combined->image), true, true);
+			auto *var = maybe_get_backing_variable(combined->image);
+			if (var)
+				e.loaded_from = var->self;
+		}
 		else
-			emit_op(result_type, id, to_expression(ops[2]), true, true);
+		{
+			auto &e = emit_op(result_type, id, to_expression(ops[2]), true, true);
+			auto *var = maybe_get_backing_variable(ops[2]);
+			if (var)
+				e.loaded_from = var->self;
+		}
 		break;
 	}
 

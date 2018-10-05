@@ -2345,18 +2345,23 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpImage:
 	{
+		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		uint32_t arg = ops[2];
+		auto *combined = maybe_get<SPIRCombinedImageSampler>(ops[2]);
 
-		CompilerGLSL::emit_instruction(instruction);
-		auto &expr = get<SPIRExpression>(id);
-		if (expr.loaded_from == 0)
+		if (combined)
 		{
-			// This means the operand is the result of an OpSampledImage.
-			// In that case, we need to get the original image from the
-			// OpSampledImage.
-			auto *var = maybe_get_backing_variable(meta[arg].image);
-			expr.loaded_from = var ? var->self : 0;
+			auto &e = emit_op(result_type, id, to_expression(combined->image), true, true);
+			auto *var = maybe_get_backing_variable(combined->image);
+			if (var)
+				e.loaded_from = var->self;
+		}
+		else
+		{
+			auto &e = emit_op(result_type, id, to_expression(ops[2]), true, true);
+			auto *var = maybe_get_backing_variable(ops[2]);
+			if (var)
+				e.loaded_from = var->self;
 		}
 		break;
 	}
@@ -2939,8 +2944,10 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 		return fname;
 	}
 
+	auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
+
 	// Texture reference
-	string fname = to_expression(img) + ".";
+	string fname = to_expression(combined ? combined->image : img) + ".";
 	if (msl_options.swizzle_texture_samples && !is_gather && is_sampled_image_type(imgtype))
 		fname = "spvTextureSwizzle(" + fname;
 
@@ -2972,7 +2979,9 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		if (!farg_str.empty())
 			farg_str += ", ";
-		farg_str += to_expression(img);
+
+		auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
+		farg_str += to_expression(combined ? combined->image : img);
 	}
 
 	// Texture coordinates
@@ -3230,8 +3239,11 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			farg_str += ")";
 		// Get the original input variable for this image.
 		uint32_t img_var = img;
-		if (meta[img].image)
-			img_var = meta[img].image;
+
+		auto *combined = maybe_get<SPIRCombinedImageSampler>(img_var);
+		if (combined)
+			img_var = combined->image;
+
 		if (auto *var = maybe_get_backing_variable(img_var))
 		{
 			if (var->parameter && !var->parameter->alias_global_variable)
@@ -3287,9 +3299,7 @@ string CompilerMSL::to_component_argument(uint32_t id)
 // Establish sampled image as expression object and assign the sampler to it.
 void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
 {
-	set<SPIRExpression>(result_id, to_expression(image_id), result_type, true);
-	meta[result_id].sampler = samp_id;
-	meta[result_id].image = image_id;
+	set<SPIRCombinedImageSampler>(result_id, result_type, image_id, samp_id);
 }
 
 // Returns a string representation of the ID, usable as a function arg.
@@ -3311,9 +3321,13 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 // by appending a suffix to the expression constructed from the ID.
 string CompilerMSL::to_sampler_expression(uint32_t id)
 {
-	auto expr = to_expression(id);
+	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
+	auto expr = to_expression(combined ? combined->image : id);
 	auto index = expr.find_first_of('[');
-	uint32_t samp_id = meta[id].sampler;
+
+	uint32_t samp_id = 0;
+	if (combined)
+		samp_id = combined->sampler;
 
 	if (index == string::npos)
 		return samp_id ? to_expression(samp_id) : expr + sampler_name_suffix;
