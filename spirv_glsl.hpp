@@ -127,14 +127,26 @@ public:
 		remap_pls_variables();
 	}
 
-	CompilerGLSL(std::vector<uint32_t> spirv_)
+	explicit CompilerGLSL(std::vector<uint32_t> spirv_)
 	    : Compiler(move(spirv_))
 	{
 		init();
 	}
 
-	CompilerGLSL(const uint32_t *ir, size_t word_count)
-	    : Compiler(ir, word_count)
+	CompilerGLSL(const uint32_t *ir_, size_t word_count)
+	    : Compiler(ir_, word_count)
+	{
+		init();
+	}
+
+	explicit CompilerGLSL(const ParsedIR &ir_)
+	    : Compiler(ir_)
+	{
+		init();
+	}
+
+	explicit CompilerGLSL(ParsedIR &&ir_)
+	    : Compiler(std::move(ir_))
 	{
 		init();
 	}
@@ -586,10 +598,10 @@ protected:
 private:
 	void init()
 	{
-		if (source.known)
+		if (ir.source.known)
 		{
-			options.es = source.es;
-			options.version = source.version;
+			options.es = ir.source.es;
+			options.version = ir.source.version;
 		}
 	}
 };

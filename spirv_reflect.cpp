@@ -264,7 +264,7 @@ string CompilerReflection::compile()
 void CompilerReflection::emit_types()
 {
 	bool emitted_open_tag = false;
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		auto idType = id.get_type();
 		if (idType == TypeType)
@@ -360,7 +360,7 @@ void CompilerReflection::emit_type_member_qualifiers(const SPIRType &type, uint3
 
 	auto &membertype = get<SPIRType>(type.member_types[index]);
 	emit_type_array(membertype);
-	auto &memb = meta[type.self].members;
+	auto &memb = ir.meta[type.self].members;
 	if (index < memb.size())
 	{
 		auto &dec = memb[index];
@@ -437,7 +437,7 @@ void CompilerReflection::emit_resources(const char *tag, const vector<Resource> 
 	for (auto &res : resources)
 	{
 		auto &type = get_type(res.type_id);
-		auto typeflags = meta[type.self].decoration.decoration_flags;
+		auto typeflags = ir.meta[type.self].decoration.decoration_flags;
 		auto &mask = get_decoration_bitset(res.id);
 
 		// If we don't have a name, use the fallback for the type instead of the variable
@@ -565,7 +565,7 @@ void CompilerReflection::emit_specialization_constants()
 
 string CompilerReflection::to_member_name(const SPIRType &type, uint32_t index) const
 {
-	auto &memb = meta[type.self].members;
+	auto &memb = ir.meta[type.self].members;
 	if (index < memb.size() && !memb[index].alias.empty())
 		return memb[index].alias;
 	else

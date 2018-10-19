@@ -17,6 +17,7 @@
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
 #include "spirv_cfg.hpp"
+#include "spirv_parser.hpp"
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -25,69 +26,40 @@ using namespace std;
 using namespace spv;
 using namespace spirv_cross;
 
-#define log(...) fprintf(stderr, __VA_ARGS__)
-
-static string ensure_valid_identifier(const string &name, bool member)
+Compiler::Compiler(vector<uint32_t> ir_)
 {
-	// Functions in glslangValidator are mangled with name(<mangled> stuff.
-	// Normally, we would never see '(' in any legal identifiers, so just strip them out.
-	auto str = name.substr(0, name.find('('));
-
-	for (uint32_t i = 0; i < str.size(); i++)
-	{
-		auto &c = str[i];
-
-		if (member)
-		{
-			// _m<num> variables are reserved by the internal implementation,
-			// otherwise, make sure the name is a valid identifier.
-			if (i == 0)
-				c = isalpha(c) ? c : '_';
-			else if (i == 2 && str[0] == '_' && str[1] == 'm')
-				c = isalpha(c) ? c : '_';
-			else
-				c = isalnum(c) ? c : '_';
-		}
-		else
-		{
-			// _<num> variables are reserved by the internal implementation,
-			// otherwise, make sure the name is a valid identifier.
-			if (i == 0 || (str[0] == '_' && i == 1))
-				c = isalpha(c) ? c : '_';
-			else
-				c = isalnum(c) ? c : '_';
-		}
-	}
-	return str;
+	Parser parser(move(ir_));
+	parser.parse();
+	set_ir(move(parser.get_parsed_ir()));
 }
 
-Instruction::Instruction(const vector<uint32_t> &spirv, uint32_t &index)
+Compiler::Compiler(const uint32_t *ir_, size_t word_count)
 {
-	op = spirv[index] & 0xffff;
-	count = (spirv[index] >> 16) & 0xffff;
-
-	if (count == 0)
-		SPIRV_CROSS_THROW("SPIR-V instructions cannot consume 0 words. Invalid SPIR-V file.");
-
-	offset = index + 1;
-	length = count - 1;
-
-	index += count;
-
-	if (index > spirv.size())
-		SPIRV_CROSS_THROW("SPIR-V instruction goes out of bounds.");
+	Parser parser(ir_, word_count);
+	parser.parse();
+	set_ir(move(parser.get_parsed_ir()));
 }
 
-Compiler::Compiler(vector<uint32_t> ir)
-    : spirv(move(ir))
+Compiler::Compiler(const ParsedIR &ir_)
 {
-	parse();
+	set_ir(ir_);
 }
 
-Compiler::Compiler(const uint32_t *ir, size_t word_count)
-    : spirv(ir, ir + word_count)
+Compiler::Compiler(ParsedIR &&ir_)
 {
-	parse();
+	set_ir(move(ir_));
+}
+
+void Compiler::set_ir(ParsedIR &&ir_)
+{
+	ir = move(ir_);
+	parse_fixup();
+}
+
+void Compiler::set_ir(const ParsedIR &ir_)
+{
+	ir = ir_;
+	parse_fixup();
 }
 
 string Compiler::compile()
@@ -101,13 +73,13 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 {
 	auto &type = get<SPIRType>(v.basetype);
 	bool ssbo = v.storage == StorageClassStorageBuffer ||
-	            meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
 
 	bool is_restrict;
 	if (ssbo)
-		is_restrict = get_buffer_block_flags(v).get(DecorationRestrict);
+		is_restrict = ir.get_buffer_block_flags(v).get(DecorationRestrict);
 	else
 		is_restrict = has_decoration(v.self, DecorationRestrict);
 
@@ -186,7 +158,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 
 string Compiler::to_name(uint32_t id, bool allow_alias) const
 {
-	if (allow_alias && ids.at(id).get_type() == TypeType)
+	if (allow_alias && ir.ids.at(id).get_type() == TypeType)
 	{
 		// If this type is a simple alias, emit the
 		// name of the original type instead.
@@ -202,10 +174,10 @@ string Compiler::to_name(uint32_t id, bool allow_alias) const
 		}
 	}
 
-	if (meta[id].decoration.alias.empty())
+	if (ir.meta[id].decoration.alias.empty())
 		return join("_", id);
 	else
-		return meta.at(id).decoration.alias;
+		return ir.meta[id].decoration.alias;
 }
 
 bool Compiler::function_is_pure(const SPIRFunction &func)
@@ -381,7 +353,7 @@ void Compiler::flush_all_active_variables()
 
 uint32_t Compiler::expression_type_id(uint32_t id) const
 {
-	switch (ids[id].get_type())
+	switch (ir.ids[id].get_type())
 	{
 	case TypeVariable:
 		return get<SPIRVariable>(id).basetype;
@@ -431,7 +403,7 @@ bool Compiler::expression_is_lvalue(uint32_t id) const
 
 bool Compiler::is_immutable(uint32_t id) const
 {
-	if (ids[id].get_type() == TypeVariable)
+	if (ir.ids[id].get_type() == TypeVariable)
 	{
 		auto &var = get<SPIRVariable>(id);
 
@@ -439,12 +411,12 @@ bool Compiler::is_immutable(uint32_t id) const
 		bool pointer_to_const = var.storage == StorageClassUniformConstant;
 		return pointer_to_const || var.phi_variable || !expression_is_lvalue(id);
 	}
-	else if (ids[id].get_type() == TypeAccessChain)
+	else if (ir.ids[id].get_type() == TypeAccessChain)
 		return get<SPIRAccessChain>(id).immutable;
-	else if (ids[id].get_type() == TypeExpression)
+	else if (ir.ids[id].get_type() == TypeExpression)
 		return get<SPIRExpression>(id).immutable;
-	else if (ids[id].get_type() == TypeConstant || ids[id].get_type() == TypeConstantOp ||
-	         ids[id].get_type() == TypeUndef)
+	else if (ir.ids[id].get_type() == TypeConstant || ir.ids[id].get_type() == TypeConstantOp ||
+	         ir.ids[id].get_type() == TypeUndef)
 		return true;
 	else
 		return false;
@@ -490,7 +462,7 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 bool Compiler::is_builtin_type(const SPIRType &type) const
 {
 	// We can have builtin structs as well. If one member of a struct is builtin, the struct must also be builtin.
-	for (auto &m : meta[type.self].members)
+	for (auto &m : ir.meta[type.self].members)
 		if (m.builtin)
 			return true;
 
@@ -499,7 +471,7 @@ bool Compiler::is_builtin_type(const SPIRType &type) const
 
 bool Compiler::is_builtin_variable(const SPIRVariable &var) const
 {
-	if (var.compat_builtin || meta[var.self].decoration.builtin)
+	if (var.compat_builtin || ir.meta[var.self].decoration.builtin)
 		return true;
 	else
 		return is_builtin_type(get<SPIRType>(var.basetype));
@@ -507,7 +479,7 @@ bool Compiler::is_builtin_variable(const SPIRVariable &var) const
 
 bool Compiler::is_member_builtin(const SPIRType &type, uint32_t index, BuiltIn *builtin) const
 {
-	auto &memb = meta[type.self].members;
+	auto &memb = ir.meta[type.self].members;
 	if (index < memb.size() && memb[index].builtin)
 	{
 		if (builtin)
@@ -669,7 +641,7 @@ unordered_set<uint32_t> Compiler::get_active_interface_variables() const
 	// Traverse the call graph and find all interface variables which are in use.
 	unordered_set<uint32_t> variables;
 	InterfaceVariableAccessHandler handler(*this, variables);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 
 	// If we needed to create one, we'll need it.
 	if (dummy_sampler_id)
@@ -688,7 +660,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 {
 	ShaderResources res;
 
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() != TypeVariable)
 			continue;
@@ -707,36 +679,36 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		// Input
 		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 		{
-			if (meta[type.self].decoration.decoration_flags.get(DecorationBlock))
+			if (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock))
 				res.stage_inputs.push_back(
 				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			else
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+				res.stage_inputs.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Subpass inputs
 		else if (var.storage == StorageClassUniformConstant && type.image.dim == DimSubpassData)
 		{
-			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Outputs
 		else if (var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 		{
-			if (meta[type.self].decoration.decoration_flags.get(DecorationBlock))
+			if (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock))
 				res.stage_outputs.push_back(
 				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			else
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+				res.stage_outputs.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// UBOs
 		else if (type.storage == StorageClassUniform &&
-		         (meta[type.self].decoration.decoration_flags.get(DecorationBlock)))
+		         (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock)))
 		{
 			res.uniform_buffers.push_back(
 			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 		}
 		// Old way to declare SSBOs.
 		else if (type.storage == StorageClassUniform &&
-		         (meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+		         (ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
 		{
 			res.storage_buffers.push_back(
 			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
@@ -752,79 +724,39 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		{
 			// There can only be one push constant block, but keep the vector in case this restriction is lifted
 			// in the future.
-			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.push_constant_buffers.push_back(
+			    { var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 2)
 		{
-			res.storage_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.storage_images.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Separate images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 1)
 		{
-			res.separate_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.separate_images.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Separate samplers
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Sampler)
 		{
-			res.separate_samplers.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.separate_samplers.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Textures
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::SampledImage)
 		{
-			res.sampled_images.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.sampled_images.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 		// Atomic counters
 		else if (type.storage == StorageClassAtomicCounter)
 		{
-			res.atomic_counters.push_back({ var.self, var.basetype, type.self, meta[var.self].decoration.alias });
+			res.atomic_counters.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
 	}
 
 	return res;
-}
-
-static inline uint32_t swap_endian(uint32_t v)
-{
-	return ((v >> 24) & 0x000000ffu) | ((v >> 8) & 0x0000ff00u) | ((v << 8) & 0x00ff0000u) | ((v << 24) & 0xff000000u);
-}
-
-static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
-{
-	string ret;
-	for (uint32_t i = offset; i < spirv.size(); i++)
-	{
-		uint32_t w = spirv[i];
-
-		for (uint32_t j = 0; j < 4; j++, w >>= 8)
-		{
-			char c = w & 0xff;
-			if (c == '\0')
-				return ret;
-			ret += c;
-		}
-	}
-
-	SPIRV_CROSS_THROW("String was not terminated before EOF");
-}
-
-static bool is_valid_spirv_version(uint32_t version)
-{
-	switch (version)
-	{
-	// Allow v99 since it tends to just work.
-	case 99:
-	case 0x10000: // SPIR-V 1.0
-	case 0x10100: // SPIR-V 1.1
-	case 0x10200: // SPIR-V 1.2
-	case 0x10300: // SPIR-V 1.3
-		return true;
-
-	default:
-		return false;
-	}
 }
 
 bool Compiler::type_is_block_like(const SPIRType &type) const
@@ -850,7 +782,7 @@ void Compiler::fixup_type_alias()
 	// Due to how some backends work, the "master" type of type_alias must be a block-like type if it exists.
 	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
 	// alias if the slave type is a block type.
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() != TypeType)
 			continue;
@@ -860,7 +792,7 @@ void Compiler::fixup_type_alias()
 		if (type.type_alias && type_is_block_like(type))
 		{
 			// Become the master.
-			for (auto &other_id : ids)
+			for (auto &other_id : ir.ids)
 			{
 				if (other_id.get_type() != TypeType)
 					continue;
@@ -877,7 +809,7 @@ void Compiler::fixup_type_alias()
 		}
 	}
 
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() != TypeType)
 			continue;
@@ -891,48 +823,19 @@ void Compiler::fixup_type_alias()
 	}
 }
 
-void Compiler::parse()
+void Compiler::parse_fixup()
 {
-	auto len = spirv.size();
-	if (len < 5)
-		SPIRV_CROSS_THROW("SPIRV file too small.");
-
-	auto s = spirv.data();
-
-	// Endian-swap if we need to.
-	if (s[0] == swap_endian(MagicNumber))
-		transform(begin(spirv), end(spirv), begin(spirv), [](uint32_t c) { return swap_endian(c); });
-
-	if (s[0] != MagicNumber || !is_valid_spirv_version(s[1]))
-		SPIRV_CROSS_THROW("Invalid SPIRV format.");
-
-	uint32_t bound = s[3];
-	ids.resize(bound);
-	meta.resize(bound);
-
-	uint32_t offset = 5;
-	while (offset < len)
-		inst.emplace_back(spirv, offset);
-
-	for (auto &i : inst)
-		parse(i);
-
-	if (current_function)
-		SPIRV_CROSS_THROW("Function was not terminated.");
-	if (current_block)
-		SPIRV_CROSS_THROW("Block was not terminated.");
-
 	// Figure out specialization constants for work group sizes.
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
-			if (meta[c.self].decoration.builtin && meta[c.self].decoration.builtin_type == BuiltInWorkgroupSize)
+			if (ir.meta[c.self].decoration.builtin && ir.meta[c.self].decoration.builtin_type == BuiltInWorkgroupSize)
 			{
 				// In current SPIR-V, there can be just one constant like this.
 				// All entry points will receive the constant value.
-				for (auto &entry : entry_points)
+				for (auto &entry : ir.entry_points)
 				{
 					entry.second.workgroup_size.constant = c.self;
 					entry.second.workgroup_size.x = c.scalar(0, 0);
@@ -940,6 +843,15 @@ void Compiler::parse()
 					entry.second.workgroup_size.z = c.scalar(0, 2);
 				}
 			}
+		}
+		else if (id.get_type() == TypeVariable)
+		{
+			auto &var = id.get<SPIRVariable>();
+			if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
+			    var.storage == StorageClassOutput)
+				global_variables.push_back(var.self);
+			if (variable_storage_is_aliased(var))
+				aliased_variables.push_back(var.self);
 		}
 	}
 
@@ -950,7 +862,7 @@ void Compiler::flatten_interface_block(uint32_t id)
 {
 	auto &var = get<SPIRVariable>(id);
 	auto &type = get<SPIRType>(var.basetype);
-	auto &flags = meta.at(type.self).decoration.decoration_flags;
+	auto &flags = ir.meta.at(type.self).decoration.decoration_flags;
 
 	if (!type.array.empty())
 		SPIRV_CROSS_THROW("Type is array of UBOs.");
@@ -973,7 +885,7 @@ void Compiler::flatten_interface_block(uint32_t id)
 		SPIRV_CROSS_THROW("Member type cannot be struct.");
 
 	// Inherit variable name from interface block name.
-	meta.at(var.self).decoration.alias = meta.at(type.self).decoration.alias;
+	ir.meta.at(var.self).decoration.alias = ir.meta.at(type.self).decoration.alias;
 
 	auto storage = var.storage;
 	if (storage == StorageClassUniform)
@@ -1030,32 +942,7 @@ void Compiler::update_name_cache(unordered_set<string> &cache, string &name)
 
 void Compiler::set_name(uint32_t id, const std::string &name)
 {
-	auto &str = meta.at(id).decoration.alias;
-	str.clear();
-
-	if (name.empty())
-		return;
-
-	// glslang uses identifiers to pass along meaningful information
-	// about HLSL reflection.
-	// FIXME: This should be deprecated eventually.
-	auto &m = meta.at(id);
-	if (source.hlsl && name.size() >= 6 && name.find("@count") == name.size() - 6)
-	{
-		m.hlsl_magic_counter_buffer_candidate = true;
-		m.hlsl_magic_counter_buffer_name = name.substr(0, name.find("@count"));
-	}
-	else
-	{
-		m.hlsl_magic_counter_buffer_candidate = false;
-		m.hlsl_magic_counter_buffer_name.clear();
-	}
-
-	// Reserved for temporaries.
-	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
-		return;
-
-	str = ensure_valid_identifier(name, false);
+	ir.set_name(id, name);
 }
 
 const SPIRType &Compiler::get_type(uint32_t id) const
@@ -1105,106 +992,35 @@ bool Compiler::is_sampled_image_type(const SPIRType &type)
 void Compiler::set_member_decoration_string(uint32_t id, uint32_t index, spv::Decoration decoration,
                                             const std::string &argument)
 {
-	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
-	auto &dec = meta.at(id).members[index];
-	dec.decoration_flags.set(decoration);
-
-	switch (decoration)
-	{
-	case DecorationHlslSemanticGOOGLE:
-		dec.hlsl_semantic = argument;
-		break;
-
-	default:
-		break;
-	}
+	ir.set_member_decoration_string(id, index, decoration, argument);
 }
 
 void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration decoration, uint32_t argument)
 {
-	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
-	auto &dec = meta.at(id).members[index];
-	dec.decoration_flags.set(decoration);
-
-	switch (decoration)
-	{
-	case DecorationBuiltIn:
-		dec.builtin = true;
-		dec.builtin_type = static_cast<BuiltIn>(argument);
-		break;
-
-	case DecorationLocation:
-		dec.location = argument;
-		break;
-
-	case DecorationComponent:
-		dec.component = argument;
-		break;
-
-	case DecorationBinding:
-		dec.binding = argument;
-		break;
-
-	case DecorationOffset:
-		dec.offset = argument;
-		break;
-
-	case DecorationSpecId:
-		dec.spec_id = argument;
-		break;
-
-	case DecorationMatrixStride:
-		dec.matrix_stride = argument;
-		break;
-
-	case DecorationIndex:
-		dec.index = argument;
-		break;
-
-	default:
-		break;
-	}
+	ir.set_member_decoration(id, index, decoration, argument);
 }
 
 void Compiler::set_member_name(uint32_t id, uint32_t index, const std::string &name)
 {
-	meta.at(id).members.resize(max(meta[id].members.size(), size_t(index) + 1));
-
-	auto &str = meta.at(id).members[index].alias;
-	str.clear();
-	if (name.empty())
-		return;
-
-	// Reserved for unnamed members.
-	if (name[0] == '_' && name.size() >= 3 && name[1] == 'm' && isdigit(name[2]))
-		return;
-
-	str = ensure_valid_identifier(name, true);
+	ir.set_member_name(id, index, name);
 }
 
 const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 {
-	auto &m = meta.at(id);
-	if (index >= m.members.size())
-	{
-		static string empty;
-		return empty;
-	}
-
-	return m.members[index].alias;
+	return ir.get_member_name(id, index);
 }
 
 void Compiler::set_member_qualified_name(uint32_t type_id, uint32_t index, const std::string &name)
 {
-	meta.at(type_id).members.resize(max(meta[type_id].members.size(), size_t(index) + 1));
-	meta.at(type_id).members[index].qualified_alias = name;
+	ir.meta.at(type_id).members.resize(max(ir.meta[type_id].members.size(), size_t(index) + 1));
+	ir.meta.at(type_id).members[index].qualified_alias = name;
 }
 
 const std::string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_t index) const
 {
 	const static string empty;
 
-	auto &m = meta.at(type_id);
+	auto &m = ir.meta.at(type_id);
 	if (index < m.members.size())
 		return m.members[index].qualified_alias;
 	else
@@ -1213,33 +1029,7 @@ const std::string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_
 
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
-	auto &m = meta.at(id);
-	if (index >= m.members.size())
-		return 0;
-
-	auto &dec = m.members[index];
-	if (!dec.decoration_flags.get(decoration))
-		return 0;
-
-	switch (decoration)
-	{
-	case DecorationBuiltIn:
-		return dec.builtin_type;
-	case DecorationLocation:
-		return dec.location;
-	case DecorationComponent:
-		return dec.component;
-	case DecorationBinding:
-		return dec.binding;
-	case DecorationOffset:
-		return dec.offset;
-	case DecorationSpecId:
-		return dec.spec_id;
-	case DecorationIndex:
-		return dec.index;
-	default:
-		return 1;
-	}
+	return ir.get_member_decoration(id, index, decoration);
 }
 
 uint64_t Compiler::get_member_decoration_mask(uint32_t id, uint32_t index) const
@@ -1249,137 +1039,27 @@ uint64_t Compiler::get_member_decoration_mask(uint32_t id, uint32_t index) const
 
 const Bitset &Compiler::get_member_decoration_bitset(uint32_t id, uint32_t index) const
 {
-	auto &m = meta.at(id);
-	if (index >= m.members.size())
-	{
-		static const Bitset cleared = {};
-		return cleared;
-	}
-
-	return m.members[index].decoration_flags;
+	return ir.get_member_decoration_bitset(id, index);
 }
 
 bool Compiler::has_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
-	return get_member_decoration_bitset(id, index).get(decoration);
+	return ir.has_member_decoration(id, index, decoration);
 }
 
 void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration decoration)
 {
-	auto &m = meta.at(id);
-	if (index >= m.members.size())
-		return;
-
-	auto &dec = m.members[index];
-
-	dec.decoration_flags.clear(decoration);
-	switch (decoration)
-	{
-	case DecorationBuiltIn:
-		dec.builtin = false;
-		break;
-
-	case DecorationLocation:
-		dec.location = 0;
-		break;
-
-	case DecorationComponent:
-		dec.component = 0;
-		break;
-
-	case DecorationOffset:
-		dec.offset = 0;
-		break;
-
-	case DecorationSpecId:
-		dec.spec_id = 0;
-		break;
-
-	case DecorationHlslSemanticGOOGLE:
-		dec.hlsl_semantic.clear();
-		break;
-
-	default:
-		break;
-	}
+	ir.unset_member_decoration(id, index, decoration);
 }
 
 void Compiler::set_decoration_string(uint32_t id, spv::Decoration decoration, const std::string &argument)
 {
-	auto &dec = meta.at(id).decoration;
-	dec.decoration_flags.set(decoration);
-
-	switch (decoration)
-	{
-	case DecorationHlslSemanticGOOGLE:
-		dec.hlsl_semantic = argument;
-		break;
-
-	default:
-		break;
-	}
+	ir.set_decoration_string(id, decoration, argument);
 }
 
 void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argument)
 {
-	auto &dec = meta.at(id).decoration;
-	dec.decoration_flags.set(decoration);
-
-	switch (decoration)
-	{
-	case DecorationBuiltIn:
-		dec.builtin = true;
-		dec.builtin_type = static_cast<BuiltIn>(argument);
-		break;
-
-	case DecorationLocation:
-		dec.location = argument;
-		break;
-
-	case DecorationComponent:
-		dec.component = argument;
-		break;
-
-	case DecorationOffset:
-		dec.offset = argument;
-		break;
-
-	case DecorationArrayStride:
-		dec.array_stride = argument;
-		break;
-
-	case DecorationMatrixStride:
-		dec.matrix_stride = argument;
-		break;
-
-	case DecorationBinding:
-		dec.binding = argument;
-		break;
-
-	case DecorationDescriptorSet:
-		dec.set = argument;
-		break;
-
-	case DecorationInputAttachmentIndex:
-		dec.input_attachment = argument;
-		break;
-
-	case DecorationSpecId:
-		dec.spec_id = argument;
-		break;
-
-	case DecorationIndex:
-		dec.index = argument;
-		break;
-
-	case DecorationHlslCounterBufferGOOGLE:
-		meta.at(id).hlsl_magic_counter_buffer = argument;
-		meta.at(argument).hlsl_is_magic_counter_buffer = true;
-		break;
-
-	default:
-		break;
-	}
+	ir.set_decoration(id, decoration, argument);
 }
 
 StorageClass Compiler::get_storage_class(uint32_t id) const
@@ -1389,7 +1069,7 @@ StorageClass Compiler::get_storage_class(uint32_t id) const
 
 const std::string &Compiler::get_name(uint32_t id) const
 {
-	return meta.at(id).decoration.alias;
+	return ir.meta.at(id).decoration.alias;
 }
 
 const std::string Compiler::get_fallback_name(uint32_t id) const
@@ -1413,937 +1093,43 @@ uint64_t Compiler::get_decoration_mask(uint32_t id) const
 
 const Bitset &Compiler::get_decoration_bitset(uint32_t id) const
 {
-	auto &dec = meta.at(id).decoration;
-	return dec.decoration_flags;
+	return ir.get_decoration_bitset(id);
 }
 
 bool Compiler::has_decoration(uint32_t id, Decoration decoration) const
 {
-	return get_decoration_bitset(id).get(decoration);
+	return ir.has_decoration(id, decoration);
 }
 
-const string &Compiler::get_decoration_string(uint32_t id, spv::Decoration decoration) const
+const string &Compiler::get_decoration_string(uint32_t id, Decoration decoration) const
 {
-	auto &dec = meta.at(id).decoration;
-	static const string empty;
+	return ir.get_decoration_string(id, decoration);
+}
 
-	if (!dec.decoration_flags.get(decoration))
-		return empty;
-
-	switch (decoration)
-	{
-	case DecorationHlslSemanticGOOGLE:
-		return dec.hlsl_semantic;
-
-	default:
-		return empty;
-	}
+const string &Compiler::get_member_decoration_string(uint32_t id, uint32_t index, Decoration decoration) const
+{
+	return ir.get_member_decoration_string(id, index, decoration);
 }
 
 uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 {
-	auto &dec = meta.at(id).decoration;
-	if (!dec.decoration_flags.get(decoration))
-		return 0;
-
-	switch (decoration)
-	{
-	case DecorationBuiltIn:
-		return dec.builtin_type;
-	case DecorationLocation:
-		return dec.location;
-	case DecorationComponent:
-		return dec.component;
-	case DecorationOffset:
-		return dec.offset;
-	case DecorationBinding:
-		return dec.binding;
-	case DecorationDescriptorSet:
-		return dec.set;
-	case DecorationInputAttachmentIndex:
-		return dec.input_attachment;
-	case DecorationSpecId:
-		return dec.spec_id;
-	case DecorationArrayStride:
-		return dec.array_stride;
-	case DecorationMatrixStride:
-		return dec.matrix_stride;
-	case DecorationIndex:
-		return dec.index;
-	default:
-		return 1;
-	}
+	return ir.get_decoration(id, decoration);
 }
 
 void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 {
-	auto &dec = meta.at(id).decoration;
-	dec.decoration_flags.clear(decoration);
-	switch (decoration)
-	{
-	case DecorationBuiltIn:
-		dec.builtin = false;
-		break;
-
-	case DecorationLocation:
-		dec.location = 0;
-		break;
-
-	case DecorationComponent:
-		dec.component = 0;
-		break;
-
-	case DecorationOffset:
-		dec.offset = 0;
-		break;
-
-	case DecorationBinding:
-		dec.binding = 0;
-		break;
-
-	case DecorationDescriptorSet:
-		dec.set = 0;
-		break;
-
-	case DecorationInputAttachmentIndex:
-		dec.input_attachment = 0;
-		break;
-
-	case DecorationSpecId:
-		dec.spec_id = 0;
-		break;
-
-	case DecorationHlslSemanticGOOGLE:
-		dec.hlsl_semantic.clear();
-		break;
-
-	case DecorationHlslCounterBufferGOOGLE:
-	{
-		auto &counter = meta.at(id).hlsl_magic_counter_buffer;
-		if (counter)
-		{
-			meta.at(counter).hlsl_is_magic_counter_buffer = false;
-			counter = 0;
-		}
-		break;
-	}
-
-	default:
-		break;
-	}
+	ir.unset_decoration(id, decoration);
 }
 
 bool Compiler::get_binary_offset_for_decoration(uint32_t id, spv::Decoration decoration, uint32_t &word_offset) const
 {
-	auto &word_offsets = meta.at(id).decoration_word_offset;
+	auto &word_offsets = ir.meta.at(id).decoration_word_offset;
 	auto itr = word_offsets.find(decoration);
 	if (itr == end(word_offsets))
 		return false;
 
 	word_offset = itr->second;
 	return true;
-}
-
-void Compiler::parse(const Instruction &instruction)
-{
-	auto ops = stream(instruction);
-	auto op = static_cast<Op>(instruction.op);
-	uint32_t length = instruction.length;
-
-	switch (op)
-	{
-	case OpMemoryModel:
-	case OpSourceExtension:
-	case OpNop:
-	case OpLine:
-	case OpNoLine:
-	case OpString:
-		break;
-
-	case OpSource:
-	{
-		auto lang = static_cast<SourceLanguage>(ops[0]);
-		switch (lang)
-		{
-		case SourceLanguageESSL:
-			source.es = true;
-			source.version = ops[1];
-			source.known = true;
-			source.hlsl = false;
-			break;
-
-		case SourceLanguageGLSL:
-			source.es = false;
-			source.version = ops[1];
-			source.known = true;
-			source.hlsl = false;
-			break;
-
-		case SourceLanguageHLSL:
-			// For purposes of cross-compiling, this is GLSL 450.
-			source.es = false;
-			source.version = 450;
-			source.known = true;
-			source.hlsl = true;
-			break;
-
-		default:
-			source.known = false;
-			break;
-		}
-		break;
-	}
-
-	case OpUndef:
-	{
-		uint32_t result_type = ops[0];
-		uint32_t id = ops[1];
-		set<SPIRUndef>(id, result_type);
-		break;
-	}
-
-	case OpCapability:
-	{
-		uint32_t cap = ops[0];
-		if (cap == CapabilityKernel)
-			SPIRV_CROSS_THROW("Kernel capability not supported.");
-
-		declared_capabilities.push_back(static_cast<Capability>(ops[0]));
-		break;
-	}
-
-	case OpExtension:
-	{
-		auto ext = extract_string(spirv, instruction.offset);
-		declared_extensions.push_back(move(ext));
-		break;
-	}
-
-	case OpExtInstImport:
-	{
-		uint32_t id = ops[0];
-		auto ext = extract_string(spirv, instruction.offset + 1);
-		if (ext == "GLSL.std.450")
-			set<SPIRExtension>(id, SPIRExtension::GLSL);
-		else if (ext == "SPV_AMD_shader_ballot")
-			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_shader_ballot);
-		else if (ext == "SPV_AMD_shader_explicit_vertex_parameter")
-			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter);
-		else if (ext == "SPV_AMD_shader_trinary_minmax")
-			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_shader_trinary_minmax);
-		else if (ext == "SPV_AMD_gcn_shader")
-			set<SPIRExtension>(id, SPIRExtension::SPV_AMD_gcn_shader);
-		else
-			set<SPIRExtension>(id, SPIRExtension::Unsupported);
-
-		// Other SPIR-V extensions currently not supported.
-
-		break;
-	}
-
-	case OpEntryPoint:
-	{
-		auto itr =
-		    entry_points.insert(make_pair(ops[1], SPIREntryPoint(ops[1], static_cast<ExecutionModel>(ops[0]),
-		                                                         extract_string(spirv, instruction.offset + 2))));
-		auto &e = itr.first->second;
-
-		// Strings need nul-terminator and consume the whole word.
-		uint32_t strlen_words = uint32_t((e.name.size() + 1 + 3) >> 2);
-		e.interface_variables.insert(end(e.interface_variables), ops + strlen_words + 2, ops + instruction.length);
-
-		// Set the name of the entry point in case OpName is not provided later
-		set_name(ops[1], e.name);
-
-		// If we don't have an entry, make the first one our "default".
-		if (!entry_point)
-			entry_point = ops[1];
-		break;
-	}
-
-	case OpExecutionMode:
-	{
-		auto &execution = entry_points[ops[0]];
-		auto mode = static_cast<ExecutionMode>(ops[1]);
-		execution.flags.set(mode);
-
-		switch (mode)
-		{
-		case ExecutionModeInvocations:
-			execution.invocations = ops[2];
-			break;
-
-		case ExecutionModeLocalSize:
-			execution.workgroup_size.x = ops[2];
-			execution.workgroup_size.y = ops[3];
-			execution.workgroup_size.z = ops[4];
-			break;
-
-		case ExecutionModeOutputVertices:
-			execution.output_vertices = ops[2];
-			break;
-
-		default:
-			break;
-		}
-		break;
-	}
-
-	case OpName:
-	{
-		uint32_t id = ops[0];
-		set_name(id, extract_string(spirv, instruction.offset + 1));
-		break;
-	}
-
-	case OpMemberName:
-	{
-		uint32_t id = ops[0];
-		uint32_t member = ops[1];
-		set_member_name(id, member, extract_string(spirv, instruction.offset + 2));
-		break;
-	}
-
-	case OpDecorate:
-	case OpDecorateId:
-	{
-		uint32_t id = ops[0];
-
-		auto decoration = static_cast<Decoration>(ops[1]);
-		if (length >= 3)
-		{
-			meta[id].decoration_word_offset[decoration] = uint32_t(&ops[2] - spirv.data());
-			set_decoration(id, decoration, ops[2]);
-		}
-		else
-			set_decoration(id, decoration);
-
-		break;
-	}
-
-	case OpDecorateStringGOOGLE:
-	{
-		uint32_t id = ops[0];
-		auto decoration = static_cast<Decoration>(ops[1]);
-		set_decoration_string(id, decoration, extract_string(spirv, instruction.offset + 2));
-		break;
-	}
-
-	case OpMemberDecorate:
-	{
-		uint32_t id = ops[0];
-		uint32_t member = ops[1];
-		auto decoration = static_cast<Decoration>(ops[2]);
-		if (length >= 4)
-			set_member_decoration(id, member, decoration, ops[3]);
-		else
-			set_member_decoration(id, member, decoration);
-		break;
-	}
-
-	case OpMemberDecorateStringGOOGLE:
-	{
-		uint32_t id = ops[0];
-		uint32_t member = ops[1];
-		auto decoration = static_cast<Decoration>(ops[2]);
-		set_member_decoration_string(id, member, decoration, extract_string(spirv, instruction.offset + 3));
-		break;
-	}
-
-	// Build up basic types.
-	case OpTypeVoid:
-	{
-		uint32_t id = ops[0];
-		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Void;
-		break;
-	}
-
-	case OpTypeBool:
-	{
-		uint32_t id = ops[0];
-		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Boolean;
-		type.width = 1;
-		break;
-	}
-
-	case OpTypeFloat:
-	{
-		uint32_t id = ops[0];
-		uint32_t width = ops[1];
-		auto &type = set<SPIRType>(id);
-		if (width == 64)
-			type.basetype = SPIRType::Double;
-		else if (width == 32)
-			type.basetype = SPIRType::Float;
-		else if (width == 16)
-			type.basetype = SPIRType::Half;
-		else
-			SPIRV_CROSS_THROW("Unrecognized bit-width of floating point type.");
-		type.width = width;
-		break;
-	}
-
-	case OpTypeInt:
-	{
-		uint32_t id = ops[0];
-		uint32_t width = ops[1];
-		auto &type = set<SPIRType>(id);
-		type.basetype =
-		    ops[2] ? (width > 32 ? SPIRType::Int64 : SPIRType::Int) : (width > 32 ? SPIRType::UInt64 : SPIRType::UInt);
-		type.width = width;
-		break;
-	}
-
-	// Build composite types by "inheriting".
-	// NOTE: The self member is also copied! For pointers and array modifiers this is a good thing
-	// since we can refer to decorations on pointee classes which is needed for UBO/SSBO, I/O blocks in geometry/tess etc.
-	case OpTypeVector:
-	{
-		uint32_t id = ops[0];
-		uint32_t vecsize = ops[2];
-
-		auto &base = get<SPIRType>(ops[1]);
-		auto &vecbase = set<SPIRType>(id);
-
-		vecbase = base;
-		vecbase.vecsize = vecsize;
-		vecbase.self = id;
-		vecbase.parent_type = ops[1];
-		break;
-	}
-
-	case OpTypeMatrix:
-	{
-		uint32_t id = ops[0];
-		uint32_t colcount = ops[2];
-
-		auto &base = get<SPIRType>(ops[1]);
-		auto &matrixbase = set<SPIRType>(id);
-
-		matrixbase = base;
-		matrixbase.columns = colcount;
-		matrixbase.self = id;
-		matrixbase.parent_type = ops[1];
-		break;
-	}
-
-	case OpTypeArray:
-	{
-		uint32_t id = ops[0];
-		auto &arraybase = set<SPIRType>(id);
-
-		uint32_t tid = ops[1];
-		auto &base = get<SPIRType>(tid);
-
-		arraybase = base;
-		arraybase.parent_type = tid;
-
-		uint32_t cid = ops[2];
-		mark_used_as_array_length(cid);
-		auto *c = maybe_get<SPIRConstant>(cid);
-		bool literal = c && !c->specialization;
-
-		arraybase.array_size_literal.push_back(literal);
-		arraybase.array.push_back(literal ? c->scalar() : cid);
-		// Do NOT set arraybase.self!
-		break;
-	}
-
-	case OpTypeRuntimeArray:
-	{
-		uint32_t id = ops[0];
-
-		auto &base = get<SPIRType>(ops[1]);
-		auto &arraybase = set<SPIRType>(id);
-
-		arraybase = base;
-		arraybase.array.push_back(0);
-		arraybase.array_size_literal.push_back(true);
-		arraybase.parent_type = ops[1];
-		// Do NOT set arraybase.self!
-		break;
-	}
-
-	case OpTypeImage:
-	{
-		uint32_t id = ops[0];
-		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Image;
-		type.image.type = ops[1];
-		type.image.dim = static_cast<Dim>(ops[2]);
-		type.image.depth = ops[3] == 1;
-		type.image.arrayed = ops[4] != 0;
-		type.image.ms = ops[5] != 0;
-		type.image.sampled = ops[6];
-		type.image.format = static_cast<ImageFormat>(ops[7]);
-		type.image.access = (length >= 9) ? static_cast<AccessQualifier>(ops[8]) : AccessQualifierMax;
-
-		if (type.image.sampled == 0)
-			SPIRV_CROSS_THROW("OpTypeImage Sampled parameter must not be zero.");
-
-		break;
-	}
-
-	case OpTypeSampledImage:
-	{
-		uint32_t id = ops[0];
-		uint32_t imagetype = ops[1];
-		auto &type = set<SPIRType>(id);
-		type = get<SPIRType>(imagetype);
-		type.basetype = SPIRType::SampledImage;
-		type.self = id;
-		break;
-	}
-
-	case OpTypeSampler:
-	{
-		uint32_t id = ops[0];
-		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Sampler;
-		break;
-	}
-
-	case OpTypePointer:
-	{
-		uint32_t id = ops[0];
-
-		auto &base = get<SPIRType>(ops[2]);
-		auto &ptrbase = set<SPIRType>(id);
-
-		ptrbase = base;
-		if (ptrbase.pointer)
-			SPIRV_CROSS_THROW("Cannot make pointer-to-pointer type.");
-		ptrbase.pointer = true;
-		ptrbase.storage = static_cast<StorageClass>(ops[1]);
-
-		if (ptrbase.storage == StorageClassAtomicCounter)
-			ptrbase.basetype = SPIRType::AtomicCounter;
-
-		ptrbase.parent_type = ops[2];
-
-		// Do NOT set ptrbase.self!
-		break;
-	}
-
-	case OpTypeStruct:
-	{
-		uint32_t id = ops[0];
-		auto &type = set<SPIRType>(id);
-		type.basetype = SPIRType::Struct;
-		for (uint32_t i = 1; i < length; i++)
-			type.member_types.push_back(ops[i]);
-
-		// Check if we have seen this struct type before, with just different
-		// decorations.
-		//
-		// Add workaround for issue #17 as well by looking at OpName for the struct
-		// types, which we shouldn't normally do.
-		// We should not normally have to consider type aliases like this to begin with
-		// however ... glslang issues #304, #307 cover this.
-
-		// For stripped names, never consider struct type aliasing.
-		// We risk declaring the same struct multiple times, but type-punning is not allowed
-		// so this is safe.
-		bool consider_aliasing = !get_name(type.self).empty();
-		if (consider_aliasing)
-		{
-			for (auto &other : global_struct_cache)
-			{
-				if (get_name(type.self) == get_name(other) &&
-				    types_are_logically_equivalent(type, get<SPIRType>(other)))
-				{
-					type.type_alias = other;
-					break;
-				}
-			}
-
-			if (type.type_alias == 0)
-				global_struct_cache.push_back(id);
-		}
-		break;
-	}
-
-	case OpTypeFunction:
-	{
-		uint32_t id = ops[0];
-		uint32_t ret = ops[1];
-
-		auto &func = set<SPIRFunctionPrototype>(id, ret);
-		for (uint32_t i = 2; i < length; i++)
-			func.parameter_types.push_back(ops[i]);
-		break;
-	}
-
-	// Variable declaration
-	// All variables are essentially pointers with a storage qualifier.
-	case OpVariable:
-	{
-		uint32_t type = ops[0];
-		uint32_t id = ops[1];
-		auto storage = static_cast<StorageClass>(ops[2]);
-		uint32_t initializer = length == 4 ? ops[3] : 0;
-
-		if (storage == StorageClassFunction)
-		{
-			if (!current_function)
-				SPIRV_CROSS_THROW("No function currently in scope");
-			current_function->add_local_variable(id);
-		}
-		else if (storage == StorageClassPrivate || storage == StorageClassWorkgroup || storage == StorageClassOutput)
-		{
-			global_variables.push_back(id);
-		}
-
-		auto &var = set<SPIRVariable>(id, type, storage, initializer);
-
-		// hlsl based shaders don't have those decorations. force them and then reset when reading/writing images
-		auto &ttype = get<SPIRType>(type);
-		if (ttype.basetype == SPIRType::BaseType::Image)
-		{
-			set_decoration(id, DecorationNonWritable);
-			set_decoration(id, DecorationNonReadable);
-		}
-
-		if (variable_storage_is_aliased(var))
-			aliased_variables.push_back(var.self);
-
-		break;
-	}
-
-	// OpPhi
-	// OpPhi is a fairly magical opcode.
-	// It selects temporary variables based on which parent block we *came from*.
-	// In high-level languages we can "de-SSA" by creating a function local, and flush out temporaries to this function-local
-	// variable to emulate SSA Phi.
-	case OpPhi:
-	{
-		if (!current_function)
-			SPIRV_CROSS_THROW("No function currently in scope");
-		if (!current_block)
-			SPIRV_CROSS_THROW("No block currently in scope");
-
-		uint32_t result_type = ops[0];
-		uint32_t id = ops[1];
-
-		// Instead of a temporary, create a new function-wide temporary with this ID instead.
-		auto &var = set<SPIRVariable>(id, result_type, spv::StorageClassFunction);
-		var.phi_variable = true;
-
-		current_function->add_local_variable(id);
-
-		for (uint32_t i = 2; i + 2 <= length; i += 2)
-			current_block->phi_variables.push_back({ ops[i], ops[i + 1], id });
-		break;
-	}
-
-	// Constants
-	case OpSpecConstant:
-	case OpConstant:
-	{
-		uint32_t id = ops[1];
-		auto &type = get<SPIRType>(ops[0]);
-
-		if (type.width > 32)
-			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
-		else
-			set<SPIRConstant>(id, ops[0], ops[2], op == OpSpecConstant);
-		break;
-	}
-
-	case OpSpecConstantFalse:
-	case OpConstantFalse:
-	{
-		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], uint32_t(0), op == OpSpecConstantFalse);
-		break;
-	}
-
-	case OpSpecConstantTrue:
-	case OpConstantTrue:
-	{
-		uint32_t id = ops[1];
-		set<SPIRConstant>(id, ops[0], uint32_t(1), op == OpSpecConstantTrue);
-		break;
-	}
-
-	case OpConstantNull:
-	{
-		uint32_t id = ops[1];
-		uint32_t type = ops[0];
-		make_constant_null(id, type);
-		break;
-	}
-
-	case OpSpecConstantComposite:
-	case OpConstantComposite:
-	{
-		uint32_t id = ops[1];
-		uint32_t type = ops[0];
-
-		auto &ctype = get<SPIRType>(type);
-
-		// We can have constants which are structs and arrays.
-		// In this case, our SPIRConstant will be a list of other SPIRConstant ids which we
-		// can refer to.
-		if (ctype.basetype == SPIRType::Struct || !ctype.array.empty())
-		{
-			set<SPIRConstant>(id, type, ops + 2, length - 2, op == OpSpecConstantComposite);
-		}
-		else
-		{
-			uint32_t elements = length - 2;
-			if (elements > 4)
-				SPIRV_CROSS_THROW("OpConstantComposite only supports 1, 2, 3 and 4 elements.");
-
-			SPIRConstant remapped_constant_ops[4];
-			const SPIRConstant *c[4];
-			for (uint32_t i = 0; i < elements; i++)
-			{
-				// Specialization constants operations can also be part of this.
-				// We do not know their value, so any attempt to query SPIRConstant later
-				// will fail. We can only propagate the ID of the expression and use to_expression on it.
-				auto *constant_op = maybe_get<SPIRConstantOp>(ops[2 + i]);
-				if (constant_op)
-				{
-					if (op == OpConstantComposite)
-						SPIRV_CROSS_THROW("Specialization constant operation used in OpConstantComposite.");
-
-					remapped_constant_ops[i].make_null(get<SPIRType>(constant_op->basetype));
-					remapped_constant_ops[i].self = constant_op->self;
-					remapped_constant_ops[i].constant_type = constant_op->basetype;
-					remapped_constant_ops[i].specialization = true;
-					c[i] = &remapped_constant_ops[i];
-				}
-				else
-					c[i] = &get<SPIRConstant>(ops[2 + i]);
-			}
-			set<SPIRConstant>(id, type, c, elements, op == OpSpecConstantComposite);
-		}
-		break;
-	}
-
-	// Functions
-	case OpFunction:
-	{
-		uint32_t res = ops[0];
-		uint32_t id = ops[1];
-		// Control
-		uint32_t type = ops[3];
-
-		if (current_function)
-			SPIRV_CROSS_THROW("Must end a function before starting a new one!");
-
-		current_function = &set<SPIRFunction>(id, res, type);
-		break;
-	}
-
-	case OpFunctionParameter:
-	{
-		uint32_t type = ops[0];
-		uint32_t id = ops[1];
-
-		if (!current_function)
-			SPIRV_CROSS_THROW("Must be in a function!");
-
-		current_function->add_parameter(type, id);
-		set<SPIRVariable>(id, type, StorageClassFunction);
-		break;
-	}
-
-	case OpFunctionEnd:
-	{
-		if (current_block)
-		{
-			// Very specific error message, but seems to come up quite often.
-			SPIRV_CROSS_THROW(
-			    "Cannot end a function before ending the current block.\n"
-			    "Likely cause: If this SPIR-V was created from glslang HLSL, make sure the entry point is valid.");
-		}
-		current_function = nullptr;
-		break;
-	}
-
-	// Blocks
-	case OpLabel:
-	{
-		// OpLabel always starts a block.
-		if (!current_function)
-			SPIRV_CROSS_THROW("Blocks cannot exist outside functions!");
-
-		uint32_t id = ops[0];
-
-		current_function->blocks.push_back(id);
-		if (!current_function->entry_block)
-			current_function->entry_block = id;
-
-		if (current_block)
-			SPIRV_CROSS_THROW("Cannot start a block before ending the current block.");
-
-		current_block = &set<SPIRBlock>(id);
-		break;
-	}
-
-	// Branch instructions end blocks.
-	case OpBranch:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-
-		uint32_t target = ops[0];
-		current_block->terminator = SPIRBlock::Direct;
-		current_block->next_block = target;
-		current_block = nullptr;
-		break;
-	}
-
-	case OpBranchConditional:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-
-		current_block->condition = ops[0];
-		current_block->true_block = ops[1];
-		current_block->false_block = ops[2];
-
-		current_block->terminator = SPIRBlock::Select;
-		current_block = nullptr;
-		break;
-	}
-
-	case OpSwitch:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-
-		if (current_block->merge == SPIRBlock::MergeNone)
-			SPIRV_CROSS_THROW("Switch statement is not structured");
-
-		current_block->terminator = SPIRBlock::MultiSelect;
-
-		current_block->condition = ops[0];
-		current_block->default_block = ops[1];
-
-		for (uint32_t i = 2; i + 2 <= length; i += 2)
-			current_block->cases.push_back({ ops[i], ops[i + 1] });
-
-		// If we jump to next block, make it break instead since we're inside a switch case block at that point.
-		multiselect_merge_targets.insert(current_block->next_block);
-
-		current_block = nullptr;
-		break;
-	}
-
-	case OpKill:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-		current_block->terminator = SPIRBlock::Kill;
-		current_block = nullptr;
-		break;
-	}
-
-	case OpReturn:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-		current_block->terminator = SPIRBlock::Return;
-		current_block = nullptr;
-		break;
-	}
-
-	case OpReturnValue:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-		current_block->terminator = SPIRBlock::Return;
-		current_block->return_value = ops[0];
-		current_block = nullptr;
-		break;
-	}
-
-	case OpUnreachable:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
-		current_block->terminator = SPIRBlock::Unreachable;
-		current_block = nullptr;
-		break;
-	}
-
-	case OpSelectionMerge:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to modify a non-existing block.");
-
-		current_block->next_block = ops[0];
-		current_block->merge = SPIRBlock::MergeSelection;
-		selection_merge_targets.insert(current_block->next_block);
-
-		if (length >= 2)
-		{
-			if (ops[1] & SelectionControlFlattenMask)
-				current_block->hint = SPIRBlock::HintFlatten;
-			else if (ops[1] & SelectionControlDontFlattenMask)
-				current_block->hint = SPIRBlock::HintDontFlatten;
-		}
-		break;
-	}
-
-	case OpLoopMerge:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Trying to modify a non-existing block.");
-
-		current_block->merge_block = ops[0];
-		current_block->continue_block = ops[1];
-		current_block->merge = SPIRBlock::MergeLoop;
-
-		loop_blocks.insert(current_block->self);
-		loop_merge_targets.insert(current_block->merge_block);
-
-		continue_block_to_loop_header[current_block->continue_block] = current_block->self;
-
-		// Don't add loop headers to continue blocks,
-		// which would make it impossible branch into the loop header since
-		// they are treated as continues.
-		if (current_block->continue_block != current_block->self)
-			continue_blocks.insert(current_block->continue_block);
-
-		if (length >= 3)
-		{
-			if (ops[2] & LoopControlUnrollMask)
-				current_block->hint = SPIRBlock::HintUnroll;
-			else if (ops[2] & LoopControlDontUnrollMask)
-				current_block->hint = SPIRBlock::HintDontUnroll;
-		}
-		break;
-	}
-
-	case OpSpecConstantOp:
-	{
-		if (length < 3)
-			SPIRV_CROSS_THROW("OpSpecConstantOp not enough arguments.");
-
-		uint32_t result_type = ops[0];
-		uint32_t id = ops[1];
-		auto spec_op = static_cast<Op>(ops[2]);
-
-		set<SPIRConstantOp>(id, result_type, spec_op, ops + 3, length - 3);
-		break;
-	}
-
-	// Actual opcodes.
-	default:
-	{
-		if (!current_block)
-			SPIRV_CROSS_THROW("Currently no block to insert opcode.");
-
-		current_block->ops.push_back(instruction);
-		break;
-	}
-	}
 }
 
 bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const
@@ -2567,7 +1353,7 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRFunction &func, OpcodeHa
 uint32_t Compiler::type_struct_member_offset(const SPIRType &type, uint32_t index) const
 {
 	// Decoration must be set in valid SPIR-V, otherwise throw.
-	auto &dec = meta[type.self].members.at(index);
+	auto &dec = ir.meta[type.self].members.at(index);
 	if (dec.decoration_flags.get(DecorationOffset))
 		return dec.offset;
 	else
@@ -2578,7 +1364,7 @@ uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_
 {
 	// Decoration must be set in valid SPIR-V, otherwise throw.
 	// ArrayStride is part of the array type not OpMemberDecorate.
-	auto &dec = meta[type.member_types[index]].decoration;
+	auto &dec = ir.meta[type.member_types[index]].decoration;
 	if (dec.decoration_flags.get(DecorationArrayStride))
 		return dec.array_stride;
 	else
@@ -2589,7 +1375,7 @@ uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32
 {
 	// Decoration must be set in valid SPIR-V, otherwise throw.
 	// MatrixStride is part of OpMemberDecorate.
-	auto &dec = meta[type.self].members[index];
+	auto &dec = ir.meta[type.self].members[index];
 	if (dec.decoration_flags.get(DecorationMatrixStride))
 		return dec.matrix_stride;
 	else
@@ -2728,19 +1514,8 @@ std::vector<BufferRange> Compiler::get_active_buffer_ranges(uint32_t id) const
 {
 	std::vector<BufferRange> ranges;
 	BufferAccessHandler handler(*this, ranges, id);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 	return ranges;
-}
-
-// Increase the number of IDs by the specified incremental amount.
-// Returns the value of the first ID available for use in the expanded bound.
-uint32_t Compiler::increase_bound_by(uint32_t incr_amount)
-{
-	auto curr_bound = ids.size();
-	auto new_bound = curr_bound + incr_amount;
-	ids.resize(new_bound);
-	meta.resize(new_bound);
-	return uint32_t(curr_bound);
 }
 
 bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const
@@ -2948,7 +1723,7 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 vector<string> Compiler::get_entry_points() const
 {
 	vector<string> entries;
-	for (auto &entry : entry_points)
+	for (auto &entry : ir.entry_points)
 		entries.push_back(entry.second.orig_name);
 	return entries;
 }
@@ -2956,7 +1731,7 @@ vector<string> Compiler::get_entry_points() const
 vector<EntryPoint> Compiler::get_entry_points_and_stages() const
 {
 	vector<EntryPoint> entries;
-	for (auto &entry : entry_points)
+	for (auto &entry : ir.entry_points)
 		entries.push_back({ entry.second.orig_name, entry.second.model });
 	return entries;
 }
@@ -2978,13 +1753,13 @@ void Compiler::rename_entry_point(const std::string &old_name, const std::string
 void Compiler::set_entry_point(const std::string &name)
 {
 	auto &entry = get_first_entry_point(name);
-	entry_point = entry.self;
+	ir.default_entry_point = entry.self;
 }
 
 void Compiler::set_entry_point(const std::string &name, spv::ExecutionModel model)
 {
 	auto &entry = get_entry_point(name, model);
-	entry_point = entry.self;
+	ir.default_entry_point = entry.self;
 }
 
 SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
@@ -2999,12 +1774,11 @@ const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
 
 SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
 {
-	auto itr =
-	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
-		    return entry.second.orig_name == name;
-	    });
+	auto itr = find_if(
+	    begin(ir.entry_points), end(ir.entry_points),
+	    [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.orig_name == name; });
 
-	if (itr == end(entry_points))
+	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
@@ -3012,12 +1786,11 @@ SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
 
 const SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name) const
 {
-	auto itr =
-	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
-		    return entry.second.orig_name == name;
-	    });
+	auto itr = find_if(
+	    begin(ir.entry_points), end(ir.entry_points),
+	    [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.orig_name == name; });
 
-	if (itr == end(entry_points))
+	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
@@ -3025,12 +1798,12 @@ const SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name) c
 
 SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionModel model)
 {
-	auto itr =
-	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
-		    return entry.second.orig_name == name && entry.second.model == model;
-	    });
+	auto itr = find_if(begin(ir.entry_points), end(ir.entry_points),
+	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		                   return entry.second.orig_name == name && entry.second.model == model;
+	                   });
 
-	if (itr == end(entry_points))
+	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
@@ -3038,12 +1811,12 @@ SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionMode
 
 const SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionModel model) const
 {
-	auto itr =
-	    find_if(begin(entry_points), end(entry_points), [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
-		    return entry.second.orig_name == name && entry.second.model == model;
-	    });
+	auto itr = find_if(begin(ir.entry_points), end(ir.entry_points),
+	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
+		                   return entry.second.orig_name == name && entry.second.model == model;
+	                   });
 
-	if (itr == end(entry_points))
+	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
@@ -3061,12 +1834,12 @@ const string &Compiler::get_cleansed_entry_point_name(const std::string &name, E
 
 const SPIREntryPoint &Compiler::get_entry_point() const
 {
-	return entry_points.find(entry_point)->second;
+	return ir.entry_points.find(ir.default_entry_point)->second;
 }
 
 SPIREntryPoint &Compiler::get_entry_point()
 {
-	return entry_points.find(entry_point)->second;
+	return ir.entry_points.find(ir.default_entry_point)->second;
 }
 
 bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
@@ -3080,7 +1853,7 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	// not emit input/output interfaces properly.
 	// We can assume they only had a single entry point, and single entry point
 	// shaders could easily be assumed to use every interface variable anyways.
-	if (entry_points.size() <= 1)
+	if (ir.entry_points.size() <= 1)
 		return true;
 
 	auto &execution = get_entry_point();
@@ -3219,7 +1992,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 
 	if (itr == end(caller.combined_parameters))
 	{
-		uint32_t id = compiler.increase_bound_by(3);
+		uint32_t id = compiler.ir.increase_bound_by(3);
 		auto type_id = id + 0;
 		auto ptr_type_id = id + 1;
 		auto combined_id = id + 2;
@@ -3242,8 +2015,8 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
-		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
-		auto &old_flags = compiler.meta[sampler_id].decoration.decoration_flags;
+		auto &new_flags = compiler.ir.meta[combined_id].decoration.decoration_flags;
+		auto &old_flags = compiler.ir.meta[sampler_id].decoration.decoration_flags;
 		new_flags.reset();
 		if (old_flags.get(DecorationRelaxedPrecision))
 			new_flags.set(DecorationRelaxedPrecision);
@@ -3327,7 +2100,7 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 		compiler.register_read(id, ptr, true);
 
 		// Other backends might use SPIRAccessChain for this later.
-		compiler.ids[id].set_allow_type_rewrite();
+		compiler.ir.ids[id].set_allow_type_rewrite();
 		break;
 	}
 
@@ -3474,7 +2247,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		if (is_fetch)
 		{
 			// Have to invent the sampled image type.
-			sampled_type = compiler.increase_bound_by(1);
+			sampled_type = compiler.ir.increase_bound_by(1);
 			auto &type = compiler.set<SPIRType>(sampled_type);
 			type = compiler.expression_type(args[2]);
 			type.self = sampled_type;
@@ -3486,7 +2259,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 			sampled_type = args[0];
 		}
 
-		auto id = compiler.increase_bound_by(2);
+		auto id = compiler.ir.increase_bound_by(2);
 		auto type_id = id + 0;
 		auto combined_id = id + 1;
 
@@ -3502,9 +2275,9 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
-		auto &new_flags = compiler.meta[combined_id].decoration.decoration_flags;
+		auto &new_flags = compiler.ir.meta[combined_id].decoration.decoration_flags;
 		// Fetch inherits precision from the image, not sampler (there is no sampler).
-		auto &old_flags = compiler.meta[is_fetch ? image_id : sampler_id].decoration.decoration_flags;
+		auto &old_flags = compiler.ir.meta[is_fetch ? image_id : sampler_id].decoration.decoration_flags;
 		new_flags.reset();
 		if (old_flags.get(DecorationRelaxedPrecision))
 			new_flags.set(DecorationRelaxedPrecision);
@@ -3527,10 +2300,10 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 uint32_t Compiler::build_dummy_sampler_for_combined_images()
 {
 	DummySamplerForCombinedImageHandler handler(*this);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 	if (handler.need_dummy_sampler)
 	{
-		uint32_t offset = increase_bound_by(3);
+		uint32_t offset = ir.increase_bound_by(3);
 		auto type_id = offset + 0;
 		auto ptr_type_id = offset + 1;
 		auto var_id = offset + 2;
@@ -3556,7 +2329,7 @@ uint32_t Compiler::build_dummy_sampler_for_combined_images()
 
 void Compiler::build_combined_image_samplers()
 {
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeFunction)
 		{
@@ -3569,13 +2342,13 @@ void Compiler::build_combined_image_samplers()
 
 	combined_image_samplers.clear();
 	CombinedImageSamplerHandler handler(*this);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 }
 
 vector<SpecializationConstant> Compiler::get_specialization_constants() const
 {
 	vector<SpecializationConstant> spec_consts;
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeConstant)
 		{
@@ -3595,31 +2368,6 @@ SPIRConstant &Compiler::get_constant(uint32_t id)
 const SPIRConstant &Compiler::get_constant(uint32_t id) const
 {
 	return get<SPIRConstant>(id);
-}
-
-// Recursively marks any constants referenced by the specified constant instruction as being used
-// as an array length. The id must be a constant instruction (SPIRConstant or SPIRConstantOp).
-void Compiler::mark_used_as_array_length(uint32_t id)
-{
-	switch (ids[id].get_type())
-	{
-	case TypeConstant:
-		get<SPIRConstant>(id).is_used_as_array_length = true;
-		break;
-
-	case TypeConstantOp:
-	{
-		auto &cop = get<SPIRConstantOp>(id);
-		for (uint32_t arg_id : cop.arguments)
-			mark_used_as_array_length(arg_id);
-	}
-
-	case TypeUndef:
-		return;
-
-	default:
-		SPIRV_CROSS_THROW("Array lengths must be a constant instruction (OpConstant.. or OpSpecConstant...).");
-	}
 }
 
 static bool exists_unaccessed_path_to_return(const CFG &cfg, uint32_t block, const unordered_set<uint32_t> &blocks)
@@ -3781,7 +2529,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::id_is_potential_temporary(uint
 		return false;
 
 	// Temporaries are not created before we start emitting code.
-	return compiler.ids[id].empty() || (compiler.ids[id].get_type() == TypeExpression);
+	return compiler.ir.ids[id].empty() || (compiler.ir.ids[id].get_type() == TypeExpression);
 }
 
 bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint32_t *args, uint32_t length)
@@ -3836,7 +2584,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		e.loaded_from = backing_variable ? backing_variable->self : 0;
 
 		// Other backends might use SPIRAccessChain for this later.
-		compiler.ids[args[1]].set_allow_type_rewrite();
+		compiler.ir.ids[args[1]].set_allow_type_rewrite();
 		break;
 	}
 
@@ -4048,7 +2796,7 @@ void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariab
 		uint32_t static_constant_expression = 0;
 		if (var.initializer)
 		{
-			if (ids[var.initializer].get_type() != TypeConstant)
+			if (ir.ids[var.initializer].get_type() != TypeConstant)
 				continue;
 			static_constant_expression = var.initializer;
 
@@ -4095,7 +2843,7 @@ void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariab
 				continue;
 
 			// Is it a constant expression?
-			if (ids[static_expression_handler.static_expression].get_type() != TypeConstant)
+			if (ir.ids[static_expression_handler.static_expression].get_type() != TypeConstant)
 				continue;
 
 			// We found a LUT!
@@ -4147,7 +2895,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				// The continue block is dominated by the inner part of the loop, which does not make sense in high-level
 				// language output because it will be declared before the body,
 				// so we will have to lift the dominator up to the relevant loop header instead.
-				builder.add_block(continue_block_to_loop_header[block]);
+				builder.add_block(ir.continue_block_to_loop_header[block]);
 
 				// Arrays or structs cannot be loop variables.
 				if (type.vecsize == 1 && type.columns == 1 && type.basetype != SPIRType::Struct && type.array.empty())
@@ -4203,7 +2951,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 			// If a temporary is used in more than one block, we might have to lift continue block
 			// access up to loop header like we did for variables.
 			if (blocks.size() != 1 && is_continue(block))
-				builder.add_block(continue_block_to_loop_header[block]);
+				builder.add_block(ir.continue_block_to_loop_header[block]);
 			else if (blocks.size() != 1 && is_single_block_loop(block))
 			{
 				// Awkward case, because the loop header is also the continue block.
@@ -4261,14 +3009,17 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 
 		uint32_t header = 0;
 
-		// Find the loop header for this block.
-		for (auto b : loop_blocks)
+		// Find the loop header for this block if we are a continue block.
 		{
-			auto &potential_header = get<SPIRBlock>(b);
-			if (potential_header.continue_block == block)
+			auto itr = ir.continue_block_to_loop_header.find(block);
+			if (itr != end(ir.continue_block_to_loop_header))
 			{
-				header = b;
-				break;
+				header = itr->second;
+			}
+			else if (get<SPIRBlock>(block).continue_block == block)
+			{
+				// Also check for self-referential continue block.
+				header = block;
 			}
 		}
 
@@ -4335,28 +3086,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 
 Bitset Compiler::get_buffer_block_flags(uint32_t id) const
 {
-	return get_buffer_block_flags(get<SPIRVariable>(id));
-}
-
-Bitset Compiler::get_buffer_block_flags(const SPIRVariable &var) const
-{
-	auto &type = get<SPIRType>(var.basetype);
-	assert(type.basetype == SPIRType::Struct);
-
-	// Some flags like non-writable, non-readable are actually found
-	// as member decorations. If all members have a decoration set, propagate
-	// the decoration up as a regular variable decoration.
-	Bitset base_flags = meta[var.self].decoration.decoration_flags;
-
-	if (type.member_types.empty())
-		return base_flags;
-
-	Bitset all_members_flags = get_member_decoration_bitset(type.self, 0);
-	for (uint32_t i = 1; i < uint32_t(type.member_types.size()); i++)
-		all_members_flags.merge_and(get_member_decoration_bitset(type.self, i));
-
-	base_flags.merge_or(all_members_flags);
-	return base_flags;
+	return ir.get_buffer_block_flags(get<SPIRVariable>(id));
 }
 
 bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
@@ -4420,7 +3150,7 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		// Only handles variables here.
 		// Builtins which are part of a block are handled in AccessChain.
 		auto *var = compiler.maybe_get<SPIRVariable>(id);
-		auto &decorations = compiler.meta[id].decoration;
+		auto &decorations = compiler.ir.meta[id].decoration;
 		if (var && decorations.builtin)
 		{
 			auto &type = compiler.get<SPIRType>(var->basetype);
@@ -4503,9 +3233,9 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 			{
 				uint32_t index = compiler.get<SPIRConstant>(args[i]).scalar();
 
-				if (index < uint32_t(compiler.meta[type->self].members.size()))
+				if (index < uint32_t(compiler.ir.meta[type->self].members.size()))
 				{
-					auto &decorations = compiler.meta[type->self].members[index];
+					auto &decorations = compiler.ir.meta[type->self].members[index];
 					if (decorations.builtin)
 					{
 						flags.set(decorations.builtin_type);
@@ -4539,7 +3269,7 @@ void Compiler::update_active_builtins()
 	cull_distance_count = 0;
 	clip_distance_count = 0;
 	ActiveBuiltinHandler handler(*this);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 }
 
 // Returns whether this shader uses a builtin of the storage class
@@ -4564,10 +3294,10 @@ bool Compiler::has_active_builtin(BuiltIn builtin, StorageClass storage)
 void Compiler::analyze_image_and_sampler_usage()
 {
 	CombinedImageSamplerDrefHandler dref_handler(*this);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), dref_handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), dref_handler);
 
 	CombinedImageSamplerUsageHandler handler(*this, dref_handler.dref_combined_samplers);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 	comparison_ids = move(handler.comparison_ids);
 	need_subpass_input = handler.need_subpass_input;
 
@@ -4605,8 +3335,8 @@ bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uin
 void Compiler::build_function_control_flow_graphs_and_analyze()
 {
 	CFGBuilder handler(*this);
-	handler.function_cfgs[entry_point].reset(new CFG(*this, get<SPIRFunction>(entry_point)));
-	traverse_all_reachable_opcodes(get<SPIRFunction>(entry_point), handler);
+	handler.function_cfgs[ir.default_entry_point].reset(new CFG(*this, get<SPIRFunction>(ir.default_entry_point)));
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 	function_cfgs = move(handler.function_cfgs);
 
 	for (auto &f : function_cfgs)
@@ -4752,13 +3482,13 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 {
 	// First, check for the proper decoration.
-	if (meta.at(id).hlsl_is_magic_counter_buffer)
+	if (ir.meta.at(id).hlsl_is_magic_counter_buffer)
 		return true;
 
 	// Check for legacy fallback method.
 	// FIXME: This should be deprecated eventually.
 
-	if (meta.at(id).hlsl_magic_counter_buffer_candidate)
+	if (ir.meta.at(id).hlsl_magic_counter_buffer_candidate)
 	{
 		auto *var = maybe_get<SPIRVariable>(id);
 		// Ensure that this is actually a buffer object.
@@ -4772,9 +3502,9 @@ bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const
 {
 	// First, check for the proper decoration.
-	if (meta[id].hlsl_magic_counter_buffer != 0)
+	if (ir.meta[id].hlsl_magic_counter_buffer != 0)
 	{
-		counter_id = meta[id].hlsl_magic_counter_buffer;
+		counter_id = ir.meta[id].hlsl_magic_counter_buffer;
 		return true;
 	}
 
@@ -4785,7 +3515,7 @@ bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id)
 	uint32_t id_bound = get_current_id_bound();
 	for (uint32_t i = 0; i < id_bound; i++)
 	{
-		if (meta[i].hlsl_magic_counter_buffer_candidate && meta[i].hlsl_magic_counter_buffer_name == name)
+		if (ir.meta[i].hlsl_magic_counter_buffer_candidate && ir.meta[i].hlsl_magic_counter_buffer_name == name)
 		{
 			auto *var = maybe_get<SPIRVariable>(i);
 			// Ensure that this is actually a buffer object.
@@ -4807,7 +3537,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 	if (!constant_type.array.empty())
 	{
 		assert(constant_type.parent_type);
-		uint32_t parent_id = increase_bound_by(1);
+		uint32_t parent_id = ir.increase_bound_by(1);
 		make_constant_null(parent_id, constant_type.parent_type);
 
 		if (!constant_type.array_size_literal.back())
@@ -4820,7 +3550,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 	}
 	else if (!constant_type.member_types.empty())
 	{
-		uint32_t member_ids = increase_bound_by(uint32_t(constant_type.member_types.size()));
+		uint32_t member_ids = ir.increase_bound_by(uint32_t(constant_type.member_types.size()));
 		vector<uint32_t> elements(constant_type.member_types.size());
 		for (uint32_t i = 0; i < constant_type.member_types.size(); i++)
 		{
@@ -4838,12 +3568,12 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 
 const std::vector<spv::Capability> &Compiler::get_declared_capabilities() const
 {
-	return declared_capabilities;
+	return ir.declared_capabilities;
 }
 
 const std::vector<std::string> &Compiler::get_declared_extensions() const
 {
-	return declared_extensions;
+	return ir.declared_extensions;
 }
 
 std::string Compiler::get_remapped_declared_block_name(uint32_t id) const
@@ -4855,7 +3585,7 @@ std::string Compiler::get_remapped_declared_block_name(uint32_t id) const
 	{
 		auto &var = get<SPIRVariable>(id);
 		auto &type = get<SPIRType>(var.basetype);
-		auto &block_name = meta[type.self].decoration.alias;
+		auto &block_name = ir.meta[type.self].decoration.alias;
 		return block_name.empty() ? get_block_fallback_name(id) : block_name;
 	}
 }
@@ -4903,7 +3633,7 @@ bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &resul
 Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t index) const
 {
 	Bitset flags;
-	auto &memb = meta[type.self].members;
+	auto &memb = ir.meta[type.self].members;
 	if (index >= memb.size())
 		return flags;
 	auto &dec = memb[index];

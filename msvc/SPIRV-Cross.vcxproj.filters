@@ -36,6 +36,12 @@
     <ClCompile Include="..\spirv_cfg.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\spirv_parser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\spirv_cross_parsed_ir.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="..\spirv_hlsl.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -71,6 +77,12 @@
     <ClInclude Include="..\spirv_cfg.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClCompile Include="..\spirv_parser.hpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\spirv_cross_parsed_ir.hpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
     <ClInclude Include="..\spirv_hlsl.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

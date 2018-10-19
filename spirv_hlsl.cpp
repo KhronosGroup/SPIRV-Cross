@@ -472,7 +472,7 @@ void CompilerHLSL::emit_interface_block_globally(const SPIRVariable &var)
 
 	// The global copies of I/O variables should not contain interpolation qualifiers.
 	// These are emitted inside the interface structs.
-	auto &flags = meta[var.self].decoration.decoration_flags;
+	auto &flags = ir.meta[var.self].decoration.decoration_flags;
 	auto old_flags = flags;
 	flags.reset();
 	statement("static ", variable_decl(var), ";");
@@ -806,7 +806,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 
 	bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
 
-	auto &m = meta[var.self].decoration;
+	auto &m = ir.meta[var.self].decoration;
 	auto name = to_name(var.self);
 	if (use_location_number)
 	{
@@ -992,7 +992,7 @@ void CompilerHLSL::emit_composite_constants()
 	// global constants directly.
 	bool emitted = false;
 
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeConstant)
 		{
@@ -1020,7 +1020,7 @@ void CompilerHLSL::emit_specialization_constants()
 	SpecializationConstant wg_x, wg_y, wg_z;
 	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeConstant)
 		{
@@ -1063,14 +1063,14 @@ void CompilerHLSL::replace_illegal_names()
 		"line", "linear", "matrix", "point", "row_major", "sampler",
 	};
 
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (!is_hidden_variable(var))
 			{
-				auto &m = meta[var.self].decoration;
+				auto &m = ir.meta[var.self].decoration;
 				if (keywords.find(m.alias) != end(keywords))
 					m.alias = join("_", m.alias);
 			}
@@ -1090,14 +1090,14 @@ void CompilerHLSL::emit_resources()
 
 	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
 	// when such variables are instantiated.
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeType)
 		{
 			auto &type = id.get<SPIRType>();
 			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
-			    (!meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
-			     !meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+			    (!ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
+			     !ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
 			{
 				emit_struct(type);
 			}
@@ -1109,7 +1109,7 @@ void CompilerHLSL::emit_resources()
 	bool emitted = false;
 
 	// Output UBOs and SSBOs
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
@@ -1117,8 +1117,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = get<SPIRType>(var.basetype);
 
 			bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
-			bool has_block_flags = meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-			                       meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+			bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
+			                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
 			if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
 			    has_block_flags)
@@ -1130,7 +1130,7 @@ void CompilerHLSL::emit_resources()
 	}
 
 	// Output push constant blocks
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
@@ -1152,7 +1152,7 @@ void CompilerHLSL::emit_resources()
 	}
 
 	// Output Uniform Constants (values, samplers, images, etc).
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
@@ -1176,13 +1176,13 @@ void CompilerHLSL::emit_resources()
 	// Emit builtin input and output variables here.
 	emit_builtin_variables();
 
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+			bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			// Do not emit I/O blocks here.
 			// I/O blocks can be arrayed, so we must deal with them separately to support geometry shaders
@@ -1208,13 +1208,13 @@ void CompilerHLSL::emit_resources()
 	unordered_set<uint32_t> active_outputs;
 	vector<SPIRVariable *> input_variables;
 	vector<SPIRVariable *> output_variables;
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+			bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 				continue;
@@ -1801,13 +1801,13 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 	auto &membertype = get<SPIRType>(member_type_id);
 
 	Bitset memberflags;
-	auto &memb = meta[type.self].members;
+	auto &memb = ir.meta[type.self].members;
 	if (index < memb.size())
 		memberflags = memb[index].decoration_flags;
 
 	string qualifiers;
-	bool is_block = meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-	                meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+	bool is_block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
+	                ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
@@ -1838,7 +1838,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 	if (is_uav)
 	{
-		Bitset flags = get_buffer_block_flags(var);
+		Bitset flags = ir.get_buffer_block_flags(var);
 		bool is_readonly = flags.get(DecorationNonWritable);
 		bool is_coherent = flags.get(DecorationCoherent);
 		add_resource_name(var.self);
@@ -1918,7 +1918,7 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 			flattened_structs.insert(var.self);
 			type.member_name_cache.clear();
 			add_resource_name(var.self);
-			auto &memb = meta[type.self].members;
+			auto &memb = ir.meta[type.self].members;
 
 			statement("cbuffer SPIRV_CROSS_RootConstant_", to_name(var.self),
 			          to_resource_register('b', layout.binding, layout.space));
@@ -1994,7 +1994,7 @@ string CompilerHLSL::to_func_call_arg(uint32_t id)
 
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
 {
-	if (func.self != entry_point)
+	if (func.self != ir.default_entry_point)
 		add_function_overload(func);
 
 	auto &execution = get_entry_point();
@@ -2016,7 +2016,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		decl = "void ";
 	}
 
-	if (func.self == entry_point)
+	if (func.self == ir.default_entry_point)
 	{
 		if (execution.model == ExecutionModelVertex)
 			decl += "vert_main";
@@ -2087,13 +2087,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		arguments.push_back("SPIRV_Cross_Input stage_input");
 
 	// Add I/O blocks as separate arguments with appropriate storage qualifier.
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+			bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 				continue;
@@ -2257,13 +2257,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	});
 
 	// Copy from stage input struct to globals.
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+			bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassInput)
 				continue;
@@ -2307,13 +2307,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		SPIRV_CROSS_THROW("Unsupported shader stage.");
 
 	// Copy block outputs.
-	for (auto &id : ids)
+	for (auto &id : ir.ids)
 	{
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+			bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassOutput)
 				continue;
@@ -2361,13 +2361,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			}
 		});
 
-		for (auto &id : ids)
+		for (auto &id : ir.ids)
 		{
 			if (id.get_type() == TypeVariable)
 			{
 				auto &var = id.get<SPIRVariable>();
 				auto &type = get<SPIRType>(var.basetype);
-				bool block = meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+				bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 				if (var.storage != StorageClassOutput)
 					continue;
@@ -2421,12 +2421,9 @@ void CompilerHLSL::emit_fixup()
 
 void CompilerHLSL::emit_texture_op(const Instruction &i)
 {
-	auto ops = stream(i);
+	auto *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
 	uint32_t length = i.length;
-
-	if (i.offset + length > spirv.size())
-		SPIRV_CROSS_THROW("Compiler::parse() opcode out of range.");
 
 	vector<uint32_t> inherited_expressions;
 
@@ -2886,7 +2883,7 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		{
 			if (has_decoration(type.self, DecorationBufferBlock))
 			{
-				Bitset flags = get_buffer_block_flags(var);
+				Bitset flags = ir.get_buffer_block_flags(var);
 				bool is_readonly = flags.get(DecorationNonWritable);
 				space = is_readonly ? 't' : 'u'; // UAV
 			}
@@ -4550,7 +4547,7 @@ uint32_t CompilerHLSL::remap_num_workgroups_builtin()
 		return 0;
 
 	// Create a new, fake UBO.
-	uint32_t offset = increase_bound_by(4);
+	uint32_t offset = ir.increase_bound_by(4);
 
 	uint32_t uint_type_id = offset;
 	uint32_t block_type_id = offset + 1;
@@ -4582,7 +4579,7 @@ uint32_t CompilerHLSL::remap_num_workgroups_builtin()
 	ptr_type.self = block_type_id;
 
 	set<SPIRVariable>(variable_id, block_pointer_type_id, StorageClassUniform);
-	meta[variable_id].decoration.alias = "SPIRV_Cross_NumWorkgroups";
+	ir.meta[variable_id].decoration.alias = "SPIRV_Cross_NumWorkgroups";
 
 	num_workgroups_builtin = variable_id;
 	return variable_id;
@@ -4635,7 +4632,7 @@ string CompilerHLSL::compile()
 		emit_header();
 		emit_resources();
 
-		emit_function(get<SPIRFunction>(entry_point), Bitset());
+		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 		emit_hlsl_entry_point();
 
 		pass_count++;
