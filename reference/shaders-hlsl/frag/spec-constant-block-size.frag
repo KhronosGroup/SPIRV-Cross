@@ -1,9 +1,10 @@
 static const int Value = 2;
 
-cbuffer _15 : register(b0)
+cbuffer SpecConstArray : register(b0)
 {
     float4 _15_samples[Value] : packoffset(c0);
 };
+
 
 static float4 FragColor;
 static int Index;
