@@ -7,13 +7,14 @@ struct CBO_1
 };
 
 ConstantBuffer<CBO_1> cbo[2][4] : register(b4, space0);
-cbuffer push
+cbuffer PushMe
 {
     float4 push_a : packoffset(c0);
     float4 push_b : packoffset(c1);
     float4 push_c : packoffset(c2);
     float4 push_d : packoffset(c3);
 };
+
 
 static float4 FragColor;
 

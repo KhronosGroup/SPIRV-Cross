@@ -512,6 +512,8 @@ public:
 	// For other names like remapped names for variables, etc, it's generally enough to query the name of the variables
 	// after compiling, block names are an exception to this rule.
 	// ID is the name of a variable as returned by Resource::id, and must be a variable with a Block-like type.
+	//
+	// This also applies to HLSL cbuffers.
 	std::string get_remapped_declared_block_name(uint32_t id) const;
 
 	// For buffer block variables, get the decorations for that variable.
