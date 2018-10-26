@@ -3,7 +3,7 @@
 echo "Building spirv-cross"
 make -j$(nproc)
 
-export PATH="./external/glslang-build/StandAlone:./external/spirv-tools-build/tools:.:$PATH"
+export PATH="./external/glslang-build/output/bin:./external/spirv-tools-build/output/bin:.:$PATH"
 echo "Using glslangValidation in: $(which glslangValidator)."
 echo "Using spirv-opt in: $(which spirv-opt)."
 

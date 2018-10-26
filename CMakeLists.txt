@@ -134,32 +134,45 @@ find_package(PythonInterp)
 if (${PYTHONINTERP_FOUND})
   if (${PYTHON_VERSION_MAJOR} GREATER 2)
 	add_test(NAME spirv-cross-test
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-no-opt
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-no-opt)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-no-opt
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-metal
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-metal-no-opt
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl-no-opt)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl-no-opt
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-hlsl
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-hlsl-no-opt
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl-no-opt)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl-no-opt
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-opt
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --opt
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --opt --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-metal-opt
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal --opt
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --metal --opt --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-msl
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
 	add_test(NAME spirv-cross-test-hlsl-opt
-		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl --opt
-			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl)
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --hlsl --opt --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-hlsl
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
+	add_test(NAME spirv-cross-test-reflection
+		COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --reflect --parallel
+			${CMAKE_CURRENT_SOURCE_DIR}/shaders-reflection
+		WORKING_DIRECTORY $<TARGET_FILE_DIR:spirv-cross>)
   endif()
 else()
   message(WARNING "Testing disabled. Could not find python3. If you have python3 installed try running "
