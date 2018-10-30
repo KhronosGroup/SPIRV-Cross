@@ -1150,6 +1150,12 @@ struct SPIRConstant : IVariant
 	// For composites which are constant arrays, etc.
 	std::vector<uint32_t> subconstants;
 
+	// Non-Vulkan GLSL emits defines for each specialization constant,
+	// and uses them to initialize the constant. This allows the user
+	// to still be able to specialize the value by supplying corresponding
+	// preprocessor directives before compiling the shader.
+	std::string spec_constant_glsl_macro_name;
+
 	SPIRV_CROSS_DECLARE_CLONE(SPIRConstant)
 };
 
