@@ -366,6 +366,14 @@ void CompilerGLSL::find_static_extensions()
 
 			if (type.basetype == SPIRType::Half)
 				require_extension_internal("GL_AMD_gpu_shader_half_float");
+
+			if (type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt)
+			{
+				if (type.width == 8)
+					require_extension_internal("GL_EXT_shader_8bit_storage");
+				else if (type.width == 16)
+					require_extension_internal("GL_AMD_gpu_shader_int16");
+			}
 		}
 	}
 
@@ -516,16 +524,32 @@ void CompilerGLSL::emit_header()
 
 	for (auto &ext : forced_extensions)
 	{
-		if (ext == "GL_AMD_gpu_shader_half_float" && !options.vulkan_semantics)
+		if (ext == "GL_AMD_gpu_shader_half_float")
 		{
 			// Special case, this extension has a potential fallback to another vendor extension in normal GLSL.
 			// GL_AMD_gpu_shader_half_float is a superset, so try that first.
 			statement("#if defined(GL_AMD_gpu_shader_half_float)");
 			statement("#extension GL_AMD_gpu_shader_half_float : require");
-			statement("#elif defined(GL_NV_gpu_shader5)");
-			statement("#extension GL_NV_gpu_shader5 : require");
+			if (!options.vulkan_semantics)
+			{
+				statement("#elif defined(GL_NV_gpu_shader5)");
+				statement("#extension GL_NV_gpu_shader5 : require");
+			}
+			statement("#elif defined(GL_EXT_shader_16bit_storage)");
+			statement("#extension GL_EXT_shader_16bit_storage : require");
 			statement("#else");
 			statement("#error No extension available for FP16.");
+			statement("#endif");
+		}
+		else if (ext == "GL_AMD_gpu_shader_int16")
+		{
+			// GL_AMD_gpu_shader_int16 is a superset, so try that first.
+			statement("#if defined(GL_AMD_gpu_shader_int16)");
+			statement("#extension GL_AMD_gpu_shader_int16 : require");
+			statement("#elif defined(GL_EXT_shader_16bit_storage)");
+			statement("#extension GL_EXT_shader_16bit_storage : require");
+			statement("#else");
+			statement("#error No extension available for Int16.");
 			statement("#endif");
 		}
 		else
@@ -8834,9 +8858,23 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		case SPIRType::Boolean:
 			return "bool";
 		case SPIRType::Int:
-			return backend.basic_int_type;
+			switch (type.width) {
+			case 8:
+				return backend.basic_int8_type;
+			case 16:
+				return backend.basic_int16_type;
+			default:
+				return backend.basic_int_type;
+			}
 		case SPIRType::UInt:
-			return backend.basic_uint_type;
+			switch (type.width) {
+			case 8:
+				return backend.basic_uint8_type;
+			case 16:
+				return backend.basic_uint16_type;
+			default:
+				return backend.basic_uint_type;
+			}
 		case SPIRType::AtomicCounter:
 			return "atomic_uint";
 		case SPIRType::Half:
@@ -8860,9 +8898,23 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		case SPIRType::Boolean:
 			return join("bvec", type.vecsize);
 		case SPIRType::Int:
-			return join("ivec", type.vecsize);
+			switch (type.width) {
+			case 8:
+				return join("i8vec", type.vecsize);
+			case 16:
+				return join("i16vec", type.vecsize);
+			default:
+				return join("ivec", type.vecsize);
+			}
 		case SPIRType::UInt:
-			return join("uvec", type.vecsize);
+			switch (type.width) {
+			case 8:
+				return join("u8vec", type.vecsize);
+			case 16:
+				return join("u16vec", type.vecsize);
+			default:
+				return join("uvec", type.vecsize);
+			}
 		case SPIRType::Half:
 			return join("f16vec", type.vecsize);
 		case SPIRType::Float:

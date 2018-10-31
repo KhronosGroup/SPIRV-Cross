@@ -392,6 +392,10 @@ string CompilerMSL::compile()
 	backend.uint32_t_literal_suffix = true;
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
+	backend.basic_int8_type = "char";
+	backend.basic_uint8_type = "uchar";
+	backend.basic_int16_type = "short";
+	backend.basic_uint16_type = "ushort";
 	backend.discard_literal = "discard_fragment()";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
@@ -4269,10 +4273,10 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "char";
 		break;
 	case SPIRType::Int:
-		type_name = (type.width == 16 ? "short" : "int");
+		type_name = (type.width == 8 ? "char" : (type.width == 16 ? "short" : "int"));
 		break;
 	case SPIRType::UInt:
-		type_name = (type.width == 16 ? "ushort" : "uint");
+		type_name = (type.width == 8 ? "uchar" : (type.width == 16 ? "ushort" : "uint"));
 		break;
 	case SPIRType::Int64:
 		type_name = "long"; // Currently unsupported
