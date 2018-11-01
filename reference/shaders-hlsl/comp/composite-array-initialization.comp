@@ -1,4 +1,7 @@
-static const float X = 4.0f;
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 4.0f
+#endif
+static const float X = SPIRV_CROSS_CONSTANT_ID_0;
 static const uint3 gl_WorkGroupSize = uint3(2u, 1u, 1u);
 
 struct Data

@@ -6,17 +6,14 @@ precision highp int;
 #define SPIRV_CROSS_CONSTANT_ID_1 1.0
 #endif
 const float a = SPIRV_CROSS_CONSTANT_ID_1;
-
 #ifndef SPIRV_CROSS_CONSTANT_ID_2
 #define SPIRV_CROSS_CONSTANT_ID_2 2.0
 #endif
 const float b = SPIRV_CROSS_CONSTANT_ID_2;
-
 #ifndef SPIRV_CROSS_CONSTANT_ID_3
 #define SPIRV_CROSS_CONSTANT_ID_3 3
 #endif
 const int c = SPIRV_CROSS_CONSTANT_ID_3;
-
 const uint _18 = (uint(c) + 0u);
 const int _21 = (-c);
 const int _23 = (~c);
@@ -24,7 +21,6 @@ const int _23 = (~c);
 #define SPIRV_CROSS_CONSTANT_ID_4 4
 #endif
 const int d = SPIRV_CROSS_CONSTANT_ID_4;
-
 const int _26 = (c + d);
 const int _28 = (c - d);
 const int _30 = (c * d);
@@ -33,12 +29,10 @@ const int _32 = (c / d);
 #define SPIRV_CROSS_CONSTANT_ID_5 5u
 #endif
 const uint e = SPIRV_CROSS_CONSTANT_ID_5;
-
 #ifndef SPIRV_CROSS_CONSTANT_ID_6
 #define SPIRV_CROSS_CONSTANT_ID_6 6u
 #endif
 const uint f = SPIRV_CROSS_CONSTANT_ID_6;
-
 const uint _36 = (e / f);
 const int _38 = (c % d);
 const uint _40 = (e % f);
@@ -52,12 +46,10 @@ const int _52 = (c & d);
 #define SPIRV_CROSS_CONSTANT_ID_7 false
 #endif
 const bool g = SPIRV_CROSS_CONSTANT_ID_7;
-
 #ifndef SPIRV_CROSS_CONSTANT_ID_8
 #define SPIRV_CROSS_CONSTANT_ID_8 true
 #endif
 const bool h = SPIRV_CROSS_CONSTANT_ID_8;
-
 const bool _58 = (g || h);
 const bool _60 = (g && h);
 const bool _62 = (!g);

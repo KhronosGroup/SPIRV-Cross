@@ -5,6 +5,11 @@
 
 using namespace metal;
 
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 3
+#endif
+constant int arraySize = SPIRV_CROSS_CONSTANT_ID_0;
+
 struct storage_block
 {
     uint4 baz;

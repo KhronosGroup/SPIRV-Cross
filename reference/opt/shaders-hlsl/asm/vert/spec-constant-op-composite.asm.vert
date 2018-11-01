@@ -1,8 +1,17 @@
-static const int _7 = -10;
-static const uint _8 = 100u;
+#ifndef SPIRV_CROSS_CONSTANT_ID_201
+#define SPIRV_CROSS_CONSTANT_ID_201 -10
+#endif
+static const int _7 = SPIRV_CROSS_CONSTANT_ID_201;
+#ifndef SPIRV_CROSS_CONSTANT_ID_202
+#define SPIRV_CROSS_CONSTANT_ID_202 100u
+#endif
+static const uint _8 = SPIRV_CROSS_CONSTANT_ID_202;
 static const int _20 = (_7 + 2);
 static const uint _25 = (_8 % 5u);
-static const int4 _30 = int4(20, 30, _20, _20);
+#ifndef SPIRV_CROSS_CONSTANT_ID_0
+#define SPIRV_CROSS_CONSTANT_ID_0 int4(20, 30, _20, _20)
+#endif
+static const int4 _30 = SPIRV_CROSS_CONSTANT_ID_0;
 static const int2 _32 = int2(_30.y, _30.x);
 static const int _33 = _30.y;
 

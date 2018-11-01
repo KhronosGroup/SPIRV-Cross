@@ -1025,23 +1025,29 @@ void CompilerHLSL::emit_specialization_constants()
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
-			if (!c.specialization)
-				continue;
+
 			if (c.self == workgroup_size_id)
-				continue;
+			{
+				statement("static const uint3 gl_WorkGroupSize = ",
+				          constant_expression(get<SPIRConstant>(workgroup_size_id)),
+				          ";");
+				emitted = true;
+			}
+			else if (c.specialization)
+			{
+				auto &type = get<SPIRType>(c.constant_type);
+				auto name = to_name(c.self);
 
-			auto &type = get<SPIRType>(c.constant_type);
-			auto name = to_name(c.self);
+				// HLSL does not support specialization constants, so fallback to macros.
+				c.specialization_constant_macro_name =
+						constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
 
-			// HLSL does not support specialization constants, so fallback to macros.
-			c.specialization_constant_macro_name =
-					constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
-
-			statement("#ifndef ", c.specialization_constant_macro_name);
-			statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));
-			statement("#endif");
-			statement("static const ", variable_decl(type, name), " = ", c.specialization_constant_macro_name, ";");
-			emitted = true;
+				statement("#ifndef ", c.specialization_constant_macro_name);
+				statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));
+				statement("#endif");
+				statement("static const ", variable_decl(type, name), " = ", c.specialization_constant_macro_name, ";");
+				emitted = true;
+			}
 		}
 		else if (id.get_type() == TypeConstantOp)
 		{
@@ -1050,13 +1056,6 @@ void CompilerHLSL::emit_specialization_constants()
 			auto name = to_name(c.self);
 			statement("static const ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
 		}
-	}
-
-	if (workgroup_size_id)
-	{
-		statement("static const uint3 gl_WorkGroupSize = ", constant_expression(get<SPIRConstant>(workgroup_size_id)),
-		          ";");
-		emitted = true;
 	}
 
 	if (emitted)

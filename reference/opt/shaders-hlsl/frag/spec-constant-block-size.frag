@@ -1,4 +1,7 @@
-static const int Value = 2;
+#ifndef SPIRV_CROSS_CONSTANT_ID_10
+#define SPIRV_CROSS_CONSTANT_ID_10 2
+#endif
+static const int Value = SPIRV_CROSS_CONSTANT_ID_10;
 
 cbuffer SpecConstArray : register(b0)
 {

@@ -155,7 +155,6 @@ public:
 		uint32_t aux_buffer_index = 0;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
-		bool resolve_specialized_array_lengths = true;
 		bool swizzle_texture_samples = false;
 
 		bool is_ios()
