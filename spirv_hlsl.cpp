@@ -1033,7 +1033,14 @@ void CompilerHLSL::emit_specialization_constants()
 			auto &type = get<SPIRType>(c.constant_type);
 			auto name = to_name(c.self);
 
-			statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");
+			// HLSL does not support specialization constants, so fallback to macros.
+			c.specialization_constant_macro_name =
+					constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+
+			statement("#ifndef ", c.specialization_constant_macro_name);
+			statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));
+			statement("#endif");
+			statement("static const ", variable_decl(type, name), " = ", c.specialization_constant_macro_name, ";");
 			emitted = true;
 		}
 		else if (id.get_type() == TypeConstantOp)
@@ -2142,14 +2149,11 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		uint32_t y = execution.workgroup_size.y;
 		uint32_t z = execution.workgroup_size.z;
 
-		if (wg_x.id)
-			x = get<SPIRConstant>(wg_x.id).scalar();
-		if (wg_y.id)
-			y = get<SPIRConstant>(wg_y.id).scalar();
-		if (wg_z.id)
-			z = get<SPIRConstant>(wg_z.id).scalar();
+		auto x_expr = wg_x.id ? get<SPIRConstant>(wg_x.id).specialization_constant_macro_name : to_string(x);
+		auto y_expr = wg_y.id ? get<SPIRConstant>(wg_y.id).specialization_constant_macro_name : to_string(y);
+		auto z_expr = wg_z.id ? get<SPIRConstant>(wg_z.id).specialization_constant_macro_name : to_string(z);
 
-		statement("[numthreads(", x, ", ", y, ", ", z, ")]");
+		statement("[numthreads(", x_expr, ", ", y_expr, ", ", z_expr, ")]");
 		break;
 	}
 	case ExecutionModelFragment:
