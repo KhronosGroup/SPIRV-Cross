@@ -534,21 +534,6 @@ void CompilerMSL::localize_global_variables()
 	}
 }
 
-// Metal does not allow dynamic array lengths.
-// Turn off specialization of any constants that are used for array lengths.
-void CompilerMSL::resolve_specialized_array_lengths()
-{
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeConstant)
-		{
-			auto &c = id.get<SPIRConstant>();
-			if (c.is_used_as_array_length)
-				c.specialization = false;
-		}
-	}
-}
-
 // For any global variable accessed directly by a function,
 // extract that variable and add it as an argument to that function.
 void CompilerMSL::extract_global_variables_from_functions()
@@ -1024,8 +1009,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						if (type.array.size() != 1)
 							SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
 
-						elem_cnt = type.array_size_literal.back() ? type.array.back() :
-						                                            get<SPIRConstant>(type.array.back()).scalar();
+						elem_cnt = to_array_size_literal(type);
 					}
 
 					auto *usable_type = &type;
@@ -1199,14 +1183,13 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 	MemberSorter member_sorter(ib_type, ir.meta[ib_type_id], MemberSorter::Offset);
 	member_sorter.sort();
 
-	uint32_t curr_offset;
 	uint32_t mbr_cnt = uint32_t(ib_type.member_types.size());
 
 	// Test the alignment of each member, and if a member should be closer to the previous
 	// member than the default spacing expects, it is likely that the previous member is in
 	// a packed format. If so, and the previous member is packable, pack it.
 	// For example...this applies to any 3-element vector that is followed by a scalar.
-	curr_offset = 0;
+	uint32_t curr_offset = 0;
 	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
 	{
 		if (is_member_packable(ib_type, mbr_idx))
@@ -1228,7 +1211,9 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 		}
 
 		// Increment the current offset to be positioned immediately after the current member.
-		curr_offset = mbr_offset + uint32_t(get_declared_struct_member_size(ib_type, mbr_idx));
+		// Don't do this for the last member since it can be unsized, and it is not relevant for padding purposes here.
+		if (mbr_idx + 1 < mbr_cnt)
+			curr_offset = mbr_offset + uint32_t(get_declared_struct_member_size(ib_type, mbr_idx));
 	}
 }
 
@@ -1259,7 +1244,7 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 		uint32_t md_elem_cnt = 1;
 		size_t last_elem_idx = mbr_type.array.size() - 1;
 		for (uint32_t i = 0; i < last_elem_idx; i++)
-			md_elem_cnt *= max(to_array_size_literal(mbr_type, i), 1U);
+			md_elem_cnt *= max(to_array_size_literal(mbr_type, i), 1u);
 
 		uint32_t unpacked_array_stride = unpacked_mbr_size * md_elem_cnt;
 		uint32_t array_stride = type_struct_member_array_stride(ib_type, index);
@@ -3909,8 +3894,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				// Metal doesn't directly support this, so we must expand the
 				// array. We'll declare a local array to hold these elements
 				// later.
-				uint32_t array_size =
-				    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+				uint32_t array_size = to_array_size_literal(type);
 
 				if (array_size == 0)
 					SPIRV_CROSS_THROW("Unsized arrays of buffers are not supported in MSL.");
@@ -4332,8 +4316,7 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 			SPIRV_CROSS_THROW("Arrays of arrays of samplers are not supported in MSL.");
 
 		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
-		uint32_t array_size =
-		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		uint32_t array_size = to_array_size_literal(type);
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
 
@@ -4375,8 +4358,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("Arrays of arrays of textures are not supported in MSL.");
 
 		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
-		uint32_t array_size =
-		    type.array_size_literal.back() ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+		uint32_t array_size = to_array_size_literal(type);
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
 
@@ -4757,9 +4739,7 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 		// Runtime arrays will have zero size so force to min of one.
 		if (!type.array.empty())
 		{
-			bool array_size_literal = type.array_size_literal.back();
-			uint32_t array_size =
-			    array_size_literal ? type.array.back() : get<SPIRConstant>(type.array.back()).scalar();
+			uint32_t array_size = to_array_size_literal(type);
 			return type_struct_member_array_stride(struct_type, index) * max(array_size, 1u);
 		}
 
