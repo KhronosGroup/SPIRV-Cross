@@ -1710,6 +1710,11 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), variable_decl(var), ";");
 }
 
+string CompilerGLSL::constant_value_macro_name(uint32_t id)
+{
+	return join("SPIRV_CROSS_CONSTANT_ID_", std::to_string(id));
+}
+
 void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constant)
 {
 	auto &type = get<SPIRType>(constant.basetype);
@@ -1735,8 +1740,20 @@ void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 	// Only scalars have constant IDs.
 	if (has_decoration(constant.self, DecorationSpecId))
 	{
-		statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
-		          variable_decl(type, name), " = ", constant_expression(constant), ";");
+		if (options.vulkan_semantics)
+		{
+			statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
+			          variable_decl(type, name), " = ", constant_expression(constant), ";");
+		}
+		else
+		{
+			const string &macro_name = constant.spec_constant_glsl_macro_name;
+			statement("#ifndef ", macro_name);
+			statement("#define ", macro_name, " ", constant_expression(constant));
+			statement("#endif");
+			statement("const ", variable_decl(type, name), " = ", macro_name, ";");
+			statement("");
+		}
 	}
 	else
 	{
@@ -2144,15 +2161,20 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &c = id.get<SPIRConstant>();
 
-			bool needs_declaration = (c.specialization && options.vulkan_semantics) || c.is_used_as_lut;
+			bool needs_declaration = (c.specialization) || c.is_used_as_lut;
 
 			if (needs_declaration)
 			{
+				if (!options.vulkan_semantics)
+				{
+					c.spec_constant_glsl_macro_name =
+					    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+				}
 				emit_constant(c);
 				emitted = true;
 			}
 		}
-		else if (options.vulkan_semantics && id.get_type() == TypeConstantOp)
+		else if (id.get_type() == TypeConstantOp)
 		{
 			emit_specialization_constant_op(id.get<SPIRConstantOp>());
 			emitted = true;
@@ -2494,7 +2516,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 		auto &dec = ir.meta[c.self].decoration;
 		if (dec.builtin)
 			return builtin_to_glsl(dec.builtin_type, StorageClassGeneric);
-		else if (c.specialization && options.vulkan_semantics)
+		else if (c.specialization)
 			return to_name(id);
 		else if (c.is_used_as_lut)
 			return to_name(id);
@@ -2507,10 +2529,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 	}
 
 	case TypeConstantOp:
-		if (options.vulkan_semantics)
 			return to_name(id);
-		else
-			return constant_op_expression(get<SPIRConstantOp>(id));
 
 	case TypeVariable:
 	{
@@ -2760,7 +2779,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		for (auto &elem : c.subconstants)
 		{
 			auto &subc = get<SPIRConstant>(elem);
-			if (subc.specialization && options.vulkan_semantics)
+			if (subc.specialization)
 				res += to_name(elem);
 			else
 				res += constant_expression(subc);
@@ -2781,7 +2800,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		string res = type_to_glsl(get<SPIRType>(c.constant_type)) + "(";
 		for (uint32_t col = 0; col < c.columns(); col++)
 		{
-			if (options.vulkan_semantics && c.specialization_constant_id(col) != 0)
+			if (c.specialization_constant_id(col) != 0)
 				res += to_name(c.specialization_constant_id(col));
 			else
 				res += constant_expression_vector(c, col);
@@ -3012,7 +3031,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		// Cannot use constant splatting if we have specialization constants somewhere in the vector.
 		for (uint32_t i = 0; i < c.vector_size(); i++)
 		{
-			if (options.vulkan_semantics && c.specialization_constant_id(vector, i) != 0)
+			if (c.specialization_constant_id(vector, i) != 0)
 			{
 				splat = false;
 				swizzle_splat = false;
@@ -3066,7 +3085,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 					res += convert_half_to_string(c, vector, i);
@@ -3088,7 +3107,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 					res += convert_float_to_string(c, vector, i);
@@ -3110,7 +3129,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 					res += convert_double_to_string(c, vector, i);
@@ -3134,7 +3153,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
@@ -3164,7 +3183,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
@@ -3199,7 +3218,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
@@ -3229,7 +3248,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 					res += convert_to_string(c.scalar_i32(vector, i));
@@ -3246,7 +3265,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		{
 			for (uint32_t i = 0; i < c.vector_size(); i++)
 			{
-				if (options.vulkan_semantics && c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 					res += c.scalar(vector, i) ? "true" : "false";
@@ -6913,7 +6932,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		GLSL_BOP_CAST(^, type);
+		GLSL_BOP_CAST (^, type);
 		break;
 	}
 
