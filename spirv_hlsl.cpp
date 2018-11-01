@@ -1054,6 +1054,7 @@ void CompilerHLSL::emit_specialization_constants()
 			auto &type = get<SPIRType>(c.basetype);
 			auto name = to_name(c.self);
 			statement("static const ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
+			emitted = true;
 		}
 	}
 
