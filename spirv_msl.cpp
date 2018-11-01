@@ -443,11 +443,6 @@ string CompilerMSL::compile()
 	// Mark any non-stage-in structs to be tightly packed.
 	mark_packable_structs();
 
-	// Metal does not allow dynamic array lengths.
-	// Resolve any specialization constants that are used for array lengths.
-	if (msl_options.resolve_specialized_array_lengths)
-		resolve_specialized_array_lengths();
-
 	uint32_t pass_count = 0;
 	do
 	{
@@ -1927,35 +1922,57 @@ void CompilerMSL::emit_specialization_constants()
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
-			if (!c.specialization)
-				continue;
 
-			// If WorkGroupSize is a specialization constant, it will be declared explicitly below.
 			if (c.self == workgroup_size_id)
-				continue;
-
-			auto &type = get<SPIRType>(c.constant_type);
-			string sc_type_name = type_to_glsl(type);
-			string sc_name = to_name(c.self);
-			string sc_tmp_name = sc_name + "_tmp";
-
-			// Function constants are only supported in MSL 1.2 and later.
-			// If we don't support it just declare the "default" directly.
-			// This "default" value can be overridden to the true specialization constant by the API user.
-			if (msl_options.supports_msl_version(1, 2) && has_decoration(c.self, DecorationSpecId))
 			{
-				uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
-				// Only scalar, non-composite values can be function constants.
-				statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(", constant_id, ")]];");
-				statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name,
-				          ") ? ", sc_tmp_name, " : ", constant_expression(c), ";");
+				// TODO: This can be expressed as a [[threads_per_threadgroup]] input semantic, but we need to know
+				// the work group size at compile time in SPIR-V, and [[threads_per_threadgroup]] would need to be passed around as a global.
+				// The work group size may be a specialization constant.
+				statement("constant uint3 ", builtin_to_glsl(BuiltInWorkgroupSize, StorageClassWorkgroup), " = ",
+				          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+				emitted = true;
 			}
-			else
+			else if (c.specialization)
 			{
-				// Composite specialization constants must be built from other specialization constants.
-				statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(c), ";");
+				auto &type = get<SPIRType>(c.constant_type);
+				string sc_type_name = type_to_glsl(type);
+				string sc_name = to_name(c.self);
+				string sc_tmp_name = sc_name + "_tmp";
+
+				// Function constants are only supported in MSL 1.2 and later.
+				// If we don't support it just declare the "default" directly.
+				// This "default" value can be overridden to the true specialization constant by the API user.
+				// Specialization constants which are used as array length expressions cannot be function constants in MSL,
+				// so just fall back to macros.
+				if (msl_options.supports_msl_version(1, 2) && has_decoration(c.self, DecorationSpecId) &&
+				    !c.is_used_as_array_length)
+				{
+					uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
+					// Only scalar, non-composite values can be function constants.
+					statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(", constant_id,
+					          ")]];");
+					statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name,
+					          ") ? ", sc_tmp_name, " : ", constant_expression(c), ";");
+				}
+				else if (has_decoration(c.self, DecorationSpecId))
+				{
+					// Fallback to macro overrides.
+					c.specialization_constant_macro_name =
+					    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+
+					statement("#ifndef ", c.specialization_constant_macro_name);
+					statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));
+					statement("#endif");
+					statement("constant ", sc_type_name, " ", sc_name, " = ", c.specialization_constant_macro_name,
+					          ";");
+				}
+				else
+				{
+					// Composite specialization constants must be built from other specialization constants.
+					statement("constant ", sc_type_name, " ", sc_name, " = ", constant_expression(c), ";");
+				}
+				emitted = true;
 			}
-			emitted = true;
 		}
 		else if (id.get_type() == TypeConstantOp)
 		{
@@ -1965,16 +1982,6 @@ void CompilerMSL::emit_specialization_constants()
 			statement("constant ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
 			emitted = true;
 		}
-	}
-
-	// TODO: This can be expressed as a [[threads_per_threadgroup]] input semantic, but we need to know
-	// the work group size at compile time in SPIR-V, and [[threads_per_threadgroup]] would need to be passed around as a global.
-	// The work group size may be a specialization constant.
-	if (workgroup_size_id)
-	{
-		statement("constant uint3 ", builtin_to_glsl(BuiltInWorkgroupSize, StorageClassWorkgroup), " = ",
-		          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
-		emitted = true;
 	}
 
 	if (emitted)

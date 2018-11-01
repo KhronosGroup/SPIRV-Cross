@@ -459,6 +459,42 @@ std::string CompilerGLSL::get_partial_source()
 	return buffer ? buffer->str() : "No compiled source available yet.";
 }
 
+void CompilerGLSL::build_workgroup_size(vector<string> &arguments, const SpecializationConstant &wg_x,
+                                        const SpecializationConstant &wg_y, const SpecializationConstant &wg_z)
+{
+	auto &execution = get_entry_point();
+
+	if (wg_x.id)
+	{
+		if (options.vulkan_semantics)
+			arguments.push_back(join("local_size_x_id = ", wg_x.constant_id));
+		else
+			arguments.push_back(join("local_size_x = ", get<SPIRConstant>(wg_x.id).specialization_constant_macro_name));
+	}
+	else
+		arguments.push_back(join("local_size_x = ", execution.workgroup_size.x));
+
+	if (wg_y.id)
+	{
+		if (options.vulkan_semantics)
+			arguments.push_back(join("local_size_y_id = ", wg_y.constant_id));
+		else
+			arguments.push_back(join("local_size_y = ", get<SPIRConstant>(wg_y.id).specialization_constant_macro_name));
+	}
+	else
+		arguments.push_back(join("local_size_y = ", execution.workgroup_size.y));
+
+	if (wg_z.id)
+	{
+		if (options.vulkan_semantics)
+			arguments.push_back(join("local_size_z_id = ", wg_z.constant_id));
+		else
+			arguments.push_back(join("local_size_z = ", get<SPIRConstant>(wg_z.id).specialization_constant_macro_name));
+	}
+	else
+		arguments.push_back(join("local_size_z = ", execution.workgroup_size.z));
+}
+
 void CompilerGLSL::emit_header()
 {
 	auto &execution = get_entry_point();
@@ -564,35 +600,10 @@ void CompilerGLSL::emit_header()
 			SpecializationConstant wg_x, wg_y, wg_z;
 			get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
-			if (wg_x.id)
-			{
-				if (options.vulkan_semantics)
-					inputs.push_back(join("local_size_x_id = ", wg_x.constant_id));
-				else
-					inputs.push_back(join("local_size_x = ", get<SPIRConstant>(wg_x.id).scalar()));
-			}
-			else
-				inputs.push_back(join("local_size_x = ", execution.workgroup_size.x));
-
-			if (wg_y.id)
-			{
-				if (options.vulkan_semantics)
-					inputs.push_back(join("local_size_y_id = ", wg_y.constant_id));
-				else
-					inputs.push_back(join("local_size_y = ", get<SPIRConstant>(wg_y.id).scalar()));
-			}
-			else
-				inputs.push_back(join("local_size_y = ", execution.workgroup_size.y));
-
-			if (wg_z.id)
-			{
-				if (options.vulkan_semantics)
-					inputs.push_back(join("local_size_z_id = ", wg_z.constant_id));
-				else
-					inputs.push_back(join("local_size_z = ", get<SPIRConstant>(wg_z.id).scalar()));
-			}
-			else
-				inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
+			// If there are any spec constants on legacy GLSL, defer declaration, we need to set up macro
+			// declarations before we can emit the work group size.
+			if (options.vulkan_semantics || ((wg_x.id == 0) && (wg_y.id == 0) && (wg_z.id == 0)))
+				build_workgroup_size(inputs, wg_x, wg_y, wg_z);
 		}
 		else
 		{
@@ -1712,7 +1723,7 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 
 string CompilerGLSL::constant_value_macro_name(uint32_t id)
 {
-	return join("SPIRV_CROSS_CONSTANT_ID_", std::to_string(id));
+	return join("SPIRV_CROSS_CONSTANT_ID_", id);
 }
 
 void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constant)
@@ -1730,10 +1741,24 @@ void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 	SpecializationConstant wg_x, wg_y, wg_z;
 	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
-	if (constant.self == workgroup_size_id || constant.self == wg_x.id || constant.self == wg_y.id ||
-	    constant.self == wg_z.id)
+	// This specialization constant is implicitly declared by emitting layout() in;
+	if (constant.self == workgroup_size_id)
+		return;
+
+	// These specialization constants are implicitly declared by emitting layout() in;
+	// In legacy GLSL, we will still need to emit macros for these, so a layout() in; declaration
+	// later can use macro overrides for work group size.
+	bool is_workgroup_size_constant = constant.self == wg_x.id || constant.self == wg_y.id || constant.self == wg_z.id;
+
+	if (options.vulkan_semantics && is_workgroup_size_constant)
 	{
-		// These specialization constants are implicitly declared by emitting layout() in;
+		// Vulkan GLSL does not need to declare workgroup spec constants explicitly, it is handled in layout().
+		return;
+	}
+	else if (!options.vulkan_semantics && is_workgroup_size_constant &&
+	         !has_decoration(constant.self, DecorationSpecId))
+	{
+		// Only bother declaring a workgroup size if it is actually a specialization constant, because we need macros.
 		return;
 	}
 
@@ -1747,12 +1772,14 @@ void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 		}
 		else
 		{
-			const string &macro_name = constant.spec_constant_glsl_macro_name;
+			const string &macro_name = constant.specialization_constant_macro_name;
 			statement("#ifndef ", macro_name);
 			statement("#define ", macro_name, " ", constant_expression(constant));
 			statement("#endif");
-			statement("const ", variable_decl(type, name), " = ", macro_name, ";");
-			statement("");
+
+			// For workgroup size constants, only emit the macros.
+			if (!is_workgroup_size_constant)
+				statement("const ", variable_decl(type, name), " = ", macro_name, ";");
 		}
 	}
 	else
@@ -2161,13 +2188,13 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &c = id.get<SPIRConstant>();
 
-			bool needs_declaration = (c.specialization) || c.is_used_as_lut;
+			bool needs_declaration = c.specialization || c.is_used_as_lut;
 
 			if (needs_declaration)
 			{
-				if (!options.vulkan_semantics)
+				if (!options.vulkan_semantics && c.specialization)
 				{
-					c.spec_constant_glsl_macro_name =
+					c.specialization_constant_macro_name =
 					    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
 				}
 				emit_constant(c);
@@ -2183,6 +2210,25 @@ void CompilerGLSL::emit_resources()
 
 	if (emitted)
 		statement("");
+
+	// If we needed to declare work group size late, check here.
+	// If the work group size depends on a specialization constant, we need to declare the layout() block
+	// after constants (and their macros) have been declared.
+	if (execution.model == ExecutionModelGLCompute && !options.vulkan_semantics &&
+	    execution.workgroup_size.constant != 0)
+	{
+		SpecializationConstant wg_x, wg_y, wg_z;
+		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+
+		if ((wg_x.id != 0) || (wg_y.id != 0) || (wg_z.id != 0))
+		{
+			vector<string> inputs;
+			build_workgroup_size(inputs, wg_x, wg_y, wg_z);
+			statement("layout(", merge(inputs), ") in;");
+			statement("");
+		}
+	}
+
 	emitted = false;
 
 	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
@@ -2529,7 +2575,7 @@ string CompilerGLSL::to_expression(uint32_t id)
 	}
 
 	case TypeConstantOp:
-			return to_name(id);
+		return to_name(id);
 
 	case TypeVariable:
 	{
@@ -6932,7 +6978,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
-		GLSL_BOP_CAST (^, type);
+		GLSL_BOP_CAST(^, type);
 		break;
 	}
 

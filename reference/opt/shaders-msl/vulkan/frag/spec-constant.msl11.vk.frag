@@ -3,8 +3,14 @@
 
 using namespace metal;
 
-constant float a = 1.0;
-constant float b = 2.0;
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 1.0
+#endif
+constant float a = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 2.0
+#endif
+constant float b = SPIRV_CROSS_CONSTANT_ID_2;
 
 struct main0_out
 {

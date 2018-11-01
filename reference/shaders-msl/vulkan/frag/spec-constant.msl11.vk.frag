@@ -3,19 +3,37 @@
 
 using namespace metal;
 
-constant float a = 1.0;
-constant float b = 2.0;
-constant int c = 3;
+#ifndef SPIRV_CROSS_CONSTANT_ID_1
+#define SPIRV_CROSS_CONSTANT_ID_1 1.0
+#endif
+constant float a = SPIRV_CROSS_CONSTANT_ID_1;
+#ifndef SPIRV_CROSS_CONSTANT_ID_2
+#define SPIRV_CROSS_CONSTANT_ID_2 2.0
+#endif
+constant float b = SPIRV_CROSS_CONSTANT_ID_2;
+#ifndef SPIRV_CROSS_CONSTANT_ID_3
+#define SPIRV_CROSS_CONSTANT_ID_3 3
+#endif
+constant int c = SPIRV_CROSS_CONSTANT_ID_3;
 constant uint _18 = (uint(c) + 0u);
 constant int _21 = (-c);
 constant int _23 = (~c);
-constant int d = 4;
+#ifndef SPIRV_CROSS_CONSTANT_ID_4
+#define SPIRV_CROSS_CONSTANT_ID_4 4
+#endif
+constant int d = SPIRV_CROSS_CONSTANT_ID_4;
 constant int _26 = (c + d);
 constant int _28 = (c - d);
 constant int _30 = (c * d);
 constant int _32 = (c / d);
-constant uint e = 5u;
-constant uint f = 6u;
+#ifndef SPIRV_CROSS_CONSTANT_ID_5
+#define SPIRV_CROSS_CONSTANT_ID_5 5u
+#endif
+constant uint e = SPIRV_CROSS_CONSTANT_ID_5;
+#ifndef SPIRV_CROSS_CONSTANT_ID_6
+#define SPIRV_CROSS_CONSTANT_ID_6 6u
+#endif
+constant uint f = SPIRV_CROSS_CONSTANT_ID_6;
 constant uint _36 = (e / f);
 constant int _38 = (c % d);
 constant uint _40 = (e % f);
@@ -25,8 +43,14 @@ constant int _46 = (c << d);
 constant int _48 = (c | d);
 constant int _50 = (c ^ d);
 constant int _52 = (c & d);
-constant bool g = false;
-constant bool h = true;
+#ifndef SPIRV_CROSS_CONSTANT_ID_7
+#define SPIRV_CROSS_CONSTANT_ID_7 false
+#endif
+constant bool g = SPIRV_CROSS_CONSTANT_ID_7;
+#ifndef SPIRV_CROSS_CONSTANT_ID_8
+#define SPIRV_CROSS_CONSTANT_ID_8 true
+#endif
+constant bool h = SPIRV_CROSS_CONSTANT_ID_8;
 constant bool _58 = (g || h);
 constant bool _60 = (g && h);
 constant bool _62 = (!g);

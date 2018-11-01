@@ -4,7 +4,6 @@
 #define SPIRV_CROSS_CONSTANT_ID_0 10u
 #endif
 const uint s = SPIRV_CROSS_CONSTANT_ID_0;
-
 const bool _13 = (s > 20u);
 const uint _16 = _13 ? 30u : 50u;
 

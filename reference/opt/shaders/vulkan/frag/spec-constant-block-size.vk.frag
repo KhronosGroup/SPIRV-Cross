@@ -7,7 +7,6 @@ precision highp int;
 #endif
 const int Value = SPIRV_CROSS_CONSTANT_ID_10;
 
-
 layout(binding = 0, std140) uniform SpecConstArray
 {
     vec4 samples[Value];
