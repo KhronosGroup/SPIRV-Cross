@@ -1029,8 +1029,7 @@ void CompilerHLSL::emit_specialization_constants()
 			if (c.self == workgroup_size_id)
 			{
 				statement("static const uint3 gl_WorkGroupSize = ",
-				          constant_expression(get<SPIRConstant>(workgroup_size_id)),
-				          ";");
+				          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
 				emitted = true;
 			}
 			else if (c.specialization)
@@ -1040,7 +1039,7 @@ void CompilerHLSL::emit_specialization_constants()
 
 				// HLSL does not support specialization constants, so fallback to macros.
 				c.specialization_constant_macro_name =
-						constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+				    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
 
 				statement("#ifndef ", c.specialization_constant_macro_name);
 				statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));

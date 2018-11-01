@@ -1944,7 +1944,8 @@ void CompilerMSL::emit_specialization_constants()
 				// This "default" value can be overridden to the true specialization constant by the API user.
 				// Specialization constants which are used as array length expressions cannot be function constants in MSL,
 				// so just fall back to macros.
-				if (msl_options.supports_msl_version(1, 2) && has_decoration(c.self, DecorationSpecId) && !c.is_used_as_array_length)
+				if (msl_options.supports_msl_version(1, 2) && has_decoration(c.self, DecorationSpecId) &&
+				    !c.is_used_as_array_length)
 				{
 					uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
 					// Only scalar, non-composite values can be function constants.
@@ -1957,12 +1958,13 @@ void CompilerMSL::emit_specialization_constants()
 				{
 					// Fallback to macro overrides.
 					c.specialization_constant_macro_name =
-							constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+					    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
 
 					statement("#ifndef ", c.specialization_constant_macro_name);
 					statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));
 					statement("#endif");
-					statement("constant ", sc_type_name, " ", sc_name, " = ", c.specialization_constant_macro_name, ";");
+					statement("constant ", sc_type_name, " ", sc_name, " = ", c.specialization_constant_macro_name,
+					          ";");
 				}
 				else
 				{

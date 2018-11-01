@@ -232,10 +232,8 @@ protected:
 	virtual void emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                                        uint32_t count);
 	virtual void emit_header();
-	void build_workgroup_size(std::vector<std::string> &arguments,
-	                          const SpecializationConstant &x,
-	                          const SpecializationConstant &y,
-	                          const SpecializationConstant &z);
+	void build_workgroup_size(std::vector<std::string> &arguments, const SpecializationConstant &x,
+	                          const SpecializationConstant &y, const SpecializationConstant &z);
 
 	virtual void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id);
 	virtual void emit_texture_op(const Instruction &i);
