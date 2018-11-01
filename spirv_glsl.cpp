@@ -367,13 +367,11 @@ void CompilerGLSL::find_static_extensions()
 			if (type.basetype == SPIRType::Half)
 				require_extension_internal("GL_AMD_gpu_shader_half_float");
 
-			if (type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt)
-			{
-				if (type.width == 8)
-					require_extension_internal("GL_EXT_shader_8bit_storage");
-				else if (type.width == 16)
-					require_extension_internal("GL_AMD_gpu_shader_int16");
-			}
+			if (type.basetype == SPIRType::SByte || type.basetype == SPIRType::UByte)
+				require_extension_internal("GL_EXT_shader_8bit_storage");
+
+			if (type.basetype == SPIRType::Short || type.basetype == SPIRType::UShort)
+				require_extension_internal("GL_AMD_gpu_shader_int16");
 		}
 	}
 
@@ -943,7 +941,12 @@ uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPack
 	case SPIRType::UInt:
 		return 4;
 	case SPIRType::Half:
+	case SPIRType::Short:
+	case SPIRType::UShort:
 		return 2;
+	case SPIRType::SByte:
+	case SPIRType::UByte:
+		return 1;
 
 	default:
 		SPIRV_CROSS_THROW("Unrecognized type in type_to_packed_base_size.");
@@ -3783,6 +3786,11 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 	bool ret = false;
 	switch (type.basetype)
 	{
+	case SPIRType::Short:
+	case SPIRType::UShort:
+		ret = cleft->scalar_u16() == 0 && cright->scalar_u16() == 1;
+		break;
+
 	case SPIRType::Int:
 	case SPIRType::UInt:
 		ret = cleft->scalar() == 0 && cright->scalar() == 1;
@@ -8857,24 +8865,18 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		{
 		case SPIRType::Boolean:
 			return "bool";
+		case SPIRType::SByte:
+			return backend.basic_int8_type;
+		case SPIRType::UByte:
+			return backend.basic_uint8_type;
+		case SPIRType::Short:
+			return backend.basic_int16_type;
+		case SPIRType::UShort:
+			return backend.basic_uint16_type;
 		case SPIRType::Int:
-			switch (type.width) {
-			case 8:
-				return backend.basic_int8_type;
-			case 16:
-				return backend.basic_int16_type;
-			default:
-				return backend.basic_int_type;
-			}
+			return backend.basic_int_type;
 		case SPIRType::UInt:
-			switch (type.width) {
-			case 8:
-				return backend.basic_uint8_type;
-			case 16:
-				return backend.basic_uint16_type;
-			default:
-				return backend.basic_uint_type;
-			}
+			return backend.basic_uint_type;
 		case SPIRType::AtomicCounter:
 			return "atomic_uint";
 		case SPIRType::Half:
@@ -8897,24 +8899,18 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		{
 		case SPIRType::Boolean:
 			return join("bvec", type.vecsize);
+		case SPIRType::SByte:
+			return join("i8vec", type.vecsize);
+		case SPIRType::UByte:
+			return join("u8vec", type.vecsize);
+		case SPIRType::Short:
+			return join("i16vec", type.vecsize);
+		case SPIRType::UShort:
+			return join("u16vec", type.vecsize);
 		case SPIRType::Int:
-			switch (type.width) {
-			case 8:
-				return join("i8vec", type.vecsize);
-			case 16:
-				return join("i16vec", type.vecsize);
-			default:
-				return join("ivec", type.vecsize);
-			}
+			return join("ivec", type.vecsize);
 		case SPIRType::UInt:
-			switch (type.width) {
-			case 8:
-				return join("u8vec", type.vecsize);
-			case 16:
-				return join("u16vec", type.vecsize);
-			default:
-				return join("uvec", type.vecsize);
-			}
+			return join("uvec", type.vecsize);
 		case SPIRType::Half:
 			return join("f16vec", type.vecsize);
 		case SPIRType::Float:
@@ -10029,7 +10025,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	case SPIRBlock::MultiSelect:
 	{
 		auto &type = expression_type(block.condition);
-		bool uint32_t_case = type.basetype == SPIRType::UInt;
+		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort;
 
 		SPIRBlock *old_emitting_switch = current_emitting_switch;
 		current_emitting_switch = &block;
@@ -10056,7 +10052,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			{
 				if (other_case.block == c.block)
 				{
-					auto case_value = uint32_t_case ? convert_to_string(uint32_t(other_case.value)) :
+					auto case_value = unsigned_case ? convert_to_string(uint32_t(other_case.value)) :
 					                                  convert_to_string(int32_t(other_case.value));
 					statement("case ", case_value, ":");
 				}

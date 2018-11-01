@@ -982,9 +982,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			}
 		}
 		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char ||
-		         type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
-		         type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
-		         type_is_floating_point(type) || type.basetype == SPIRType::Boolean)
+		         type_is_integral(type) || type_is_floating_point(type) ||
+		         type.basetype == SPIRType::Boolean)
 		{
 			bool is_builtin = is_builtin_variable(*p_var);
 			BuiltIn builtin = BuiltIn(get_decoration(p_var->self, DecorationBuiltIn));
@@ -4270,13 +4269,23 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "bool";
 		break;
 	case SPIRType::Char:
+	case SPIRType::SByte:
 		type_name = "char";
 		break;
+	case SPIRType::UByte:
+		type_name = "uchar";
+		break;
+	case SPIRType::Short:
+		type_name = "short";
+		break;
+	case SPIRType::UShort:
+		type_name = "ushort";
+		break;
 	case SPIRType::Int:
-		type_name = (type.width == 8 ? "char" : (type.width == 16 ? "short" : "int"));
+		type_name = "int";
 		break;
 	case SPIRType::UInt:
-		type_name = (type.width == 8 ? "uchar" : (type.width == 16 ? "ushort" : "uint"));
+		type_name = "uint";
 		break;
 	case SPIRType::Int64:
 		type_name = "long"; // Currently unsupported

@@ -19,20 +19,20 @@
 
 layout(binding = 0, std140) uniform block
 {
-    layout(offset = 0) i16vec2 a;
-    layout(offset = 4) u16vec2 b;
-    layout(offset = 8) i8vec2 c;
-    layout(offset = 10) u8vec2 d;
-    layout(offset = 12) f16vec2 e;
+    i16vec2 a;
+    u16vec2 b;
+    i8vec2 c;
+    u8vec2 d;
+    f16vec2 e;
 } _26;
 
-layout(binding = 1, std140) readonly buffer storage
+layout(binding = 1, std430) readonly buffer storage
 {
-    layout(offset = 0) i16vec3 f;
-    layout(offset = 8) u16vec3 g;
-    layout(offset = 16) i8vec3 h;
-    layout(offset = 20) u8vec3 i;
-    layout(offset = 24) f16vec3 j;
+    i16vec3 f;
+    u16vec3 g;
+    i8vec3 h;
+    u8vec3 i;
+    f16vec3 j;
 } _53;
 
 struct pushconst

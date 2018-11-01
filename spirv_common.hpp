@@ -402,6 +402,10 @@ struct SPIRType : IVariant
 		Void,
 		Boolean,
 		Char,
+		SByte,
+		UByte,
+		Short,
+		UShort,
 		Int,
 		UInt,
 		Int64,
@@ -1010,6 +1014,11 @@ struct SPIRConstant : IVariant
 		return m.c[col].r[row].u32;
 	}
 
+	inline int16_t scalar_i16(uint32_t col = 0, uint32_t row = 0) const
+	{
+		return int16_t(m.c[col].r[row].u32 & 0xffffu);
+	}
+
 	inline uint16_t scalar_u16(uint32_t col = 0, uint32_t row = 0) const
 	{
 		return uint16_t(m.c[col].r[row].u32 & 0xffffu);
@@ -1377,8 +1386,9 @@ static inline bool type_is_floating_point(const SPIRType &type)
 
 static inline bool type_is_integral(const SPIRType &type)
 {
-	return type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt || type.basetype == SPIRType::Int64 ||
-	       type.basetype == SPIRType::UInt64;
+	return type.basetype == SPIRType::SByte || type.basetype == SPIRType::UByte || type.basetype == SPIRType::Short ||
+	       type.basetype == SPIRType::UShort || type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
+	       type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64;
 }
 } // namespace spirv_cross
 

@@ -17,29 +17,29 @@
 
 layout(set = 0, binding = 0, std140) uniform block
 {
-    layout(offset = 0) i16vec2 a;
-    layout(offset = 4) u16vec2 b;
-    layout(offset = 8) i8vec2 c;
-    layout(offset = 10) u8vec2 d;
-    layout(offset = 12) f16vec2 e;
+    i16vec2 a;
+    u16vec2 b;
+    i8vec2 c;
+    u8vec2 d;
+    f16vec2 e;
 } _26;
 
-layout(set = 0, binding = 1, std140) readonly buffer storage
+layout(set = 0, binding = 1, std430) readonly buffer storage
 {
-    layout(offset = 0) i16vec3 f;
-    layout(offset = 8) u16vec3 g;
-    layout(offset = 16) i8vec3 h;
-    layout(offset = 20) u8vec3 i;
-    layout(offset = 24) f16vec3 j;
+    i16vec3 f;
+    u16vec3 g;
+    i8vec3 h;
+    u8vec3 i;
+    f16vec3 j;
 } _53;
 
-layout(push_constant, std140) uniform pushconst
+layout(push_constant, std430) uniform pushconst
 {
-    layout(offset = 0) i16vec4 k;
-    layout(offset = 8) u16vec4 l;
-    layout(offset = 16) i8vec4 m;
-    layout(offset = 20) u8vec4 n;
-    layout(offset = 24) f16vec4 o;
+    i16vec4 k;
+    u16vec4 l;
+    i8vec4 m;
+    u8vec4 n;
+    f16vec4 o;
 } _76;
 
 layout(location = 0) out i16vec4 p;
