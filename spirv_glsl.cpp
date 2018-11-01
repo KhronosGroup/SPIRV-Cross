@@ -1042,8 +1042,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 {
 	if (!type.array.empty())
 	{
-		return to_array_size_literal(type, uint32_t(type.array.size()) - 1) *
-		       type_to_packed_array_stride(type, flags, packing);
+		return to_array_size_literal(type) * type_to_packed_array_stride(type, flags, packing);
 	}
 
 	uint32_t size = 0;
@@ -1121,6 +1120,9 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	uint32_t offset = 0;
 	uint32_t pad_alignment = 1;
 
+	bool is_top_level_block =
+	    has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
+
 	for (uint32_t i = 0; i < type.member_types.size(); i++)
 	{
 		auto &memb_type = get<SPIRType>(type.member_types[i]);
@@ -1128,8 +1130,26 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 
 		// Verify alignment rules.
 		uint32_t packed_alignment = type_to_packed_alignment(memb_type, member_flags, packing);
-		uint32_t packed_size = type_to_packed_size(memb_type, member_flags, packing);
 
+		// This is a rather dirty workaround to deal with some cases of OpSpecConstantOp used as array size, e.g:
+		// layout(constant_id = 0) const int s = 10;
+		// const int S = s + 5; // SpecConstantOp
+		// buffer Foo { int data[S]; }; // <-- Very hard for us to deduce a fixed value here,
+		// we would need full implementation of compile-time constant folding. :(
+		// If we are the last member of a struct, there might be cases where the actual size of that member is irrelevant
+		// for our analysis (e.g. unsized arrays).
+		// This lets us simply ignore that there are spec constant op sized arrays in our buffers.
+		// Querying size of this member will fail, so just don't call it unless we have to.
+		//
+		// This is likely "best effort" we can support without going into unacceptably complicated workarounds.
+		bool member_can_be_unsized =
+		    is_top_level_block && size_t(i + 1) == type.member_types.size() && !memb_type.array.empty();
+
+		uint32_t packed_size = 0;
+		if (!member_can_be_unsized)
+			packed_size = type_to_packed_size(memb_type, member_flags, packing);
+
+		// We only need to care about this if we have non-array types which can straddle the vec4 boundary.
 		if (packing_is_hlsl(packing))
 		{
 			// If a member straddles across a vec4 boundary, alignment is actually vec4.
@@ -8574,6 +8594,11 @@ string CompilerGLSL::pls_decl(const PlsRemap &var)
 	            to_name(variable.self));
 }
 
+uint32_t CompilerGLSL::to_array_size_literal(const SPIRType &type) const
+{
+	return to_array_size_literal(type, uint32_t(type.array.size() - 1));
+}
+
 uint32_t CompilerGLSL::to_array_size_literal(const SPIRType &type, uint32_t index) const
 {
 	assert(type.array.size() == type.array_size_literal.size());
@@ -8587,6 +8612,12 @@ uint32_t CompilerGLSL::to_array_size_literal(const SPIRType &type, uint32_t inde
 		// Use the default spec constant value.
 		// This is the best we can do.
 		uint32_t array_size_id = type.array[index];
+
+		// Explicitly check for this case. The error message you would get (bad cast) makes no sense otherwise.
+		if (ir.ids[array_size_id].get_type() == TypeConstantOp)
+			SPIRV_CROSS_THROW("An array size was found to be an OpSpecConstantOp. This is not supported since "
+			                  "SPIRV-Cross cannot deduce the actual size here.");
+
 		uint32_t array_size = get<SPIRConstant>(array_size_id).scalar();
 		return array_size;
 	}

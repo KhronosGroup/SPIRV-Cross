@@ -326,6 +326,7 @@ protected:
 	std::string type_to_array_glsl(const SPIRType &type);
 	std::string to_array_size(const SPIRType &type, uint32_t index);
 	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
+	uint32_t to_array_size_literal(const SPIRType &type) const;
 	std::string variable_decl(const SPIRVariable &variable);
 	std::string variable_decl_function_local(SPIRVariable &variable);
 

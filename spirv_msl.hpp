@@ -341,7 +341,6 @@ protected:
 	void preprocess_op_codes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
-	void resolve_specialized_array_lengths();
 	void mark_packable_structs();
 	void mark_as_packable(SPIRType &type);
 
