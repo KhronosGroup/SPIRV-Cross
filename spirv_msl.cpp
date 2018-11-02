@@ -390,6 +390,8 @@ string CompilerMSL::compile()
 	backend.float_literal_suffix = false;
 	backend.half_literal_suffix = "h";
 	backend.uint32_t_literal_suffix = true;
+	backend.int16_t_literal_suffix = nullptr;
+	backend.uint16_t_literal_suffix = "u";
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
 	backend.basic_int8_type = "char";

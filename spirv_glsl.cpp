@@ -3351,6 +3351,72 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		}
 		break;
 
+	case SPIRType::UShort:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar(vector, 0));
+			if (is_legacy())
+			{
+				// Fake unsigned constant literals with signed ones if possible.
+				// Things like array sizes, etc, tend to be unsigned even though they could just as easily be signed.
+				if (c.scalar_i16(vector, 0) < 0)
+					SPIRV_CROSS_THROW("Tried to convert uint literal into int, but this made the literal negative.");
+			}
+			else if (backend.uint16_t_literal_suffix)
+				res += backend.uint16_t_literal_suffix;
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+				{
+					res += convert_to_string(c.scalar(vector, i));
+					if (is_legacy())
+					{
+						// Fake unsigned constant literals with signed ones if possible.
+						// Things like array sizes, etc, tend to be unsigned even though they could just as easily be signed.
+						if (c.scalar_i16(vector, i) < 0)
+							SPIRV_CROSS_THROW(
+							    "Tried to convert uint literal into int, but this made the literal negative.");
+					}
+					else if (backend.uint16_t_literal_suffix)
+						res += backend.uint16_t_literal_suffix;
+				}
+
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
+	case SPIRType::Short:
+		if (splat)
+		{
+			res += convert_to_string(c.scalar_i16(vector, 0));
+			if (backend.int16_t_literal_suffix)
+				res += backend.int16_t_literal_suffix;
+		}
+		else
+		{
+			for (uint32_t i = 0; i < c.vector_size(); i++)
+			{
+				if (c.vector_size() > 1 && c.specialization_constant_id(vector, i) != 0)
+					res += to_name(c.specialization_constant_id(vector, i));
+				else
+				{
+					res += convert_to_string(c.scalar_i16(vector, i));
+					if (backend.int16_t_literal_suffix)
+						res += backend.int16_t_literal_suffix;
+				}
+				if (i + 1 < c.vector_size())
+					res += ", ";
+			}
+		}
+		break;
+
 	case SPIRType::Boolean:
 		if (splat)
 			res += c.scalar(vector, 0) ? "true" : "false";
