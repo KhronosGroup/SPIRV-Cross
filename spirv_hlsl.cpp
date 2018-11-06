@@ -4616,6 +4616,8 @@ string CompilerHLSL::compile()
 	backend.half_literal_suffix = nullptr;
 	backend.long_long_literal_suffix = true;
 	backend.uint32_t_literal_suffix = true;
+	backend.int16_t_literal_suffix = nullptr;
+	backend.uint16_t_literal_suffix = "u";
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
 	backend.swizzle_is_function = false;

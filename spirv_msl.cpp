@@ -390,8 +390,14 @@ string CompilerMSL::compile()
 	backend.float_literal_suffix = false;
 	backend.half_literal_suffix = "h";
 	backend.uint32_t_literal_suffix = true;
+	backend.int16_t_literal_suffix = nullptr;
+	backend.uint16_t_literal_suffix = "u";
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
+	backend.basic_int8_type = "char";
+	backend.basic_uint8_type = "uchar";
+	backend.basic_int16_type = "short";
+	backend.basic_uint16_type = "ushort";
 	backend.discard_literal = "discard_fragment()";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
@@ -977,9 +983,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 				mbr_idx++;
 			}
 		}
-		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char ||
-		         type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
-		         type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64 ||
+		else if (type.basetype == SPIRType::Boolean || type.basetype == SPIRType::Char || type_is_integral(type) ||
 		         type_is_floating_point(type) || type.basetype == SPIRType::Boolean)
 		{
 			bool is_builtin = is_builtin_variable(*p_var);
@@ -4266,13 +4270,23 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "bool";
 		break;
 	case SPIRType::Char:
+	case SPIRType::SByte:
 		type_name = "char";
 		break;
+	case SPIRType::UByte:
+		type_name = "uchar";
+		break;
+	case SPIRType::Short:
+		type_name = "short";
+		break;
+	case SPIRType::UShort:
+		type_name = "ushort";
+		break;
 	case SPIRType::Int:
-		type_name = (type.width == 16 ? "short" : "int");
+		type_name = "int";
 		break;
 	case SPIRType::UInt:
-		type_name = (type.width == 16 ? "ushort" : "uint");
+		type_name = "uint";
 		break;
 	case SPIRType::Int64:
 		type_name = "long"; // Currently unsupported
@@ -4486,7 +4500,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
-	if ((out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int) ||
+	if ((out_type.basetype == SPIRType::UShort && in_type.basetype == SPIRType::Short) ||
+	    (out_type.basetype == SPIRType::Short && in_type.basetype == SPIRType::UShort) ||
+	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int) ||
 	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt) ||
 	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64) ||
 	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64))
@@ -4501,7 +4517,17 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64) ||
 	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64) ||
 	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UInt) ||
-	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Half))
+	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Half) ||
+	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::Int) ||
+	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Half) ||
+	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UShort) ||
+	    (out_type.basetype == SPIRType::UShort && in_type.basetype == SPIRType::Half) ||
+	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::Short) ||
+	    (out_type.basetype == SPIRType::Short && in_type.basetype == SPIRType::Half) ||
+	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::UShort && in_type.vecsize == 2) ||
+	    (out_type.basetype == SPIRType::UShort && in_type.basetype == SPIRType::UInt && in_type.vecsize == 1) ||
+	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Short && in_type.vecsize == 2) ||
+	    (out_type.basetype == SPIRType::Short && in_type.basetype == SPIRType::Int && in_type.vecsize == 1))
 		return "as_type<" + type_to_glsl(out_type) + ">";
 
 	return "";

@@ -361,7 +361,13 @@ protected:
 		bool long_long_literal_suffix = false;
 		const char *basic_int_type = "int";
 		const char *basic_uint_type = "uint";
+		const char *basic_int8_type = "int8_t";
+		const char *basic_uint8_type = "uint8_t";
+		const char *basic_int16_type = "int16_t";
+		const char *basic_uint16_type = "uint16_t";
 		const char *half_literal_suffix = "hf";
+		const char *int16_t_literal_suffix = "s";
+		const char *uint16_t_literal_suffix = "us";
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
 		bool flexible_member_array_supported = true;
