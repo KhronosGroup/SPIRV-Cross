@@ -1256,11 +1256,15 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 	}
 	else
 	{
+		uint32_t mbr_offset_curr = get_member_decoration(ib_type.self, index, DecorationOffset);
+		// For vectors, pack if the member's offset doesn't conform to the
+		// type's usual alignment. For example, a float3 at offset 4.
+		if (!is_matrix(mbr_type) && (mbr_offset_curr % unpacked_mbr_size))
+			return true;
 		// Pack if there is not enough space between this member and next.
 		// If last member, only pack if it's a row-major matrix.
 		if (index < ib_type.member_types.size() - 1)
 		{
-			uint32_t mbr_offset_curr = get_member_decoration(ib_type.self, index, DecorationOffset);
 			uint32_t mbr_offset_next = get_member_decoration(ib_type.self, index + 1, DecorationOffset);
 			return unpacked_mbr_size > mbr_offset_next - mbr_offset_curr;
 		}

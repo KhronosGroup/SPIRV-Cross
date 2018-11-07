@@ -1,0 +1,17 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct foo
+{
+    uint bar;
+    packed_float3 baz;
+};
+
+kernel void main0(device foo& _6 [[buffer(0)]], uint3 gl_LocalInvocationID [[thread_position_in_threadgroup]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    _6.bar = gl_LocalInvocationID.x;
+    _6.baz = float3(gl_GlobalInvocationID);
+}
+
