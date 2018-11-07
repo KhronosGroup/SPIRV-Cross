@@ -230,6 +230,7 @@ public:
 		SPVFuncImplFindILsb,
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
+		SPVFuncImplSSign,
 		SPVFuncImplArrayCopyMultidimBase,
 		// Unfortunately, we cannot use recursive templates in the MSL compiler properly,
 		// so stamp out variants up to some arbitrary maximum.

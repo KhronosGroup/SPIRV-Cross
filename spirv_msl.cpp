@@ -1401,6 +1401,16 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplSSign:
+			statement("// Implementation of the GLSL sign() function for integer types");
+			statement("template<typename T, typename E = typename enable_if<is_integral<T>::value>::type>");
+			statement("T sign(T x)");
+			begin_scope();
+			statement("return select(select(select(x, T(0), x == T(0)), T(1), x > T(0)), T(-1), x < T(0));");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplArrayCopy:
 			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
 			          "assignment.");
@@ -5067,6 +5077,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 				return SPVFuncImplFindSMsb;
 			case GLSLstd450FindUMsb:
 				return SPVFuncImplFindUMsb;
+			case GLSLstd450SSign:
+				return SPVFuncImplSSign;
 			case GLSLstd450MatrixInverse:
 			{
 				auto &mat_type = compiler.get<SPIRType>(args[0]);
