@@ -3750,7 +3750,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		break;
 	case ExecutionModelFragment:
 		entry_type =
-		    execution.flags.get(ExecutionModeEarlyFragmentTests) ? "fragment [[ early_fragment_tests ]]" : "fragment";
+		    execution.flags.get(ExecutionModeEarlyFragmentTests) ? "[[ early_fragment_tests ]] fragment" : "fragment";
 		break;
 	case ExecutionModelGLCompute:
 	case ExecutionModelKernel:
