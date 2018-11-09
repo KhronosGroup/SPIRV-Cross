@@ -1231,8 +1231,8 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 
 	auto &mbr_type = get<SPIRType>(ib_type.member_types[index]);
 
-	// Only 3-element vectors or 3-row matrices need to be packed.
-	if (mbr_type.vecsize != 3)
+	// Only vectors or 3-row matrices need to be packed.
+	if (mbr_type.vecsize == 1 || (is_matrix(mbr_type) && mbr_type.vecsize != 3))
 		return false;
 
 	// Only row-major matrices need to be packed.
@@ -1240,7 +1240,11 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 		return false;
 
 	uint32_t component_size = mbr_type.width / 8;
-	uint32_t unpacked_mbr_size = component_size * (mbr_type.vecsize + 1) * mbr_type.columns;
+	uint32_t unpacked_mbr_size;
+	if (mbr_type.vecsize == 3)
+		unpacked_mbr_size = component_size * (mbr_type.vecsize + 1) * mbr_type.columns;
+	else
+		unpacked_mbr_size = component_size * mbr_type.vecsize * mbr_type.columns;
 	if (is_array(mbr_type))
 	{
 		// If member is an array, and the array stride is larger than the type needs, don't pack it.

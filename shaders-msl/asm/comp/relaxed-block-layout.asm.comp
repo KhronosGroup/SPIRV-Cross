@@ -1,23 +1,35 @@
 ; SPIR-V
 ; Version: 1.3
 ; Generator: Khronos Glslang Reference Front End; 7
-; Bound: 29
+; Bound: 33
 ; Schema: 0
                OpCapability Shader
+               OpCapability StorageBuffer16BitAccess
+               OpCapability StorageBuffer8BitAccess
+               OpCapability UniformAndStorageBuffer8BitAccess
+               OpExtension "SPV_KHR_8bit_storage"
           %1 = OpExtInstImport "GLSL.std.450"
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %main "main" %gl_LocalInvocationID %gl_GlobalInvocationID
                OpExecutionMode %main LocalSize 1 1 1
                OpSource GLSL 450
+               OpSourceExtension "GL_EXT_shader_16bit_storage"
+               OpSourceExtension "GL_EXT_shader_8bit_storage"
                OpName %main "main"
                OpName %foo "foo"
                OpMemberName %foo 0 "bar"
                OpMemberName %foo 1 "baz"
+               OpMemberName %foo 2 "quux"
+               OpMemberName %foo 3 "blah"
+               OpMemberName %foo 4 "wibble"
                OpName %_ ""
                OpName %gl_LocalInvocationID "gl_LocalInvocationID"
                OpName %gl_GlobalInvocationID "gl_GlobalInvocationID"
                OpMemberDecorate %foo 0 Offset 0
                OpMemberDecorate %foo 1 Offset 4
+               OpMemberDecorate %foo 2 Offset 16
+               OpMemberDecorate %foo 3 Offset 17
+               OpMemberDecorate %foo 4 Offset 22
                OpDecorate %foo BufferBlock
                OpDecorate %_ DescriptorSet 0
                OpDecorate %_ Binding 0
@@ -28,7 +40,11 @@
        %uint = OpTypeInt 32 0
       %float = OpTypeFloat 32
     %v3float = OpTypeVector %float 3
-        %foo = OpTypeStruct %uint %v3float
+      %uchar = OpTypeInt 8 0
+    %v4uchar = OpTypeVector %uchar 4
+       %half = OpTypeFloat 16
+     %v2half = OpTypeVector %half 2
+        %foo = OpTypeStruct %uint %v3float %uchar %v4uchar %v2half
 %_ptr_Uniform_foo = OpTypePointer Uniform %foo
           %_ = OpVariable %_ptr_Uniform_foo Uniform
         %int = OpTypeInt 32 1
@@ -44,13 +60,13 @@
 %_ptr_Uniform_v3float = OpTypePointer Uniform %v3float
        %main = OpFunction %void None %3
           %5 = OpLabel
-         %19 = OpAccessChain %_ptr_Input_uint %gl_LocalInvocationID %uint_0
-         %20 = OpLoad %uint %19
-         %22 = OpAccessChain %_ptr_Uniform_uint %_ %int_0
-               OpStore %22 %20
-         %25 = OpLoad %v3uint %gl_GlobalInvocationID
-         %26 = OpConvertUToF %v3float %25
-         %28 = OpAccessChain %_ptr_Uniform_v3float %_ %int_1
-               OpStore %28 %26
+         %23 = OpAccessChain %_ptr_Input_uint %gl_LocalInvocationID %uint_0
+         %24 = OpLoad %uint %23
+         %26 = OpAccessChain %_ptr_Uniform_uint %_ %int_0
+               OpStore %26 %24
+         %29 = OpLoad %v3uint %gl_GlobalInvocationID
+         %30 = OpConvertUToF %v3float %29
+         %32 = OpAccessChain %_ptr_Uniform_v3float %_ %int_1
+               OpStore %32 %30
                OpReturn
                OpFunctionEnd
