@@ -984,6 +984,11 @@ static int main_inner(int argc, char *argv[])
 			hlsl_opts.point_size_compat = true;
 			hlsl_opts.point_coord_compat = true;
 		}
+		if (hlsl_opts.shader_model <= 30)
+		{
+			combined_image_samplers = true;
+			build_dummy_sampler = true;
+		}
 		hlsl->set_hlsl_options(hlsl_opts);
 	}
 
