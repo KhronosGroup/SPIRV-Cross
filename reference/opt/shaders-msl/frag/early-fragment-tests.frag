@@ -5,13 +5,13 @@ using namespace metal;
 
 struct main0_out
 {
-    float gl_FragDepth [[depth(greater)]];
+    float4 FragColor [[color(0)]];
 };
 
-fragment main0_out main0()
+[[ early_fragment_tests ]] fragment main0_out main0()
 {
     main0_out out = {};
-    out.gl_FragDepth = 0.5;
+    out.FragColor = float4(1.0);
     return out;
 }
 

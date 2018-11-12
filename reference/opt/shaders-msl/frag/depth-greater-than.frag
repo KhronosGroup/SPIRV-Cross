@@ -8,7 +8,7 @@ struct main0_out
     float gl_FragDepth [[depth(greater)]];
 };
 
-[[ early_fragment_tests ]] fragment main0_out main0()
+fragment main0_out main0()
 {
     main0_out out = {};
     out.gl_FragDepth = 0.5;
