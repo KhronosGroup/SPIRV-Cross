@@ -494,6 +494,8 @@ const char *CompilerHLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 
 void CompilerHLSL::emit_builtin_outputs_in_struct()
 {
+	auto &execution = get_entry_point();
+
 	bool legacy = hlsl_options.shader_model <= 30;
 	active_output_builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
@@ -508,7 +510,19 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		case BuiltInFragDepth:
 			type = "float";
-			semantic = legacy ? "DEPTH" : "SV_Depth";
+			if (legacy)
+			{
+				semantic = "DEPTH";
+			}
+			else
+			{
+				if (hlsl_options.shader_model >= 50 && execution.flags.get(ExecutionModeDepthGreater))
+					semantic = "SV_DepthGreaterEqual";
+				else if (hlsl_options.shader_model >= 50 && execution.flags.get(ExecutionModeDepthLess))
+					semantic = "SV_DepthLessEqual";
+				else
+					semantic = "SV_Depth";
+			}
 			break;
 
 		case BuiltInClipDistance:

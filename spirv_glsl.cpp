@@ -678,10 +678,11 @@ void CompilerGLSL::emit_header()
 
 		if (execution.flags.get(ExecutionModeEarlyFragmentTests))
 			inputs.push_back("early_fragment_tests");
-		if (execution.flags.get(ExecutionModeDepthGreater))
-			inputs.push_back("depth_greater");
-		if (execution.flags.get(ExecutionModeDepthLess))
-			inputs.push_back("depth_less");
+
+		if (!options.es && execution.flags.get(ExecutionModeDepthGreater))
+			statement("layout(depth_greater) out float gl_FragDepth;");
+		else if (!options.es && execution.flags.get(ExecutionModeDepthLess))
+			statement("layout(depth_less) out float gl_FragDepth;");
 
 		break;
 
