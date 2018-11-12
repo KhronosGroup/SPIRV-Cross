@@ -2076,28 +2076,34 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		decl += to_name(func.self);
 
 	decl += "(";
+	vector<string> arglist;
 
 	if (!type.array.empty())
 	{
 		// Fake array returns by writing to an out array instead.
-		decl += "out ";
-		decl += type_to_glsl(type);
-		decl += " ";
-		decl += "SPIRV_Cross_return_value";
-		decl += type_to_array_glsl(type);
-		if (!func.arguments.empty())
-			decl += ", ";
+		string out_argument;
+		out_argument += "out ";
+		out_argument += type_to_glsl(type);
+		out_argument += " ";
+		out_argument += "SPIRV_Cross_return_value";
+		out_argument += type_to_array_glsl(type);
+		arglist.push_back(move(out_argument));
 	}
 
 	for (auto &arg : func.arguments)
 	{
+		// Do not pass in separate images or samplers if we're remapping
+		// to combined image samplers.
+		if (skip_argument(arg.id))
+			continue;
+
 		// Might change the variable name if it already exists in this function.
 		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
 		// to use same name for variables.
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
 		add_local_variable_name(arg.id);
 
-		decl += argument_decl(arg);
+		arglist.push_back(argument_decl(arg));
 
 		// Flatten a combined sampler to two separate arguments in modern HLSL.
 		auto &arg_type = get<SPIRType>(arg.type);
@@ -2105,13 +2111,9 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		    arg_type.image.dim != DimBuffer)
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
-			decl += ", ";
-			decl += join(image_is_comparison(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
-			             to_sampler_expression(arg.id), type_to_array_glsl(arg_type));
+			arglist.push_back(join(image_is_comparison(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
+			                       to_sampler_expression(arg.id), type_to_array_glsl(arg_type)));
 		}
-
-		if (&arg != &func.arguments.back())
-			decl += ", ";
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 		auto *var = maybe_get<SPIRVariable>(arg.id);
@@ -2119,6 +2121,23 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 			var->parameter = &arg;
 	}
 
+	for (auto &arg : func.shadow_arguments)
+	{
+		// Might change the variable name if it already exists in this function.
+		// SPIRV OpName doesn't have any semantic effect, so it's valid for an implementation
+		// to use same name for variables.
+		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
+		add_local_variable_name(arg.id);
+
+		arglist.push_back(argument_decl(arg));
+
+		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
+		auto *var = maybe_get<SPIRVariable>(arg.id);
+		if (var)
+			var->parameter = &arg;
+	}
+
+	decl += merge(arglist);
 	decl += ")";
 	statement(decl);
 }
