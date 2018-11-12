@@ -1157,6 +1157,8 @@ void CompilerHLSL::emit_resources()
 		emitted = true;
 	}
 
+	bool skip_separate_image_sampler = !combined_image_samplers.empty() || hlsl_options.shader_model <= 30;
+
 	// Output Uniform Constants (values, samplers, images, etc).
 	for (auto &id : ir.ids)
 	{
@@ -1164,6 +1166,17 @@ void CompilerHLSL::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
+
+			// If we're remapping separate samplers and images, only emit the combined samplers.
+			if (skip_separate_image_sampler)
+			{
+				// Sampler buffers are always used without a sampler, and they will also work in regular D3D.
+				bool sampler_buffer = type.basetype == SPIRType::Image && type.image.dim == DimBuffer;
+				bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+				bool separate_sampler = type.basetype == SPIRType::Sampler;
+				if (!sampler_buffer && (separate_image || separate_sampler))
+					continue;
+			}
 
 			if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
 			    type.pointer &&
@@ -1993,7 +2006,15 @@ string CompilerHLSL::to_sampler_expression(uint32_t id)
 
 void CompilerHLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id)
 {
-	set<SPIRCombinedImageSampler>(result_id, result_type, image_id, samp_id);
+	if (hlsl_options.shader_model >= 40 && combined_image_samplers.empty())
+	{
+		set<SPIRCombinedImageSampler>(result_id, result_type, image_id, samp_id);
+	}
+	else
+	{
+		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
+		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
+	}
 }
 
 string CompilerHLSL::to_func_call_arg(uint32_t id)
