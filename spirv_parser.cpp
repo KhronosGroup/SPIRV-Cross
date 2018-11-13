@@ -152,6 +152,7 @@ void Parser::parse(const Instruction &instruction)
 	case OpLine:
 	case OpNoLine:
 	case OpString:
+	case OpModuleProcessed:
 		break;
 
 	case OpSource:
