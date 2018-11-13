@@ -7098,6 +7098,56 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		GLSL_BOP_CAST(/, SPIRType::UInt);
 		break;
 
+	case OpIAddCarry:
+	case OpISubBorrow:
+	{
+		if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("Extended arithmetic is only available from ESSL 310.");
+		else if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("Extended arithmetic is only available from GLSL 400.");
+
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t op0 = ops[2];
+		uint32_t op1 = ops[3];
+		forced_temporaries.insert(result_id);
+		auto &type = get<SPIRType>(result_type);
+		auto flags = ir.meta[result_id].decoration.decoration_flags;
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), ";");
+		set<SPIRExpression>(result_id, to_name(result_id), result_type, true);
+
+		const char *op = opcode == OpIAddCarry ? "uaddCarry" : "usubBorrow";
+
+		statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", op, "(", to_expression(op0), ", ",
+		          to_expression(op1), ", ", to_expression(result_id), ".", to_member_name(type, 1), ");");
+		break;
+	}
+
+	case OpUMulExtended:
+	case OpSMulExtended:
+	{
+		if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("Extended arithmetic is only available from ESSL 310.");
+		else if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("Extended arithmetic is only available from GLSL 4000.");
+
+		uint32_t result_type = ops[0];
+		uint32_t result_id = ops[1];
+		uint32_t op0 = ops[2];
+		uint32_t op1 = ops[3];
+		forced_temporaries.insert(result_id);
+		auto &type = get<SPIRType>(result_type);
+		auto flags = ir.meta[result_id].decoration.decoration_flags;
+		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), ";");
+		set<SPIRExpression>(result_id, to_name(result_id), result_type, true);
+
+		const char *op = opcode == OpUMulExtended ? "umulExtended" : "imulExtended";
+
+		statement(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(result_id), ".",
+		          to_member_name(type, 1), ", ", to_expression(result_id), ".", to_member_name(type, 0), ");");
+		break;
+	}
+
 	case OpFDiv:
 		GLSL_BOP(/);
 		break;
