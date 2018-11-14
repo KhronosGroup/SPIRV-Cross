@@ -2005,21 +2005,6 @@ void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id,
 	inherit_expression_dependencies(result_id, op1);
 }
 
-static std::string type_to_max_limit(const SPIRType &type)
-{
-	switch (type.basetype)
-	{
-	case SPIRType::UByte:
-		return "UCHAR_MAX";
-	case SPIRType::UShort:
-		return "USHRT_MAX";
-	case SPIRType::UInt:
-		return "UINT_MAX";
-	default:
-		return "";
-	}
-}
-
 // Override for MSL-specific syntax instructions
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
@@ -2517,16 +2502,16 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", to_enclosed_expression(op0), " + ",
 			          to_enclosed_expression(op1), ";");
 			statement(to_expression(result_id), ".", to_member_name(type, 1), " = select(", type_to_glsl(res_type),
-			          "(1), ", type_to_glsl(res_type), "(0), addsat(", to_expression(op0), ", ", to_expression(op1),
-			          ") == ", type_to_max_limit(res_type), ");");
+			          "(1), ", type_to_glsl(res_type), "(0), ", to_expression(result_id), ".", to_member_name(type, 0),
+			          " >= max(", to_expression(op0), ", ", to_expression(op1), "));");
 		}
 		else
 		{
 			statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", to_enclosed_expression(op0), " - ",
 			          to_enclosed_expression(op1), ";");
 			statement(to_expression(result_id), ".", to_member_name(type, 1), " = select(", type_to_glsl(res_type),
-			          "(1), ", type_to_glsl(res_type), "(0), subsat(", to_expression(op0), ", ", to_expression(op1),
-			          ") == 0);");
+			          "(1), ", type_to_glsl(res_type), "(0), ", to_enclosed_expression(op0),
+			          " >= ", to_enclosed_expression(op1), ");");
 		}
 		break;
 	}
