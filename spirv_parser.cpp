@@ -147,6 +147,7 @@ void Parser::parse(const Instruction &instruction)
 	switch (op)
 	{
 	case OpMemoryModel:
+	case OpSourceContinued:
 	case OpSourceExtension:
 	case OpNop:
 	case OpLine:
