@@ -160,7 +160,7 @@ struct VSOutput {
 VSOutput main(...) {}
 ```
 
-```
+```c++
 struct VSOutput {
    float4 coord;
 }
