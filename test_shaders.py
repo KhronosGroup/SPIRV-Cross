@@ -143,20 +143,18 @@ def cross_compile_msl(shader, spirv, opt):
     if opt:
         subprocess.check_call(['spirv-opt', '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross = ['./spirv-cross']
+    if shader_is_invalid_spirv(msl_path):
+        spirv_cross.extend(['--validate', 'off'])
 
-    msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl']
-    msl_args.append('--msl-version')
-    msl_args.append(path_to_msl_standard_cli(shader))
+    spirv_cross.extend(['--entry', 'main', '--output', msl_path, spirv_path, '--msl', '--msl-version'])
+    spirv_cross.append(path_to_msl_standard_cli(shader))
     if '.swizzle.' in shader:
-        msl_args.append('--msl-swizzle-texture-samples')
+        spirv_cross.append('--msl-swizzle-texture-samples')
     if '.ios.' in shader:
-        msl_args.append('--msl-ios')
+        spirv_cross.append('--msl-ios')
 
-    subprocess.check_call(msl_args)
-
-    if not shader_is_invalid_spirv(msl_path):
-        subprocess.check_call(['spirv-val', '--target-env', 'vulkan1.1', spirv_path])
+    subprocess.check_call(spirv_cross)
 
     return (spirv_path, msl_path)
 
@@ -230,13 +228,13 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation):
     if opt:
         subprocess.check_call(['spirv-opt', '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross = ['./spirv-cross']
+    if shader_is_invalid_spirv(hlsl_path):
+        spirv_cross.extend(['--validate', 'off'])
 
     sm = shader_to_sm(shader)
-    subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm])
-
-    if not shader_is_invalid_spirv(hlsl_path):
-        subprocess.check_call(['spirv-val', '--target-env', 'vulkan1.1', spirv_path])
+    spirv_cross.extend(['--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm])
+    subprocess.check_call(spirv_cross)
 
     validate_shader_hlsl(hlsl_path, force_no_external_validation)
     
@@ -281,9 +279,6 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if opt and (not invalid_spirv):
         subprocess.check_call(['spirv-opt', '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    if not invalid_spirv:
-        subprocess.check_call(['spirv-val', '--target-env', 'vulkan1.1', spirv_path])
-
     extra_args = []
     if eliminate:
         extra_args += ['--remove-unused-variables']
@@ -296,18 +291,20 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if flatten_dim:
         extra_args += ['--flatten-multidimensional-arrays']
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross = ['./spirv-cross', '--entry', 'main']
+    if invalid_spirv:
+        spirv_cross.extend(['--validate', 'off'])
 
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if not ('nocompat' in glsl_path):
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path] + extra_args)
+        subprocess.check_call(spirv_cross + ['--output', glsl_path, spirv_path] + extra_args)
         validate_shader(glsl_path, False)
     else:
         remove_file(glsl_path)
         glsl_path = None
 
     if vulkan or spirv:
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path] + extra_args)
+        subprocess.check_call(spirv_cross + ['--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path] + extra_args)
         validate_shader(vulkan_glsl_path, True)
         # SPIR-V shaders might just want to validate Vulkan GLSL output, we don't always care about the output.
         if not vulkan:

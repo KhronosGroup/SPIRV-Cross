@@ -35,7 +35,7 @@ endif()
 # -DCMAKE_CXX_COMPILE_FLAGS
 # However, we require the C++11 dialect.
 if (NOT "${MSVC}")
-  set(spirv-compiler-options ${spirv-compiler-options} -std=c++11 -Wall -Wextra -Werror -Wshadow)
+  set(spirv-compiler-options ${spirv-compiler-options} -std=c++11 -Wall -Wextra -Werror -Wshadow -I../external/spirv-tools -I../external/spirv-tools/include)
   set(spirv-compiler-defines ${spirv-compiler-defines} __STDC_LIMIT_MACROS)
 
   if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
@@ -124,6 +124,7 @@ target_link_libraries(spirv-cross-glsl spirv-cross-core)
 target_link_libraries(spirv-cross-msl spirv-cross-glsl)
 target_link_libraries(spirv-cross-hlsl spirv-cross-glsl)
 target_link_libraries(spirv-cross-cpp spirv-cross-glsl)
+target_link_libraries(spirv-cross-cpp -L../external/spirv-tools-build/output/lib -lSPIRV-Tools)
 
 # Set up tests, using only the simplest modes of the test_shaders
 # script.  You have to invoke the script manually to:

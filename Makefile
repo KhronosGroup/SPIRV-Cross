@@ -10,7 +10,8 @@ STATIC_LIB := lib$(TARGET).a
 
 DEPS := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d)
 
-CXXFLAGS += -std=c++11 -Wall -Wextra -Wshadow -D__STDC_LIMIT_MACROS
+CXXFLAGS += -std=c++11 -Wall -Wextra -Wshadow -D__STDC_LIMIT_MACROS -Iexternal/spirv-tools -Iexternal/spirv-tools/include
+LDFLAGS += -Lexternal/spirv-tools-build/output/lib -lSPIRV-Tools
 
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -O0 -g

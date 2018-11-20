@@ -30,7 +30,13 @@ The make and CMake build flavors offer the option to treat exceptions as asserti
 
 ### Linux and macOS
 
-Just run `make` on the command line. A recent GCC (4.8+) or Clang (3.x+) compiler is required as SPIRV-Cross uses C++11 extensively.
+Run the following two scripts to check out and build the SPIRV-Tools dependency.  Glslang is also built but not used for building, just [testing](#testing).
+```
+./checkout_glslang_spirv_tools.sh # Checks out glslang and SPIRV-Tools at a fixed revision which matches the reference output.
+./build_glslang_spirv_tools.sh    # Builds glslang and SPIRV-Tools.
+```
+
+Then just run `make` on the command line. A recent GCC (4.8+) or Clang (3.x+) compiler is required as SPIRV-Cross uses C++11 extensively.
 
 ### Windows
 
@@ -279,13 +285,12 @@ All pull requests should ensure that test output does not change unexpectedly. T
 ./test_shaders.py shaders-msl --msl --opt
 ```
 
-although there are a couple of convenience script for doing this:
+though there is a script to do it:
+```
+./test_shaders.sh # Runs over all changes and makes sure that there are no deltas compared to reference files.
+```
 
-```
-./checkout_glslang_spirv_tools.sh # Checks out glslang and SPIRV-Tools at a fixed revision which matches the reference output.
-./build_glslang_spirv_tools.sh    # Builds glslang and SPIRV-Tools.
-./test_shaders.sh                 # Runs over all changes and makes sure that there are no deltas compared to reference files.
-```
+The test scripts use glslang and SPIRV-Tools which were downloaded and built in the [build step](#building).
 
 However, when improving SPIRV-Cross there are of course legitimate cases where reference output should change.
 In these cases, run:

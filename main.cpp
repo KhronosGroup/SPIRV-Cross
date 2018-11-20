@@ -31,6 +31,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "spirv-tools/libspirv.hpp"
+#include "source/spirv_target_env.h"
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)
 #endif
@@ -521,6 +524,8 @@ struct CLIArguments
 	bool use_420pack_extension = true;
 	bool remove_unused = false;
 	bool combined_samplers_inherit_bindings = false;
+	bool validate = false;
+	spv_target_env validate_env = SPV_ENV_VULKAN_1_1;
 };
 
 static void print_help()
@@ -565,6 +570,7 @@ static void print_help()
 	                "\t[--rename-entry-point <old> <new> <stage>]\n"
 	                "\t[--combined-samplers-inherit-bindings]\n"
 	                "\t[--no-support-nonzero-baseinstance]\n"
+	                "\t[--validate <off|vulkan1.0|vulkan1.1|opencl2.2|spv1.0|spv1.1|spv1.2|spv1.3|webgpu0>]\n"
 	                "\n");
 }
 
@@ -668,6 +674,11 @@ static ExecutionModel stage_to_execution_model(const std::string &stage)
 		return ExecutionModelGeometry;
 	else
 		SPIRV_CROSS_THROW("Invalid stage.");
+}
+
+static void validation_message_consumer(spv_message_level_t, const char*, const spv_position_t&, const char* message)
+{
+	fprintf(stderr, "validation error: %s\n", message);
 }
 
 static int main_inner(int argc, char *argv[])
@@ -778,6 +789,23 @@ static int main_inner(int argc, char *argv[])
 
 	cbs.add("--no-support-nonzero-baseinstance", [&](CLIParser &) { args.support_nonzero_baseinstance = false; });
 
+	cbs.add("--validate", [&](CLIParser &parser) {
+		auto env = parser.next_string();
+		if (strcmp(env, "off") == 0)
+		{
+			args.validate = false;
+		}
+		else if (spvParseTargetEnv(env, &args.validate_env))
+		{
+			args.validate = true;
+		}
+		else
+		{
+			print_help();
+			parser.end();
+		}
+	});
+
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };
 
@@ -801,6 +829,19 @@ static int main_inner(int argc, char *argv[])
 	auto spirv_file = read_spirv_file(args.input);
 	if (spirv_file.empty())
 		return EXIT_FAILURE;
+
+	if (args.validate)
+	{
+		spvtools::SpirvTools tools(args.validate_env);
+		tools.SetMessageConsumer(validation_message_consumer);
+		spvtools::ValidatorOptions options;
+		if (!tools.Validate(spirv_file.data(), spirv_file.size(), options))
+		{
+			fprintf(stderr, "validation failed\n");
+			return EXIT_FAILURE;
+		}
+	}
+
 	Parser spirv_parser(move(spirv_file));
 
 	spirv_parser.parse();
