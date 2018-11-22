@@ -1299,6 +1299,13 @@ T &variant_set(Variant &var, P &&... args)
 	return *ptr;
 }
 
+struct AccessChainMeta
+{
+	bool need_transpose = false;
+	bool storage_is_packed = false;
+	bool storage_is_invariant = false;
+};
+
 struct Meta
 {
 	struct Decoration
