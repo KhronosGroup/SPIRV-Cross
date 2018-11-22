@@ -3608,10 +3608,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 
 		string base;
 		if (to_plain_buffer_length != 0)
-		{
-			bool need_transpose;
-			base = access_chain(ops[2], &ops[3], to_plain_buffer_length, get<SPIRType>(ops[0]), &need_transpose);
-		}
+			base = access_chain(ops[2], &ops[3], to_plain_buffer_length, get<SPIRType>(ops[0]));
 		else if (chain)
 			base = chain->base;
 		else

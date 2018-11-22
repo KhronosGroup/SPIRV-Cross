@@ -5462,8 +5462,7 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-                                           bool index_is_literal, bool chain_only, bool *need_transpose,
-                                           bool *result_is_packed)
+                                           bool index_is_literal, bool chain_only, AccessChainMeta *meta)
 {
 	string expr;
 	if (!chain_only)
@@ -5477,6 +5476,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 	bool is_packed = has_decoration(base, DecorationCPacked);
+	bool is_invariant = has_decoration(base, DecorationInvariant);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
@@ -5605,6 +5605,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					expr += to_member_reference(maybe_get_backing_variable(base), *type, index);
 			}
 
+			if (has_member_decoration(type->self, index, DecorationInvariant))
+				is_invariant = true;
+
 			is_packed = member_is_packed_type(*type, index);
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
@@ -5670,11 +5673,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		                  "This is not supported.");
 	}
 
-	if (need_transpose)
-		*need_transpose = row_major_matrix_needs_conversion;
-
-	if (result_is_packed)
-		*result_is_packed = is_packed;
+	if (meta)
+	{
+		meta->need_transpose = row_major_matrix_needs_conversion;
+		meta->storage_is_packed = is_packed;
+		meta->storage_is_invariant = is_invariant;
+	}
 
 	return expr;
 }
@@ -5686,7 +5690,7 @@ string CompilerGLSL::to_flattened_struct_member(const SPIRVariable &var, uint32_
 }
 
 string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-                                  bool *out_need_transpose, bool *result_is_packed)
+                                  AccessChainMeta *meta)
 {
 	if (flattened_buffer_blocks.count(base))
 	{
@@ -5694,25 +5698,27 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 		bool need_transpose = false;
 		flattened_access_chain_offset(expression_type(base), indices, count, 0, 16, &need_transpose, &matrix_stride);
 
-		if (out_need_transpose)
-			*out_need_transpose = target_type.columns > 1 && need_transpose;
-		if (result_is_packed)
-			*result_is_packed = false;
+		if (meta)
+		{
+			meta->need_transpose = target_type.columns > 1 && need_transpose;
+			meta->storage_is_packed = false;
+		}
 
 		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, need_transpose);
 	}
 	else if (flattened_structs.count(base) && count > 0)
 	{
 		auto chain = access_chain_internal(base, indices, count, false, true).substr(1);
-		if (out_need_transpose)
-			*out_need_transpose = false;
-		if (result_is_packed)
-			*result_is_packed = false;
+		if (meta)
+		{
+			meta->need_transpose = false;
+			meta->storage_is_packed = false;
+		}
 		return sanitize_underscores(join(to_name(base), "_", chain));
 	}
 	else
 	{
-		return access_chain_internal(base, indices, count, false, false, out_need_transpose, result_is_packed);
+		return access_chain_internal(base, indices, count, false, false, meta);
 	}
 }
 
@@ -6420,6 +6426,37 @@ void CompilerGLSL::emit_block_instructions(SPIRBlock &block)
 	current_emitting_block = nullptr;
 }
 
+void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression &expr)
+{
+	if (forwarded_temporaries.count(expr.self))
+	{
+		forced_temporaries.insert(expr.self);
+		force_recompile = true;
+	}
+
+	for (auto &dependent : expr.expression_dependencies)
+		disallow_forwarding_in_expression_chain(get<SPIRExpression>(dependent));
+}
+
+void CompilerGLSL::handle_store_to_invariant_variable(uint32_t store_id, uint32_t value_id)
+{
+	// Variables or access chains marked invariant are complicated. We will need to make sure the code-gen leading up to
+	// this variable is consistent. The failure case for SPIRV-Cross is when an expression is forced to a temporary
+	// in one translation unit, but not another, e.g. due to multiple use of an expression.
+	// This causes variance despite the output variable being marked invariant, so the solution here is to force all dependent
+	// expressions to be temporaries.
+	// It is uncertain if this is enough to support invariant in all possible cases, but it should be good enough
+	// for all reasonable uses of invariant.
+	if (!has_decoration(store_id, DecorationInvariant))
+		return;
+
+	auto *expr = maybe_get<SPIRExpression>(value_id);
+	if (!expr)
+		return;
+
+	disallow_forwarding_in_expression_chain(*expr);
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -6503,21 +6540,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// If the base is immutable, the access chain pointer must also be.
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
-		bool need_transpose = false;
-		bool result_is_packed = false;
-		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &need_transpose, &result_is_packed);
+		AccessChainMeta meta;
+		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &meta);
 
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 
 		auto *backing_variable = maybe_get_backing_variable(ops[2]);
 		expr.loaded_from = backing_variable ? backing_variable->self : ops[2];
-		expr.need_transpose = need_transpose;
+		expr.need_transpose = meta.need_transpose;
 
 		// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
-		if (result_is_packed)
+		if (meta.storage_is_packed)
 			set_decoration(ops[1], DecorationCPacked);
 		else
 			unset_decoration(ops[1], DecorationCPacked);
+
+		if (meta.storage_is_invariant)
+			set_decoration(ops[1], DecorationInvariant);
+		else
+			unset_decoration(ops[1], DecorationInvariant);
 
 		break;
 	}
@@ -6546,6 +6587,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// Statements to OpStore may be empty if it is a struct with zero members. Just forward the store to /dev/null.
 			if (!rhs.empty())
 			{
+				handle_store_to_invariant_variable(ops[0], ops[1]);
+
 				auto lhs = to_expression(ops[0]);
 
 				// We might need to bitcast in order to store to a builtin.
