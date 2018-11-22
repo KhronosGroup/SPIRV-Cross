@@ -1326,15 +1326,7 @@ struct Meta
 
 	std::unordered_map<uint32_t, uint32_t> decoration_word_offset;
 
-	// Used when the parser has detected a candidate identifier which matches
-	// known "magic" counter buffers as emitted by HLSL frontends.
-	// We will need to match the identifiers by name later when reflecting resources.
-	// We could use the regular alias later, but the alias will be mangled when parsing SPIR-V because the identifier
-	// is not a valid identifier in any high-level language.
-	std::string hlsl_magic_counter_buffer_name;
-	bool hlsl_magic_counter_buffer_candidate = false;
-
-	// For SPV_GOOGLE_hlsl_functionality1, this avoids the workaround.
+	// For SPV_GOOGLE_hlsl_functionality1.
 	bool hlsl_is_magic_counter_buffer = false;
 	// ID for the sibling counter buffer.
 	uint32_t hlsl_magic_counter_buffer = 0;
