@@ -3481,22 +3481,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 
 bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 {
-	// First, check for the proper decoration.
-	if (ir.meta.at(id).hlsl_is_magic_counter_buffer)
-		return true;
-
-	// Check for legacy fallback method.
-	// FIXME: This should be deprecated eventually.
-
-	if (ir.meta.at(id).hlsl_magic_counter_buffer_candidate)
-	{
-		auto *var = maybe_get<SPIRVariable>(id);
-		// Ensure that this is actually a buffer object.
-		return var && (var->storage == StorageClassStorageBuffer ||
-		               has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock));
-	}
-	else
-		return false;
+	return ir.meta.at(id).hlsl_is_magic_counter_buffer;
 }
 
 bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const
@@ -3507,27 +3492,8 @@ bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id)
 		counter_id = ir.meta[id].hlsl_magic_counter_buffer;
 		return true;
 	}
-
-	// Check for legacy fallback method.
-	// FIXME: This should be deprecated eventually.
-
-	auto &name = get_name(id);
-	uint32_t id_bound = get_current_id_bound();
-	for (uint32_t i = 0; i < id_bound; i++)
-	{
-		if (ir.meta[i].hlsl_magic_counter_buffer_candidate && ir.meta[i].hlsl_magic_counter_buffer_name == name)
-		{
-			auto *var = maybe_get<SPIRVariable>(i);
-			// Ensure that this is actually a buffer object.
-			if (var && (var->storage == StorageClassStorageBuffer ||
-			            has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock)))
-			{
-				counter_id = i;
-				return true;
-			}
-		}
-	}
-	return false;
+	else
+		return false;
 }
 
 void Compiler::make_constant_null(uint32_t id, uint32_t type)

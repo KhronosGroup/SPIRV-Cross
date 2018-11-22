@@ -88,21 +88,6 @@ void ParsedIR::set_name(uint32_t id, const string &name)
 	if (name.empty())
 		return;
 
-	// glslang uses identifiers to pass along meaningful information
-	// about HLSL reflection.
-	// FIXME: This should be deprecated eventually.
-	auto &m = meta[id];
-	if (source.hlsl && name.size() >= 6 && name.find("@count") == name.size() - 6)
-	{
-		m.hlsl_magic_counter_buffer_candidate = true;
-		m.hlsl_magic_counter_buffer_name = name.substr(0, name.find("@count"));
-	}
-	else
-	{
-		m.hlsl_magic_counter_buffer_candidate = false;
-		m.hlsl_magic_counter_buffer_name.clear();
-	}
-
 	// Reserved for temporaries.
 	if (name[0] == '_' && name.size() >= 2 && isdigit(name[1]))
 		return;
@@ -196,7 +181,7 @@ void ParsedIR::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 
 	case DecorationHlslCounterBufferGOOGLE:
 		meta[id].hlsl_magic_counter_buffer = argument;
-		meta[id].hlsl_is_magic_counter_buffer = true;
+		meta[argument].hlsl_is_magic_counter_buffer = true;
 		break;
 
 	default:
