@@ -10217,6 +10217,20 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		auto &type = expression_type(block.condition);
 		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort;
 
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+		{
+			// SPIR-V spec suggests this is allowed, but we cannot support it in higher level languages.
+			SPIRV_CROSS_THROW("Cannot use 64-bit switch selectors.");
+		}
+
+		const char *label_suffix = "";
+		if (type.basetype == SPIRType::UInt && backend.uint32_t_literal_suffix)
+			label_suffix = "u";
+		else if (type.basetype == SPIRType::UShort)
+			label_suffix = backend.uint16_t_literal_suffix;
+		else if (type.basetype == SPIRType::Short)
+			label_suffix = backend.int16_t_literal_suffix;
+
 		SPIRBlock *old_emitting_switch = current_emitting_switch;
 		current_emitting_switch = &block;
 
@@ -10242,9 +10256,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			{
 				if (other_case.block == c.block)
 				{
+					// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
 					auto case_value = unsigned_case ? convert_to_string(uint32_t(other_case.value)) :
 					                                  convert_to_string(int32_t(other_case.value));
-					statement("case ", case_value, ":");
+					statement("case ", case_value, label_suffix, ":");
 				}
 			}
 
