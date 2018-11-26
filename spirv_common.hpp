@@ -437,7 +437,10 @@ struct SPIRType : IVariant
 	std::vector<bool> array_size_literal;
 
 	// Pointers
+	// Keep track of how many pointer layers we have.
+	uint32_t pointer_depth = 0;
 	bool pointer = false;
+
 	spv::StorageClass storage = spv::StorageClassGeneric;
 
 	std::vector<uint32_t> member_types;
