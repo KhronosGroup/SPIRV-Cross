@@ -599,9 +599,8 @@ void Parser::parse(const Instruction &instruction)
 		auto &ptrbase = set<SPIRType>(id);
 
 		ptrbase = base;
-		if (ptrbase.pointer)
-			SPIRV_CROSS_THROW("Cannot make pointer-to-pointer type.");
 		ptrbase.pointer = true;
+		ptrbase.pointer_depth++;
 		ptrbase.storage = static_cast<StorageClass>(ops[1]);
 
 		if (ptrbase.storage == StorageClassAtomicCounter)
