@@ -4023,21 +4023,33 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			// point, we get that by calling get_sample_position() on the sample ID.
 			if (var.storage == StorageClassInput && is_builtin_variable(var))
 			{
-				if (bi_type != BuiltInSamplePosition)
-				{
-					if (!ep_args.empty())
-						ep_args += ", ";
-
-					ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
-					ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
-				}
-				else
+				if (bi_type == BuiltInSamplePosition)
 				{
 					auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 					entry_func.fixup_hooks_in.push_back([=]() {
 						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = get_sample_position(",
 						          to_expression(builtin_sample_id_id), ");");
 					});
+				}
+				else if (bi_type == BuiltInHelperInvocation)
+				{
+					if (msl_options.is_ios())
+						SPIRV_CROSS_THROW("simd_is_helper_thread() is only supported on macOS.");
+					else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
+						SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
+
+					auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = simd_is_helper_thread();");
+					});
+				}
+				else
+				{
+					if (!ep_args.empty())
+						ep_args += ", ";
+
+					ep_args += builtin_type_decl(bi_type) + " " + to_expression(var_id);
+					ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
 				}
 			}
 		}
@@ -4793,6 +4805,9 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 		return "uint3";
 	case BuiltInLocalInvocationIndex:
 		return "uint";
+
+	case BuiltInHelperInvocation:
+		return "bool";
 
 	default:
 		return "unsupported-built-in-type";
