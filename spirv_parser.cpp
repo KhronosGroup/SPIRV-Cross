@@ -459,7 +459,7 @@ void Parser::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[0];
 		uint32_t width = ops[1];
-		bool signedness = ops[2];
+		bool signedness = ops[2] != 0;
 		auto &type = set<SPIRType>(id);
 		switch (width)
 		{
