@@ -943,6 +943,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					if (has_member_decoration(type_id, mbr_idx, DecorationLocation))
 					{
 						uint32_t locn = get_member_decoration(type_id, mbr_idx, DecorationLocation);
+						if (storage == StorageClassInput && get_entry_point().model == ExecutionModelVertex)
+						{
+							mbr_type_id = ensure_correct_attribute_type(mbr_type_id, locn);
+							type.member_types[mbr_idx] = mbr_type_id;
+							ib_type.member_types[ib_mbr_idx] = mbr_type_id;
+						}
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
 					}
@@ -951,6 +957,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						// The block itself might have a location and in this case, all members of the block
 						// receive incrementing locations.
 						uint32_t locn = get_decoration(p_var->self, DecorationLocation) + mbr_idx;
+						if (storage == StorageClassInput && get_entry_point().model == ExecutionModelVertex)
+						{
+							mbr_type_id = ensure_correct_attribute_type(mbr_type_id, locn);
+							type.member_types[mbr_idx] = mbr_type_id;
+							ib_type.member_types[ib_mbr_idx] = mbr_type_id;
+						}
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
 					}
@@ -1039,6 +1051,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						if (get_decoration_bitset(p_var->self).get(DecorationLocation))
 						{
 							uint32_t locn = get_decoration(p_var->self, DecorationLocation) + i;
+							if (storage == StorageClassInput && get_entry_point().model == ExecutionModelVertex)
+							{
+								p_var->basetype = ensure_correct_attribute_type(p_var->basetype, locn);
+								uint32_t mbr_type_id = ensure_correct_attribute_type(usable_type->self, locn);
+								ib_type.member_types[ib_mbr_idx] = mbr_type_id;
+							}
 							set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 							mark_location_as_used_by_shader(locn, storage);
 						}
@@ -1098,6 +1116,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					if (get_decoration_bitset(p_var->self).get(DecorationLocation))
 					{
 						uint32_t locn = get_decoration(p_var->self, DecorationLocation);
+						if (storage == StorageClassInput && get_entry_point().model == ExecutionModelVertex)
+						{
+							type_id = ensure_correct_attribute_type(type_id, locn);
+							p_var->basetype = type_id;
+							ib_type.member_types[ib_mbr_idx] = type_id;
+						}
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
 					}
@@ -1158,6 +1182,81 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 		auto &base_type = set<SPIRType>(base_type_id);
 		base_type.basetype = SPIRType::UInt;
 		base_type.width = 32;
+
+		if (!type.pointer)
+			return base_type_id;
+
+		uint32_t ptr_type_id = next_id++;
+		auto &ptr_type = set<SPIRType>(ptr_type_id);
+		ptr_type = base_type;
+		ptr_type.pointer = true;
+		ptr_type.storage = type.storage;
+		ptr_type.parent_type = base_type_id;
+		return ptr_type_id;
+	}
+
+	return type_id;
+}
+
+// Ensure that the type is compatible with the vertex attribute.
+// If it is, simply return the given type ID.
+// Otherwise, create a new type, and return its ID.
+uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t location)
+{
+	auto &type = get<SPIRType>(type_id);
+
+	MSLVertexAttr *p_va = vtx_attrs_by_location[location];
+	if (!p_va)
+		return type_id;
+
+	if (p_va->uint8)
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::UByte:
+		case SPIRType::UShort:
+		case SPIRType::UInt:
+			return type_id;
+		case SPIRType::Short:
+		case SPIRType::Int:
+			break;
+		default:
+			SPIRV_CROSS_THROW("Vertex attribute type mismatch between host and shader");
+		}
+		uint32_t next_id = ir.increase_bound_by(type.pointer ? 2 : 1);
+		uint32_t base_type_id = next_id++;
+		auto &base_type = set<SPIRType>(base_type_id);
+		base_type = type;
+		base_type.basetype = type.basetype == SPIRType::Short ? SPIRType::UShort : SPIRType::UInt;
+
+		if (!type.pointer)
+			return base_type_id;
+
+		uint32_t ptr_type_id = next_id++;
+		auto &ptr_type = set<SPIRType>(ptr_type_id);
+		ptr_type = base_type;
+		ptr_type.pointer = true;
+		ptr_type.storage = type.storage;
+		ptr_type.parent_type = base_type_id;
+		return ptr_type_id;
+	}
+	else if (p_va->uint16)
+	{
+		switch (type.basetype)
+		{
+		case SPIRType::UShort:
+		case SPIRType::UInt:
+			return type_id;
+		case SPIRType::Int:
+			break;
+		default:
+			SPIRV_CROSS_THROW("Vertex attribute type mismatch between host and shader");
+		}
+		uint32_t next_id = ir.increase_bound_by(type.pointer ? 2 : 1);
+		uint32_t base_type_id = next_id++;
+		auto &base_type = set<SPIRType>(base_type_id);
+		base_type = type;
+		base_type.basetype = SPIRType::UInt;
 
 		if (!type.pointer)
 			return base_type_id;

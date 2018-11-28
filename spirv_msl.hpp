@@ -37,6 +37,8 @@ struct MSLVertexAttr
 	uint32_t msl_offset = 0;
 	uint32_t msl_stride = 0;
 	bool per_instance = false;
+	bool uint8 = false;
+	bool uint16 = false;
 	bool used_by_shader = false;
 };
 
@@ -352,6 +354,7 @@ protected:
 	uint32_t add_interface_block(spv::StorageClass storage);
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
+	uint32_t ensure_correct_attribute_type(uint32_t type_id, uint32_t location);
 
 	void emit_custom_functions();
 	void emit_resources();
