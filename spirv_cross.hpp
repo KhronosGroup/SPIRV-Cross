@@ -186,6 +186,15 @@ public:
 	// Gets the SPIR-V type underlying the given type_id, which might be a pointer.
 	const SPIRType &get_non_pointer_type(uint32_t type_id) const;
 
+	// Gets the ID of the SPIR-V type underlying a variable.
+	uint32_t get_variable_data_type_id(const SPIRVariable &var) const;
+
+	// Gets the SPIR-V type underlying a variable.
+	SPIRType &get_variable_data_type(const SPIRVariable &var);
+
+	// Gets the SPIR-V type underlying a variable.
+	const SPIRType &get_variable_data_type(const SPIRVariable &var) const;
+
 	// Returns if the given type refers to a sampled image.
 	bool is_sampled_image_type(const SPIRType &type);
 

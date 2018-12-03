@@ -1081,7 +1081,12 @@ void Parser::make_constant_null(uint32_t id, uint32_t type)
 {
 	auto &constant_type = get<SPIRType>(type);
 
-	if (!constant_type.array.empty())
+	if (constant_type.pointer)
+	{
+		auto &constant = set<SPIRConstant>(id, type);
+		constant.make_null(constant_type);
+	}
+	else if (!constant_type.array.empty())
 	{
 		assert(constant_type.parent_type);
 		uint32_t parent_id = ir.increase_bound_by(1);

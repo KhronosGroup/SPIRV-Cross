@@ -564,6 +564,9 @@ struct SPIRExpression : IVariant
 	// This is needed for targets which don't support row_major layouts.
 	bool need_transpose = false;
 
+	// Whether or not this is an access chain expression.
+	bool access_chain = false;
+
 	// A list of expressions which this expression depends on.
 	std::vector<uint32_t> expression_dependencies;
 

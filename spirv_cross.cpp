@@ -546,6 +546,40 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 		break;
 	}
 
+	case OpSelect:
+	{
+		// Invalid SPIR-V.
+		if (length < 5)
+			return false;
+
+		uint32_t count = length - 3;
+		args += 3;
+		for (uint32_t i = 0; i < count; i++)
+		{
+			auto *var = compiler.maybe_get<SPIRVariable>(args[i]);
+			if (var && storage_class_is_interface(var->storage))
+				variables.insert(args[i]);
+		}
+		break;
+	}
+
+	case OpPhi:
+	{
+		// Invalid SPIR-V.
+		if (length < 2)
+			return false;
+
+		uint32_t count = length - 2;
+		args += 2;
+		for (uint32_t i = 0; i < count; i += 2)
+		{
+			auto *var = compiler.maybe_get<SPIRVariable>(args[i]);
+			if (var && storage_class_is_interface(var->storage))
+				variables.insert(args[i]);
+		}
+		break;
+	}
+
 	case OpAtomicStore:
 	case OpStore:
 		// Invalid SPIR-V.
@@ -602,6 +636,7 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
+	case OpPtrAccessChain:
 	case OpLoad:
 	case OpCopyObject:
 	case OpImageTexelPointer:
@@ -898,6 +933,7 @@ void Compiler::flatten_interface_block(uint32_t id)
 	type.array.push_back(array_size);
 	type.pointer = true;
 	type.storage = storage;
+	type.parent_type = t;
 	var.storage = storage;
 }
 
@@ -977,11 +1013,10 @@ const SPIRType &Compiler::get_type_from_variable(uint32_t id) const
 uint32_t Compiler::get_non_pointer_type_id(uint32_t type_id) const
 {
 	auto *p_type = &get<SPIRType>(type_id);
-	while (p_type->pointer)
+	if (p_type->pointer)
 	{
 		assert(p_type->parent_type);
 		type_id = p_type->parent_type;
-		p_type = &get<SPIRType>(type_id);
 	}
 	return type_id;
 }
@@ -989,7 +1024,7 @@ uint32_t Compiler::get_non_pointer_type_id(uint32_t type_id) const
 const SPIRType &Compiler::get_non_pointer_type(const SPIRType &type) const
 {
 	auto *p_type = &type;
-	while (p_type->pointer)
+	if (p_type->pointer)
 	{
 		assert(p_type->parent_type);
 		p_type = &get<SPIRType>(p_type->parent_type);
@@ -1000,6 +1035,23 @@ const SPIRType &Compiler::get_non_pointer_type(const SPIRType &type) const
 const SPIRType &Compiler::get_non_pointer_type(uint32_t type_id) const
 {
 	return get_non_pointer_type(get<SPIRType>(type_id));
+}
+
+uint32_t Compiler::get_variable_data_type_id(const SPIRVariable &var) const
+{
+	if (var.phi_variable)
+		return var.basetype;
+	return get_non_pointer_type_id(var.basetype);
+}
+
+SPIRType &Compiler::get_variable_data_type(const SPIRVariable &var)
+{
+	return get<SPIRType>(get_variable_data_type_id(var));
+}
+
+const SPIRType &Compiler::get_variable_data_type(const SPIRVariable &var) const
+{
+	return get<SPIRType>(get_variable_data_type_id(var));
 }
 
 bool Compiler::is_sampled_image_type(const SPIRType &type)
@@ -1487,11 +1539,13 @@ size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, ui
 
 bool Compiler::BufferAccessHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
-	if (opcode != OpAccessChain && opcode != OpInBoundsAccessChain)
+	if (opcode != OpAccessChain && opcode != OpInBoundsAccessChain && opcode != OpPtrAccessChain)
 		return true;
 
+	bool ptr_chain = (opcode == OpPtrAccessChain);
+
 	// Invalid SPIR-V.
-	if (length < 4)
+	if (length < (ptr_chain ? 5 : 4))
 		return false;
 
 	if (args[2] != id)
@@ -1499,7 +1553,7 @@ bool Compiler::BufferAccessHandler::handle(Op opcode, const uint32_t *args, uint
 
 	// Don't bother traversing the entire access chain tree yet.
 	// If we access a struct member, assume we access the entire member.
-	uint32_t index = compiler.get<SPIRConstant>(args[3]).scalar();
+	uint32_t index = compiler.get<SPIRConstant>(args[ptr_chain ? 4 : 3]).scalar();
 
 	// Seen this index already.
 	if (seen.find(index) != end(seen))
@@ -2043,6 +2097,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		ptr_type = type;
 		ptr_type.pointer = true;
 		ptr_type.storage = StorageClassUniformConstant;
+		ptr_type.parent_type = type_id;
 
 		// Build new variable.
 		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0);
@@ -2116,6 +2171,7 @@ bool Compiler::DummySamplerForCombinedImageHandler::handle(Op opcode, const uint
 
 	case OpInBoundsAccessChain:
 	case OpAccessChain:
+	case OpPtrAccessChain:
 	{
 		if (length < 3)
 			return false;
@@ -2175,6 +2231,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 	case OpInBoundsAccessChain:
 	case OpAccessChain:
+	case OpPtrAccessChain:
 	{
 		if (length < 3)
 			return false;
@@ -2303,6 +2360,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		type = base;
 		type.pointer = true;
 		type.storage = StorageClassUniformConstant;
+		type.parent_type = type_id;
 
 		// Build new variable.
 		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
@@ -2350,6 +2408,7 @@ uint32_t Compiler::build_dummy_sampler_for_combined_images()
 		ptr_sampler.self = type_id;
 		ptr_sampler.storage = StorageClassUniformConstant;
 		ptr_sampler.pointer = true;
+		ptr_sampler.parent_type = type_id;
 
 		set<SPIRVariable>(var_id, ptr_type_id, StorageClassUniformConstant, 0);
 		set_name(var_id, "SPIRV_Cross_DummySampler");
@@ -2599,6 +2658,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
+	case OpPtrAccessChain:
 	{
 		if (length < 3)
 			return false;
@@ -2783,6 +2843,7 @@ bool Compiler::StaticExpressionAccessHandler::handle(spv::Op op, const uint32_t 
 
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
+	case OpPtrAccessChain:
 		if (length < 3)
 			return false;
 		if (args[2] == variable_id) // If we try to access chain our candidate variable before we store to it, bail.
@@ -3219,6 +3280,26 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		add_if_builtin(args[2]);
 		break;
 
+	case OpSelect:
+		if (length < 5)
+			return false;
+
+		add_if_builtin(args[3]);
+		add_if_builtin(args[4]);
+		break;
+
+	case OpPhi:
+	{
+		if (length < 2)
+			return false;
+
+		uint32_t count = length - 2;
+		args += 2;
+		for (uint32_t i = 0; i < count; i += 2)
+			add_if_builtin(args[i]);
+		break;
+	}
+
 	case OpFunctionCall:
 	{
 		if (length < 3)
@@ -3233,6 +3314,7 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
+	case OpPtrAccessChain:
 	{
 		if (length < 4)
 			return false;
@@ -3247,7 +3329,7 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		add_if_builtin(args[2]);
 
 		// Start traversing type hierarchy at the proper non-pointer types.
-		auto *type = &compiler.get_non_pointer_type(var->basetype);
+		auto *type = &compiler.get_variable_data_type(*var);
 
 		auto &flags =
 		    type->storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
@@ -3256,6 +3338,13 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		args += 3;
 		for (uint32_t i = 0; i < count; i++)
 		{
+			// Pointers
+			if (opcode == OpPtrAccessChain && i == 0)
+			{
+				type = &compiler.get<SPIRType>(type->parent_type);
+				continue;
+			}
+
 			// Arrays
 			if (!type->array.empty())
 			{
@@ -3463,6 +3552,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 	{
 	case OpAccessChain:
 	case OpInBoundsAccessChain:
+	case OpPtrAccessChain:
 	case OpLoad:
 	{
 		if (length < 3)
@@ -3533,7 +3623,12 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 {
 	auto &constant_type = get<SPIRType>(type);
 
-	if (!constant_type.array.empty())
+	if (constant_type.pointer)
+	{
+		auto &constant = set<SPIRConstant>(id, type);
+		constant.make_null(constant_type);
+	}
+	else if (!constant_type.array.empty())
 	{
 		assert(constant_type.parent_type);
 		uint32_t parent_id = ir.increase_bound_by(1);
