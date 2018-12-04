@@ -27,6 +27,16 @@
 namespace spirv_cross
 {
 
+// Indicates the format of the vertex attribute. Currently limited to specifying
+// if the attribute is an 8-bit unsigned integer, 16-bit unsigned integer, or
+// some other format.
+enum MSLVertexFormat
+{
+	MSL_VERTEX_FORMAT_OTHER,
+	MSL_VERTEX_FORMAT_UINT8,
+	MSL_VERTEX_FORMAT_UINT16
+};
+
 // Defines MSL characteristics of a vertex attribute at a particular location.
 // The used_by_shader flag is set to true during compilation of SPIR-V to MSL
 // if the shader makes use of this vertex attribute.
@@ -37,8 +47,7 @@ struct MSLVertexAttr
 	uint32_t msl_offset = 0;
 	uint32_t msl_stride = 0;
 	bool per_instance = false;
-	bool uint8 = false;
-	bool uint16 = false;
+	MSLVertexFormat format = MSL_VERTEX_FORMAT_OTHER;
 	bool used_by_shader = false;
 };
 

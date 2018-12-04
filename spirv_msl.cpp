@@ -1209,7 +1209,9 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 	if (!p_va)
 		return type_id;
 
-	if (p_va->uint8)
+	switch (p_va->format)
+	{
+	case MSL_VERTEX_FORMAT_UINT8:
 	{
 		switch (type.basetype)
 		{
@@ -1240,7 +1242,7 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 		ptr_type.parent_type = base_type_id;
 		return ptr_type_id;
 	}
-	else if (p_va->uint16)
+	case MSL_VERTEX_FORMAT_UINT16:
 	{
 		switch (type.basetype)
 		{
@@ -1268,6 +1270,10 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 		ptr_type.storage = type.storage;
 		ptr_type.parent_type = base_type_id;
 		return ptr_type_id;
+	}
+
+	case MSL_VERTEX_FORMAT_OTHER:
+		break;
 	}
 
 	return type_id;
