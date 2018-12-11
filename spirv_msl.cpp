@@ -2671,7 +2671,7 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	else
 		bar_stmt += "mem_none";
 
-	if (msl_options.is_ios() && msl_options.supports_msl_version(2))
+	if (msl_options.is_ios() && (msl_options.supports_msl_version(2) && !msl_options.supports_msl_version(2, 1)))
 	{
 		bar_stmt += ", ";
 
