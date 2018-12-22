@@ -35,7 +35,13 @@ $(STATIC_LIB): $(OBJECTS)
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CXXFLAGS) -MMD
 
+install:
+	mkdir -p $(TARGET_DIR_BIN)
+	mkdir -p $(TARGET_DIR_LIB)
+	cp $(TARGET) $(TARGET_DIR_BIN)/
+	cp $(STATIC_LIB) $(TARGET_DIR_LIB)/
+
 clean:
 	rm -f $(TARGET) $(OBJECTS) $(CLI_OBJECTS) $(STATIC_LIB) $(DEPS)
 
-.PHONY: clean
+.PHONY: all install clean
