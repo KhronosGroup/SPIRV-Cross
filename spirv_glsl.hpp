@@ -346,6 +346,7 @@ protected:
 	std::unordered_set<std::string> block_output_names;
 	std::unordered_set<std::string> block_ubo_names;
 	std::unordered_set<std::string> block_ssbo_names;
+	std::unordered_set<std::string> block_names; // A union of all block_*_names.
 	std::unordered_map<std::string, std::unordered_set<uint64_t>> function_overloads;
 
 	bool processing_entry_point = false;
@@ -571,8 +572,13 @@ protected:
 	void emit_pls();
 	void remap_pls_variables();
 
-	void add_variable(std::unordered_set<std::string> &variables, uint32_t id);
-	void add_variable(std::unordered_set<std::string> &variables, std::string &name);
+	// A variant which takes two sets of name. The secondary is only used to verify there are no collisions,
+	// but the set is not updated when we have found a new name.
+	// Used primarily when adding block interface names.
+	void add_variable(std::unordered_set<std::string> &variables_primary,
+	                  const std::unordered_set<std::string> &variables_secondary,
+	                  std::string &name);
+
 	void check_function_call_constraints(const uint32_t *args, uint32_t length);
 	void handle_invalid_expression(uint32_t id);
 	void find_static_extensions();

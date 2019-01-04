@@ -288,6 +288,7 @@ void CompilerGLSL::reset()
 	block_output_names.clear();
 	block_ubo_names.clear();
 	block_ssbo_names.clear();
+	block_names.clear();
 	function_overloads.clear();
 
 	for (auto &id : ir.ids)
@@ -1544,19 +1545,26 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
-	if (ir.meta[type.self].decoration.alias.empty() || block_namespace.find(buffer_name) != end(block_namespace))
+	// If we have a collision for any reason, just fallback immediately.
+	if (ir.meta[type.self].decoration.alias.empty() ||
+	    block_namespace.find(buffer_name) != end(block_namespace) ||
+	    resource_names.find(buffer_name) != end(resource_names))
+	{
 		buffer_name = get_block_fallback_name(var.self);
+	}
 
-	// Make sure we get something unique.
-	add_variable(block_namespace, buffer_name);
+	// Make sure we get something unique for both global name scope and block name scope.
+	// See GLSL 4.5 spec: section 4.3.9 for details.
+	add_variable(block_namespace, resource_names, buffer_name);
 
 	// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
 	// This cannot conflict with anything else, so we're safe now.
+	// We cannot reuse this fallback name in neither global scope (blocked by block_names) nor block name scope.
 	if (buffer_name.empty())
 		buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
 
-	// Instance names cannot alias block names.
-	resource_names.insert(buffer_name);
+	block_names.insert(buffer_name);
+	block_namespace.insert(buffer_name);
 
 	// Save for post-reflection later.
 	declared_block_names[var.self] = buffer_name;
@@ -9164,7 +9172,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	}
 }
 
-void CompilerGLSL::add_variable(unordered_set<string> &variables, string &name)
+void CompilerGLSL::add_variable(unordered_set<string> &variables_primary,
+                                const unordered_set<string> &variables_secondary, string &name)
 {
 	if (name.empty())
 		return;
@@ -9179,23 +9188,17 @@ void CompilerGLSL::add_variable(unordered_set<string> &variables, string &name)
 	// Avoid double underscores.
 	name = sanitize_underscores(name);
 
-	update_name_cache(variables, name);
-}
-
-void CompilerGLSL::add_variable(unordered_set<string> &variables, uint32_t id)
-{
-	auto &name = ir.meta[id].decoration.alias;
-	add_variable(variables, name);
+	update_name_cache(variables_primary, variables_secondary, name);
 }
 
 void CompilerGLSL::add_local_variable_name(uint32_t id)
 {
-	add_variable(local_variable_names, id);
+	add_variable(local_variable_names, block_names, ir.meta[id].decoration.alias);
 }
 
 void CompilerGLSL::add_resource_name(uint32_t id)
 {
-	add_variable(resource_names, id);
+	add_variable(resource_names, block_names, ir.meta[id].decoration.alias);
 }
 
 void CompilerGLSL::add_header_line(const std::string &line)
