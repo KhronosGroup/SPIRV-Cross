@@ -1893,16 +1893,21 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 			// Prefer the block name if possible.
 			auto buffer_name = to_name(type.self, false);
-			if (ir.meta[type.self].decoration.alias.empty() || resource_names.find(buffer_name) != end(resource_names))
+			if (ir.meta[type.self].decoration.alias.empty() ||
+			    resource_names.find(buffer_name) != end(resource_names) ||
+			    block_names.find(buffer_name) != end(block_names))
+			{
 				buffer_name = get_block_fallback_name(var.self);
-			add_variable(resource_names, buffer_name);
+			}
+
+			add_variable(block_names, resource_names, buffer_name);
 
 			// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
 			// This cannot conflict with anything else, so we're safe now.
 			if (buffer_name.empty())
 				buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
 
-			resource_names.insert(buffer_name);
+			block_names.insert(buffer_name);
 
 			// Save for post-reflection later.
 			declared_block_names[var.self] = buffer_name;

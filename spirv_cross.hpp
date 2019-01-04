@@ -649,6 +649,13 @@ protected:
 
 	void update_name_cache(std::unordered_set<std::string> &cache, std::string &name);
 
+	// A variant which takes two sets of names. The secondary is only used to verify there are no collisions,
+	// but the set is not updated when we have found a new name.
+	// Used primarily when adding block interface names.
+	void update_name_cache(std::unordered_set<std::string> &cache_primary,
+	                       const std::unordered_set<std::string> &cache_secondary,
+	                       std::string &name);
+
 	bool function_is_pure(const SPIRFunction &func);
 	bool block_is_pure(const SPIRBlock &block);
 	bool block_is_outside_flow_control_from_block(const SPIRBlock &from, const SPIRBlock &to);

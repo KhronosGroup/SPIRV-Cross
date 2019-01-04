@@ -901,14 +901,30 @@ void Compiler::flatten_interface_block(uint32_t id)
 	var.storage = storage;
 }
 
-void Compiler::update_name_cache(unordered_set<string> &cache, string &name)
+void Compiler::update_name_cache(unordered_set<string> &cache_primary,
+                                 const unordered_set<string> &cache_secondary, string &name)
 {
 	if (name.empty())
 		return;
 
-	if (cache.find(name) == end(cache))
+	const auto find_name = [&](const string &n) -> bool {
+		if (cache_primary.find(n) != end(cache_primary))
+			return true;
+
+		if (&cache_primary != &cache_secondary)
+			if (cache_secondary.find(n) != end(cache_secondary))
+				return true;
+
+		return false;
+	};
+
+	const auto insert_name = [&](const string &n) {
+		cache_primary.insert(n);
+	};
+
+	if (!find_name(name))
 	{
-		cache.insert(name);
+		insert_name(name);
 		return;
 	}
 
@@ -936,8 +952,13 @@ void Compiler::update_name_cache(unordered_set<string> &cache, string &name)
 	{
 		counter++;
 		name = tmpname + (use_linked_underscore ? "_" : "") + convert_to_string(counter);
-	} while (cache.find(name) != end(cache));
-	cache.insert(name);
+	} while (find_name(name));
+	insert_name(name);
+}
+
+void Compiler::update_name_cache(unordered_set<string> &cache, string &name)
+{
+	update_name_cache(cache, cache, name);
 }
 
 void Compiler::set_name(uint32_t id, const std::string &name)
