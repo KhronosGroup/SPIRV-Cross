@@ -567,6 +567,10 @@ struct SPIRExpression : IVariant
 	// A list of expressions which this expression depends on.
 	std::vector<uint32_t> expression_dependencies;
 
+	// By reading this expression, we implicitly read these expressions as well.
+	// Used by access chain Store and Load since we read multiple expressions in this case.
+	std::vector<uint32_t> implied_read_expressions;
+
 	SPIRV_CROSS_DECLARE_CLONE(SPIRExpression)
 };
 
@@ -844,6 +848,10 @@ struct SPIRAccessChain : IVariant
 	uint32_t matrix_stride = 0;
 	bool row_major_matrix = false;
 	bool immutable = false;
+
+	// By reading this expression, we implicitly read these expressions as well.
+	// Used by access chain Store and Load since we read multiple expressions in this case.
+	std::vector<uint32_t> implied_read_expressions;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRAccessChain)
 };

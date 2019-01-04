@@ -2514,9 +2514,9 @@ string CompilerGLSL::enclose_expression(const string &expr)
 }
 
 // Just like to_expression except that we enclose the expression inside parentheses if needed.
-string CompilerGLSL::to_enclosed_expression(uint32_t id)
+string CompilerGLSL::to_enclosed_expression(uint32_t id, bool register_expression_read)
 {
-	return enclose_expression(to_expression(id));
+	return enclose_expression(to_expression(id, register_expression_read));
 }
 
 string CompilerGLSL::to_unpacked_expression(uint32_t id)
@@ -2550,7 +2550,7 @@ string CompilerGLSL::to_extract_component_expression(uint32_t id, uint32_t index
 		return join(expr, ".", index_to_swizzle(index));
 }
 
-string CompilerGLSL::to_expression(uint32_t id)
+string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 {
 	auto itr = invalid_expressions.find(id);
 	if (itr != end(invalid_expressions))
@@ -2575,7 +2575,8 @@ string CompilerGLSL::to_expression(uint32_t id)
 				handle_invalid_expression(dep);
 	}
 
-	track_expression_read(id);
+	if (register_expression_read)
+		track_expression_read(id);
 
 	switch (ir.ids[id].get_type())
 	{
@@ -5464,11 +5465,12 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-                                           bool index_is_literal, bool chain_only, AccessChainMeta *meta)
+                                           bool index_is_literal, bool chain_only, AccessChainMeta *meta,
+                                           bool register_expression_read)
 {
 	string expr;
 	if (!chain_only)
-		expr = to_enclosed_expression(base);
+		expr = to_enclosed_expression(base, register_expression_read);
 
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
@@ -5506,7 +5508,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (index_is_literal)
 					expr += convert_to_string(index);
 				else
-					expr += to_expression(index);
+					expr += to_expression(index, register_expression_read);
 				expr += "]";
 			};
 
@@ -5527,9 +5529,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				case BuiltInPosition:
 				case BuiltInPointSize:
 					if (var->storage == StorageClassInput)
-						expr = join("gl_in[", to_expression(index), "].", expr);
+						expr = join("gl_in[", to_expression(index, register_expression_read), "].", expr);
 					else if (var->storage == StorageClassOutput)
-						expr = join("gl_out[", to_expression(index), "].", expr);
+						expr = join("gl_out[", to_expression(index, register_expression_read), "].", expr);
 					else
 						append_index();
 					break;
@@ -5547,7 +5549,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (index_is_literal)
 					expr += convert_to_string(index);
 				else
-					expr += to_enclosed_expression(index);
+					expr += to_enclosed_expression(index, register_expression_read);
 
 				for (auto j = uint32_t(parent_type.array.size()); j; j--)
 				{
@@ -5628,7 +5630,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (index_is_literal)
 				expr += convert_to_string(index);
 			else
-				expr += to_expression(index);
+				expr += to_expression(index, register_expression_read);
 			expr += "]";
 
 			type_id = type->parent_type;
@@ -5656,7 +5658,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else
 			{
 				expr += "[";
-				expr += to_expression(index);
+				expr += to_expression(index, register_expression_read);
 				expr += "]";
 			}
 
@@ -5710,7 +5712,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 	else if (flattened_structs.count(base) && count > 0)
 	{
-		auto chain = access_chain_internal(base, indices, count, false, true).substr(1);
+		auto chain = access_chain_internal(base, indices, count, false, true, nullptr, false).substr(1);
 		if (meta)
 		{
 			meta->need_transpose = false;
@@ -5720,7 +5722,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 	else
 	{
-		return access_chain_internal(base, indices, count, false, false, meta);
+		return access_chain_internal(base, indices, count, false, false, meta, false);
 	}
 }
 
@@ -5966,7 +5968,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
 					    "This cannot be flattened. Try using std140 layout instead.");
 				}
 
-				expr += to_enclosed_expression(index);
+				expr += to_enclosed_expression(index, false);
 				expr += " * ";
 				expr += convert_to_string(array_stride / word_stride);
 				expr += " + ";
@@ -6023,7 +6025,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
 					    "This cannot be flattened. Try using std140 layout instead.");
 				}
 
-				expr += to_enclosed_expression(index);
+				expr += to_enclosed_expression(index, false);
 				expr += " * ";
 				expr += convert_to_string(indexing_stride / word_stride);
 				expr += " + ";
@@ -6054,7 +6056,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(con
 					    "This cannot be flattened in legacy targets.");
 				}
 
-				expr += to_enclosed_expression(index);
+				expr += to_enclosed_expression(index, false);
 				expr += " * ";
 				expr += convert_to_string(indexing_stride / word_stride);
 				expr += " + ";
@@ -6097,6 +6099,28 @@ bool CompilerGLSL::should_forward(uint32_t id)
 
 void CompilerGLSL::track_expression_read(uint32_t id)
 {
+	switch (ir.ids[id].get_type())
+	{
+	case TypeExpression:
+	{
+		auto &e = get<SPIRExpression>(id);
+		for (auto implied_read : e.implied_read_expressions)
+			track_expression_read(implied_read);
+		break;
+	}
+
+	case TypeAccessChain:
+	{
+		auto &e = get<SPIRAccessChain>(id);
+		for (auto implied_read : e.implied_read_expressions)
+			track_expression_read(implied_read);
+		break;
+	}
+
+	default:
+		break;
+	}
+
 	// If we try to read a forwarded temporary more than once we will stamp out possibly complex code twice.
 	// In this case, it's better to just bind the complex expression to the temporary and read that temporary twice.
 	if (expression_is_forwarded(id))
@@ -6507,7 +6531,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else if (is_non_native_row_major_matrix(ptr))
 			need_transpose = true;
 
-		auto expr = to_expression(ptr);
+		// If we are forwarding this load,
+		// don't register the read to access chain here, defer that to when we actually use the expression,
+		// using the add_implied_read_expression mechanism.
+		auto expr = to_expression(ptr, !forward);
 
 		// We might need to bitcast in order to load from a builtin.
 		bitcast_from_builtin_load(ptr, expr, get<SPIRType>(result_type));
@@ -6530,6 +6557,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (has_decoration(ptr, DecorationCPacked))
 			set_decoration(id, DecorationCPacked);
 
+		inherit_expression_dependencies(id, ptr);
+		if (forward)
+			add_implied_read_expression(e, ptr);
 		break;
 	}
 
@@ -6561,6 +6591,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			set_decoration(ops[1], DecorationInvariant);
 		else
 			unset_decoration(ops[1], DecorationInvariant);
+
+		for (uint32_t i = 2; i < length; i++)
+		{
+			inherit_expression_dependencies(ops[1], ops[i]);
+			add_implied_read_expression(expr, ops[i]);
+		}
 
 		break;
 	}
