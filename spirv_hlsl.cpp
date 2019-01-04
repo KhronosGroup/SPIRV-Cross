@@ -3440,6 +3440,12 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
 
+		// If we are forwarding this load,
+		// don't register the read to access chain here, defer that to when we actually use the expression,
+		// using the add_implied_read_expression mechanism.
+		if (!forward)
+			track_expression_read(chain->self);
+
 		// Do not forward complex load sequences like matrices, structs and arrays.
 		auto &type = get<SPIRType>(result_type);
 		if (type.columns > 1 || !type.array.empty() || type.basetype == SPIRType::Struct)
@@ -3448,6 +3454,9 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		auto &e = emit_op(result_type, id, load_expr, forward, true);
 		e.need_transpose = false;
 		register_read(id, ptr, forward);
+		inherit_expression_dependencies(id, ptr);
+		if (forward)
+			add_implied_read_expression(e, chain->self);
 	}
 	else
 		CompilerGLSL::emit_instruction(instruction);
@@ -3456,6 +3465,9 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t value)
 {
 	auto &type = get<SPIRType>(chain.basetype);
+
+	// Make sure we trigger a read of the constituents in the access chain.
+	track_expression_read(chain.self);
 
 	SPIRType target_type;
 	target_type.basetype = SPIRType::UInt;
@@ -3648,6 +3660,12 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		{
 			e.dynamic_index += chain->dynamic_index;
 			e.static_index += chain->static_index;
+		}
+
+		for (uint32_t i = 2; i < length; i++)
+		{
+			inherit_expression_dependencies(ops[1], ops[i]);
+			add_implied_read_expression(e, ops[i]);
 		}
 	}
 	else

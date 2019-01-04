@@ -4145,7 +4145,8 @@ string CompilerMSL::entry_point_args(bool append_comma)
 
 					auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = simd_is_helper_thread();");
+						statement(builtin_type_decl(bi_type), " ", to_expression(var_id),
+						          " = simd_is_helper_thread();");
 					});
 				}
 				else

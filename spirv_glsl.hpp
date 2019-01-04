@@ -444,7 +444,8 @@ protected:
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-	                                  bool chain_only = false, AccessChainMeta *meta = nullptr);
+	                                  bool chain_only = false, AccessChainMeta *meta = nullptr,
+	                                  bool register_expression_read = true);
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
 	                         AccessChainMeta *meta = nullptr);
 
@@ -468,8 +469,8 @@ protected:
 	std::string remap_swizzle(const SPIRType &result_type, uint32_t input_components, const std::string &expr);
 	std::string declare_temporary(uint32_t type, uint32_t id);
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
-	std::string to_expression(uint32_t id);
-	std::string to_enclosed_expression(uint32_t id);
+	std::string to_expression(uint32_t id, bool register_expression_read = true);
+	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_expression(uint32_t id);
 	std::string to_enclosed_unpacked_expression(uint32_t id);
 	std::string to_extract_component_expression(uint32_t id, uint32_t index);

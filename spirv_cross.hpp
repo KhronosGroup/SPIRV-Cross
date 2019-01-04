@@ -663,6 +663,8 @@ protected:
 
 	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
 	void inherit_expression_dependencies(uint32_t dst, uint32_t source);
+	void add_implied_read_expression(SPIRExpression &e, uint32_t source);
+	void add_implied_read_expression(SPIRAccessChain &e, uint32_t source);
 
 	// For proper multiple entry point support, allow querying if an Input or Output
 	// variable is part of that entry points interface.

@@ -1685,6 +1685,20 @@ uint32_t Compiler::get_subpass_input_remapped_components(uint32_t id) const
 	return get<SPIRVariable>(id).remapped_components;
 }
 
+void Compiler::add_implied_read_expression(SPIRExpression &e, uint32_t source)
+{
+	auto itr = find(begin(e.implied_read_expressions), end(e.implied_read_expressions), source);
+	if (itr == end(e.implied_read_expressions))
+		e.implied_read_expressions.push_back(source);
+}
+
+void Compiler::add_implied_read_expression(SPIRAccessChain &e, uint32_t source)
+{
+	auto itr = find(begin(e.implied_read_expressions), end(e.implied_read_expressions), source);
+	if (itr == end(e.implied_read_expressions))
+		e.implied_read_expressions.push_back(source);
+}
+
 void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_expression)
 {
 	// Don't inherit any expression dependencies if the expression in dst
