@@ -40,10 +40,12 @@ template<typename T> inline constexpr thread T&& spvForward(thread typename spvR
 }
 
 template<typename T>
-inline T spvGetSwizzle(vec<T, 4> x, spvSwizzle s)
+inline T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
 {
     switch (s)
     {
+        case spvSwizzle::none:
+            return c;
         case spvSwizzle::zero:
             return 0;
         case spvSwizzle::one:
@@ -56,10 +58,7 @@ inline T spvGetSwizzle(vec<T, 4> x, spvSwizzle s)
             return x.b;
         case spvSwizzle::alpha:
             return x.a;
-        default:
-            break;
     }
-    return 0;
 }
 
 // Wrapper function that swizzles texture samples and fetches.
@@ -68,7 +67,7 @@ inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
 {
     if (!s)
         return x;
-    return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 8) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 16) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 24) & 0xFF)));
+    return vec<T, 4>(spvGetSwizzle(x, x.r, spvSwizzle((s >> 0) & 0xFF)), spvGetSwizzle(x, x.g, spvSwizzle((s >> 8) & 0xFF)), spvGetSwizzle(x, x.b, spvSwizzle((s >> 16) & 0xFF)), spvGetSwizzle(x, x.a, spvSwizzle((s >> 24) & 0xFF)));
 }
 
 template<typename T>
