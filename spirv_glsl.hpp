@@ -615,6 +615,8 @@ protected:
 	void handle_store_to_invariant_variable(uint32_t store_id, uint32_t value_id);
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
 
+	bool expression_is_constant_null(uint32_t id) const;
+
 private:
 	void init()
 	{

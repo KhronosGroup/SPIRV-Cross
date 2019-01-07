@@ -3321,6 +3321,42 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		forward = forward && should_forward(dref);
 		farg_str += ", ";
 		farg_str += to_expression(dref);
+
+		if (msl_options.is_macos() && (grad_x || grad_y))
+		{
+			// For sample compare, MSL does not support gradient2d for all targets (only iOS apparently according to docs).
+			// However, the most common case here is to have a constant gradient of 0, as that is the only way to express
+			// LOD == 0 in GLSL with sampler2DArrayShadow (cascaded shadow mapping).
+			// We will detect a compile-time constant 0 value for gradient and promote that to level(0) on MSL.
+			bool constant_zero_x = !grad_x || expression_is_constant_null(grad_x);
+			bool constant_zero_y = !grad_y || expression_is_constant_null(grad_y);
+			if (constant_zero_x && constant_zero_y)
+			{
+				lod = 0;
+				grad_x = 0;
+				grad_y = 0;
+				farg_str += ", level(0)";
+			}
+			else
+			{
+				SPIRV_CROSS_THROW("Using non-constant 0.0 gradient() qualifier for sample_compare. This is not supported in MSL macOS.");
+			}
+		}
+
+		if (msl_options.is_macos() && bias)
+		{
+			// Bias is not supported either on macOS with sample_compare.
+			// Verify it is compile-time zero, and drop the argument.
+			if (expression_is_constant_null(bias))
+			{
+				bias = 0;
+			}
+			else
+			{
+				SPIRV_CROSS_THROW(
+						"Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported in MSL macOS.");
+			}
+		}
 	}
 
 	// LOD Options

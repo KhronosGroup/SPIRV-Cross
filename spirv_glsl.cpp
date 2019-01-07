@@ -4231,6 +4231,14 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	}
 }
 
+bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
+{
+	auto *c = maybe_get<SPIRConstant>(id);
+	if (!c)
+		return false;
+	return c->constant_is_null();
+}
+
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
 string CompilerGLSL::to_function_name(uint32_t tex, const SPIRType &imgtype, bool is_fetch, bool is_gather,
@@ -4247,10 +4255,11 @@ string CompilerGLSL::to_function_name(uint32_t tex, const SPIRType &imgtype, boo
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
 	    image_is_comparison(imgtype, tex) && lod)
 	{
-		auto *constant_lod = maybe_get<SPIRConstant>(lod);
-		if (!constant_lod || constant_lod->scalar_f32() != 0.0f)
+		if (!expression_is_constant_null(lod))
+		{
 			SPIRV_CROSS_THROW(
-			    "textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
+					"textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
+		}
 		workaround_lod_array_shadow_as_grad = true;
 	}
 
