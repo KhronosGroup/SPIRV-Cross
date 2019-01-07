@@ -15,6 +15,7 @@ void main()
 {
     bool _34;
     float _35;
+    float _35_copy;
     float _36;
     _34 = true;
     _35 = _4._m0[gl_GlobalInvocationID.x];
@@ -24,7 +25,7 @@ void main()
         if (_34)
         {
             _34 = false;
-            float _35_copy = _35;
+            _35_copy = _35;
             _35 = _36;
             _36 = _35_copy;
         }

@@ -894,6 +894,10 @@ struct SPIRVariable : IVariant
 
 	bool deferred_declaration = false;
 	bool phi_variable = false;
+
+	// Used to deal with Phi variable flushes. See flush_phi().
+	bool allocate_temporary_copy = false;
+
 	bool remapped_variable = false;
 	uint32_t remapped_components = 0;
 

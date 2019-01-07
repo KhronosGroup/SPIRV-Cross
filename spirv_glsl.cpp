@@ -6219,6 +6219,13 @@ void CompilerGLSL::flush_variable_declaration(uint32_t id)
 	if (var && var->deferred_declaration)
 	{
 		statement(variable_decl_function_local(*var), ";");
+		if (var->allocate_temporary_copy)
+		{
+			auto &type = get<SPIRType>(var->basetype);
+			auto &flags = ir.meta[id].decoration.decoration_flags;
+			statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, join("_", id, "_copy")),
+			          ";");
+		}
 		var->deferred_declaration = false;
 	}
 }
@@ -9626,12 +9633,15 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 
 				if (need_saved_temporary)
 				{
+					// Need to make sure we declare the phi variable with a copy at the right scope.
+					// We cannot safely declare a temporary here since we might be inside a continue block.
+					if (!var.allocate_temporary_copy)
+					{
+						var.allocate_temporary_copy = true;
+						force_recompile = true;
+					}
+					statement("_", phi.function_variable, "_copy", " = ", to_name(phi.function_variable), ";");
 					temporary_phi_variables.insert(phi.function_variable);
-					auto &type = expression_type(phi.function_variable);
-					auto &flags = ir.meta[phi.function_variable].decoration.decoration_flags;
-					statement(flags_to_precision_qualifiers_glsl(type, flags),
-					          variable_decl(type, join("_", phi.function_variable, "_copy")), " = ",
-					          to_name(phi.function_variable), ";");
 				}
 
 				// This might be called in continue block, so make sure we
@@ -10138,14 +10148,8 @@ void CompilerGLSL::flush_undeclared_variables(SPIRBlock &block)
 {
 	// Enforce declaration order for regression testing purposes.
 	sort(begin(block.dominated_variables), end(block.dominated_variables));
-
 	for (auto &v : block.dominated_variables)
-	{
-		auto &var = get<SPIRVariable>(v);
-		if (var.deferred_declaration)
-			statement(variable_decl(var), ";");
-		var.deferred_declaration = false;
-	}
+		flush_variable_declaration(v);
 }
 
 void CompilerGLSL::emit_hoisted_temporaries(vector<pair<uint32_t, uint32_t>> &temporaries)
