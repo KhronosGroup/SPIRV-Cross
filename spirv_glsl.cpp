@@ -6928,6 +6928,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (has_decoration(ops[2], DecorationCPacked))
 			allow_base_expression = false;
 
+		AccessChainMeta meta;
+		SPIRExpression *e = nullptr;
+
 		// Only apply this optimization if result is scalar.
 		if (allow_base_expression && should_forward(ops[2]) && type.vecsize == 1 && type.columns == 1 && length == 1)
 		{
@@ -6943,17 +6946,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			//
 			// Including the base will prevent this and would trigger multiple reads
 			// from expression causing it to be forced to an actual temporary in GLSL.
-			auto expr = access_chain_internal(ops[2], &ops[3], length, true, true);
-			auto &e = emit_op(result_type, id, expr, true, !expression_is_forwarded(ops[2]));
+			auto expr = access_chain_internal(ops[2], &ops[3], length, true, true, &meta);
+			e = &emit_op(result_type, id, expr, true, !expression_is_forwarded(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
-			e.base_expression = ops[2];
+			e->base_expression = ops[2];
 		}
 		else
 		{
-			auto expr = access_chain_internal(ops[2], &ops[3], length, true);
-			emit_op(result_type, id, expr, should_forward(ops[2]), !expression_is_forwarded(ops[2]));
+			auto expr = access_chain_internal(ops[2], &ops[3], length, true, false, &meta);
+			e = &emit_op(result_type, id, expr, should_forward(ops[2]), !expression_is_forwarded(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
+
+		// Pass through some meta information to the loaded expression.
+		// We can still end up loading a buffer type to a variable, then CompositeExtract from it
+		// instead of loading everything through an access chain.
+		e->need_transpose = meta.need_transpose;
+		if (meta.storage_is_packed)
+			set_decoration(id, DecorationCPacked);
+		if (meta.storage_is_invariant)
+			set_decoration(id, DecorationInvariant);
+
 		break;
 	}
 
