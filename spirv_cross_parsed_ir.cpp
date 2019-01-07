@@ -184,6 +184,10 @@ void ParsedIR::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 		meta[argument].hlsl_is_magic_counter_buffer = true;
 		break;
 
+	case DecorationFPRoundingMode:
+		dec.fp_rounding_mode = static_cast<FPRoundingMode>(argument);
+		break;
+
 	default:
 		break;
 	}
@@ -329,6 +333,8 @@ uint32_t ParsedIR::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.matrix_stride;
 	case DecorationIndex:
 		return dec.index;
+	case DecorationFPRoundingMode:
+		return dec.fp_rounding_mode;
 	default:
 		return 1;
 	}
@@ -392,6 +398,10 @@ void ParsedIR::unset_decoration(uint32_t id, Decoration decoration)
 
 	case DecorationHlslSemanticGOOGLE:
 		dec.hlsl_semantic.clear();
+		break;
+
+	case DecorationFPRoundingMode:
+		dec.fp_rounding_mode = FPRoundingModeMax;
 		break;
 
 	case DecorationHlslCounterBufferGOOGLE:
