@@ -1283,7 +1283,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	auto &dec = ir.meta[var.self].decoration;
 	auto &type = get<SPIRType>(var.basetype);
-	auto flags = dec.decoration_flags;
+	auto &flags = dec.decoration_flags;
 	auto typeflags = ir.meta[type.self].decoration.decoration_flags;
 
 	if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
@@ -3459,7 +3459,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 {
 	auto &type = get<SPIRType>(result_type);
-	auto flags = ir.meta[result_id].decoration.decoration_flags;
+	auto &flags = ir.meta[result_id].decoration.decoration_flags;
 
 	// If we're declaring temporaries inside continue blocks,
 	// we must declare the temporary in the loop header so that the continue block can avoid declaring new variables.
@@ -4568,7 +4568,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 		forced_temporaries.insert(id);
 		auto &type = get<SPIRType>(result_type);
-		auto flags = ir.meta[id].decoration.decoration_flags;
+		auto &flags = ir.meta[id].decoration.decoration_flags;
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(id)), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
 
@@ -4691,7 +4691,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 		forced_temporaries.insert(id);
 		auto &type = get<SPIRType>(result_type);
-		auto flags = ir.meta[id].decoration.decoration_flags;
+		auto &flags = ir.meta[id].decoration.decoration_flags;
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(id)), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
 
@@ -6840,7 +6840,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// We cannot construct array of arrays because we cannot treat the inputs
 			// as value types. Need to declare the array-of-arrays, and copy in elements one by one.
 			forced_temporaries.insert(id);
-			auto flags = ir.meta[id].decoration.decoration_flags;
+			auto &flags = ir.meta[id].decoration.decoration_flags;
 			statement(flags_to_precision_qualifiers_glsl(out_type, flags), variable_decl(out_type, to_name(id)), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
 			for (uint32_t i = 0; i < length; i++)
@@ -7225,7 +7225,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t op1 = ops[3];
 		forced_temporaries.insert(result_id);
 		auto &type = get<SPIRType>(result_type);
-		auto flags = ir.meta[result_id].decoration.decoration_flags;
+		auto &flags = ir.meta[result_id].decoration.decoration_flags;
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), ";");
 		set<SPIRExpression>(result_id, to_name(result_id), result_type, true);
 
@@ -7250,7 +7250,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t op1 = ops[3];
 		forced_temporaries.insert(result_id);
 		auto &type = get<SPIRType>(result_type);
-		auto flags = ir.meta[result_id].decoration.decoration_flags;
+		auto &flags = ir.meta[result_id].decoration.decoration_flags;
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), ";");
 		set<SPIRExpression>(result_id, to_name(result_id), result_type, true);
 
@@ -8791,7 +8791,7 @@ const char *CompilerGLSL::to_precision_qualifiers_glsl(uint32_t id)
 
 string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 {
-	auto flags = ir.meta[id].decoration.decoration_flags;
+	auto &flags = ir.meta[id].decoration.decoration_flags;
 	string res;
 
 	auto *var = maybe_get<SPIRVariable>(id);
@@ -8870,7 +8870,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 
 const char *CompilerGLSL::to_pls_qualifiers_glsl(const SPIRVariable &variable)
 {
-	auto flags = ir.meta[variable.self].decoration.decoration_flags;
+	auto &flags = ir.meta[variable.self].decoration.decoration_flags;
 	if (flags.get(DecorationRelaxedPrecision))
 		return "mediump ";
 	else
@@ -9301,7 +9301,7 @@ void CompilerGLSL::flatten_buffer_block(uint32_t id)
 	auto &var = get<SPIRVariable>(id);
 	auto &type = get<SPIRType>(var.basetype);
 	auto name = to_name(type.self, false);
-	auto flags = ir.meta.at(type.self).decoration.decoration_flags;
+	auto &flags = ir.meta.at(type.self).decoration.decoration_flags;
 
 	if (!type.array.empty())
 		SPIRV_CROSS_THROW(name + " is an array of UBOs.");
@@ -9598,8 +9598,12 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 {
 	auto &child = get<SPIRBlock>(to);
 
-	for (auto &phi : child.phi_variables)
+	unordered_set<uint32_t> temporary_phi_variables;
+
+	for (auto itr = begin(child.phi_variables); itr != end(child.phi_variables); ++itr)
 	{
+		auto &phi = *itr;
+
 		if (phi.parent == from)
 		{
 			auto &var = get<SPIRVariable>(phi.function_variable);
@@ -9611,10 +9615,35 @@ void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 			{
 				flush_variable_declaration(phi.function_variable);
 
+				// Check if we are going to write to a Phi variable that another statement will read from
+				// as part of another Phi node in our target block.
+				// For this case, we will need to copy phi.function_variable to a temporary, and use that for future reads.
+				// This is judged to be extremely rare, so deal with it here using a simple, but suboptimal algorithm.
+				bool need_saved_temporary =
+				    find_if(itr + 1, end(child.phi_variables), [&](const SPIRBlock::Phi &future_phi) -> bool {
+					    return future_phi.local_variable == phi.function_variable && future_phi.parent == from;
+				    }) != end(child.phi_variables);
+
+				if (need_saved_temporary)
+				{
+					temporary_phi_variables.insert(phi.function_variable);
+					auto &type = expression_type(phi.function_variable);
+					auto &flags = ir.meta[phi.function_variable].decoration.decoration_flags;
+					statement(flags_to_precision_qualifiers_glsl(type, flags),
+					          variable_decl(type, join("_", phi.function_variable, "_copy")), " = ",
+					          to_name(phi.function_variable), ";");
+				}
+
 				// This might be called in continue block, so make sure we
 				// use this to emit ESSL 1.0 compliant increments/decrements.
 				auto lhs = to_expression(phi.function_variable);
-				auto rhs = to_expression(phi.local_variable);
+
+				string rhs;
+				if (temporary_phi_variables.count(phi.local_variable))
+					rhs = join("_", phi.local_variable, "_copy");
+				else
+					rhs = to_expression(phi.local_variable);
+
 				if (!optimize_read_modify_write(get<SPIRType>(var.basetype), lhs, rhs))
 					statement(lhs, " = ", rhs, ";");
 			}
@@ -10129,7 +10158,7 @@ void CompilerGLSL::emit_hoisted_temporaries(vector<pair<uint32_t, uint32_t>> &te
 	for (auto &tmp : temporaries)
 	{
 		add_local_variable_name(tmp.second);
-		auto flags = ir.meta[tmp.second].decoration.decoration_flags;
+		auto &flags = ir.meta[tmp.second].decoration.decoration_flags;
 		auto &type = get<SPIRType>(tmp.first);
 		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
 
