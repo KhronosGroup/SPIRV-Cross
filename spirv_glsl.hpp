@@ -577,8 +577,7 @@ protected:
 	// but the set is not updated when we have found a new name.
 	// Used primarily when adding block interface names.
 	void add_variable(std::unordered_set<std::string> &variables_primary,
-	                  const std::unordered_set<std::string> &variables_secondary,
-	                  std::string &name);
+	                  const std::unordered_set<std::string> &variables_secondary, std::string &name);
 
 	void check_function_call_constraints(const uint32_t *args, uint32_t length);
 	void handle_invalid_expression(uint32_t id);
@@ -614,6 +613,8 @@ protected:
 
 	void handle_store_to_invariant_variable(uint32_t store_id, uint32_t value_id);
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
+
+	bool expression_is_constant_null(uint32_t id) const;
 
 private:
 	void init()

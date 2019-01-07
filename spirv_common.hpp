@@ -1088,6 +1088,21 @@ struct SPIRConstant : IVariant
 			c.vecsize = constant_type_.vecsize;
 	}
 
+	inline bool constant_is_null() const
+	{
+		if (specialization)
+			return false;
+		if (!subconstants.empty())
+			return false;
+
+		for (uint32_t col = 0; col < columns(); col++)
+			for (uint32_t row = 0; row < vector_size(); row++)
+				if (scalar_u64(col, row) != 0)
+					return false;
+
+		return true;
+	}
+
 	explicit SPIRConstant(uint32_t constant_type_)
 	    : constant_type(constant_type_)
 	{
