@@ -1546,8 +1546,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	// Shaders never use the block by interface name, so we don't
 	// have to track this other than updating name caches.
 	// If we have a collision for any reason, just fallback immediately.
-	if (ir.meta[type.self].decoration.alias.empty() ||
-	    block_namespace.find(buffer_name) != end(block_namespace) ||
+	if (ir.meta[type.self].decoration.alias.empty() || block_namespace.find(buffer_name) != end(block_namespace) ||
 	    resource_names.find(buffer_name) != end(resource_names))
 	{
 		buffer_name = get_block_fallback_name(var.self);
@@ -4258,7 +4257,7 @@ string CompilerGLSL::to_function_name(uint32_t tex, const SPIRType &imgtype, boo
 		if (!expression_is_constant_null(lod))
 		{
 			SPIRV_CROSS_THROW(
-					"textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
+			    "textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
 		}
 		workaround_lod_array_shadow_as_grad = true;
 	}

@@ -901,8 +901,8 @@ void Compiler::flatten_interface_block(uint32_t id)
 	var.storage = storage;
 }
 
-void Compiler::update_name_cache(unordered_set<string> &cache_primary,
-                                 const unordered_set<string> &cache_secondary, string &name)
+void Compiler::update_name_cache(unordered_set<string> &cache_primary, const unordered_set<string> &cache_secondary,
+                                 string &name)
 {
 	if (name.empty())
 		return;
@@ -918,9 +918,7 @@ void Compiler::update_name_cache(unordered_set<string> &cache_primary,
 		return false;
 	};
 
-	const auto insert_name = [&](const string &n) {
-		cache_primary.insert(n);
-	};
+	const auto insert_name = [&](const string &n) { cache_primary.insert(n); };
 
 	if (!find_name(name))
 	{

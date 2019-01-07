@@ -3339,7 +3339,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			}
 			else
 			{
-				SPIRV_CROSS_THROW("Using non-constant 0.0 gradient() qualifier for sample_compare. This is not supported in MSL macOS.");
+				SPIRV_CROSS_THROW("Using non-constant 0.0 gradient() qualifier for sample_compare. This is not "
+				                  "supported in MSL macOS.");
 			}
 		}
 
@@ -3354,7 +3355,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			else
 			{
 				SPIRV_CROSS_THROW(
-						"Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported in MSL macOS.");
+				    "Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported in MSL macOS.");
 			}
 		}
 	}
