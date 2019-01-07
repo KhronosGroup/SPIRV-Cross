@@ -3752,6 +3752,9 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	case spv::DimCube:
 		type = "Cube";
 		break;
+	case spv::DimRect:
+		type = "2DRect";
+		break;
 	case spv::DimBuffer:
 		type = "Buffer";
 		break;
@@ -9010,6 +9013,15 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	case DimCube:
 		res += "Cube";
 		break;
+	case DimRect:
+		if (options.es)
+			SPIRV_CROSS_THROW("Rectangle textures are not supported on OpenGL ES.");
+
+		if (is_legacy_desktop())
+			require_extension_internal("GL_ARB_texture_rectangle");
+
+		res += "2DRect";
+		break;
 
 	case DimBuffer:
 		if (options.es && options.version < 320)
@@ -9023,7 +9035,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		res += "2D";
 		break;
 	default:
-		SPIRV_CROSS_THROW("Only 1D, 2D, 3D, Buffer, InputTarget and Cube textures supported.");
+		SPIRV_CROSS_THROW("Only 1D, 2D, 2DRect, 3D, Buffer, InputTarget and Cube textures supported.");
 	}
 
 	if (type.image.ms)
