@@ -3632,7 +3632,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 			base = to_expression(ops[2]);
 
 		// Start traversing type hierarchy at the proper non-pointer types.
-		auto *basetype = &get_non_pointer_type(type);
+		auto *basetype = &get_pointee_type(type);
 
 		// Traverse the type hierarchy down to the actual buffer types.
 		for (uint32_t i = 0; i < to_plain_buffer_length; i++)

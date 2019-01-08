@@ -690,8 +690,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 			if (is_builtin_variable(var) && p_type->basetype == SPIRType::Struct)
 			{
-				// Get the non-pointer type
-				type_id = get_non_pointer_type_id(type_id);
+				// Get the pointee type
+				type_id = get_pointee_type_id(type_id);
 				p_type = &get<SPIRType>(type_id);
 
 				uint32_t mbr_idx = 0;
@@ -1118,7 +1118,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 					type_id = ensure_correct_builtin_type(type_id, builtin);
 					p_var->basetype = type_id;
-					ib_type.member_types.push_back(get_non_pointer_type_id(type_id));
+					ib_type.member_types.push_back(get_pointee_type_id(type_id));
 
 					// Give the member a name
 					string mbr_name = ensure_valid_name(to_expression(p_var->self), "m");
@@ -1136,7 +1136,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						{
 							type_id = ensure_correct_attribute_type(type_id, locn);
 							p_var->basetype = type_id;
-							ib_type.member_types[ib_mbr_idx] = get_non_pointer_type_id(type_id);
+							ib_type.member_types[ib_mbr_idx] = get_pointee_type_id(type_id);
 						}
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
@@ -2794,7 +2794,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 
 	string exp = string(op) + "(";
 
-	auto &type = get_non_pointer_type(expression_type(obj));
+	auto &type = get_pointee_type(expression_type(obj));
 	exp += "(volatile ";
 	auto *var = maybe_get_backing_variable(obj);
 	if (!var)
@@ -4630,7 +4630,7 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
 
-		auto &parent = get<SPIRType>(get_non_pointer_type(type).parent_type);
+		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		return join("array<", sampler_type(parent), ", ", array_size, ">");
 	}
 	else
@@ -4672,7 +4672,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
 
-		auto &parent = get<SPIRType>(get_non_pointer_type(type).parent_type);
+		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		return join("array<", image_type_glsl(parent, id), ", ", array_size, ">");
 	}
 

@@ -5555,7 +5555,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
 	uint32_t type_id = expression_type_id(base);
-	const auto *type = &get_non_pointer_type(type_id);
+	const auto *type = &get_pointee_type(type_id);
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
@@ -6044,7 +6044,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
     bool *need_transpose, uint32_t *out_matrix_stride, bool ptr_chain)
 {
 	// Start traversing type hierarchy at the proper non-pointer types.
-	const auto *type = &get_non_pointer_type(basetype);
+	const auto *type = &get_pointee_type(basetype);
 
 	// This holds the type of the current pointer which we are traversing through.
 	// We always start out from a struct type which is the block.
@@ -9519,7 +9519,7 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 		// Parameters can vary with pointer type or not,
 		// but that will not change the signature in GLSL/HLSL,
 		// so strip the pointer type before hashing.
-		uint32_t type_id = get_non_pointer_type_id(arg.type);
+		uint32_t type_id = get_pointee_type_id(arg.type);
 		auto &type = get<SPIRType>(type_id);
 
 		if (!combined_image_samplers.empty())

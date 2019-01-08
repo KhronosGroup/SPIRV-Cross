@@ -178,13 +178,13 @@ public:
 	const SPIRType &get_type_from_variable(uint32_t id) const;
 
 	// Gets the id of SPIR-V type underlying the given type_id, which might be a pointer.
-	uint32_t get_non_pointer_type_id(uint32_t type_id) const;
+	uint32_t get_pointee_type_id(uint32_t type_id) const;
 
 	// Gets the SPIR-V type underlying the given type, which might be a pointer.
-	const SPIRType &get_non_pointer_type(const SPIRType &type) const;
+	const SPIRType &get_pointee_type(const SPIRType &type) const;
 
 	// Gets the SPIR-V type underlying the given type_id, which might be a pointer.
-	const SPIRType &get_non_pointer_type(uint32_t type_id) const;
+	const SPIRType &get_pointee_type(uint32_t type_id) const;
 
 	// Gets the ID of the SPIR-V type underlying a variable.
 	uint32_t get_variable_data_type_id(const SPIRVariable &var) const;

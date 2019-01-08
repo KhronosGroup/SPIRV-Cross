@@ -1010,7 +1010,7 @@ const SPIRType &Compiler::get_type_from_variable(uint32_t id) const
 	return get<SPIRType>(get<SPIRVariable>(id).basetype);
 }
 
-uint32_t Compiler::get_non_pointer_type_id(uint32_t type_id) const
+uint32_t Compiler::get_pointee_type_id(uint32_t type_id) const
 {
 	auto *p_type = &get<SPIRType>(type_id);
 	if (p_type->pointer)
@@ -1021,7 +1021,7 @@ uint32_t Compiler::get_non_pointer_type_id(uint32_t type_id) const
 	return type_id;
 }
 
-const SPIRType &Compiler::get_non_pointer_type(const SPIRType &type) const
+const SPIRType &Compiler::get_pointee_type(const SPIRType &type) const
 {
 	auto *p_type = &type;
 	if (p_type->pointer)
@@ -1032,16 +1032,16 @@ const SPIRType &Compiler::get_non_pointer_type(const SPIRType &type) const
 	return *p_type;
 }
 
-const SPIRType &Compiler::get_non_pointer_type(uint32_t type_id) const
+const SPIRType &Compiler::get_pointee_type(uint32_t type_id) const
 {
-	return get_non_pointer_type(get<SPIRType>(type_id));
+	return get_pointee_type(get<SPIRType>(type_id));
 }
 
 uint32_t Compiler::get_variable_data_type_id(const SPIRVariable &var) const
 {
 	if (var.phi_variable)
 		return var.basetype;
-	return get_non_pointer_type_id(var.basetype);
+	return get_pointee_type_id(var.basetype);
 }
 
 SPIRType &Compiler::get_variable_data_type(const SPIRVariable &var)
