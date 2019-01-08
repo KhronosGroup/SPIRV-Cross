@@ -1347,7 +1347,7 @@ struct Meta
 		std::string qualified_alias;
 		std::string hlsl_semantic;
 		Bitset decoration_flags;
-		spv::BuiltIn builtin_type;
+		spv::BuiltIn builtin_type = spv::BuiltInMax;
 		uint32_t location = 0;
 		uint32_t component = 0;
 		uint32_t set = 0;
