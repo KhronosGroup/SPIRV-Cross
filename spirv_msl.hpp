@@ -163,9 +163,11 @@ public:
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
-		uint32_t aux_buffer_index = 0;
+		uint32_t aux_buffer_index = 30;
+		uint32_t shader_output_buffer_index = 29;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
+		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
 
 		// Fragment output in MSL must have at least as many components as the render pass.
@@ -329,6 +331,8 @@ protected:
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_fixup() override;
+	std::string to_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
+	                             const std::string &qualifier = "");
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
@@ -415,6 +419,7 @@ protected:
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
 	std::string get_argument_address_space(const SPIRVariable &argument);
 	std::string get_type_address_space(const SPIRType &type);
+	SPIRType &get_stage_out_struct_type();
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
 	                         uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
 	                         bool op1_is_pointer = false, bool op1_is_literal = false, uint32_t op2 = 0);
@@ -427,6 +432,10 @@ protected:
 	void emit_entry_point_declarations() override;
 	uint32_t builtin_frag_coord_id = 0;
 	uint32_t builtin_sample_id_id = 0;
+	uint32_t builtin_vertex_idx_id = 0;
+	uint32_t builtin_base_vertex_id = 0;
+	uint32_t builtin_instance_idx_id = 0;
+	uint32_t builtin_base_instance_id = 0;
 	uint32_t aux_buffer_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
@@ -451,12 +460,15 @@ protected:
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
 	bool is_rasterization_disabled = false;
+	bool capture_output_to_buffer = false;
+	bool needs_aux_buffer_def = false;
 	bool used_aux_buffer = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string sampler_name_suffix = "Smplr";
 	std::string swizzle_name_suffix = "Swzl";
+	std::string output_buffer_var_name = "spvOut";
 	spv::Op previous_instruction_opcode = spv::OpNop;
 
 	std::unordered_map<uint32_t, MSLConstexprSampler> constexpr_samplers;
