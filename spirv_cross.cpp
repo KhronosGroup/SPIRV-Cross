@@ -294,7 +294,10 @@ void Compiler::register_write(uint32_t chain)
 	if (var)
 	{
 		// If our variable is in a storage class which can alias with other buffers,
-		// invalidate all variables which depend on aliased variables.
+		// invalidate all variables which depend on aliased variables. And if this is a
+		// variable pointer, then invalidate all variables regardless.
+		if (get_variable_data_type(*var).pointer)
+			flush_all_active_variables();
 		if (variable_storage_is_aliased(*var))
 			flush_all_aliased_variables();
 		else if (var)
@@ -306,6 +309,15 @@ void Compiler::register_write(uint32_t chain)
 			var->parameter->write_count++;
 			force_recompile = true;
 		}
+	}
+	else
+	{
+		// If we stored through a variable pointer, then we don't know which
+		// variable we stored to. So *all* expressions after this point need to
+		// be invalidated.
+		// FIXME: If we can prove that the variable pointer will point to
+		// only certain variables, we can invalidate only those.
+		flush_all_active_variables();
 	}
 }
 

@@ -53,7 +53,8 @@ kernel void main0(device foo& buf [[buffer(0)]], constant bar& cb [[buffer(3)]],
         _77 = *_73;
         if (_77 != 0)
         {
-            int _82 = _77 + (*_76);
+            int _81 = *_76;
+            int _82 = _77 + _81;
             *_73 = _82;
             *_76 = _82;
             cur = &_76[1u];
