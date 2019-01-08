@@ -1819,10 +1819,12 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			statement("template<typename T>");
-			statement("inline T spvGetSwizzle(vec<T, 4> x, spvSwizzle s)");
+			statement("inline T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)");
 			begin_scope();
 			statement("switch (s)");
 			begin_scope();
+			statement("case spvSwizzle::none:");
+			statement("    return c;");
 			statement("case spvSwizzle::zero:");
 			statement("    return 0;");
 			statement("case spvSwizzle::one:");
@@ -1835,10 +1837,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("    return x.b;");
 			statement("case spvSwizzle::alpha:");
 			statement("    return x.a;");
-			statement("default:");
-			statement("    break;");
 			end_scope();
-			statement("return 0;");
 			end_scope();
 			statement("");
 			statement("// Wrapper function that swizzles texture samples and fetches.");
@@ -1847,9 +1846,9 @@ void CompilerMSL::emit_custom_functions()
 			begin_scope();
 			statement("if (!s)");
 			statement("    return x;");
-			statement("return vec<T, 4>(spvGetSwizzle(x, spvSwizzle((s >> 0) & 0xFF)), "
-			          "spvGetSwizzle(x, spvSwizzle((s >> 8) & 0xFF)), spvGetSwizzle(x, spvSwizzle((s >> 16) & 0xFF)), "
-			          "spvGetSwizzle(x, spvSwizzle((s >> 24) & 0xFF)));");
+			statement("return vec<T, 4>(spvGetSwizzle(x, x.r, spvSwizzle((s >> 0) & 0xFF)), "
+			          "spvGetSwizzle(x, x.g, spvSwizzle((s >> 8) & 0xFF)), spvGetSwizzle(x, x.b, spvSwizzle((s >> 16) & 0xFF)), "
+			          "spvGetSwizzle(x, x.a, spvSwizzle((s >> 24) & 0xFF)));");
 			end_scope();
 			statement("");
 			statement("template<typename T>");
