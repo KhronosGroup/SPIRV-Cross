@@ -664,6 +664,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				base_id = ops[4];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+				break;
 			}
 
 			default:
