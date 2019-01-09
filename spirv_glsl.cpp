@@ -9093,9 +9093,10 @@ string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 {
 	assert(type.array.size() == type.array_size_literal.size());
 
-	// Tessellation control shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
+	// Tessellation control and evaluation shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
 	// Opt for unsized as it's the more "correct" variant to use.
-	if (type.storage == StorageClassInput && get_entry_point().model == ExecutionModelTessellationControl)
+	if (type.storage == StorageClassInput && (get_entry_point().model == ExecutionModelTessellationControl ||
+	                                          get_entry_point().model == ExecutionModelTessellationEvaluation))
 		return "";
 
 	auto &size = type.array[index];
