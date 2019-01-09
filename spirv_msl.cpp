@@ -365,7 +365,7 @@ void CompilerMSL::emit_entry_point_declarations()
 	for (uint32_t array_id : buffer_arrays)
 	{
 		const auto &var = get<SPIRVariable>(array_id);
-		const auto &type = get<SPIRType>(var.basetype);
+		const auto &type = get_variable_data_type(var);
 		string name = get_name(array_id);
 		statement(get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + name + "[] =");
 		begin_scope();
@@ -387,6 +387,7 @@ string CompilerMSL::compile()
 	options.vulkan_semantics = true;
 	options.es = false;
 	options.version = 450;
+	backend.null_pointer_literal = "nullptr";
 	backend.float_literal_suffix = false;
 	backend.half_literal_suffix = "h";
 	backend.uint32_t_literal_suffix = true;
@@ -604,6 +605,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			case OpLoad:
 			case OpInBoundsAccessChain:
 			case OpAccessChain:
+			case OpPtrAccessChain:
 			{
 				uint32_t base_id = ops[2];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
@@ -654,6 +656,17 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				break;
 			}
 
+			case OpSelect:
+			{
+				uint32_t base_id = ops[3];
+				if (global_var_ids.find(base_id) != global_var_ids.end())
+					added_arg_ids.insert(base_id);
+				base_id = ops[4];
+				if (global_var_ids.find(base_id) != global_var_ids.end())
+					added_arg_ids.insert(base_id);
+				break;
+			}
+
 			default:
 				break;
 			}
@@ -677,8 +690,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 			if (is_builtin_variable(var) && p_type->basetype == SPIRType::Struct)
 			{
-				// Get the non-pointer type
-				type_id = get_non_pointer_type_id(type_id);
+				// Get the pointee type
+				type_id = get_pointee_type_id(type_id);
 				p_type = &get<SPIRType>(type_id);
 
 				uint32_t mbr_idx = 0;
@@ -699,6 +712,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 						ptr.self = mbr_type_id;
 						ptr.storage = var.storage;
 						ptr.pointer = true;
+						ptr.parent_type = mbr_type_id;
 
 						func.add_parameter(mbr_type_id, var_id, true);
 						set<SPIRVariable>(var_id, ptr_type_id, StorageClassFunction);
@@ -863,7 +877,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	for (auto p_var : vars)
 	{
 		uint32_t type_id = p_var->basetype;
-		auto &type = get<SPIRType>(type_id);
+		auto &type = get_variable_data_type(*p_var);
 
 		if (type.basetype == SPIRType::Struct)
 		{
@@ -1029,6 +1043,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					}
 
 					auto *usable_type = &type;
+					if (usable_type->pointer)
+						usable_type = &get<SPIRType>(usable_type->parent_type);
 					while (is_array(*usable_type) || is_matrix(*usable_type))
 						usable_type = &get<SPIRType>(usable_type->parent_type);
 
@@ -1102,7 +1118,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 					uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 					type_id = ensure_correct_builtin_type(type_id, builtin);
 					p_var->basetype = type_id;
-					ib_type.member_types.push_back(type_id);
+					ib_type.member_types.push_back(get_pointee_type_id(type_id));
 
 					// Give the member a name
 					string mbr_name = ensure_valid_name(to_expression(p_var->self), "m");
@@ -1120,7 +1136,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 						{
 							type_id = ensure_correct_attribute_type(type_id, locn);
 							p_var->basetype = type_id;
-							ib_type.member_types[ib_mbr_idx] = type_id;
+							ib_type.member_types[ib_mbr_idx] = get_pointee_type_id(type_id);
 						}
 						set_member_decoration(ib_type_id, ib_mbr_idx, DecorationLocation, locn);
 						mark_location_as_used_by_shader(locn, storage);
@@ -2777,7 +2793,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 
 	string exp = string(op) + "(";
 
-	auto &type = expression_type(obj);
+	auto &type = get_pointee_type(expression_type(obj));
 	exp += "(volatile ";
 	auto *var = maybe_get_backing_variable(obj);
 	if (!var)
@@ -3946,7 +3962,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	if (stage_out_var_id && ep_should_return_output)
 	{
 		auto &so_var = get<SPIRVariable>(stage_out_var_id);
-		auto &so_type = get<SPIRType>(so_var.basetype);
+		auto &so_type = get_variable_data_type(so_var);
 		return_type = type_to_glsl(so_type) + type_to_array_glsl(type);
 	}
 
@@ -3974,7 +3990,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	return entry_type + " " + return_type;
 }
 
-// In MSL, address space qualifiers are required for all pointer or reference arguments
+// In MSL, address space qualifiers are required for all pointer or reference variables
 string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 {
 	const auto &type = get<SPIRType>(argument.basetype);
@@ -4018,6 +4034,43 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 	return "thread";
 }
 
+string CompilerMSL::get_type_address_space(const SPIRType &type)
+{
+	switch (type.storage)
+	{
+	case StorageClassWorkgroup:
+		return "threadgroup";
+
+	case StorageClassStorageBuffer:
+		// FIXME: Need to use 'const device' for pointers into non-writable SSBOs
+		return "device";
+
+	case StorageClassUniform:
+	case StorageClassUniformConstant:
+	case StorageClassPushConstant:
+		if (type.basetype == SPIRType::Struct)
+		{
+			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
+			// FIXME: Need to use 'const device' for pointers into non-writable SSBOs
+			if (ssbo)
+				return "device";
+			else
+				return "constant";
+		}
+		break;
+
+	case StorageClassFunction:
+	case StorageClassGeneric:
+		// No address space for plain values.
+		return type.pointer ? "thread" : "";
+
+	default:
+		break;
+	}
+
+	return "thread";
+}
+
 // Returns a string containing a comma-delimited list of args for the entry point function
 string CompilerMSL::entry_point_args(bool append_comma)
 {
@@ -4027,7 +4080,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	if (stage_in_var_id)
 	{
 		auto &var = get<SPIRVariable>(stage_in_var_id);
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = get_variable_data_type(var);
 
 		if (!ep_args.empty())
 			ep_args += ", ";
@@ -4053,7 +4106,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		if (id.get_type() == TypeVariable)
 		{
 			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
+			auto &type = get_variable_data_type(var);
 
 			uint32_t var_id = var.self;
 
@@ -4089,7 +4142,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 	for (auto &r : resources)
 	{
 		auto &var = r.id->get<SPIRVariable>();
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = get_variable_data_type(var);
 
 		uint32_t var_id = var.self;
 
@@ -4274,9 +4327,11 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
-
 	auto &var = get<SPIRVariable>(arg.id);
-	auto &type = expression_type(arg.id);
+	auto &type = get_variable_data_type(var);
+	auto &var_type = get<SPIRType>(arg.type);
+	StorageClass storage = var_type.storage;
+	bool is_pointer = var_type.pointer;
 
 	// If we need to modify the name of the variable, make sure we use the original variable.
 	// Our alias is just a shadow variable.
@@ -4284,7 +4339,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (arg.alias_global_variable && var.basevariable)
 		name_id = var.basevariable;
 
-	bool constref = !arg.alias_global_variable && type.pointer && arg.write_count == 0;
+	bool constref = !arg.alias_global_variable && is_pointer && arg.write_count == 0;
 
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
@@ -4300,13 +4355,15 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	bool builtin = is_builtin_variable(var);
 	if (builtin)
 		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)));
+	else if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) && is_array(type))
+		decl += join(type_to_glsl(type, arg.id), "*");
 	else
 		decl += type_to_glsl(type, arg.id);
 
-	bool opaque_handle = type.storage == StorageClassUniformConstant;
+	bool opaque_handle = storage == StorageClassUniformConstant;
 
-	if (!builtin && !opaque_handle && !type.pointer &&
-	    (type.storage == StorageClassFunction || type.storage == StorageClassGeneric))
+	if (!builtin && !opaque_handle && !is_pointer &&
+	    (storage == StorageClassFunction || storage == StorageClassGeneric))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
 		decl += " ";
@@ -4315,11 +4372,6 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else if (is_array(type) && !type_is_image)
 	{
 		// Arrays of images and samplers are special cased.
-		if (get<SPIRVariable>(name_id).storage == StorageClassUniform ||
-		    get<SPIRVariable>(name_id).storage == StorageClassStorageBuffer)
-			// If an array of buffers, declare an array of pointers, since we
-			// can't have an array of references.
-			decl += "*";
 		decl += " (&";
 		decl += to_expression(name_id);
 		decl += ")";
@@ -4439,11 +4491,14 @@ void CompilerMSL::replace_illegal_names()
 	CompilerGLSL::replace_illegal_names();
 }
 
-string CompilerMSL::to_member_reference(const SPIRVariable *var, const SPIRType &type, uint32_t index)
+string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain)
 {
+	auto *var = maybe_get<SPIRVariable>(base);
 	// If this is a buffer array, we have to dereference the buffer pointers.
-	if (var && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer) &&
-	    !get<SPIRType>(var->basetype).array.empty())
+	// Otherwise, if this is a pointer expression, dereference it.
+	if ((var && ((var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer) &&
+	             is_array(get<SPIRType>(var->basetype)))) ||
+	    (!ptr_chain && should_dereference(base)))
 		return join("->", to_member_name(type, index));
 	else
 		return join(".", to_member_name(type, index));
@@ -4465,9 +4520,26 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 // depend on a specific object's use of that type.
 string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
-	// Ignore the pointer type since GLSL doesn't have pointers.
-
 	string type_name;
+
+	// Pointer?
+	if (type.pointer)
+	{
+		type_name = join(get_type_address_space(type), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
+		switch (type.basetype)
+		{
+		case SPIRType::Image:
+		case SPIRType::SampledImage:
+		case SPIRType::Sampler:
+			// These are handles.
+			break;
+		default:
+			// Anything else can be a raw pointer.
+			type_name += "*";
+			break;
+		}
+		return type_name;
+	}
 
 	switch (type.basetype)
 	{
@@ -4557,7 +4629,7 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
 
-		auto &parent = get<SPIRType>(get_non_pointer_type(type).parent_type);
+		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		return join("array<", sampler_type(parent), ", ", array_size, ">");
 	}
 	else
@@ -4599,7 +4671,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
 
-		auto &parent = get<SPIRType>(get_non_pointer_type(type).parent_type);
+		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		return join("array<", image_type_glsl(parent, id), ", ", array_size, ">");
 	}
 
