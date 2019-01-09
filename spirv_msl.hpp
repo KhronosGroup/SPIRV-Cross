@@ -361,6 +361,19 @@ protected:
 	                                            std::unordered_set<uint32_t> &global_var_ids,
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	uint32_t add_interface_block(spv::StorageClass storage);
+
+	void add_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
+	                                     SPIRVariable &var);
+	void add_composite_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                               SPIRType &ib_type, SPIRVariable &var);
+	void add_plain_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                           SPIRType &ib_type, SPIRVariable &var);
+	void add_plain_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                                  SPIRType &ib_type, SPIRVariable &var, uint32_t index);
+	void add_composite_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                                      SPIRType &ib_type, SPIRVariable &var, uint32_t index);
+	uint32_t get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx);
+
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
 	uint32_t ensure_correct_attribute_type(uint32_t type_id, uint32_t location);
