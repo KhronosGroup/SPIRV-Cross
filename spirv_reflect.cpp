@@ -565,9 +565,16 @@ void CompilerReflection::emit_specialization_constants()
 
 string CompilerReflection::to_member_name(const SPIRType &type, uint32_t index) const
 {
-	auto &memb = ir.meta[type.self].members;
-	if (index < memb.size() && !memb[index].alias.empty())
-		return memb[index].alias;
+	auto *type_meta = ir.find_meta(type.self);
+
+	if (type_meta)
+	{
+		auto &memb = type_meta->members;
+		if (index < memb.size() && !memb[index].alias.empty())
+			return memb[index].alias;
+		else
+			return join("_m", index);
+	}
 	else
 		return join("_m", index);
 }

@@ -4071,7 +4071,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 // index as the location.
 uint32_t CompilerMSL::get_ordered_member_location(uint32_t type_id, uint32_t index, uint32_t *comp)
 {
-	auto &m = ir.meta.at(type_id);
+	auto &m = ir.meta[type_id];
 	if (index < m.members.size())
 	{
 		auto &dec = m.members[index];
@@ -4287,7 +4287,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		{
 		case SPIRType::Struct:
 		{
-			auto &m = ir.meta.at(type.self);
+			auto &m = ir.meta[type.self];
 			if (m.members.size() == 0)
 				break;
 			if (!type.array.empty())
@@ -4529,9 +4529,9 @@ string CompilerMSL::to_name(uint32_t id, bool allow_alias) const
 {
 	if (current_function && (current_function->self == ir.default_entry_point))
 	{
-		string qual_name = ir.meta.at(id).decoration.qualified_alias;
-		if (!qual_name.empty())
-			return qual_name;
+		auto *m = ir.find_meta(id);
+		if (m && !m->decoration.qualified_alias.empty())
+			return m->decoration.qualified_alias;
 	}
 	return Compiler::to_name(id, allow_alias);
 }

@@ -43,7 +43,7 @@ public:
 	std::vector<Variant> ids;
 
 	// Various meta data for IDs, decorations, names, etc.
-	std::vector<Meta> meta;
+	std::unordered_map<uint32_t, Meta> meta;
 
 	// Holds all IDs which have a certain type.
 	// This is needed so we can iterate through a specific kind of resource quickly,
@@ -156,6 +156,14 @@ public:
 
 	void reset_all_of_type(Types type);
 
+	Meta *find_meta(uint32_t id);
+	const Meta *find_meta(uint32_t id) const;
+
+	const std::string &get_empty_string() const
+	{
+		return empty_string;
+	}
+
 private:
 	template <typename T>
 	T &get(uint32_t id)
@@ -170,6 +178,8 @@ private:
 	}
 
 	uint32_t loop_iteration_depth = 0;
+	std::string empty_string;
+	Bitset cleared_bitset;
 };
 } // namespace spirv_cross
 

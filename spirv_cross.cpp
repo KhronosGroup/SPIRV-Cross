@@ -158,7 +158,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 
 string Compiler::to_name(uint32_t id, bool allow_alias) const
 {
-	if (allow_alias && ir.ids.at(id).get_type() == TypeType)
+	if (allow_alias && ir.ids[id].get_type() == TypeType)
 	{
 		// If this type is a simple alias, emit the
 		// name of the original type instead.
@@ -174,10 +174,11 @@ string Compiler::to_name(uint32_t id, bool allow_alias) const
 		}
 	}
 
-	if (ir.meta[id].decoration.alias.empty())
+	auto &alias = ir.get_name(id);
+	if (alias.empty())
 		return join("_", id);
 	else
-		return ir.meta[id].decoration.alias;
+		return alias;
 }
 
 bool Compiler::function_is_pure(const SPIRFunction &func)
@@ -473,17 +474,22 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 
 bool Compiler::is_builtin_type(const SPIRType &type) const
 {
+	auto *type_meta = ir.find_meta(type.self);
+
 	// We can have builtin structs as well. If one member of a struct is builtin, the struct must also be builtin.
-	for (auto &m : ir.meta[type.self].members)
-		if (m.builtin)
-			return true;
+	if (type_meta)
+		for (auto &m : type_meta->members)
+			if (m.builtin)
+				return true;
 
 	return false;
 }
 
 bool Compiler::is_builtin_variable(const SPIRVariable &var) const
 {
-	if (var.compat_builtin || ir.meta[var.self].decoration.builtin)
+	auto *m = ir.find_meta(var.self);
+
+	if (var.compat_builtin || (m && m->decoration.builtin))
 		return true;
 	else
 		return is_builtin_type(get<SPIRType>(var.basetype));
@@ -491,12 +497,17 @@ bool Compiler::is_builtin_variable(const SPIRVariable &var) const
 
 bool Compiler::is_member_builtin(const SPIRType &type, uint32_t index, BuiltIn *builtin) const
 {
-	auto &memb = ir.meta[type.self].members;
-	if (index < memb.size() && memb[index].builtin)
+	auto *type_meta = ir.find_meta(type.self);
+
+	if (type_meta)
 	{
-		if (builtin)
-			*builtin = memb[index].builtin_type;
-		return true;
+		auto &memb = type_meta->members;
+		if (index < memb.size() && memb[index].builtin)
+		{
+			if (builtin)
+				*builtin = memb[index].builtin_type;
+			return true;
+		}
 	}
 
 	return false;
@@ -721,36 +732,38 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		// Input
 		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
 		{
-			if (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock))
+			if (has_decoration(type.self, DecorationBlock))
+			{
 				res.stage_inputs.push_back(
-				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
+						{var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self)});
+			}
 			else
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+				res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Subpass inputs
 		else if (var.storage == StorageClassUniformConstant && type.image.dim == DimSubpassData)
 		{
-			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Outputs
 		else if (var.storage == StorageClassOutput && interface_variable_exists_in_entry_point(var.self))
 		{
-			if (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock))
+			if (has_decoration(type.self, DecorationBlock))
+			{
 				res.stage_outputs.push_back(
-				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
+						{var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self)});
+			}
 			else
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+				res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// UBOs
-		else if (type.storage == StorageClassUniform &&
-		         (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock)))
+		else if (type.storage == StorageClassUniform && has_decoration(type.self, DecorationBlock))
 		{
 			res.uniform_buffers.push_back(
 			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 		}
 		// Old way to declare SSBOs.
-		else if (type.storage == StorageClassUniform &&
-		         (ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+		else if (type.storage == StorageClassUniform && has_decoration(type.self, DecorationBufferBlock))
 		{
 			res.storage_buffers.push_back(
 			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
@@ -767,34 +780,34 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 			// There can only be one push constant block, but keep the vector in case this restriction is lifted
 			// in the future.
 			res.push_constant_buffers.push_back(
-			    { var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			    { var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 2)
 		{
-			res.storage_images.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			res.storage_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Separate images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 1)
 		{
-			res.separate_images.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			res.separate_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Separate samplers
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Sampler)
 		{
-			res.separate_samplers.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			res.separate_samplers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Textures
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::SampledImage)
 		{
-			res.sampled_images.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			res.sampled_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Atomic counters
 		else if (type.storage == StorageClassAtomicCounter)
 		{
-			res.atomic_counters.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
+			res.atomic_counters.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 	});
 
@@ -919,7 +932,7 @@ void Compiler::flatten_interface_block(uint32_t id)
 {
 	auto &var = get<SPIRVariable>(id);
 	auto &type = get<SPIRType>(var.basetype);
-	auto &flags = ir.meta.at(type.self).decoration.decoration_flags;
+	auto &flags = ir.meta[type.self].decoration.decoration_flags;
 
 	if (!type.array.empty())
 		SPIRV_CROSS_THROW("Type is array of UBOs.");
@@ -942,7 +955,7 @@ void Compiler::flatten_interface_block(uint32_t id)
 		SPIRV_CROSS_THROW("Member type cannot be struct.");
 
 	// Inherit variable name from interface block name.
-	ir.meta.at(var.self).decoration.alias = ir.meta.at(type.self).decoration.alias;
+	ir.meta[var.self].decoration.alias = ir.meta[type.self].decoration.alias;
 
 	auto storage = var.storage;
 	if (storage == StorageClassUniform)
@@ -1105,19 +1118,17 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 
 void Compiler::set_member_qualified_name(uint32_t type_id, uint32_t index, const std::string &name)
 {
-	ir.meta.at(type_id).members.resize(max(ir.meta[type_id].members.size(), size_t(index) + 1));
-	ir.meta.at(type_id).members[index].qualified_alias = name;
+	ir.meta[type_id].members.resize(max(ir.meta[type_id].members.size(), size_t(index) + 1));
+	ir.meta[type_id].members[index].qualified_alias = name;
 }
 
-const std::string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_t index) const
+const string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_t index) const
 {
-	const static string empty;
-
-	auto &m = ir.meta.at(type_id);
-	if (index < m.members.size())
-		return m.members[index].qualified_alias;
+	auto *m = ir.find_meta(type_id);
+	if (m && index < m->members.size())
+		return m->members[index].qualified_alias;
 	else
-		return empty;
+		return ir.get_empty_string();
 }
 
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
@@ -1162,7 +1173,7 @@ StorageClass Compiler::get_storage_class(uint32_t id) const
 
 const std::string &Compiler::get_name(uint32_t id) const
 {
-	return ir.meta.at(id).decoration.alias;
+	return ir.get_name(id);
 }
 
 const std::string Compiler::get_fallback_name(uint32_t id) const
@@ -1216,7 +1227,11 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 bool Compiler::get_binary_offset_for_decoration(uint32_t id, spv::Decoration decoration, uint32_t &word_offset) const
 {
-	auto &word_offsets = ir.meta.at(id).decoration_word_offset;
+	auto *m = ir.find_meta(id);
+	if (!m)
+		return false;
+
+	auto &word_offsets = m->decoration_word_offset;
 	auto itr = word_offsets.find(decoration);
 	if (itr == end(word_offsets))
 		return false;
@@ -1445,32 +1460,50 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRFunction &func, OpcodeHa
 
 uint32_t Compiler::type_struct_member_offset(const SPIRType &type, uint32_t index) const
 {
-	// Decoration must be set in valid SPIR-V, otherwise throw.
-	auto &dec = ir.meta[type.self].members.at(index);
-	if (dec.decoration_flags.get(DecorationOffset))
-		return dec.offset;
+	auto *type_meta = ir.find_meta(type.self);
+	if (type_meta)
+	{
+		// Decoration must be set in valid SPIR-V, otherwise throw.
+		auto &dec = type_meta->members[index];
+		if (dec.decoration_flags.get(DecorationOffset))
+			return dec.offset;
+		else
+			SPIRV_CROSS_THROW("Struct member does not have Offset set.");
+	}
 	else
 		SPIRV_CROSS_THROW("Struct member does not have Offset set.");
 }
 
 uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_t index) const
 {
-	// Decoration must be set in valid SPIR-V, otherwise throw.
-	// ArrayStride is part of the array type not OpMemberDecorate.
-	auto &dec = ir.meta[type.member_types[index]].decoration;
-	if (dec.decoration_flags.get(DecorationArrayStride))
-		return dec.array_stride;
+	auto *type_meta = ir.find_meta(type.member_types[index]);
+	if (type_meta)
+	{
+		// Decoration must be set in valid SPIR-V, otherwise throw.
+		// ArrayStride is part of the array type not OpMemberDecorate.
+		auto &dec = type_meta->decoration;
+		if (dec.decoration_flags.get(DecorationArrayStride))
+			return dec.array_stride;
+		else
+			SPIRV_CROSS_THROW("Struct member does not have ArrayStride set.");
+	}
 	else
-		SPIRV_CROSS_THROW("Struct member does not have ArrayStride set.");
+		SPIRV_CROSS_THROW("Struct member does not have Offset set.");
 }
 
 uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const
 {
-	// Decoration must be set in valid SPIR-V, otherwise throw.
-	// MatrixStride is part of OpMemberDecorate.
-	auto &dec = ir.meta[type.self].members[index];
-	if (dec.decoration_flags.get(DecorationMatrixStride))
-		return dec.matrix_stride;
+	auto *type_meta = ir.find_meta(type.self);
+	if (type_meta)
+	{
+		// Decoration must be set in valid SPIR-V, otherwise throw.
+		// MatrixStride is part of OpMemberDecorate.
+		auto &dec = type_meta->members[index];
+		if (dec.decoration_flags.get(DecorationMatrixStride))
+			return dec.matrix_stride;
+		else
+			SPIRV_CROSS_THROW("Struct member does not have MatrixStride set.");
+	}
 	else
 		SPIRV_CROSS_THROW("Struct member does not have MatrixStride set.");
 }
@@ -3610,15 +3643,18 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 
 bool Compiler::buffer_is_hlsl_counter_buffer(uint32_t id) const
 {
-	return ir.meta.at(id).hlsl_is_magic_counter_buffer;
+	auto *m = ir.find_meta(id);
+	return m && m->hlsl_is_magic_counter_buffer;
 }
 
 bool Compiler::buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const
 {
+	auto *m = ir.find_meta(id);
+
 	// First, check for the proper decoration.
-	if (ir.meta[id].hlsl_magic_counter_buffer != 0)
+	if (m && m->hlsl_magic_counter_buffer != 0)
 	{
-		counter_id = ir.meta[id].hlsl_magic_counter_buffer;
+		counter_id = m->hlsl_magic_counter_buffer;
 		return true;
 	}
 	else
@@ -3685,8 +3721,10 @@ std::string Compiler::get_remapped_declared_block_name(uint32_t id) const
 	{
 		auto &var = get<SPIRVariable>(id);
 		auto &type = get<SPIRType>(var.basetype);
-		auto &block_name = ir.meta[type.self].decoration.alias;
-		return block_name.empty() ? get_block_fallback_name(id) : block_name;
+
+		auto *type_meta = ir.find_meta(type.self);
+		auto *block_name = type_meta ? &type_meta->decoration.alias : nullptr;
+		return (!block_name || block_name->empty()) ? get_block_fallback_name(id) : *block_name;
 	}
 }
 
@@ -3733,15 +3771,20 @@ bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &resul
 Bitset Compiler::combined_decoration_for_member(const SPIRType &type, uint32_t index) const
 {
 	Bitset flags;
-	auto &memb = ir.meta[type.self].members;
-	if (index >= memb.size())
-		return flags;
-	auto &dec = memb[index];
+	auto *type_meta = ir.find_meta(type.self);
 
-	// If our type is a struct, traverse all the members as well recursively.
-	flags.merge_or(dec.decoration_flags);
-	for (uint32_t i = 0; i < type.member_types.size(); i++)
-		flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
+	if (type_meta)
+	{
+		auto &memb = type_meta->members;
+		if (index >= memb.size())
+			return flags;
+		auto &dec = memb[index];
+
+		// If our type is a struct, traverse all the members as well recursively.
+		flags.merge_or(dec.decoration_flags);
+		for (uint32_t i = 0; i < type.member_types.size(); i++)
+			flags.merge_or(combined_decoration_for_member(get<SPIRType>(type.member_types[i]), i));
+	}
 
 	return flags;
 }
