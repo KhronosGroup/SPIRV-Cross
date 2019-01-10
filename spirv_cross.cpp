@@ -707,21 +707,16 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 {
 	ShaderResources res;
 
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() != TypeVariable)
-			continue;
-
-		auto &var = id.get<SPIRVariable>();
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
 		auto &type = get<SPIRType>(var.basetype);
 
 		// It is possible for uniform storage classes to be passed as function parameters, so detect
 		// that. To detect function parameters, check of StorageClass of variable is function scope.
 		if (var.storage == StorageClassFunction || !type.pointer || is_builtin_variable(var))
-			continue;
+			return;
 
 		if (active_variables && active_variables->find(var.self) == end(*active_variables))
-			continue;
+			return;
 
 		// Input
 		if (var.storage == StorageClassInput && interface_variable_exists_in_entry_point(var.self))
@@ -801,7 +796,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		{
 			res.atomic_counters.push_back({ var.self, var.basetype, type.self, ir.meta[var.self].decoration.alias });
 		}
-	}
+	});
 
 	return res;
 }
@@ -829,43 +824,56 @@ void Compiler::fixup_type_alias()
 	// Due to how some backends work, the "master" type of type_alias must be a block-like type if it exists.
 	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
 	// alias if the slave type is a block type.
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() != TypeType)
-			continue;
-
-		auto &type = id.get<SPIRType>();
-
+	ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
 		if (type.type_alias && type_is_block_like(type))
 		{
 			// Become the master.
-			for (auto &other_id : ir.ids)
-			{
-				if (other_id.get_type() != TypeType)
-					continue;
-				if (other_id.get_id() == type.self)
-					continue;
+			ir.for_each_typed_id<SPIRType>([&](uint32_t other_id, SPIRType &other_type) {
+				if (other_id == type.self)
+					return;
 
-				auto &other_type = other_id.get<SPIRType>();
 				if (other_type.type_alias == type.type_alias)
 					other_type.type_alias = type.self;
-			}
+			});
 
-			get<SPIRType>(type.type_alias).type_alias = id.get_id();
+			get<SPIRType>(type.type_alias).type_alias = self;
 			type.type_alias = 0;
 		}
-	}
+	});
 
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() != TypeType)
-			continue;
-
-		auto &type = id.get<SPIRType>();
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
 		if (type.type_alias && type_is_block_like(type))
 		{
 			// This is not allowed, drop the type_alias.
 			type.type_alias = 0;
+		}
+	});
+
+	// Reorder declaration of types so that the master of the type alias is always emitted first.
+	// We need this in case a type B depends on type A (A must come before in the vector), but A is an alias of a type Abuffer, which
+	// means declaration of A doesn't happen (yet), and order would be B, ABuffer and not ABuffer, B. Fix this up here.
+	auto &type_ids = ir.ids_for_type[TypeType];
+	for (auto alias_itr = begin(type_ids); alias_itr != end(type_ids); ++alias_itr)
+	{
+		auto &type = get<SPIRType>(*alias_itr);
+		if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
+		{
+			// We will skip declaring this type, so make sure the type_alias type comes before.
+			auto master_itr = find(begin(type_ids), end(type_ids), type.type_alias);
+			assert(master_itr != end(type_ids));
+
+			if (alias_itr < master_itr)
+			{
+				// Must also swap the type order for the constant-type joined array.
+				auto &joined_types = ir.ids_for_constant_or_type;
+				auto alt_alias_itr = find(begin(joined_types), end(joined_types), *alias_itr);
+				auto alt_master_itr = find(begin(joined_types), end(joined_types), *master_itr);
+				assert(alt_alias_itr != end(joined_types));
+				assert(alt_master_itr != end(joined_types));
+
+				swap(*alias_itr, *master_itr);
+				swap(*alt_alias_itr, *alt_master_itr);
+			}
 		}
 	}
 }
@@ -873,8 +881,10 @@ void Compiler::fixup_type_alias()
 void Compiler::parse_fixup()
 {
 	// Figure out specialization constants for work group sizes.
-	for (auto &id : ir.ids)
+	for (auto id_ : ir.ids_for_constant_or_variable)
 	{
+		auto &id = ir.ids[id_];
+
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
@@ -2433,16 +2443,11 @@ uint32_t Compiler::build_dummy_sampler_for_combined_images()
 
 void Compiler::build_combined_image_samplers()
 {
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeFunction)
-		{
-			auto &func = id.get<SPIRFunction>();
-			func.combined_parameters.clear();
-			func.shadow_arguments.clear();
-			func.do_combined_parameters = true;
-		}
-	}
+	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, SPIRFunction &func) {
+		func.combined_parameters.clear();
+		func.shadow_arguments.clear();
+		func.do_combined_parameters = true;
+	});
 
 	combined_image_samplers.clear();
 	CombinedImageSamplerHandler handler(*this);
@@ -2452,15 +2457,10 @@ void Compiler::build_combined_image_samplers()
 vector<SpecializationConstant> Compiler::get_specialization_constants() const
 {
 	vector<SpecializationConstant> spec_consts;
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeConstant)
-		{
-			auto &c = id.get<SPIRConstant>();
-			if (c.specialization && has_decoration(c.self, DecorationSpecId))
-				spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
-		}
-	}
+	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, const SPIRConstant &c) {
+		if (c.specialization && has_decoration(c.self, DecorationSpecId))
+			spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
+	});
 	return spec_consts;
 }
 
@@ -2890,12 +2890,6 @@ void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariab
 
 		// Only consider arrays here.
 		if (type.array.empty())
-			continue;
-
-		// HACK: Do not consider structs. This is a quirk with how types are currently being emitted.
-		// Structs are emitted after specialization constants and composite constants.
-		// FIXME: Fix declaration order so declared constants can have struct types.
-		if (type.basetype == SPIRType::Struct)
 			continue;
 
 		// If the variable has an initializer, make sure it is a constant expression.

@@ -291,25 +291,17 @@ void CompilerGLSL::reset()
 	block_names.clear();
 	function_overloads.clear();
 
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
-		{
-			// Clear unflushed dependees.
-			id.get<SPIRVariable>().dependees.clear();
-		}
-		else if (id.get_type() == TypeExpression)
-		{
-			// And remove all expressions.
-			id.reset();
-		}
-		else if (id.get_type() == TypeFunction)
-		{
-			// Reset active state for all functions.
-			id.get<SPIRFunction>().active = false;
-			id.get<SPIRFunction>().flush_undeclared = true;
-		}
-	}
+	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, SPIRFunction &func) {
+		func.active = false;
+		func.flush_undeclared = true;
+	});
+
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		var.dependees.clear();
+	});
+
+	ir.reset_all_of_type<SPIRExpression>();
+	ir.reset_all_of_type<SPIRAccessChain>();
 
 	statement_count = 0;
 	indent = 0;
@@ -344,37 +336,32 @@ void CompilerGLSL::remap_pls_variables()
 
 void CompilerGLSL::find_static_extensions()
 {
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeType)
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, const SPIRType &type) {
+		if (type.basetype == SPIRType::Double)
 		{
-			auto &type = id.get<SPIRType>();
-			if (type.basetype == SPIRType::Double)
-			{
-				if (options.es)
-					SPIRV_CROSS_THROW("FP64 not supported in ES profile.");
-				if (!options.es && options.version < 400)
-					require_extension_internal("GL_ARB_gpu_shader_fp64");
-			}
-
-			if (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64)
-			{
-				if (options.es)
-					SPIRV_CROSS_THROW("64-bit integers not supported in ES profile.");
-				if (!options.es)
-					require_extension_internal("GL_ARB_gpu_shader_int64");
-			}
-
-			if (type.basetype == SPIRType::Half)
-				require_extension_internal("GL_AMD_gpu_shader_half_float");
-
-			if (type.basetype == SPIRType::SByte || type.basetype == SPIRType::UByte)
-				require_extension_internal("GL_EXT_shader_8bit_storage");
-
-			if (type.basetype == SPIRType::Short || type.basetype == SPIRType::UShort)
-				require_extension_internal("GL_AMD_gpu_shader_int16");
+			if (options.es)
+				SPIRV_CROSS_THROW("FP64 not supported in ES profile.");
+			if (!options.es && options.version < 400)
+				require_extension_internal("GL_ARB_gpu_shader_fp64");
 		}
-	}
+
+		if (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64)
+		{
+			if (options.es)
+				SPIRV_CROSS_THROW("64-bit integers not supported in ES profile.");
+			if (!options.es)
+				require_extension_internal("GL_ARB_gpu_shader_int64");
+		}
+
+		if (type.basetype == SPIRType::Half)
+			require_extension_internal("GL_AMD_gpu_shader_half_float");
+
+		if (type.basetype == SPIRType::SByte || type.basetype == SPIRType::UByte)
+			require_extension_internal("GL_EXT_shader_8bit_storage");
+
+		if (type.basetype == SPIRType::Short || type.basetype == SPIRType::UShort)
+			require_extension_internal("GL_AMD_gpu_shader_int16");
+	});
 
 	auto &execution = get_entry_point();
 	switch (execution.model)
@@ -1902,19 +1889,14 @@ void CompilerGLSL::replace_illegal_names()
 	};
 	// clang-format on
 
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
+		if (!is_hidden_variable(var))
 		{
-			auto &var = id.get<SPIRVariable>();
-			if (!is_hidden_variable(var))
-			{
-				auto &m = ir.meta[var.self].decoration;
-				if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
-					m.alias = join("_", m.alias);
-			}
+			auto &m = ir.meta[var.self].decoration;
+			if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
+				m.alias = join("_", m.alias);
 		}
-	}
+	});
 }
 
 void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
@@ -1957,18 +1939,13 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 
 void CompilerGLSL::replace_fragment_outputs()
 {
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
-		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = get<SPIRType>(var.basetype);
 
-			if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
-			    var.storage == StorageClassOutput)
-				replace_fragment_output(var);
-		}
-	}
+		if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
+		    var.storage == StorageClassOutput)
+			replace_fragment_output(var);
+	});
 }
 
 string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_components, const string &expr)
@@ -2027,12 +2004,7 @@ void CompilerGLSL::emit_pls()
 
 void CompilerGLSL::fixup_image_load_store_access()
 {
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() != TypeVariable)
-			continue;
-
-		uint32_t var = id.get<SPIRVariable>().self;
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var, const SPIRVariable &) {
 		auto &vartype = expression_type(var);
 		if (vartype.basetype == SPIRType::Image)
 		{
@@ -2047,7 +2019,7 @@ void CompilerGLSL::fixup_image_load_store_access()
 				flags.set(DecorationNonReadable);
 			}
 		}
-	}
+	});
 }
 
 void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionModel model)
@@ -2063,12 +2035,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	uint32_t cull_distance_size = 0;
 	uint32_t clip_distance_size = 0;
 
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() != TypeVariable)
-			continue;
-
-		auto &var = id.get<SPIRVariable>();
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = get<SPIRType>(var.basetype);
 		bool block = has_decoration(type.self, DecorationBlock);
 		Bitset builtins;
@@ -2104,7 +2071,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		}
 
 		if (builtins.empty())
-			continue;
+			return;
 
 		if (emitted_block)
 			SPIRV_CROSS_THROW("Cannot use more than one builtin I/O block.");
@@ -2113,7 +2080,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		emitted_block = true;
 		builtin_array = !type.array.empty();
 		block_var = &var;
-	}
+	});
 
 	global_builtins =
 	    Bitset(global_builtins.get_lower() & ((1ull << BuiltInPosition) | (1ull << BuiltInPointSize) |
@@ -2164,15 +2131,10 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 void CompilerGLSL::declare_undefined_values()
 {
 	bool emitted = false;
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() != TypeUndef)
-			continue;
-
-		auto &undef = id.get<SPIRUndef>();
+	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, const SPIRUndef &undef) {
 		statement(variable_decl(get<SPIRType>(undef.basetype), to_name(undef.self), undef.self), ";");
 		emitted = true;
-	}
+	});
 
 	if (emitted)
 		statement("");
@@ -2238,10 +2200,10 @@ void CompilerGLSL::emit_resources()
 	// emit specialization constants as actual floats,
 	// spec op expressions will redirect to the constant name.
 	//
-	// TODO: If we have the fringe case that we create a spec constant which depends on a struct type,
-	// we'll have to deal with that, but there's currently no known way to express that.
-	for (auto &id : ir.ids)
+	for (auto &id_ : ir.ids_for_constant_or_type)
 	{
+		auto &id = ir.ids[id_];
+
 		if (id.get_type() == TypeConstant)
 		{
 			auto &c = id.get<SPIRConstant>();
@@ -2263,6 +2225,20 @@ void CompilerGLSL::emit_resources()
 		{
 			emit_specialization_constant_op(id.get<SPIRConstantOp>());
 			emitted = true;
+		}
+		else if (id.get_type() == TypeType)
+		{
+			auto &type = id.get<SPIRType>();
+			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
+			    (!ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
+			     !ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+			{
+				if (emitted)
+					statement("");
+				emitted = false;
+
+				emit_struct(type);
+			}
 		}
 	}
 
@@ -2289,120 +2265,84 @@ void CompilerGLSL::emit_resources()
 
 	emitted = false;
 
-	// Output all basic struct types which are not Block or BufferBlock as these are declared inplace
-	// when such variables are instantiated.
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeType)
-		{
-			auto &type = id.get<SPIRType>();
-			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
-			    (!ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
-			     !ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
-			{
-				emit_struct(type);
-			}
-		}
-	}
-
 	// Output UBOs and SSBOs
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = get<SPIRType>(var.basetype);
+
+		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
+		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
+		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+
+		if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
+		    has_block_flags)
 		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
-
-			bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
-			bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-			                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
-
-			if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
-			    has_block_flags)
-			{
-				emit_buffer_block(var);
-			}
+			emit_buffer_block(var);
 		}
-	}
+	});
 
 	// Output push constant blocks
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = get<SPIRType>(var.basetype);
+		if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
+		    !is_hidden_variable(var))
 		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
-			    !is_hidden_variable(var))
-			{
-				emit_push_constant_block(var);
-			}
+			emit_push_constant_block(var);
 		}
-	}
+	});
 
 	bool skip_separate_image_sampler = !combined_image_samplers.empty() || !options.vulkan_semantics;
 
 	// Output Uniform Constants (values, samplers, images, etc).
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = get<SPIRType>(var.basetype);
+
+		// If we're remapping separate samplers and images, only emit the combined samplers.
+		if (skip_separate_image_sampler)
 		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
-
-			// If we're remapping separate samplers and images, only emit the combined samplers.
-			if (skip_separate_image_sampler)
-			{
-				// Sampler buffers are always used without a sampler, and they will also work in regular GL.
-				bool sampler_buffer = type.basetype == SPIRType::Image && type.image.dim == DimBuffer;
-				bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
-				bool separate_sampler = type.basetype == SPIRType::Sampler;
-				if (!sampler_buffer && (separate_image || separate_sampler))
-					continue;
-			}
-
-			if (var.storage != StorageClassFunction && type.pointer &&
-			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
-			    !is_hidden_variable(var))
-			{
-				emit_uniform(var);
-				emitted = true;
-			}
+			// Sampler buffers are always used without a sampler, and they will also work in regular GL.
+			bool sampler_buffer = type.basetype == SPIRType::Image && type.image.dim == DimBuffer;
+			bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
+			bool separate_sampler = type.basetype == SPIRType::Sampler;
+			if (!sampler_buffer && (separate_image || separate_sampler))
+				return;
 		}
-	}
+
+		if (var.storage != StorageClassFunction && type.pointer &&
+		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
+		    !is_hidden_variable(var))
+		{
+			emit_uniform(var);
+			emitted = true;
+		}
+	});
 
 	if (emitted)
 		statement("");
 	emitted = false;
 
 	// Output in/out interfaces.
-	for (auto &id : ir.ids)
-	{
-		if (id.get_type() == TypeVariable)
-		{
-			auto &var = id.get<SPIRVariable>();
-			auto &type = get<SPIRType>(var.basetype);
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-			    interface_variable_exists_in_entry_point(var.self) && !is_hidden_variable(var))
+		if (var.storage != StorageClassFunction && type.pointer &&
+		    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+		    interface_variable_exists_in_entry_point(var.self) && !is_hidden_variable(var))
+		{
+			emit_interface_block(var);
+			emitted = true;
+		}
+		else if (is_builtin_variable(var))
+		{
+			// For gl_InstanceIndex emulation on GLES, the API user needs to
+			// supply this uniform.
+			if (options.vertex.support_nonzero_base_instance &&
+			    ir.meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
 			{
-				emit_interface_block(var);
+				statement("uniform int SPIRV_Cross_BaseInstance;");
 				emitted = true;
 			}
-			else if (is_builtin_variable(var))
-			{
-				// For gl_InstanceIndex emulation on GLES, the API user needs to
-				// supply this uniform.
-				if (options.vertex.support_nonzero_base_instance &&
-				    ir.meta[var.self].decoration.builtin_type == BuiltInInstanceIndex && !options.vulkan_semantics)
-				{
-					statement("uniform int SPIRV_Cross_BaseInstance;");
-					emitted = true;
-				}
-			}
 		}
-	}
+	});
 
 	// Global variables.
 	for (auto global : global_variables)

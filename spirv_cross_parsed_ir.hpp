@@ -45,6 +45,18 @@ public:
 	// Various meta data for IDs, decorations, names, etc.
 	std::vector<Meta> meta;
 
+	// Holds all IDs which have a certain type.
+	// This is needed so we can iterate through a specific kind of resource quickly,
+	// and in-order of module declaration.
+	std::vector<uint32_t> ids_for_type[TypeCount];
+
+	// Special purpose lists which contain a union of types.
+	// This is needed so we can declare specialization constants and structs in an interleaved fashion,
+	// among other things.
+	// Constants can be of struct type, and struct array sizes can use specialization constants.
+	std::vector<uint32_t> ids_for_constant_or_type;
+	std::vector<uint32_t> ids_for_constant_or_variable;
+
 	// Declared capabilities and extensions in the SPIR-V module.
 	// Not really used except for reflection at the moment.
 	std::vector<spv::Capability> declared_capabilities;
@@ -111,6 +123,39 @@ public:
 	uint32_t increase_bound_by(uint32_t count);
 	Bitset get_buffer_block_flags(const SPIRVariable &var) const;
 
+	void add_typed_id(Types type, uint32_t id);
+	void remove_typed_id(Types type, uint32_t id);
+
+	template <typename T, typename Op>
+	void for_each_typed_id(const Op &op)
+	{
+		loop_iteration_depth++;
+		for (auto &id : ids_for_type[T::type])
+		{
+			if (ids[id].get_type() == static_cast<Types>(T::type))
+				op(id, get<T>(id));
+		}
+		loop_iteration_depth--;
+	}
+
+	template <typename T, typename Op>
+	void for_each_typed_id(const Op &op) const
+	{
+		for (auto &id : ids_for_type[T::type])
+		{
+			if (ids[id].get_type() == static_cast<Types>(T::type))
+				op(id, get<T>(id));
+		}
+	}
+
+	template <typename T>
+	void reset_all_of_type()
+	{
+		reset_all_of_type(static_cast<Types>(T::type));
+	}
+
+	void reset_all_of_type(Types type);
+
 private:
 	template <typename T>
 	T &get(uint32_t id)
@@ -123,6 +168,8 @@ private:
 	{
 		return variant_get<T>(ids[id]);
 	}
+
+	uint32_t loop_iteration_depth = 0;
 };
 } // namespace spirv_cross
 

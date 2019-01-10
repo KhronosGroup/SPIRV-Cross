@@ -16,6 +16,7 @@
 
 #include "spirv_cross_parsed_ir.hpp"
 #include <assert.h>
+#include <algorithm>
 
 using namespace std;
 using namespace spv;
@@ -547,6 +548,57 @@ uint32_t ParsedIR::increase_bound_by(uint32_t incr_amount)
 	meta.resize(new_bound);
 	block_meta.resize(new_bound);
 	return uint32_t(curr_bound);
+}
+
+void ParsedIR::remove_typed_id(Types type, uint32_t id)
+{
+	auto &type_ids = ids_for_type[type];
+	type_ids.erase(remove(begin(type_ids), end(type_ids), id), end(type_ids));
+}
+
+void ParsedIR::reset_all_of_type(Types type)
+{
+	for (auto &id : ids_for_type[type])
+		if (ids[id].get_type() == type)
+			ids[id].reset();
+
+	ids_for_type[type].clear();
+}
+
+void ParsedIR::add_typed_id(Types type, uint32_t id)
+{
+	if (loop_iteration_depth)
+		SPIRV_CROSS_THROW("Cannot add typed ID while looping over it.");
+
+	switch (type)
+	{
+	case TypeConstant:
+		ids_for_constant_or_variable.push_back(id);
+		ids_for_constant_or_type.push_back(id);
+		break;
+
+	case TypeVariable:
+		ids_for_constant_or_variable.push_back(id);
+		break;
+
+	case TypeType:
+	case TypeConstantOp:
+		ids_for_constant_or_type.push_back(id);
+		break;
+
+	default:
+		break;
+	}
+
+	if (ids[id].empty())
+	{
+		ids_for_type[type].push_back(id);
+	}
+	else if (ids[id].get_type() != type)
+	{
+		remove_typed_id(ids[id].get_type(), id);
+		ids_for_type[type].push_back(id);
+	}
 }
 
 } // namespace spirv_cross
