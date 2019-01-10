@@ -264,18 +264,11 @@ string CompilerReflection::compile()
 void CompilerReflection::emit_types()
 {
 	bool emitted_open_tag = false;
-	for (auto &id : ir.ids)
-	{
-		auto idType = id.get_type();
-		if (idType == TypeType)
-		{
-			auto &type = id.get<SPIRType>();
-			if (type.basetype == SPIRType::Struct && !type.pointer && type.array.empty())
-			{
-				emit_type(type, emitted_open_tag);
-			}
-		}
-	}
+
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+		if (type.basetype == SPIRType::Struct && !type.pointer && type.array.empty())
+			emit_type(type, emitted_open_tag);
+	});
 
 	if (emitted_open_tag)
 	{
