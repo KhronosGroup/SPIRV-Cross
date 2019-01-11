@@ -4255,7 +4255,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			if (type.basetype == SPIRType::SampledImage)
 			{
 				resources.push_back(
-						{ &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
+				    { &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
 
 				if (type.image.dim != DimBuffer && constexpr_samplers.count(var_id) == 0)
 				{
@@ -4267,7 +4267,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				// constexpr samplers are not declared as resources.
 				resources.push_back(
-						{ &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
+				    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
 			}
 		}
 	});
@@ -4366,8 +4366,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 
 				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
 				entry_func.fixup_hooks_in.push_back([=]() {
-					statement(builtin_type_decl(bi_type), " ", to_expression(var_id),
-					          " = simd_is_helper_thread();");
+					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = simd_is_helper_thread();");
 				});
 			}
 			else

@@ -15,8 +15,8 @@
  */
 
 #include "spirv_cross_parsed_ir.hpp"
-#include <assert.h>
 #include <algorithm>
+#include <assert.h>
 
 using namespace std;
 using namespace spv;

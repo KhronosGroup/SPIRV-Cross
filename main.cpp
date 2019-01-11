@@ -707,7 +707,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
-	cbs.add("--hlsl-support-nonzero-basevertex-baseinstance", [&args](CLIParser &) { args.hlsl_support_nonzero_base = true; });
+	cbs.add("--hlsl-support-nonzero-basevertex-baseinstance",
+	        [&args](CLIParser &) { args.hlsl_support_nonzero_base = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });

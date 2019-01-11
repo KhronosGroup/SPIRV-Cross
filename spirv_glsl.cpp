@@ -296,9 +296,7 @@ void CompilerGLSL::reset()
 		func.flush_undeclared = true;
 	});
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		var.dependees.clear();
-	});
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) { var.dependees.clear(); });
 
 	ir.reset_all_of_type<SPIRExpression>();
 	ir.reset_all_of_type<SPIRAccessChain>();
@@ -1942,8 +1940,7 @@ void CompilerGLSL::replace_fragment_outputs()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
-		if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
-		    var.storage == StorageClassOutput)
+		if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer && var.storage == StorageClassOutput)
 			replace_fragment_output(var);
 	});
 }

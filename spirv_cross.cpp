@@ -735,7 +735,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 			if (has_decoration(type.self, DecorationBlock))
 			{
 				res.stage_inputs.push_back(
-						{var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self)});
+				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			}
 			else
 				res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
@@ -751,7 +751,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 			if (has_decoration(type.self, DecorationBlock))
 			{
 				res.stage_outputs.push_back(
-						{var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self)});
+				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self) });
 			}
 			else
 				res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
@@ -779,8 +779,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		{
 			// There can only be one push constant block, but keep the vector in case this restriction is lifted
 			// in the future.
-			res.push_constant_buffers.push_back(
-			    { var.self, var.basetype, type.self, get_name(var.self) });
+			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 		// Images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
