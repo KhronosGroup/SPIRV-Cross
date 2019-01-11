@@ -902,6 +902,8 @@ void CompilerHLSL::emit_builtin_variables()
 	Bitset builtins = active_input_builtins;
 	builtins.merge_or(active_output_builtins);
 
+	bool need_base_vertex_info = false;
+
 	// Emit global variables for the interface variables which are statically used by the shader.
 	builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
@@ -921,8 +923,13 @@ void CompilerHLSL::emit_builtin_variables()
 
 		case BuiltInVertexId:
 		case BuiltInVertexIndex:
-		case BuiltInInstanceId:
 		case BuiltInInstanceIndex:
+			type = "int";
+			if (hlsl_options.support_nonzero_base_vertex_base_instance)
+				need_base_vertex_info = true;
+			break;
+
+		case BuiltInInstanceId:
 		case BuiltInSampleId:
 			type = "int";
 			break;
@@ -998,6 +1005,16 @@ void CompilerHLSL::emit_builtin_variables()
 				statement("static ", type, " ", builtin_to_glsl(builtin, storage), ";");
 		}
 	});
+
+	if (need_base_vertex_info)
+	{
+		statement("cbuffer SPIRV_Cross_VertexInfo");
+		begin_scope();
+		statement("int SPIRV_Cross_BaseVertex;");
+		statement("int SPIRV_Cross_BaseInstance;");
+		end_scope_decl();
+		statement("");
+	}
 }
 
 void CompilerHLSL::emit_composite_constants()
@@ -2243,8 +2260,20 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		case BuiltInVertexId:
 		case BuiltInVertexIndex:
-		case BuiltInInstanceId:
 		case BuiltInInstanceIndex:
+			// D3D semantics are uint, but shader wants int.
+			if (hlsl_options.support_nonzero_base_vertex_base_instance)
+			{
+				if (static_cast<BuiltIn>(i) == BuiltInInstanceIndex)
+					statement(builtin, " = int(stage_input.", builtin, ") + SPIRV_Cross_BaseInstance;");
+				else
+					statement(builtin, " = int(stage_input.", builtin, ") + SPIRV_Cross_BaseVertex;");
+			}
+			else
+				statement(builtin, " = int(stage_input.", builtin, ");");
+			break;
+
+		case BuiltInInstanceId:
 			// D3D semantics are uint, but shader wants int.
 			statement(builtin, " = int(stage_input.", builtin, ");");
 			break;

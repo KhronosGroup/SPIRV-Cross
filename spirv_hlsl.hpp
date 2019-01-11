@@ -54,6 +54,12 @@ public:
 
 		// Allows the PointCoord builtin, returns float2(0.5, 0.5), as PointCoord is not supported in HLSL.
 		bool point_coord_compat = false;
+
+		// If true, the backend will assume that VertexIndex and InstanceIndex will need to apply
+		// a base offset, and you will need to fill in a cbuffer with offsets.
+		// Set to false if you know you will never use base instance or base vertex
+		// functionality as it might remove an internal cbuffer.
+		bool support_nonzero_base_vertex_base_instance = false;
 	};
 
 	explicit CompilerHLSL(std::vector<uint32_t> spirv_)

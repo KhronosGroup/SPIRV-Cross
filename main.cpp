@@ -516,6 +516,7 @@ struct CLIArguments
 	bool msl = false;
 	bool hlsl = false;
 	bool hlsl_compat = false;
+	bool hlsl_support_nonzero_base = false;
 	bool vulkan_semantics = false;
 	bool flatten_multidimensional_arrays = false;
 	bool use_420pack_extension = true;
@@ -549,6 +550,7 @@ static void print_help()
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
 	                "\t[--hlsl-enable-compat]\n"
+	                "\t[--hlsl-support-nonzero-basevertex-baseinstance]\n"
 	                "\t[--separate-shader-objects]\n"
 	                "\t[--pls-in format input-name]\n"
 	                "\t[--pls-out format output-name]\n"
@@ -705,6 +707,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
+	cbs.add("--hlsl-support-nonzero-basevertex-baseinstance", [&args](CLIParser &) { args.hlsl_support_nonzero_base = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
@@ -991,6 +994,7 @@ static int main_inner(int argc, char *argv[])
 			build_dummy_sampler = true;
 		}
 
+		hlsl_opts.support_nonzero_base_vertex_base_instance = args.hlsl_support_nonzero_base;
 		hlsl->set_hlsl_options(hlsl_opts);
 	}
 
