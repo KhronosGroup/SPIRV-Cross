@@ -729,7 +729,7 @@ void CompilerMSL::mark_packable_structs()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		if (var.storage != StorageClassFunction && !is_hidden_variable(var))
 		{
-			auto &type = get<SPIRType>(var.basetype);
+			auto &type = this->get<SPIRType>(var.basetype);
 			if (type.pointer &&
 			    (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
 			     type.storage == StorageClassPushConstant || type.storage == StorageClassStorageBuffer) &&
@@ -1257,7 +1257,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 	bool incl_builtins = (storage == StorageClassOutput);
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		if (var.storage == storage && interface_variable_exists_in_entry_point(var.self) &&
 		    !is_hidden_variable(var, incl_builtins) && type.pointer)
 		{
@@ -2096,7 +2096,7 @@ void CompilerMSL::declare_undefined_values()
 {
 	bool emitted = false;
 	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, SPIRUndef &undef) {
-		auto &type = get<SPIRType>(undef.basetype);
+		auto &type = this->get<SPIRType>(undef.basetype);
 		statement("constant ", variable_decl(type, to_name(undef.self), undef.self), " = {};");
 		emitted = true;
 	});
@@ -2115,7 +2115,7 @@ void CompilerMSL::declare_constant_arrays()
 		if (c.specialization)
 			return;
 
-		auto &type = get<SPIRType>(c.constant_type);
+		auto &type = this->get<SPIRType>(c.constant_type);
 		if (!type.array.empty())
 		{
 			auto name = to_name(c.self);
@@ -4351,7 +4351,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		{
 			if (bi_type == BuiltInSamplePosition)
 			{
-				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = get_sample_position(",
 					          to_expression(builtin_sample_id_id), ");");
@@ -4364,7 +4364,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
 					SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
 
-				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id),
 					          " = simd_is_helper_thread();");

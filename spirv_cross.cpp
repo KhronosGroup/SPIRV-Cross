@@ -719,7 +719,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 	ShaderResources res;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		// It is possible for uniform storage classes to be passed as function parameters, so detect
 		// that. To detect function parameters, check of StorageClass of variable is function scope.
@@ -849,7 +849,7 @@ void Compiler::fixup_type_alias()
 					other_type.type_alias = type.self;
 			});
 
-			get<SPIRType>(type.type_alias).type_alias = self;
+			this->get<SPIRType>(type.type_alias).type_alias = self;
 			type.type_alias = 0;
 		}
 	});
@@ -1600,7 +1600,7 @@ bool Compiler::BufferAccessHandler::handle(Op opcode, const uint32_t *args, uint
 	bool ptr_chain = (opcode == OpPtrAccessChain);
 
 	// Invalid SPIR-V.
-	if (length < (ptr_chain ? 5 : 4))
+	if (length < (ptr_chain ? 5u : 4u))
 		return false;
 
 	if (args[2] != id)

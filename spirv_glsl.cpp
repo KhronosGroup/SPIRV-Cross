@@ -1940,7 +1940,7 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 void CompilerGLSL::replace_fragment_outputs()
 {
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer &&
 		    var.storage == StorageClassOutput)
@@ -2036,7 +2036,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	uint32_t clip_distance_size = 0;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = has_decoration(type.self, DecorationBlock);
 		Bitset builtins;
 
@@ -2049,9 +2049,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 				{
 					builtins.set(m.builtin_type);
 					if (m.builtin_type == BuiltInCullDistance)
-						cull_distance_size = get<SPIRType>(type.member_types[index]).array.front();
+						cull_distance_size = this->get<SPIRType>(type.member_types[index]).array.front();
 					else if (m.builtin_type == BuiltInClipDistance)
-						clip_distance_size = get<SPIRType>(type.member_types[index]).array.front();
+						clip_distance_size = this->get<SPIRType>(type.member_types[index]).array.front();
 				}
 				index++;
 			}
@@ -2132,7 +2132,7 @@ void CompilerGLSL::declare_undefined_values()
 {
 	bool emitted = false;
 	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, const SPIRUndef &undef) {
-		statement(variable_decl(get<SPIRType>(undef.basetype), to_name(undef.self), undef.self), ";");
+		statement(variable_decl(this->get<SPIRType>(undef.basetype), to_name(undef.self), undef.self), ";");
 		emitted = true;
 	});
 
@@ -2267,7 +2267,7 @@ void CompilerGLSL::emit_resources()
 
 	// Output UBOs and SSBOs
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
@@ -2282,7 +2282,7 @@ void CompilerGLSL::emit_resources()
 
 	// Output push constant blocks
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
 		    !is_hidden_variable(var))
 		{
@@ -2294,7 +2294,7 @@ void CompilerGLSL::emit_resources()
 
 	// Output Uniform Constants (values, samplers, images, etc).
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		// If we're remapping separate samplers and images, only emit the combined samplers.
 		if (skip_separate_image_sampler)
@@ -2322,7 +2322,7 @@ void CompilerGLSL::emit_resources()
 
 	// Output in/out interfaces.
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		if (var.storage != StorageClassFunction && type.pointer &&
 		    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&

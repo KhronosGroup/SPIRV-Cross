@@ -1010,7 +1010,7 @@ void CompilerHLSL::emit_composite_constants()
 		if (c.specialization)
 			return;
 
-		auto &type = get<SPIRType>(c.constant_type);
+		auto &type = this->get<SPIRType>(c.constant_type);
 		if (type.basetype == SPIRType::Struct || !type.array.empty())
 		{
 			auto name = to_name(c.self);
@@ -1119,7 +1119,7 @@ void CompilerHLSL::emit_resources()
 
 	// Output UBOs and SSBOs
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
@@ -1135,7 +1135,7 @@ void CompilerHLSL::emit_resources()
 
 	// Output push constant blocks
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
 		    !is_hidden_variable(var))
 		{
@@ -1154,7 +1154,7 @@ void CompilerHLSL::emit_resources()
 
 	// Output Uniform Constants (values, samplers, images, etc).
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 
 		// If we're remapping separate samplers and images, only emit the combined samplers.
 		if (skip_separate_image_sampler)
@@ -1184,7 +1184,7 @@ void CompilerHLSL::emit_resources()
 	emit_builtin_variables();
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 		// Do not emit I/O blocks here.
@@ -1211,7 +1211,7 @@ void CompilerHLSL::emit_resources()
 	vector<SPIRVariable *> input_variables;
 	vector<SPIRVariable *> output_variables;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 		if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
@@ -2134,7 +2134,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	// Add I/O blocks as separate arguments with appropriate storage qualifier.
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 		if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
@@ -2296,7 +2296,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	// Copy from stage input struct to globals.
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 		if (var.storage != StorageClassInput)
@@ -2308,7 +2308,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		    interface_variable_exists_in_entry_point(var.self))
 		{
 			auto name = to_name(var.self);
-			auto &mtype = get<SPIRType>(var.basetype);
+			auto &mtype = this->get<SPIRType>(var.basetype);
 			if (need_matrix_unroll && mtype.columns > 1)
 			{
 				// Unroll matrices.
@@ -2341,7 +2341,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	// Copy block outputs.
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = get<SPIRType>(var.basetype);
+		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 		if (var.storage != StorageClassOutput)
@@ -2390,7 +2390,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		});
 
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-			auto &type = get<SPIRType>(var.basetype);
+			auto &type = this->get<SPIRType>(var.basetype);
 			bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 
 			if (var.storage != StorageClassOutput)
