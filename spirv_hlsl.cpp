@@ -805,7 +805,14 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 	bool legacy = hlsl_options.shader_model <= 30;
 	if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
 	{
-		binding = join(legacy ? "COLOR" : "SV_Target", get_decoration(var.self, DecorationLocation));
+		// Dual-source blending is achieved in HLSL by emitting to SV_Target0 and 1.
+		uint32_t index = get_decoration(var.self, DecorationIndex);
+		uint32_t location = get_decoration(var.self, DecorationLocation);
+
+		if (index != 0 && location != 0)
+			SPIRV_CROSS_THROW("Dual-source blending is only supported on MRT #0 in HLSL.");
+
+		binding = join(legacy ? "COLOR" : "SV_Target", location + index);
 		use_location_number = false;
 		if (legacy) // COLOR must be a four-component vector on legacy shader model targets (HLSL ERR_COLOR_4COMP)
 			type.vecsize = 4;
