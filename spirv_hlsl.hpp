@@ -148,7 +148,7 @@ private:
 	void emit_uniform(const SPIRVariable &var) override;
 	void emit_modern_uniform(const SPIRVariable &var);
 	void emit_legacy_uniform(const SPIRVariable &var);
-	void emit_specialization_constants();
+	void emit_specialization_constants_and_structs();
 	void emit_composite_constants();
 	void emit_fixup() override;
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
