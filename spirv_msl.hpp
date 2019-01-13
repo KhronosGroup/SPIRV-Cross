@@ -390,6 +390,7 @@ protected:
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
+	std::string to_swizzle_expression(uint32_t id);
 	std::string builtin_qualifier(spv::BuiltIn builtin);
 	std::string builtin_type_decl(spv::BuiltIn builtin);
 	std::string built_in_func_arg(spv::BuiltIn builtin, bool prefix_comma);
@@ -444,6 +445,7 @@ protected:
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
 	std::string sampler_name_suffix = "Smplr";
+	std::string swizzle_name_suffix = "Swzl";
 	spv::Op previous_instruction_opcode = spv::OpNop;
 
 	std::unordered_map<uint32_t, MSLConstexprSampler> constexpr_samplers;
