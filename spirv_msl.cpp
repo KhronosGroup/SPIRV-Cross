@@ -3695,7 +3695,31 @@ void CompilerMSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_id
 // Manufacture automatic sampler arg for SampledImage texture.
 string CompilerMSL::to_func_call_arg(uint32_t id)
 {
-	string arg_str = CompilerGLSL::to_func_call_arg(id);
+	string arg_str;
+
+	auto *c = maybe_get<SPIRConstant>(id);
+	if (c && !get<SPIRType>(c->constant_type).array.empty())
+	{
+		// If we are passing a constant array directly to a function for some reason,
+		// the callee will expect an argument in thread const address space
+		// (since we can only bind to arrays with references in MSL).
+		// To resolve this, we must emit a copy in this address space.
+		// This kind of code gen should be rare enough that performance is not a real concern.
+		// Inline the SPIR-V to avoid this kind of suboptimal codegen.
+		//
+		// We risk calling this inside a continue block (invalid code),
+		// so just create a thread local copy in the current function.
+		arg_str = join("_", id, "_array_copy");
+		auto &constants = current_function->constant_arrays_needed_on_stack;
+		auto itr = find(begin(constants), end(constants), id);
+		if (itr == end(constants))
+		{
+			force_recompile = true;
+			constants.push_back(id);
+		}
+	}
+	else
+		arg_str = CompilerGLSL::to_func_call_arg(id);
 
 	// Manufacture automatic sampler arg if the arg is a SampledImage texture.
 	auto &type = expression_type(id);
@@ -4496,8 +4520,26 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	    (storage == StorageClassFunction || storage == StorageClassGeneric))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
-		decl += " ";
-		decl += to_expression(name_id);
+		if (is_array(type))
+		{
+			// We are receiving an array by value. This is problematic.
+			// We cannot be sure of the target address space since we are supposed to receive a copy,
+			// but this is not possible with MSL without some extra work.
+			// We will have to assume we're getting a reference in thread address space.
+			// If we happen to get a reference in constant address space, the caller must emit a copy and pass that.
+			// Thread const therefore becomes the only logical choice, since we cannot "create" a constant array from
+			// non-constant arrays, but we can create thread const from constant.
+			decl = string("thread const ") + decl;
+			decl += " (&";
+			decl += to_expression(name_id);
+			decl += ")";
+			decl += type_to_array_glsl(type);
+		}
+		else
+		{
+			decl += " ";
+			decl += to_expression(name_id);
+		}
 	}
 	else if (is_array(type) && !type_is_image)
 	{
