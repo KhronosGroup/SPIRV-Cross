@@ -82,6 +82,11 @@ CompilerMSL::CompilerMSL(ParsedIR &&ir_, MSLVertexAttr *p_vtx_attrs, size_t vtx_
 			resource_bindings.push_back(&p_res_bindings[i]);
 }
 
+void CompilerMSL::set_fragment_output_components(uint32_t location, uint32_t components)
+{
+	fragment_output_components[location] = components;
+}
+
 void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
@@ -779,6 +784,27 @@ void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, StorageClas
 		p_va->used_by_shader = true;
 }
 
+uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t location) const
+{
+	auto itr = fragment_output_components.find(location);
+	if (itr == end(fragment_output_components))
+		return 4;
+	else
+		return itr->second;
+}
+
+uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t components)
+{
+	uint32_t new_type_id = ir.increase_bound_by(1);
+	auto &type = set<SPIRType>(new_type_id, get<SPIRType>(type_id));
+	type.vecsize = components;
+	type.self = new_type_id;
+	type.parent_type = 0;
+	type.pointer = false;
+
+	return new_type_id;
+}
+
 void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
                                                         SPIRType &ib_type, SPIRVariable &var)
 {
@@ -793,6 +819,26 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 	uint32_t type_id = ensure_correct_builtin_type(var.basetype, builtin);
 	var.basetype = type_id;
+
+	auto &type = get<SPIRType>(type_id);
+	uint32_t target_components = 0;
+	uint32_t type_components = type.vecsize;
+	bool padded_output = false;
+
+	// Check if we need to pad fragment output to match a certain number of components.
+	if (get_decoration_bitset(var.self).get(DecorationLocation) && msl_options.pad_fragment_output_components &&
+	    get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput)
+	{
+		uint32_t locn = get_decoration(var.self, DecorationLocation);
+		target_components = get_target_components_for_fragment_location(locn);
+		if (type_components < target_components)
+		{
+			// Make a new type here.
+			type_id = build_extended_vector_type(type_id, target_components);
+			padded_output = true;
+		}
+	}
+
 	ib_type.member_types.push_back(get_pointee_type_id(type_id));
 
 	// Give the member a name
@@ -801,7 +847,20 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 	// Update the original variable reference to include the structure reference
 	string qual_var_name = ib_var_ref + "." + mbr_name;
-	ir.meta[var.self].decoration.qualified_alias = qual_var_name;
+
+	if (padded_output)
+	{
+		auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+		entry_func.add_local_variable(var.self);
+		vars_needing_early_declaration.push_back(var.self);
+
+		entry_func.fixup_hooks_out.push_back([=, &var]() {
+			SPIRType &padded_type = this->get<SPIRType>(type_id);
+			statement(qual_var_name, " = ", remap_swizzle(padded_type, type_components, to_name(var.self)), ";");
+		});
+	}
+	else
+		ir.meta[var.self].decoration.qualified_alias = qual_var_name;
 
 	// Copy the variable location from the original variable to the member
 	if (get_decoration_bitset(var.self).get(DecorationLocation))
@@ -890,7 +949,26 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 	{
 		// Add a reference to the variable type to the interface struct.
 		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-		ib_type.member_types.push_back(usable_type->self);
+
+		uint32_t target_components = 0;
+		bool padded_output = false;
+		uint32_t type_id = usable_type->self;
+
+		// Check if we need to pad fragment output to match a certain number of components.
+		if (get_decoration_bitset(var.self).get(DecorationLocation) && msl_options.pad_fragment_output_components &&
+		    get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput)
+		{
+			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
+			target_components = get_target_components_for_fragment_location(locn);
+			if (usable_type->vecsize < target_components)
+			{
+				// Make a new type here.
+				type_id = build_extended_vector_type(usable_type->self, target_components);
+				padded_output = true;
+			}
+		}
+
+		ib_type.member_types.push_back(get_pointee_type_id(type_id));
 
 		// Give the member a name
 		string mbr_name = ensure_valid_name(join(to_expression(var.self), "_", i), "m");
@@ -930,12 +1008,21 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		{
 		case StorageClassInput:
 			entry_func.fixup_hooks_in.push_back(
-			    [=]() { statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";"); });
+			    [=, &var]() { statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";"); });
 			break;
 
 		case StorageClassOutput:
-			entry_func.fixup_hooks_out.push_back(
-			    [=]() { statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];"); });
+			entry_func.fixup_hooks_out.push_back([=, &var]() {
+				if (padded_output)
+				{
+					auto &padded_type = this->get<SPIRType>(type_id);
+					statement(ib_var_ref, ".", mbr_name, " = ",
+					          remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
+					          ";");
+				}
+				else
+					statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
+			});
 			break;
 
 		default:
@@ -1053,14 +1140,14 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		switch (storage)
 		{
 		case StorageClassInput:
-			entry_func.fixup_hooks_in.push_back([=]() {
+			entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
 				statement(to_name(var.self), ".", to_member_name(var_type, mbr_idx), "[", i, "] = ", ib_var_ref, ".",
 				          mbr_name, ";");
 			});
 			break;
 
 		case StorageClassOutput:
-			entry_func.fixup_hooks_out.push_back([=]() {
+			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
 				statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), ".", to_member_name(var_type, mbr_idx),
 				          "[", i, "];");
 			});
@@ -1115,13 +1202,13 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		switch (storage)
 		{
 		case StorageClassInput:
-			entry_func.fixup_hooks_in.push_back([=]() {
+			entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
 				statement(to_name(var.self), ".", to_member_name(var_type, mbr_idx), " = ", qual_var_name, ";");
 			});
 			break;
 
 		case StorageClassOutput:
-			entry_func.fixup_hooks_out.push_back([=]() {
+			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
 				statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(var_type, mbr_idx), ";");
 			});
 			break;
