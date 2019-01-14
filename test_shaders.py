@@ -152,6 +152,8 @@ def cross_compile_msl(shader, spirv, opt):
         msl_args.append('--msl-swizzle-texture-samples')
     if '.ios.' in shader:
         msl_args.append('--msl-ios')
+    if '.pad-fragment.' in shader:
+        msl_args.append('--msl-pad-fragment-output')
 
     subprocess.check_call(msl_args)
 
