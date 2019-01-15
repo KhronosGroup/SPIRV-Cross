@@ -2109,7 +2109,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			statement("// Wrapper function that swizzles texture gathers.");
 			statement("template<typename T, typename Tex, typename... Ts>");
-			statement("inline vec<T, 4> spvGatherSwizzle(sampler s, thread Tex& t, Ts... params, component c, uint sw) "
+			statement("inline vec<T, 4> spvGatherSwizzle(sampler s, const thread Tex& t, Ts... params, component c, uint sw) "
 			          "METAL_CONST_ARG(c)");
 			begin_scope();
 			statement("if (sw)");
@@ -2149,7 +2149,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			statement("// Wrapper function that swizzles depth texture gathers.");
 			statement("template<typename T, typename Tex, typename... Ts>");
-			statement("inline vec<T, 4> spvGatherCompareSwizzle(sampler s, thread Tex& t, Ts... params, uint sw) ");
+			statement("inline vec<T, 4> spvGatherCompareSwizzle(sampler s, const thread Tex& t, Ts... params, uint sw) ");
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();
@@ -3338,6 +3338,10 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		if (arg_type.basetype == SPIRType::SampledImage && arg_type.image.dim != DimBuffer)
 			decl += join(", thread const ", sampler_type(arg_type), " ", to_sampler_expression(arg.id));
 
+		// Manufacture automatic swizzle arg.
+		if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(arg_type))
+			decl += join(", constant uint32_t& ", to_swizzle_expression(arg.id));
+
 		if (&arg != &func.arguments.back())
 			decl += ", ";
 	}
@@ -3713,22 +3717,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		// Add the swizzle constant from the swizzle buffer.
 		if (!is_gather)
 			farg_str += ")";
-		// Get the original input variable for this image.
-		uint32_t img_var = img;
-
-		auto *combined = maybe_get<SPIRCombinedImageSampler>(img_var);
-		if (combined)
-			img_var = combined->image;
-
-		if (auto *var = maybe_get_backing_variable(img_var))
-		{
-			if (var->parameter && !var->parameter->alias_global_variable)
-				SPIRV_CROSS_THROW("Cannot yet map non-aliased parameter to Metal resource!");
-			img_var = var->self;
-		}
-		auto &aux_type = expression_type(aux_buffer_id);
-		farg_str += ", " + to_name(aux_buffer_id) + "." + to_member_name(aux_type, k_aux_mbr_idx_swizzle_const) + "[" +
-		            convert_to_string(get_metal_resource_index(get<SPIRVariable>(img_var), SPIRType::Image)) + "]";
+		farg_str += ", " + to_swizzle_expression(img);
 		used_aux_buffer = true;
 	}
 
@@ -3812,6 +3801,8 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 	auto &type = expression_type(id);
 	if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		arg_str += ", " + to_sampler_expression(id);
+	if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
+		arg_str += ", " + to_swizzle_expression(id);
 
 	return arg_str;
 }
@@ -3836,6 +3827,22 @@ string CompilerMSL::to_sampler_expression(uint32_t id)
 		auto image_expr = expr.substr(0, index);
 		auto array_expr = expr.substr(index);
 		return samp_id ? to_expression(samp_id) : (image_expr + sampler_name_suffix + array_expr);
+	}
+}
+
+string CompilerMSL::to_swizzle_expression(uint32_t id)
+{
+	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
+	auto expr = to_expression(combined ? combined->image : id);
+	auto index = expr.find_first_of('[');
+
+	if (index == string::npos)
+		return expr + swizzle_name_suffix;
+	else
+	{
+		auto image_expr = expr.substr(0, index);
+		auto array_expr = expr.substr(index);
+		return image_expr + swizzle_name_suffix + array_expr;
 	}
 }
 
@@ -4379,6 +4386,17 @@ string CompilerMSL::entry_point_args(bool append_comma)
 				// constexpr samplers are not declared as resources.
 				resources.push_back(
 				    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
+			}
+
+			if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
+			{
+				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
+				entry_func.fixup_hooks_in.push_back([this, &var, var_id]() {
+					auto &aux_type = expression_type(aux_buffer_id);
+					statement("constant uint32_t& ", to_swizzle_expression(var_id), " = ", to_name(aux_buffer_id), ".",
+					          to_member_name(aux_type, k_aux_mbr_idx_swizzle_const), "[",
+					          convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
+				});
 			}
 		}
 	});
