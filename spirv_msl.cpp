@@ -1585,6 +1585,27 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 
 	auto &mbr_type = get<SPIRType>(ib_type.member_types[index]);
 
+	uint32_t component_size = mbr_type.width / 8;
+	uint32_t unpacked_mbr_size;
+	if (mbr_type.vecsize == 3)
+		unpacked_mbr_size = component_size * (mbr_type.vecsize + 1) * mbr_type.columns;
+	else
+		unpacked_mbr_size = component_size * mbr_type.vecsize * mbr_type.columns;
+
+	// Special case for packing. Check for float[] or vec2[] in std140 layout. Here we actually need to pad out instead,
+	// but we will use the same mechanism as before.
+	if (is_array(mbr_type) &&
+	    (is_scalar(mbr_type) || is_vector(mbr_type)) &&
+	    mbr_type.vecsize <= 2 &&
+	    type_struct_member_array_stride(ib_type, index) == 4 * component_size)
+	{
+		return true;
+	}
+
+	// Another sanity check for matrices. We currently do not support std140 matrices which need to be padded out per column.
+	//if (is_matrix(mbr_type) && mbr_type.vecsize <= 2 && type_struct_member_matrix_stride(ib_type, index) == 16)
+	//	SPIRV_CROSS_THROW("Currently cannot support matrices with small vector size in std140 layout.");
+
 	// Only vectors or 3-row matrices need to be packed.
 	if (mbr_type.vecsize == 1 || (is_matrix(mbr_type) && mbr_type.vecsize != 3))
 		return false;
@@ -1593,12 +1614,6 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 	if (is_matrix(mbr_type) && !has_member_decoration(ib_type.self, index, DecorationRowMajor))
 		return false;
 
-	uint32_t component_size = mbr_type.width / 8;
-	uint32_t unpacked_mbr_size;
-	if (mbr_type.vecsize == 3)
-		unpacked_mbr_size = component_size * (mbr_type.vecsize + 1) * mbr_type.columns;
-	else
-		unpacked_mbr_size = component_size * mbr_type.vecsize * mbr_type.columns;
 	if (is_array(mbr_type))
 	{
 		// If member is an array, and the array stride is larger than the type needs, don't pack it.
@@ -1644,7 +1659,13 @@ MSLStructMemberKey CompilerMSL::get_struct_member_key(uint32_t type_id, uint32_t
 // by wrapping the expression in a constructor of the appropriate type.
 string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type)
 {
-	return join(type_to_glsl(type), "(", expr_str, ")");
+	// float[] and float2[] cases are really just padding, so directly swizzle from the backing float4 instead.
+	if (is_scalar(type))
+		return enclose_expression(expr_str) + ".x";
+	else if (is_vector(type) && type.vecsize == 2)
+		return enclose_expression(expr_str) + ".xy";
+	else
+		return join(type_to_glsl(type), "(", expr_str, ")");
 }
 
 // Emits the file header info
@@ -3964,13 +3985,16 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 
 	// If this member is packed, mark it as so.
 	string pack_pfx = "";
+
+	const SPIRType *effective_membertype = &membertype;
+	SPIRType override_type;
+
 	if (member_is_packed_type(type, index))
 	{
-		pack_pfx = "packed_";
-
 		// If we're packing a matrix, output an appropriate typedef
 		if (membertype.vecsize > 1 && membertype.columns > 1)
 		{
+			pack_pfx = "packed_";
 			string base_type = membertype.width == 16 ? "half" : "float";
 			string td_line = "typedef ";
 			td_line += base_type + to_string(membertype.vecsize) + "x" + to_string(membertype.columns);
@@ -3979,10 +4003,19 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 			td_line += ";";
 			add_typedef_line(td_line);
 		}
+		else if (membertype.vecsize <= 2 && membertype.basetype != SPIRType::Struct)
+		{
+			// A "packed" float array, but we pad here instead to 4-vector.
+			override_type = membertype;
+			override_type.vecsize = 4;
+			effective_membertype = &override_type;
+		}
+		else
+			pack_pfx = "packed_";
 	}
 
-	statement(pack_pfx, type_to_glsl(membertype), " ", qualifier, to_member_name(type, index),
-	          member_attribute_qualifier(type, index), type_to_array_glsl(membertype), ";");
+	statement(pack_pfx, type_to_glsl(*effective_membertype), " ", qualifier, to_member_name(type, index),
+	          member_attribute_qualifier(type, index), type_to_array_glsl(*effective_membertype), ";");
 }
 
 // Return a MSL qualifier for the specified function attribute member

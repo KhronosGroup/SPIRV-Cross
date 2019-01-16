@@ -515,7 +515,7 @@ bool Compiler::is_member_builtin(const SPIRType &type, uint32_t index, BuiltIn *
 
 bool Compiler::is_scalar(const SPIRType &type) const
 {
-	return type.vecsize == 1 && type.columns == 1;
+	return type.basetype != SPIRType::Struct && type.vecsize == 1 && type.columns == 1;
 }
 
 bool Compiler::is_vector(const SPIRType &type) const
