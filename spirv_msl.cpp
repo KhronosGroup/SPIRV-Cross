@@ -1479,6 +1479,7 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 		auto &base_type = set<SPIRType>(base_type_id);
 		base_type = type;
 		base_type.basetype = type.basetype == SPIRType::Short ? SPIRType::UShort : SPIRType::UInt;
+		base_type.pointer = false;
 
 		if (!type.pointer)
 			return base_type_id;
@@ -1508,6 +1509,7 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 		auto &base_type = set<SPIRType>(base_type_id);
 		base_type = type;
 		base_type.basetype = SPIRType::UInt;
+		base_type.pointer = false;
 
 		if (!type.pointer)
 			return base_type_id;
