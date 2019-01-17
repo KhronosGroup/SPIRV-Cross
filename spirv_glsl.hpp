@@ -60,12 +60,6 @@ enum AccessChainFlagBits
 };
 typedef uint32_t AccessChainFlags;
 
-enum CustomDecorations
-{
-	SPIRVCrossPackedExpression = 1000000,
-	SPIRVCrossUnpackExpressionOnStore = 1000001,
-};
-
 class CompilerGLSL : public Compiler
 {
 public:

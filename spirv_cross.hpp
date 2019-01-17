@@ -108,6 +108,16 @@ enum BufferPackingStandard
 	BufferPackingHLSLCbufferPackOffset
 };
 
+// Decoration used internally to track various meta-data.
+enum CustomDecorations
+{
+	SPIRVCrossPackedExpression = 10000000,
+	SPIRVCrossUnpackExpressionOnStore = 10000001,
+};
+
+#define SPIRV_CROSS_DECORATION_PACKED static_cast<spv::Decoration>(SPIRVCrossPackedExpression)
+#define SPIRV_CROSS_UNPACK_EXPRESSION_ON_STORE static_cast<spv::Decoration>(SPIRVCrossUnpackExpressionOnStore)
+
 struct EntryPoint
 {
 	std::string name;

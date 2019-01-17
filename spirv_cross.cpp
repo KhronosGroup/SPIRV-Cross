@@ -169,7 +169,7 @@ string Compiler::to_name(uint32_t id, bool allow_alias) const
 		{
 			// If the alias master has been specially packed, we will have emitted a clean variant as well,
 			// so skip the name aliasing here.
-			if (!has_decoration(type.type_alias, DecorationCPacked))
+			if (!has_decoration(type.type_alias, SPIRV_CROSS_DECORATION_PACKED))
 				return to_name(type.type_alias);
 		}
 	}
@@ -868,7 +868,7 @@ void Compiler::fixup_type_alias()
 	for (auto alias_itr = begin(type_ids); alias_itr != end(type_ids); ++alias_itr)
 	{
 		auto &type = get<SPIRType>(*alias_itr);
-		if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
+		if (type.type_alias != 0 && !has_decoration(type.type_alias, SPIRV_CROSS_DECORATION_PACKED))
 		{
 			// We will skip declaring this type, so make sure the type_alias type comes before.
 			auto master_itr = find(begin(type_ids), end(type_ids), type.type_alias);

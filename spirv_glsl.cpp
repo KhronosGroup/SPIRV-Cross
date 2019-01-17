@@ -696,7 +696,7 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 	// Type-punning with these types is legal, which complicates things
 	// when we are storing struct and array types in an SSBO for example.
 	// If the type master is packed however, we can no longer assume that the struct declaration will be redundant.
-	if (type.type_alias != 0 && !has_decoration(type.type_alias, DecorationCPacked))
+	if (type.type_alias != 0 && !has_decoration(type.type_alias, SPIRV_CROSS_DECORATION_PACKED))
 		return;
 
 	add_resource_name(type.self);
@@ -810,9 +810,9 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 			SPIRV_CROSS_THROW("Component decoration is not supported in ES targets.");
 	}
 
-	// DecorationCPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
+	// SPIRV_CROSS_DECORATION_PACKED is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
 	// This is only done selectively in GLSL as needed.
-	if (has_decoration(type.self, DecorationCPacked) && dec.decoration_flags.get(DecorationOffset))
+	if (has_decoration(type.self, SPIRV_CROSS_DECORATION_PACKED) && dec.decoration_flags.get(DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
 	if (attr.empty())
@@ -1370,7 +1370,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			// layout_for_variable() will be called before the actual buffer emit.
 			// The alternative is a full pass before codegen where we deduce this decoration,
 			// but then we are just doing the exact same work twice, and more complexity.
-			set_decoration(type.self, DecorationCPacked);
+			set_decoration(type.self, SPIRV_CROSS_DECORATION_PACKED);
 		}
 		else
 		{
@@ -1398,7 +1398,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
 				require_extension_internal("GL_ARB_enhanced_layouts");
 
-			set_decoration(type.self, DecorationCPacked);
+			set_decoration(type.self, SPIRV_CROSS_DECORATION_PACKED);
 		}
 		else if (buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
 		{
@@ -1409,7 +1409,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
 				require_extension_internal("GL_ARB_enhanced_layouts");
 
-			set_decoration(type.self, DecorationCPacked);
+			set_decoration(type.self, SPIRV_CROSS_DECORATION_PACKED);
 		}
 		else
 		{
@@ -2491,7 +2491,7 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expressio
 	// If we need to transpose, it will also take care of unpacking rules.
 	auto *e = maybe_get<SPIRExpression>(id);
 	bool need_transpose = e && e->need_transpose;
-	if (!need_transpose && has_decoration(id, DecorationCPacked))
+	if (!need_transpose && has_decoration(id, SPIRV_CROSS_DECORATION_PACKED))
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id));
 	else
 		return to_expression(id, register_expression_read);
@@ -2502,7 +2502,7 @@ string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id, bool register_
 	// If we need to transpose, it will also take care of unpacking rules.
 	auto *e = maybe_get<SPIRExpression>(id);
 	bool need_transpose = e && e->need_transpose;
-	if (!need_transpose && has_decoration(id, DecorationCPacked))
+	if (!need_transpose && has_decoration(id, SPIRV_CROSS_DECORATION_PACKED))
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id));
 	else
 		return to_enclosed_expression(id, register_expression_read);
@@ -2538,7 +2538,7 @@ string CompilerGLSL::to_enclosed_pointer_expression(uint32_t id, bool register_e
 string CompilerGLSL::to_extract_component_expression(uint32_t id, uint32_t index)
 {
 	auto expr = to_enclosed_expression(id);
-	if (has_decoration(id, DecorationCPacked))
+	if (has_decoration(id, SPIRV_CROSS_DECORATION_PACKED))
 		return join(expr, "[", index, "]");
 	else
 		return join(expr, ".", index_to_swizzle(index));
@@ -2581,7 +2581,7 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 			return to_enclosed_expression(e.base_expression) + e.expression;
 		else if (e.need_transpose)
 		{
-			bool is_packed = has_decoration(id, DecorationCPacked);
+			bool is_packed = has_decoration(id, SPIRV_CROSS_DECORATION_PACKED);
 			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), is_packed);
 		}
 		else
@@ -5502,7 +5502,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
-	bool is_packed = has_decoration(base, DecorationCPacked);
+	bool is_packed = has_decoration(base, SPIRV_CROSS_DECORATION_PACKED);
 	bool is_invariant = has_decoration(base, DecorationInvariant);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
@@ -6711,8 +6711,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_read(id, ptr, forward);
 
 		// Pass through whether the result is of a packed type.
-		if (has_decoration(ptr, DecorationCPacked))
-			set_decoration(id, DecorationCPacked);
+		if (has_decoration(ptr, SPIRV_CROSS_DECORATION_PACKED))
+			set_decoration(id, SPIRV_CROSS_DECORATION_PACKED);
 
 		inherit_expression_dependencies(id, ptr);
 		if (forward)
@@ -6743,9 +6743,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
 		if (meta.storage_is_packed)
-			set_decoration(ops[1], DecorationCPacked);
+			set_decoration(ops[1], SPIRV_CROSS_DECORATION_PACKED);
 		else
-			unset_decoration(ops[1], DecorationCPacked);
+			unset_decoration(ops[1], SPIRV_CROSS_DECORATION_PACKED);
 
 		if (meta.storage_is_invariant)
 			set_decoration(ops[1], DecorationInvariant);
@@ -7061,7 +7061,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			allow_base_expression = false;
 
 		// Packed expressions cannot be split up.
-		if (has_decoration(ops[2], DecorationCPacked))
+		if (has_decoration(ops[2], SPIRV_CROSS_DECORATION_PACKED))
 			allow_base_expression = false;
 
 		AccessChainMeta meta;
@@ -7100,7 +7100,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// instead of loading everything through an access chain.
 		e->need_transpose = meta.need_transpose;
 		if (meta.storage_is_packed)
-			set_decoration(id, DecorationCPacked);
+			set_decoration(id, SPIRV_CROSS_DECORATION_PACKED);
 		if (meta.storage_is_invariant)
 			set_decoration(id, DecorationInvariant);
 
@@ -7188,7 +7188,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				shuffle = true;
 
 		// Cannot use swizzles with packed expressions, force shuffle path.
-		if (!shuffle && has_decoration(vec0, DecorationCPacked))
+		if (!shuffle && has_decoration(vec0, SPIRV_CROSS_DECORATION_PACKED))
 			shuffle = true;
 
 		string expr;
@@ -8817,7 +8817,7 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 // GLSL does not define packed data types, but certain subclasses do.
 bool CompilerGLSL::member_is_packed_type(const SPIRType &type, uint32_t index) const
 {
-	return has_member_decoration(type.self, index, DecorationCPacked);
+	return has_member_decoration(type.self, index, SPIRV_CROSS_DECORATION_PACKED);
 }
 
 // Wraps the expression string in a function call that converts the
