@@ -2777,7 +2777,8 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	case OpCompositeExtract:
 	{
 		auto expr =
-		    access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1), true, false);
+				access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1),
+				                      ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
 		return expr;
 	}
 
@@ -5482,10 +5483,15 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-                                           bool index_is_literal, bool chain_only, bool ptr_chain,
-                                           AccessChainMeta *meta, bool register_expression_read)
+                                           AccessChainFlags flags, AccessChainMeta *meta)
 {
 	string expr;
+
+	bool index_is_literal = (flags & ACCESS_CHAIN_INDEX_IS_LITERAL_BIT) != 0;
+	bool chain_only = (flags & ACCESS_CHAIN_CHAIN_ONLY_BIT) != 0;
+	bool ptr_chain = (flags & ACCESS_CHAIN_PTR_CHAIN_BIT) != 0;
+	bool register_expression_read = (flags & ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT) == 0;
+
 	if (!chain_only)
 		expr = to_enclosed_expression(base, register_expression_read);
 
@@ -5772,7 +5778,11 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 	else if (flattened_structs.count(base) && count > 0)
 	{
-		auto chain = access_chain_internal(base, indices, count, false, true, ptr_chain, nullptr, false).substr(1);
+		AccessChainFlags flags = ACCESS_CHAIN_CHAIN_ONLY_BIT | ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT;
+		if (ptr_chain)
+			flags |= ACCESS_CHAIN_PTR_CHAIN_BIT;
+
+		auto chain = access_chain_internal(base, indices, count, flags, nullptr).substr(1);
 		if (meta)
 		{
 			meta->need_transpose = false;
@@ -5782,7 +5792,10 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	}
 	else
 	{
-		return access_chain_internal(base, indices, count, false, false, ptr_chain, meta, false);
+		AccessChainFlags flags = ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT;
+		if (ptr_chain)
+			flags |= ACCESS_CHAIN_PTR_CHAIN_BIT;
+		return access_chain_internal(base, indices, count, flags, meta);
 	}
 }
 
@@ -6781,7 +6794,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		auto e = access_chain_internal(ops[2], &ops[3], length - 3, true);
+		auto e = access_chain_internal(ops[2], &ops[3], length - 3,
+		                               ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
 		set<SPIRExpression>(id, e + ".length()", result_type, true);
 		break;
 	}
@@ -7013,7 +7027,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Make a copy, then use access chain to store the variable.
 		statement(declare_temporary(result_type, id), to_expression(vec), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
-		auto chain = access_chain_internal(id, &index, 1, false);
+		auto chain = access_chain_internal(id, &index, 1, 0, nullptr);
 		statement(chain, " = ", to_expression(comp), ";");
 		break;
 	}
@@ -7023,7 +7037,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		auto expr = access_chain_internal(ops[2], &ops[3], 1, false);
+		auto expr = access_chain_internal(ops[2], &ops[3], 1, 0, nullptr);
 		emit_op(result_type, id, expr, should_forward(ops[2]));
 		inherit_expression_dependencies(id, ops[2]);
 		inherit_expression_dependencies(id, ops[3]);
@@ -7068,14 +7082,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			//
 			// Including the base will prevent this and would trigger multiple reads
 			// from expression causing it to be forced to an actual temporary in GLSL.
-			auto expr = access_chain_internal(ops[2], &ops[3], length, true, true, false, &meta);
+			auto expr = access_chain_internal(ops[2], &ops[3], length,
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT, &meta);
 			e = &emit_op(result_type, id, expr, true, !expression_is_forwarded(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 			e->base_expression = ops[2];
 		}
 		else
 		{
-			auto expr = access_chain_internal(ops[2], &ops[3], length, true, false, false, &meta);
+			auto expr = access_chain_internal(ops[2], &ops[3], length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), !expression_is_forwarded(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
@@ -7106,7 +7121,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Make a copy, then use access chain to store the variable.
 		statement(declare_temporary(result_type, id), to_expression(composite), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
-		auto chain = access_chain_internal(id, elems, length, true);
+		auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
 		statement(chain, " = ", to_expression(obj), ";");
 
 		break;

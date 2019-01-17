@@ -51,6 +51,21 @@ struct PlsRemap
 	PlsFormat format;
 };
 
+enum AccessChainFlagBits
+{
+	ACCESS_CHAIN_INDEX_IS_LITERAL_BIT = 1 << 0,
+	ACCESS_CHAIN_CHAIN_ONLY_BIT = 1 << 1,
+	ACCESS_CHAIN_PTR_CHAIN_BIT = 1 << 2,
+	ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT = 1 << 3
+};
+typedef uint32_t AccessChainFlags;
+
+enum CustomDecorations
+{
+	SPIRVCrossPackedExpression = 1000000,
+	SPIRVCrossUnpackExpressionOnStore = 1000001,
+};
+
 class CompilerGLSL : public Compiler
 {
 public:
@@ -447,9 +462,10 @@ protected:
 	bool expression_is_forwarded(uint32_t id);
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
-	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, bool index_is_literal,
-	                                  bool chain_only = false, bool ptr_chain = false, AccessChainMeta *meta = nullptr,
-	                                  bool register_expression_read = true);
+
+	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
+	                                  AccessChainFlags flags, AccessChainMeta *meta);
+
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
 	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);
 

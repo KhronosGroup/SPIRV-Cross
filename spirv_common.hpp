@@ -1341,6 +1341,7 @@ struct AccessChainMeta
 {
 	bool need_transpose = false;
 	bool storage_is_packed = false;
+	bool storage_is_packed_on_store = false;
 	bool storage_is_invariant = false;
 };
 
