@@ -17,6 +17,6 @@ kernel void main0(device foo& _8 [[buffer(0)]], uint3 gl_LocalInvocationID [[thr
     _8.bar = gl_LocalInvocationID.x;
     _8.baz = float3(gl_GlobalInvocationID);
     _8.blah = uchar4(uint4(uint4(uchar4(_8.blah)).xyz + gl_WorkGroupID, 0u));
-    _8.wibble = half2(float2(_8.wibble.xy) * float2(gl_NumWorkGroups.xy));
+    _8.wibble = half2(float2(half2(_8.wibble)) * float2(gl_NumWorkGroups.xy));
 }
 

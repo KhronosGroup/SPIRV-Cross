@@ -270,7 +270,7 @@ protected:
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);
 	virtual void emit_uniform(const SPIRVariable &var);
-	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type);
+	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t packed_type_id);
 
 	std::unique_ptr<std::ostringstream> buffer;
 

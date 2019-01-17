@@ -1687,12 +1687,16 @@ void CompilerMSL::emit_store(uint32_t lhs_expression, uint32_t rhs_expression)
 
 // Converts the format of the current expression from packed to unpacked,
 // by wrapping the expression in a constructor of the appropriate type.
-string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type)
+string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type, uint32_t packed_type_id)
 {
+	const SPIRType *packed_type = nullptr;
+	if (packed_type_id)
+		packed_type = &get<SPIRType>(packed_type_id);
+
 	// float[] and float2[] cases are really just padding, so directly swizzle from the backing float4 instead.
-	if (is_scalar(type))
+	if (packed_type && is_array(*packed_type) && is_scalar(*packed_type))
 		return enclose_expression(expr_str) + ".x";
-	else if (is_vector(type) && type.vecsize == 2)
+	else if (packed_type && is_array(*packed_type) && is_vector(*packed_type) && packed_type->vecsize == 2)
 		return enclose_expression(expr_str) + ".xy";
 	else
 		return join(type_to_glsl(type), "(", expr_str, ")");
