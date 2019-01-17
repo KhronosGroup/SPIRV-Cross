@@ -1657,12 +1657,12 @@ MSLStructMemberKey CompilerMSL::get_struct_member_key(uint32_t type_id, uint32_t
 	return k;
 }
 
-void CompilerMSL::emit_store(uint32_t lhs_expression, uint32_t rhs_expression)
+void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression)
 {
 	if (!has_extended_decoration(lhs_expression, SPIRVCrossDecorationPacked) ||
 	    get_extended_decoration(lhs_expression, SPIRVCrossDecorationPackedType) == 0)
 	{
-		CompilerGLSL::emit_store(lhs_expression, rhs_expression);
+		CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
 	}
 	else
 	{

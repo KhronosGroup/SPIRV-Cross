@@ -6626,7 +6626,7 @@ void CompilerGLSL::handle_store_to_invariant_variable(uint32_t store_id, uint32_
 	disallow_forwarding_in_expression_chain(*expr);
 }
 
-void CompilerGLSL::emit_store(uint32_t lhs_expression, uint32_t rhs_expression)
+void CompilerGLSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression)
 {
 	auto rhs = to_pointer_expression(rhs_expression);
 
@@ -6791,7 +6791,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			emit_store(ops[0], ops[1]);
+			emit_store_statement(ops[0], ops[1]);
 		}
 
 		// Storing a pointer results in a variable pointer, so we must conservatively assume

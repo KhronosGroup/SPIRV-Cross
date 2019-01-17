@@ -634,7 +634,7 @@ protected:
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
 
 	bool expression_is_constant_null(uint32_t id) const;
-	virtual void emit_store(uint32_t lhs_expression, uint32_t rhs_expression);
+	virtual void emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression);
 
 private:
 	void init()
