@@ -1553,7 +1553,8 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 		if (is_member_packable(ib_type, mbr_idx))
 		{
 			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPacked);
-			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPackedType, ib_type.member_types[mbr_idx]);
+			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPackedType,
+			                               ib_type.member_types[mbr_idx]);
 		}
 
 		// Align current offset to the current member's default alignment.
@@ -1597,9 +1598,7 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 
 	// Special case for packing. Check for float[] or vec2[] in std140 layout. Here we actually need to pad out instead,
 	// but we will use the same mechanism.
-	if (is_array(mbr_type) &&
-	    (is_scalar(mbr_type) || is_vector(mbr_type)) &&
-	    mbr_type.vecsize <= 2 &&
+	if (is_array(mbr_type) && (is_scalar(mbr_type) || is_vector(mbr_type)) && mbr_type.vecsize <= 2 &&
 	    type_struct_member_array_stride(ib_type, index) == 4 * component_size)
 	{
 		return true;
@@ -2161,8 +2160,9 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			statement("// Wrapper function that swizzles texture gathers.");
 			statement("template<typename T, typename Tex, typename... Ts>");
-			statement("inline vec<T, 4> spvGatherSwizzle(sampler s, const thread Tex& t, Ts... params, component c, uint sw) "
-			          "METAL_CONST_ARG(c)");
+			statement(
+			    "inline vec<T, 4> spvGatherSwizzle(sampler s, const thread Tex& t, Ts... params, component c, uint sw) "
+			    "METAL_CONST_ARG(c)");
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();
@@ -2201,7 +2201,8 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			statement("// Wrapper function that swizzles depth texture gathers.");
 			statement("template<typename T, typename Tex, typename... Ts>");
-			statement("inline vec<T, 4> spvGatherCompareSwizzle(sampler s, const thread Tex& t, Ts... params, uint sw) ");
+			statement(
+			    "inline vec<T, 4> spvGatherCompareSwizzle(sampler s, const thread Tex& t, Ts... params, uint sw) ");
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();

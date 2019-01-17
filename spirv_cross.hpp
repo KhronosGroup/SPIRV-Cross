@@ -957,7 +957,8 @@ protected:
 	bool has_extended_decoration(uint32_t id, ExtendedDecorations decoration) const;
 	void unset_extended_decoration(uint32_t id, ExtendedDecorations decoration);
 
-	void set_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration, uint32_t value = 0);
+	void set_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration,
+	                                    uint32_t value = 0);
 	uint32_t get_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration) const;
 	bool has_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration) const;
 	void unset_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration);

@@ -1180,7 +1180,8 @@ void Compiler::set_extended_decoration(uint32_t id, ExtendedDecorations decorati
 	}
 }
 
-void Compiler::set_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration, uint32_t value)
+void Compiler::set_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration,
+                                              uint32_t value)
 {
 	ir.meta[type].members.resize(max(ir.meta[type].members.size(), size_t(index) + 1));
 	auto &dec = ir.meta[type].members[index];
