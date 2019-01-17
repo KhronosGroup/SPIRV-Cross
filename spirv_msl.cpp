@@ -2711,8 +2711,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		test(bias, ImageOperandsBiasMask);
 		test(lod, ImageOperandsLodMask);
 
+		auto &texel_type = expression_type(texel_id);
+		auto store_type = texel_type;
+		store_type.vecsize = 4;
+
 		statement(join(
-		    to_expression(img_id), ".write(", to_expression(texel_id), ", ",
+		    to_expression(img_id), ".write(", remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)),
+		    ", ",
 		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, &forward),
 		    ");"));
 

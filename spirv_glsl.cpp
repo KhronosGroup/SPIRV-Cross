@@ -4212,6 +4212,10 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	if (is_legacy() && image_is_comparison(imgtype, img))
 		expr += ".r";
 
+	// Deals with reads from MSL. We might need to downconvert to fewer components.
+	if (op == OpImageRead)
+		expr = remap_swizzle(get<SPIRType>(result_type), 4, expr);
+
 	emit_op(result_type, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
 		inherit_expression_dependencies(id, inherit);
