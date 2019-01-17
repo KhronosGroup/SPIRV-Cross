@@ -757,7 +757,7 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 
 	if (type.basetype == SPIRType::Struct)
 	{
-		set_decoration(type.self, SPIRV_CROSS_DECORATION_PACKED);
+		set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
 
 		// Recurse
 		size_t mbr_cnt = type.member_types.size();
@@ -1551,7 +1551,10 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
 	{
 		if (is_member_packable(ib_type, mbr_idx))
-			set_member_decoration(ib_type_id, mbr_idx, SPIRV_CROSS_DECORATION_PACKED);
+		{
+			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPacked);
+			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPackedType, ib_type.member_types[mbr_idx]);
+		}
 
 		// Align current offset to the current member's default alignment.
 		size_t align_mask = get_declared_struct_member_alignment(ib_type, mbr_idx) - 1;
@@ -1580,7 +1583,7 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 {
 	// We've already marked it as packable
-	if (has_member_decoration(ib_type.self, index, SPIRV_CROSS_DECORATION_PACKED))
+	if (has_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPacked))
 		return true;
 
 	auto &mbr_type = get<SPIRType>(ib_type.member_types[index]);
@@ -1657,21 +1660,24 @@ MSLStructMemberKey CompilerMSL::get_struct_member_key(uint32_t type_id, uint32_t
 
 void CompilerMSL::emit_store(uint32_t lhs_expression, uint32_t rhs_expression)
 {
-	if (!has_decoration(lhs_expression, SPIRV_CROSS_DECORATION_PACKED))
+	if (!has_extended_decoration(lhs_expression, SPIRVCrossDecorationPacked) ||
+	    get_extended_decoration(lhs_expression, SPIRVCrossDecorationPackedType) == 0)
+	{
 		CompilerGLSL::emit_store(lhs_expression, rhs_expression);
+	}
 	else
 	{
 		// Special handling when storing to a float[] or float2[] in std140 layout.
 
-		auto &type = expression_type(lhs_expression);
+		auto &type = get<SPIRType>(get_extended_decoration(lhs_expression, SPIRVCrossDecorationPackedType));
 		string lhs = to_dereferenced_expression(lhs_expression);
 		string rhs = to_pointer_expression(rhs_expression);
 
 		// Unpack the expression so we can store to it with a float or float2.
 		// It's still an l-value, so it's fine. Most other unpacking of expressions turn them into r-values instead.
-		if (is_scalar(type))
+		if (is_scalar(type) && is_array(type))
 			lhs = enclose_expression(lhs) + ".x";
-		else if (is_vector(type) && type.vecsize == 2)
+		else if (is_vector(type) && type.vecsize == 2 && is_array(type))
 			lhs = enclose_expression(lhs) + ".xy";
 
 		if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
@@ -2376,7 +2382,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 
 				declared_structs.insert(type_id);
 
-				if (has_decoration(type_id, SPIRV_CROSS_DECORATION_PACKED))
+				if (has_extended_decoration(type_id, SPIRVCrossDecorationPacked))
 					align_struct(type);
 
 				// Make sure we declare the underlying struct type, and not the "decorated" type with pointers, etc.
@@ -2859,7 +2865,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t mtx_id = ops[opcode == OpMatrixTimesVector ? 2 : 3];
 		auto *e = maybe_get<SPIRExpression>(mtx_id);
 		auto &t = expression_type(mtx_id);
-		bool is_packed = has_decoration(mtx_id, SPIRV_CROSS_DECORATION_PACKED);
+		bool is_packed = has_extended_decoration(mtx_id, SPIRVCrossDecorationPacked);
 		if (e && e->need_transpose && (t.columns == t.vecsize || is_packed))
 		{
 			e->need_transpose = false;
@@ -2868,11 +2874,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			// are generally transposed, so unpacking using a constructor argument
 			// will result in an error.
 			// The simplest solution for now is to just avoid unpacking the matrix in this operation.
-			unset_decoration(mtx_id, SPIRV_CROSS_DECORATION_PACKED);
+			unset_extended_decoration(mtx_id, SPIRVCrossDecorationPacked);
 
 			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
 			if (is_packed)
-				set_decoration(mtx_id, SPIRV_CROSS_DECORATION_PACKED);
+				set_extended_decoration(mtx_id, SPIRVCrossDecorationPacked);
 			e->need_transpose = true;
 		}
 		else
@@ -3905,7 +3911,7 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 
 	// Generate a function that will swap matrix elements from row-major to column-major.
 	// Packed row-matrix should just use transpose() function.
-	if (!has_decoration(id, SPIRV_CROSS_DECORATION_PACKED))
+	if (!has_extended_decoration(id, SPIRVCrossDecorationPacked))
 	{
 		const auto type = expression_type(id);
 		add_convert_row_major_matrix_function(type.columns, type.vecsize);
@@ -3927,7 +3933,7 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 
 	// Generate a function that will swap matrix elements from row-major to column-major.
 	// Packed row-matrix should just use transpose() function.
-	if (!has_member_decoration(type.self, index, SPIRV_CROSS_DECORATION_PACKED))
+	if (!has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPacked))
 	{
 		const auto mbr_type = get<SPIRType>(type.member_types[index]);
 		add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
@@ -5634,7 +5640,7 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 		uint32_t columns = type.columns;
 
 		// An unpacked 3-element vector or matrix column is the same memory size as a 4-element.
-		if (vecsize == 3 && !has_member_decoration(struct_type.self, index, SPIRV_CROSS_DECORATION_PACKED))
+		if (vecsize == 3 && !has_extended_member_decoration(struct_type.self, index, SPIRVCrossDecorationPacked))
 			vecsize = 4;
 
 		return component_size * vecsize * columns;
