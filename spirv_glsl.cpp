@@ -2486,26 +2486,26 @@ string CompilerGLSL::to_enclosed_expression(uint32_t id, bool register_expressio
 	return enclose_expression(to_expression(id, register_expression_read));
 }
 
-string CompilerGLSL::to_unpacked_expression(uint32_t id)
+string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expression_read)
 {
 	// If we need to transpose, it will also take care of unpacking rules.
 	auto *e = maybe_get<SPIRExpression>(id);
 	bool need_transpose = e && e->need_transpose;
 	if (!need_transpose && has_decoration(id, DecorationCPacked))
-		return unpack_expression_type(to_expression(id), expression_type(id));
+		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id));
 	else
-		return to_expression(id);
+		return to_expression(id, register_expression_read);
 }
 
-string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id)
+string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read)
 {
 	// If we need to transpose, it will also take care of unpacking rules.
 	auto *e = maybe_get<SPIRExpression>(id);
 	bool need_transpose = e && e->need_transpose;
 	if (!need_transpose && has_decoration(id, DecorationCPacked))
-		return unpack_expression_type(to_expression(id), expression_type(id));
+		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id));
 	else
-		return to_enclosed_expression(id);
+		return to_enclosed_expression(id, register_expression_read);
 }
 
 string CompilerGLSL::to_dereferenced_expression(uint32_t id, bool register_expression_read)
@@ -2517,22 +2517,22 @@ string CompilerGLSL::to_dereferenced_expression(uint32_t id, bool register_expre
 		return to_expression(id, register_expression_read);
 }
 
-string CompilerGLSL::to_pointer_expression(uint32_t id)
+string CompilerGLSL::to_pointer_expression(uint32_t id, bool register_expression_read)
 {
 	auto &type = expression_type(id);
 	if (type.pointer && expression_is_lvalue(id) && !should_dereference(id))
-		return address_of_expression(to_enclosed_expression(id));
+		return address_of_expression(to_enclosed_expression(id, register_expression_read));
 	else
-		return to_expression(id);
+		return to_unpacked_expression(id, register_expression_read);
 }
 
-string CompilerGLSL::to_enclosed_pointer_expression(uint32_t id)
+string CompilerGLSL::to_enclosed_pointer_expression(uint32_t id, bool register_expression_read)
 {
 	auto &type = expression_type(id);
 	if (type.pointer && expression_is_lvalue(id) && !should_dereference(id))
-		return address_of_expression(to_enclosed_expression(id));
+		return address_of_expression(to_enclosed_expression(id, register_expression_read));
 	else
-		return to_enclosed_expression(id);
+		return to_enclosed_expression(id, register_expression_read);
 }
 
 string CompilerGLSL::to_extract_component_expression(uint32_t id, uint32_t index)
@@ -6603,6 +6603,30 @@ void CompilerGLSL::handle_store_to_invariant_variable(uint32_t store_id, uint32_
 	disallow_forwarding_in_expression_chain(*expr);
 }
 
+void CompilerGLSL::emit_store(uint32_t lhs_expression, uint32_t rhs_expression)
+{
+	auto rhs = to_pointer_expression(rhs_expression);
+
+	// Statements to OpStore may be empty if it is a struct with zero members. Just forward the store to /dev/null.
+	if (!rhs.empty())
+	{
+		handle_store_to_invariant_variable(lhs_expression, rhs_expression);
+
+		auto lhs = to_dereferenced_expression(lhs_expression);
+
+		// We might need to bitcast in order to store to a builtin.
+		bitcast_to_builtin_store(lhs_expression, rhs, expression_type(rhs_expression));
+
+		// Tries to optimize assignments like "<lhs> = <lhs> op expr".
+		// While this is purely cosmetic, this is important for legacy ESSL where loop
+		// variable increments must be in either i++ or i += const-expr.
+		// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
+		if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
+			statement(lhs, " = ", rhs, ";");
+		register_write(lhs_expression);
+	}
+}
+
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
 {
 	auto ops = stream(instruction);
@@ -6743,27 +6767,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			auto rhs = to_pointer_expression(ops[1]);
-
-			// Statements to OpStore may be empty if it is a struct with zero members. Just forward the store to /dev/null.
-			if (!rhs.empty())
-			{
-				handle_store_to_invariant_variable(ops[0], ops[1]);
-
-				auto lhs = to_dereferenced_expression(ops[0]);
-
-				// We might need to bitcast in order to store to a builtin.
-				bitcast_to_builtin_store(ops[0], rhs, expression_type(ops[1]));
-
-				// Tries to optimize assignments like "<lhs> = <lhs> op expr".
-				// While this is purely cosmetic, this is important for legacy ESSL where loop
-				// variable increments must be in either i++ or i += const-expr.
-				// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
-				if (!optimize_read_modify_write(expression_type(ops[1]), lhs, rhs))
-					statement(lhs, " = ", rhs, ";");
-				register_write(ops[0]);
-			}
+			emit_store(ops[0], ops[1]);
 		}
+
 		// Storing a pointer results in a variable pointer, so we must conservatively assume
 		// we can write through it.
 		if (expression_type(ops[1]).pointer)

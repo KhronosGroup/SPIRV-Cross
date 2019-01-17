@@ -476,11 +476,11 @@ protected:
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, std::vector<std::string> &arglist);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
-	std::string to_unpacked_expression(uint32_t id);
-	std::string to_enclosed_unpacked_expression(uint32_t id);
+	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
+	std::string to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
-	std::string to_pointer_expression(uint32_t id);
-	std::string to_enclosed_pointer_expression(uint32_t id);
+	std::string to_pointer_expression(uint32_t id, bool register_expression_read = true);
+	std::string to_enclosed_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_extract_component_expression(uint32_t id, uint32_t index);
 	std::string enclose_expression(const std::string &expr);
 	std::string dereference_expression(const std::string &expr);
@@ -624,6 +624,7 @@ protected:
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
 
 	bool expression_is_constant_null(uint32_t id) const;
+	virtual void emit_store(uint32_t lhs_expression, uint32_t rhs_expression);
 
 private:
 	void init()

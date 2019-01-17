@@ -1593,7 +1593,7 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 		unpacked_mbr_size = component_size * mbr_type.vecsize * mbr_type.columns;
 
 	// Special case for packing. Check for float[] or vec2[] in std140 layout. Here we actually need to pad out instead,
-	// but we will use the same mechanism as before.
+	// but we will use the same mechanism.
 	if (is_array(mbr_type) &&
 	    (is_scalar(mbr_type) || is_vector(mbr_type)) &&
 	    mbr_type.vecsize <= 2 &&
@@ -1653,6 +1653,31 @@ MSLStructMemberKey CompilerMSL::get_struct_member_key(uint32_t type_id, uint32_t
 	k <<= 32;
 	k += index;
 	return k;
+}
+
+void CompilerMSL::emit_store(uint32_t lhs_expression, uint32_t rhs_expression)
+{
+	if (!has_decoration(lhs_expression, DecorationCPacked))
+		CompilerGLSL::emit_store(lhs_expression, rhs_expression);
+	else
+	{
+		// Special handling when storing to a float[] or float2[] in std140 layout.
+
+		auto &type = expression_type(lhs_expression);
+		string lhs = to_dereferenced_expression(lhs_expression);
+		string rhs = to_pointer_expression(rhs_expression);
+
+		// Unpack the expression so we can store to it with a float or float2.
+		// It's still an l-value, so it's fine. Most other unpacking of expressions turn them into r-values instead.
+		if (is_scalar(type))
+			lhs = enclose_expression(lhs) + ".x";
+		else if (is_vector(type) && type.vecsize == 2)
+			lhs = enclose_expression(lhs) + ".xy";
+
+		if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
+			statement(lhs, " = ", rhs, ";");
+		register_write(lhs_expression);
+	}
 }
 
 // Converts the format of the current expression from packed to unpacked,
@@ -4003,7 +4028,7 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 			td_line += ";";
 			add_typedef_line(td_line);
 		}
-		else if (membertype.vecsize <= 2 && membertype.basetype != SPIRType::Struct)
+		else if (is_array(membertype) && membertype.vecsize <= 2 && membertype.basetype != SPIRType::Struct)
 		{
 			// A "packed" float array, but we pad here instead to 4-vector.
 			override_type = membertype;
