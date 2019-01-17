@@ -745,7 +745,7 @@ void CompilerMSL::mark_packable_structs()
 }
 
 // If the specified type is a struct, it and any nested structs
-// are marked as packable with the SPIRV_CROSS_DECORATION_PACKED decoration,
+// are marked as packable with the SPIRVCrossDecorationPacked decoration,
 void CompilerMSL::mark_as_packable(SPIRType &type)
 {
 	// If this is not the base type (eg. it's a pointer or array), tunnel down
@@ -1604,7 +1604,7 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 		return true;
 	}
 
-	// Another sanity check for matrices. We currently do not support std140 matrices which need to be padded out per column.
+	// TODO: Another sanity check for matrices. We currently do not support std140 matrices which need to be padded out per column.
 	//if (is_matrix(mbr_type) && mbr_type.vecsize <= 2 && type_struct_member_matrix_stride(ib_type, index) == 16)
 	//	SPIRV_CROSS_THROW("Currently cannot support matrices with small vector size in std140 layout.");
 
