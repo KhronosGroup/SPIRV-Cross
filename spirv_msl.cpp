@@ -4424,6 +4424,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		if (!ep_args.empty())
 			ep_args += ", ";
 
+		add_resource_name(var.self);
 		ep_args += type_to_glsl(type) + " " + to_name(var.self) + " [[stage_in]]";
 	}
 
@@ -4452,6 +4453,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 		{
 			if (type.basetype == SPIRType::SampledImage)
 			{
+				add_resource_name(var_id);
 				resources.push_back(
 				    { &id, to_name(var_id), SPIRType::Image, get_metal_resource_index(var, SPIRType::Image) });
 
@@ -4464,6 +4466,7 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			else if (constexpr_samplers.count(var_id) == 0)
 			{
 				// constexpr samplers are not declared as resources.
+				add_resource_name(var_id);
 				resources.push_back(
 				    { &id, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype) });
 			}
