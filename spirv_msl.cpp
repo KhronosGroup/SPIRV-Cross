@@ -5750,9 +5750,11 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 		{
 			// This is getting pretty complicated.
 			// The special case of array of float/float2 needs to be handled here.
-			uint32_t packed_type_id = get_extended_member_decoration(struct_type.self, index, SPIRVCrossDecorationPackedType);
+			uint32_t packed_type_id =
+			    get_extended_member_decoration(struct_type.self, index, SPIRVCrossDecorationPackedType);
 			const SPIRType *packed_type = packed_type_id != 0 ? &get<SPIRType>(packed_type_id) : nullptr;
-			if (packed_type && is_array(*packed_type) && !is_matrix(*packed_type) && packed_type->basetype != SPIRType::Struct)
+			if (packed_type && is_array(*packed_type) && !is_matrix(*packed_type) &&
+			    packed_type->basetype != SPIRType::Struct)
 				return (packed_type->width / 8) * 4;
 			else
 				return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
