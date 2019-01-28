@@ -3503,32 +3503,30 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	bool is_cube_fetch = false;
 
 	string tex_coords = coord_expr;
-	const char *alt_coord = "";
+	uint32_t alt_coord_component = 0;
 
 	switch (imgtype.image.dim)
 	{
 
 	case Dim1D:
 		if (coord_type.vecsize > 1)
-			tex_coords += ".x";
+			tex_coords = enclose_expression(tex_coords) + ".x";
 
 		if (is_fetch)
 			tex_coords = "uint(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
-		alt_coord = ".y";
-
+		alt_coord_component = 1;
 		break;
 
 	case DimBuffer:
 		if (coord_type.vecsize > 1)
-			tex_coords += ".x";
+			tex_coords = enclose_expression(tex_coords) + ".x";
 
 		// Metal texel buffer textures are 2D, so convert 1D coord to 2D.
 		if (is_fetch)
 			tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
-		alt_coord = ".y";
-
+		alt_coord_component = 1;
 		break;
 
 	case DimSubpassData:
@@ -3540,24 +3538,22 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	case Dim2D:
 		if (coord_type.vecsize > 2)
-			tex_coords += ".xy";
+			tex_coords = enclose_expression(tex_coords) + ".xy";
 
 		if (is_fetch)
 			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
-		alt_coord = ".z";
-
+		alt_coord_component = 2;
 		break;
 
 	case Dim3D:
 		if (coord_type.vecsize > 3)
-			tex_coords += ".xyz";
+			tex_coords = enclose_expression(tex_coords) + ".xyz";
 
 		if (is_fetch)
 			tex_coords = "uint3(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 
-		alt_coord = ".w";
-
+		alt_coord_component = 3;
 		break;
 
 	case DimCube:
@@ -3570,11 +3566,10 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		else
 		{
 			if (coord_type.vecsize > 3)
-				tex_coords += ".xyz";
+				tex_coords = enclose_expression(tex_coords) + ".xyz";
 		}
 
-		alt_coord = ".w";
-
+		alt_coord_component = 3;
 		break;
 
 	default:
@@ -3604,7 +3599,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	// If projection, use alt coord as divisor
 	if (is_proj)
-		tex_coords += " / " + coord_expr + alt_coord;
+		tex_coords += " / " + to_extract_component_expression(coord, alt_coord_component);
 
 	if (!farg_str.empty())
 		farg_str += ", ";
@@ -3615,9 +3610,9 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		// Special case for cube arrays, face and layer are packed in one dimension.
 		if (imgtype.image.arrayed)
-			farg_str += ", uint(" + join(coord_expr, ".z) % 6u");
+			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ") % 6u";
 		else
-			farg_str += ", uint(" + round_fp_tex_coords(coord_expr + ".z", coord_is_fp) + ")";
+			farg_str += ", uint(" + round_fp_tex_coords(to_extract_component_expression(coord, 2), coord_is_fp) + ")";
 	}
 
 	// If array, use alt coord
@@ -3625,9 +3620,11 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		// Special case for cube arrays, face and layer are packed in one dimension.
 		if (imgtype.image.dim == DimCube && is_fetch)
-			farg_str += ", uint(" + join(coord_expr, ".z) / 6u");
+			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ") / 6u";
 		else
-			farg_str += ", uint(" + round_fp_tex_coords(coord_expr + alt_coord, coord_is_fp) + ")";
+			farg_str += ", uint(" +
+			            round_fp_tex_coords(to_extract_component_expression(coord, alt_coord_component), coord_is_fp) +
+			            ")";
 	}
 
 	// Depth compare reference value
@@ -3635,7 +3632,12 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 	{
 		forward = forward && should_forward(dref);
 		farg_str += ", ";
-		farg_str += to_expression(dref);
+
+		if (is_proj)
+			farg_str +=
+			    to_enclosed_expression(dref) + " / " + to_extract_component_expression(coord, alt_coord_component);
+		else
+			farg_str += to_expression(dref);
 
 		if (msl_options.is_macos() && (grad_x || grad_y))
 		{
