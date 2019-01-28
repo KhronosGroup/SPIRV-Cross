@@ -4030,7 +4030,7 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	MSLStructMemberKey key = get_struct_member_key(type.self, index);
 	uint32_t pad_len = struct_member_padding[key];
 	if (pad_len > 0)
-		statement("char pad", to_string(index), "[", to_string(pad_len), "];");
+		statement("char _m", index, "_pad", "[", to_string(pad_len), "];");
 
 	// If this member is packed, mark it as so.
 	string pack_pfx = "";
@@ -5712,7 +5712,13 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 		SPIRV_CROSS_THROW("Querying alignment of opaque object.");
 
 	case SPIRType::Struct:
-		return 16; // Per Vulkan spec section 14.5.4
+	{
+		// In MSL, a struct's alignment is equal to the maximum alignment of any of its members.
+		uint32_t alignment = 1;
+		for (uint32_t i = 0; i < type.member_types.size(); i++)
+			alignment = max(alignment, uint32_t(get_declared_struct_member_alignment(type, i)));
+		return alignment;
+	}
 
 	default:
 	{
