@@ -1610,6 +1610,18 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 		return true;
 	}
 
+	// Check for array of struct, where the SPIR-V declares an array stride which is larger than the struct itself.
+	// This can happen for struct A { float a }; A a[]; in std140 layout.
+	// TODO: Emit a padded struct which can be used for this purpose.
+	if (is_array(mbr_type) && mbr_type.basetype == SPIRType::Struct)
+	{
+		size_t declared_struct_size = get_declared_struct_size(mbr_type);
+		size_t alignment = get_declared_struct_member_alignment(ib_type, index);
+		declared_struct_size = (declared_struct_size + alignment - 1) & ~(alignment - 1);
+		if (type_struct_member_array_stride(ib_type, index) > declared_struct_size)
+			return true;
+	}
+
 	// TODO: Another sanity check for matrices. We currently do not support std140 matrices which need to be padded out per column.
 	//if (is_matrix(mbr_type) && mbr_type.vecsize <= 2 && type_struct_member_matrix_stride(ib_type, index) == 16)
 	//	SPIRV_CROSS_THROW("Currently cannot support matrices with small vector size in std140 layout.");
@@ -4041,7 +4053,11 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	if (member_is_packed_type(type, index))
 	{
 		// If we're packing a matrix, output an appropriate typedef
-		if (membertype.vecsize > 1 && membertype.columns > 1)
+		if (membertype.basetype == SPIRType::Struct)
+		{
+			pack_pfx = "/* FIXME: A padded struct is needed here. If you see this message, file a bug! */ ";
+		}
+		else if (membertype.vecsize > 1 && membertype.columns > 1)
 		{
 			pack_pfx = "packed_";
 			string base_type = membertype.width == 16 ? "half" : "float";

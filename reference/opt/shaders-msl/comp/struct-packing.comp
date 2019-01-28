@@ -100,7 +100,7 @@ struct S4_1
 
 struct Content_1
 {
-    S0_1 m0s[1];
+    /* FIXME: A padded struct is needed here. If you see this message, file a bug! */ S0_1 m0s[1];
     S1_1 m1s[1];
     S2_1 m2s[1];
     S0_1 m0;
@@ -112,7 +112,7 @@ struct Content_1
     char _m7_pad[4];
     float m4;
     char _m8_pad[8];
-    S4_1 m3s[8];
+    /* FIXME: A padded struct is needed here. If you see this message, file a bug! */ S4_1 m3s[8];
 };
 
 struct SSBO0
