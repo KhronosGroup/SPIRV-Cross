@@ -1565,11 +1565,11 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 
 		// Align current offset to the current member's default alignment.
 		size_t align_mask = get_declared_struct_member_alignment(ib_type, mbr_idx) - 1;
-		curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
+		uint32_t aligned_curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
 
 		// Fetch the member offset as declared in the SPIRV.
 		uint32_t mbr_offset = get_member_decoration(ib_type_id, mbr_idx, DecorationOffset);
-		if (mbr_offset > curr_offset)
+		if (mbr_offset > aligned_curr_offset)
 		{
 			// Since MSL and SPIR-V have slightly different struct member alignment and
 			// size rules, we'll pad to standard C-packing rules. If the member is farther
@@ -1608,6 +1608,18 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 	    type_struct_member_array_stride(ib_type, index) == 4 * component_size)
 	{
 		return true;
+	}
+
+	// Check for array of struct, where the SPIR-V declares an array stride which is larger than the struct itself.
+	// This can happen for struct A { float a }; A a[]; in std140 layout.
+	// TODO: Emit a padded struct which can be used for this purpose.
+	if (is_array(mbr_type) && mbr_type.basetype == SPIRType::Struct)
+	{
+		size_t declared_struct_size = get_declared_struct_size(mbr_type);
+		size_t alignment = get_declared_struct_member_alignment(ib_type, index);
+		declared_struct_size = (declared_struct_size + alignment - 1) & ~(alignment - 1);
+		if (type_struct_member_array_stride(ib_type, index) > declared_struct_size)
+			return true;
 	}
 
 	// TODO: Another sanity check for matrices. We currently do not support std140 matrices which need to be padded out per column.
@@ -4030,7 +4042,7 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	MSLStructMemberKey key = get_struct_member_key(type.self, index);
 	uint32_t pad_len = struct_member_padding[key];
 	if (pad_len > 0)
-		statement("char pad", to_string(index), "[", to_string(pad_len), "];");
+		statement("char _m", index, "_pad", "[", to_string(pad_len), "];");
 
 	// If this member is packed, mark it as so.
 	string pack_pfx = "";
@@ -4041,7 +4053,11 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 	if (member_is_packed_type(type, index))
 	{
 		// If we're packing a matrix, output an appropriate typedef
-		if (membertype.vecsize > 1 && membertype.columns > 1)
+		if (membertype.basetype == SPIRType::Struct)
+		{
+			pack_pfx = "/* FIXME: A padded struct is needed here. If you see this message, file a bug! */ ";
+		}
+		else if (membertype.vecsize > 1 && membertype.columns > 1)
 		{
 			pack_pfx = "packed_";
 			string base_type = membertype.width == 16 ? "half" : "float";
@@ -5681,7 +5697,12 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 		}
 
 		if (type.basetype == SPIRType::Struct)
-			return get_declared_struct_size(type);
+		{
+			// The size of a struct in Metal is aligned up to its natural alignment.
+			auto size = get_declared_struct_size(type);
+			auto alignment = get_declared_struct_member_alignment(struct_type, index);
+			return (size + alignment - 1) & ~(alignment - 1);
+		}
 
 		uint32_t component_size = type.width / 8;
 		uint32_t vecsize = type.vecsize;
@@ -5712,7 +5733,13 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 		SPIRV_CROSS_THROW("Querying alignment of opaque object.");
 
 	case SPIRType::Struct:
-		return 16; // Per Vulkan spec section 14.5.4
+	{
+		// In MSL, a struct's alignment is equal to the maximum alignment of any of its members.
+		uint32_t alignment = 1;
+		for (uint32_t i = 0; i < type.member_types.size(); i++)
+			alignment = max(alignment, uint32_t(get_declared_struct_member_alignment(type, i)));
+		return alignment;
+	}
 
 	default:
 	{
@@ -5720,7 +5747,18 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 		// Alignment of unpacked type is the same as the vector size.
 		// Alignment of 3-elements vector is the same as 4-elements (including packed using column).
 		if (member_is_packed_type(struct_type, index))
-			return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
+		{
+			// This is getting pretty complicated.
+			// The special case of array of float/float2 needs to be handled here.
+			uint32_t packed_type_id =
+			    get_extended_member_decoration(struct_type.self, index, SPIRVCrossDecorationPackedType);
+			const SPIRType *packed_type = packed_type_id != 0 ? &get<SPIRType>(packed_type_id) : nullptr;
+			if (packed_type && is_array(*packed_type) && !is_matrix(*packed_type) &&
+			    packed_type->basetype != SPIRType::Struct)
+				return (packed_type->width / 8) * 4;
+			else
+				return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
+		}
 		else
 			return (type.width / 8) * (type.vecsize == 3 ? 4 : type.vecsize);
 	}
