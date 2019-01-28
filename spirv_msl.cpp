@@ -1565,11 +1565,11 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 
 		// Align current offset to the current member's default alignment.
 		size_t align_mask = get_declared_struct_member_alignment(ib_type, mbr_idx) - 1;
-		curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
+		uint32_t aligned_curr_offset = uint32_t((curr_offset + align_mask) & ~align_mask);
 
 		// Fetch the member offset as declared in the SPIRV.
 		uint32_t mbr_offset = get_member_decoration(ib_type_id, mbr_idx, DecorationOffset);
-		if (mbr_offset > curr_offset)
+		if (mbr_offset > aligned_curr_offset)
 		{
 			// Since MSL and SPIR-V have slightly different struct member alignment and
 			// size rules, we'll pad to standard C-packing rules. If the member is farther
@@ -5697,7 +5697,12 @@ size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type,
 		}
 
 		if (type.basetype == SPIRType::Struct)
-			return get_declared_struct_size(type);
+		{
+			// The size of a struct in Metal is aligned up to its natural alignment.
+			auto size = get_declared_struct_size(type);
+			auto alignment = get_declared_struct_member_alignment(struct_type, index);
+			return (size + alignment - 1) & ~(alignment - 1);
+		}
 
 		uint32_t component_size = type.width / 8;
 		uint32_t vecsize = type.vecsize;
@@ -5742,7 +5747,16 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 		// Alignment of unpacked type is the same as the vector size.
 		// Alignment of 3-elements vector is the same as 4-elements (including packed using column).
 		if (member_is_packed_type(struct_type, index))
-			return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
+		{
+			// This is getting pretty complicated.
+			// The special case of array of float/float2 needs to be handled here.
+			uint32_t packed_type_id = get_extended_member_decoration(struct_type.self, index, SPIRVCrossDecorationPackedType);
+			const SPIRType *packed_type = packed_type_id != 0 ? &get<SPIRType>(packed_type_id) : nullptr;
+			if (packed_type && is_array(*packed_type) && !is_matrix(*packed_type) && packed_type->basetype != SPIRType::Struct)
+				return (packed_type->width / 8) * 4;
+			else
+				return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
+		}
 		else
 			return (type.width / 8) * (type.vecsize == 3 ? 4 : type.vecsize);
 	}
