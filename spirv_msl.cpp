@@ -369,7 +369,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		for (uint32_t i = 0; i < type.array[0]; ++i)
 			statement(name + "_" + convert_to_string(i) + ",");
 		end_scope_decl();
-		statement("");
+		statement_no_indent("");
 	}
 	// For some reason, without this, we end up emitting the arrays twice.
 	buffer_arrays.clear();
@@ -868,9 +868,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 	if (var.storage == StorageClassOutput && var.initializer != 0)
 	{
-		entry_func.fixup_hooks_in.push_back([=, &var]() {
-			statement(qual_var_name, " = ", to_expression(var.initializer), ";");
-		});
+		entry_func.fixup_hooks_in.push_back(
+		    [=, &var]() { statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
 	}
 
 	// Copy the variable location from the original variable to the member
@@ -2442,7 +2441,6 @@ void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id,
 // Override for MSL-specific syntax instructions
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
-
 #define MSL_BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define MSL_BOP_CAST(op, type) \
 	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
@@ -2458,42 +2456,77 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
 
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_instruction(instruction);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
+
 	switch (opcode)
 	{
 
 	// Comparisons
 	case OpIEqual:
+		MSL_BOP_CAST(==, int_type);
+		break;
+
 	case OpLogicalEqual:
 	case OpFOrdEqual:
 		MSL_BOP(==);
 		break;
 
 	case OpINotEqual:
+		MSL_BOP_CAST(!=, int_type);
+		break;
+
 	case OpLogicalNotEqual:
 	case OpFOrdNotEqual:
 		MSL_BOP(!=);
 		break;
 
 	case OpUGreaterThan:
+		MSL_BOP_CAST(>, uint_type);
+		break;
+
 	case OpSGreaterThan:
+		MSL_BOP_CAST(>, int_type);
+		break;
+
 	case OpFOrdGreaterThan:
 		MSL_BOP(>);
 		break;
 
 	case OpUGreaterThanEqual:
+		MSL_BOP_CAST(>=, uint_type);
+		break;
+
 	case OpSGreaterThanEqual:
+		MSL_BOP_CAST(>=, int_type);
+		break;
+
 	case OpFOrdGreaterThanEqual:
 		MSL_BOP(>=);
 		break;
 
 	case OpULessThan:
+		MSL_BOP_CAST(<, uint_type);
+		break;
+
 	case OpSLessThan:
+		MSL_BOP_CAST(<, int_type);
+		break;
+
 	case OpFOrdLessThan:
 		MSL_BOP(<);
 		break;
 
 	case OpULessThanEqual:
+		MSL_BOP_CAST(<=, uint_type);
+		break;
+
 	case OpSLessThanEqual:
+		MSL_BOP_CAST(<=, int_type);
+		break;
+
 	case OpFOrdLessThanEqual:
 		MSL_BOP(<=);
 		break;
@@ -5434,37 +5467,25 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
-	if ((out_type.basetype == SPIRType::UShort && in_type.basetype == SPIRType::Short) ||
-	    (out_type.basetype == SPIRType::Short && in_type.basetype == SPIRType::UShort) ||
-	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int) ||
-	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::UInt) ||
-	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Int64) ||
-	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::UInt64))
+	assert(out_type.basetype != SPIRType::Boolean);
+	assert(in_type.basetype != SPIRType::Boolean);
+
+	if (out_type.basetype == in_type.basetype)
+		return "";
+
+	bool integral_cast = type_is_integral(out_type) && type_is_integral(in_type);
+	bool same_size_cast = out_type.width == in_type.width;
+
+	if (integral_cast && same_size_cast)
+	{
+		// Trivial bitcast case, casts between integers.
 		return type_to_glsl(out_type);
-
-	if ((out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Float) ||
-	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Float) ||
-	    (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::UInt) ||
-	    (out_type.basetype == SPIRType::Float && in_type.basetype == SPIRType::Int) ||
-	    (out_type.basetype == SPIRType::Int64 && in_type.basetype == SPIRType::Double) ||
-	    (out_type.basetype == SPIRType::UInt64 && in_type.basetype == SPIRType::Double) ||
-	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::Int64) ||
-	    (out_type.basetype == SPIRType::Double && in_type.basetype == SPIRType::UInt64) ||
-	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UInt) ||
-	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Half) ||
-	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::Int) ||
-	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Half) ||
-	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::UShort) ||
-	    (out_type.basetype == SPIRType::UShort && in_type.basetype == SPIRType::Half) ||
-	    (out_type.basetype == SPIRType::Half && in_type.basetype == SPIRType::Short) ||
-	    (out_type.basetype == SPIRType::Short && in_type.basetype == SPIRType::Half) ||
-	    (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::UShort && in_type.vecsize == 2) ||
-	    (out_type.basetype == SPIRType::UShort && in_type.basetype == SPIRType::UInt && in_type.vecsize == 1) ||
-	    (out_type.basetype == SPIRType::Int && in_type.basetype == SPIRType::Short && in_type.vecsize == 2) ||
-	    (out_type.basetype == SPIRType::Short && in_type.basetype == SPIRType::Int && in_type.vecsize == 1))
+	}
+	else
+	{
+		// Fall back to the catch-all bitcast in MSL.
 		return "as_type<" + type_to_glsl(out_type) + ">";
-
-	return "";
+	}
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin.
