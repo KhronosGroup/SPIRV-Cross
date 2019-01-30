@@ -369,7 +369,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		for (uint32_t i = 0; i < type.array[0]; ++i)
 			statement(name + "_" + convert_to_string(i) + ",");
 		end_scope_decl();
-		statement("");
+		statement_no_indent("");
 	}
 	// For some reason, without this, we end up emitting the arrays twice.
 	buffer_arrays.clear();

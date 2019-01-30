@@ -2909,7 +2909,12 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		else if (storage == StorageClassPushConstant)
 			space = 'b'; // Constant buffers
 		else if (storage == StorageClassStorageBuffer)
-			space = 'u'; // UAV
+		{
+			// UAV or SRV depending on readonly flag.
+			Bitset flags = ir.get_buffer_block_flags(var);
+			bool is_readonly = flags.get(DecorationNonWritable);
+			space = is_readonly ? 't' : 'u';
+		}
 
 		break;
 	}
@@ -3538,20 +3543,19 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 
 	bool need_byte_access_chain = false;
 	auto &type = expression_type(ops[2]);
-	const SPIRAccessChain *chain = nullptr;
-	if (type.storage == StorageClassStorageBuffer || has_decoration(type.self, DecorationBufferBlock))
+	const auto *chain = maybe_get<SPIRAccessChain>(ops[2]);
+
+	if (chain)
+	{
+		// Keep tacking on an existing access chain.
+		need_byte_access_chain = true;
+	}
+	else if (type.storage == StorageClassStorageBuffer || has_decoration(type.self, DecorationBufferBlock))
 	{
 		// If we are starting to poke into an SSBO, we are dealing with ByteAddressBuffers, and we need
 		// to emit SPIRAccessChain rather than a plain SPIRExpression.
 		uint32_t chain_arguments = length - 3;
 		if (chain_arguments > type.array.size())
-			need_byte_access_chain = true;
-	}
-	else
-	{
-		// Keep tacking on an existing access chain.
-		chain = maybe_get<SPIRAccessChain>(ops[2]);
-		if (chain)
 			need_byte_access_chain = true;
 	}
 
