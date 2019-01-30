@@ -32,7 +32,7 @@ struct main0_in
     int4 vColor [[user(locn0)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]], constant Push& registers [[buffer(0)]], constant UBO& ubo [[buffer(0)]], device SSBO& ssbo [[buffer(1)]])
+fragment main0_out main0(main0_in in [[stage_in]], constant Push& registers [[buffer(0)]], constant UBO& ubo [[buffer(1)]], device SSBO& ssbo [[buffer(2)]])
 {
     main0_out out = {};
     short _196 = 10;

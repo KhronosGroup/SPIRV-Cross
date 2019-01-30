@@ -12,13 +12,13 @@ layout(push_constant, std140) uniform Push
 	uint8_t u8;
 } registers;
 
-layout(binding = 0, std140) uniform UBO
+layout(binding = 1, std140) uniform UBO
 {
 	int8_t i8;
 	uint8_t u8;
 } ubo;
 
-layout(binding = 1, std430) buffer SSBO
+layout(binding = 2, std430) buffer SSBO
 {
 	int8_t i8[16];
 	uint8_t u8[16];
