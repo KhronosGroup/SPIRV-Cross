@@ -868,9 +868,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 	if (var.storage == StorageClassOutput && var.initializer != 0)
 	{
-		entry_func.fixup_hooks_in.push_back([=, &var]() {
-			statement(qual_var_name, " = ", to_expression(var.initializer), ";");
-		});
+		entry_func.fixup_hooks_in.push_back(
+		    [=, &var]() { statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
 	}
 
 	// Copy the variable location from the original variable to the member

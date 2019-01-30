@@ -1748,9 +1748,8 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			if (var.storage == StorageClassOutput && var.initializer)
 			{
 				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
-				entry_func.fixup_hooks_in.push_back([&]() {
-					statement(to_name(var.self), " = ", to_expression(var.initializer), ";");
-				});
+				entry_func.fixup_hooks_in.push_back(
+				    [&]() { statement(to_name(var.self), " = ", to_expression(var.initializer), ";"); });
 			}
 		}
 	}
