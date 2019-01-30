@@ -851,10 +851,10 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 	// Update the original variable reference to include the structure reference
 	string qual_var_name = ib_var_ref + "." + mbr_name;
+	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	if (padded_output)
 	{
-		auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 		entry_func.add_local_variable(var.self);
 		vars_needing_early_declaration.push_back(var.self);
 
@@ -865,6 +865,13 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	}
 	else
 		ir.meta[var.self].decoration.qualified_alias = qual_var_name;
+
+	if (var.storage == StorageClassOutput && var.initializer != 0)
+	{
+		entry_func.fixup_hooks_in.push_back([=, &var]() {
+			statement(qual_var_name, " = ", to_expression(var.initializer), ";");
+		});
+	}
 
 	// Copy the variable location from the original variable to the member
 	if (get_decoration_bitset(var.self).get(DecorationLocation))
@@ -3383,10 +3390,13 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		for (auto var_id : vars_needing_early_declaration)
 		{
 			auto &ed_var = get<SPIRVariable>(var_id);
-			if (!ed_var.initializer)
-				ed_var.initializer = ir.increase_bound_by(1);
+			uint32_t &initializer = ed_var.initializer;
+			if (!initializer)
+				initializer = ir.increase_bound_by(1);
 
-			set<SPIRExpression>(ed_var.initializer, "{}", ed_var.basetype, true);
+			// Do not override proper initializers.
+			if (ir.ids[initializer].get_type() == TypeNone || ir.ids[initializer].get_type() == TypeExpression)
+				set<SPIRExpression>(ed_var.initializer, "{}", ed_var.basetype, true);
 		}
 	}
 

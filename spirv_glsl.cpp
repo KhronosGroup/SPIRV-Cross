@@ -1743,6 +1743,15 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			add_resource_name(var.self);
 			statement(layout_for_variable(var), to_qualifiers_glsl(var.self),
 			          variable_decl(type, to_name(var.self), var.self), ";");
+
+			// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
+			if (var.storage == StorageClassOutput && var.initializer)
+			{
+				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
+				entry_func.fixup_hooks_in.push_back([&]() {
+					statement(to_name(var.self), " = ", to_expression(var.initializer), ";");
+				});
+			}
 		}
 	}
 }
