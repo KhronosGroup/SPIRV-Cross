@@ -5254,11 +5254,11 @@ case OpGroupNonUniform##op: \
 
 string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
-	assert(out_type.basetype != SPIRType::Boolean);
-	assert(in_type.basetype != SPIRType::Boolean);
-
 	if (out_type.basetype == in_type.basetype)
 		return "";
+
+	assert(out_type.basetype != SPIRType::Boolean);
+	assert(in_type.basetype != SPIRType::Boolean);
 
 	bool integral_cast = type_is_integral(out_type) && type_is_integral(in_type);
 	bool same_size_cast = out_type.width == in_type.width;
