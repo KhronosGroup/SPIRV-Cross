@@ -31,7 +31,7 @@ void spvArrayCopyFromConstant1(thread T (&dst)[N], constant T (&src)[N])
     for (uint i = 0; i < N; dst[i] = src[i], i++);
 }
 
-float4 consume_constant_arrays2(thread const float4 (&positions)[4], thread const float4 (&positions2)[4], thread int& Index1, thread int& Index2)
+float4 consume_constant_arrays2(thread const float4 (&positions)[4], thread const float4 (&positions2)[4], int Index1, int Index2)
 {
     float4 indexable[4];
     spvArrayCopyFromStack1(indexable, positions);
@@ -40,7 +40,7 @@ float4 consume_constant_arrays2(thread const float4 (&positions)[4], thread cons
     return indexable[Index1] + indexable_1[Index2];
 }
 
-float4 consume_constant_arrays(thread const float4 (&positions)[4], thread const float4 (&positions2)[4], thread int& Index1, thread int& Index2)
+float4 consume_constant_arrays(thread const float4 (&positions)[4], thread const float4 (&positions2)[4], int Index1, int Index2)
 {
     return consume_constant_arrays2(positions, positions2, Index1, Index2);
 }

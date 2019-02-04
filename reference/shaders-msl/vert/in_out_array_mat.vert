@@ -44,7 +44,7 @@ void write_deeper_in_function(thread float4x4& outTransModel, constant UBO& ubo,
     color = colors[2];
 }
 
-void write_in_function(thread float4x4& outTransModel, constant UBO& ubo, thread float4& color, thread float4 (&colors)[3], thread float3& inNormal)
+void write_in_function(thread float4x4& outTransModel, constant UBO& ubo, thread float4& color, thread float4 (&colors)[3], float3 inNormal)
 {
     outTransModel[2] = float4(inNormal, 1.0);
     write_deeper_in_function(outTransModel, ubo, color, colors);

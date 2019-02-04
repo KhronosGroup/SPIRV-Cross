@@ -36,7 +36,7 @@ void test(thread float4 (&SPIRV_Cross_return_value)[2])
     spvArrayCopyFromConstant1(SPIRV_Cross_return_value, _20);
 }
 
-void test2(thread float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)
+void test2(thread float4 (&SPIRV_Cross_return_value)[2], float4 vInput0, float4 vInput1)
 {
     float4 foobar[2];
     foobar[0] = vInput0;
