@@ -534,7 +534,8 @@ void CompilerMSL::localize_global_variables()
 		auto &var = get<SPIRVariable>(v_id);
 		if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup)
 		{
-			entry_func.add_local_variable(v_id);
+			if (!variable_is_lut(var))
+				entry_func.add_local_variable(v_id);
 			iter = global_variables.erase(iter);
 		}
 		else
