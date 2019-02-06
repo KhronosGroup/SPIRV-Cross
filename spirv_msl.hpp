@@ -241,6 +241,13 @@ public:
 		return used_aux_buffer;
 	}
 
+	// Provide feedback to calling API to allow it to pass an output
+	// buffer if the shader needs it.
+	bool needs_output_buffer() const
+	{
+		return capture_output_to_buffer && stage_out_var_id != 0;
+	}
+
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
 	enum SPVFuncImpl
