@@ -149,7 +149,7 @@ static const uint32_t kPushConstBinding = 0;
 
 // The current version of the aux buffer structure. It must be incremented any time a
 // new field is added to the aux buffer.
-#define SPIRV_CROSS_MSL_AUX_BUFFER_STRUCT_VERSION 2
+#define SPIRV_CROSS_MSL_AUX_BUFFER_STRUCT_VERSION 1
 
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
@@ -168,7 +168,8 @@ public:
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
 		uint32_t aux_buffer_index = 30;
-		uint32_t shader_output_buffer_index = 29;
+		uint32_t indirect_params_buffer_index = 29;
+		uint32_t shader_output_buffer_index = 28;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;

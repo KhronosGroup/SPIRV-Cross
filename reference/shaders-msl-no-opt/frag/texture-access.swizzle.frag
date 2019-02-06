@@ -7,7 +7,6 @@ using namespace metal;
 
 struct spvAux
 {
-    uint vertexCount;
     uint swizzleConst[1];
 };
 

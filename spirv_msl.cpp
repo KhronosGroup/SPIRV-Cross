@@ -28,8 +28,7 @@ using namespace std;
 static const uint32_t k_unknown_location = ~0u;
 static const uint32_t k_unknown_component = ~0u;
 
-static const uint32_t k_aux_mbr_idx_vertex_count = 0u;
-static const uint32_t k_aux_mbr_idx_swizzle_const = 1u;
+static const uint32_t k_aux_mbr_idx_swizzle_const = 0u;
 
 CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_attrs,
                          vector<MSLResourceBinding> *p_res_bindings)
@@ -254,7 +253,7 @@ void CompilerMSL::build_implicit_builtins()
 		}
 	}
 
-	if (needs_aux_buffer_def || capture_output_to_buffer)
+	if (needs_aux_buffer_def)
 	{
 		uint32_t offset = ir.increase_bound_by(5);
 		uint32_t type_id = offset;
@@ -278,16 +277,13 @@ void CompilerMSL::build_implicit_builtins()
 
 		SPIRType struct_type;
 		struct_type.basetype = SPIRType::Struct;
-		struct_type.member_types.push_back(type_id); // Vertex count
-		struct_type.member_types.push_back(type_arr_id); // Swizzle constants
+		struct_type.member_types.push_back(type_arr_id);
 		auto &type = set<SPIRType>(struct_id, struct_type);
 		type.self = struct_id;
 		set_decoration(struct_id, DecorationBlock);
 		set_name(struct_id, "spvAux");
-		set_member_name(struct_id, k_aux_mbr_idx_vertex_count, "vertexCount");
-		set_member_decoration(struct_id, k_aux_mbr_idx_vertex_count, DecorationOffset, 0);
 		set_member_name(struct_id, k_aux_mbr_idx_swizzle_const, "swizzleConst");
-		set_member_decoration(struct_id, k_aux_mbr_idx_swizzle_const, DecorationOffset, 4);
+		set_member_decoration(struct_id, k_aux_mbr_idx_swizzle_const, DecorationOffset, 0);
 
 		SPIRType struct_type_ptr = struct_type;
 		struct_type_ptr.pointer = true;
@@ -1515,12 +1511,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			// as a reference to the final output element in the buffer. Then we can
 			// avoid the extra copy.
 			entry_func.fixup_hooks_in.push_back([=]() {
-				auto &aux_type = expression_type(aux_buffer_id);
-				statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
-				          output_buffer_var_name, "[(", to_expression(builtin_instance_idx_id), " - ",
-				          to_expression(builtin_base_instance_id), ") * ", to_expression(aux_buffer_id), ".",
-				          to_member_name(aux_type, k_aux_mbr_idx_vertex_count), " + ",
-				          to_expression(builtin_vertex_idx_id), " - ", to_expression(builtin_base_vertex_id), "];");
+				if (stage_out_var_id)
+				{
+					// The first member of the indirect buffer is always the number of vertices
+					// to draw.
+					statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
+					          output_buffer_var_name, "[(", to_expression(builtin_instance_idx_id), " - ",
+					          to_expression(builtin_base_instance_id), ") * spvIndirectParams[0] + ",
+					          to_expression(builtin_vertex_idx_id), " - ", to_expression(builtin_base_vertex_id), "];");
+				}
 			});
 		}
 		break;
@@ -4761,14 +4760,16 @@ string CompilerMSL::entry_point_args(bool append_comma)
 
 	if (capture_output_to_buffer)
 	{
-		// Add a parameter to hold the shader output. This has to be handled
+		// Add parameters to hold the indirect draw parameters and the shader output. This has to be handled
 		// specially because it needs to be a pointer, not a reference.
 		if (stage_out_var_id)
 		{
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += "device " + type_to_glsl(get_stage_out_struct_type()) + "* " + output_buffer_var_name +
-			           " [[buffer(" + convert_to_string(msl_options.shader_output_buffer_index) + ")]]";
+			ep_args += join("device ", type_to_glsl(get_stage_out_struct_type()), "* ", output_buffer_var_name,
+			                " [[buffer(", msl_options.shader_output_buffer_index, ")]], ");
+			ep_args +=
+			    join("device uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
 	}
 
