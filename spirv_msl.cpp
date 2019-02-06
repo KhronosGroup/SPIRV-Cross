@@ -5552,6 +5552,23 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = spvIndirectParams[0];");
 					});
 				break;
+			case BuiltInTessCoord:
+				// Emit a fixup to account for the shifted domain. The fixup for triangles can be derived
+				// thus:
+				// u' = u
+				// w' = 1 - v
+				// v' = 1 - u' - w' = 1 - u - (1 - v) = v - u
+				// v and w are swapped because the winding must be reversed in lower-left mode.
+				if (msl_options.tess_domain_origin_lower_left)
+				{
+					string tc = to_expression(var_id);
+					if (get_entry_point().flags.get(ExecutionModeTriangles))
+						entry_func.fixup_hooks_in.push_back(
+						    [=]() { statement(tc, ".yz = float2(", tc, ".y - ", tc, ".x, 1.0 - ", tc, ".y);"); });
+					else
+						entry_func.fixup_hooks_in.push_back([=]() { statement(tc, ".y = 1.0 - ", tc, ".y;"); });
+				}
+				break;
 			default:
 				break;
 			}

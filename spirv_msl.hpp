@@ -177,6 +177,7 @@ public:
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
+		bool tess_domain_origin_lower_left = false;
 
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.

@@ -156,6 +156,8 @@ def cross_compile_msl(shader, spirv, opt):
         msl_args.append('--msl-pad-fragment-output')
     if '.capture.' in shader:
         msl_args.append('--msl-capture-output')
+    if '.domain.' in shader:
+        msl_args.append('--msl-domain-lower-left')
 
     subprocess.check_call(msl_args)
 
