@@ -417,7 +417,8 @@ struct SPIRType : IVariant
 		Struct,
 		Image,
 		SampledImage,
-		Sampler
+		Sampler,
+		ControlPointArray
 	};
 
 	// Scalar/vector/matrix support.
