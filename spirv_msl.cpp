@@ -615,13 +615,6 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(builtin_frag_coord_id);
 				}
 
-				if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
-				{
-					// Implicitly reads spvAuxBuffer.
-					assert(aux_buffer_id != 0);
-					added_arg_ids.insert(aux_buffer_id);
-				}
-
 				break;
 			}
 
