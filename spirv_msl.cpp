@@ -278,16 +278,24 @@ void CompilerMSL::build_implicit_builtins()
 
 		SPIRType struct_type;
 		struct_type.basetype = SPIRType::Struct;
-		struct_type.member_types.push_back(type_id); // Vertex count
-		struct_type.member_types.push_back(type_arr_id); // Swizzle constants
+		if (msl_options.aux_buffer_features.vertex_count)
+			struct_type.member_types.push_back(type_id); // Vertex count
+		if (msl_options.aux_buffer_features.swizzle_const)
+			struct_type.member_types.push_back(type_arr_id); // Swizzle constants
 		auto &type = set<SPIRType>(struct_id, struct_type);
 		type.self = struct_id;
 		set_decoration(struct_id, DecorationBlock);
 		set_name(struct_id, "spvAux");
-		set_member_name(struct_id, k_aux_mbr_idx_vertex_count, "vertexCount");
-		set_member_decoration(struct_id, k_aux_mbr_idx_vertex_count, DecorationOffset, 0);
-		set_member_name(struct_id, k_aux_mbr_idx_swizzle_const, "swizzleConst");
-		set_member_decoration(struct_id, k_aux_mbr_idx_swizzle_const, DecorationOffset, 4);
+		if (msl_options.aux_buffer_features.vertex_count)
+		{
+			set_member_name(struct_id, k_aux_mbr_idx_vertex_count, "vertexCount");
+			set_member_decoration(struct_id, k_aux_mbr_idx_vertex_count, DecorationOffset, 0);
+		}
+		if (msl_options.aux_buffer_features.swizzle_const)
+		{
+			set_member_name(struct_id, k_aux_mbr_idx_swizzle_const, "swizzleConst");
+			set_member_decoration(struct_id, k_aux_mbr_idx_swizzle_const, DecorationOffset, 4);
+		}
 
 		SPIRType struct_type_ptr = struct_type;
 		struct_type_ptr.pointer = true;
@@ -1514,6 +1522,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage)
 			// copying that to the output buffer, we'll declare the output variable
 			// as a reference to the final output element in the buffer. Then we can
 			// avoid the extra copy.
+			if (!msl_options.aux_buffer_features.vertex_count)
+				SPIRV_CROSS_THROW("Capturing vertex output to a buffer requires the vertexCount feature.");
 			entry_func.fixup_hooks_in.push_back([=]() {
 				auto &aux_type = expression_type(aux_buffer_id);
 				statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
@@ -4792,6 +4802,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		{
 			if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
 			{
+				if (!msl_options.aux_buffer_features.swizzle_const)
+					SPIRV_CROSS_THROW("Swizzling sampled values from images requires the swizzleConst feature.");
 				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
 				entry_func.fixup_hooks_in.push_back([this, &var, var_id]() {
 					auto &aux_type = expression_type(aux_buffer_id);

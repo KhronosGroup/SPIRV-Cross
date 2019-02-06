@@ -174,6 +174,15 @@ public:
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
 
+		struct AuxBufferFeatures
+		{
+			// The current version of this structure. It must be incremented any time a
+			// new field is added to the aux buffer.
+			uint32_t version = 2;
+			bool vertex_count = true;
+			bool swizzle_const = true;
+		} aux_buffer_features;
+
 		bool is_ios()
 		{
 			return platform == iOS;
