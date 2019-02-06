@@ -147,6 +147,10 @@ static const uint32_t kPushConstDescSet = ~(0u);
 // element to indicate the bindings for the push constants.
 static const uint32_t kPushConstBinding = 0;
 
+// The current version of the aux buffer structure. It must be incremented any time a
+// new field is added to the aux buffer.
+#define SPIRV_CROSS_MSL_AUX_BUFFER_STRUCT_VERSION 2
+
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
 {
@@ -173,15 +177,6 @@ public:
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
-
-		// The current version of this structure. It must be incremented any time a
-		// new field is added to the aux buffer.
-#define SPIRV_CROSS_MSL_AUX_BUFFER_STRUCT_VERSION 2
-		struct AuxBufferFeatures
-		{
-			bool vertex_count = true;
-			bool swizzle_const = true;
-		} aux_buffer_features;
 
 		bool is_ios()
 		{
