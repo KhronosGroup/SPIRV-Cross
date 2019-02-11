@@ -3359,13 +3359,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				    has_decoration(get_variable_element_type(*var).self, DecorationBlock))
 				{
 					uint32_t i = 4;
-					if (index == (uint32_t)-1)
+					if (index == uint32_t(-1))
 					{
 						// Maybe this is a struct type in the input class, in which case
 						// we put it as a decoration on the corresponding member.
 						index =
 						    get_extended_member_decoration(ops[2], ops[4], SPIRVCrossDecorationInterfaceMemberIndex);
-						assert(index != (uint32_t)-1);
+						assert(index != uint32_t(-1));
 						i++;
 					}
 					// In this case, we flattened structures and arrays, so now we have to

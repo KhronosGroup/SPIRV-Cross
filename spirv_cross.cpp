@@ -1305,7 +1305,7 @@ bool Compiler::has_extended_decoration(uint32_t id, ExtendedDecorations decorati
 		return dec.extended.packed_type != 0;
 
 	case SPIRVCrossDecorationInterfaceMemberIndex:
-		return dec.extended.ib_member_index != (uint32_t)-1;
+		return dec.extended.ib_member_index != uint32_t(-1);
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id != 0;
@@ -1333,7 +1333,7 @@ bool Compiler::has_extended_member_decoration(uint32_t type, uint32_t index, Ext
 		return dec.extended.packed_type != 0;
 
 	case SPIRVCrossDecorationInterfaceMemberIndex:
-		return dec.extended.ib_member_index != (uint32_t)-1;
+		return dec.extended.ib_member_index != uint32_t(-1);
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id != 0;
