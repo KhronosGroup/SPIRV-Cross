@@ -4950,6 +4950,8 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	case ExecutionModelTessellationControl:
 		if (!msl_options.supports_msl_version(1, 2))
 			SPIRV_CROSS_THROW("Tessellation requires Metal 1.2.");
+		if (execution.flags.get(ExecutionModeIsolines))
+			SPIRV_CROSS_THROW("Metal does not support isoline tessellation.");
 		/* fallthrough */
 	case ExecutionModelGLCompute:
 	case ExecutionModelKernel:
