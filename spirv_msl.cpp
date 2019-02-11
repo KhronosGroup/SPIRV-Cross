@@ -1044,12 +1044,14 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	uint32_t type_id = ensure_correct_builtin_type(var.basetype, builtin);
 	var.basetype = type_id;
 
-	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
+	type_id = get_pointee_type_id(var.basetype);
+	if (strip_array && is_array(get<SPIRType>(type_id)))
+		type_id = get<SPIRType>(type_id).parent_type;
+	auto &type = get<SPIRType>(type_id);
 	uint32_t target_components = 0;
 	uint32_t type_components = type.vecsize;
 	bool padded_output = false;
 
-	type_id = type.self;
 	// Check if we need to pad fragment output to match a certain number of components.
 	if (get_decoration_bitset(var.self).get(DecorationLocation) && msl_options.pad_fragment_output_components &&
 	    get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput)
@@ -1532,7 +1534,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		if (!is_builtin_type(var_type) && !strip_array)
+		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || storage == StorageClassInput) && !strip_array)
 		{
 			// For I/O blocks or structs, we will need to pass the block itself around
 			// to functions if they are used globally in leaf functions.
@@ -1544,14 +1546,13 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			vars_needing_early_declaration.push_back(var.self);
 		}
 
-		// Per-vertex outputs in a tess. control shader need special handling.
-		if (strip_array && storage != StorageClassInput && !has_decoration(var_type.self, DecorationBlock))
+		if (capture_output_to_buffer && storage != StorageClassInput && !has_decoration(var_type.self, DecorationBlock))
 		{
-			// We can't flatten the struct, because of the requirement that these be passed around as arrays.
-			// In Metal, the interface block itself is arrayed. This makes things very complicated, since
-			// stage-in structures in MSL don't support nested structures. Luckily, for stage-out in a
-			// tessellation control shader, we can get away with this because the structure is stored
-			// to a buffer, not returned.
+			// In Metal tessellation shaders, the interface block itself is arrayed. This makes things
+			// very complicated, since stage-in structures in MSL don't support nested structures.
+			// Luckily, for stage-out when capturing output, we can avoid this and just add
+			// composite members directly, because the stage-out structure is stored to a buffer,
+			// not returned.
 			add_plain_variable_to_interface_block(storage, ib_var_ref, ib_type, var, strip_array);
 		}
 		else
@@ -1589,7 +1590,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		if (!is_builtin || has_active_builtin(builtin, storage))
 		{
 			// MSL does not allow matrices or arrays in input or output variables, so need to handle it specially.
-			if (!is_builtin && (storage == StorageClassInput || storage == StorageClassOutput) &&
+			if (!is_builtin &&
+			    (storage == StorageClassInput || (storage == StorageClassOutput && !capture_output_to_buffer)) &&
 			    (is_matrix(var_type) || is_array(var_type)))
 			{
 				add_composite_variable_to_interface_block(storage, ib_var_ref, ib_type, var, strip_array);
@@ -5248,9 +5250,9 @@ string CompilerMSL::entry_point_args(bool append_comma)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
-				ep_args += join("device ", type_to_glsl(get_patch_stage_out_struct_type()), "* ",
-				                patch_output_buffer_var_name, " [[buffer(",
-				                convert_to_string(msl_options.shader_patch_output_buffer_index), ")]]");
+				ep_args +=
+				    join("device ", type_to_glsl(get_patch_stage_out_struct_type()), "* ", patch_output_buffer_var_name,
+				         " [[buffer(", convert_to_string(msl_options.shader_patch_output_buffer_index), ")]]");
 			}
 			if (!ep_args.empty())
 				ep_args += ", ";
