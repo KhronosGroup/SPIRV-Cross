@@ -1100,9 +1100,12 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		if (storage == StorageClassInput && (get_execution_model() == ExecutionModelVertex ||
 		                                     get_execution_model() == ExecutionModelTessellationControl))
 		{
-			type_id = ensure_correct_attribute_type(type_id, locn);
+			type_id = ensure_correct_attribute_type(var.basetype, locn);
 			var.basetype = type_id;
-			ib_type.member_types[ib_mbr_idx] = get_pointee_type_id(type_id);
+			type_id = get_pointee_type_id(type_id);
+			if (strip_array && is_array(get<SPIRType>(type_id)))
+				type_id = get<SPIRType>(type_id).parent_type;
+			ib_type.member_types[ib_mbr_idx] = type_id;
 		}
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 		mark_location_as_used_by_shader(locn, storage);
