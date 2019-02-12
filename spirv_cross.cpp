@@ -931,50 +931,6 @@ void Compiler::parse_fixup()
 	fixup_type_alias();
 }
 
-void Compiler::flatten_interface_block(uint32_t id)
-{
-	auto &var = get<SPIRVariable>(id);
-	auto &type = get<SPIRType>(var.basetype);
-	auto &flags = ir.meta[type.self].decoration.decoration_flags;
-
-	if (!type.array.empty())
-		SPIRV_CROSS_THROW("Type is array of UBOs.");
-	if (type.basetype != SPIRType::Struct)
-		SPIRV_CROSS_THROW("Type is not a struct.");
-	if (!flags.get(DecorationBlock))
-		SPIRV_CROSS_THROW("Type is not a block.");
-	if (type.member_types.empty())
-		SPIRV_CROSS_THROW("Member list of struct is empty.");
-
-	uint32_t t = type.member_types[0];
-	for (auto &m : type.member_types)
-		if (t != m)
-			SPIRV_CROSS_THROW("Types in block differ.");
-
-	auto &mtype = get<SPIRType>(t);
-	if (!mtype.array.empty())
-		SPIRV_CROSS_THROW("Member type cannot be arrays.");
-	if (mtype.basetype == SPIRType::Struct)
-		SPIRV_CROSS_THROW("Member type cannot be struct.");
-
-	// Inherit variable name from interface block name.
-	ir.meta[var.self].decoration.alias = ir.meta[type.self].decoration.alias;
-
-	auto storage = var.storage;
-	if (storage == StorageClassUniform)
-		storage = StorageClassUniformConstant;
-
-	// Change type definition in-place into an array instead.
-	// Access chains will still work as-is.
-	uint32_t array_size = uint32_t(type.member_types.size());
-	type = mtype;
-	type.array.push_back(array_size);
-	type.pointer = true;
-	type.storage = storage;
-	type.parent_type = t;
-	var.storage = storage;
-}
-
 void Compiler::update_name_cache(unordered_set<string> &cache_primary, const unordered_set<string> &cache_secondary,
                                  string &name)
 {
@@ -1153,11 +1109,6 @@ const string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_t ind
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
 	return ir.get_member_decoration(id, index, decoration);
-}
-
-uint64_t Compiler::get_member_decoration_mask(uint32_t id, uint32_t index) const
-{
-	return get_member_decoration_bitset(id, index).get_lower();
 }
 
 const Bitset &Compiler::get_member_decoration_bitset(uint32_t id, uint32_t index) const
@@ -1410,11 +1361,6 @@ const std::string Compiler::get_block_fallback_name(uint32_t id) const
 		return join("_", get<SPIRType>(var.basetype).self, "_", id);
 	else
 		return get_name(id);
-}
-
-uint64_t Compiler::get_decoration_mask(uint32_t id) const
-{
-	return get_decoration_bitset(id).get_lower();
 }
 
 const Bitset &Compiler::get_decoration_bitset(uint32_t id) const
@@ -1904,11 +1850,6 @@ bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType 
 	return true;
 }
 
-uint64_t Compiler::get_execution_mode_mask() const
-{
-	return get_entry_point().flags.get_lower();
-}
-
 const Bitset &Compiler::get_execution_mode_bitset() const
 {
 	return get_entry_point().flags;
@@ -2094,27 +2035,12 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 	e_deps.erase(unique(begin(e_deps), end(e_deps)), end(e_deps));
 }
 
-vector<string> Compiler::get_entry_points() const
-{
-	vector<string> entries;
-	for (auto &entry : ir.entry_points)
-		entries.push_back(entry.second.orig_name);
-	return entries;
-}
-
 vector<EntryPoint> Compiler::get_entry_points_and_stages() const
 {
 	vector<EntryPoint> entries;
 	for (auto &entry : ir.entry_points)
 		entries.push_back({ entry.second.orig_name, entry.second.model });
 	return entries;
-}
-
-void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name)
-{
-	auto &entry = get_first_entry_point(old_name);
-	entry.orig_name = new_name;
-	entry.name = new_name;
 }
 
 void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name, spv::ExecutionModel model)
@@ -2124,26 +2050,10 @@ void Compiler::rename_entry_point(const std::string &old_name, const std::string
 	entry.name = new_name;
 }
 
-void Compiler::set_entry_point(const std::string &name)
-{
-	auto &entry = get_first_entry_point(name);
-	ir.default_entry_point = entry.self;
-}
-
 void Compiler::set_entry_point(const std::string &name, spv::ExecutionModel model)
 {
 	auto &entry = get_entry_point(name, model);
 	ir.default_entry_point = entry.self;
-}
-
-SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
-{
-	return get_first_entry_point(name);
-}
-
-const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
-{
-	return get_first_entry_point(name);
 }
 
 SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
@@ -2194,11 +2104,6 @@ const SPIREntryPoint &Compiler::get_entry_point(const std::string &name, Executi
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
-}
-
-const string &Compiler::get_cleansed_entry_point_name(const std::string &name) const
-{
-	return get_first_entry_point(name).name;
 }
 
 const string &Compiler::get_cleansed_entry_point_name(const std::string &name, ExecutionModel model) const

@@ -10,7 +10,7 @@ SPIRV-Cross is a tool designed for parsing and converting SPIR-V to other shader
   - Convert SPIR-V to readable, usable and efficient GLSL
   - Convert SPIR-V to readable, usable and efficient Metal Shading Language (MSL)
   - Convert SPIR-V to readable, usable and efficient HLSL
-  - Convert SPIR-V to debuggable C++ [EXPERIMENTAL]
+  - Convert SPIR-V to debuggable C++ [DEPRECATED]
   - Convert SPIR-V to a JSON reflection format [EXPERIMENTAL]
   - Reflection API to simplify the creation of Vulkan pipeline layouts
   - Reflection API to modify and tweak OpDecorations
@@ -48,11 +48,18 @@ SPIRV-Cross is only useful as a library here. Use the CMake build to link SPIRV-
 
 The make and CMake build flavors offer the option to treat exceptions as assertions. To disable exceptions for make just append `SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS=1` to the command line. For CMake append `-DSPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS=ON`. By default exceptions are enabled.
 
+### Static, shared and CLI
+
+You can use `-DSPIRV_CROSS_STATIC=ON/OFF` `-DSPIRV_CROSS_SHARED=ON/OFF` `-DSPIRV_CROSS_CLI=ON/OFF` to control which modules are built (and installed).
+
 ## Usage
 
 ### Using the C++ API
 
-For more in-depth documentation than what's provided in this README, please have a look at the [Wiki](https://github.com/KhronosGroup/SPIRV-Cross/wiki).
+The C++ API is the main API for SPIRV-Cross. For more in-depth documentation than what's provided in this README,
+please have a look at the [Wiki](https://github.com/KhronosGroup/SPIRV-Cross/wiki).
+**NOTE**: This API is not guaranteed to be ABI-stable, and it is highly recommended to link against this API statically.
+The API is generally quite stable, but it can change over time, see the C API for more stability.
 
 To perform reflection and convert to other shader languages you can use the SPIRV-Cross API.
 For example:
@@ -99,19 +106,86 @@ int main()
 }
 ```
 
+### Using the C API wrapper
+
+To facilitate C compatibility and compatibility with foreign programming languages, a C89-compatible API wrapper is provided. Unlike the C++ API,
+the goal of this wrapper is to be fully stable, both API and ABI-wise.
+This is the only interface which is supported when building SPIRV-Cross as a shared library.
+
+```c
+// TODO: Example code
+```
+
+### Linking
+
+#### CMake add_subdirectory()
+
+This is the recommended way if you are using CMake and want to link against SPIRV-Cross statically.
+
 #### Integrating SPIRV-Cross in a custom build system
 
 To add SPIRV-Cross to your own codebase, just copy the source and header files from root directory
 and build the relevant .cpp files you need. Make sure to build with C++11 support, e.g. `-std=c++11` in GCC and Clang.
 Alternatively, the Makefile generates a libspirv-cross.a static library during build that can be linked in.
 
-### Creating a SPIR-V file from GLSL with glslang
+#### Linking against SPIRV-Cross as a system library
+
+It is possible to link against SPIRV-Cross when it is installed as a system library,
+which would be mostly relevant for Unix-like platforms.
+
+##### pkg-config
+
+For Unix-based systems, a pkg-config is installed for the C API, e.g.:
+
+```
+$ pkg-config spirv-cross-c-shared --libs --cflags
+-I/usr/local/include -L/usr/local/lib -lspirv-cross-c-shared
+```
+
+##### CMake
+
+If the project is installed, it can be found with `find_package()`, e.g.:
+
+```
+cmake_minimum_required(VERSION 3.5)
+set(CMAKE_C_STANDARD 99)
+project(Test LANGUAGES C)
+
+find_package(spirv_cross_c_shared)
+if (spirv_cross_c_shared_FOUND)
+        message(STATUS "Found SPIRV-Cross C API! :)")
+else()
+        message(STATUS "Could not find SPIRV-Cross C API! :(")
+endif()
+
+add_executable(test test.c)
+target_link_libraries(test spirv-cross-c-shared)
+```
+
+test.c:
+```c
+#include <spirv_cross/spirv_cross_c.h>
+
+int main(void)
+{
+        spvc_context context;
+        spvc_context_create(&context);
+        spvc_context_destroy(context);
+}
+```
+
+### CLI
+
+The CLI is suitable for basic cross-compilation tasks, but it cannot support the full flexibility that the API can.
+Some examples below.
+
+#### Creating a SPIR-V file from GLSL with glslang
 
 ```
 glslangValidator -H -V -o test.spv test.frag
 ```
 
-### Converting a SPIR-V file to GLSL ES
+#### Converting a SPIR-V file to GLSL ES
 
 ```
 glslangValidator -H -V -o test.spv shaders/comp/basic.comp
@@ -122,7 +196,7 @@ glslangValidator -H -V -o test.spv shaders/comp/basic.comp
 
 ```
 glslangValidator -H -V -o test.spv shaders/comp/basic.comp
-./spirv-cross --version 330 test.spv --output test.comp
+./spirv-cross --version 330 --no-es test.spv --output test.comp
 ```
 
 #### Disable prettifying optimizations
@@ -278,17 +352,22 @@ Contributions to SPIRV-Cross are welcome. See Testing and Licensing sections for
 ### Testing
 
 SPIRV-Cross maintains a test suite of shaders with reference output of how the output looks after going through a roundtrip through
-glslangValidator then back through SPIRV-Cross again. The reference files are stored inside the repository in order to be able to track regressions.
+glslangValidator/spirv-as then back through SPIRV-Cross again.
+The reference files are stored inside the repository in order to be able to track regressions.
 
 All pull requests should ensure that test output does not change unexpectedly. This can be tested with:
 
 ```
-./test_shaders.py shaders
-./test_shaders.py shaders --opt
-./test_shaders.py shaders-hlsl --hlsl
-./test_shaders.py shaders-hlsl --hlsl --opt
-./test_shaders.py shaders-msl --msl
-./test_shaders.py shaders-msl --msl --opt
+./test_shaders.py shaders || exit 1
+./test_shaders.py shaders --opt || exit 1
+./test_shaders.py shaders-no-opt || exit 1
+./test_shaders.py shaders-msl --msl || exit 1
+./test_shaders.py shaders-msl --msl --opt || exit 1
+./test_shaders.py shaders-msl-no-opt --msl || exit 1
+./test_shaders.py shaders-hlsl --hlsl || exit 1
+./test_shaders.py shaders-hlsl --hlsl --opt || exit 1
+./test_shaders.py shaders-hlsl-no-opt --hlsl || exit 1
+./test_shaders.py shaders-reflection --reflect || exit 1
 ```
 
 although there are a couple of convenience script for doing this:
@@ -316,6 +395,8 @@ A pull request which does not pass testing on Travis will not be accepted howeve
 
 When adding support for new features to SPIRV-Cross, a new shader and reference file should be added which covers usage of the new shader features in question.
 
+Travis CI runs the test suite with the CMake, by running `ctest`. This method is compatible with MSVC.
+
 ### Licensing
 
 Contributors of new files should add a copyright header at the top of every new source code file with their copyright
@@ -331,13 +412,6 @@ source files in the library. In this directory, run the following from the
 command line:
 
 	./format_all.sh
-
-## ABI concerns
-
-### SPIR-V headers
-
-The current repository uses the latest SPIR-V and GLSL.std.450 headers.
-SPIR-V files created from older headers could have ABI issues.
 
 ## Regression testing
 
