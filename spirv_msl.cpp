@@ -3357,23 +3357,25 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 				uint32_t const_mbr_id = next_id++;
 				uint32_t index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
+				uint32_t ptr = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
 				if (var->storage == StorageClassInput ||
 				    has_decoration(get_variable_element_type(*var).self, DecorationBlock))
 				{
 					uint32_t i = 4;
-					if (index == uint32_t(-1))
+					auto *type = &get_variable_element_type(*var);
+					if (index == uint32_t(-1) && length >= 5)
 					{
 						// Maybe this is a struct type in the input class, in which case
 						// we put it as a decoration on the corresponding member.
-						index =
-						    get_extended_member_decoration(ops[2], ops[4], SPIRVCrossDecorationInterfaceMemberIndex);
+						index = get_extended_member_decoration(ops[2], get_constant(ops[4]).scalar(),
+						                                       SPIRVCrossDecorationInterfaceMemberIndex);
 						assert(index != uint32_t(-1));
 						i++;
+						type = &get<SPIRType>(type->member_types[get_constant(ops[4]).scalar()]);
 					}
 					// In this case, we flattened structures and arrays, so now we have to
 					// combine the following indices. If we encounter a non-constant index,
 					// we're hosed.
-					auto *type = &get_variable_element_type(*var);
 					for (; i < length; ++i)
 					{
 						if (!is_array(*type) && !is_matrix(*type) && type->basetype != SPIRType::Struct)
@@ -3383,30 +3385,110 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 						index += c.scalar();
 						if (type->parent_type)
 							type = &get<SPIRType>(type->parent_type);
+						else if (type->basetype == SPIRType::Struct)
+							type = &get<SPIRType>(type->member_types[c.scalar()]);
 					}
-					set<SPIRConstant>(const_mbr_id, type_id, index, false);
-					indices.push_back(const_mbr_id);
+					// If the access chain terminates at a composite type, the composite
+					// itself might be copied. In that case, we must unflatten it.
+					if (is_matrix(*type) || is_array(*type) || type->basetype == SPIRType::Struct)
+					{
+						std::string temp_name = join(to_name(var->self), "_", ops[1]);
+						statement(variable_decl(*type, temp_name, var->self), ";");
+						// Set up the initializer for this temporary variable.
+						indices.push_back(const_mbr_id);
+						if (type->basetype == SPIRType::Struct)
+						{
+							for (uint32_t j = 0; j < type->member_types.size(); j++)
+							{
+								index =
+								    get_extended_member_decoration(ops[2], j, SPIRVCrossDecorationInterfaceMemberIndex);
+								const auto &mbr_type = get<SPIRType>(type->member_types[j]);
+								if (is_matrix(mbr_type))
+								{
+									for (uint32_t k = 0; k < mbr_type.columns; k++, index++)
+									{
+										set<SPIRConstant>(const_mbr_id, type_id, index, false);
+										auto e =
+										    access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+										statement(temp_name, ".", to_member_name(*type, j), "[", k, "] = ", e, ";");
+									}
+								}
+								else if (is_array(mbr_type))
+								{
+									for (uint32_t k = 0; k < mbr_type.array[0]; k++, index++)
+									{
+										set<SPIRConstant>(const_mbr_id, type_id, index, false);
+										auto e =
+										    access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+										statement(temp_name, ".", to_member_name(*type, j), "[", k, "] = ", e, ";");
+									}
+								}
+								else
+								{
+									set<SPIRConstant>(const_mbr_id, type_id, index, false);
+									auto e = access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+									statement(temp_name, ".", to_member_name(*type, j), " = ", e, ";");
+								}
+							}
+						}
+						else if (is_matrix(*type))
+						{
+							for (uint32_t j = 0; j < type->columns; j++, index++)
+							{
+								set<SPIRConstant>(const_mbr_id, type_id, index, false);
+								auto e = access_chain(ptr, indices.data(), indices.size(), *type, nullptr, true);
+								statement(temp_name, "[", j, "] = ", e, ";");
+							}
+						}
+						else // Must be an array
+						{
+							assert(is_array(*type));
+							for (uint32_t j = 0; j < type->array[0]; j++, index++)
+							{
+								set<SPIRConstant>(const_mbr_id, type_id, index, false);
+								auto e = access_chain(ptr, indices.data(), indices.size(), *type, nullptr, true);
+								statement(temp_name, "[", j, "] = ", e, ";");
+							}
+						}
 
-					indices.insert(indices.end(), &ops[i], &ops[length]);
+						// This needs to be a variable instead of an expression so we don't
+						// try to dereference this as a variable pointer.
+						set<SPIRVariable>(ops[1], ops[0], var->storage);
+						ir.meta[ops[1]] = ir.meta[ops[2]];
+						set_name(ops[1], temp_name);
+						if (has_decoration(var->self, DecorationInvariant))
+							set_decoration(ops[1], DecorationInvariant);
+						for (uint32_t j = 2; j < length; j++)
+							inherit_expression_dependencies(ops[1], ops[j]);
+						break;
+					}
+					else
+					{
+						set<SPIRConstant>(const_mbr_id, type_id, index, false);
+						indices.push_back(const_mbr_id);
+
+						if (i < length)
+							indices.insert(indices.end(), ops + i, ops + length);
+					}
 				}
 				else
 				{
+					assert(index != uint32_t(-1));
 					set<SPIRConstant>(const_mbr_id, type_id, index, false);
 					indices.push_back(const_mbr_id);
 
-					indices.insert(indices.end(), &ops[4], &ops[length]);
+					indices.insert(indices.end(), ops + 4, ops + length);
 				}
 
 				// We use the pointer to the base of the input/output array here,
 				// so this is always a pointer chain.
-				uint32_t ptr = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
 				auto e = access_chain(ptr, indices.data(), indices.size(), get<SPIRType>(ops[0]), &meta, true);
 				auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 				expr.loaded_from = var->self;
 				expr.need_transpose = meta.need_transpose;
 				expr.access_chain = true;
 
-				// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
+				// Mark the result as being packed if necessary.
 				if (meta.storage_is_packed)
 					set_extended_decoration(ops[1], SPIRVCrossDecorationPacked);
 				if (meta.storage_packed_type != 0)
