@@ -117,7 +117,9 @@ struct EntryPoint
 enum ExtendedDecorations
 {
 	SPIRVCrossDecorationPacked,
-	SPIRVCrossDecorationPackedType
+	SPIRVCrossDecorationPackedType,
+	SPIRVCrossDecorationInterfaceMemberIndex,
+	SPIRVCrossDecorationInterfaceOrigID,
 };
 
 class Compiler
@@ -200,6 +202,12 @@ public:
 
 	// Gets the SPIR-V type underlying a variable.
 	const SPIRType &get_variable_data_type(const SPIRVariable &var) const;
+
+	// Gets the SPIR-V element type underlying an array variable.
+	SPIRType &get_variable_element_type(const SPIRVariable &var);
+
+	// Gets the SPIR-V element type underlying an array variable.
+	const SPIRType &get_variable_element_type(const SPIRVariable &var) const;
 
 	// Returns if the given type refers to a sampled image.
 	bool is_sampled_image_type(const SPIRType &type);
