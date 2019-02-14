@@ -484,6 +484,8 @@ protected:
 
 	void analyze_sampled_image_usage();
 
+	bool emit_tessellation_control_access_chain(const uint32_t *ops, uint32_t length);
+
 	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
