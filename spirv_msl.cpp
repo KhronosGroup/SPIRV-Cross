@@ -2886,8 +2886,7 @@ bool CompilerMSL::emit_tessellation_control_access_chain(const uint32_t *ops, ui
 		uint32_t const_mbr_id = next_id++;
 		uint32_t index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
 		uint32_t ptr = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
-		if (var->storage == StorageClassInput ||
-		    has_decoration(get_variable_element_type(*var).self, DecorationBlock))
+		if (var->storage == StorageClassInput || has_decoration(get_variable_element_type(*var).self, DecorationBlock))
 		{
 			uint32_t i = 4;
 			auto *type = &get_variable_element_type(*var);
@@ -2928,16 +2927,14 @@ bool CompilerMSL::emit_tessellation_control_access_chain(const uint32_t *ops, ui
 				{
 					for (uint32_t j = 0; j < type->member_types.size(); j++)
 					{
-						index =
-								get_extended_member_decoration(ops[2], j, SPIRVCrossDecorationInterfaceMemberIndex);
+						index = get_extended_member_decoration(ops[2], j, SPIRVCrossDecorationInterfaceMemberIndex);
 						const auto &mbr_type = get<SPIRType>(type->member_types[j]);
 						if (is_matrix(mbr_type))
 						{
 							for (uint32_t k = 0; k < mbr_type.columns; k++, index++)
 							{
 								set<SPIRConstant>(const_mbr_id, type_id, index, false);
-								auto e =
-										access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+								auto e = access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
 								statement(temp_name, ".", to_member_name(*type, j), "[", k, "] = ", e, ";");
 							}
 						}
@@ -2946,8 +2943,7 @@ bool CompilerMSL::emit_tessellation_control_access_chain(const uint32_t *ops, ui
 							for (uint32_t k = 0; k < mbr_type.array[0]; k++, index++)
 							{
 								set<SPIRConstant>(const_mbr_id, type_id, index, false);
-								auto e =
-										access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+								auto e = access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
 								statement(temp_name, ".", to_member_name(*type, j), "[", k, "] = ", e, ";");
 							}
 						}
