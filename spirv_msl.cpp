@@ -878,7 +878,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 			if (((is_tessellation_shader() && var.storage == StorageClassInput) ||
 			     (get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassOutput)) &&
-			    !has_decoration(arg_id, DecorationPatch) &&
+			    !(has_decoration(arg_id, DecorationPatch) || is_patch_block(*p_type)) &&
 			    (!is_builtin_variable(var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
 			     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
 			     p_type->basetype == SPIRType::Struct))
@@ -1687,7 +1687,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		BuiltIn bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
 		if (var.storage == storage && interface_variable_exists_in_entry_point(var.self) &&
 		    !is_hidden_variable(var, incl_builtins) && type.pointer &&
-		    has_decoration(var_id, DecorationPatch) == patch &&
+		    (has_decoration(var_id, DecorationPatch) || is_patch_block(type)) == patch &&
 		    (!is_builtin_variable(var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
 		     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance || bi_type == BuiltInLayer ||
 		     bi_type == BuiltInViewportIndex || bi_type == BuiltInFragDepth || bi_type == BuiltInSampleMask ||
@@ -2925,7 +2925,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	if (var &&
 	    (var->storage == StorageClassInput ||
 	     (get_execution_model() == ExecutionModelTessellationControl && var->storage == StorageClassOutput)) &&
-	    !has_decoration(ops[2], DecorationPatch) &&
+	    !(has_decoration(ops[2], DecorationPatch) || is_patch_block(get_variable_data_type(*var))) &&
 	    (!is_builtin_variable(*var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
 	     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
 	     get_variable_data_type(*var).basetype == SPIRType::Struct))
@@ -4650,6 +4650,21 @@ string CompilerMSL::to_swizzle_expression(uint32_t id)
 		auto array_expr = expr.substr(index);
 		return image_expr + swizzle_name_suffix + array_expr;
 	}
+}
+
+// Checks whether the type is a Block all of whose members have DecorationPatch.
+bool CompilerMSL::is_patch_block(const SPIRType &type)
+{
+	if (!has_decoration(type.self, DecorationBlock))
+		return false;
+
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+	{
+		if (!has_member_decoration(type.self, i, DecorationPatch))
+			return false;
+	}
+
+	return true;
 }
 
 // Checks whether the ID is a row_major matrix that requires conversion before use

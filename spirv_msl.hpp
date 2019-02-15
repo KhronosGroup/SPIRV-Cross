@@ -388,6 +388,7 @@ protected:
 	void replace_illegal_names() override;
 	void declare_undefined_values() override;
 	void declare_constant_arrays();
+	bool is_patch_block(const SPIRType &type);
 	bool is_non_native_row_major_matrix(uint32_t id) override;
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, bool is_packed) override;
