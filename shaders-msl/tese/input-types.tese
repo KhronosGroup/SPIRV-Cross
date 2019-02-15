@@ -31,7 +31,7 @@ struct Foo
         vec4 b;
 };
 layout(location = 8) patch in Foo vFoo;
-//layout(location = 10) patch in Foo vFooArray[2];
+//layout(location = 10) patch in Foo vFooArray[2];  // FIXME: Handling of array-of-struct input is broken!
 
 // Per-control point struct.
 layout(location = 14) in Foo vFoos[];
