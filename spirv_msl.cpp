@@ -1094,7 +1094,7 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			statement(qual_var_name, " = ", remap_swizzle(padded_type, type_components, to_name(var.self)), ";");
 		});
 	}
-	else
+	else if (!strip_array)
 		ir.meta[var.self].decoration.qualified_alias = qual_var_name;
 
 	if (var.storage == StorageClassOutput && var.initializer != 0)
@@ -1253,29 +1253,33 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
 
-		switch (storage)
+		if (!strip_array)
 		{
-		case StorageClassInput:
-			entry_func.fixup_hooks_in.push_back(
-			    [=, &var]() { statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";"); });
-			break;
+			switch (storage)
+			{
+			case StorageClassInput:
+				entry_func.fixup_hooks_in.push_back(
+				    [=, &var]() { statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";"); });
+				break;
 
-		case StorageClassOutput:
-			entry_func.fixup_hooks_out.push_back([=, &var]() {
-				if (padded_output)
-				{
-					auto &padded_type = this->get<SPIRType>(type_id);
-					statement(ib_var_ref, ".", mbr_name, " = ",
-					          remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
-					          ";");
-				}
-				else
-					statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
-			});
-			break;
+			case StorageClassOutput:
+				entry_func.fixup_hooks_out.push_back([=, &var]() {
+					if (padded_output)
+					{
+						auto &padded_type = this->get<SPIRType>(type_id);
+						statement(
+						    ib_var_ref, ".", mbr_name, " = ",
+						    remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
+						    ";");
+					}
+					else
+						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
+				});
+				break;
 
-		default:
-			break;
+			default:
+				break;
+			}
 		}
 	}
 }
@@ -1389,24 +1393,27 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, mbr_idx);
 
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
-		switch (storage)
+		if (!strip_array)
 		{
-		case StorageClassInput:
-			entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
-				statement(to_name(var.self), ".", to_member_name(var_type, mbr_idx), "[", i, "] = ", ib_var_ref, ".",
-				          mbr_name, ";");
-			});
-			break;
+			switch (storage)
+			{
+			case StorageClassInput:
+				entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
+					statement(to_name(var.self), ".", to_member_name(var_type, mbr_idx), "[", i, "] = ", ib_var_ref,
+					          ".", mbr_name, ";");
+				});
+				break;
 
-		case StorageClassOutput:
-			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
-				statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), ".", to_member_name(var_type, mbr_idx),
-				          "[", i, "];");
-			});
-			break;
+			case StorageClassOutput:
+				entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
+					statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), ".",
+					          to_member_name(var_type, mbr_idx), "[", i, "];");
+				});
+				break;
 
-		default:
-			break;
+			default:
+				break;
+			}
 		}
 	}
 }
@@ -1443,13 +1450,13 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	// Update the original variable reference to include the structure reference
 	string qual_var_name = ib_var_ref + "." + mbr_name;
 
-	if (is_builtin || get_execution_model() == ExecutionModelTessellationControl)
+	if (is_builtin && !strip_array)
 	{
 		// For the builtin gl_PerVertex, we cannot treat it as a block anyways,
 		// so redirect to qualified name.
 		set_member_qualified_name(var_type.self, mbr_idx, qual_var_name);
 	}
-	else
+	else if (!strip_array)
 	{
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
 		switch (storage)
