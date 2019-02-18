@@ -5671,6 +5671,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				append_index();
 			}
 
+			if (type->basetype == SPIRType::ControlPointArray)
+			{
+				type_id = type->parent_type;
+				type = &get<SPIRType>(type_id);
+			}
+
 			access_chain_is_arrayed = true;
 		}
 		// Arrays

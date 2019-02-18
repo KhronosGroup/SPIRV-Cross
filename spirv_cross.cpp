@@ -2017,6 +2017,16 @@ ExecutionModel Compiler::get_execution_model() const
 	return execution.model;
 }
 
+bool Compiler::is_tessellation_shader(ExecutionModel model)
+{
+	return model == ExecutionModelTessellationControl || model == ExecutionModelTessellationEvaluation;
+}
+
+bool Compiler::is_tessellation_shader() const
+{
+	return is_tessellation_shader(get_execution_model());
+}
+
 void Compiler::set_remapped_variable_state(uint32_t id, bool remap_enable)
 {
 	get<SPIRVariable>(id).remapped_variable = remap_enable;

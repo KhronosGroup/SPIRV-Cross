@@ -360,6 +360,8 @@ public:
 	uint32_t get_execution_mode_argument(spv::ExecutionMode mode, uint32_t index = 0) const;
 	spv::ExecutionModel get_execution_model() const;
 
+	bool is_tessellation_shader() const;
+
 	// In SPIR-V, the compute work group size can be represented by a constant vector, in which case
 	// the LocalSize execution mode is ignored.
 	//
@@ -613,6 +615,7 @@ protected:
 
 	const SPIREntryPoint &get_entry_point() const;
 	SPIREntryPoint &get_entry_point();
+	static bool is_tessellation_shader(spv::ExecutionModel model);
 
 	virtual std::string to_name(uint32_t id, bool allow_alias = true) const;
 	bool is_builtin_variable(const SPIRVariable &var) const;
