@@ -236,7 +236,8 @@ public:
 	bool get_is_rasterization_disabled() const
 	{
 		return is_rasterization_disabled && (get_entry_point().model == spv::ExecutionModelVertex ||
-		                                     get_entry_point().model == spv::ExecutionModelTessellationControl);
+		                                     get_entry_point().model == spv::ExecutionModelTessellationControl ||
+		                                     get_entry_point().model == spv::ExecutionModelTessellationEvaluation);
 	}
 
 	// Provide feedback to calling API to allow it to pass an auxiliary
