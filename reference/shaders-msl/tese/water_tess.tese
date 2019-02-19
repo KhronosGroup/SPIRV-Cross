@@ -50,7 +50,7 @@ float3 sample_height_displacement(thread const float2& uv, thread const float2& 
 [[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant UBO& v_31 [[buffer(1)]], texture2d<float> uHeightmapDisplacement [[texture(0)]], sampler uHeightmapDisplacementSmplr [[sampler(0)]], float2 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    float2 tess_coord = gl_TessCoord.xy;
+    float2 tess_coord = float3(gl_TessCoord, 0).xy;
     float2 param = tess_coord;
     float2 pos = lerp_vertex(param, patchIn.vOutPatchPosBase, v_31);
     float2 param_1 = tess_coord;

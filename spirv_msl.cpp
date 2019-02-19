@@ -7147,6 +7147,14 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 
 	if (expected_type != expr_type.basetype)
 		expr = bitcast_expression(expr_type, expected_type, expr);
+
+	if (builtin == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads) && expr_type.vecsize == 3)
+	{
+		// In SPIR-V, this is always a vec3, even for quads. In Metal, though, it's a float2 for quads.
+		// The code is expecting a float3, so we need to widen this.
+		expr = join("float3(", expr, ", 0)");
+	}
+
 }
 
 void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)

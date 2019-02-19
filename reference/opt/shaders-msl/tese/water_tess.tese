@@ -29,9 +29,9 @@ struct main0_patchIn
 [[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant UBO& _31 [[buffer(1)]], texture2d<float> uHeightmapDisplacement [[texture(0)]], sampler uHeightmapDisplacementSmplr [[sampler(0)]], float2 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    float2 _201 = patchIn.vOutPatchPosBase + (gl_TessCoord.xy * _31.uPatchSize);
-    float2 _214 = mix(patchIn.vPatchLods.yx, patchIn.vPatchLods.zw, float2(gl_TessCoord.x));
-    float _221 = mix(_214.x, _214.y, gl_TessCoord.y);
+    float2 _201 = patchIn.vOutPatchPosBase + (float3(gl_TessCoord, 0).xy * _31.uPatchSize);
+    float2 _214 = mix(patchIn.vPatchLods.yx, patchIn.vPatchLods.zw, float2(float3(gl_TessCoord, 0).x));
+    float _221 = mix(_214.x, _214.y, float3(gl_TessCoord, 0).y);
     float _223 = floor(_221);
     float2 _125 = _201 * _31.uInvHeightmapSize;
     float2 _141 = _31.uInvHeightmapSize * exp2(_223);
