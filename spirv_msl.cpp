@@ -564,7 +564,6 @@ string CompilerMSL::compile()
 	options.version = 450;
 	backend.null_pointer_literal = "nullptr";
 	backend.float_literal_suffix = false;
-	backend.half_literal_suffix = "h";
 	backend.uint32_t_literal_suffix = true;
 	backend.int16_t_literal_suffix = nullptr;
 	backend.uint16_t_literal_suffix = "u";
