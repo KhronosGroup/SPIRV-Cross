@@ -5582,20 +5582,12 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					});
 				break;
 			case BuiltInTessCoord:
-				// Emit a fixup to account for the shifted domain. The fixup for triangles can be derived
-				// thus:
-				// u' = u
-				// w' = 1 - v
-				// v' = 1 - u' - w' = 1 - u - (1 - v) = v - u
-				// v and w are swapped because the winding must be reversed in lower-left mode.
-				if (msl_options.tess_domain_origin_lower_left)
+				// Emit a fixup to account for the shifted domain. Don't do this for triangles;
+				// MoltenVK will just reverse the winding order instead.
+				if (msl_options.tess_domain_origin_lower_left && !get_entry_point().flags.get(ExecutionModeTriangles))
 				{
 					string tc = to_expression(var_id);
-					if (get_entry_point().flags.get(ExecutionModeTriangles))
-						entry_func.fixup_hooks_in.push_back(
-						    [=]() { statement(tc, ".yz = float2(", tc, ".y - ", tc, ".x, 1.0 - ", tc, ".y);"); });
-					else
-						entry_func.fixup_hooks_in.push_back([=]() { statement(tc, ".y = 1.0 - ", tc, ".y;"); });
+					entry_func.fixup_hooks_in.push_back([=]() { statement(tc, ".y = 1.0 - ", tc, ".y;"); });
 				}
 				break;
 			default:
