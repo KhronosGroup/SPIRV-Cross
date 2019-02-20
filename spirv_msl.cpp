@@ -3105,8 +3105,8 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	if (get_execution_model() == ExecutionModelTessellationControl && var && m &&
 	    m->decoration.builtin_type == BuiltInTessLevelInner && get_entry_point().flags.get(ExecutionModeTriangles))
 	{
-		if (auto *c = maybe_get<SPIRConstant>(ops[3]))
-			if (c->scalar() == 1) return false;
+		auto *c = maybe_get<SPIRConstant>(ops[3]);
+		if (c && c->scalar() == 1) return false;
 		auto &dest_var = set<SPIRVariable>(ops[1], *var);
 		dest_var.basetype = ops[0];
 		ir.meta[ops[1]] = ir.meta[ops[2]];
@@ -3117,7 +3117,8 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	return false;
 }
 
-bool CompilerMSL::is_out_of_bounds_tessellation_level(uint32_t id_lhs) {
+bool CompilerMSL::is_out_of_bounds_tessellation_level(uint32_t id_lhs)
+{
 	if (!get_entry_point().flags.get(ExecutionModeTriangles))
 		return false;
 
@@ -7183,7 +7184,6 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 		// The code is expecting a float3, so we need to widen this.
 		expr = join("float3(", expr, ", 0)");
 	}
-
 }
 
 void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
