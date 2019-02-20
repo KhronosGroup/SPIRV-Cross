@@ -489,6 +489,7 @@ protected:
 	void analyze_sampled_image_usage();
 
 	bool emit_tessellation_access_chain(const uint32_t *ops, uint32_t length);
+	bool is_out_of_bounds_tessellation_level(uint32_t id_lhs);
 
 	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
