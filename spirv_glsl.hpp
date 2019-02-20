@@ -380,7 +380,6 @@ protected:
 		const char *basic_uint8_type = "uint8_t";
 		const char *basic_int16_type = "int16_t";
 		const char *basic_uint16_type = "uint16_t";
-		const char *half_literal_suffix = "hf";
 		const char *int16_t_literal_suffix = "s";
 		const char *uint16_t_literal_suffix = "us";
 		bool swizzle_is_function = false;
