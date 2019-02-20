@@ -3106,7 +3106,8 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	    m->decoration.builtin_type == BuiltInTessLevelInner && get_entry_point().flags.get(ExecutionModeTriangles))
 	{
 		auto *c = maybe_get<SPIRConstant>(ops[3]);
-		if (c && c->scalar() == 1) return false;
+		if (c && c->scalar() == 1)
+			return false;
 		auto &dest_var = set<SPIRVariable>(ops[1], *var);
 		dest_var.basetype = ops[0];
 		ir.meta[ops[1]] = ir.meta[ops[2]];
@@ -3132,12 +3133,16 @@ bool CompilerMSL::is_out_of_bounds_tessellation_level(uint32_t id_lhs)
 	// on the patch type. Therefore, in Triangles mode, any access to the second
 	// inner level or the fourth outer level must be dropped.
 	const auto *e = maybe_get<SPIRExpression>(id_lhs);
-	if (!e || !e->access_chain) return false;
+	if (!e || !e->access_chain)
+		return false;
 	BuiltIn builtin = BuiltIn(get_decoration(e->loaded_from, DecorationBuiltIn));
-	if (builtin != BuiltInTessLevelInner && builtin != BuiltInTessLevelOuter) return false;
+	if (builtin != BuiltInTessLevelInner && builtin != BuiltInTessLevelOuter)
+		return false;
 	auto *c = maybe_get<SPIRConstant>(e->implied_read_expressions[1]);
-	if (!c) return false;
-	return (builtin == BuiltInTessLevelInner && c->scalar() == 1) || (builtin == BuiltInTessLevelOuter && c->scalar() == 3);
+	if (!c)
+		return false;
+	return (builtin == BuiltInTessLevelInner && c->scalar() == 1) ||
+	       (builtin == BuiltInTessLevelOuter && c->scalar() == 3);
 }
 
 // Override for MSL-specific syntax instructions
