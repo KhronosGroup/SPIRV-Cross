@@ -135,8 +135,12 @@ def cross_compile_msl(shader, spirv, opt):
     spirv_path = create_temporary()
     msl_path = create_temporary(os.path.basename(shader))
 
+    spirv_cmd = ['spirv-as', '-o', spirv_path, shader]
+    if '.preserve.' in shader:
+        spirv_cmd.append('--preserve-numeric-ids')
+
     if spirv:
-        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+        subprocess.check_call(spirv_cmd)
     else:
         subprocess.check_call(['glslangValidator', '--target-env', 'vulkan1.1', '-V', '-o', spirv_path, shader])
 
@@ -231,8 +235,12 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation):
     spirv_path = create_temporary()
     hlsl_path = create_temporary(os.path.basename(shader))
 
+    spirv_cmd = ['spirv-as', '-o', spirv_path, shader]
+    if '.preserve.' in shader:
+        spirv_cmd.append('--preserve-numeric-ids')
+
     if spirv:
-        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+        subprocess.check_call(spirv_cmd)
     else:
         subprocess.check_call(['glslangValidator', '--target-env', 'vulkan1.1', '-V', '-o', spirv_path, shader])
 
@@ -255,8 +263,12 @@ def cross_compile_reflect(shader, spirv, opt):
     spirv_path = create_temporary()
     reflect_path = create_temporary(os.path.basename(shader))
 
+    spirv_cmd = ['spirv-as', '-o', spirv_path, shader]
+    if '.preserve.' in shader:
+        spirv_cmd.append('--preserve-numeric-ids')
+
     if spirv:
-        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+        subprocess.check_call(spirv_cmd)
     else:
         subprocess.check_call(['glslangValidator', '--target-env', 'vulkan1.1', '-V', '-o', spirv_path, shader])
 
@@ -282,8 +294,12 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if vulkan or spirv:
         vulkan_glsl_path = create_temporary('vk' + os.path.basename(shader))
 
+    spirv_cmd = ['spirv-as', '-o', spirv_path, shader]
+    if '.preserve.' in shader:
+        spirv_cmd.append('--preserve-numeric-ids')
+
     if spirv:
-        subprocess.check_call(['spirv-as', '-o', spirv_path, shader])
+        subprocess.check_call(spirv_cmd)
     else:
         subprocess.check_call(['glslangValidator', '--target-env', 'vulkan1.1', '-V', '-o', spirv_path, shader])
 

@@ -565,7 +565,9 @@ protected:
 	template <typename T>
 	T *maybe_get(uint32_t id)
 	{
-		if (ir.ids[id].get_type() == static_cast<Types>(T::type))
+		if (id >= ir.ids.size())
+			return nullptr;
+		else if (ir.ids[id].get_type() == static_cast<Types>(T::type))
 			return &get<T>(id);
 		else
 			return nullptr;
@@ -982,6 +984,7 @@ private:
 
 	void fixup_type_alias();
 	bool type_is_block_like(const SPIRType &type) const;
+	bool type_is_opaque_value(const SPIRType &type) const;
 };
 } // namespace spirv_cross
 
