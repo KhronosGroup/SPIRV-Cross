@@ -8940,7 +8940,7 @@ bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!ir.meta[id].decoration.decoration_flags.get(DecorationRowMajor))
+	if (!has_decoration(id, DecorationRowMajor))
 		return false;
 
 	// Only square row-major matrices can be converted at this time.
@@ -8961,7 +8961,7 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!combined_decoration_for_member(type, index).get(DecorationRowMajor))
+	if (!has_member_decoration(type.self, index, DecorationRowMajor))
 		return false;
 
 	// Only square row-major matrices can be converted at this time.
