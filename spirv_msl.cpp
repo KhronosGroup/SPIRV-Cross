@@ -38,7 +38,7 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_a
 		for (auto &va : *p_vtx_attrs)
 		{
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -56,7 +56,7 @@ CompilerMSL::CompilerMSL(const uint32_t *ir_, size_t word_count, MSLVertexAttr *
 		{
 			auto &va = p_vtx_attrs[i];
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -74,7 +74,7 @@ CompilerMSL::CompilerMSL(const ParsedIR &ir_, MSLVertexAttr *p_vtx_attrs, size_t
 		{
 			auto &va = p_vtx_attrs[i];
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -92,7 +92,7 @@ CompilerMSL::CompilerMSL(ParsedIR &&ir_, MSLVertexAttr *p_vtx_attrs, size_t vtx_
 		{
 			auto &va = p_vtx_attrs[i];
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
