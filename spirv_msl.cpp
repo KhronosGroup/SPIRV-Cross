@@ -687,7 +687,11 @@ string CompilerMSL::compile(vector<MSLVertexAttr> *p_vtx_attrs, vector<MSLResour
 	{
 		vtx_attrs_by_location.clear();
 		for (auto &va : *p_vtx_attrs)
+		{
 			vtx_attrs_by_location[va.location] = &va;
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
+				vtx_attrs_by_builtin[va.builtin] = &va;
+		}
 	}
 
 	if (p_res_bindings)
