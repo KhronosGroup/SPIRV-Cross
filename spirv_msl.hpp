@@ -48,6 +48,7 @@ struct MSLVertexAttr
 	uint32_t msl_stride = 0;
 	bool per_instance = false;
 	MSLVertexFormat format = MSL_VERTEX_FORMAT_OTHER;
+	spv::BuiltIn builtin = spv::BuiltInMax;
 	bool used_by_shader = false;
 };
 
@@ -494,6 +495,7 @@ protected:
 	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
 	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_location;
+	std::unordered_map<uint32_t, MSLVertexAttr *> vtx_attrs_by_builtin;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::unordered_map<MSLStructMemberKey, uint32_t> struct_member_padding;
 	std::set<std::string> pragma_lines;

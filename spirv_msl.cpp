@@ -36,7 +36,11 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_a
 {
 	if (p_vtx_attrs)
 		for (auto &va : *p_vtx_attrs)
+		{
 			vtx_attrs_by_location[va.location] = &va;
+			if (va.builtin != BuiltInMax)
+				vtx_attrs_by_builtin[va.builtin] = &va;
+		}
 
 	if (p_res_bindings)
 		for (auto &rb : *p_res_bindings)
@@ -49,7 +53,12 @@ CompilerMSL::CompilerMSL(const uint32_t *ir_, size_t word_count, MSLVertexAttr *
 {
 	if (p_vtx_attrs)
 		for (size_t i = 0; i < vtx_attrs_count; i++)
-			vtx_attrs_by_location[p_vtx_attrs[i].location] = &p_vtx_attrs[i];
+		{
+			auto &va = p_vtx_attrs[i];
+			vtx_attrs_by_location[va.location] = &va;
+			if (va.builtin != BuiltInMax)
+				vtx_attrs_by_builtin[va.builtin] = &va;
+		}
 
 	if (p_res_bindings)
 		for (size_t i = 0; i < res_bindings_count; i++)
@@ -62,7 +71,12 @@ CompilerMSL::CompilerMSL(const ParsedIR &ir_, MSLVertexAttr *p_vtx_attrs, size_t
 {
 	if (p_vtx_attrs)
 		for (size_t i = 0; i < vtx_attrs_count; i++)
-			vtx_attrs_by_location[p_vtx_attrs[i].location] = &p_vtx_attrs[i];
+		{
+			auto &va = p_vtx_attrs[i];
+			vtx_attrs_by_location[va.location] = &va;
+			if (va.builtin != BuiltInMax)
+				vtx_attrs_by_builtin[va.builtin] = &va;
+		}
 
 	if (p_res_bindings)
 		for (size_t i = 0; i < res_bindings_count; i++)
@@ -75,7 +89,12 @@ CompilerMSL::CompilerMSL(ParsedIR &&ir_, MSLVertexAttr *p_vtx_attrs, size_t vtx_
 {
 	if (p_vtx_attrs)
 		for (size_t i = 0; i < vtx_attrs_count; i++)
-			vtx_attrs_by_location[p_vtx_attrs[i].location] = &p_vtx_attrs[i];
+		{
+			auto &va = p_vtx_attrs[i];
+			vtx_attrs_by_location[va.location] = &va;
+			if (va.builtin != BuiltInMax)
+				vtx_attrs_by_builtin[va.builtin] = &va;
+		}
 
 	if (p_res_bindings)
 		for (size_t i = 0; i < res_bindings_count; i++)
@@ -1118,6 +1137,13 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 		mark_location_as_used_by_shader(locn, storage);
 	}
+	else if (is_builtin && is_tessellation_shader() && vtx_attrs_by_builtin.count(builtin))
+	{
+		uint32_t locn = vtx_attrs_by_builtin[builtin]->location;
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
+		mark_location_as_used_by_shader(locn, storage);
+	}
+
 
 	if (get_decoration_bitset(var.self).get(DecorationComponent))
 	{
@@ -1174,6 +1200,8 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		elem_cnt = to_array_size_literal(var_type);
 	}
 
+	bool is_builtin = is_builtin_variable(var);
+	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 	bool is_flat = has_decoration(var.self, DecorationFlat);
 	bool is_noperspective = has_decoration(var.self, DecorationNoPerspective);
 	bool is_centroid = has_decoration(var.self, DecorationCentroid);
@@ -1184,6 +1212,10 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		usable_type = &get<SPIRType>(usable_type->parent_type);
 	while (is_array(*usable_type) || is_matrix(*usable_type))
 		usable_type = &get<SPIRType>(usable_type->parent_type);
+
+	// If a builtin, force it to have the proper name.
+	if (is_builtin)
+		set_name(var.self, builtin_to_glsl(builtin, StorageClassFunction));
 
 	entry_func.add_local_variable(var.self);
 
@@ -1230,6 +1262,12 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 				uint32_t mbr_type_id = ensure_correct_attribute_type(usable_type->self, locn);
 				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 			}
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
+			mark_location_as_used_by_shader(locn, storage);
+		}
+		else if (is_builtin && is_tessellation_shader() && vtx_attrs_by_builtin.count(builtin))
+		{
+			uint32_t locn = vtx_attrs_by_builtin[builtin]->location + i;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, storage);
 		}
@@ -1318,6 +1356,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 	auto &var_type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
 
+	BuiltIn builtin;
+	bool is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 	bool is_flat =
 	    has_member_decoration(var_type.self, mbr_idx, DecorationFlat) || has_decoration(var.self, DecorationFlat);
 	bool is_noperspective = has_member_decoration(var_type.self, mbr_idx, DecorationNoPerspective) ||
@@ -1371,6 +1411,12 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		else if (has_decoration(var.self, DecorationLocation))
 		{
 			uint32_t locn = get_accumulated_member_location(var, mbr_idx, strip_array) + i;
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
+			mark_location_as_used_by_shader(locn, storage);
+		}
+		else if (is_builtin && is_tessellation_shader() && vtx_attrs_by_builtin.count(builtin))
+		{
+			uint32_t locn = vtx_attrs_by_builtin[builtin]->location + i;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, storage);
 		}
@@ -1501,6 +1547,12 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 		}
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
+		mark_location_as_used_by_shader(locn, storage);
+	}
+	else if (is_builtin && is_tessellation_shader() && vtx_attrs_by_builtin.count(builtin))
+	{
+		uint32_t locn = vtx_attrs_by_builtin[builtin]->location;
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 		mark_location_as_used_by_shader(locn, storage);
 	}
