@@ -4861,7 +4861,7 @@ void CompilerMSL::emit_fixup()
 {
 	if ((get_execution_model() == ExecutionModelVertex ||
 	     get_execution_model() == ExecutionModelTessellationEvaluation) &&
-	    stage_out_var_id && !qual_pos_var_name.empty())
+	    stage_out_var_id && !qual_pos_var_name.empty() && !capture_output_to_buffer)
 	{
 		if (options.vertex.fixup_clipspace)
 			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
