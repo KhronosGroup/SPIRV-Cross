@@ -38,7 +38,7 @@ CompilerMSL::CompilerMSL(vector<uint32_t> spirv_, vector<MSLVertexAttr> *p_vtx_a
 		for (auto &va : *p_vtx_attrs)
 		{
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -56,7 +56,7 @@ CompilerMSL::CompilerMSL(const uint32_t *ir_, size_t word_count, MSLVertexAttr *
 		{
 			auto &va = p_vtx_attrs[i];
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -74,7 +74,7 @@ CompilerMSL::CompilerMSL(const ParsedIR &ir_, MSLVertexAttr *p_vtx_attrs, size_t
 		{
 			auto &va = p_vtx_attrs[i];
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -92,7 +92,7 @@ CompilerMSL::CompilerMSL(ParsedIR &&ir_, MSLVertexAttr *p_vtx_attrs, size_t vtx_
 		{
 			auto &va = p_vtx_attrs[i];
 			vtx_attrs_by_location[va.location] = &va;
-			if (va.builtin != BuiltInMax)
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
 				vtx_attrs_by_builtin[va.builtin] = &va;
 		}
 
@@ -687,7 +687,11 @@ string CompilerMSL::compile(vector<MSLVertexAttr> *p_vtx_attrs, vector<MSLResour
 	{
 		vtx_attrs_by_location.clear();
 		for (auto &va : *p_vtx_attrs)
+		{
 			vtx_attrs_by_location[va.location] = &va;
+			if (va.builtin != BuiltInMax && !vtx_attrs_by_builtin.count(va.builtin))
+				vtx_attrs_by_builtin[va.builtin] = &va;
+		}
 	}
 
 	if (p_res_bindings)
@@ -1143,7 +1147,6 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 		mark_location_as_used_by_shader(locn, storage);
 	}
-
 
 	if (get_decoration_bitset(var.self).get(DecorationComponent))
 	{
@@ -1895,7 +1898,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		pcp_type.parent_type = pcp_type.type_alias = get_stage_in_struct_type().self;
 		pcp_type.storage = storage;
 		ir.meta[pcp_type_id] = ir.meta[ib_type.self];
-		uint32_t mbr_idx = ib_type.member_types.size();
+		uint32_t mbr_idx = uint32_t(ib_type.member_types.size());
 		ib_type.member_types.push_back(pcp_type_id);
 		set_member_name(ib_type.self, mbr_idx, "gl_in");
 	}
@@ -3052,7 +3055,8 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 							for (uint32_t k = 0; k < mbr_type.columns; k++, index++)
 							{
 								set<SPIRConstant>(const_mbr_id, type_id, index, false);
-								auto e = access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+								auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), mbr_type, nullptr,
+								                      true);
 								statement(temp_name, ".", to_member_name(*type, j), "[", k, "] = ", e, ";");
 							}
 						}
@@ -3061,14 +3065,16 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 							for (uint32_t k = 0; k < mbr_type.array[0]; k++, index++)
 							{
 								set<SPIRConstant>(const_mbr_id, type_id, index, false);
-								auto e = access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+								auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), mbr_type, nullptr,
+								                      true);
 								statement(temp_name, ".", to_member_name(*type, j), "[", k, "] = ", e, ";");
 							}
 						}
 						else
 						{
 							set<SPIRConstant>(const_mbr_id, type_id, index, false);
-							auto e = access_chain(ptr, indices.data(), indices.size(), mbr_type, nullptr, true);
+							auto e =
+							    access_chain(ptr, indices.data(), uint32_t(indices.size()), mbr_type, nullptr, true);
 							statement(temp_name, ".", to_member_name(*type, j), " = ", e, ";");
 						}
 					}
@@ -3078,7 +3084,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 					for (uint32_t j = 0; j < type->columns; j++, index++)
 					{
 						set<SPIRConstant>(const_mbr_id, type_id, index, false);
-						auto e = access_chain(ptr, indices.data(), indices.size(), *type, nullptr, true);
+						auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), *type, nullptr, true);
 						statement(temp_name, "[", j, "] = ", e, ";");
 					}
 				}
@@ -3088,7 +3094,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 					for (uint32_t j = 0; j < type->array[0]; j++, index++)
 					{
 						set<SPIRConstant>(const_mbr_id, type_id, index, false);
-						auto e = access_chain(ptr, indices.data(), indices.size(), *type, nullptr, true);
+						auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), *type, nullptr, true);
 						statement(temp_name, "[", j, "] = ", e, ";");
 					}
 				}
@@ -3124,7 +3130,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 		// We use the pointer to the base of the input/output array here,
 		// so this is always a pointer chain.
-		auto e = access_chain(ptr, indices.data(), indices.size(), get<SPIRType>(ops[0]), &meta, true);
+		auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), get<SPIRType>(ops[0]), &meta, true);
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 		expr.loaded_from = var->self;
 		expr.need_transpose = meta.need_transpose;
