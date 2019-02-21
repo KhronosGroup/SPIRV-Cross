@@ -1185,6 +1185,13 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 	while (is_array(*usable_type) || is_matrix(*usable_type))
 		usable_type = &get<SPIRType>(usable_type->parent_type);
 
+	// If a builtin, force it to have the proper name.
+	if (is_builtin_variable(var))
+	{
+		BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+		set_name(var.self, builtin_to_glsl(builtin, StorageClassFunction));
+	}
+
 	entry_func.add_local_variable(var.self);
 
 	// We need to declare the variable early and at entry-point scope.
