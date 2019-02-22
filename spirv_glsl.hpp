@@ -401,6 +401,7 @@ protected:
 		bool supports_extensions = false;
 		bool supports_empty_struct = false;
 		bool array_is_value_type = true;
+		bool comparison_image_samples_scalar = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
