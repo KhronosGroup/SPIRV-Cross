@@ -1916,6 +1916,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				statement("    ", input_wg_var_name, "[", to_expression(builtin_invocation_id_id), "] = ", ib_var_ref,
 				          ";");
 				statement("threadgroup_barrier(mem_flags::mem_threadgroup);");
+				statement("if (", to_expression(builtin_invocation_id_id), " >= ", get_entry_point().output_vertices, ")");
+				statement("    return;");
 			});
 		}
 		break;
