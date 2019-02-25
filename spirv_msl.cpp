@@ -560,7 +560,7 @@ void CompilerMSL::emit_entry_point_declarations()
 	{
 		const auto &var = get<SPIRVariable>(array_id);
 		const auto &type = get_variable_data_type(var);
-		string name = get_name(array_id);
+		string name = to_name(array_id);
 		statement(get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + name + "[] =");
 		begin_scope();
 		for (uint32_t i = 0; i < type.array[0]; ++i)
