@@ -1607,6 +1607,18 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	{
 		return "uniform ";
 	}
+	else if (var.storage == StorageClassRayPayloadNV)
+	{
+		return "rayPayloadNV ";
+	}
+	else if (var.storage == StorageClassIncomingRayPayloadNV)
+	{
+		return "rayPayloadInNV ";
+	}
+	else if (var.storage == StorageClassHitAttributeNV)
+	{
+		return "hitAttributeNV ";
+	}
 
 	return "";
 }
@@ -2317,7 +2329,9 @@ void CompilerGLSL::emit_resources()
 		}
 
 		if (var.storage != StorageClassFunction && type.pointer &&
-		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
+		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
+		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassHitAttributeNV ||
+		     type.storage == StorageClassIncomingRayPayloadNV) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
@@ -5586,6 +5600,35 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
 		require_extension_internal("GL_KHR_shader_subgroup_ballot");
 		return "gl_SubgroupLtMask";
+
+	case BuiltInLaunchIdNV:
+		return "gl_LaunchIDNV";
+	case BuiltInLaunchSizeNV:
+		return "gl_LaunchSizeNV";
+	case BuiltInWorldRayOriginNV:
+		return "gl_WorldRayOriginNV";
+	case BuiltInWorldRayDirectionNV:
+		return "gl_WorldRayDirectionNV";
+	case BuiltInObjectRayOriginNV:
+		return "gl_ObjectRayOriginNV";
+	case BuiltInObjectRayDirectionNV:
+		return "gl_ObjectRayDirectionNV";
+	case BuiltInRayTminNV:
+		return "gl_RayTminNV";
+	case BuiltInRayTmaxNV:
+		return "gl_RayTmaxNV";
+	case BuiltInInstanceCustomIndexNV:
+		return "gl_InstanceCustomIndexNV";
+	case BuiltInObjectToWorldNV:
+		return "gl_ObjectToWorldNV";
+	case BuiltInWorldToObjectNV:
+		return "gl_WorldToObjectNV";
+	case BuiltInHitTNV:
+		return "gl_HitTNV";
+	case BuiltInHitKindNV:
+		return "gl_HitKindNV";
+	case BuiltInIncomingRayFlagsNV:
+		return "gl_IncomingRayFlagsNV";
 
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
@@ -8881,6 +8924,25 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		GLSL_BFOP(unsupported_FUnordGreaterThanEqual);
 		break;
 
+	case OpReportIntersectionNV:
+		statement("reportIntersectionNV(", to_func_call_arg(ops[0]), ", ", to_func_call_arg(ops[1]), ");");
+		break;
+	case OpIgnoreIntersectionNV:
+		statement("ignoreIntersectionNV();");
+		break;
+	case OpTerminateRayNV:
+		statement("terminateRayNV();");
+		break;
+	case OpTraceNV:
+		statement("traceNV(", to_func_call_arg(ops[0]), ", ", to_func_call_arg(ops[1]), ", ", to_func_call_arg(ops[2]),
+		          ", ", to_func_call_arg(ops[3]), ", ", to_func_call_arg(ops[4]), ", ", to_func_call_arg(ops[5]), ", ",
+		          to_func_call_arg(ops[6]), ", ", to_func_call_arg(ops[7]), ", ", to_func_call_arg(ops[8]), ", ",
+		          to_func_call_arg(ops[9]), ", ", to_func_call_arg(ops[10]), ");");
+		break;
+	case OpExecuteCallableNV:
+		statement("executeCallableNV(", to_func_call_arg(ops[0]), ", ", to_func_call_arg(ops[1]), ");");
+		break;
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;
@@ -9428,6 +9490,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		// The depth field is set by calling code based on the variable ID of the sampler, effectively reintroducing
 		// this distinction into the type system.
 		return comparison_ids.count(id) ? "samplerShadow" : "sampler";
+
+	case SPIRType::AccelerationStructureNV:
+		return "accelerationStructureNV";
 
 	case SPIRType::Void:
 		return "void";
