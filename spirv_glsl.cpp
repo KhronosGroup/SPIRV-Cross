@@ -174,7 +174,7 @@ void CompilerGLSL::init()
 		current_locale_radix_character = *conv->decimal_point;
 #else
 	// localeconv, the portable function is not MT safe ...
-	const char *decimal_point = nl_langinfo(DECIMAL_POINT);
+	const char *decimal_point = nl_langinfo(RADIXCHAR);
 	if (decimal_point && *decimal_point != '\0')
 		current_locale_radix_character = *decimal_point;
 #endif
