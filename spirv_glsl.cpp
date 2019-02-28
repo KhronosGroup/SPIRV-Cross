@@ -24,6 +24,11 @@
 #include <locale.h>
 #include <utility>
 
+#ifndef _WIN32
+#include <langinfo.h>
+#endif
+#include <locale.h>
+
 using namespace spv;
 using namespace spirv_cross;
 using namespace std;
@@ -162,9 +167,17 @@ void CompilerGLSL::init()
 	// We'll rely on fixing it up ourselves in the rare case we have a comma-as-decimal locale
 	// rather than setting locales ourselves. Settings locales in a safe and isolated way is rather
 	// tricky.
-	const lconv *loc = localeconv();
-	if (loc && loc->decimal_point)
-		current_locale_radix_character = *loc->decimal_point;
+#ifdef _WIN32
+	// On Windows, localeconv uses thread-local storage, so it should be fine.
+	const struct lconv *conv = localeconv();
+	if (conv && conv->decimal_point)
+		current_locale_radix_character = *conv->decimal_point;
+#else
+	// localeconv, the portable function is not MT safe ...
+	const char *decimal_point = nl_langinfo(DECIMAL_POINT);
+	if (decimal_point && *decimal_point != '\0')
+		current_locale_radix_character = *decimal_point;
+#endif
 }
 
 static const char *to_pls_layout(PlsFormat format)
