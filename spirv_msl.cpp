@@ -546,8 +546,8 @@ void CompilerMSL::emit_entry_point_declarations()
 			args.push_back(join("max_anisotropy(", s.max_anisotropy, ")"));
 		if (s.lod_clamp_enable)
 		{
-			args.push_back(
-			    join("lod_clamp(", convert_to_string(s.lod_clamp_min), ", ", convert_to_string(s.lod_clamp_max), ")"));
+			args.push_back(join("lod_clamp(", convert_to_string(s.lod_clamp_min, current_locale_radix_character), ", ",
+			                    convert_to_string(s.lod_clamp_max, current_locale_radix_character), ")"));
 		}
 
 		statement("constexpr sampler ",
@@ -574,9 +574,6 @@ void CompilerMSL::emit_entry_point_declarations()
 
 string CompilerMSL::compile()
 {
-	// Force a classic "C" locale, reverts when function returns
-	ClassicLocale classic_locale;
-
 	// Do not deal with GLES-isms like precision, older extensions and such.
 	options.vulkan_semantics = true;
 	options.es = false;
@@ -1916,7 +1913,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				statement("    ", input_wg_var_name, "[", to_expression(builtin_invocation_id_id), "] = ", ib_var_ref,
 				          ";");
 				statement("threadgroup_barrier(mem_flags::mem_threadgroup);");
-				statement("if (", to_expression(builtin_invocation_id_id), " >= ", get_entry_point().output_vertices, ")");
+				statement("if (", to_expression(builtin_invocation_id_id), " >= ", get_entry_point().output_vertices,
+				          ")");
 				statement("    return;");
 			});
 		}
