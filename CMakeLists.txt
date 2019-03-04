@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_CXX_STANDARD 11)
-project(SPIRV-Cross LANGUAGES CXX)
+project(SPIRV-Cross LANGUAGES CXX C)
 enable_testing()
 
 option(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS "Instead of throwing exceptions assert" OFF)
@@ -157,6 +157,13 @@ if (SPIRV_CROSS_STATIC)
 	target_link_libraries(spirv-cross-msl PRIVATE spirv-cross-glsl)
 	target_link_libraries(spirv-cross-hlsl PRIVATE spirv-cross-glsl)
 	target_link_libraries(spirv-cross-cpp PRIVATE spirv-cross-glsl)
+	target_link_libraries(spirv-cross-c PRIVATE
+			spirv-cross-core
+			spirv-cross-glsl
+			spirv-cross-hlsl
+			spirv-cross-msl
+			spirv-cross-cpp
+			spirv-cross-reflect)
 endif()
 
 if (SPIRV_CROSS_SHARED)
@@ -220,6 +227,13 @@ if (SPIRV_CROSS_CLI)
 	find_package(PythonInterp)
 	if (${PYTHONINTERP_FOUND})
 		if (${PYTHON_VERSION_MAJOR} GREATER 2)
+			add_executable(spirv-cross-c-api-test tests-other/c_api_test.c)
+			target_link_libraries(spirv-cross-c-api-test spirv-cross-c)
+			if (CMAKE_COMPILER_IS_GNUCXX OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
+				target_compile_options(spirv-cross-c-api-test PRIVATE -std=c89 -Wall -Wextra)
+			endif()
+			add_test(NAME spirv-cross-c-api-test
+				COMMAND $<TARGET_FILE:spirv-cross-c-api-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c-api-test.spv)
 			add_test(NAME spirv-cross-test
 				COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
 				${CMAKE_CURRENT_SOURCE_DIR}/shaders
