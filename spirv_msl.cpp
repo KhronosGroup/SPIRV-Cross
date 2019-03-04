@@ -5753,7 +5753,17 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	if (itr != end(resource_bindings))
 	{
 		itr->second = true;
-		return itr->first.msl_resource_index;
+		switch (basetype)
+		{
+		case SPIRType::Struct:
+			return itr->first.msl_buffer;
+		case SPIRType::Image:
+			return itr->first.msl_texture;
+		case SPIRType::Sampler:
+			return itr->first.msl_sampler;
+		default:
+			return 0;
+		}
 	}
 
 	// If there is no explicit mapping of bindings to MSL, use the declared binding.

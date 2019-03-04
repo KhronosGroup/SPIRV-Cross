@@ -59,7 +59,9 @@ struct MSLResourceBinding
 	spv::ExecutionModel stage = spv::ExecutionModelMax;
 	uint32_t desc_set = 0;
 	uint32_t binding = 0;
-	uint32_t msl_resource_index = 0;
+	uint32_t msl_buffer = 0;
+	uint32_t msl_texture = 0;
+	uint32_t msl_sampler = 0;
 };
 
 enum MSLSamplerCoord

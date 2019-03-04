@@ -535,7 +535,7 @@ spvc_result spvc_compiler_flatten_buffer_block(spvc_compiler compiler, spvc_vari
 }
 
 spvc_result spvc_compiler_hlsl_set_root_constants_layout(spvc_compiler compiler,
-                                                         const struct spvc_hlsl_root_constants *constant_info,
+                                                         const spvc_hlsl_root_constants *constant_info,
                                                          size_t count)
 {
 	if (compiler->backend != SPVC_BACKEND_HLSL)
@@ -562,7 +562,7 @@ spvc_result spvc_compiler_hlsl_set_root_constants_layout(spvc_compiler compiler,
 }
 
 spvc_result spvc_compiler_hlsl_add_vertex_attribute_remap(spvc_compiler compiler,
-                                                          const struct spvc_hlsl_vertex_attribute_remap *remap,
+                                                          const spvc_hlsl_vertex_attribute_remap *remap,
                                                           size_t count)
 {
 	if (compiler->backend != SPVC_BACKEND_HLSL)
@@ -655,7 +655,7 @@ spvc_bool spvc_compiler_msl_needs_input_threadgroup_mem(spvc_compiler compiler)
 	return msl.needs_input_threadgroup_mem() ? SPVC_TRUE : SPVC_FALSE;
 }
 
-spvc_result spvc_compiler_msl_add_vertex_attribute(spvc_compiler compiler, const struct spvc_msl_vertex_attribute *va)
+spvc_result spvc_compiler_msl_add_vertex_attribute(spvc_compiler compiler, const spvc_msl_vertex_attribute *va)
 {
 	if (compiler->backend != SPVC_BACKEND_MSL)
 	{
@@ -677,7 +677,7 @@ spvc_result spvc_compiler_msl_add_vertex_attribute(spvc_compiler compiler, const
 }
 
 spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
-                                                   const struct spvc_msl_resource_binding *binding)
+                                                   const spvc_msl_resource_binding *binding)
 {
 	if (compiler->backend != SPVC_BACKEND_MSL)
 	{
@@ -690,7 +690,9 @@ spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
 	bind.binding = binding->binding;
 	bind.desc_set = binding->desc_set;
 	bind.stage = static_cast<spv::ExecutionModel>(binding->stage);
-	bind.msl_resource_index = binding->msl_resource_index;
+	bind.msl_buffer = binding->msl_buffer;
+	bind.msl_texture = binding->msl_texture;
+	bind.msl_sampler = binding->msl_sampler;
 	msl.add_msl_resource_binding(bind);
 	return SPVC_SUCCESS;
 }
@@ -722,7 +724,7 @@ spvc_bool spvc_compiler_msl_is_resource_used(spvc_compiler compiler, SpvExecutio
 }
 
 spvc_result spvc_compiler_msl_remap_constexpr_sampler(spvc_compiler compiler, spvc_variable_id id,
-                                                      const struct spvc_msl_constexpr_sampler *sampler)
+                                                      const spvc_msl_constexpr_sampler *sampler)
 {
 	if (compiler->backend != SPVC_BACKEND_MSL)
 	{
@@ -919,7 +921,7 @@ spvc_result spvc_compiler_create_shader_resources(spvc_compiler compiler, spvc_r
 }
 
 spvc_result spvc_resources_get_resource_list_for_type(spvc_resources resources, spvc_resource_type type,
-                                                      const struct spvc_reflected_resource **resource_list,
+                                                      const spvc_reflected_resource **resource_list,
                                                       size_t *resource_size)
 {
 	const std::vector<spvc_reflected_resource> *list = nullptr;
@@ -1070,7 +1072,7 @@ const char *spvc_compiler_get_member_decoration_string(spvc_compiler compiler, s
 	    .c_str();
 }
 
-spvc_result spvc_compiler_get_entry_points(spvc_compiler compiler, const struct spvc_entry_point **entry_points,
+spvc_result spvc_compiler_get_entry_points(spvc_compiler compiler, const spvc_entry_point **entry_points,
                                            size_t *num_entry_points)
 {
 	SPVC_BEGIN_SAFE_SCOPE
@@ -1299,7 +1301,7 @@ spvc_result spvc_compiler_get_declared_struct_size(spvc_compiler compiler, spvc_
 }
 
 spvc_result spvc_compiler_get_declared_struct_size_runtime_array(spvc_compiler compiler, spvc_type struct_type,
-                                                            size_t array_size, size_t *size)
+                                                                 size_t array_size, size_t *size)
 {
 	SPVC_BEGIN_SAFE_SCOPE
 	{
@@ -1361,7 +1363,7 @@ spvc_result spvc_compiler_build_combined_image_samplers(spvc_compiler compiler)
 }
 
 spvc_result spvc_compiler_get_combined_image_samplers(spvc_compiler compiler,
-                                                      const struct spvc_combined_image_sampler **samplers,
+                                                      const spvc_combined_image_sampler **samplers,
                                                       size_t *num_samplers)
 {
 	SPVC_BEGIN_SAFE_SCOPE
@@ -1386,7 +1388,7 @@ spvc_result spvc_compiler_get_combined_image_samplers(spvc_compiler compiler,
 }
 
 spvc_result spvc_compiler_get_specialization_constants(spvc_compiler compiler,
-                                                       const struct spvc_specialization_constant **constants,
+                                                       const spvc_specialization_constant **constants,
                                                        size_t *num_constants)
 {
 	SPVC_BEGIN_SAFE_SCOPE
@@ -1592,7 +1594,7 @@ unsigned spvc_msl_get_aux_buffer_struct_version(void)
 	return SPVC_MSL_AUX_BUFFER_STRUCT_VERSION;
 }
 
-void spvc_msl_vertex_attribute_defaults(struct spvc_msl_vertex_attribute *attr)
+void spvc_msl_vertex_attribute_init(spvc_msl_vertex_attribute *attr)
 {
 	// Crude, but works.
 	MSLVertexAttr attr_default;
@@ -1605,16 +1607,18 @@ void spvc_msl_vertex_attribute_defaults(struct spvc_msl_vertex_attribute *attr)
 	attr->msl_stride = attr_default.msl_stride;
 }
 
-void spvc_msl_resource_binding_defaults(struct spvc_msl_resource_binding *binding)
+void spvc_msl_resource_binding_init(spvc_msl_resource_binding *binding)
 {
 	MSLResourceBinding binding_default;
 	binding->desc_set = binding_default.desc_set;
 	binding->binding = binding_default.binding;
-	binding->msl_resource_index = binding_default.msl_resource_index;
+	binding->msl_buffer = binding_default.msl_buffer;
+	binding->msl_texture = binding_default.msl_texture;
+	binding->msl_sampler = binding_default.msl_sampler;
 	binding->stage = static_cast<SpvExecutionModel>(binding_default.stage);
 }
 
-void spvc_msl_constexpr_sampler_defaults(struct spvc_msl_constexpr_sampler *sampler)
+void spvc_msl_constexpr_sampler_init(spvc_msl_constexpr_sampler *sampler)
 {
 	MSLConstexprSampler defaults;
 	sampler->anisotropy_enable = defaults.anisotropy_enable ? SPVC_TRUE : SPVC_FALSE;

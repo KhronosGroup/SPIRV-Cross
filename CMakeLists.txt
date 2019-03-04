@@ -187,6 +187,8 @@ if (SPIRV_CROSS_SHARED)
 		endif()
 	endif()
 
+	target_compile_definitions(spirv-cross-c-shared PRIVATE SPVC_EXPORT_SYMBOLS)
+
 	set_target_properties(spirv-cross-c-shared PROPERTIES
 		VERSION ${SPIRV_CROSS_VERSION}
 		SOVERSION ${spirv-cross-abi-major})
