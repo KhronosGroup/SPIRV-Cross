@@ -233,7 +233,7 @@ if (SPIRV_CROSS_CLI)
 				target_compile_options(spirv-cross-c-api-test PRIVATE -std=c89 -Wall -Wextra)
 			endif()
 			add_test(NAME spirv-cross-c-api-test
-				COMMAND $<TARGET_FILE:spirv-cross-c-api-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c-api-test.spv)
+				COMMAND $<TARGET_FILE:spirv-cross-c-api-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c_api_test.spv)
 			add_test(NAME spirv-cross-test
 				COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
 				${CMAKE_CURRENT_SOURCE_DIR}/shaders
