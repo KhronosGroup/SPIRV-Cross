@@ -112,8 +112,65 @@ To facilitate C compatibility and compatibility with foreign programming languag
 the goal of this wrapper is to be fully stable, both API and ABI-wise.
 This is the only interface which is supported when building SPIRV-Cross as a shared library.
 
+An important point of the wrapper is that all memory allocations are contained in the `spvc_context`.
+This simplifies the use of the API greatly. However, you should destroy the context as soon as reasonable,
+or use `spvc_context_release_allocations()` if you intend to reuse the `spvc_context` object again soon.
+
+Most functions return a `spvc_result`, where `SPVC_SUCCESS` is the only success code.
+For brevity, the code below does not do any error checking.
+
 ```c
-// TODO: Example code
+#include <spirv_cross_c.h>
+
+const SpvId *spirv = get_spirv_data();
+size_t word_count = get_spirv_word_count();
+
+spvc_context context = NULL;
+spvc_parsed_ir ir = NULL;
+spvc_compiler compiler_glsl = NULL;
+spvc_compiler_options options = NULL;
+spvc_resources resources = NULL;
+const spvc_reflected_resource *list = NULL;
+const char *result = NULL;
+size_t count;
+size_t i;
+
+// Create context.
+spvc_context_create(&context);
+
+// Set debug callback.
+spvc_context_set_error_callback(context, error_callback, userdata);
+
+// Parse the SPIR-V.
+spvc_context_parse_spirv(context, spirv, word_count, &ir);
+
+// Hand it off to a compiler instance and give it ownership of the IR.
+spvc_context_create_compiler(context, SPVC_BACKEND_GLSL, ir, SPVC_CAPTURE_MODE_TAKE_OWNERSHIP, &compiler_glsl);
+
+// Do some basic reflection.
+spvc_compiler_create_shader_resources(compiler_glsl, &resources);
+spvc_resources_get_resource_list_for_type(resources, SPVC_RESOURCE_TYPE_UNIFORM_BUFFER, &list, &count);
+
+for (i = 0; i < count; i++)
+{
+    printf("ID: %u, BaseTypeID: %u, TypeID: %u, Name: %s\n", list[i].id, list[i].base_type_id, list[i].type_id,
+           list[i].name);
+    printf("  Set: %u, Binding: %u\n",
+           spvc_compiler_get_decoration(compiler_glsl, list[i].id, SpvDecorationDescriptorSet),
+           spvc_compiler_get_decoration(compiler_glsl, list[i].id, SpvDecorationBinding));
+}
+
+// Modify options.
+spvc_compiler_create_compiler_options(context, &options);
+spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
+spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
+spvc_compiler_install_compiler_options(compiler_glsl, options);
+
+spvc_compiler_compile(compiler, &result);
+printf("Cross-compiled source: %s\n", result);
+
+// Frees all memory we allocated so far.
+spvc_context_destroy(context);
 ```
 
 ### Linking
@@ -139,7 +196,7 @@ For Unix-based systems, a pkg-config is installed for the C API, e.g.:
 
 ```
 $ pkg-config spirv-cross-c-shared --libs --cflags
--I/usr/local/include -L/usr/local/lib -lspirv-cross-c-shared
+-I/usr/local/include/spirv_cross -L/usr/local/lib -lspirv-cross-c-shared
 ```
 
 ##### CMake
@@ -164,7 +221,7 @@ target_link_libraries(test spirv-cross-c-shared)
 
 test.c:
 ```c
-#include <spirv_cross/spirv_cross_c.h>
+#include <spirv_cross_c.h>
 
 int main(void)
 {

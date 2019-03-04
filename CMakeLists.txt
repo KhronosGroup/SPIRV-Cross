@@ -69,7 +69,7 @@ macro(spirv_cross_add_library name config_name)
 	extract_headers(hdrs "${ARGN}")
 	target_include_directories(${name} PUBLIC
 		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-		$<INSTALL_INTERFACE:include>)
+		$<INSTALL_INTERFACE:include/spirv_cross>)
 	set_target_properties(${name} PROPERTIES
 		PUBLIC_HEADERS "${hdrs}")
 	target_compile_options(${name} PRIVATE ${spirv-compiler-options})
@@ -172,7 +172,7 @@ if (SPIRV_CROSS_SHARED)
 	set(spirv-cross-abi-patch 0)
 	set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
 	set(SPIRV_CROSS_INSTALL_LIB_DIR ${CMAKE_INSTALL_PREFIX}/lib)
-	set(SPIRV_CROSS_INSTALL_INC_DIR ${CMAKE_INSTALL_PREFIX}/include)
+	set(SPIRV_CROSS_INSTALL_INC_DIR ${CMAKE_INSTALL_PREFIX}/include/spirv_cross)
 	configure_file(
 		${CMAKE_CURRENT_SOURCE_DIR}/pkg-config/spirv-cross-c-shared.pc.in
 		${CMAKE_CURRENT_BINARY_DIR}/spirv-cross-c-shared.pc @ONLY)
