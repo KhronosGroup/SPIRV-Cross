@@ -152,5 +152,6 @@ int main(int argc, char **argv)
 	compile(compiler_cpp, "CPP");
 
 	spvc_context_destroy(context);
+	free(buffer);
 	return 0;
 }
