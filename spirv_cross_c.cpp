@@ -24,6 +24,8 @@
 #include <memory>
 #include <new>
 
+// clang-format off
+
 #ifdef _MSC_VER
 #pragma warning(push)
 #pragma warning(disable : 4996)

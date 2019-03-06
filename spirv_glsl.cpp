@@ -10919,9 +10919,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			// should become an empty string.
 			// We have no fallbacks if we cannot forward everything to temporaries ...
 			const auto &continue_block = get<SPIRBlock>(block.continue_block);
-			bool positive_test =
-					execution_is_noop(get<SPIRBlock>(continue_block.true_block),
-					                  get<SPIRBlock>(continue_block.loop_dominator));
+			bool positive_test = execution_is_noop(get<SPIRBlock>(continue_block.true_block),
+			                                       get<SPIRBlock>(continue_block.loop_dominator));
 
 			auto statements = emit_continue_block(block.continue_block, positive_test, !positive_test);
 			if (!statements.empty())
