@@ -1611,8 +1611,20 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 		return SPIRBlock::ForLoop;
 	else
 	{
+		const auto *false_block = maybe_get<SPIRBlock>(block.false_block);
+		const auto *true_block = maybe_get<SPIRBlock>(block.true_block);
+		const auto *merge_block = maybe_get<SPIRBlock>(dominator.merge_block);
+
+		bool positive_do_while = block.true_block == dominator.self &&
+		                         (block.false_block == dominator.merge_block ||
+		                          (false_block && merge_block && execution_is_noop(*false_block, *merge_block)));
+
+		bool negative_do_while = block.false_block == dominator.self &&
+		                         (block.true_block == dominator.merge_block ||
+		                          (true_block && merge_block && execution_is_noop(*true_block, *merge_block)));
+
 		if (block.merge == SPIRBlock::MergeNone && block.terminator == SPIRBlock::Select &&
-		    block.true_block == dominator.self && block.false_block == dominator.merge_block)
+		    (positive_do_while || negative_do_while))
 		{
 			return SPIRBlock::DoWhileLoop;
 		}
