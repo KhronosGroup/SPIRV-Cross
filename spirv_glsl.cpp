@@ -10392,6 +10392,11 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				// emitting the continue block can invalidate the condition expression.
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(block.condition);
+
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+					condition = join("!", enclose_expression(condition));
+
 				emit_block_hints(block);
 				if (method != SPIRBlock::MergeToSelectContinueForLoop)
 				{
@@ -10404,12 +10409,20 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			}
 
 			case SPIRBlock::WhileLoop:
+			{
 				// This block may be a dominating block, so make sure we flush undeclared variables before building the while loop header.
 				flush_undeclared_variables(block);
 				emit_while_loop_initializers(block);
 				emit_block_hints(block);
-				statement("while (", to_expression(block.condition), ")");
+
+				auto condition = to_expression(block.condition);
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+					condition = join("!", enclose_expression(condition));
+
+				statement("while (", condition, ")");
 				break;
+			}
 
 			default:
 				SPIRV_CROSS_THROW("For/while loop detected, but need while/for loop semantics.");
@@ -10445,6 +10458,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		if (current_count == statement_count && condition_is_temporary)
 		{
 			propagate_loop_dominators(child);
+			uint32_t target_block = child.true_block;
 
 			switch (continue_type)
 			{
@@ -10454,6 +10468,14 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				// emitting the continue block can invalidate the condition expression.
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(child.condition);
+
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(child.true_block), get<SPIRBlock>(block.merge_block)))
+				{
+					condition = join("!", enclose_expression(condition));
+					target_block = child.false_block;
+				}
+
 				auto continue_block = emit_continue_block(block.continue_block);
 				emit_block_hints(block);
 				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
@@ -10461,17 +10483,28 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			}
 
 			case SPIRBlock::WhileLoop:
+			{
 				emit_while_loop_initializers(block);
 				emit_block_hints(block);
-				statement("while (", to_expression(child.condition), ")");
+
+				auto condition = to_expression(child.condition);
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(child.true_block), get<SPIRBlock>(block.merge_block)))
+				{
+					condition = join("!", enclose_expression(condition));
+					target_block = child.false_block;
+				}
+
+				statement("while (", condition, ")");
 				break;
+			}
 
 			default:
 				SPIRV_CROSS_THROW("For/while loop detected, but need while/for loop semantics.");
 			}
 
 			begin_scope();
-			branch(child.self, child.true_block);
+			branch(child.self, target_block);
 			return true;
 		}
 		else
@@ -10521,6 +10554,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	propagate_loop_dominators(block);
 
 	bool select_branch_to_true_block = false;
+	bool select_branch_to_false_block = false;
 	bool skip_direct_branch = false;
 	bool emitted_for_loop_header = false;
 	bool force_complex_continue_block = false;
@@ -10544,7 +10578,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectContinueForLoop))
 		{
-			select_branch_to_true_block = true;
+			if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+				select_branch_to_false_block = true;
+			else
+				select_branch_to_true_block = true;
+
 			emitted_for_loop_header = true;
 			force_complex_continue_block = true;
 		}
@@ -10555,8 +10593,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectForLoop))
 		{
-			// The body of while, is actually just the true block, so always branch there unconditionally.
-			select_branch_to_true_block = true;
+			// The body of while, is actually just the true (or false) block, so always branch there unconditionally.
+			if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+				select_branch_to_false_block = true;
+			else
+				select_branch_to_true_block = true;
+
 			emitted_for_loop_header = true;
 		}
 	}
@@ -10659,6 +10701,22 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			}
 			else
 				branch(block.self, block.true_block);
+		}
+		else if (select_branch_to_false_block)
+		{
+			if (force_complex_continue_block)
+			{
+				assert(block.false_block == block.continue_block);
+
+				// We're going to emit a continue block directly here, so make sure it's marked as complex.
+				auto &complex_continue = get<SPIRBlock>(block.continue_block).complex_continue;
+				bool old_complex = complex_continue;
+				complex_continue = true;
+				branch(block.self, block.false_block);
+				complex_continue = old_complex;
+			}
+			else
+				branch(block.self, block.false_block);
 		}
 		else
 			branch(block.self, block.condition, block.true_block, block.false_block);

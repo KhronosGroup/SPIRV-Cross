@@ -1420,12 +1420,31 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 		// which the code backend can use to create cleaner code.
 		// for(;;) { if (cond) { some_body; } else { break; } }
 		// is the pattern we're looking for.
-		bool ret = block.terminator == SPIRBlock::Select && block.merge == SPIRBlock::MergeLoop &&
-		           block.true_block != block.merge_block && block.true_block != block.self &&
-		           block.false_block == block.merge_block;
+		const auto *false_block = maybe_get<SPIRBlock>(block.false_block);
+		const auto *true_block = maybe_get<SPIRBlock>(block.true_block);
+		const auto *merge_block = maybe_get<SPIRBlock>(block.merge_block);
 
-		if (ret && method == SPIRBlock::MergeToSelectContinueForLoop)
+		bool false_block_is_merge =
+				block.false_block == block.merge_block ||
+				(false_block && merge_block && execution_is_noop(*false_block, *merge_block));
+
+		bool true_block_is_merge =
+				block.true_block == block.merge_block ||
+				(true_block && merge_block && execution_is_noop(*true_block, *merge_block));
+
+		bool positive_candidate = block.true_block != block.merge_block && block.true_block != block.self &&
+		                          false_block_is_merge;
+
+		bool negative_candidate = block.false_block != block.merge_block && block.false_block != block.self &&
+		                          true_block_is_merge;
+
+		bool ret = block.terminator == SPIRBlock::Select && block.merge == SPIRBlock::MergeLoop &&
+		           (positive_candidate || negative_candidate);
+
+		if (ret && positive_candidate && method == SPIRBlock::MergeToSelectContinueForLoop)
 			ret = block.true_block == block.continue_block;
+		else if (ret && negative_candidate && method == SPIRBlock::MergeToSelectContinueForLoop)
+			ret = block.false_block == block.continue_block;
 
 		// If we have OpPhi which depends on branches which came from our own block,
 		// we need to flush phi variables in else block instead of a trivial break,
@@ -1454,9 +1473,27 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 			return false;
 
 		auto &child = get<SPIRBlock>(block.next_block);
+
+		const auto *false_block = maybe_get<SPIRBlock>(child.false_block);
+		const auto *true_block = maybe_get<SPIRBlock>(child.true_block);
+		const auto *merge_block = maybe_get<SPIRBlock>(block.merge_block);
+
+		bool false_block_is_merge =
+				child.false_block == block.merge_block ||
+				(false_block && merge_block && execution_is_noop(*false_block, *merge_block));
+
+		bool true_block_is_merge =
+				child.true_block == block.merge_block ||
+				(true_block && merge_block && execution_is_noop(*true_block, *merge_block));
+
+		bool positive_candidate = child.true_block != block.merge_block && child.true_block != block.self &&
+		                          false_block_is_merge;
+
+		bool negative_candidate = child.false_block != block.merge_block && child.false_block != block.self &&
+		                          true_block_is_merge;
+
 		ret = child.terminator == SPIRBlock::Select && child.merge == SPIRBlock::MergeNone &&
-		      child.false_block == block.merge_block && child.true_block != block.merge_block &&
-		      child.true_block != block.self;
+		      (positive_candidate || negative_candidate);
 
 		// If we have OpPhi which depends on branches which came from our own block,
 		// we need to flush phi variables in else block instead of a trivial break,
