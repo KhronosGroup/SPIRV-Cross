@@ -161,25 +161,9 @@ public:
 		init();
 	}
 
-	// Deprecate this interface because it doesn't overload properly with subclasses.
-	// Requires awkward static casting, which was a mistake.
-	SPIRV_CROSS_DEPRECATED("get_options() is obsolete, use get_common_options() instead.")
-	const Options &get_options() const
-	{
-		return options;
-	}
-
 	const Options &get_common_options() const
 	{
 		return options;
-	}
-
-	// Deprecate this interface because it doesn't overload properly with subclasses.
-	// Requires awkward static casting, which was a mistake.
-	SPIRV_CROSS_DEPRECATED("set_options() is obsolete, use set_common_options() instead.")
-	void set_options(Options &opts)
-	{
-		options = opts;
 	}
 
 	void set_common_options(const Options &opts)

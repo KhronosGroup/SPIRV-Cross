@@ -3,7 +3,6 @@
 *.txt
 /test
 /spirv-cross
-*.spv
 /obj
 /msvc/x64
 /msvc/Debug
