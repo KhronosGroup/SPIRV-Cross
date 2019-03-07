@@ -1,5 +1,9 @@
 /* Smoke test for the C API. */
 
+#ifdef _MSC_VER
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+
 #include <spirv_cross_c.h>
 #include <stdlib.h>
 #include <stdio.h>
