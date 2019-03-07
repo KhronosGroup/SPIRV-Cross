@@ -565,16 +565,17 @@ def test_shader_reflect(stats, shader, update, keep, opt, paths):
     regression_check_reflect(shader, reflect, update, keep, opt)
     remove_file(spirv)
 
-def test_shader_file(relpath, stats, shader_dir, update, keep, opt, force_no_external_validation, backend, paths):
+def test_shader_file(relpath, stats, args, backend):
+    paths = Paths(args.glslang, args.spirv_as, args.spirv_val, args.spirv_opt)
     try:
         if backend == 'msl':
-            test_shader_msl(stats, (shader_dir, relpath), update, keep, opt, force_no_external_validation, paths)
+            test_shader_msl(stats, (args.folder, relpath), args.update, args.keep, args.opt, args.force_no_external_validation, paths)
         elif backend == 'hlsl':
-            test_shader_hlsl(stats, (shader_dir, relpath), update, keep, opt, force_no_external_validation, paths)
+            test_shader_hlsl(stats, (args.folder, relpath), args.update, args.keep, args.opt, args.force_no_external_validation, paths)
         elif backend == 'reflect':
-            test_shader_reflect(stats, (shader_dir, relpath), update, keep, opt, paths)
+            test_shader_reflect(stats, (args.folder, relpath), args.update, args.keep, args.opt, paths)
         else:
-            test_shader(stats, (shader_dir, relpath), update, keep, opt, paths)
+            test_shader(stats, (args.folder, relpath), args.update, args.keep, args.opt, paths)
         return None
     except Exception as e:
         return e
@@ -588,8 +589,6 @@ def test_shaders_helper(stats, backend, args):
             relpath = os.path.relpath(path, args.folder)
             all_files.append(relpath)
 
-    paths = Paths(args.glslang, args.spirv_as, args.spirv_val, args.spirv_opt)
-
     # The child processes in parallel execution mode don't have the proper state for the global args variable, so 
     # at this point we need to switch to explicit arguments
     if args.parallel:
@@ -598,9 +597,7 @@ def test_shaders_helper(stats, backend, args):
         results = []
         for f in all_files:
             results.append(pool.apply_async(test_shader_file,
-                args = (f, stats,
-                args.folder, args.update, args.keep, args.opt, args.force_no_external_validation,
-                backend, paths)))
+                args = (f, stats, args, backend)))
 
         for res in results:
             error = res.get()
@@ -611,7 +608,7 @@ def test_shaders_helper(stats, backend, args):
                 sys.exit(1)
     else:
         for i in all_files:
-            e = test_shader_file(i, stats, args.folder, args.update, args.keep, args.opt, args.force_no_external_validation, backend, paths)
+            e = test_shader_file(i, stats, args, backend)
             if e is not None:
                 print('Error:', e)
                 sys.exit(1)
