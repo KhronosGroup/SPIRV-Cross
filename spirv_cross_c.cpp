@@ -470,6 +470,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 		options->msl.platform = static_cast<CompilerMSL::Options::Platform>(value);
 		break;
 
+	case SPVC_COMPILER_OPTION_MSL_ARGUMENT_BUFFERS:
+		options->msl.argument_buffers = value != 0;
+		break;
+
 	default:
 		options->context->report_error("Unknown option.");
 		return SPVC_ERROR_INVALID_ARGUMENT;

@@ -169,6 +169,8 @@ def cross_compile_msl(shader, spirv, opt, paths):
         msl_args.append('--msl-capture-output')
     if '.domain.' in shader:
         msl_args.append('--msl-domain-lower-left')
+    if '.argument.' in shader:
+        msl_args.append('--msl-argument-buffers')
 
     subprocess.check_call(msl_args)
 

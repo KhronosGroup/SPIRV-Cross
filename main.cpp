@@ -495,6 +495,7 @@ struct CLIArguments
 	bool msl_ios = false;
 	bool msl_pad_fragment_output = false;
 	bool msl_domain_lower_left = false;
+	bool msl_argument_buffers = false;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -552,6 +553,7 @@ static void print_help()
 	                "\t[--msl-ios]\n"
 	                "\t[--msl-pad-fragment-output]\n"
 	                "\t[--msl-domain-lower-left]\n"
+	                "\t[--msl-argument-buffers]\n"
 	                "\t[--hlsl]\n"
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
@@ -723,6 +725,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-ios", [&args](CLIParser &) { args.msl_ios = true; });
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });
 	cbs.add("--msl-domain-lower-left", [&args](CLIParser &) { args.msl_domain_lower_left = true; });
+	cbs.add("--msl-argument-buffers", [&args](CLIParser &) { args.msl_argument_buffers = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
@@ -855,6 +858,7 @@ static int main_inner(int argc, char *argv[])
 			msl_opts.platform = CompilerMSL::Options::iOS;
 		msl_opts.pad_fragment_output_components = args.msl_pad_fragment_output;
 		msl_opts.tess_domain_origin_lower_left = args.msl_domain_lower_left;
+		msl_opts.argument_buffers = args.msl_argument_buffers;
 		msl_comp->set_msl_options(msl_opts);
 	}
 	else if (args.hlsl)

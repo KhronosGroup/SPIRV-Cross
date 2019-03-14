@@ -148,6 +148,8 @@ static const uint32_t kPushConstDescSet = ~(0u);
 // element to indicate the bindings for the push constants.
 static const uint32_t kPushConstBinding = 0;
 
+static const uint32_t kMaxArgumentBuffers = 8;
+
 // The current version of the aux buffer structure. It must be incremented any time a
 // new field is added to the aux buffer.
 #define SPIRV_CROSS_MSL_AUX_BUFFER_STRUCT_VERSION 1
@@ -179,6 +181,7 @@ public:
 		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
 		bool tess_domain_origin_lower_left = false;
+		bool argument_buffers = false;
 
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
@@ -413,7 +416,10 @@ protected:
 	void fix_up_shader_inputs_outputs();
 
 	std::string func_type_decl(SPIRType &type);
-	std::string entry_point_args(bool append_comma);
+	std::string entry_point_args_classic(bool append_comma);
+	std::string entry_point_args_argument_buffer(bool append_comma);
+	std::string entry_point_arg_stage_in();
+	void entry_point_args_builtin(std::string &args);
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
@@ -512,6 +518,9 @@ protected:
 
 	std::unordered_map<uint32_t, MSLConstexprSampler> constexpr_samplers;
 	std::vector<uint32_t> buffer_arrays;
+
+	uint32_t argument_buffer_ids[kMaxArgumentBuffers];
+	void analyze_argument_buffers();
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components);
