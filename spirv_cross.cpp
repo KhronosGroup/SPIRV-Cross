@@ -17,7 +17,6 @@
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
 #include "spirv_cfg.hpp"
-#include "spirv_common.hpp"
 #include "spirv_parser.hpp"
 #include <algorithm>
 #include <cstring>
