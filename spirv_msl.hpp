@@ -438,7 +438,7 @@ protected:
 	bool is_member_packable(SPIRType &ib_type, uint32_t index);
 	MSLStructMemberKey get_struct_member_key(uint32_t type_id, uint32_t index);
 	std::string get_argument_address_space(const SPIRVariable &argument);
-	std::string get_type_address_space(const SPIRType &type);
+	std::string get_type_address_space(const SPIRType &type, uint32_t id);
 	SPIRType &get_stage_in_struct_type();
 	SPIRType &get_stage_out_struct_type();
 	SPIRType &get_patch_stage_in_struct_type();

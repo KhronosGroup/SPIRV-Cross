@@ -5429,7 +5429,7 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 	return "thread";
 }
 
-string CompilerMSL::get_type_address_space(const SPIRType &type)
+string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id)
 {
 	switch (type.storage)
 	{
@@ -5437,8 +5437,10 @@ string CompilerMSL::get_type_address_space(const SPIRType &type)
 		return "threadgroup";
 
 	case StorageClassStorageBuffer:
-		// FIXME: Need to use 'const device' for pointers into non-writable SSBOs
-		return "device";
+	{
+		auto flags = id ? get_buffer_block_flags(id) : Bitset();
+		return flags.get(DecorationNonWritable) ? "const device" : "device";
+	}
 
 	case StorageClassUniform:
 	case StorageClassUniformConstant:
@@ -5446,9 +5448,11 @@ string CompilerMSL::get_type_address_space(const SPIRType &type)
 		if (type.basetype == SPIRType::Struct)
 		{
 			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
-			// FIXME: Need to use 'const device' for pointers into non-writable SSBOs
 			if (ssbo)
-				return "device";
+			{
+				auto flags = id ? get_buffer_block_flags(id) : Bitset();
+				return flags.get(DecorationNonWritable) ? "const device" : "device";
+			}
 			else
 				return "constant";
 		}
@@ -6378,7 +6382,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	// Pointer?
 	if (type.pointer)
 	{
-		type_name = join(get_type_address_space(type), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
+		type_name = join(get_type_address_space(type, id), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
 		switch (type.basetype)
 		{
 		case SPIRType::Image:
