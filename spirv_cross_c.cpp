@@ -703,6 +703,19 @@ spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
 	return SPVC_SUCCESS;
 }
 
+spvc_result spvc_compiler_msl_add_push_descriptor_set(spvc_compiler compiler, unsigned desc_set)
+{
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	msl.add_push_descriptor_set(desc_set);
+	return SPVC_SUCCESS;
+}
+
 spvc_bool spvc_compiler_msl_is_vertex_attribute_used(spvc_compiler compiler, unsigned location)
 {
 	if (compiler->backend != SPVC_BACKEND_MSL)

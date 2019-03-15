@@ -62,6 +62,12 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 	resource_bindings.push_back({ binding, false });
 }
 
+void CompilerMSL::add_push_descriptor_set(uint32_t desc_set)
+{
+	if (desc_set < kMaxArgumentBuffers)
+		argument_buffer_push |= 1u << desc_set;
+}
+
 bool CompilerMSL::is_msl_vertex_attribute_used(uint32_t location)
 {
 	return vtx_attrs_in_use.count(location) != 0;
@@ -5617,25 +5623,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 		next_metal_resource_index_buffer = i + 1;
 	}
 
-	// Declare the push constant block separately, it does not belong in an indirect argument buffer.
-	uint32_t push_constant_id = 0;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &var) {
-		if (var.storage == StorageClassPushConstant && !is_hidden_variable(var))
-			push_constant_id = self;
-	});
-
-	if (push_constant_id)
-	{
-		add_resource_name(push_constant_id);
-		auto &var = get<SPIRVariable>(push_constant_id);
-		auto &type = get_variable_data_type(var);
-		uint32_t resource_index = get_metal_resource_index(var, type.basetype);
-		if (!ep_args.empty())
-			ep_args += ", ";
-		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(push_constant_id);
-		ep_args += " [[buffer(" + convert_to_string(resource_index) + ")]]";
-	}
-
+	entry_point_args_push_descriptors(ep_args);
 	entry_point_args_builtin(ep_args);
 
 	if (!ep_args.empty() && append_comma)
@@ -5644,12 +5632,8 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 	return ep_args;
 }
 
-// Returns a string containing a comma-delimited list of args for the entry point function
-// This is the "classic" method of MSL 1 when we don't have argument buffer support.
-string CompilerMSL::entry_point_args_classic(bool append_comma)
+void CompilerMSL::entry_point_args_push_descriptors(string &ep_args)
 {
-	string ep_args = entry_point_arg_stage_in();
-
 	// Output resources, sorted by resource index & type
 	// We need to sort to work around a bug on macOS 10.13 with NVidia drivers where switching between shaders
 	// with different order of buffers can result in issues with buffer assignments inside the driver.
@@ -5670,6 +5654,13 @@ string CompilerMSL::entry_point_args_classic(bool append_comma)
 		{
 			auto &type = get_variable_data_type(var);
 			uint32_t var_id = var.self;
+
+			if (var.storage != StorageClassPushConstant)
+			{
+				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+				if (descriptor_set_is_argument_buffer(desc_set))
+					return;
+			}
 
 			if (type.basetype == SPIRType::SampledImage)
 			{
@@ -5693,7 +5684,7 @@ string CompilerMSL::entry_point_args_classic(bool append_comma)
 		}
 	});
 
-	std::sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
+	sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
 		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
 	});
 
@@ -5760,7 +5751,14 @@ string CompilerMSL::entry_point_args_classic(bool append_comma)
 			break;
 		}
 	}
+}
 
+// Returns a string containing a comma-delimited list of args for the entry point function
+// This is the "classic" method of MSL 1 when we don't have argument buffer support.
+string CompilerMSL::entry_point_args_classic(bool append_comma)
+{
+	string ep_args = entry_point_arg_stage_in();
+	entry_point_args_push_descriptors(ep_args);
 	entry_point_args_builtin(ep_args);
 
 	if (!ep_args.empty() && append_comma)
@@ -7527,6 +7525,16 @@ std::string CompilerMSL::to_initializer_expression(const SPIRVariable &var)
 		return CompilerGLSL::to_initializer_expression(var);
 }
 
+bool CompilerMSL::descriptor_set_is_argument_buffer(uint32_t desc_set) const
+{
+	if (!msl_options.argument_buffers)
+		return false;
+	if (desc_set >= kMaxArgumentBuffers)
+		return false;
+
+	return (argument_buffer_push & (1u << desc_set)) == 0;
+}
+
 void CompilerMSL::analyze_argument_buffers()
 {
 	// Gather all used resources and sort them out into argument buffers.
@@ -7555,6 +7563,10 @@ void CompilerMSL::analyze_argument_buffers()
 		    !is_hidden_variable(var))
 		{
 			uint32_t desc_set = get_decoration(self, DecorationDescriptorSet);
+			// Ignore if it's part of a push descriptor set.
+			if (!descriptor_set_is_argument_buffer(desc_set))
+				return;
+
 			uint32_t var_id = var.self;
 			auto &type = get_variable_data_type(var);
 
@@ -7596,6 +7608,8 @@ void CompilerMSL::analyze_argument_buffers()
 		auto &resources = resources_in_set[desc_set];
 		if (resources.empty())
 			continue;
+
+		assert(descriptor_set_is_argument_buffer(desc_set));
 
 		uint32_t next_id = ir.increase_bound_by(3);
 		uint32_t type_id = next_id + 1;
