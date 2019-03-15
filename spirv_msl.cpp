@@ -5438,7 +5438,13 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id)
 
 	case StorageClassStorageBuffer:
 	{
-		auto flags = id ? get_buffer_block_flags(id) : Bitset();
+		// This can be called for variable pointer contexts as well, so be very careful about which method we choose.
+		Bitset flags;
+		if (ir.ids[id].get_type() == TypeVariable && has_decoration(type.self, DecorationBlock))
+			flags = get_buffer_block_flags(id);
+		else
+			flags = get_decoration_bitset(id);
+
 		return flags.get(DecorationNonWritable) ? "const device" : "device";
 	}
 
@@ -5450,7 +5456,13 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id)
 			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
 			if (ssbo)
 			{
-				auto flags = id ? get_buffer_block_flags(id) : Bitset();
+				// This can be called for variable pointer contexts as well, so be very careful about which method we choose.
+				Bitset flags;
+				if (ir.ids[id].get_type() == TypeVariable && has_decoration(type.self, DecorationBlock))
+					flags = get_buffer_block_flags(id);
+				else
+					flags = get_decoration_bitset(id);
+
 				return flags.get(DecorationNonWritable) ? "const device" : "device";
 			}
 			else
