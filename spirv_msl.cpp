@@ -5968,15 +5968,20 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		if (!address_space.empty())
 			decl = join(address_space, " ", decl);
 
-		// An awkward case where we need to emit *more* address space declarations (yay!).
-		// An example is where we pass down an array of buffer pointers to leaf functions.
-		// It's a constant array containing pointers to constants.
-		// The pointer array is always constant however. E.g.
-		// device SSBO * constant (&array)[N].
-		// const device SSBO * constant (&array)[N].
-		// constant SSBO * constant (&array)[N].
-		if (storage == StorageClassUniform || storage == StorageClassStorageBuffer)
-			decl += " constant";
+		if (msl_options.argument_buffers)
+		{
+			// An awkward case where we need to emit *more* address space declarations (yay!).
+			// An example is where we pass down an array of buffer pointers to leaf functions.
+			// It's a constant array containing pointers to constants.
+			// The pointer array is always constant however. E.g.
+			// device SSBO * constant (&array)[N].
+			// const device SSBO * constant (&array)[N].
+			// constant SSBO * constant (&array)[N].
+			// However, this only matters for argument buffers, since for MSL 1.0 style codegen,
+			// we emit the buffer array on stack instead, and that seems to work just fine apparently.
+			if (storage == StorageClassUniform || storage == StorageClassStorageBuffer)
+				decl += " constant";
+		}
 
 		decl += " (&";
 		decl += to_expression(name_id);
