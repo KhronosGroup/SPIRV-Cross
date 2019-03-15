@@ -54,10 +54,10 @@ struct MSLVertexAttr
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
 // Taken together, the stage, desc_set and binding combine to form a reference to a resource
 // descriptor used in a particular shading stage.
-// If using MSL 2.0 argument buffers, and the descriptor set is not marked as a push descriptor set,
+// If using MSL 2.0 argument buffers, and the descriptor set is not marked as a discrete descriptor set,
 // the binding reference we remap to will become an [[id(N)]] attribute within
 // the "descriptor set" argument buffer structure.
-// For resources which are bound in the "classic" MSL 1.0 way or push descriptors, the remap will become a
+// For resources which are bound in the "classic" MSL 1.0 way or discrete descriptors, the remap will become a
 // [[buffer(N)]], [[texture(N)]] or [[sampler(N)]] depending on the resource types used.
 struct MSLResourceBinding
 {
@@ -288,7 +288,7 @@ public:
 
 	// When using MSL argument buffers, we can force "classic" MSL 1.0 binding schemes for certain descriptor sets.
 	// This corresponds to VK_KHR_push_descriptor in Vulkan.
-	void add_push_descriptor_set(uint32_t desc_set);
+	void add_discrete_descriptor_set(uint32_t desc_set);
 
 	// Query after compilation is done. This allows you to check if a location or set/binding combination was used by the shader.
 	bool is_msl_vertex_attribute_used(uint32_t location);
@@ -432,7 +432,7 @@ protected:
 	std::string entry_point_args_argument_buffer(bool append_comma);
 	std::string entry_point_arg_stage_in();
 	void entry_point_args_builtin(std::string &args);
-	void entry_point_args_push_descriptors(std::string &args);
+	void entry_point_args_discrete_descriptors(std::string &args);
 	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
@@ -533,7 +533,7 @@ protected:
 	std::vector<uint32_t> buffer_arrays;
 
 	uint32_t argument_buffer_ids[kMaxArgumentBuffers];
-	uint32_t argument_buffer_push = 0;
+	uint32_t argument_buffer_discrete_mask = 0;
 	void analyze_argument_buffers();
 	bool descriptor_set_is_argument_buffer(uint32_t desc_set) const;
 

@@ -703,7 +703,7 @@ spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
 	return SPVC_SUCCESS;
 }
 
-spvc_result spvc_compiler_msl_add_push_descriptor_set(spvc_compiler compiler, unsigned desc_set)
+spvc_result spvc_compiler_msl_add_discrete_descriptor_set(spvc_compiler compiler, unsigned desc_set)
 {
 	if (compiler->backend != SPVC_BACKEND_MSL)
 	{
@@ -712,7 +712,7 @@ spvc_result spvc_compiler_msl_add_push_descriptor_set(spvc_compiler compiler, un
 	}
 
 	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
-	msl.add_push_descriptor_set(desc_set);
+	msl.add_discrete_descriptor_set(desc_set);
 	return SPVC_SUCCESS;
 }
 

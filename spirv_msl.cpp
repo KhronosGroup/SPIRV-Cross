@@ -62,10 +62,10 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 	resource_bindings.push_back({ binding, false });
 }
 
-void CompilerMSL::add_push_descriptor_set(uint32_t desc_set)
+void CompilerMSL::add_discrete_descriptor_set(uint32_t desc_set)
 {
 	if (desc_set < kMaxArgumentBuffers)
-		argument_buffer_push |= 1u << desc_set;
+		argument_buffer_discrete_mask |= 1u << desc_set;
 }
 
 bool CompilerMSL::is_msl_vertex_attribute_used(uint32_t location)
@@ -5022,6 +5022,13 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			pack_pfx = "packed_";
 	}
 
+	// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
+	if (msl_options.is_ios() && membertype.basetype == SPIRType::Image && membertype.image.sampled == 2)
+	{
+		if (!has_decoration(orig_id, DecorationNonWritable))
+			SPIRV_CROSS_THROW("Writable images are not allowed in argument buffers on iOS.");
+	}
+
 	// Array information is baked into these types.
 	string array_type;
 	if (membertype.basetype != SPIRType::Image && membertype.basetype != SPIRType::Sampler &&
@@ -5623,7 +5630,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 		next_metal_resource_index_buffer = i + 1;
 	}
 
-	entry_point_args_push_descriptors(ep_args);
+	entry_point_args_discrete_descriptors(ep_args);
 	entry_point_args_builtin(ep_args);
 
 	if (!ep_args.empty() && append_comma)
@@ -5632,7 +5639,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 	return ep_args;
 }
 
-void CompilerMSL::entry_point_args_push_descriptors(string &ep_args)
+void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 {
 	// Output resources, sorted by resource index & type
 	// We need to sort to work around a bug on macOS 10.13 with NVidia drivers where switching between shaders
@@ -5758,7 +5765,7 @@ void CompilerMSL::entry_point_args_push_descriptors(string &ep_args)
 string CompilerMSL::entry_point_args_classic(bool append_comma)
 {
 	string ep_args = entry_point_arg_stage_in();
-	entry_point_args_push_descriptors(ep_args);
+	entry_point_args_discrete_descriptors(ep_args);
 	entry_point_args_builtin(ep_args);
 
 	if (!ep_args.empty() && append_comma)
@@ -7532,7 +7539,7 @@ bool CompilerMSL::descriptor_set_is_argument_buffer(uint32_t desc_set) const
 	if (desc_set >= kMaxArgumentBuffers)
 		return false;
 
-	return (argument_buffer_push & (1u << desc_set)) == 0;
+	return (argument_buffer_discrete_mask & (1u << desc_set)) == 0;
 }
 
 void CompilerMSL::analyze_argument_buffers()
