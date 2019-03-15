@@ -5967,6 +5967,17 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// Arrays of images and samplers are special cased.
 		if (!address_space.empty())
 			decl = join(address_space, " ", decl);
+
+		// An awkward case where we need to emit *more* address space declarations (yay!).
+		// An example is where we pass down an array of buffer pointers to leaf functions.
+		// It's a constant array containing pointers to constants.
+		// The pointer array is always constant however. E.g.
+		// device SSBO * constant (&array)[N].
+		// const device SSBO * constant (&array)[N].
+		// constant SSBO * constant (&array)[N].
+		if (storage == StorageClassUniform || storage == StorageClassStorageBuffer)
+			decl += " constant";
+
 		decl += " (&";
 		decl += to_expression(name_id);
 		decl += ")";
