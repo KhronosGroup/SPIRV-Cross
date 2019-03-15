@@ -54,6 +54,10 @@ struct MSLVertexAttr
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
 // Taken together, the stage, desc_set and binding combine to form a reference to a resource
 // descriptor used in a particular shading stage.
+// If using MSL 2.0 argument buffers, the binding reference we remap to will become an [[id(N)]] attribute within
+// the "descriptor set" argument buffer structure.
+// For resources which are bound in the "classic" MSL 1.0 way, the remap will become a
+// [[buffer(N)]], [[texture(N)]] or [[sampler(N)]].
 struct MSLResourceBinding
 {
 	spv::ExecutionModel stage = spv::ExecutionModelMax;
@@ -181,6 +185,9 @@ public:
 		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
 		bool tess_domain_origin_lower_left = false;
+
+		// Enable use of MSL 2.0 indirect argument buffers.
+		// MSL 2.0 must also be enabled.
 		bool argument_buffers = false;
 
 		// Fragment output in MSL must have at least as many components as the render pass.
