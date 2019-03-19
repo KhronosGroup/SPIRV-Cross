@@ -96,6 +96,9 @@ public:
 		// If disabled on older targets, binding decorations will be stripped.
 		bool enable_420pack_extension = true;
 
+		// In non-Vulkan GLSL, emit push constant blocks as UBOs rather than plain uniforms.
+		bool emit_push_constant_as_uniform_buffer = false;
+
 		enum Precision
 		{
 			DontCare,
