@@ -10747,6 +10747,9 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		auto &type = expression_type(block.condition);
 		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort;
 
+		if (block.merge == SPIRBlock::MergeNone)
+			SPIRV_CROSS_THROW("Switch statement is not structured");
+
 		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
 		{
 			// SPIR-V spec suggests this is allowed, but we cannot support it in higher level languages.
