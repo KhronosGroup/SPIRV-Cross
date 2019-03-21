@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_GLSL_HPP
 
 #include "spirv_cross.hpp"
+#include "GLSL.std.450.h"
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -421,6 +422,7 @@ protected:
 	bool should_dereference(uint32_t id);
 	bool should_forward(uint32_t id);
 	void emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp);
+	void emit_nminmax_op(uint32_t result_type, uint32_t id, uint32_t op0, uint32_t op1, GLSLstd450 op);
 	bool to_trivial_mix_op(const SPIRType &type, std::string &op, uint32_t left, uint32_t right, uint32_t lerp);
 	void emit_quaternary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                             uint32_t op3, const char *op);
@@ -551,6 +553,11 @@ protected:
 
 	std::vector<std::string> forced_extensions;
 	std::vector<std::string> header_lines;
+
+	// Used when expressions emit extra opcodes with their own unique IDs,
+	// and we need to reuse the IDs across recompilation loops.
+	// Currently used by NMin/Max/Clamp implementations.
+	std::unordered_map<uint32_t, uint32_t> extra_sub_expressions;
 
 	uint32_t statement_count;
 
