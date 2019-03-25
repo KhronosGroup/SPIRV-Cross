@@ -410,6 +410,17 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_ARB_tessellation_shader");
 		break;
 
+	case ExecutionModelRayGenerationNV:
+	case ExecutionModelIntersectionNV:
+	case ExecutionModelAnyHitNV:
+	case ExecutionModelClosestHitNV:
+	case ExecutionModelMissNV:
+	case ExecutionModelCallableNV:
+		if (options.es || options.version < 460)
+			SPIRV_CROSS_THROW("Ray tracing shaders require non-es profile with version 460 or above.");
+		require_extension("GL_NV_ray_tracing");
+		break;
+
 	default:
 		break;
 	}
