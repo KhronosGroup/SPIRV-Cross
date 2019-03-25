@@ -23,13 +23,13 @@
 #include <cstdio>
 #include <cstring>
 #include <functional>
-#include <locale>
 #include <memory>
 #include <sstream>
 #include <stack>
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -59,7 +59,7 @@ report_and_abort(const std::string &msg)
 class CompilerError : public std::runtime_error
 {
 public:
-	CompilerError(const std::string &str)
+	explicit CompilerError(const std::string &str)
 	    : std::runtime_error(str)
 	{
 	}
@@ -245,10 +245,12 @@ inline std::string merge(const std::vector<std::string> &list)
 	return s;
 }
 
-template <typename T>
-inline std::string convert_to_string(T &&t)
+// Make sure we don't accidentally call this with float or doubles with SFINAE.
+// Have to use the radix-aware overload.
+template <typename T, typename std::enable_if<!std::is_floating_point<T>::value, int>::type = 0>
+inline std::string convert_to_string(const T &t)
 {
-	return std::to_string(std::forward<T>(t));
+	return std::to_string(t);
 }
 
 // Allow implementations to set a convenient standard precision
@@ -263,24 +265,43 @@ inline std::string convert_to_string(T &&t)
 #pragma warning(disable : 4996)
 #endif
 
-inline std::string convert_to_string(float t)
+static inline void fixup_radix_point(char *str, char radix_point)
+{
+	// Setting locales is a very risky business in multi-threaded program,
+	// so just fixup locales instead. We only need to care about the radix point.
+	if (radix_point != '.')
+	{
+		while (*str != '\0')
+		{
+			if (*str == radix_point)
+				*str = '.';
+			str++;
+		}
+	}
+}
+
+inline std::string convert_to_string(float t, char locale_radix_point)
 {
 	// std::to_string for floating point values is broken.
 	// Fallback to something more sane.
 	char buf[64];
 	sprintf(buf, SPIRV_CROSS_FLT_FMT, t);
+	fixup_radix_point(buf, locale_radix_point);
+
 	// Ensure that the literal is float.
 	if (!strchr(buf, '.') && !strchr(buf, 'e'))
 		strcat(buf, ".0");
 	return buf;
 }
 
-inline std::string convert_to_string(double t)
+inline std::string convert_to_string(double t, char locale_radix_point)
 {
 	// std::to_string for floating point values is broken.
 	// Fallback to something more sane.
 	char buf[64];
 	sprintf(buf, SPIRV_CROSS_FLT_FMT, t);
+	fixup_radix_point(buf, locale_radix_point);
+
 	// Ensure that the literal is float.
 	if (!strchr(buf, '.') && !strchr(buf, 'e'))
 		strcat(buf, ".0");
@@ -338,7 +359,8 @@ struct SPIRUndef : IVariant
 	{
 		type = TypeUndef
 	};
-	SPIRUndef(uint32_t basetype_)
+
+	explicit SPIRUndef(uint32_t basetype_)
 	    : basetype(basetype_)
 	{
 	}
@@ -491,7 +513,7 @@ struct SPIRExtension : IVariant
 		SPV_AMD_gcn_shader
 	};
 
-	SPIRExtension(Extension ext_)
+	explicit SPIRExtension(Extension ext_)
 	    : ext(ext_)
 	{
 	}
@@ -526,7 +548,7 @@ struct SPIREntryPoint
 	} workgroup_size;
 	uint32_t invocations = 0;
 	uint32_t output_vertices = 0;
-	spv::ExecutionModel model;
+	spv::ExecutionModel model = spv::ExecutionModelMax;
 };
 
 struct SPIRExpression : IVariant
@@ -586,7 +608,7 @@ struct SPIRFunctionPrototype : IVariant
 		type = TypeFunctionPrototype
 	};
 
-	SPIRFunctionPrototype(uint32_t return_type_)
+	explicit SPIRFunctionPrototype(uint32_t return_type_)
 	    : return_type(return_type_)
 	{
 	}
@@ -837,7 +859,7 @@ struct SPIRAccessChain : IVariant
 	                int32_t static_index_)
 	    : basetype(basetype_)
 	    , storage(storage_)
-	    , base(base_)
+	    , base(std::move(base_))
 	    , dynamic_index(std::move(dynamic_index_))
 	    , static_index(static_index_)
 	{
@@ -1195,7 +1217,7 @@ struct SPIRConstant : IVariant
 		}
 	}
 
-	uint32_t constant_type;
+	uint32_t constant_type = 0;
 	ConstantMatrix m;
 
 	// If this constant is a specialization constant (i.e. created with OpSpecConstant*).
@@ -1383,8 +1405,9 @@ struct Meta
 		{
 			uint32_t packed_type = 0;
 			bool packed = false;
-			uint32_t ib_member_index = static_cast<uint32_t>(-1);
+			uint32_t ib_member_index = ~(0u);
 			uint32_t ib_orig_id = 0;
+			uint32_t argument_buffer_id = ~(0u);
 		} extended;
 	};
 
@@ -1404,22 +1427,6 @@ struct Meta
 // name_of_type is the textual name of the type which will be used in the code unless written to by the callback.
 using VariableTypeRemapCallback =
     std::function<void(const SPIRType &type, const std::string &var_name, std::string &name_of_type)>;
-
-class ClassicLocale
-{
-public:
-	ClassicLocale()
-	{
-		old = std::locale::global(std::locale::classic());
-	}
-	~ClassicLocale()
-	{
-		std::locale::global(old);
-	}
-
-private:
-	std::locale old;
-};
 
 class Hasher
 {

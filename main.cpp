@@ -495,6 +495,9 @@ struct CLIArguments
 	bool msl_ios = false;
 	bool msl_pad_fragment_output = false;
 	bool msl_domain_lower_left = false;
+	bool msl_argument_buffers = false;
+	bool glsl_emit_push_constant_as_ubo = false;
+	vector<uint32_t> msl_discrete_descriptor_sets;
 	vector<PLSArg> pls_in;
 	vector<PLSArg> pls_out;
 	vector<Remap> remaps;
@@ -545,6 +548,7 @@ static void print_help()
 	                "\t[--iterations iter]\n"
 	                "\t[--cpp]\n"
 	                "\t[--cpp-interface-name <name>]\n"
+	                "\t[--glsl-emit-push-constant-as-ubo]\n"
 	                "\t[--msl]\n"
 	                "\t[--msl-version <MMmmpp>]\n"
 	                "\t[--msl-capture-output]\n"
@@ -552,6 +556,8 @@ static void print_help()
 	                "\t[--msl-ios]\n"
 	                "\t[--msl-pad-fragment-output]\n"
 	                "\t[--msl-domain-lower-left]\n"
+	                "\t[--msl-argument-buffers]\n"
+	                "\t[--msl-discrete-descriptor-set <index>]\n"
 	                "\t[--hlsl]\n"
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
@@ -710,6 +716,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--reflect", [&args](CLIParser &parser) { args.reflect = parser.next_value_string("json"); });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
+	cbs.add("--glsl-emit-push-constant-as-ubo", [&args](CLIParser &) { args.glsl_emit_push_constant_as_ubo = true; });
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
@@ -723,6 +730,9 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-ios", [&args](CLIParser &) { args.msl_ios = true; });
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });
 	cbs.add("--msl-domain-lower-left", [&args](CLIParser &) { args.msl_domain_lower_left = true; });
+	cbs.add("--msl-argument-buffers", [&args](CLIParser &) { args.msl_argument_buffers = true; });
+	cbs.add("--msl-discrete-descriptor-set",
+	        [&args](CLIParser &parser) { args.msl_discrete_descriptor_sets.push_back(parser.next_uint()); });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
@@ -855,7 +865,10 @@ static int main_inner(int argc, char *argv[])
 			msl_opts.platform = CompilerMSL::Options::iOS;
 		msl_opts.pad_fragment_output_components = args.msl_pad_fragment_output;
 		msl_opts.tess_domain_origin_lower_left = args.msl_domain_lower_left;
+		msl_opts.argument_buffers = args.msl_argument_buffers;
 		msl_comp->set_msl_options(msl_opts);
+		for (auto &v : args.msl_discrete_descriptor_sets)
+			msl_comp->add_discrete_descriptor_set(v);
 	}
 	else if (args.hlsl)
 		compiler.reset(new CompilerHLSL(move(spirv_parser.get_parsed_ir())));
@@ -976,6 +989,7 @@ static int main_inner(int argc, char *argv[])
 	opts.vertex.fixup_clipspace = args.fixup;
 	opts.vertex.flip_vert_y = args.yflip;
 	opts.vertex.support_nonzero_base_instance = args.support_nonzero_baseinstance;
+	opts.emit_push_constant_as_uniform_buffer = args.glsl_emit_push_constant_as_ubo;
 	compiler->set_common_options(opts);
 
 	// Set HLSL specific options.
@@ -1109,9 +1123,12 @@ static int main_inner(int argc, char *argv[])
 	for (uint32_t i = 0; i < args.iterations; i++)
 	{
 		if (args.hlsl)
-			glsl = static_cast<CompilerHLSL *>(compiler.get())->compile(move(args.hlsl_attr_remap));
-		else
-			glsl = compiler->compile();
+		{
+			for (auto &remap : args.hlsl_attr_remap)
+				static_cast<CompilerHLSL *>(compiler.get())->add_vertex_attribute_remap(remap);
+		}
+
+		glsl = compiler->compile();
 	}
 
 	if (args.output)

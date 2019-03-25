@@ -18,6 +18,7 @@
 #define SPIRV_CROSS_GLSL_HPP
 
 #include "spirv_cross.hpp"
+#include "GLSL.std.450.h"
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
@@ -96,6 +97,9 @@ public:
 		// If disabled on older targets, binding decorations will be stripped.
 		bool enable_420pack_extension = true;
 
+		// In non-Vulkan GLSL, emit push constant blocks as UBOs rather than plain uniforms.
+		bool emit_push_constant_as_uniform_buffer = false;
+
 		enum Precision
 		{
 			DontCare,
@@ -161,25 +165,9 @@ public:
 		init();
 	}
 
-	// Deprecate this interface because it doesn't overload properly with subclasses.
-	// Requires awkward static casting, which was a mistake.
-	SPIRV_CROSS_DEPRECATED("get_options() is obsolete, use get_common_options() instead.")
-	const Options &get_options() const
-	{
-		return options;
-	}
-
 	const Options &get_common_options() const
 	{
 		return options;
-	}
-
-	// Deprecate this interface because it doesn't overload properly with subclasses.
-	// Requires awkward static casting, which was a mistake.
-	SPIRV_CROSS_DEPRECATED("set_options() is obsolete, use set_common_options() instead.")
-	void set_options(Options &opts)
-	{
-		options = opts;
 	}
 
 	void set_common_options(const Options &opts)
@@ -419,7 +407,7 @@ protected:
 	std::string constant_value_macro_name(uint32_t id);
 	void emit_constant(const SPIRConstant &constant);
 	void emit_specialization_constant_op(const SPIRConstantOp &constant);
-	std::string emit_continue_block(uint32_t continue_block);
+	std::string emit_continue_block(uint32_t continue_block, bool follow_true_block, bool follow_false_block);
 	bool attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method);
 	void propagate_loop_dominators(const SPIRBlock &block);
 
@@ -434,6 +422,7 @@ protected:
 	bool should_dereference(uint32_t id);
 	bool should_forward(uint32_t id);
 	void emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp);
+	void emit_nminmax_op(uint32_t result_type, uint32_t id, uint32_t op0, uint32_t op1, GLSLstd450 op);
 	bool to_trivial_mix_op(const SPIRType &type, std::string &op, uint32_t left, uint32_t right, uint32_t lerp);
 	void emit_quaternary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                             uint32_t op3, const char *op);
@@ -565,6 +554,11 @@ protected:
 	std::vector<std::string> forced_extensions;
 	std::vector<std::string> header_lines;
 
+	// Used when expressions emit extra opcodes with their own unique IDs,
+	// and we need to reuse the IDs across recompilation loops.
+	// Currently used by NMin/Max/Clamp implementations.
+	std::unordered_map<uint32_t, uint32_t> extra_sub_expressions;
+
 	uint32_t statement_count;
 
 	inline bool is_legacy() const
@@ -632,6 +626,7 @@ protected:
 	// Sometimes we will need to automatically perform bitcasts on load and store to make this work.
 	virtual void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type);
 	virtual void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type);
+	void unroll_array_from_complex_load(uint32_t target_id, uint32_t source_id, std::string &expr);
 
 	void handle_store_to_invariant_variable(uint32_t store_id, uint32_t value_id);
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
@@ -643,15 +638,10 @@ protected:
 
 	bool variable_is_lut(const SPIRVariable &var) const;
 
+	char current_locale_radix_character = '.';
+
 private:
-	void init()
-	{
-		if (ir.source.known)
-		{
-			options.es = ir.source.es;
-			options.version = ir.source.version;
-		}
-	}
+	void init();
 };
 } // namespace spirv_cross
 

@@ -21,7 +21,13 @@
 #include <assert.h>
 #include <cmath>
 #include <limits>
+#include <locale.h>
 #include <utility>
+
+#ifndef _WIN32
+#include <langinfo.h>
+#endif
+#include <locale.h>
 
 using namespace spv;
 using namespace spirv_cross;
@@ -147,6 +153,36 @@ string CompilerGLSL::sanitize_underscores(const string &str)
 		}
 	}
 	return res;
+}
+
+void CompilerGLSL::init()
+{
+	if (ir.source.known)
+	{
+		options.es = ir.source.es;
+		options.version = ir.source.version;
+	}
+
+	// Query the locale to see what the decimal point is.
+	// We'll rely on fixing it up ourselves in the rare case we have a comma-as-decimal locale
+	// rather than setting locales ourselves. Settings locales in a safe and isolated way is rather
+	// tricky.
+#ifdef _WIN32
+	// On Windows, localeconv uses thread-local storage, so it should be fine.
+	const struct lconv *conv = localeconv();
+	if (conv && conv->decimal_point)
+		current_locale_radix_character = *conv->decimal_point;
+#elif defined(__ANDROID__) && __ANDROID_API__ < 26
+	// nl_langinfo is not supported on this platform, fall back to the worse alternative.
+	const struct lconv *conv = localeconv();
+	if (conv && conv->decimal_point)
+		current_locale_radix_character = *conv->decimal_point;
+#else
+	// localeconv, the portable function is not MT safe ...
+	const char *decimal_point = nl_langinfo(RADIXCHAR);
+	if (decimal_point && *decimal_point != '\0')
+		current_locale_radix_character = *decimal_point;
+#endif
 }
 
 static const char *to_pls_layout(PlsFormat format)
@@ -387,9 +423,6 @@ void CompilerGLSL::find_static_extensions()
 
 string CompilerGLSL::compile()
 {
-	// Force a classic "C" locale, reverts when function returns
-	ClassicLocale classic_locale;
-
 	if (options.vulkan_semantics)
 		backend.allow_precision_qualifiers = true;
 	backend.force_gl_in_out_block = true;
@@ -1230,7 +1263,7 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 			return false;
 	}
 
-	if (storage == StorageClassUniform || storage == StorageClassUniformConstant)
+	if (storage == StorageClassUniform || storage == StorageClassUniformConstant || storage == StorageClassPushConstant)
 	{
 		if (options.es && options.version < 310)
 			return false;
@@ -1332,10 +1365,12 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
 	bool ssbo_block = var.storage == StorageClassStorageBuffer ||
 	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
+	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
+	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
 
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
-	if (can_use_buffer_blocks && var.storage == StorageClassUniform && typeflags.get(DecorationBlock))
+	if (can_use_buffer_blocks && (ubo_block || emulated_ubo))
 	{
 		if (buffer_is_packing_standard(type, BufferPackingStd140))
 			attr.push_back("std140");
@@ -1346,7 +1381,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
 			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
 			if (options.es && !options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+				SPIRV_CROSS_THROW("Uniform buffer block cannot be expressed as std140. ES-targets do "
 				                  "not support GL_ARB_enhanced_layouts.");
 			if (!options.es && !options.vulkan_semantics && options.version < 440)
 				require_extension_internal("GL_ARB_enhanced_layouts");
@@ -1428,6 +1463,8 @@ void CompilerGLSL::emit_push_constant_block(const SPIRVariable &var)
 		emit_buffer_block_flattened(var);
 	else if (options.vulkan_semantics)
 		emit_push_constant_block_vulkan(var);
+	else if (options.emit_push_constant_as_uniform_buffer)
+		emit_buffer_block_native(var);
 	else
 		emit_push_constant_block_glsl(var);
 }
@@ -2999,7 +3036,7 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 		type.basetype = SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
-		res = join(type_to_glsl(type), "(", convert_to_string(float_value), ")");
+		res = join(type_to_glsl(type), "(", convert_to_string(float_value, current_locale_radix_character), ")");
 	}
 
 	return res;
@@ -3057,7 +3094,7 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 	}
 	else
 	{
-		res = convert_to_string(float_value);
+		res = convert_to_string(float_value, current_locale_radix_character);
 		if (backend.float_literal_suffix)
 			res += "f";
 	}
@@ -3129,7 +3166,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 	}
 	else
 	{
-		res = convert_to_string(double_value);
+		res = convert_to_string(double_value, current_locale_radix_character);
 		if (backend.double_literal_suffix)
 			res += "lf";
 	}
@@ -4912,19 +4949,61 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		break;
 
 	case GLSLstd450NMin:
-		emit_binary_func_op(result_type, id, args[0], args[1], "unsupported_glsl450_nmin");
-		break;
 	case GLSLstd450NMax:
-		emit_binary_func_op(result_type, id, args[0], args[1], "unsupported_glsl450_nmax");
+	{
+		emit_nminmax_op(result_type, id, args[0], args[1], op);
 		break;
+	}
+
 	case GLSLstd450NClamp:
-		emit_binary_func_op(result_type, id, args[0], args[1], "unsupported_glsl450_nclamp");
+	{
+		// Make sure we have a unique ID here to avoid aliasing the extra sub-expressions between clamp and NMin sub-op.
+		// IDs cannot exceed 24 bits, so we can make use of the higher bits for some unique flags.
+		uint32_t &max_id = extra_sub_expressions[id | 0x80000000u];
+		if (!max_id)
+			max_id = ir.increase_bound_by(1);
+
+		// Inherit precision qualifiers.
+		ir.meta[max_id] = ir.meta[id];
+
+		emit_nminmax_op(result_type, max_id, args[0], args[1], GLSLstd450NMax);
+		emit_nminmax_op(result_type, id, max_id, args[2], GLSLstd450NMin);
 		break;
+	}
 
 	default:
 		statement("// unimplemented GLSL op ", eop);
 		break;
 	}
+}
+
+void CompilerGLSL::emit_nminmax_op(uint32_t result_type, uint32_t id, uint32_t op0, uint32_t op1, GLSLstd450 op)
+{
+	// Need to emulate this call.
+	uint32_t &ids = extra_sub_expressions[id];
+	if (!ids)
+	{
+		ids = ir.increase_bound_by(5);
+		auto btype = get<SPIRType>(result_type);
+		btype.basetype = SPIRType::Boolean;
+		set<SPIRType>(ids, btype);
+	}
+
+	uint32_t btype_id = ids + 0;
+	uint32_t left_nan_id = ids + 1;
+	uint32_t right_nan_id = ids + 2;
+	uint32_t tmp_id = ids + 3;
+	uint32_t mixed_first_id = ids + 4;
+
+	// Inherit precision qualifiers.
+	ir.meta[tmp_id] = ir.meta[id];
+	ir.meta[mixed_first_id] = ir.meta[id];
+
+	emit_unary_func_op(btype_id, left_nan_id, op0, "isnan");
+	emit_unary_func_op(btype_id, right_nan_id, op1, "isnan");
+	emit_binary_func_op(result_type, tmp_id, op0, op1, op == GLSLstd450NMin ? "min" : "max");
+	emit_mix_op(result_type, mixed_first_id, tmp_id, op1, left_nan_id);
+	emit_mix_op(result_type, id, mixed_first_id, op0, right_nan_id);
 }
 
 void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
@@ -6915,6 +6994,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We might need to bitcast in order to load from a builtin.
 		bitcast_from_builtin_load(ptr, expr, get<SPIRType>(result_type));
 
+		// We might be trying to load a gl_Position[N], where we should be
+		// doing float4[](gl_in[i].gl_Position, ...) instead.
+		// Similar workarounds are required for input arrays in tessellation.
+		unroll_array_from_complex_load(id, ptr, expr);
+
 		if (ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
 
@@ -7403,9 +7487,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto &type0 = expression_type(vec0);
 
+		// If we have the undefined swizzle index -1, we need to swizzle in undefined data,
+		// or in our case, T(0).
 		bool shuffle = false;
 		for (uint32_t i = 0; i < length; i++)
-			if (elems[i] >= type0.vecsize)
+			if (elems[i] >= type0.vecsize || elems[i] == 0xffffffffu)
 				shuffle = true;
 
 		// Cannot use swizzles with packed expressions, force shuffle path.
@@ -7424,7 +7510,17 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			vector<string> args;
 			for (uint32_t i = 0; i < length; i++)
 			{
-				if (elems[i] >= type0.vecsize)
+				if (elems[i] == 0xffffffffu)
+				{
+					// Use a constant 0 here.
+					// We could use the first component or similar, but then we risk propagating
+					// a value we might not need, and bog down codegen.
+					SPIRConstant c;
+					c.constant_type = type0.parent_type;
+					assert(type0.parent_type != 0);
+					args.push_back(constant_expression(c));
+				}
+				else if (elems[i] >= type0.vecsize)
 					args.push_back(to_extract_component_expression(vec1, elems[i] - type0.vecsize));
 				else
 					args.push_back(to_extract_component_expression(vec0, elems[i]));
@@ -7441,7 +7537,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			expr += to_enclosed_unpacked_expression(vec0);
 			expr += ".";
 			for (uint32_t i = 0; i < length; i++)
+			{
+				assert(elems[i] != 0xffffffffu);
 				expr += index_to_swizzle(elems[i]);
+			}
 
 			if (backend.swizzle_is_function && length > 1)
 				expr += "()";
@@ -10242,7 +10341,7 @@ void CompilerGLSL::propagate_loop_dominators(const SPIRBlock &block)
 // FIXME: This currently cannot handle complex continue blocks
 // as in do-while.
 // This should be seen as a "trivial" continue block.
-string CompilerGLSL::emit_continue_block(uint32_t continue_block)
+string CompilerGLSL::emit_continue_block(uint32_t continue_block, bool follow_true_block, bool follow_false_block)
 {
 	auto *block = &get<SPIRBlock>(continue_block);
 
@@ -10270,10 +10369,19 @@ string CompilerGLSL::emit_continue_block(uint32_t continue_block)
 			block = &get<SPIRBlock>(block->next_block);
 		}
 		// For do while blocks. The last block will be a select block.
-		else if (block->true_block)
+		else if (block->true_block && follow_true_block)
 		{
 			flush_phi(continue_block, block->true_block);
 			block = &get<SPIRBlock>(block->true_block);
+		}
+		else if (block->false_block && follow_false_block)
+		{
+			flush_phi(continue_block, block->false_block);
+			block = &get<SPIRBlock>(block->false_block);
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Invalid continue block detected!");
 		}
 	}
 
@@ -10429,10 +10537,15 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				// emitting the continue block can invalidate the condition expression.
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(block.condition);
+
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+					condition = join("!", enclose_expression(condition));
+
 				emit_block_hints(block);
 				if (method != SPIRBlock::MergeToSelectContinueForLoop)
 				{
-					auto continue_block = emit_continue_block(block.continue_block);
+					auto continue_block = emit_continue_block(block.continue_block, false, false);
 					statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
 				}
 				else
@@ -10441,12 +10554,20 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			}
 
 			case SPIRBlock::WhileLoop:
+			{
 				// This block may be a dominating block, so make sure we flush undeclared variables before building the while loop header.
 				flush_undeclared_variables(block);
 				emit_while_loop_initializers(block);
 				emit_block_hints(block);
-				statement("while (", to_expression(block.condition), ")");
+
+				auto condition = to_expression(block.condition);
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+					condition = join("!", enclose_expression(condition));
+
+				statement("while (", condition, ")");
 				break;
+			}
 
 			default:
 				SPIRV_CROSS_THROW("For/while loop detected, but need while/for loop semantics.");
@@ -10482,6 +10603,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		if (current_count == statement_count && condition_is_temporary)
 		{
 			propagate_loop_dominators(child);
+			uint32_t target_block = child.true_block;
 
 			switch (continue_type)
 			{
@@ -10491,24 +10613,43 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 				// emitting the continue block can invalidate the condition expression.
 				auto initializer = emit_for_loop_initializers(block);
 				auto condition = to_expression(child.condition);
-				auto continue_block = emit_continue_block(block.continue_block);
+
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(child.true_block), get<SPIRBlock>(block.merge_block)))
+				{
+					condition = join("!", enclose_expression(condition));
+					target_block = child.false_block;
+				}
+
+				auto continue_block = emit_continue_block(block.continue_block, false, false);
 				emit_block_hints(block);
 				statement("for (", initializer, "; ", condition, "; ", continue_block, ")");
 				break;
 			}
 
 			case SPIRBlock::WhileLoop:
+			{
 				emit_while_loop_initializers(block);
 				emit_block_hints(block);
-				statement("while (", to_expression(child.condition), ")");
+
+				auto condition = to_expression(child.condition);
+				// Condition might have to be inverted.
+				if (execution_is_noop(get<SPIRBlock>(child.true_block), get<SPIRBlock>(block.merge_block)))
+				{
+					condition = join("!", enclose_expression(condition));
+					target_block = child.false_block;
+				}
+
+				statement("while (", condition, ")");
 				break;
+			}
 
 			default:
 				SPIRV_CROSS_THROW("For/while loop detected, but need while/for loop semantics.");
 			}
 
 			begin_scope();
-			branch(child.self, child.true_block);
+			branch(child.self, target_block);
 			return true;
 		}
 		else
@@ -10558,8 +10699,9 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	propagate_loop_dominators(block);
 
 	bool select_branch_to_true_block = false;
+	bool select_branch_to_false_block = false;
 	bool skip_direct_branch = false;
-	bool emitted_for_loop_header = false;
+	bool emitted_loop_header_variables = false;
 	bool force_complex_continue_block = false;
 
 	emit_hoisted_temporaries(block.declare_temporary);
@@ -10581,8 +10723,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectContinueForLoop))
 		{
-			select_branch_to_true_block = true;
-			emitted_for_loop_header = true;
+			if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+				select_branch_to_false_block = true;
+			else
+				select_branch_to_true_block = true;
+
+			emitted_loop_header_variables = true;
 			force_complex_continue_block = true;
 		}
 	}
@@ -10592,9 +10738,13 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		flush_undeclared_variables(block);
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToSelectForLoop))
 		{
-			// The body of while, is actually just the true block, so always branch there unconditionally.
-			select_branch_to_true_block = true;
-			emitted_for_loop_header = true;
+			// The body of while, is actually just the true (or false) block, so always branch there unconditionally.
+			if (execution_is_noop(get<SPIRBlock>(block.true_block), get<SPIRBlock>(block.merge_block)))
+				select_branch_to_false_block = true;
+			else
+				select_branch_to_true_block = true;
+
+			emitted_loop_header_variables = true;
 		}
 	}
 	// This is the newer loop behavior in glslang which branches from Loop header directly to
@@ -10605,13 +10755,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		if (attempt_emit_loop_header(block, SPIRBlock::MergeToDirectForLoop))
 		{
 			skip_direct_branch = true;
-			emitted_for_loop_header = true;
+			emitted_loop_header_variables = true;
 		}
 	}
 	else if (continue_type == SPIRBlock::DoWhileLoop)
 	{
 		flush_undeclared_variables(block);
 		emit_while_loop_initializers(block);
+		emitted_loop_header_variables = true;
 		// We have some temporaries where the loop header is the dominator.
 		// We risk a case where we have code like:
 		// for (;;) { create-temporary; break; } consume-temporary;
@@ -10626,6 +10777,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		flush_undeclared_variables(block);
 		emit_while_loop_initializers(block);
+		emitted_loop_header_variables = true;
 
 		// We have a generic loop without any distinguishable pattern like for, while or do while.
 		get<SPIRBlock>(block.continue_block).complex_continue = true;
@@ -10648,7 +10800,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	// If we didn't successfully emit a loop header and we had loop variable candidates, we have a problem
 	// as writes to said loop variables might have been masked out, we need a recompile.
-	if (!emitted_for_loop_header && !block.loop_variables.empty())
+	if (!emitted_loop_header_variables && !block.loop_variables.empty())
 	{
 		force_recompile = true;
 		for (auto var : block.loop_variables)
@@ -10697,6 +10849,22 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			else
 				branch(block.self, block.true_block);
 		}
+		else if (select_branch_to_false_block)
+		{
+			if (force_complex_continue_block)
+			{
+				assert(block.false_block == block.continue_block);
+
+				// We're going to emit a continue block directly here, so make sure it's marked as complex.
+				auto &complex_continue = get<SPIRBlock>(block.continue_block).complex_continue;
+				bool old_complex = complex_continue;
+				complex_continue = true;
+				branch(block.self, block.false_block);
+				complex_continue = old_complex;
+			}
+			else
+				branch(block.self, block.false_block);
+		}
 		else
 			branch(block.self, block.condition, block.true_block, block.false_block);
 		break;
@@ -10705,6 +10873,9 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	{
 		auto &type = expression_type(block.condition);
 		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort;
+
+		if (block.merge == SPIRBlock::MergeNone)
+			SPIRV_CROSS_THROW("Switch statement is not structured");
 
 		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
 		{
@@ -10887,7 +11058,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			// Make sure that we run the continue block to get the expressions set, but this
 			// should become an empty string.
 			// We have no fallbacks if we cannot forward everything to temporaries ...
-			auto statements = emit_continue_block(block.continue_block);
+			const auto &continue_block = get<SPIRBlock>(block.continue_block);
+			bool positive_test = execution_is_noop(get<SPIRBlock>(continue_block.true_block),
+			                                       get<SPIRBlock>(continue_block.loop_dominator));
+
+			auto statements = emit_continue_block(block.continue_block, positive_test, !positive_test);
 			if (!statements.empty())
 			{
 				// The DoWhile block has side effects, force ComplexLoop pattern next pass.
@@ -10895,7 +11070,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				force_recompile = true;
 			}
 
-			end_scope_decl(join("while (", to_expression(get<SPIRBlock>(block.continue_block).condition), ")"));
+			// Might have to invert the do-while test here.
+			auto condition = to_expression(continue_block.condition);
+			if (!positive_test)
+				condition = join("!", enclose_expression(condition));
+
+			end_scope_decl(join("while (", condition, ")"));
 		}
 		else
 			end_scope();
@@ -10986,6 +11166,59 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
+}
+
+void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t source_id, std::string &expr)
+{
+	if (!backend.force_gl_in_out_block)
+		return;
+	// This path is only relevant for GL backends.
+
+	auto *var = maybe_get<SPIRVariable>(source_id);
+	if (!var)
+		return;
+
+	if (var->storage != StorageClassInput)
+		return;
+
+	auto &type = get_variable_data_type(*var);
+	if (type.array.empty())
+		return;
+
+	auto builtin = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
+	bool is_builtin = is_builtin_variable(*var) && (builtin == BuiltInPointSize || builtin == BuiltInPosition);
+	bool is_tess = is_tessellation_shader();
+
+	// Tessellation input arrays are special in that they are unsized, so we cannot directly copy from it.
+	// We must unroll the array load.
+	// For builtins, we couldn't catch this case normally,
+	// because this is resolved in the OpAccessChain in most cases.
+	// If we load the entire array, we have no choice but to unroll here.
+	if (is_builtin || is_tess)
+	{
+		auto new_expr = join("_", target_id, "_unrolled");
+		statement(variable_decl(type, new_expr, target_id), ";");
+		string array_expr;
+		if (type.array_size_literal.front())
+		{
+			array_expr = convert_to_string(type.array.front());
+			if (type.array.front() == 0)
+				SPIRV_CROSS_THROW("Cannot unroll an array copy from unsized array.");
+		}
+		else
+			array_expr = to_expression(type.array.front());
+
+		// The array size might be a specialization constant, so use a for-loop instead.
+		statement("for (int i = 0; i < int(", array_expr, "); i++)");
+		begin_scope();
+		if (is_builtin)
+			statement(new_expr, "[i] = gl_in[i].", expr, ";");
+		else
+			statement(new_expr, "[i] = ", expr, "[i];");
+		end_scope();
+
+		expr = move(new_expr);
+	}
 }
 
 void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &expr,

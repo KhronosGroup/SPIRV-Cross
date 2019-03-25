@@ -64,8 +64,6 @@ void Compiler::set_ir(const ParsedIR &ir_)
 
 string Compiler::compile()
 {
-	// Force a classic "C" locale, reverts when function returns
-	ClassicLocale classic_locale;
 	return "";
 }
 
@@ -933,50 +931,6 @@ void Compiler::parse_fixup()
 	fixup_type_alias();
 }
 
-void Compiler::flatten_interface_block(uint32_t id)
-{
-	auto &var = get<SPIRVariable>(id);
-	auto &type = get<SPIRType>(var.basetype);
-	auto &flags = ir.meta[type.self].decoration.decoration_flags;
-
-	if (!type.array.empty())
-		SPIRV_CROSS_THROW("Type is array of UBOs.");
-	if (type.basetype != SPIRType::Struct)
-		SPIRV_CROSS_THROW("Type is not a struct.");
-	if (!flags.get(DecorationBlock))
-		SPIRV_CROSS_THROW("Type is not a block.");
-	if (type.member_types.empty())
-		SPIRV_CROSS_THROW("Member list of struct is empty.");
-
-	uint32_t t = type.member_types[0];
-	for (auto &m : type.member_types)
-		if (t != m)
-			SPIRV_CROSS_THROW("Types in block differ.");
-
-	auto &mtype = get<SPIRType>(t);
-	if (!mtype.array.empty())
-		SPIRV_CROSS_THROW("Member type cannot be arrays.");
-	if (mtype.basetype == SPIRType::Struct)
-		SPIRV_CROSS_THROW("Member type cannot be struct.");
-
-	// Inherit variable name from interface block name.
-	ir.meta[var.self].decoration.alias = ir.meta[type.self].decoration.alias;
-
-	auto storage = var.storage;
-	if (storage == StorageClassUniform)
-		storage = StorageClassUniformConstant;
-
-	// Change type definition in-place into an array instead.
-	// Access chains will still work as-is.
-	uint32_t array_size = uint32_t(type.member_types.size());
-	type = mtype;
-	type.array.push_back(array_size);
-	type.pointer = true;
-	type.storage = storage;
-	type.parent_type = t;
-	var.storage = storage;
-}
-
 void Compiler::update_name_cache(unordered_set<string> &cache_primary, const unordered_set<string> &cache_secondary,
                                  string &name)
 {
@@ -1137,6 +1091,11 @@ const std::string &Compiler::get_member_name(uint32_t id, uint32_t index) const
 	return ir.get_member_name(id, index);
 }
 
+void Compiler::set_qualified_name(uint32_t id, const string &name)
+{
+	ir.meta[id].decoration.qualified_alias = name;
+}
+
 void Compiler::set_member_qualified_name(uint32_t type_id, uint32_t index, const std::string &name)
 {
 	ir.meta[type_id].members.resize(max(ir.meta[type_id].members.size(), size_t(index) + 1));
@@ -1155,11 +1114,6 @@ const string &Compiler::get_member_qualified_name(uint32_t type_id, uint32_t ind
 uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration decoration) const
 {
 	return ir.get_member_decoration(id, index, decoration);
-}
-
-uint64_t Compiler::get_member_decoration_mask(uint32_t id, uint32_t index) const
-{
-	return get_member_decoration_bitset(id, index).get_lower();
 }
 
 const Bitset &Compiler::get_member_decoration_bitset(uint32_t id, uint32_t index) const
@@ -1207,6 +1161,10 @@ void Compiler::set_extended_decoration(uint32_t id, ExtendedDecorations decorati
 	case SPIRVCrossDecorationInterfaceOrigID:
 		dec.extended.ib_orig_id = value;
 		break;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		dec.extended.argument_buffer_id = value;
+		break;
 	}
 }
 
@@ -1233,6 +1191,10 @@ void Compiler::set_extended_member_decoration(uint32_t type, uint32_t index, Ext
 	case SPIRVCrossDecorationInterfaceOrigID:
 		dec.extended.ib_orig_id = value;
 		break;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		dec.extended.argument_buffer_id = value;
+		break;
 	}
 }
 
@@ -1256,6 +1218,9 @@ uint32_t Compiler::get_extended_decoration(uint32_t id, ExtendedDecorations deco
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		return dec.extended.argument_buffer_id;
 	}
 
 	return 0;
@@ -1284,6 +1249,9 @@ uint32_t Compiler::get_extended_member_decoration(uint32_t type, uint32_t index,
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		return dec.extended.argument_buffer_id;
 	}
 
 	return 0;
@@ -1309,6 +1277,9 @@ bool Compiler::has_extended_decoration(uint32_t id, ExtendedDecorations decorati
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id != 0;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		return dec.extended.argument_buffer_id != 0;
 	}
 
 	return false;
@@ -1337,6 +1308,9 @@ bool Compiler::has_extended_member_decoration(uint32_t type, uint32_t index, Ext
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id != 0;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		return dec.extended.argument_buffer_id != uint32_t(-1);
 	}
 
 	return false;
@@ -1356,11 +1330,15 @@ void Compiler::unset_extended_decoration(uint32_t id, ExtendedDecorations decora
 		break;
 
 	case SPIRVCrossDecorationInterfaceMemberIndex:
-		dec.extended.ib_member_index = -1;
+		dec.extended.ib_member_index = ~(0u);
 		break;
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		dec.extended.ib_orig_id = 0;
+		break;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		dec.extended.argument_buffer_id = 0;
 		break;
 	}
 }
@@ -1381,11 +1359,15 @@ void Compiler::unset_extended_member_decoration(uint32_t type, uint32_t index, E
 		break;
 
 	case SPIRVCrossDecorationInterfaceMemberIndex:
-		dec.extended.ib_member_index = -1;
+		dec.extended.ib_member_index = ~(0u);
 		break;
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		dec.extended.ib_orig_id = 0;
+		break;
+
+	case SPIRVCrossDecorationArgumentBufferID:
+		dec.extended.argument_buffer_id = 0;
 		break;
 	}
 }
@@ -1412,11 +1394,6 @@ const std::string Compiler::get_block_fallback_name(uint32_t id) const
 		return join("_", get<SPIRType>(var.basetype).self, "_", id);
 	else
 		return get_name(id);
-}
-
-uint64_t Compiler::get_decoration_mask(uint32_t id) const
-{
-	return get_decoration_bitset(id).get_lower();
 }
 
 const Bitset &Compiler::get_decoration_bitset(uint32_t id) const
@@ -1476,12 +1453,29 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 		// which the code backend can use to create cleaner code.
 		// for(;;) { if (cond) { some_body; } else { break; } }
 		// is the pattern we're looking for.
-		bool ret = block.terminator == SPIRBlock::Select && block.merge == SPIRBlock::MergeLoop &&
-		           block.true_block != block.merge_block && block.true_block != block.self &&
-		           block.false_block == block.merge_block;
+		const auto *false_block = maybe_get<SPIRBlock>(block.false_block);
+		const auto *true_block = maybe_get<SPIRBlock>(block.true_block);
+		const auto *merge_block = maybe_get<SPIRBlock>(block.merge_block);
 
-		if (ret && method == SPIRBlock::MergeToSelectContinueForLoop)
+		bool false_block_is_merge = block.false_block == block.merge_block ||
+		                            (false_block && merge_block && execution_is_noop(*false_block, *merge_block));
+
+		bool true_block_is_merge = block.true_block == block.merge_block ||
+		                           (true_block && merge_block && execution_is_noop(*true_block, *merge_block));
+
+		bool positive_candidate =
+		    block.true_block != block.merge_block && block.true_block != block.self && false_block_is_merge;
+
+		bool negative_candidate =
+		    block.false_block != block.merge_block && block.false_block != block.self && true_block_is_merge;
+
+		bool ret = block.terminator == SPIRBlock::Select && block.merge == SPIRBlock::MergeLoop &&
+		           (positive_candidate || negative_candidate);
+
+		if (ret && positive_candidate && method == SPIRBlock::MergeToSelectContinueForLoop)
 			ret = block.true_block == block.continue_block;
+		else if (ret && negative_candidate && method == SPIRBlock::MergeToSelectContinueForLoop)
+			ret = block.false_block == block.continue_block;
 
 		// If we have OpPhi which depends on branches which came from our own block,
 		// we need to flush phi variables in else block instead of a trivial break,
@@ -1510,9 +1504,25 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 			return false;
 
 		auto &child = get<SPIRBlock>(block.next_block);
+
+		const auto *false_block = maybe_get<SPIRBlock>(child.false_block);
+		const auto *true_block = maybe_get<SPIRBlock>(child.true_block);
+		const auto *merge_block = maybe_get<SPIRBlock>(block.merge_block);
+
+		bool false_block_is_merge = child.false_block == block.merge_block ||
+		                            (false_block && merge_block && execution_is_noop(*false_block, *merge_block));
+
+		bool true_block_is_merge = child.true_block == block.merge_block ||
+		                           (true_block && merge_block && execution_is_noop(*true_block, *merge_block));
+
+		bool positive_candidate =
+		    child.true_block != block.merge_block && child.true_block != block.self && false_block_is_merge;
+
+		bool negative_candidate =
+		    child.false_block != block.merge_block && child.false_block != block.self && true_block_is_merge;
+
 		ret = child.terminator == SPIRBlock::Select && child.merge == SPIRBlock::MergeNone &&
-		      child.false_block == block.merge_block && child.true_block != block.merge_block &&
-		      child.true_block != block.self;
+		      (positive_candidate || negative_candidate);
 
 		// If we have OpPhi which depends on branches which came from our own block,
 		// we need to flush phi variables in else block instead of a trivial break,
@@ -1630,8 +1640,20 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 		return SPIRBlock::ForLoop;
 	else
 	{
+		const auto *false_block = maybe_get<SPIRBlock>(block.false_block);
+		const auto *true_block = maybe_get<SPIRBlock>(block.true_block);
+		const auto *merge_block = maybe_get<SPIRBlock>(dominator.merge_block);
+
+		bool positive_do_while = block.true_block == dominator.self &&
+		                         (block.false_block == dominator.merge_block ||
+		                          (false_block && merge_block && execution_is_noop(*false_block, *merge_block)));
+
+		bool negative_do_while = block.false_block == dominator.self &&
+		                         (block.true_block == dominator.merge_block ||
+		                          (true_block && merge_block && execution_is_noop(*true_block, *merge_block)));
+
 		if (block.merge == SPIRBlock::MergeNone && block.terminator == SPIRBlock::Select &&
-		    block.true_block == dominator.self && block.false_block == dominator.merge_block)
+		    (positive_do_while || negative_do_while))
 		{
 			return SPIRBlock::DoWhileLoop;
 		}
@@ -1906,11 +1928,6 @@ bool Compiler::types_are_logically_equivalent(const SPIRType &a, const SPIRType 
 	return true;
 }
 
-uint64_t Compiler::get_execution_mode_mask() const
-{
-	return get_entry_point().flags.get_lower();
-}
-
 const Bitset &Compiler::get_execution_mode_bitset() const
 {
 	return get_entry_point().flags;
@@ -2096,27 +2113,12 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 	e_deps.erase(unique(begin(e_deps), end(e_deps)), end(e_deps));
 }
 
-vector<string> Compiler::get_entry_points() const
-{
-	vector<string> entries;
-	for (auto &entry : ir.entry_points)
-		entries.push_back(entry.second.orig_name);
-	return entries;
-}
-
 vector<EntryPoint> Compiler::get_entry_points_and_stages() const
 {
 	vector<EntryPoint> entries;
 	for (auto &entry : ir.entry_points)
 		entries.push_back({ entry.second.orig_name, entry.second.model });
 	return entries;
-}
-
-void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name)
-{
-	auto &entry = get_first_entry_point(old_name);
-	entry.orig_name = new_name;
-	entry.name = new_name;
 }
 
 void Compiler::rename_entry_point(const std::string &old_name, const std::string &new_name, spv::ExecutionModel model)
@@ -2126,26 +2128,10 @@ void Compiler::rename_entry_point(const std::string &old_name, const std::string
 	entry.name = new_name;
 }
 
-void Compiler::set_entry_point(const std::string &name)
-{
-	auto &entry = get_first_entry_point(name);
-	ir.default_entry_point = entry.self;
-}
-
 void Compiler::set_entry_point(const std::string &name, spv::ExecutionModel model)
 {
 	auto &entry = get_entry_point(name, model);
 	ir.default_entry_point = entry.self;
-}
-
-SPIREntryPoint &Compiler::get_entry_point(const std::string &name)
-{
-	return get_first_entry_point(name);
-}
-
-const SPIREntryPoint &Compiler::get_entry_point(const std::string &name) const
-{
-	return get_first_entry_point(name);
 }
 
 SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
@@ -2196,11 +2182,6 @@ const SPIREntryPoint &Compiler::get_entry_point(const std::string &name, Executi
 		SPIRV_CROSS_THROW("Entry point does not exist.");
 
 	return itr->second;
-}
-
-const string &Compiler::get_cleansed_entry_point_name(const std::string &name) const
-{
-	return get_first_entry_point(name).name;
 }
 
 const string &Compiler::get_cleansed_entry_point_name(const std::string &name, ExecutionModel model) const
