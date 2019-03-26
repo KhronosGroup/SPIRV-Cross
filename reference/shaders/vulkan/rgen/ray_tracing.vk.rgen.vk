@@ -1,9 +1,9 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
-layout(set = 0, binding = 0, rgba8) uniform image2D image;
 layout(set = 0, binding = 1) uniform accelerationStructureNV as;
 layout(location = 0) rayPayloadNV float payload;
+layout(set = 0, binding = 0, rgba8) uniform writeonly image2D image;
 
 void main()
 {
@@ -14,3 +14,4 @@ void main()
     col.y = payload;
     imageStore(image, ivec2(gl_LaunchIDNV.xy), col);
 }
+
