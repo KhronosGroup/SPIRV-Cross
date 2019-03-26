@@ -418,7 +418,7 @@ void CompilerGLSL::find_static_extensions()
 	case ExecutionModelCallableNV:
 		if (options.es || options.version < 460)
 			SPIRV_CROSS_THROW("Ray tracing shaders require non-es profile with version 460 or above.");
-		require_extension("GL_NV_ray_tracing");
+		require_extension_internal("GL_NV_ray_tracing");
 		break;
 
 	default:
@@ -9035,7 +9035,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpReportIntersectionNV:
-		statement("reportIntersectionNV(", to_func_call_arg(ops[0]), ", ", to_func_call_arg(ops[1]), ");");
+		statement("reportIntersectionNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 	case OpIgnoreIntersectionNV:
 		statement("ignoreIntersectionNV();");
@@ -9044,13 +9044,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("terminateRayNV();");
 		break;
 	case OpTraceNV:
-		statement("traceNV(", to_func_call_arg(ops[0]), ", ", to_func_call_arg(ops[1]), ", ", to_func_call_arg(ops[2]),
-		          ", ", to_func_call_arg(ops[3]), ", ", to_func_call_arg(ops[4]), ", ", to_func_call_arg(ops[5]), ", ",
-		          to_func_call_arg(ops[6]), ", ", to_func_call_arg(ops[7]), ", ", to_func_call_arg(ops[8]), ", ",
-		          to_func_call_arg(ops[9]), ", ", to_func_call_arg(ops[10]), ");");
+		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
+		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
+		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
 		break;
 	case OpExecuteCallableNV:
-		statement("executeCallableNV(", to_func_call_arg(ops[0]), ", ", to_func_call_arg(ops[1]), ");");
+		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 
 	default:
