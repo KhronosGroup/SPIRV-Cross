@@ -62,6 +62,7 @@ struct ShaderResources
 	std::vector<Resource> storage_images;
 	std::vector<Resource> sampled_images;
 	std::vector<Resource> atomic_counters;
+	std::vector<Resource> acceleration_structures;
 
 	// There can only be one push constant block,
 	// but keep the vector in case this restriction is lifted in the future.

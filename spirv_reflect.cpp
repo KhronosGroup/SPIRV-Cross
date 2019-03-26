@@ -436,6 +436,7 @@ void CompilerReflection::emit_resources()
 	emit_resources("ubos", res.uniform_buffers);
 	emit_resources("push_constants", res.push_constant_buffers);
 	emit_resources("counters", res.atomic_counters);
+	emit_resources("acceleration_structures", res.acceleration_structures);
 }
 
 void CompilerReflection::emit_resources(const char *tag, const vector<Resource> &resources)
