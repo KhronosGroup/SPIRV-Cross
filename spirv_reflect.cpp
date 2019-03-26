@@ -365,9 +365,9 @@ string CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
 {
 	switch (model)
 	{
-	case spv::ExecutionModelVertex:
+	case ExecutionModelVertex:
 		return "vert";
-	case spv::ExecutionModelTessellationControl:
+	case ExecutionModelTessellationControl:
 		return "tesc";
 	case ExecutionModelTessellationEvaluation:
 		return "tese";
@@ -377,6 +377,18 @@ string CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
 		return "frag";
 	case ExecutionModelGLCompute:
 		return "comp";
+	case ExecutionModelRayGenerationNV:
+		return "rgen";
+	case ExecutionModelIntersectionNV:
+		return "rint";
+	case ExecutionModelAnyHitNV:
+		return "rahit";
+	case ExecutionModelClosestHitNV:
+		return "rchit";
+	case ExecutionModelMissNV:
+		return "rmiss";
+	case ExecutionModelCallableNV:
+		return "rcall";
 	default:
 		return "???";
 	}
