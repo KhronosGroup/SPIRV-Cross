@@ -4085,7 +4085,12 @@ const char *CompilerMSL::get_memory_order(uint32_t)
 // Override for MSL-specific extension syntax instructions
 void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
 {
-	GLSLstd450 op = static_cast<GLSLstd450>(eop);
+	auto op = static_cast<GLSLstd450>(eop);
+
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_glsl_instruction(op, args, count);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
 
 	switch (op)
 	{
@@ -4100,10 +4105,11 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 
 	case GLSLstd450FindSMsb:
-		emit_unary_func_op(result_type, id, args[0], "findSMSB");
+		emit_unary_func_op_cast(result_type, id, args[0], "findSMSB", int_type, int_type);
 		break;
+
 	case GLSLstd450FindUMsb:
-		emit_unary_func_op(result_type, id, args[0], "findUMSB");
+		emit_unary_func_op_cast(result_type, id, args[0], "findUMSB", uint_type, uint_type);
 		break;
 
 	case GLSLstd450PackSnorm4x8:
