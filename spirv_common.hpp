@@ -440,7 +440,8 @@ struct SPIRType : IVariant
 		Image,
 		SampledImage,
 		Sampler,
-		ControlPointArray
+		ControlPointArray,
+		AccelerationStructureNV
 	};
 
 	// Scalar/vector/matrix support.

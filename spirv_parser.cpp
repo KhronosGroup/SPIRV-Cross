@@ -645,6 +645,14 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpTypeAccelerationStructureNV:
+	{
+		uint32_t id = ops[0];
+		auto &type = set<SPIRType>(id);
+		type.basetype = SPIRType::AccelerationStructureNV;
+		break;
+	}
+
 	// Variable declaration
 	// All variables are essentially pointers with a storage qualifier.
 	case OpVariable:

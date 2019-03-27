@@ -144,6 +144,14 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpMemoryBarrier:
 			return false;
 
+		// Ray tracing builtins are impure.
+		case OpReportIntersectionNV:
+		case OpIgnoreIntersectionNV:
+		case OpTerminateRayNV:
+		case OpTraceNV:
+		case OpExecuteCallableNV:
+			return false;
+
 			// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
 
 		default:
@@ -811,6 +819,11 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<uint32_t> *ac
 		else if (type.storage == StorageClassAtomicCounter)
 		{
 			res.atomic_counters.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+		}
+		// Acceleration structures
+		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::AccelerationStructureNV)
+		{
+			res.acceleration_structures.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
 	});
 
