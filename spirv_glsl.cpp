@@ -3786,6 +3786,63 @@ void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id,
 	inherit_expression_dependencies(result_id, op1);
 }
 
+void CompilerGLSL::emit_unary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op,
+                                           SPIRType::BaseType input_type, SPIRType::BaseType expected_result_type)
+{
+	auto &out_type = get<SPIRType>(result_type);
+	auto expected_type = out_type;
+	expected_type.basetype = input_type;
+	string cast_op = expression_type(op0).basetype != input_type ? bitcast_glsl(expected_type, op0) : to_expression(op0);
+
+	string expr;
+	if (out_type.basetype != expected_result_type)
+	{
+		expected_type.basetype = expected_result_type;
+		expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(op, "(", cast_op, ")");
+		expr += ')';
+	}
+	else
+	{
+		expr += join(op, "(", cast_op, ")");
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0));
+	inherit_expression_dependencies(result_id, op0);
+}
+
+void CompilerGLSL::emit_trinary_func_op_cast(uint32_t result_type, uint32_t result_id,
+                                             uint32_t op0, uint32_t op1, uint32_t op2,
+                                             const char *op,
+                                             SPIRType::BaseType input_type)
+{
+	auto &out_type = get<SPIRType>(result_type);
+	auto expected_type = out_type;
+	expected_type.basetype = input_type;
+	string cast_op0 = expression_type(op0).basetype != input_type ? bitcast_glsl(expected_type, op0) : to_expression(op0);
+	string cast_op1 = expression_type(op1).basetype != input_type ? bitcast_glsl(expected_type, op1) : to_expression(op1);
+	string cast_op2 = expression_type(op2).basetype != input_type ? bitcast_glsl(expected_type, op2) : to_expression(op2);
+
+	string expr;
+	if (out_type.basetype != input_type)
+	{
+		expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(op, "(", cast_op0, ", ", cast_op1, ", ", cast_op2, ")");
+		expr += ')';
+	}
+	else
+	{
+		expr += join(op, "(", cast_op0, ", ", cast_op1, ", ", cast_op2, ")");
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1) && should_forward(op2));
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+	inherit_expression_dependencies(result_id, op2);
+}
+
 void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                             const char *op, SPIRType::BaseType input_type, bool skip_cast_if_equal_type)
 {
@@ -4683,12 +4740,17 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	return farg_str;
 }
 
-void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t)
+void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t length)
 {
 	auto op = static_cast<GLSLstd450>(eop);
 
 	if (is_legacy() && is_unsigned_glsl_opcode(op))
 		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy GLSL targets.");
+
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_glsl_instruction(op, args, length);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
 
 	switch (op)
 	{
@@ -4708,10 +4770,14 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_unary_func_op(result_type, id, args[0], "trunc");
 		break;
 	case GLSLstd450SAbs:
+		emit_unary_func_op_cast(result_type, id, args[0], "abs", int_type, int_type);
+		break;
 	case GLSLstd450FAbs:
 		emit_unary_func_op(result_type, id, args[0], "abs");
 		break;
 	case GLSLstd450SSign:
+		emit_unary_func_op_cast(result_type, id, args[0], "sign", int_type, int_type);
+		break;
 	case GLSLstd450FSign:
 		emit_unary_func_op(result_type, id, args[0], "sign");
 		break;
@@ -4754,19 +4820,39 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 
 	// Minmax
 	case GLSLstd450UMin:
-	case GLSLstd450FMin:
+		emit_binary_func_op_cast(result_type, id, args[0], args[1], "min", uint_type, false);
+		break;
+
 	case GLSLstd450SMin:
+		emit_binary_func_op_cast(result_type, id, args[0], args[1], "min", int_type, false);
+		break;
+
+	case GLSLstd450FMin:
 		emit_binary_func_op(result_type, id, args[0], args[1], "min");
 		break;
+
 	case GLSLstd450FMax:
-	case GLSLstd450UMax:
-	case GLSLstd450SMax:
 		emit_binary_func_op(result_type, id, args[0], args[1], "max");
 		break;
+
+	case GLSLstd450UMax:
+		emit_binary_func_op_cast(result_type, id, args[0], args[1], "max", uint_type, false);
+		break;
+
+	case GLSLstd450SMax:
+		emit_binary_func_op_cast(result_type, id, args[0], args[1], "max", int_type, false);
+		break;
+
 	case GLSLstd450FClamp:
-	case GLSLstd450UClamp:
-	case GLSLstd450SClamp:
 		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "clamp");
+		break;
+
+	case GLSLstd450UClamp:
+		emit_trinary_func_op_cast(result_type, id, args[0], args[1], args[2], "clamp", uint_type);
+		break;
+
+	case GLSLstd450SClamp:
+		emit_trinary_func_op_cast(result_type, id, args[0], args[1], args[2], "clamp", int_type);
 		break;
 
 	// Trig
@@ -4943,9 +5029,13 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	case GLSLstd450FindILsb:
 		emit_unary_func_op(result_type, id, args[0], "findLSB");
 		break;
+
 	case GLSLstd450FindSMsb:
+		emit_unary_func_op_cast(result_type, id, args[0], "findMSB", int_type, int_type);
+		break;
+
 	case GLSLstd450FindUMsb:
-		emit_unary_func_op(result_type, id, args[0], "findMSB");
+		emit_unary_func_op_cast(result_type, id, args[0], "findMSB", uint_type, int_type); // findMSB always returns int.
 		break;
 
 	// Multisampled varying
@@ -6940,6 +7030,33 @@ uint32_t CompilerGLSL::get_integer_width_for_instruction(const Instruction &inst
 			return type->width;
 		else
 			return 32;
+	}
+	}
+}
+
+uint32_t CompilerGLSL::get_integer_width_for_glsl_instruction(GLSLstd450 op, const uint32_t *ops, uint32_t length) const
+{
+	if (length < 1)
+		return 32;
+
+	switch (op)
+	{
+	case GLSLstd450SAbs:
+	case GLSLstd450SSign:
+	case GLSLstd450UMin:
+	case GLSLstd450SMin:
+	case GLSLstd450UMax:
+	case GLSLstd450SMax:
+	case GLSLstd450UClamp:
+	case GLSLstd450SClamp:
+	case GLSLstd450FindSMsb:
+	case GLSLstd450FindUMsb:
+		return expression_type(ops[0]).width;
+
+	default:
+	{
+		// We don't need to care about other opcodes, just return 32.
+		return 32;
 	}
 	}
 }
