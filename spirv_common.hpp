@@ -423,7 +423,6 @@ struct SPIRType : IVariant
 		Unknown,
 		Void,
 		Boolean,
-		Char,
 		SByte,
 		UByte,
 		Short,
@@ -440,8 +439,11 @@ struct SPIRType : IVariant
 		Image,
 		SampledImage,
 		Sampler,
+		AccelerationStructureNV,
+
+		// Keep internal types at the end.
 		ControlPointArray,
-		AccelerationStructureNV
+		Char
 	};
 
 	// Scalar/vector/matrix support.

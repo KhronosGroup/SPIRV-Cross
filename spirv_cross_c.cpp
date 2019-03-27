@@ -164,6 +164,7 @@ struct spvc_resources_s : ScratchMemoryAllocation
 	std::vector<spvc_reflected_resource> push_constant_buffers;
 	std::vector<spvc_reflected_resource> separate_images;
 	std::vector<spvc_reflected_resource> separate_samplers;
+	std::vector<spvc_reflected_resource> acceleration_structures;
 
 	bool copy_resources(std::vector<spvc_reflected_resource> &outputs, const std::vector<Resource> &inputs);
 	bool copy_resources(const ShaderResources &resources);
@@ -860,6 +861,8 @@ bool spvc_resources_s::copy_resources(const ShaderResources &resources)
 		return false;
 	if (!copy_resources(separate_samplers, resources.separate_samplers))
 		return false;
+	if (!copy_resources(acceleration_structures, resources.acceleration_structures))
+		return false;
 
 	return true;
 }
@@ -997,6 +1000,10 @@ spvc_result spvc_resources_get_resource_list_for_type(spvc_resources resources, 
 
 	case SPVC_RESOURCE_TYPE_SEPARATE_SAMPLERS:
 		list = &resources->separate_samplers;
+		break;
+
+	case SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE:
+		list = &resources->acceleration_structures;
 		break;
 
 	default:
