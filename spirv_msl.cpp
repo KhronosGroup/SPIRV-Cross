@@ -5406,7 +5406,12 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 
 	case StorageClassStorageBuffer:
 	{
-		bool readonly = ir.get_buffer_block_flags(argument).get(DecorationNonWritable);
+		// For arguments from variable pointers, we use the write count deduction, so
+		// we should not assume any constness here. Only for global SSBOs.
+		bool readonly = false;
+		if (has_decoration(type.self, DecorationBlock))
+			readonly = ir.get_buffer_block_flags(argument).get(DecorationNonWritable);
+
 		return readonly ? "const device" : "device";
 	}
 
