@@ -3450,7 +3450,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				if (c.scalar_i16(vector, 0) < 0)
 					SPIRV_CROSS_THROW("Tried to convert uint literal into int, but this made the literal negative.");
 			}
-			else if (backend.uint16_t_literal_suffix)
+			else
 				res += backend.uint16_t_literal_suffix;
 		}
 		else
@@ -3470,7 +3470,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 							SPIRV_CROSS_THROW(
 							    "Tried to convert uint literal into int, but this made the literal negative.");
 					}
-					else if (backend.uint16_t_literal_suffix)
+					else
 						res += backend.uint16_t_literal_suffix;
 				}
 
@@ -3484,8 +3484,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		if (splat)
 		{
 			res += convert_to_string(c.scalar_i16(vector, 0));
-			if (backend.int16_t_literal_suffix)
-				res += backend.int16_t_literal_suffix;
+			res += backend.int16_t_literal_suffix;
 		}
 		else
 		{
@@ -3496,8 +3495,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				else
 				{
 					res += convert_to_string(c.scalar_i16(vector, i));
-					if (backend.int16_t_literal_suffix)
-						res += backend.int16_t_literal_suffix;
+					res += backend.int16_t_literal_suffix;
 				}
 				if (i + 1 < c.vector_size())
 					res += ", ";
