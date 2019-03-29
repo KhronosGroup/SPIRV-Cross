@@ -19,7 +19,7 @@
 #include <iomanip>
 
 using namespace spv;
-using namespace spirv_cross;
+using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
 namespace simple_json

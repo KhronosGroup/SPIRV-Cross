@@ -20,7 +20,7 @@
 #include <assert.h>
 
 using namespace spv;
-using namespace spirv_cross;
+using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
 static unsigned image_format_to_components(ImageFormat fmt)

@@ -20,7 +20,7 @@
 using namespace std;
 using namespace spv;
 
-namespace spirv_cross
+namespace SPIRV_CROSS_NAMESPACE
 {
 Parser::Parser(std::vector<uint32_t> spirv)
 {
