@@ -63,7 +63,7 @@
 #endif
 
 using namespace std;
-using namespace spirv_cross;
+using namespace SPIRV_CROSS_NAMESPACE;
 
 struct ScratchMemoryAllocation
 {

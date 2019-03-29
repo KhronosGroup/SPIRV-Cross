@@ -24,7 +24,7 @@
 
 using namespace std;
 using namespace spv;
-using namespace spirv_cross;
+using namespace SPIRV_CROSS_NAMESPACE;
 
 Compiler::Compiler(vector<uint32_t> ir_)
 {
@@ -3825,7 +3825,7 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 	}
 }
 
-Compiler::CFGBuilder::CFGBuilder(spirv_cross::Compiler &compiler_)
+Compiler::CFGBuilder::CFGBuilder(Compiler &compiler_)
     : compiler(compiler_)
 {
 }
@@ -4109,12 +4109,12 @@ bool Compiler::is_desktop_only_format(spv::ImageFormat format)
 	return false;
 }
 
-bool Compiler::image_is_comparison(const spirv_cross::SPIRType &type, uint32_t id) const
+bool Compiler::image_is_comparison(const SPIRType &type, uint32_t id) const
 {
 	return type.image.depth || (comparison_ids.count(id) != 0);
 }
 
-bool Compiler::type_is_opaque_value(const spirv_cross::SPIRType &type) const
+bool Compiler::type_is_opaque_value(const SPIRType &type) const
 {
 	return !type.pointer && (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image ||
 	                         type.basetype == SPIRType::Sampler);

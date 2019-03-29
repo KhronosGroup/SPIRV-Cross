@@ -36,6 +36,8 @@ option(SPIRV_CROSS_SANITIZE_MEMORY "Sanitize memory" OFF)
 option(SPIRV_CROSS_SANITIZE_THREADS "Sanitize threads" OFF)
 option(SPIRV_CROSS_SANITIZE_UNDEFINED "Sanitize undefined" OFF)
 
+option(SPIRV_CROSS_NAMESPACE_OVERRIDE "" "Override the namespace used in the C++ API.")
+
 if(${CMAKE_GENERATOR} MATCHES "Makefile")
 	if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
 		message(FATAL_ERROR "Build out of tree to avoid overwriting Makefile")
@@ -99,8 +101,8 @@ macro(extract_headers out_abs file_list)
 	endforeach()
 endmacro()
 
-macro(spirv_cross_add_library name config_name)
-	add_library(${name} ${ARGN})
+macro(spirv_cross_add_library name config_name library_type)
+	add_library(${name} ${library_type} ${ARGN})
 	extract_headers(hdrs "${ARGN}")
 	target_include_directories(${name} PUBLIC
 			$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -109,6 +111,13 @@ macro(spirv_cross_add_library name config_name)
 			PUBLIC_HEADERS "${hdrs}")
 	target_compile_options(${name} PRIVATE ${spirv-compiler-options})
 	target_compile_definitions(${name} PRIVATE ${spirv-compiler-defines})
+	if (SPIRV_CROSS_NAMESPACE_OVERRIDE)
+		if (${library_type} MATCHES "STATIC")
+			target_compile_definitions(${name} PUBLIC SPIRV_CROSS_NAMESPACE_OVERRIDE=${SPIRV_CROSS_NAMESPACE_OVERRIDE})
+		else()
+			target_compile_definitions(${name} PRIVATE SPIRV_CROSS_NAMESPACE_OVERRIDE=${SPIRV_CROSS_NAMESPACE_OVERRIDE})
+		endif()
+	endif()
 	install(TARGETS ${name}
 			EXPORT ${config_name}Config
 			RUNTIME DESTINATION bin
@@ -184,8 +193,12 @@ if (SPIRV_CROSS_STATIC)
 	endif()
 
 	if (SPIRV_CROSS_ENABLE_REFLECT)
-		spirv_cross_add_library(spirv-cross-reflect spirv_cross_reflect STATIC
-				${spirv-cross-reflect-sources})
+		if (SPIRV_CROSS_ENABLE_GLSL)
+			spirv_cross_add_library(spirv-cross-reflect spirv_cross_reflect STATIC
+					${spirv-cross-reflect-sources})
+		else()
+			message(FATAL_ERROR "Must enable GLSL support to enable JSON reflection support.")
+		endif()
 	endif()
 
 	if (SPIRV_CROSS_ENABLE_MSL)
@@ -294,7 +307,11 @@ if (SPIRV_CROSS_SHARED)
 	endif()
 
 	if (SPIRV_CROSS_ENABLE_REFLECT)
-		target_sources(spirv-cross-c-shared PRIVATE ${spirv-cross-reflect-sources})
+		if (SPIRV_CROSS_ENABLE_GLSL)
+			target_sources(spirv-cross-c-shared PRIVATE ${spirv-cross-reflect-sources})
+		else()
+			message(FATAL_ERROR "Must enable GLSL support to enable JSON reflection support.")
+		endif()
 		target_compile_definitions(spirv-cross-c-shared PRIVATE SPIRV_CROSS_C_API_REFLECT=1)
 	endif()
 

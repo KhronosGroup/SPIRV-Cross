@@ -21,7 +21,7 @@
 #include "spirv_cfg.hpp"
 #include "spirv_cross_parsed_ir.hpp"
 
-namespace spirv_cross
+namespace SPIRV_CROSS_NAMESPACE
 {
 struct Resource
 {

@@ -24,7 +24,7 @@
 #include <unordered_set>
 #include <utility>
 
-namespace spirv_cross
+namespace SPIRV_CROSS_NAMESPACE
 {
 enum PlsFormat
 {

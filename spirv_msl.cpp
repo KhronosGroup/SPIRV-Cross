@@ -22,7 +22,7 @@
 #include <numeric>
 
 using namespace spv;
-using namespace spirv_cross;
+using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
 static const uint32_t k_unknown_location = ~0u;
