@@ -20,20 +20,19 @@
 #include "spirv.hpp"
 
 #include <algorithm>
-#include <cstdio>
-#include <cstring>
 #include <functional>
 #include <memory>
-#include <sstream>
 #include <stack>
 #include <stdexcept>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <vector>
 
 // A bit crude, but allows projects which embed SPIRV-Cross statically to
 // effectively hide all the symbols from other projects.
@@ -105,16 +104,543 @@ public:
 #define SPIRV_CROSS_DEPRECATED(reason)
 #endif
 
+// std::aligned_storage does not support size == 0, so roll our own.
+template <typename T, size_t N>
+class AlignedBuffer
+{
+public:
+	T *data()
+	{
+		return reinterpret_cast<T *>(aligned_char);
+	}
+
+private:
+	alignas(T) char aligned_char[sizeof(T) * N];
+};
+
+template <typename T>
+class AlignedBuffer<T, 0>
+{
+public:
+	T *data()
+	{
+		return nullptr;
+	}
+};
+
+// An immutable version of SmallVector which erases type information about storage.
+template <typename T>
+class VectorView
+{
+public:
+	T &operator[](size_t i)
+	{
+		return ptr[i];
+	}
+
+	const T &operator[](size_t i) const
+	{
+		return ptr[i];
+	}
+
+	bool empty() const
+	{
+		return buffer_size == 0;
+	}
+
+	size_t size() const
+	{
+		return buffer_size;
+	}
+
+	T *data()
+	{
+		return ptr;
+	}
+
+	const T *data() const
+	{
+		return ptr;
+	}
+
+	T *begin()
+	{
+		return ptr;
+	}
+
+	T *end()
+	{
+		return ptr + buffer_size;
+	}
+
+	const T *begin() const
+	{
+		return ptr;
+	}
+
+	const T *end() const
+	{
+		return ptr + buffer_size;
+	}
+
+	T &front()
+	{
+		return ptr[0];
+	}
+
+	const T &front() const
+	{
+		return ptr[0];
+	}
+
+	T &back()
+	{
+		return ptr[buffer_size - 1];
+	}
+
+	const T &back() const
+	{
+		return ptr[buffer_size - 1];
+	}
+
+	// Avoid sliced copies. Base class should only be read as a reference.
+	VectorView(const VectorView &) = delete;
+	void operator=(const VectorView &) = delete;
+
+protected:
+	VectorView() = default;
+	T *ptr = nullptr;
+	size_t buffer_size = 0;
+};
+
+// Simple vector which supports up to N elements inline, without malloc/free.
+// We use a lot of throwaway vectors all over the place which triggers allocations.
+// This class only implements the subset of std::vector we need in SPIRV-Cross.
+// It is *NOT* a drop-in replacement.
+template <typename T, size_t N = 8>
+class SmallVector : public VectorView<T>
+{
+public:
+	SmallVector()
+	{
+		this->ptr = stack_storage.data();
+		buffer_capacity = N;
+	}
+
+	SmallVector(const T *arg_list_begin, const T *arg_list_end)
+	    : SmallVector()
+	{
+		auto count = size_t(arg_list_end - arg_list_begin);
+		reserve(count);
+		for (size_t i = 0; i < count; i++, arg_list_begin++)
+			new (&this->ptr[i]) T(*arg_list_begin);
+		this->buffer_size = count;
+	}
+
+	SmallVector(SmallVector &&other) SPIRV_CROSS_NOEXCEPT : SmallVector()
+	{
+		*this = std::move(other);
+	}
+
+	SmallVector &operator=(SmallVector &&other) SPIRV_CROSS_NOEXCEPT
+	{
+		clear();
+		if (other.ptr != other.stack_storage.data())
+		{
+			// Pilfer allocated pointer.
+			if (this->ptr != stack_storage.data())
+				free(this->ptr);
+			this->ptr = other.ptr;
+			this->buffer_size = other.buffer_size;
+			buffer_capacity = other.buffer_capacity;
+			other.ptr = nullptr;
+			other.buffer_size = 0;
+			other.buffer_capacity = 0;
+		}
+		else
+		{
+			// Need to move the stack contents individually.
+			reserve(other.buffer_size);
+			for (size_t i = 0; i < other.buffer_size; i++)
+			{
+				new (&this->ptr[i]) T(std::move(other.ptr[i]));
+				other.ptr[i].~T();
+			}
+			this->buffer_size = other.buffer_size;
+			other.buffer_size = 0;
+		}
+		return *this;
+	}
+
+	SmallVector(const SmallVector &other)
+	    : SmallVector()
+	{
+		*this = other;
+	}
+
+	SmallVector &operator=(const SmallVector &other)
+	{
+		clear();
+		reserve(other.buffer_size);
+		for (size_t i = 0; i < other.buffer_size; i++)
+			new (&this->ptr[i]) T(other.ptr[i]);
+		this->buffer_size = other.buffer_size;
+		return *this;
+	}
+
+	explicit SmallVector(size_t count)
+	    : SmallVector()
+	{
+		resize(count);
+	}
+
+	~SmallVector()
+	{
+		clear();
+		if (this->ptr != stack_storage.data())
+			free(this->ptr);
+	}
+
+	void clear()
+	{
+		for (size_t i = 0; i < this->buffer_size; i++)
+			this->ptr[i].~T();
+		this->buffer_size = 0;
+	}
+
+	void push_back(const T &t)
+	{
+		reserve(this->buffer_size + 1);
+		new (&this->ptr[this->buffer_size]) T(t);
+		this->buffer_size++;
+	}
+
+	void push_back(T &&t)
+	{
+		reserve(this->buffer_size + 1);
+		new (&this->ptr[this->buffer_size]) T(std::move(t));
+		this->buffer_size++;
+	}
+
+	void pop_back()
+	{
+		resize(this->buffer_size - 1);
+	}
+
+	template <typename... Ts>
+	void emplace_back(Ts &&... ts)
+	{
+		reserve(this->buffer_size + 1);
+		new (&this->ptr[this->buffer_size]) T(std::forward<Ts>(ts)...);
+		this->buffer_size++;
+	}
+
+	void reserve(size_t count)
+	{
+		if (count > buffer_capacity)
+		{
+			size_t target_capacity = buffer_capacity;
+			if (target_capacity == 0)
+				target_capacity = 1;
+			if (target_capacity < N)
+				target_capacity = N;
+
+			while (target_capacity < count)
+				target_capacity <<= 1u;
+
+			T *new_buffer =
+			    target_capacity > N ? static_cast<T *>(malloc(target_capacity * sizeof(T))) : stack_storage.data();
+
+			if (!new_buffer)
+				SPIRV_CROSS_THROW("Out of memory.");
+
+			// In case for some reason two allocations both come from same stack.
+			if (new_buffer != this->ptr)
+			{
+				// We don't deal with types which can throw in move constructor.
+				for (size_t i = 0; i < this->buffer_size; i++)
+				{
+					new (&new_buffer[i]) T(std::move(this->ptr[i]));
+					this->ptr[i].~T();
+				}
+			}
+
+			if (this->ptr != stack_storage.data())
+				free(this->ptr);
+			this->ptr = new_buffer;
+			buffer_capacity = target_capacity;
+		}
+	}
+
+	void insert(T *itr, const T *insert_begin, const T *insert_end)
+	{
+		if (itr == this->end())
+		{
+			auto count = size_t(insert_end - insert_begin);
+			reserve(this->buffer_size + count);
+			for (size_t i = 0; i < count; i++, insert_begin++)
+				new (&this->ptr[this->buffer_size + i]) T(*insert_begin);
+			this->buffer_size += count;
+		}
+		else
+			SPIRV_CROSS_THROW("Mid-insert not implemented.");
+	}
+
+	T *erase(T *itr)
+	{
+		std::move(itr + 1, this->end(), itr);
+		this->ptr[--this->buffer_size].~T();
+		return itr;
+	}
+
+	void erase(T *start_erase, T *end_erase)
+	{
+		if (end_erase != this->end())
+			SPIRV_CROSS_THROW("Mid-erase not implemented.");
+		resize(size_t(start_erase - this->begin()));
+	}
+
+	void resize(size_t new_size)
+	{
+		if (new_size < this->buffer_size)
+		{
+			for (size_t i = new_size; i < this->buffer_size; i++)
+				this->ptr[i].~T();
+		}
+		else if (new_size > this->buffer_size)
+		{
+			reserve(new_size);
+			for (size_t i = this->buffer_size; i < new_size; i++)
+				new (&this->ptr[i]) T();
+		}
+
+		this->buffer_size = new_size;
+	}
+
+private:
+	size_t buffer_capacity = 0;
+	AlignedBuffer<T, N> stack_storage;
+};
+
+// A vector without stack storage.
+// Could also be a typedef-ed to std::vector,
+// but might as well use the one we have.
+template <typename T>
+using Vector = SmallVector<T, 0>;
+
+// An object pool which we use for allocating IVariant-derived objects.
+// We know we are going to allocate a bunch of objects of each type,
+// so amortize the mallocs.
+class ObjectPoolBase
+{
+public:
+	virtual ~ObjectPoolBase() = default;
+	virtual void free_opaque(void *ptr) = 0;
+};
+
+template <typename T>
+class ObjectPool : public ObjectPoolBase
+{
+public:
+	explicit ObjectPool(unsigned start_object_count_ = 16)
+	    : start_object_count(start_object_count_)
+	{
+	}
+
+	template <typename... P>
+	T *allocate(P &&... p)
+	{
+		if (vacants.empty())
+		{
+			unsigned num_objects = start_object_count << memory.size();
+			T *ptr = static_cast<T *>(malloc(num_objects * sizeof(T)));
+			if (!ptr)
+				return nullptr;
+
+			for (unsigned i = 0; i < num_objects; i++)
+				vacants.push_back(&ptr[i]);
+
+			memory.emplace_back(ptr);
+		}
+
+		T *ptr = vacants.back();
+		vacants.pop_back();
+		new (ptr) T(std::forward<P>(p)...);
+		return ptr;
+	}
+
+	void free(T *ptr)
+	{
+		ptr->~T();
+		vacants.push_back(ptr);
+	}
+
+	void free_opaque(void *ptr) override
+	{
+		free(static_cast<T *>(ptr));
+	}
+
+	void clear()
+	{
+		vacants.clear();
+		memory.clear();
+	}
+
+protected:
+	Vector<T *> vacants;
+
+	struct MallocDeleter
+	{
+		void operator()(T *ptr)
+		{
+			::free(ptr);
+		}
+	};
+
+	SmallVector<std::unique_ptr<T, MallocDeleter>> memory;
+	unsigned start_object_count;
+};
+
+template <size_t StackSize = 4096, size_t BlockSize = 4096>
+class StringStream
+{
+public:
+	StringStream()
+	{
+		reset();
+	}
+
+	~StringStream()
+	{
+		reset();
+	}
+
+	// Disable copies and moves. Makes it easier to implement, and we don't need it.
+	StringStream(const StringStream &) = delete;
+	void operator=(const StringStream &) = delete;
+
+	template <typename T, typename std::enable_if<!std::is_floating_point<T>::value, int>::type = 0>
+	StringStream &operator<<(const T &t)
+	{
+		auto s = std::to_string(t);
+		append(s.data(), s.size());
+		return *this;
+	}
+
+	// Only overload this to make float/double conversions ambiguous.
+	StringStream &operator<<(uint32_t v)
+	{
+		auto s = std::to_string(v);
+		append(s.data(), s.size());
+		return *this;
+	}
+
+	StringStream &operator<<(char c)
+	{
+		append(&c, 1);
+		return *this;
+	}
+
+	StringStream &operator<<(const std::string &str)
+	{
+		append(str.data(), str.size());
+		return *this;
+	}
+
+	StringStream &operator<<(const char *s)
+	{
+		append(s, strlen(s));
+		return *this;
+	}
+
+	template <size_t N>
+	StringStream &operator<<(const char (&s)[N])
+	{
+		append(s, strlen(s));
+		return *this;
+	}
+
+	std::string str() const
+	{
+		std::string ret;
+		size_t target_size = 0;
+		for (auto &saved : saved_buffers)
+			target_size += saved.offset;
+		target_size += current_buffer.offset;
+		ret.reserve(target_size);
+
+		for (auto &saved : saved_buffers)
+			ret.insert(ret.end(), saved.buffer, saved.buffer + saved.offset);
+		ret.insert(ret.end(), current_buffer.buffer, current_buffer.buffer + current_buffer.offset);
+		return ret;
+	}
+
+	void reset()
+	{
+		for (auto &saved : saved_buffers)
+			if (saved.buffer != stack_buffer)
+				free(saved.buffer);
+		if (current_buffer.buffer != stack_buffer)
+			free(current_buffer.buffer);
+
+		saved_buffers.clear();
+		current_buffer.buffer = stack_buffer;
+		current_buffer.offset = 0;
+		current_buffer.size = sizeof(stack_buffer);
+	}
+
+private:
+	struct Buffer
+	{
+		char *buffer;
+		size_t offset;
+		size_t size;
+	};
+	Buffer current_buffer = {};
+	char stack_buffer[StackSize];
+	SmallVector<Buffer> saved_buffers;
+
+	void append(const char *str, size_t len)
+	{
+		size_t avail = current_buffer.size - current_buffer.offset;
+		if (avail < len)
+		{
+			if (avail > 0)
+			{
+				memcpy(current_buffer.buffer + current_buffer.offset, str, avail);
+				str += avail;
+				len -= avail;
+				current_buffer.offset += avail;
+			}
+
+			saved_buffers.push_back(current_buffer);
+			size_t target_size = len > BlockSize ? len : BlockSize;
+			current_buffer.buffer = static_cast<char *>(malloc(target_size));
+			if (!current_buffer.buffer)
+				SPIRV_CROSS_THROW("Out of memory.");
+
+			memcpy(current_buffer.buffer, str, len);
+			current_buffer.offset = len;
+			current_buffer.size = target_size;
+		}
+		else
+		{
+			memcpy(current_buffer.buffer + current_buffer.offset, str, len);
+			current_buffer.offset += len;
+		}
+	}
+};
+
 namespace inner
 {
 template <typename T>
-void join_helper(std::ostringstream &stream, T &&t)
+void join_helper(StringStream<> &stream, T &&t)
 {
 	stream << std::forward<T>(t);
 }
 
 template <typename T, typename... Ts>
-void join_helper(std::ostringstream &stream, T &&t, Ts &&... ts)
+void join_helper(StringStream<> &stream, T &&t, Ts &&... ts)
 {
 	stream << std::forward<T>(t);
 	join_helper(stream, std::forward<Ts>(ts)...);
@@ -217,7 +743,7 @@ public:
 
 		// Need to enforce an order here for reproducible results,
 		// but hitting this path should happen extremely rarely, so having this slow path is fine.
-		std::vector<uint32_t> bits;
+		SmallVector<uint32_t> bits;
 		bits.reserve(higher.size());
 		for (auto &v : higher)
 			bits.push_back(v);
@@ -244,21 +770,21 @@ private:
 template <typename... Ts>
 std::string join(Ts &&... ts)
 {
-	std::ostringstream stream;
+	StringStream<> stream;
 	inner::join_helper(stream, std::forward<Ts>(ts)...);
 	return stream.str();
 }
 
-inline std::string merge(const std::vector<std::string> &list)
+inline std::string merge(const SmallVector<std::string> &list)
 {
-	std::string s;
+	StringStream<> stream;
 	for (auto &elem : list)
 	{
-		s += elem;
+		stream << elem;
 		if (&elem != &list.back())
-			s += ", ";
+			stream << ", ";
 	}
-	return s;
+	return stream.str();
 }
 
 // Make sure we don't accidentally call this with float or doubles with SFINAE.
@@ -340,15 +866,14 @@ struct Instruction
 struct IVariant
 {
 	virtual ~IVariant() = default;
-	virtual std::unique_ptr<IVariant> clone() = 0;
-
+	virtual IVariant *clone(ObjectPoolBase *pool) = 0;
 	uint32_t self = 0;
 };
 
-#define SPIRV_CROSS_DECLARE_CLONE(T)                    \
-	std::unique_ptr<IVariant> clone() override          \
-	{                                                   \
-		return std::unique_ptr<IVariant>(new T(*this)); \
+#define SPIRV_CROSS_DECLARE_CLONE(T)                                \
+	IVariant *clone(ObjectPoolBase *pool) override                  \
+	{                                                               \
+		return static_cast<ObjectPool<T> *>(pool)->allocate(*this); \
 	}
 
 enum Types
@@ -421,7 +946,7 @@ struct SPIRConstantOp : IVariant
 	}
 
 	spv::Op opcode;
-	std::vector<uint32_t> arguments;
+	SmallVector<uint32_t> arguments;
 	uint32_t basetype;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRConstantOp)
@@ -469,14 +994,14 @@ struct SPIRType : IVariant
 	uint32_t columns = 1;
 
 	// Arrays, support array of arrays by having a vector of array sizes.
-	std::vector<uint32_t> array;
+	SmallVector<uint32_t> array;
 
 	// Array elements can be either specialization constants or specialization ops.
 	// This array determines how to interpret the array size.
 	// If an element is true, the element is a literal,
 	// otherwise, it's an expression, which must be resolved on demand.
 	// The actual size is not really known until runtime.
-	std::vector<bool> array_size_literal;
+	SmallVector<bool> array_size_literal;
 
 	// Pointers
 	// Keep track of how many pointer layers we have.
@@ -485,7 +1010,7 @@ struct SPIRType : IVariant
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
 
-	std::vector<uint32_t> member_types;
+	SmallVector<uint32_t> member_types;
 
 	struct ImageType
 	{
@@ -556,7 +1081,7 @@ struct SPIREntryPoint
 	uint32_t self = 0;
 	std::string name;
 	std::string orig_name;
-	std::vector<uint32_t> interface_variables;
+	SmallVector<uint32_t> interface_variables;
 
 	Bitset flags;
 	struct
@@ -610,11 +1135,11 @@ struct SPIRExpression : IVariant
 	bool access_chain = false;
 
 	// A list of expressions which this expression depends on.
-	std::vector<uint32_t> expression_dependencies;
+	SmallVector<uint32_t> expression_dependencies;
 
 	// By reading this expression, we implicitly read these expressions as well.
 	// Used by access chain Store and Load since we read multiple expressions in this case.
-	std::vector<uint32_t> implied_read_expressions;
+	SmallVector<uint32_t> implied_read_expressions;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRExpression)
 };
@@ -632,7 +1157,7 @@ struct SPIRFunctionPrototype : IVariant
 	}
 
 	uint32_t return_type;
-	std::vector<uint32_t> parameter_types;
+	SmallVector<uint32_t> parameter_types;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRFunctionPrototype)
 };
@@ -716,7 +1241,7 @@ struct SPIRBlock : IVariant
 	uint32_t false_block = 0;
 	uint32_t default_block = 0;
 
-	std::vector<Instruction> ops;
+	SmallVector<Instruction> ops;
 
 	struct Phi
 	{
@@ -726,22 +1251,22 @@ struct SPIRBlock : IVariant
 	};
 
 	// Before entering this block flush out local variables to magical "phi" variables.
-	std::vector<Phi> phi_variables;
+	SmallVector<Phi> phi_variables;
 
 	// Declare these temporaries before beginning the block.
 	// Used for handling complex continue blocks which have side effects.
-	std::vector<std::pair<uint32_t, uint32_t>> declare_temporary;
+	SmallVector<std::pair<uint32_t, uint32_t>> declare_temporary;
 
 	// Declare these temporaries, but only conditionally if this block turns out to be
 	// a complex loop header.
-	std::vector<std::pair<uint32_t, uint32_t>> potential_declare_temporary;
+	SmallVector<std::pair<uint32_t, uint32_t>> potential_declare_temporary;
 
 	struct Case
 	{
 		uint32_t value;
 		uint32_t block;
 	};
-	std::vector<Case> cases;
+	SmallVector<Case> cases;
 
 	// If we have tried to optimize code for this block but failed,
 	// keep track of this.
@@ -759,17 +1284,17 @@ struct SPIRBlock : IVariant
 
 	// All access to these variables are dominated by this block,
 	// so before branching anywhere we need to make sure that we declare these variables.
-	std::vector<uint32_t> dominated_variables;
+	SmallVector<uint32_t> dominated_variables;
 
 	// These are variables which should be declared in a for loop header, if we
 	// fail to use a classic for-loop,
 	// we remove these variables, and fall back to regular variables outside the loop.
-	std::vector<uint32_t> loop_variables;
+	SmallVector<uint32_t> loop_variables;
 
 	// Some expressions are control-flow dependent, i.e. any instruction which relies on derivatives or
 	// sub-group-like operations.
 	// Make sure that we only use these expressions in the original block.
-	std::vector<uint32_t> invalidate_expressions;
+	SmallVector<uint32_t> invalidate_expressions;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRBlock)
 };
@@ -822,16 +1347,16 @@ struct SPIRFunction : IVariant
 
 	uint32_t return_type;
 	uint32_t function_type;
-	std::vector<Parameter> arguments;
+	SmallVector<Parameter> arguments;
 
 	// Can be used by backends to add magic arguments.
 	// Currently used by combined image/sampler implementation.
 
-	std::vector<Parameter> shadow_arguments;
-	std::vector<uint32_t> local_variables;
+	SmallVector<Parameter> shadow_arguments;
+	SmallVector<uint32_t> local_variables;
 	uint32_t entry_block = 0;
-	std::vector<uint32_t> blocks;
-	std::vector<CombinedImageSamplerParameter> combined_parameters;
+	SmallVector<uint32_t> blocks;
+	SmallVector<CombinedImageSamplerParameter> combined_parameters;
 
 	void add_local_variable(uint32_t id)
 	{
@@ -847,17 +1372,19 @@ struct SPIRFunction : IVariant
 	// Hooks to be run when the function returns.
 	// Mostly used for lowering internal data structures onto flattened structures.
 	// Need to defer this, because they might rely on things which change during compilation.
-	std::vector<std::function<void()>> fixup_hooks_out;
+	// Intentionally not a small vector, this one is rare, and std::function can be large.
+	Vector<std::function<void()>> fixup_hooks_out;
 
 	// Hooks to be run when the function begins.
 	// Mostly used for populating internal data structures from flattened structures.
 	// Need to defer this, because they might rely on things which change during compilation.
-	std::vector<std::function<void()>> fixup_hooks_in;
+	// Intentionally not a small vector, this one is rare, and std::function can be large.
+	Vector<std::function<void()>> fixup_hooks_in;
 
 	// On function entry, make sure to copy a constant array into thread addr space to work around
 	// the case where we are passing a constant array by value to a function on backends which do not
 	// consider arrays value types.
-	std::vector<uint32_t> constant_arrays_needed_on_stack;
+	SmallVector<uint32_t> constant_arrays_needed_on_stack;
 
 	bool active = false;
 	bool flush_undeclared = true;
@@ -901,7 +1428,7 @@ struct SPIRAccessChain : IVariant
 
 	// By reading this expression, we implicitly read these expressions as well.
 	// Used by access chain Store and Load since we read multiple expressions in this case.
-	std::vector<uint32_t> implied_read_expressions;
+	SmallVector<uint32_t> implied_read_expressions;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRAccessChain)
 };
@@ -928,7 +1455,7 @@ struct SPIRVariable : IVariant
 	uint32_t initializer = 0;
 	uint32_t basevariable = 0;
 
-	std::vector<uint32_t> dereference_chain;
+	SmallVector<uint32_t> dereference_chain;
 	bool compat_builtin = false;
 
 	// If a variable is shadowed, we only statically assign to it
@@ -939,7 +1466,7 @@ struct SPIRVariable : IVariant
 	uint32_t static_expression = 0;
 
 	// Temporaries which can remain forwarded as long as this variable is not modified.
-	std::vector<uint32_t> dependees;
+	SmallVector<uint32_t> dependees;
 	bool forwardable = true;
 
 	bool deferred_declaration = false;
@@ -1178,7 +1705,7 @@ struct SPIRConstant : IVariant
 	    : constant_type(constant_type_)
 	    , specialization(specialized)
 	{
-		subconstants.insert(end(subconstants), elements, elements + num_elements);
+		subconstants.insert(std::end(subconstants), elements, elements + num_elements);
 		specialization = specialized;
 	}
 
@@ -1247,7 +1774,7 @@ struct SPIRConstant : IVariant
 	bool is_used_as_lut = false;
 
 	// For composites which are constant arrays, etc.
-	std::vector<uint32_t> subconstants;
+	SmallVector<uint32_t> subconstants;
 
 	// Non-Vulkan GLSL, HLSL and sometimes MSL emits defines for each specialization constant,
 	// and uses them to initialize the constant. This allows the user
@@ -1258,11 +1785,25 @@ struct SPIRConstant : IVariant
 	SPIRV_CROSS_DECLARE_CLONE(SPIRConstant)
 };
 
+// Variants have a very specific allocation scheme.
+struct ObjectPoolGroup
+{
+	std::unique_ptr<ObjectPoolBase> pools[TypeCount];
+};
+
 class Variant
 {
 public:
-	// MSVC 2013 workaround, we shouldn't need these constructors.
-	Variant() = default;
+	explicit Variant(ObjectPoolGroup *group_)
+	    : group(group_)
+	{
+	}
+
+	~Variant()
+	{
+		if (holder)
+			group->pools[type]->free_opaque(holder);
+	}
 
 	// Marking custom move constructor as noexcept is important.
 	Variant(Variant &&other) SPIRV_CROSS_NOEXCEPT
@@ -1270,19 +1811,23 @@ public:
 		*this = std::move(other);
 	}
 
-	Variant(const Variant &variant)
-	{
-		*this = variant;
-	}
+	// We cannot copy from other variant without our own pool group.
+	// Have to explicitly copy.
+	Variant(const Variant &variant) = delete;
 
 	// Marking custom move constructor as noexcept is important.
 	Variant &operator=(Variant &&other) SPIRV_CROSS_NOEXCEPT
 	{
 		if (this != &other)
 		{
-			holder = std::move(other.holder);
+			if (holder)
+				group->pools[type]->free_opaque(holder);
+			holder = other.holder;
+			group = other.group;
 			type = other.type;
 			allow_type_rewrite = other.allow_type_rewrite;
+
+			other.holder = nullptr;
 			other.type = TypeNone;
 		}
 		return *this;
@@ -1298,22 +1843,35 @@ public:
 #endif
 		if (this != &other)
 		{
-			holder.reset();
+			if (holder)
+				group->pools[type]->free_opaque(holder);
+
 			if (other.holder)
-				holder = other.holder->clone();
+				holder = other.holder->clone(group->pools[other.type].get());
+
 			type = other.type;
 			allow_type_rewrite = other.allow_type_rewrite;
 		}
 		return *this;
 	}
 
-	void set(std::unique_ptr<IVariant> val, Types new_type)
+	void set(IVariant *val, Types new_type)
 	{
-		holder = std::move(val);
+		if (holder)
+			group->pools[type]->free_opaque(holder);
+		holder = val;
 		if (!allow_type_rewrite && type != TypeNone && type != new_type)
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
 		type = new_type;
 		allow_type_rewrite = false;
+	}
+
+	template <typename T, typename... Ts>
+	T *allocate_and_set(Types new_type, Ts &&... ts)
+	{
+		T *val = static_cast<ObjectPool<T> &>(*group->pools[new_type]).allocate(std::forward<Ts>(ts)...);
+		set(val, new_type);
+		return val;
 	}
 
 	template <typename T>
@@ -1323,7 +1881,7 @@ public:
 			SPIRV_CROSS_THROW("nullptr");
 		if (static_cast<Types>(T::type) != type)
 			SPIRV_CROSS_THROW("Bad cast");
-		return *static_cast<T *>(holder.get());
+		return *static_cast<T *>(holder);
 	}
 
 	template <typename T>
@@ -1333,7 +1891,7 @@ public:
 			SPIRV_CROSS_THROW("nullptr");
 		if (static_cast<Types>(T::type) != type)
 			SPIRV_CROSS_THROW("Bad cast");
-		return *static_cast<const T *>(holder.get());
+		return *static_cast<const T *>(holder);
 	}
 
 	Types get_type() const
@@ -1353,7 +1911,9 @@ public:
 
 	void reset()
 	{
-		holder.reset();
+		if (holder)
+			group->pools[type]->free_opaque(holder);
+		holder = nullptr;
 		type = TypeNone;
 	}
 
@@ -1363,7 +1923,8 @@ public:
 	}
 
 private:
-	std::unique_ptr<IVariant> holder;
+	ObjectPoolGroup *group = nullptr;
+	IVariant *holder = nullptr;
 	Types type = TypeNone;
 	bool allow_type_rewrite = false;
 };
@@ -1383,9 +1944,7 @@ const T &variant_get(const Variant &var)
 template <typename T, typename... P>
 T &variant_set(Variant &var, P &&... args)
 {
-	auto uptr = std::unique_ptr<T>(new T(std::forward<P>(args)...));
-	auto ptr = uptr.get();
-	var.set(std::move(uptr), static_cast<Types>(T::type));
+	auto *ptr = var.allocate_and_set<T>(static_cast<Types>(T::type), std::forward<P>(args)...);
 	return *ptr;
 }
 
@@ -1430,7 +1989,9 @@ struct Meta
 	};
 
 	Decoration decoration;
-	std::vector<Decoration> members;
+
+	// Intentionally not a SmallVector. Decoration is large and somewhat rare.
+	Vector<Decoration> members;
 
 	std::unordered_map<uint32_t, uint32_t> decoration_word_offset;
 
@@ -1529,6 +2090,6 @@ static inline bool opcode_is_sign_invariant(spv::Op opcode)
 		return false;
 	}
 }
-} // namespace spirv_cross
+} // namespace SPIRV_CROSS_NAMESPACE
 
 #endif

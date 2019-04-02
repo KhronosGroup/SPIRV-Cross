@@ -19,7 +19,6 @@
 
 #include "spirv_glsl.hpp"
 #include <utility>
-#include <vector>
 
 namespace SPIRV_CROSS_NAMESPACE
 {
@@ -62,8 +61,8 @@ public:
 		bool support_nonzero_base_vertex_base_instance = false;
 	};
 
-	explicit CompilerHLSL(std::vector<uint32_t> spirv_)
-	    : CompilerGLSL(move(spirv_))
+	explicit CompilerHLSL(SmallVector<uint32_t> spirv_)
+	    : CompilerGLSL(std::move(spirv_))
 	{
 	}
 
@@ -96,7 +95,7 @@ public:
 	//
 	// Push constants ranges will be split up according to the
 	// layout specified.
-	void set_root_constant_layouts(std::vector<RootConstants> layout);
+	void set_root_constant_layouts(SmallVector<RootConstants> layout);
 
 	// Compiles and remaps vertex attributes at specific locations to a fixed semantic.
 	// The default is TEXCOORD# where # denotes location.
@@ -209,7 +208,7 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
-	std::vector<HLSLVertexAttributeRemap> remap_vertex_attributes;
+	SmallVector<HLSLVertexAttributeRemap> remap_vertex_attributes;
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
@@ -220,8 +219,8 @@ private:
 
 	// Custom root constant layout, which should be emitted
 	// when translating push constant ranges.
-	std::vector<RootConstants> root_constants_layout;
+	SmallVector<RootConstants> root_constants_layout;
 };
-} // namespace spirv_cross
+} // namespace SPIRV_CROSS_NAMESPACE
 
 #endif

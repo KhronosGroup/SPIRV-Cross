@@ -54,24 +54,24 @@ struct Resource
 
 struct ShaderResources
 {
-	std::vector<Resource> uniform_buffers;
-	std::vector<Resource> storage_buffers;
-	std::vector<Resource> stage_inputs;
-	std::vector<Resource> stage_outputs;
-	std::vector<Resource> subpass_inputs;
-	std::vector<Resource> storage_images;
-	std::vector<Resource> sampled_images;
-	std::vector<Resource> atomic_counters;
-	std::vector<Resource> acceleration_structures;
+	SmallVector<Resource> uniform_buffers;
+	SmallVector<Resource> storage_buffers;
+	SmallVector<Resource> stage_inputs;
+	SmallVector<Resource> stage_outputs;
+	SmallVector<Resource> subpass_inputs;
+	SmallVector<Resource> storage_images;
+	SmallVector<Resource> sampled_images;
+	SmallVector<Resource> atomic_counters;
+	SmallVector<Resource> acceleration_structures;
 
 	// There can only be one push constant block,
 	// but keep the vector in case this restriction is lifted in the future.
-	std::vector<Resource> push_constant_buffers;
+	SmallVector<Resource> push_constant_buffers;
 
 	// For Vulkan GLSL and HLSL source,
 	// these correspond to separate texture2D and samplers respectively.
-	std::vector<Resource> separate_images;
-	std::vector<Resource> separate_samplers;
+	SmallVector<Resource> separate_images;
+	SmallVector<Resource> separate_samplers;
 };
 
 struct CombinedImageSampler
@@ -133,7 +133,7 @@ public:
 	// The constructor takes a buffer of SPIR-V words and parses it.
 	// It will create its own parser, parse the SPIR-V and move the parsed IR
 	// as if you had called the constructors taking ParsedIR directly.
-	explicit Compiler(std::vector<uint32_t> ir);
+	explicit Compiler(SmallVector<uint32_t> ir);
 	Compiler(const uint32_t *ir, size_t word_count);
 
 	// This is more modular. We can also consume a ParsedIR structure directly, either as a move, or copy.
@@ -235,7 +235,7 @@ public:
 	// SPIR-V shader. The granularity of this analysis is per-member of a struct.
 	// This can be used for Buffer (UBO), BufferBlock/StorageBuffer (SSBO) and PushConstant blocks.
 	// ID is the Resource::id obtained from get_shader_resources().
-	std::vector<BufferRange> get_active_buffer_ranges(uint32_t id) const;
+	SmallVector<BufferRange> get_active_buffer_ranges(uint32_t id) const;
 
 	// Returns the effective size of a buffer block.
 	size_t get_declared_struct_size(const SPIRType &struct_type) const;
@@ -308,7 +308,7 @@ public:
 	// New variants of entry point query and reflection.
 	// Names for entry points in the SPIR-V module may alias if they belong to different execution models.
 	// To disambiguate, we must pass along with the entry point names the execution model.
-	std::vector<EntryPoint> get_entry_points_and_stages() const;
+	SmallVector<EntryPoint> get_entry_points_and_stages() const;
 	void set_entry_point(const std::string &entry, spv::ExecutionModel execution_model);
 
 	// Renames an entry point from old_name to new_name.
@@ -392,7 +392,7 @@ public:
 	void build_combined_image_samplers();
 
 	// Gets a remapping for the combined image samplers.
-	const std::vector<CombinedImageSampler> &get_combined_image_samplers() const
+	const SmallVector<CombinedImageSampler> &get_combined_image_samplers() const
 	{
 		return combined_image_samplers;
 	}
@@ -417,7 +417,7 @@ public:
 	// For composite types, the subconstants can be iterated over and modified.
 	// constant_type is the SPIRType for the specialization constant,
 	// which can be queried to determine which fields in the unions should be poked at.
-	std::vector<SpecializationConstant> get_specialization_constants() const;
+	SmallVector<SpecializationConstant> get_specialization_constants() const;
 	SPIRConstant &get_constant(uint32_t id);
 	const SPIRConstant &get_constant(uint32_t id) const;
 
@@ -468,10 +468,10 @@ public:
 	bool buffer_get_hlsl_counter_buffer(uint32_t id, uint32_t &counter_id) const;
 
 	// Gets the list of all SPIR-V Capabilities which were declared in the SPIR-V module.
-	const std::vector<spv::Capability> &get_declared_capabilities() const;
+	const SmallVector<spv::Capability> &get_declared_capabilities() const;
 
 	// Gets the list of all SPIR-V extensions which were declared in the SPIR-V module.
-	const std::vector<std::string> &get_declared_extensions() const;
+	const SmallVector<std::string> &get_declared_extensions() const;
 
 	// When declaring buffer blocks in GLSL, the name declared in the GLSL source
 	// might not be the same as the name declared in the SPIR-V module due to naming conflicts.
@@ -511,8 +511,8 @@ protected:
 	ParsedIR ir;
 	// Marks variables which have global scope and variables which can alias with other variables
 	// (SSBO, image load store, etc)
-	std::vector<uint32_t> global_variables;
-	std::vector<uint32_t> aliased_variables;
+	SmallVector<uint32_t> global_variables;
+	SmallVector<uint32_t> aliased_variables;
 
 	SPIRFunction *current_function = nullptr;
 	SPIRBlock *current_block = nullptr;
@@ -686,7 +686,7 @@ protected:
 	// variable is part of that entry points interface.
 	bool interface_variable_exists_in_entry_point(uint32_t id) const;
 
-	std::vector<CombinedImageSampler> combined_image_samplers;
+	SmallVector<CombinedImageSampler> combined_image_samplers;
 
 	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
 	{
@@ -729,7 +729,7 @@ protected:
 
 	struct BufferAccessHandler : OpcodeHandler
 	{
-		BufferAccessHandler(const Compiler &compiler_, std::vector<BufferRange> &ranges_, uint32_t id_)
+		BufferAccessHandler(const Compiler &compiler_, SmallVector<BufferRange> &ranges_, uint32_t id_)
 		    : compiler(compiler_)
 		    , ranges(ranges_)
 		    , id(id_)
@@ -739,7 +739,7 @@ protected:
 		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
 
 		const Compiler &compiler;
-		std::vector<BufferRange> &ranges;
+		SmallVector<BufferRange> &ranges;
 		uint32_t id;
 
 		std::unordered_set<uint32_t> seen;
@@ -810,7 +810,7 @@ protected:
 	bool traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const;
 	bool traverse_all_reachable_opcodes(const SPIRFunction &block, OpcodeHandler &handler) const;
 	// This must be an ordered data structure so we always pick the same type aliases.
-	std::vector<uint32_t> global_struct_cache;
+	SmallVector<uint32_t> global_struct_cache;
 
 	ShaderResources get_shader_resources(const std::unordered_set<uint32_t> *active_variables) const;
 
@@ -967,6 +967,6 @@ private:
 	bool type_is_block_like(const SPIRType &type) const;
 	bool type_is_opaque_value(const SPIRType &type) const;
 };
-} // namespace spirv_cross
+} // namespace SPIRV_CROSS_NAMESPACE
 
 #endif

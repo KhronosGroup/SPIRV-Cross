@@ -22,14 +22,14 @@ using namespace spv;
 
 namespace SPIRV_CROSS_NAMESPACE
 {
-Parser::Parser(std::vector<uint32_t> spirv)
+Parser::Parser(SmallVector<uint32_t> spirv)
 {
 	ir.spirv = move(spirv);
 }
 
 Parser::Parser(const uint32_t *spirv_data, size_t word_count)
 {
-	ir.spirv = vector<uint32_t>(spirv_data, spirv_data + word_count);
+	ir.spirv = SmallVector<uint32_t>(spirv_data, spirv_data + word_count);
 }
 
 static bool decoration_is_string(Decoration decoration)
@@ -88,7 +88,7 @@ void Parser::parse()
 
 	uint32_t offset = 5;
 
-	vector<Instruction> instructions;
+	SmallVector<Instruction> instructions;
 	while (offset < len)
 	{
 		Instruction instr = {};
@@ -131,7 +131,7 @@ const uint32_t *Parser::stream(const Instruction &instr) const
 	return &ir.spirv[instr.offset];
 }
 
-static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
+static string extract_string(const SmallVector<uint32_t> &spirv, uint32_t offset)
 {
 	string ret;
 	for (uint32_t i = offset; i < spirv.size(); i++)
@@ -1097,7 +1097,7 @@ void Parser::make_constant_null(uint32_t id, uint32_t type)
 		if (!constant_type.array_size_literal.back())
 			SPIRV_CROSS_THROW("Array size of OpConstantNull must be a literal.");
 
-		vector<uint32_t> elements(constant_type.array.back());
+		SmallVector<uint32_t> elements(constant_type.array.back());
 		for (uint32_t i = 0; i < constant_type.array.back(); i++)
 			elements[i] = parent_id;
 		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()), false);
@@ -1105,7 +1105,7 @@ void Parser::make_constant_null(uint32_t id, uint32_t type)
 	else if (!constant_type.member_types.empty())
 	{
 		uint32_t member_ids = ir.increase_bound_by(uint32_t(constant_type.member_types.size()));
-		vector<uint32_t> elements(constant_type.member_types.size());
+		SmallVector<uint32_t> elements(constant_type.member_types.size());
 		for (uint32_t i = 0; i < constant_type.member_types.size(); i++)
 		{
 			make_constant_null(member_ids + i, constant_type.member_types[i]);
@@ -1120,4 +1120,4 @@ void Parser::make_constant_null(uint32_t id, uint32_t type)
 	}
 }
 
-} // namespace spirv_cross
+} // namespace SPIRV_CROSS_NAMESPACE

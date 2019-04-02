@@ -1210,8 +1210,8 @@ void CompilerHLSL::emit_resources()
 	require_output = false;
 	unordered_set<uint32_t> active_inputs;
 	unordered_set<uint32_t> active_outputs;
-	vector<SPIRVariable *> input_variables;
-	vector<SPIRVariable *> output_variables;
+	SmallVector<SPIRVariable *> input_variables;
+	SmallVector<SPIRVariable *> output_variables;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
@@ -2024,7 +2024,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		decl += to_name(func.self);
 
 	decl += "(";
-	vector<string> arglist;
+	SmallVector<string> arglist;
 
 	if (!type.array.empty())
 	{
@@ -2092,7 +2092,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 
 void CompilerHLSL::emit_hlsl_entry_point()
 {
-	vector<string> arguments;
+	SmallVector<string> arguments;
 
 	if (require_input)
 		arguments.push_back("SPIRV_Cross_Input stage_input");
@@ -2425,7 +2425,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	auto op = static_cast<Op>(i.op);
 	uint32_t length = i.length;
 
-	vector<uint32_t> inherited_expressions;
+	SmallVector<uint32_t> inherited_expressions;
 
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
@@ -4565,7 +4565,7 @@ void CompilerHLSL::require_texture_query_variant(const SPIRType &type)
 	}
 }
 
-void CompilerHLSL::set_root_constant_layouts(vector<RootConstants> layout)
+void CompilerHLSL::set_root_constant_layouts(SmallVector<RootConstants> layout)
 {
 	root_constants_layout = move(layout);
 }
@@ -4664,7 +4664,7 @@ string CompilerHLSL::compile()
 		reset();
 
 		// Move constructor for this type is broken on GCC 4.9 ...
-		buffer = unique_ptr<ostringstream>(new ostringstream());
+		buffer.reset();
 
 		emit_header();
 		emit_resources();
@@ -4678,7 +4678,7 @@ string CompilerHLSL::compile()
 	// Entry point in HLSL is always main() for the time being.
 	get_entry_point().name = "main";
 
-	return buffer->str();
+	return buffer.str();
 }
 
 void CompilerHLSL::emit_block_hints(const SPIRBlock &block)

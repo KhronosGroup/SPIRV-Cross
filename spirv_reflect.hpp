@@ -19,7 +19,6 @@
 
 #include "spirv_glsl.hpp"
 #include <utility>
-#include <vector>
 
 namespace simple_json
 {
@@ -33,8 +32,8 @@ class CompilerReflection : public CompilerGLSL
 	using Parent = CompilerGLSL;
 
 public:
-	explicit CompilerReflection(std::vector<uint32_t> spirv_)
-	    : Parent(move(spirv_))
+	explicit CompilerReflection(SmallVector<uint32_t> spirv_)
+	    : Parent(std::move(spirv_))
 	{
 		options.vulkan_semantics = true;
 	}
@@ -72,13 +71,13 @@ private:
 	void emit_type_member(const SPIRType &type, uint32_t index);
 	void emit_type_member_qualifiers(const SPIRType &type, uint32_t index);
 	void emit_type_array(const SPIRType &type);
-	void emit_resources(const char *tag, const std::vector<Resource> &resources);
+	void emit_resources(const char *tag, const SmallVector<Resource> &resources);
 
 	std::string to_member_name(const SPIRType &type, uint32_t index) const;
 
 	std::shared_ptr<simple_json::Stream> json_stream;
 };
 
-} // namespace spirv_cross
+} // namespace SPIRV_CROSS_NAMESPACE
 
 #endif

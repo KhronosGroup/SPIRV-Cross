@@ -26,7 +26,7 @@ using namespace std;
 using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 
-Compiler::Compiler(vector<uint32_t> ir_)
+Compiler::Compiler(SmallVector<uint32_t> ir_)
 {
 	Parser parser(move(ir_));
 	parser.parse();
@@ -1897,9 +1897,9 @@ bool Compiler::BufferAccessHandler::handle(Op opcode, const uint32_t *args, uint
 	return true;
 }
 
-std::vector<BufferRange> Compiler::get_active_buffer_ranges(uint32_t id) const
+SmallVector<BufferRange> Compiler::get_active_buffer_ranges(uint32_t id) const
 {
-	std::vector<BufferRange> ranges;
+	SmallVector<BufferRange> ranges;
 	BufferAccessHandler handler(*this, ranges, id);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 	return ranges;
@@ -2126,9 +2126,9 @@ void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_exp
 	e_deps.erase(unique(begin(e_deps), end(e_deps)), end(e_deps));
 }
 
-vector<EntryPoint> Compiler::get_entry_points_and_stages() const
+SmallVector<EntryPoint> Compiler::get_entry_points_and_stages() const
 {
-	vector<EntryPoint> entries;
+	SmallVector<EntryPoint> entries;
 	for (auto &entry : ir.entry_points)
 		entries.push_back({ entry.second.orig_name, entry.second.model });
 	return entries;
@@ -2715,9 +2715,9 @@ void Compiler::build_combined_image_samplers()
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 }
 
-vector<SpecializationConstant> Compiler::get_specialization_constants() const
+SmallVector<SpecializationConstant> Compiler::get_specialization_constants() const
 {
-	vector<SpecializationConstant> spec_consts;
+	SmallVector<SpecializationConstant> spec_consts;
 	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, const SPIRConstant &c) {
 		if (c.specialization && has_decoration(c.self, DecorationSpecId))
 			spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
@@ -3966,7 +3966,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 		if (!constant_type.array_size_literal.back())
 			SPIRV_CROSS_THROW("Array size of OpConstantNull must be a literal.");
 
-		vector<uint32_t> elements(constant_type.array.back());
+		SmallVector<uint32_t> elements(constant_type.array.back());
 		for (uint32_t i = 0; i < constant_type.array.back(); i++)
 			elements[i] = parent_id;
 		set<SPIRConstant>(id, type, elements.data(), uint32_t(elements.size()), false);
@@ -3974,7 +3974,7 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 	else if (!constant_type.member_types.empty())
 	{
 		uint32_t member_ids = ir.increase_bound_by(uint32_t(constant_type.member_types.size()));
-		vector<uint32_t> elements(constant_type.member_types.size());
+		SmallVector<uint32_t> elements(constant_type.member_types.size());
 		for (uint32_t i = 0; i < constant_type.member_types.size(); i++)
 		{
 			make_constant_null(member_ids + i, constant_type.member_types[i]);
@@ -3989,12 +3989,12 @@ void Compiler::make_constant_null(uint32_t id, uint32_t type)
 	}
 }
 
-const std::vector<spv::Capability> &Compiler::get_declared_capabilities() const
+const SmallVector<spv::Capability> &Compiler::get_declared_capabilities() const
 {
 	return ir.declared_capabilities;
 }
 
-const std::vector<std::string> &Compiler::get_declared_extensions() const
+const SmallVector<std::string> &Compiler::get_declared_extensions() const
 {
 	return ir.declared_extensions;
 }

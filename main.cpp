@@ -186,7 +186,7 @@ struct CLIParser
 	bool ended_state = false;
 };
 
-static vector<uint32_t> read_spirv_file(const char *path)
+static SmallVector<uint32_t> read_spirv_file(const char *path)
 {
 	FILE *file = fopen(path, "rb");
 	if (!file)
@@ -199,7 +199,7 @@ static vector<uint32_t> read_spirv_file(const char *path)
 	long len = ftell(file) / sizeof(uint32_t);
 	rewind(file);
 
-	vector<uint32_t> spirv(len);
+	SmallVector<uint32_t> spirv(len);
 	if (fread(spirv.data(), sizeof(uint32_t), len, file) != size_t(len))
 		spirv.clear();
 
@@ -221,7 +221,7 @@ static bool write_string_to_file(const char *path, const char *string)
 	return true;
 }
 
-static void print_resources(const Compiler &compiler, const char *tag, const vector<Resource> &resources)
+static void print_resources(const Compiler &compiler, const char *tag, const SmallVector<Resource> &resources)
 {
 	fprintf(stderr, "%s\n", tag);
 	fprintf(stderr, "=============\n\n");
@@ -411,7 +411,7 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "acceleration structures", res.acceleration_structures);
 }
 
-static void print_push_constant_resources(const Compiler &compiler, const vector<Resource> &res)
+static void print_push_constant_resources(const Compiler &compiler, const SmallVector<Resource> &res)
 {
 	for (auto &block : res)
 	{
@@ -510,14 +510,14 @@ struct CLIArguments
 	bool msl_domain_lower_left = false;
 	bool msl_argument_buffers = false;
 	bool glsl_emit_push_constant_as_ubo = false;
-	vector<uint32_t> msl_discrete_descriptor_sets;
-	vector<PLSArg> pls_in;
-	vector<PLSArg> pls_out;
-	vector<Remap> remaps;
-	vector<string> extensions;
-	vector<VariableTypeRemap> variable_type_remaps;
-	vector<InterfaceVariableRename> interface_variable_renames;
-	vector<HLSLVertexAttributeRemap> hlsl_attr_remap;
+	SmallVector<uint32_t> msl_discrete_descriptor_sets;
+	SmallVector<PLSArg> pls_in;
+	SmallVector<PLSArg> pls_out;
+	SmallVector<Remap> remaps;
+	SmallVector<string> extensions;
+	SmallVector<VariableTypeRemap> variable_type_remaps;
+	SmallVector<InterfaceVariableRename> interface_variable_renames;
+	SmallVector<HLSLVertexAttributeRemap> hlsl_attr_remap;
 	string entry;
 	string entry_stage;
 
@@ -527,7 +527,7 @@ struct CLIArguments
 		string new_name;
 		ExecutionModel execution_model;
 	};
-	vector<Rename> entry_point_rename;
+	SmallVector<Rename> entry_point_rename;
 
 	uint32_t iterations = 1;
 	bool cpp = false;
@@ -595,7 +595,7 @@ static void print_help()
 	                "\n");
 }
 
-static bool remap_generic(Compiler &compiler, const vector<Resource> &resources, const Remap &remap)
+static bool remap_generic(Compiler &compiler, const SmallVector<Resource> &resources, const Remap &remap)
 {
 	auto itr =
 	    find_if(begin(resources), end(resources), [&remap](const Resource &res) { return res.name == remap.src_name; });
@@ -611,10 +611,10 @@ static bool remap_generic(Compiler &compiler, const vector<Resource> &resources,
 		return false;
 }
 
-static vector<PlsRemap> remap_pls(const vector<PLSArg> &pls_variables, const vector<Resource> &resources,
-                                  const vector<Resource> *secondary_resources)
+static SmallVector<PlsRemap> remap_pls(const SmallVector<PLSArg> &pls_variables, const SmallVector<Resource> &resources,
+                                       const SmallVector<Resource> *secondary_resources)
 {
-	vector<PlsRemap> ret;
+	SmallVector<PlsRemap> ret;
 
 	for (auto &pls : pls_variables)
 	{
@@ -697,7 +697,7 @@ static ExecutionModel stage_to_execution_model(const std::string &stage)
 		SPIRV_CROSS_THROW("Invalid stage.");
 }
 
-static string compile_iteration(const CLIArguments &args, vector<uint32_t> spirv_file)
+static string compile_iteration(const CLIArguments &args, SmallVector<uint32_t> spirv_file)
 {
 	Parser spirv_parser(move(spirv_file));
 	spirv_parser.parse();
