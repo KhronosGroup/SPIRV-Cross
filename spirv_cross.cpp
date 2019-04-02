@@ -1747,7 +1747,7 @@ uint32_t Compiler::type_struct_member_array_stride(const SPIRType &type, uint32_
 			SPIRV_CROSS_THROW("Struct member does not have ArrayStride set.");
 	}
 	else
-		SPIRV_CROSS_THROW("Struct member does not have Offset set.");
+		SPIRV_CROSS_THROW("Struct member does not have ArrayStride set.");
 }
 
 uint32_t Compiler::type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const
