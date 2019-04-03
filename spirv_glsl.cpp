@@ -4590,6 +4590,7 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 	if (coord_type.basetype == SPIRType::UInt)
 	{
 		auto expected_type = coord_type;
+		expected_type.vecsize = coord_components;
 		expected_type.basetype = SPIRType::Int;
 		coord_expr = bitcast_expression(expected_type, coord_type.basetype, coord_expr);
 	}
@@ -4690,7 +4691,19 @@ string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, boo
 			{
 				forward = forward && should_forward(lod);
 				farg_str += ", ";
-				farg_str += to_expression(lod);
+
+				auto &lod_expr_type = expression_type(lod);
+
+				// Lod expression for TexelFetch in GLSL must be int, and only int.
+				if (is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
+				    lod_expr_type.basetype != SPIRType::Int)
+				{
+					farg_str += join("int(", to_expression(lod), ")");
+				}
+				else
+				{
+					farg_str += to_expression(lod);
+				}
 			}
 		}
 	}
