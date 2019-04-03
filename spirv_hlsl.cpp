@@ -2716,7 +2716,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	// The IR can give us more components than we need, so chop them off as needed.
 	string coord_expr;
-	if (coord_components != expression_type(coord).vecsize)
+	auto &coord_type = expression_type(coord);
+	if (coord_components != coord_type.vecsize)
 		coord_expr = to_enclosed_expression(coord) + swizzle(coord_components, expression_type(coord).vecsize);
 	else
 		coord_expr = to_expression(coord);
@@ -2726,9 +2727,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	if (hlsl_options.shader_model < 40 && lod)
 	{
-		auto &coordtype = expression_type(coord);
 		string coord_filler;
-		for (uint32_t size = coordtype.vecsize; size < 3; ++size)
+		for (uint32_t size = coord_components; size < 3; ++size)
 		{
 			coord_filler += ", 0.0";
 		}
@@ -2737,9 +2737,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	if (hlsl_options.shader_model < 40 && bias)
 	{
-		auto &coordtype = expression_type(coord);
 		string coord_filler;
-		for (uint32_t size = coordtype.vecsize; size < 3; ++size)
+		for (uint32_t size = coord_components; size < 3; ++size)
 		{
 			coord_filler += ", 0.0";
 		}
@@ -2748,10 +2747,9 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	if (op == OpImageFetch)
 	{
-		auto &coordtype = expression_type(coord);
 		if (imgtype.image.dim != DimBuffer && !imgtype.image.ms)
 			coord_expr =
-			    join("int", coordtype.vecsize + 1, "(", coord_expr, ", ", lod ? to_expression(lod) : string("0"), ")");
+			    join("int", coord_components + 1, "(", coord_expr, ", ", lod ? to_expression(lod) : string("0"), ")");
 	}
 	else
 		expr += ", ";
