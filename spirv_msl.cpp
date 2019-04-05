@@ -668,7 +668,7 @@ string CompilerMSL::compile()
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 
 		pass_count++;
-	} while (force_recompile);
+	} while (is_forcing_recompilation());
 
 	return buffer->str();
 }
@@ -2378,14 +2378,14 @@ void CompilerMSL::add_pragma_line(const string &line)
 {
 	auto rslt = pragma_lines.insert(line);
 	if (rslt.second)
-		force_recompile = true;
+		force_recompile();
 }
 
 void CompilerMSL::add_typedef_line(const string &line)
 {
 	auto rslt = typedef_lines.insert(line);
 	if (rslt.second)
-		force_recompile = true;
+		force_recompile();
 }
 
 // Emits any needed custom function bodies.
@@ -3569,7 +3569,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			if (p_var && has_decoration(p_var->self, DecorationNonReadable))
 			{
 				unset_decoration(p_var->self, DecorationNonReadable);
-				force_recompile = true;
+				force_recompile();
 			}
 		}
 
@@ -3595,7 +3595,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (p_var && has_decoration(p_var->self, DecorationNonWritable))
 		{
 			unset_decoration(p_var->self, DecorationNonWritable);
-			force_recompile = true;
+			force_recompile();
 		}
 
 		bool forward = false;
@@ -4792,7 +4792,7 @@ string CompilerMSL::to_func_call_arg(uint32_t id)
 		auto itr = find(begin(constants), end(constants), id);
 		if (itr == end(constants))
 		{
-			force_recompile = true;
+			force_recompile();
 			constants.push_back(id);
 		}
 	}
@@ -4940,7 +4940,7 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 	if (rslt.second)
 	{
 		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
-		force_recompile = true;
+		force_recompile();
 	}
 }
 
