@@ -547,9 +547,9 @@ public:
 		return *this;
 	}
 
-	StringStream &operator<<(const std::string &str)
+	StringStream &operator<<(const std::string &s)
 	{
-		append(str.data(), str.size());
+		append(s.data(), s.size());
 		return *this;
 	}
 
@@ -598,23 +598,23 @@ public:
 private:
 	struct Buffer
 	{
-		char *buffer;
-		size_t offset;
-		size_t size;
+		char *buffer = nullptr;
+		size_t offset = 0;
+		size_t size = 0;
 	};
-	Buffer current_buffer = {};
+	Buffer current_buffer;
 	char stack_buffer[StackSize];
 	SmallVector<Buffer> saved_buffers;
 
-	void append(const char *str, size_t len)
+	void append(const char *s, size_t len)
 	{
 		size_t avail = current_buffer.size - current_buffer.offset;
 		if (avail < len)
 		{
 			if (avail > 0)
 			{
-				memcpy(current_buffer.buffer + current_buffer.offset, str, avail);
-				str += avail;
+				memcpy(current_buffer.buffer + current_buffer.offset, s, avail);
+				s += avail;
 				len -= avail;
 				current_buffer.offset += avail;
 			}
@@ -625,13 +625,13 @@ private:
 			if (!current_buffer.buffer)
 				SPIRV_CROSS_THROW("Out of memory.");
 
-			memcpy(current_buffer.buffer, str, len);
+			memcpy(current_buffer.buffer, s, len);
 			current_buffer.offset = len;
 			current_buffer.size = target_size;
 		}
 		else
 		{
-			memcpy(current_buffer.buffer + current_buffer.offset, str, len);
+			memcpy(current_buffer.buffer + current_buffer.offset, s, len);
 			current_buffer.offset += len;
 		}
 	}
