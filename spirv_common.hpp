@@ -90,8 +90,14 @@ public:
 // MSVC 2013 ignores that move constructors cannot throw in std::vector, so just don't define it.
 #if defined(_MSC_VER) && _MSC_VER < 1900
 #define SPIRV_CROSS_NOEXCEPT
+
+// Alignas is broken in MSVC 2013, work around it with compiler specifics.
+#define SPIRV_CROSS_ALIGNAS(N)
+#define SPIRV_CROSS_CLASS_ALIGN(N) __declspec(align(N))
 #else
 #define SPIRV_CROSS_NOEXCEPT noexcept
+#define SPIRV_CROSS_ALIGNAS(N) alignas(N)
+#define SPIRV_CROSS_CLASS_ALIGN(N)
 #endif
 
 #if __cplusplus >= 201402l
@@ -106,7 +112,7 @@ public:
 
 // std::aligned_storage does not support size == 0, so roll our own.
 template <typename T, size_t N>
-class AlignedBuffer
+SPIRV_CROSS_CLASS_ALIGN(8) class AlignedBuffer
 {
 public:
 	T *data()
@@ -115,7 +121,7 @@ public:
 	}
 
 private:
-	alignas(T) char aligned_char[sizeof(T) * N];
+	SPIRV_CROSS_ALIGNAS(T) char aligned_char[sizeof(T) * N];
 };
 
 template <typename T>
