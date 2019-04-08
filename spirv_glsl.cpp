@@ -4818,7 +4818,18 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_unary_func_op(result_type, id, args[0], "degrees");
 		break;
 	case GLSLstd450Fma:
-		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "fma");
+		if ((!options.es && options.version < 400) || (options.es && options.version < 320))
+		{
+			auto expr = join(to_enclosed_expression(args[0]), " * ", to_enclosed_expression(args[1]), " + ",
+			                 to_enclosed_expression(args[2]));
+
+			emit_op(result_type, id, expr,
+			        should_forward(args[0]) && should_forward(args[1]) && should_forward(args[2]));
+			for (uint32_t i = 0; i < 3; i++)
+				inherit_expression_dependencies(id, args[i]);
+		}
+		else
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "fma");
 		break;
 	case GLSLstd450Modf:
 		register_call_out_argument(args[1]);
