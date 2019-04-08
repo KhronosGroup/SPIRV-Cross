@@ -415,11 +415,18 @@ if (SPIRV_CROSS_CLI)
 				add_executable(spirv-cross-c-api-test tests-other/c_api_test.c)
 				target_link_libraries(spirv-cross-c-api-test spirv-cross-c)
 				set_target_properties(spirv-cross-c-api-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
+				add_executable(spirv-cross-small-vector-test tests-other/small_vector.cpp)
+				target_link_libraries(spirv-cross-small-vector-test spirv-cross-core)
+				set_target_properties(spirv-cross-small-vector-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
 				if (CMAKE_COMPILER_IS_GNUCXX OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
 					target_compile_options(spirv-cross-c-api-test PRIVATE -std=c89 -Wall -Wextra)
 				endif()
 				add_test(NAME spirv-cross-c-api-test
 						COMMAND $<TARGET_FILE:spirv-cross-c-api-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c_api_test.spv)
+				add_test(NAME spirv-cross-small-vector-test
+						COMMAND $<TARGET_FILE:spirv-cross-small-vector-test>)
 				add_test(NAME spirv-cross-test
 						COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
 						${spirv-cross-externals}

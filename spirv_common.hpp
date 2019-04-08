@@ -222,7 +222,7 @@ protected:
 // Simple vector which supports up to N elements inline, without malloc/free.
 // We use a lot of throwaway vectors all over the place which triggers allocations.
 // This class only implements the subset of std::vector we need in SPIRV-Cross.
-// It is *NOT* a drop-in replacement.
+// It is *NOT* a drop-in replacement in general projects.
 template <typename T, size_t N = 8>
 class SmallVector : public VectorView<T>
 {
@@ -380,16 +380,89 @@ public:
 
 	void insert(T *itr, const T *insert_begin, const T *insert_end)
 	{
+		auto count = size_t(insert_end - insert_begin);
 		if (itr == this->end())
 		{
-			auto count = size_t(insert_end - insert_begin);
 			reserve(this->buffer_size + count);
 			for (size_t i = 0; i < count; i++, insert_begin++)
 				new (&this->ptr[this->buffer_size + i]) T(*insert_begin);
 			this->buffer_size += count;
 		}
 		else
-			SPIRV_CROSS_THROW("Mid-insert not implemented.");
+		{
+			if (this->buffer_size + count > buffer_capacity)
+			{
+				auto target_capacity = this->buffer_size + count;
+				if (target_capacity == 0)
+					target_capacity = 1;
+				if (target_capacity < N)
+					target_capacity = N;
+
+				while (target_capacity < count)
+					target_capacity <<= 1u;
+
+				// Need to allocate new buffer. Move everything to a new buffer.
+				T *new_buffer =
+						target_capacity > N ? static_cast<T *>(malloc(target_capacity * sizeof(T))) : stack_storage.data();
+				if (!new_buffer)
+					SPIRV_CROSS_THROW("Out of memory.");
+
+				// First, move elements from source buffer to new buffer.
+				// We don't deal with types which can throw in move constructor.
+				auto *target_itr = new_buffer;
+				auto *original_source_itr = this->begin();
+
+				if (new_buffer != this->ptr)
+				{
+					while (original_source_itr != itr)
+					{
+						new(target_itr) T(std::move(*original_source_itr));
+						original_source_itr->~T();
+						++original_source_itr;
+						++target_itr;
+					}
+				}
+
+				// Copy-construct new elements.
+				for (auto *source_itr = insert_begin; source_itr != insert_end; ++source_itr, ++target_itr)
+					new (target_itr) T(*source_itr);
+
+				// Move over the other half.
+				if (new_buffer != this->ptr || insert_begin != insert_end)
+				{
+					while (original_source_itr != this->end())
+					{
+						new(target_itr) T(std::move(*original_source_itr));
+						original_source_itr->~T();
+						++original_source_itr;
+						++target_itr;
+					}
+				}
+
+				if (this->ptr != stack_storage.data())
+					free(this->ptr);
+				this->ptr = new_buffer;
+				buffer_capacity = target_capacity;
+			}
+			else
+			{
+				// Move in place, need to be a bit careful about which elements are constructed and which are not.
+				// Move the end and construct the new elements.
+				auto *target_itr = this->end() + count;
+				auto *source_itr = this->end();
+				while (target_itr != this->end())
+				{
+					--target_itr;
+					--source_itr;
+					new (target_itr) T(std::move(*source_itr));
+				}
+				// For already constructed elements we can move-assign.
+				std::move_backward(itr, source_itr, target_itr);
+				std::copy(insert_begin, insert_end, itr);
+			}
+
+			this->buffer_size += count;
+		}
 	}
 
 	T *erase(T *itr)
@@ -401,9 +474,16 @@ public:
 
 	void erase(T *start_erase, T *end_erase)
 	{
-		if (end_erase != this->end())
-			SPIRV_CROSS_THROW("Mid-erase not implemented.");
-		resize(size_t(start_erase - this->begin()));
+		if (end_erase == this->end())
+		{
+			resize(size_t(start_erase - this->begin()));
+		}
+		else
+		{
+			auto new_size = this->buffer_size - (end_erase - start_erase);
+			std::move(end_erase, this->end(), start_erase);
+			resize(new_size);
+		}
 	}
 
 	void resize(size_t new_size)
