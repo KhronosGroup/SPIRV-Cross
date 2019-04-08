@@ -207,6 +207,8 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		set<SPIRUndef>(id, result_type);
+		if (current_block)
+			current_block->ops.push_back(instruction);
 		break;
 	}
 

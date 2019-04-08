@@ -9202,6 +9202,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 
+	case OpUndef:
+		// Undefined value has been declared.
+		break;
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;
