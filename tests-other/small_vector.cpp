@@ -197,11 +197,14 @@ static void convert_to_std_vector()
 	SPVC_ASSERT(ints[0].v == 1);
 	SPVC_ASSERT(ints[1].v == 2);
 
+	// This doesn't work on MSVC 2013. Ignore it.
+#if !(defined(_MSC_VER) && _MSC_VER < 1900)
 	SmallVector<std::unique_ptr<RAIIInt>> move_only_buffer;
 	move_only_buffer.emplace_back(new RAIIInt(40));
 	std::vector<std::unique_ptr<RAIIInt>> move_only_vector(std::move(move_only_buffer));
 	SPVC_ASSERT(move_only_vector.size() == 1);
 	SPVC_ASSERT(move_only_vector[0]->v == 40);
+#endif
 }
 
 int main()

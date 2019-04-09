@@ -156,16 +156,25 @@ public:
 	}
 
 	// Makes it easier to consume SmallVector.
+#if defined(_MSC_VER) && _MSC_VER < 1900
+	explicit operator std::vector<T>() const
+	{
+		// Another MSVC 2013 workaround. It does not understand lvalue/rvalue qualified operations.
+		return std::vector<T>(ptr, ptr + buffer_size);
+	}
+#else
+	// Makes it easier to consume SmallVector.
 	explicit operator std::vector<T>() const &
 	{
 		return std::vector<T>(ptr, ptr + buffer_size);
 	}
 
 	// If we are converting as an r-value, we can pilfer our elements.
-	explicit operator std::vector<T>() const &&
+	explicit operator std::vector<T>() &&
 	{
 		return std::vector<T>(std::make_move_iterator(ptr), std::make_move_iterator(ptr + buffer_size));
 	}
+#endif
 
 	// Avoid sliced copies. Base class should only be read as a reference.
 	VectorView(const VectorView &) = delete;
