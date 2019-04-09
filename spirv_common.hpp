@@ -460,15 +460,27 @@ public:
 				// Move the end and construct the new elements.
 				auto *target_itr = this->end() + count;
 				auto *source_itr = this->end();
-				while (target_itr != this->end())
+				while (target_itr != this->end() && source_itr != itr)
 				{
 					--target_itr;
 					--source_itr;
 					new (target_itr) T(std::move(*source_itr));
 				}
+
 				// For already constructed elements we can move-assign.
 				std::move_backward(itr, source_itr, target_itr);
-				std::copy(insert_begin, insert_end, itr);
+
+				// For the inserts which go to already constructed elements, we can do a plain copy.
+				while (itr != this->end() && insert_begin != insert_end)
+					*itr++ = *insert_begin++;
+
+				// For inserts into newly allocated memory, we must copy-construct instead.
+				while (insert_begin != insert_end)
+				{
+					new (itr) T(*insert_begin);
+					++itr;
+					++insert_begin;
+				}
 			}
 
 			this->buffer_size += count;

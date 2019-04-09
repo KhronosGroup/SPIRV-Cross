@@ -59,6 +59,7 @@ ParsedIR &ParsedIR::operator=(ParsedIR &&other) SPIRV_CROSS_NOEXCEPT
 {
 	if (this != &other)
 	{
+		pool_group = move(other.pool_group);
 		spirv = move(other.spirv);
 		meta = move(other.meta);
 		for (int i = 0; i < TypeCount; i++)
