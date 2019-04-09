@@ -20,6 +20,7 @@
 #include "spirv_common.hpp"
 #include <stdint.h>
 #include <unordered_map>
+#include <vector>
 
 namespace SPIRV_CROSS_NAMESPACE
 {
@@ -51,7 +52,7 @@ public:
 	void set_id_bounds(uint32_t bounds);
 
 	// The raw SPIR-V, instructions and opcodes refer to this by offset + count.
-	SmallVector<uint32_t> spirv;
+	std::vector<uint32_t> spirv;
 
 	// Holds various data structures which inherit from IVariant.
 	SmallVector<Variant> ids;

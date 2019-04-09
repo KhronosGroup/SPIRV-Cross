@@ -133,14 +133,14 @@ public:
 		} fragment;
 	};
 
-	void remap_pixel_local_storage(SmallVector<PlsRemap> inputs, SmallVector<PlsRemap> outputs)
+	void remap_pixel_local_storage(std::vector<PlsRemap> inputs, std::vector<PlsRemap> outputs)
 	{
 		pls_inputs = std::move(inputs);
 		pls_outputs = std::move(outputs);
 		remap_pls_variables();
 	}
 
-	explicit CompilerGLSL(SmallVector<uint32_t> spirv_)
+	explicit CompilerGLSL(std::vector<uint32_t> spirv_)
 	    : Compiler(std::move(spirv_))
 	{
 		init();
@@ -569,7 +569,7 @@ protected:
 	// Currently used by NMin/Max/Clamp implementations.
 	std::unordered_map<uint32_t, uint32_t> extra_sub_expressions;
 
-	uint32_t statement_count;
+	uint32_t statement_count = 0;
 
 	inline bool is_legacy() const
 	{
@@ -592,8 +592,8 @@ protected:
 	void register_control_dependent_expression(uint32_t expr);
 
 	// GL_EXT_shader_pixel_local_storage support.
-	SmallVector<PlsRemap> pls_inputs;
-	SmallVector<PlsRemap> pls_outputs;
+	std::vector<PlsRemap> pls_inputs;
+	std::vector<PlsRemap> pls_outputs;
 	std::string pls_decl(const PlsRemap &variable);
 	const char *to_pls_qualifiers_glsl(const SPIRVariable &variable);
 	void emit_pls();

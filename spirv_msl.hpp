@@ -267,7 +267,7 @@ public:
 		return capture_output_to_buffer && stage_in_var_id != 0;
 	}
 
-	explicit CompilerMSL(SmallVector<uint32_t> spirv);
+	explicit CompilerMSL(std::vector<uint32_t> spirv);
 	CompilerMSL(const uint32_t *ir, size_t word_count);
 	explicit CompilerMSL(const ParsedIR &ir);
 	explicit CompilerMSL(ParsedIR &&ir);

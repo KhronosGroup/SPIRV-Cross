@@ -32,7 +32,7 @@ class CompilerReflection : public CompilerGLSL
 	using Parent = CompilerGLSL;
 
 public:
-	explicit CompilerReflection(SmallVector<uint32_t> spirv_)
+	explicit CompilerReflection(std::vector<uint32_t> spirv_)
 	    : Parent(std::move(spirv_))
 	{
 		options.vulkan_semantics = true;

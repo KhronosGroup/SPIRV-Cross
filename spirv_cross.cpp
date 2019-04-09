@@ -26,7 +26,7 @@ using namespace std;
 using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 
-Compiler::Compiler(SmallVector<uint32_t> ir_)
+Compiler::Compiler(vector<uint32_t> ir_)
 {
 	Parser parser(move(ir_));
 	parser.parse();

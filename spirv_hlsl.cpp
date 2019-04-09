@@ -4565,7 +4565,7 @@ void CompilerHLSL::require_texture_query_variant(const SPIRType &type)
 	}
 }
 
-void CompilerHLSL::set_root_constant_layouts(SmallVector<RootConstants> layout)
+void CompilerHLSL::set_root_constant_layouts(std::vector<RootConstants> layout)
 {
 	root_constants_layout = move(layout);
 }

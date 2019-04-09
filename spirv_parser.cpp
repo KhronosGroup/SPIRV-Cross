@@ -22,14 +22,14 @@ using namespace spv;
 
 namespace SPIRV_CROSS_NAMESPACE
 {
-Parser::Parser(SmallVector<uint32_t> spirv)
+Parser::Parser(vector<uint32_t> spirv)
 {
 	ir.spirv = move(spirv);
 }
 
 Parser::Parser(const uint32_t *spirv_data, size_t word_count)
 {
-	ir.spirv = SmallVector<uint32_t>(spirv_data, spirv_data + word_count);
+	ir.spirv = vector<uint32_t>(spirv_data, spirv_data + word_count);
 }
 
 static bool decoration_is_string(Decoration decoration)
@@ -131,7 +131,7 @@ const uint32_t *Parser::stream(const Instruction &instr) const
 	return &ir.spirv[instr.offset];
 }
 
-static string extract_string(const SmallVector<uint32_t> &spirv, uint32_t offset)
+static string extract_string(const vector<uint32_t> &spirv, uint32_t offset)
 {
 	string ret;
 	for (uint32_t i = offset; i < spirv.size(); i++)

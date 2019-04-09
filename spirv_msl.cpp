@@ -30,7 +30,7 @@ static const uint32_t k_unknown_component = ~0u;
 
 static const uint32_t k_aux_mbr_idx_swizzle_const = 0u;
 
-CompilerMSL::CompilerMSL(SmallVector<uint32_t> spirv_)
+CompilerMSL::CompilerMSL(std::vector<uint32_t> spirv_)
     : CompilerGLSL(move(spirv_))
 {
 }

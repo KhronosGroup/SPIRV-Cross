@@ -186,7 +186,7 @@ struct CLIParser
 	bool ended_state = false;
 };
 
-static SmallVector<uint32_t> read_spirv_file(const char *path)
+static vector<uint32_t> read_spirv_file(const char *path)
 {
 	FILE *file = fopen(path, "rb");
 	if (!file)
@@ -199,7 +199,7 @@ static SmallVector<uint32_t> read_spirv_file(const char *path)
 	long len = ftell(file) / sizeof(uint32_t);
 	rewind(file);
 
-	SmallVector<uint32_t> spirv(len);
+	vector<uint32_t> spirv(len);
 	if (fread(spirv.data(), sizeof(uint32_t), len, file) != size_t(len))
 		spirv.clear();
 
@@ -611,10 +611,10 @@ static bool remap_generic(Compiler &compiler, const SmallVector<Resource> &resou
 		return false;
 }
 
-static SmallVector<PlsRemap> remap_pls(const SmallVector<PLSArg> &pls_variables, const SmallVector<Resource> &resources,
-                                       const SmallVector<Resource> *secondary_resources)
+static vector<PlsRemap> remap_pls(const SmallVector<PLSArg> &pls_variables, const SmallVector<Resource> &resources,
+                                  const SmallVector<Resource> *secondary_resources)
 {
-	SmallVector<PlsRemap> ret;
+	vector<PlsRemap> ret;
 
 	for (auto &pls : pls_variables)
 	{
@@ -697,7 +697,7 @@ static ExecutionModel stage_to_execution_model(const std::string &stage)
 		SPIRV_CROSS_THROW("Invalid stage.");
 }
 
-static string compile_iteration(const CLIArguments &args, SmallVector<uint32_t> spirv_file)
+static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> spirv_file)
 {
 	Parser spirv_parser(move(spirv_file));
 	spirv_parser.parse();

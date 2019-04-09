@@ -634,7 +634,7 @@ spvc_result spvc_compiler_hlsl_set_root_constants_layout(spvc_compiler compiler,
 	}
 
 	auto &hlsl = *static_cast<CompilerHLSL *>(compiler->compiler.get());
-	SmallVector<RootConstants> roots;
+	vector<RootConstants> roots;
 	roots.reserve(count);
 	for (size_t i = 0; i < count; i++)
 	{

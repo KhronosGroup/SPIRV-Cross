@@ -133,7 +133,7 @@ public:
 	// The constructor takes a buffer of SPIR-V words and parses it.
 	// It will create its own parser, parse the SPIR-V and move the parsed IR
 	// as if you had called the constructors taking ParsedIR directly.
-	explicit Compiler(SmallVector<uint32_t> ir);
+	explicit Compiler(std::vector<uint32_t> ir);
 	Compiler(const uint32_t *ir, size_t word_count);
 
 	// This is more modular. We can also consume a ParsedIR structure directly, either as a move, or copy.

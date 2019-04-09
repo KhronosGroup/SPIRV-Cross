@@ -26,7 +26,7 @@ class Parser
 {
 public:
 	Parser(const uint32_t *spirv_data, size_t word_count);
-	Parser(SmallVector<uint32_t> spirv);
+	Parser(std::vector<uint32_t> spirv);
 
 	void parse();
 

@@ -25,7 +25,7 @@ namespace SPIRV_CROSS_NAMESPACE
 class CompilerCPP : public CompilerGLSL
 {
 public:
-	explicit CompilerCPP(SmallVector<uint32_t> spirv_)
+	explicit CompilerCPP(std::vector<uint32_t> spirv_)
 	    : CompilerGLSL(std::move(spirv_))
 	{
 	}
