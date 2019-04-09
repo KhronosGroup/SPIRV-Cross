@@ -42,9 +42,10 @@ public:
 	ParsedIR(const ParsedIR &other);
 	ParsedIR &operator=(const ParsedIR &other);
 
-	// Moves are unproblematic.
-	ParsedIR(ParsedIR &&other) = default;
-	ParsedIR &operator=(ParsedIR &&other) = default;
+	// Moves are unproblematic, but we need to implement it anyways, since MSVC 2013 does not understand
+	// how to default-implement these.
+	ParsedIR(ParsedIR &&other) SPIRV_CROSS_NOEXCEPT;
+	ParsedIR &operator=(ParsedIR &&other) SPIRV_CROSS_NOEXCEPT;
 
 	// Resizes ids, meta and block_meta.
 	void set_id_bounds(uint32_t bounds);

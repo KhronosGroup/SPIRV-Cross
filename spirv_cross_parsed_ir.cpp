@@ -49,6 +49,35 @@ ParsedIR::ParsedIR(const ParsedIR &other)
 	*this = other;
 }
 
+// Should have been default-implemented, but need this on MSVC 2013.
+ParsedIR::ParsedIR(ParsedIR &&other) SPIRV_CROSS_NOEXCEPT
+{
+	*this = move(other);
+}
+
+ParsedIR &ParsedIR::operator=(ParsedIR &&other) SPIRV_CROSS_NOEXCEPT
+{
+	if (this != &other)
+	{
+		spirv = move(other.spirv);
+		meta = move(other.meta);
+		for (int i = 0; i < TypeCount; i++)
+			ids_for_type[i] = other.ids_for_type[i];
+		ids_for_constant_or_type = move(other.ids_for_constant_or_type);
+		ids_for_constant_or_variable = move(other.ids_for_constant_or_variable);
+		declared_capabilities = move(other.declared_capabilities);
+		declared_extensions = move(other.declared_extensions);
+		block_meta = move(other.block_meta);
+		continue_block_to_loop_header = move(other.continue_block_to_loop_header);
+		entry_points = move(other.entry_points);
+		default_entry_point = move(other.default_entry_point);
+		source = move(other.source);
+		loop_iteration_depth = move(other.loop_iteration_depth);
+		ids = move(other.ids);
+	}
+	return *this;
+}
+
 ParsedIR &ParsedIR::operator=(const ParsedIR &other)
 {
 	if (this != &other)
