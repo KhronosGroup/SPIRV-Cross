@@ -20,6 +20,7 @@
 #include "spirv_cross_error_handling.hpp"
 #include <algorithm>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <stack>
 #include <stdint.h>
@@ -152,6 +153,18 @@ public:
 	const T &back() const
 	{
 		return ptr[buffer_size - 1];
+	}
+
+	// Makes it easier to consume SmallVector.
+	explicit operator std::vector<T>() const &
+	{
+		return std::vector<T>(ptr, ptr + buffer_size);
+	}
+
+	// If we are converting as an r-value, we can pilfer our elements.
+	explicit operator std::vector<T>() const &&
+	{
+		return std::vector<T>(std::make_move_iterator(ptr), std::make_move_iterator(ptr + buffer_size));
 	}
 
 	// Avoid sliced copies. Base class should only be read as a reference.

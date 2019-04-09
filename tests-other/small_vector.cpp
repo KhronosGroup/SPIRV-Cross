@@ -15,6 +15,7 @@
  */
 
 #include "spirv_cross.hpp"
+#include <memory>
 
 using namespace spirv_cross;
 
@@ -185,6 +186,24 @@ static void erase_start()
 	SPVC_ASSERT(ints[1].v == 4);
 }
 
+static void convert_to_std_vector()
+{
+	SmallVector<RAIIInt, 4> foo;
+	foo.push_back(1);
+	foo.push_back(2);
+	std::vector<RAIIInt> ints(foo);
+	SPVC_ASSERT(ints.size() == 2);
+	SPVC_ASSERT(foo.size() == 2);
+	SPVC_ASSERT(ints[0].v == 1);
+	SPVC_ASSERT(ints[1].v == 2);
+
+	SmallVector<std::unique_ptr<RAIIInt>> move_only_buffer;
+	move_only_buffer.emplace_back(new RAIIInt(40));
+	std::vector<std::unique_ptr<RAIIInt>> move_only_vector(std::move(move_only_buffer));
+	SPVC_ASSERT(move_only_vector.size() == 1);
+	SPVC_ASSERT(move_only_vector[0]->v == 40);
+}
+
 int main()
 {
 	propagate_stack_to_heap();
@@ -197,5 +216,8 @@ int main()
 	erase_middle();
 	erase_start();
 
+	convert_to_std_vector();
+
 	SPVC_ASSERT(allocations > 0 && deallocations > 0 && deallocations == allocations);
 }
+
