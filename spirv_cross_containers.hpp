@@ -19,16 +19,16 @@
 
 #include "spirv_cross_error_handling.hpp"
 #include <algorithm>
-#include <utility>
-#include <stdlib.h>
 #include <functional>
-#include <stack>
 #include <memory>
+#include <stack>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #ifdef SPIRV_CROSS_NAMESPACE_OVERRIDE
@@ -60,8 +60,7 @@ public:
 private:
 #if defined(_MSC_VER) && _MSC_VER < 1900
 	// MSVC 2013 workarounds, sigh ...
-	union
-	{
+	union {
 		char aligned_char[sizeof(T) * N];
 		double dummy_aligner;
 	} u;
@@ -349,7 +348,7 @@ public:
 
 				// Need to allocate new buffer. Move everything to a new buffer.
 				T *new_buffer =
-						target_capacity > N ? static_cast<T *>(malloc(target_capacity * sizeof(T))) : stack_storage.data();
+				    target_capacity > N ? static_cast<T *>(malloc(target_capacity * sizeof(T))) : stack_storage.data();
 				if (!new_buffer)
 					SPIRV_CROSS_THROW("Out of memory.");
 
@@ -362,7 +361,7 @@ public:
 				{
 					while (original_source_itr != itr)
 					{
-						new(target_itr) T(std::move(*original_source_itr));
+						new (target_itr) T(std::move(*original_source_itr));
 						original_source_itr->~T();
 						++original_source_itr;
 						++target_itr;
@@ -378,7 +377,7 @@ public:
 				{
 					while (original_source_itr != this->end())
 					{
-						new(target_itr) T(std::move(*original_source_itr));
+						new (target_itr) T(std::move(*original_source_itr));
 						original_source_itr->~T();
 						++original_source_itr;
 						++target_itr;
@@ -684,6 +683,6 @@ private:
 	}
 };
 
-}
+} // namespace SPIRV_CROSS_NAMESPACE
 
 #endif

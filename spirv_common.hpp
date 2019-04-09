@@ -18,8 +18,8 @@
 #define SPIRV_CROSS_COMMON_HPP
 
 #include "spirv.hpp"
-#include "spirv_cross_error_handling.hpp"
 #include "spirv_cross_containers.hpp"
+#include "spirv_cross_error_handling.hpp"
 
 // A bit crude, but allows projects which embed SPIRV-Cross statically to
 // effectively hide all the symbols from other projects.

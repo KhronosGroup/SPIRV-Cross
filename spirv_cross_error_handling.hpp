@@ -17,10 +17,10 @@
 #ifndef SPIRV_CROSS_ERROR_HANDLING
 #define SPIRV_CROSS_ERROR_HANDLING
 
-#include <string>
 #include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 #ifdef SPIRV_CROSS_NAMESPACE_OVERRIDE
 #define SPIRV_CROSS_NAMESPACE SPIRV_CROSS_NAMESPACE_OVERRIDE
@@ -78,6 +78,6 @@ public:
 #else
 #define SPIRV_CROSS_DEPRECATED(reason)
 #endif
-}
+} // namespace SPIRV_CROSS_NAMESPACE
 
 #endif
