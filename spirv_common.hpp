@@ -1257,6 +1257,8 @@ public:
 
 			if (other.holder)
 				holder = other.holder->clone(group->pools[other.type].get());
+			else
+				holder = nullptr;
 
 			type = other.type;
 			allow_type_rewrite = other.allow_type_rewrite;
@@ -1268,9 +1270,16 @@ public:
 	{
 		if (holder)
 			group->pools[type]->free_opaque(holder);
-		holder = val;
+		holder = nullptr;
+
 		if (!allow_type_rewrite && type != TypeNone && type != new_type)
+		{
+			if (val)
+				group->pools[new_type]->free_opaque(val);
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
+		}
+
+		holder = val;
 		type = new_type;
 		allow_type_rewrite = false;
 	}
