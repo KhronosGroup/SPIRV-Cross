@@ -20,7 +20,6 @@
 #include "spirv_common.hpp"
 #include <stdint.h>
 #include <unordered_map>
-#include <vector>
 
 namespace SPIRV_CROSS_NAMESPACE
 {

@@ -37,6 +37,7 @@ option(SPIRV_CROSS_SANITIZE_THREADS "Sanitize threads" OFF)
 option(SPIRV_CROSS_SANITIZE_UNDEFINED "Sanitize undefined" OFF)
 
 option(SPIRV_CROSS_NAMESPACE_OVERRIDE "" "Override the namespace used in the C++ API.")
+option(SPIRV_CROSS_FORCE_STL_TYPES "Force use of STL types instead of STL replacements in certain places. Might reduce performance." OFF)
 
 if(${CMAKE_GENERATOR} MATCHES "Makefile")
 	if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
@@ -50,6 +51,10 @@ set(spirv-cross-link-flags "")
 
 if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
 	set(spirv-compiler-defines ${spirv-compiler-defines} SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+endif()
+
+if(SPIRV_CROSS_FORCE_STL_TYPES)
+	set(spirv-compiler-defines ${spirv-compiler-defines} SPIRV_CROSS_FORCE_STL_TYPES)
 endif()
 
 if (CMAKE_COMPILER_IS_GNUCXX OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
@@ -132,6 +137,8 @@ endmacro()
 set(spirv-cross-core-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/GLSL.std.450.h
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_containers.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_error_handling.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.cpp
