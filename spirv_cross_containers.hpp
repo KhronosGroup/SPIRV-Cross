@@ -477,6 +477,8 @@ template <typename T, size_t N = 8>
 using SmallVector = std::vector<T>;
 template <typename T>
 using Vector = std::vector<T>;
+template <typename T>
+using VectorView = std::vector<T>;
 
 #endif // SPIRV_CROSS_FORCE_STL_TYPES
 
