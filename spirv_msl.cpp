@@ -679,8 +679,7 @@ void CompilerMSL::preprocess_op_codes()
 	OpCodePreprocessor preproc(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), preproc);
 
-	if (preproc.suppress_missing_prototypes)
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+	suppress_missing_prototypes = preproc.suppress_missing_prototypes;
 
 	if (preproc.uses_atomics)
 	{
@@ -2351,10 +2350,13 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 // Emits the file header info
 void CompilerMSL::emit_header()
 {
+	// This particular line can be overridden during compilation, so make it a flag and not a pragma line.
+	if (suppress_missing_prototypes)
+		statement("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
 	for (auto &pragma : pragma_lines)
 		statement(pragma);
 
-	if (!pragma_lines.empty())
+	if (!pragma_lines.empty() || suppress_missing_prototypes)
 		statement("");
 
 	statement("#include <metal_stdlib>");
@@ -3961,6 +3963,29 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 		is_constant = true;
 	}
 
+	// For the case where we have OpLoad triggering an array copy,
+	// we cannot easily detect this case ahead of time since it's
+	// context dependent. We might have to force a recompile here
+	// if this is the only use of array copies in our shader.
+	if (type.array.size() > 1)
+	{
+		if (type.array.size() > SPVFuncImplArrayCopyMultidimMax)
+			SPIRV_CROSS_THROW("Cannot support this many dimensions for arrays of arrays.");
+		auto func = static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + type.array.size());
+		if (spv_function_implementations.count(func) == 0)
+		{
+			spv_function_implementations.insert(func);
+			suppress_missing_prototypes = true;
+			force_recompile();
+		}
+	}
+	else if (spv_function_implementations.count(SPVFuncImplArrayCopy) == 0)
+	{
+		spv_function_implementations.insert(SPVFuncImplArrayCopy);
+		suppress_missing_prototypes = true;
+		force_recompile();
+	}
+
 	const char *tag = is_constant ? "FromConstant" : "FromStack";
 	statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
 }
@@ -4943,7 +4968,7 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 	auto rslt = spv_function_implementations.insert(spv_func);
 	if (rslt.second)
 	{
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+		suppress_missing_prototypes = true;
 		force_recompile();
 	}
 }
