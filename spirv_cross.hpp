@@ -916,6 +916,7 @@ protected:
 		std::unordered_map<uint32_t, uint32_t> result_id_to_type;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> partial_write_variables_to_block;
+		std::unordered_set<uint32_t> access_chain_expressions;
 		const SPIRBlock *current_block = nullptr;
 	};
 
