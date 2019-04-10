@@ -1,0 +1,39 @@
+diff --git a/spirv_msl.cpp b/spirv_msl.cpp
+index 5e0ad23..35aac5e 100644
+--- a/spirv_msl.cpp
++++ b/spirv_msl.cpp
+@@ -2552,20 +2552,21 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
+ 	if (get_entry_point().model != ExecutionModelGLCompute)
+ 		return;
+ 
+-	string bar_stmt = "threadgroup_barrier(mem_flags::";
++	string bar_stmt = "threadgroup_barrier(";
+ 
+ 	uint32_t mem_sem = id_mem_sem ? get<SPIRConstant>(id_mem_sem).scalar() : uint32_t(MemorySemanticsMaskNone);
+ 
+ 	if (mem_sem & MemorySemanticsCrossWorkgroupMemoryMask)
+-		bar_stmt += "mem_device";
++		bar_stmt += "mem_flags::mem_device";
+ 	else if (mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask |
+ 	                    MemorySemanticsAtomicCounterMemoryMask))
+-		bar_stmt += "mem_threadgroup";
++		bar_stmt += "mem_flags::mem_threadgroup";
+ 	else if (mem_sem & MemorySemanticsImageMemoryMask)
+-		bar_stmt += "mem_texture";
++		bar_stmt += "mem_flags::mem_texture";
+ 	else
+-		bar_stmt += "mem_none";
++		bar_stmt += "mem_flags::mem_none";
+ 
++#if 0
+ 	if (msl_options.is_ios() && msl_options.supports_msl_version(2))
+ 	{
+ 		bar_stmt += ", ";
+@@ -2592,6 +2593,7 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
+ 			break;
+ 		}
+ 	}
++#endif
+ 
+ 	bar_stmt += ");";
+ 
