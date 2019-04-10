@@ -404,7 +404,7 @@ def regression_check_reflect(shader, json_file, args):
         with open(reference) as f:
             expected = json.load(f)
         if (json_compare(actual, expected) != True):
-            if update:
+            if args.update:
                 print('Generated reflection json has changed for {}!'.format(reference))
                 # If we expect changes, update the reference file.
                 if os.path.exists(reference):
@@ -440,7 +440,7 @@ def regression_check(shader, glsl, args):
 
     if os.path.exists(reference):
         if md5_for_file(glsl) != md5_for_file(reference):
-            if update:
+            if args.update:
                 print('Generated source code has changed for {}!'.format(reference))
                 # If we expect changes, update the reference file.
                 if os.path.exists(reference):
