@@ -31,7 +31,7 @@
 namespace SPIRV_CROSS_NAMESPACE
 {
 #ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
-#ifndef _MSC_VER
+#if !defined(_MSC_VER) || defined(__clang__)
 [[noreturn]]
 #endif
 inline void
