@@ -11302,7 +11302,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			assert(block.merge == SPIRBlock::MergeSelection);
 			branch_to_continue(block.self, block.next_block);
 		}
-		else
+		else if (block.self != block.next_block)
 			emit_block_chain(get<SPIRBlock>(block.next_block));
 	}
 
