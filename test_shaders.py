@@ -16,6 +16,26 @@ import multiprocessing
 import errno
 from functools import partial
 
+spirv_cross_paths = [
+  './spirv-cross',
+  'msvc/x64/Release/SPIRV-Cross.exe',
+  'msvc/x64/Debug/SPIRV-Cross.exe',
+  'msvc/Debug/SPIRV-Cross.exe',
+  'msvc/Release/SPIRV-Cross.exe']
+
+def find_spirv_cross():
+    spirv_cross_path = None
+      
+    for file in spirv_cross_paths:
+      if os.path.exists(file):
+        spirv_cross_path = file
+        break
+        
+    if (spirv_cross_path is None):
+      print("Can't find SPIRV-Cross! (Have you built it?)")
+      sys.exit(1)
+    return spirv_cross_path
+  
 def remove_file(path):
     #print('Removing file:', path)
     os.remove(path)
@@ -143,7 +163,7 @@ def cross_compile_msl(shader, spirv, opt):
     if opt:
         subprocess.check_call(['spirv-opt', '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross_path = find_spirv_cross()
 
     msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl']
     msl_args.append('--msl-version')
@@ -230,8 +250,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation):
     if opt:
         subprocess.check_call(['spirv-opt', '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
-
+    spirv_cross_path = find_spirv_cross()
+    
     sm = shader_to_sm(shader)
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm])
 
@@ -254,7 +274,7 @@ def cross_compile_reflect(shader, spirv, opt):
     if opt:
         subprocess.check_call(['spirv-opt', '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross_path = find_spirv_cross()
 
     sm = shader_to_sm(shader)
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', reflect_path, spirv_path, '--reflect'])
@@ -296,8 +316,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if flatten_dim:
         extra_args += ['--flatten-multidimensional-arrays']
 
-    spirv_cross_path = './spirv-cross'
-
+    spirv_cross_path = find_spirv_cross()
+        
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if not ('nocompat' in glsl_path):
         subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', glsl_path, spirv_path] + extra_args)
