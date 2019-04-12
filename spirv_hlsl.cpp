@@ -744,17 +744,25 @@ string CompilerHLSL::to_interpolation_qualifiers(const Bitset &flags)
 	return res;
 }
 
-std::string CompilerHLSL::to_semantic(uint32_t vertex_location)
+std::string CompilerHLSL::to_semantic(uint32_t location, ExecutionModel em, StorageClass sc)
 {
-	for (auto &attribute : remap_vertex_attributes)
-		if (attribute.location == vertex_location)
-			return attribute.semantic;
+	if (em == ExecutionModelVertex && sc == StorageClassInput)
+	{
+		// We have a vertex attribute - we should look at remapping it if the user provided
+		// vertex attribute hints.
+		for (auto &attribute : remap_vertex_attributes)
+			if (attribute.location == location)
+				return attribute.semantic;
+	}
 
-	return join("TEXCOORD", vertex_location);
+	// Not a vertex attribute, or no remap_vertex_attributes entry.
+	return join("TEXCOORD", location);
 }
 
 void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 {
+	auto &execution = get_entry_point();
+
 	auto &type = get<SPIRType>(var.basetype);
 	add_resource_name(type.self);
 
@@ -770,7 +778,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 		if (has_member_decoration(type.self, i, DecorationLocation))
 		{
 			uint32_t location = get_member_decoration(type.self, i, DecorationLocation);
-			semantic = join(" : ", to_semantic(location));
+			semantic = join(" : ", to_semantic(location, execution.model, var.storage));
 		}
 		else
 		{
@@ -778,7 +786,7 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 			// There could be a conflict if the block members partially specialize the locations.
 			// It is unclear how SPIR-V deals with this. Assume this does not happen for now.
 			uint32_t location = base_location + i;
-			semantic = join(" : ", to_semantic(location));
+			semantic = join(" : ", to_semantic(location, execution.model, var.storage));
 		}
 
 		add_member_name(type, i);
@@ -834,7 +842,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			location_number = get_vacant_location();
 
 		// Allow semantic remap if specified.
-		auto semantic = to_semantic(location_number);
+		auto semantic = to_semantic(location_number, execution.model, var.storage);
 
 		if (need_matrix_unroll && type.columns > 1)
 		{

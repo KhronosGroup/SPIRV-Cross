@@ -224,7 +224,7 @@ private:
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
 	void emit_io_block(const SPIRVariable &var);
-	std::string to_semantic(uint32_t vertex_location);
+	std::string to_semantic(uint32_t location, spv::ExecutionModel em, spv::StorageClass sc);
 
 	uint32_t num_workgroups_builtin = 0;
 
