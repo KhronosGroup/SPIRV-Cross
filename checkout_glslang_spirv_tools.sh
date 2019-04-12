@@ -13,7 +13,7 @@ else
 	echo "Cloning glslang revision $GLSLANG_REV."
 	mkdir -p external
 	cd external
-	git clone git://github.com/KhronosGroup/glslang.git
+	git clone https://github.com/KhronosGroup/glslang.git
 	cd glslang
 	git checkout $GLSLANG_REV
 fi
@@ -28,7 +28,7 @@ else
 	echo "Cloning SPIRV-Tools revision $SPIRV_TOOLS_REV."
 	mkdir -p external
 	cd external
-	git clone git://github.com/KhronosGroup/SPIRV-Tools.git spirv-tools
+	git clone https://github.com/KhronosGroup/SPIRV-Tools.git spirv-tools
 	cd spirv-tools
 	git checkout $SPIRV_TOOLS_REV
 fi
@@ -39,7 +39,7 @@ if [ -d external/spirv-headers ]; then
 	git checkout $SPIRV_HEADERS_REV
 	cd ../..
 else
-	git clone git://github.com/KhronosGroup/SPIRV-Headers.git external/spirv-headers
+	git clone https://github.com/KhronosGroup/SPIRV-Headers.git external/spirv-headers
 	cd external/spirv-headers
 	git checkout $SPIRV_HEADERS_REV
 	cd ../..
