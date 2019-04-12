@@ -17,7 +17,8 @@ import errno
 from functools import partial
 
 class Paths():
-    def __init__(self, glslang, spirv_as, spirv_val, spirv_opt):
+    def __init__(self, spirv_cross, glslang, spirv_as, spirv_val, spirv_opt):
+        self.spirv_cross = spirv_cross
         self.glslang = glslang
         self.spirv_as = spirv_as
         self.spirv_val = spirv_val
@@ -154,7 +155,7 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     if opt:
         subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross_path = paths.spirv_cross
 
     msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl', '--iterations', str(iterations)]
     msl_args.append('--msl-version')
@@ -262,7 +263,7 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     if opt:
         subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross_path = paths.spirv_cross
 
     sm = shader_to_sm(shader)
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm, '--iterations', str(iterations)])
@@ -290,7 +291,7 @@ def cross_compile_reflect(shader, spirv, opt, iterations, paths):
     if opt:
         subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross_path = paths.spirv_cross
 
     sm = shader_to_sm(shader)
     subprocess.check_call([spirv_cross_path, '--entry', 'main', '--output', reflect_path, spirv_path, '--reflect', '--iterations', str(iterations)])
@@ -338,7 +339,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if push_ubo:
         extra_args += ['--glsl-emit-push-constant-as-ubo']
 
-    spirv_cross_path = './spirv-cross'
+    spirv_cross_path = paths.spirv_cross
 
     # A shader might not be possible to make valid GLSL from, skip validation for this case.
     if not ('nocompat' in glsl_path):
@@ -580,7 +581,7 @@ def test_shader_reflect(stats, shader, args, paths):
     remove_file(spirv)
 
 def test_shader_file(relpath, stats, args, backend):
-    paths = Paths(args.glslang, args.spirv_as, args.spirv_val, args.spirv_opt)
+    paths = Paths(args.spirv_cross, args.glslang, args.spirv_as, args.spirv_val, args.spirv_opt)
     try:
         if backend == 'msl':
             test_shader_msl(stats, (args.folder, relpath), args, paths)
@@ -669,6 +670,9 @@ def main():
     parser.add_argument('--parallel',
             action = 'store_true',
             help = 'Execute tests in parallel.  Useful for doing regression quickly, but bad for debugging and stat output.')
+    parser.add_argument('--spirv-cross',
+            default = './spirv-cross',
+            help = 'Explicit path to spirv-cross')
     parser.add_argument('--glslang',
             default = 'glslangValidator',
             help = 'Explicit path to glslangValidator')
