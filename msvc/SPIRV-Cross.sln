@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Express 2013 for Windows Desktop
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.28307.421
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SPIRV-Cross", "SPIRV-Cross.vcxproj", "{977E3701-1A21-4425-B7E5-6BDF5EA062CD}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SPIRV-CrossLib", "SPIRV-CrossLib.vcxproj", "{F330F8C6-72DA-4A10-82CC-99DCED412539}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,8 +23,19 @@ Global
 		{977E3701-1A21-4425-B7E5-6BDF5EA062CD}.Release|Win32.Build.0 = Release|Win32
 		{977E3701-1A21-4425-B7E5-6BDF5EA062CD}.Release|x64.ActiveCfg = Release|x64
 		{977E3701-1A21-4425-B7E5-6BDF5EA062CD}.Release|x64.Build.0 = Release|x64
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Debug|Win32.ActiveCfg = Debug|Win32
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Debug|Win32.Build.0 = Debug|Win32
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Debug|x64.ActiveCfg = Debug|x64
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Debug|x64.Build.0 = Debug|x64
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Release|Win32.ActiveCfg = Release|Win32
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Release|Win32.Build.0 = Release|Win32
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Release|x64.ActiveCfg = Release|x64
+		{F330F8C6-72DA-4A10-82CC-99DCED412539}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EF1732B4-E704-4B82-9C3A-C29533D83864}
 	EndGlobalSection
 EndGlobal
