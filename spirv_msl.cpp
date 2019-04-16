@@ -5608,13 +5608,20 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			                " [[buffer(", msl_options.shader_output_buffer_index, ")]]");
 		}
 
-		if (stage_out_var_id || get_execution_model() == ExecutionModelTessellationControl)
+		if (get_execution_model() == ExecutionModelTessellationControl)
 		{
 			if (!ep_args.empty())
 				ep_args += ", ";
 			ep_args +=
 			    join("constant uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
+        else if (stage_out_var_id)
+        {
+            if (!ep_args.empty())
+                ep_args += ", ";
+            ep_args +=
+            join("device uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
+        }
 
 		// Tessellation control shaders get three additional parameters:
 		// a buffer to hold the per-patch data, a buffer to hold the per-patch
