@@ -4488,7 +4488,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		if (msl_options.texture_buffer_native)
 		{
-			tex_coords = round_fp_tex_coords(tex_coords, coord_is_fp);
+			tex_coords = "uint(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
 		}
 		else
 		{

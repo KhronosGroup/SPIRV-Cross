@@ -11,7 +11,7 @@ struct main0_out
 vertex main0_out main0(texture_buffer<float> uSamp [[texture(4)]], texture_buffer<float> uSampo [[texture(5)]])
 {
     main0_out out = {};
-    out.gl_Position = uSamp.read(10) + uSampo.read(100);
+    out.gl_Position = uSamp.read(uint(10)) + uSampo.read(uint(100));
     return out;
 }
 

@@ -11,8 +11,8 @@ struct main0_out
 fragment main0_out main0(texture_buffer<float> buf [[texture(0)]], texture_buffer<float, access::write> bufOut [[texture(1)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
-    out.FragColor = buf.read(0);
-    bufOut.write(out.FragColor, int(gl_FragCoord.x));
+    out.FragColor = buf.read(uint(0));
+    bufOut.write(out.FragColor, uint(int(gl_FragCoord.x)));
     return out;
 }
 
