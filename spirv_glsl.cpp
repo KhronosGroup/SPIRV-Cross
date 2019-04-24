@@ -430,6 +430,21 @@ void CompilerGLSL::find_static_extensions()
 
 	if (options.separate_shader_objects && !options.es && options.version < 410)
 		require_extension_internal("GL_ARB_separate_shader_objects");
+
+	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("GL_EXT_buffer_reference is only supported in Vulkan GLSL.");
+		if (options.es && options.version < 320)
+			SPIRV_CROSS_THROW("GL_EXT_buffer_reference requires ESSL 320.");
+		else if (!options.es && options.version < 450)
+			SPIRV_CROSS_THROW("GL_EXT_buffer_reference requires GLSL 450.");
+		require_extension_internal("GL_EXT_buffer_reference");
+	}
+	else if (ir.addressing_model != AddressingModelLogical)
+	{
+		SPIRV_CROSS_THROW("Only Logical and PhysicalStorageBuffer64EXT addressing models are supported.");
+	}
 }
 
 string CompilerGLSL::compile()
@@ -445,6 +460,11 @@ string CompilerGLSL::compile()
 	fixup_image_load_store_access();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
+
+	// Shaders might cast unrelated data to pointers of non-block types.
+	// Find all such instances and make sure we can cast the pointers to a synthesized block type.
+	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+		analyze_non_block_pointer_types();
 
 	uint32_t pass_count = 0;
 	do
@@ -972,6 +992,24 @@ uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPack
 uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bitset &flags,
                                                 BufferPackingStandard packing)
 {
+	// If using PhysicalStorageBufferEXT storage class, this is a pointer,
+	// and is 64-bit.
+	if (type.storage == StorageClassPhysicalStorageBufferEXT)
+	{
+		if (!type.pointer)
+			SPIRV_CROSS_THROW("Types in PhysicalStorageBufferEXT must be pointers.");
+
+		if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+		{
+			if (packing_is_vec4_padded(packing) && type_is_array_of_pointers(type))
+				return 16;
+			else
+				return 8;
+		}
+		else
+			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64EXT must be used for PhysicalStorageBufferEXT.");
+	}
+
 	if (!type.array.empty())
 	{
 		uint32_t minimum_alignment = 1;
@@ -1086,6 +1124,19 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 	if (!type.array.empty())
 	{
 		return to_array_size_literal(type) * type_to_packed_array_stride(type, flags, packing);
+	}
+
+	// If using PhysicalStorageBufferEXT storage class, this is a pointer,
+	// and is 64-bit.
+	if (type.storage == StorageClassPhysicalStorageBufferEXT)
+	{
+		if (!type.pointer)
+			SPIRV_CROSS_THROW("Types in PhysicalStorageBufferEXT must be pointers.");
+
+		if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+			return 8;
+		else
+			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64EXT must be used for PhysicalStorageBufferEXT.");
 	}
 
 	uint32_t size = 0;
@@ -1211,7 +1262,7 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 
 		// The next member following a struct member is aligned to the base alignment of the struct that came before.
 		// GL 4.5 spec, 7.6.2.2.
-		if (memb_type.basetype == SPIRType::Struct)
+		if (memb_type.basetype == SPIRType::Struct && !memb_type.pointer)
 			pad_alignment = packed_alignment;
 		else
 			pad_alignment = 1;
@@ -1237,8 +1288,11 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 			// We cannot use enhanced layouts on substructs, so they better be up to spec.
 			auto substruct_packing = packing_to_substruct_packing(packing);
 
-			if (!memb_type.member_types.empty() && !buffer_is_packing_standard(memb_type, substruct_packing))
+			if (!memb_type.pointer && !memb_type.member_types.empty() &&
+			    !buffer_is_packing_standard(memb_type, substruct_packing))
+			{
 				return false;
+			}
 		}
 
 		// Bump size.
@@ -1412,41 +1466,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	}
 	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block))
 	{
-		if (buffer_is_packing_standard(type, BufferPackingStd430))
-			attr.push_back("std430");
-		else if (buffer_is_packing_standard(type, BufferPackingStd140))
-			attr.push_back("std140");
-		else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
-		{
-			attr.push_back("std140");
-
-			// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
-			// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
-			// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
-			if (options.es && !options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
-				                  "not support GL_ARB_enhanced_layouts.");
-			if (!options.es && !options.vulkan_semantics && options.version < 440)
-				require_extension_internal("GL_ARB_enhanced_layouts");
-
-			set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
-		}
-		else if (buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
-		{
-			attr.push_back("std430");
-			if (options.es && !options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
-				                  "not support GL_ARB_enhanced_layouts.");
-			if (!options.es && !options.vulkan_semantics && options.version < 440)
-				require_extension_internal("GL_ARB_enhanced_layouts");
-
-			set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
-		}
-		else
-		{
-			SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140, even with enhanced "
-			                  "layouts. You can try flattening this block to support a more flexible layout.");
-		}
+		attr.push_back(buffer_to_packing_standard(type));
 	}
 
 	// For images, the type itself adds a layout qualifer.
@@ -1465,6 +1485,44 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	res += merge(attr);
 	res += ") ";
 	return res;
+}
+
+string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type)
+{
+	if (buffer_is_packing_standard(type, BufferPackingStd430))
+		return "std430";
+	else if (buffer_is_packing_standard(type, BufferPackingStd140))
+		return "std140";
+	else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+	{
+		// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
+		// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
+		// Enhanced layouts seem to always work in Vulkan GLSL, so no need for extensions there.
+		if (options.es && !options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+			                  "not support GL_ARB_enhanced_layouts.");
+		if (!options.es && !options.vulkan_semantics && options.version < 440)
+			require_extension_internal("GL_ARB_enhanced_layouts");
+
+		set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
+		return "std140";
+	}
+	else if (buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
+	{
+		if (options.es && !options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
+			                  "not support GL_ARB_enhanced_layouts.");
+		if (!options.es && !options.vulkan_semantics && options.version < 440)
+			require_extension_internal("GL_ARB_enhanced_layouts");
+
+		set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
+		return "std430";
+	}
+	else
+	{
+		SPIRV_CROSS_THROW("Buffer block cannot be expressed as neither std430 nor std140, even with enhanced "
+		                  "layouts. You can try flattening this block to support a more flexible layout.");
+	}
 }
 
 void CompilerGLSL::emit_push_constant_block(const SPIRVariable &var)
@@ -1542,6 +1600,81 @@ void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 		block_flags.set(DecorationBlock);
 	emit_uniform(var);
 	statement("");
+}
+
+void CompilerGLSL::emit_buffer_reference_block(SPIRType &type, bool forward_declaration)
+{
+	string buffer_name;
+
+	if (forward_declaration)
+	{
+		// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
+		// Allow aliased name since we might be declaring the block twice. Once with buffer reference (forward declared) and one proper declaration.
+		// The names must match up.
+		buffer_name = to_name(type.self, false);
+
+		// Shaders never use the block by interface name, so we don't
+		// have to track this other than updating name caches.
+		// If we have a collision for any reason, just fallback immediately.
+		if (ir.meta[type.self].decoration.alias.empty() ||
+		    block_ssbo_names.find(buffer_name) != end(block_ssbo_names) ||
+		    resource_names.find(buffer_name) != end(resource_names))
+		{
+			buffer_name = join("_", type.self);
+		}
+
+		// Make sure we get something unique for both global name scope and block name scope.
+		// See GLSL 4.5 spec: section 4.3.9 for details.
+		add_variable(block_ssbo_names, resource_names, buffer_name);
+
+		// If for some reason buffer_name is an illegal name, make a final fallback to a workaround name.
+		// This cannot conflict with anything else, so we're safe now.
+		// We cannot reuse this fallback name in neither global scope (blocked by block_names) nor block name scope.
+		if (buffer_name.empty())
+			buffer_name = join("_", type.self);
+
+		block_names.insert(buffer_name);
+		block_ssbo_names.insert(buffer_name);
+	}
+	else if (type.basetype != SPIRType::Struct)
+		buffer_name = type_to_glsl(type);
+	else
+		buffer_name = to_name(type.self, false);
+
+	if (!forward_declaration)
+	{
+		if (type.basetype == SPIRType::Struct)
+			statement("layout(buffer_reference, ", buffer_to_packing_standard(type), ") buffer ", buffer_name);
+		else
+			statement("layout(buffer_reference) buffer ", buffer_name);
+
+		begin_scope();
+
+		if (type.basetype == SPIRType::Struct)
+		{
+			type.member_name_cache.clear();
+
+			uint32_t i = 0;
+			for (auto &member : type.member_types)
+			{
+				add_member_name(type, i);
+				emit_struct_member(type, member, i);
+				i++;
+			}
+		}
+		else
+		{
+			auto &pointee_type = get_pointee_type(type);
+			statement(type_to_glsl(pointee_type), " value", type_to_array_glsl(pointee_type), ";");
+		}
+
+		end_scope_decl();
+		statement("");
+	}
+	else
+	{
+		statement("layout(buffer_reference) buffer ", buffer_name, ";");
+	}
 }
 
 void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
@@ -1629,7 +1762,7 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 			SPIRV_CROSS_THROW("Basic types in a flattened UBO must be float, int or uint.");
 
 		auto flags = ir.get_buffer_block_flags(var);
-		statement("uniform ", flags_to_precision_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[",
+		statement("uniform ", flags_to_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[",
 		          buffer_size, "];");
 	}
 	else
@@ -2333,6 +2466,36 @@ void CompilerGLSL::emit_resources()
 
 	emitted = false;
 
+	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+	{
+		for (auto type : physical_storage_non_block_pointer_types)
+		{
+			emit_buffer_reference_block(get<SPIRType>(type), false);
+		}
+
+		// Output buffer reference blocks.
+		// Do this in two stages, one with forward declaration,
+		// and one without. Buffer reference blocks can reference themselves
+		// to support things like linked lists.
+		ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+			bool has_block_flags = has_decoration(type.self, DecorationBlock);
+			if (has_block_flags && type.pointer && type.pointer_depth == 1 && !type_is_array_of_pointers(type) &&
+			    type.storage == StorageClassPhysicalStorageBufferEXT)
+			{
+				emit_buffer_reference_block(type, true);
+			}
+		});
+
+		ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+			bool has_block_flags = has_decoration(type.self, DecorationBlock);
+			if (has_block_flags && type.pointer && type.pointer_depth == 1 && !type_is_array_of_pointers(type) &&
+			    type.storage == StorageClassPhysicalStorageBufferEXT)
+			{
+				emit_buffer_reference_block(type, false);
+			}
+		});
+	}
+
 	// Output UBOs and SSBOs
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
@@ -2534,15 +2697,22 @@ string CompilerGLSL::enclose_expression(const string &expr)
 		return expr;
 }
 
-string CompilerGLSL::dereference_expression(const std::string &expr)
+string CompilerGLSL::dereference_expression(const SPIRType &expression_type, const std::string &expr)
 {
 	// If this expression starts with an address-of operator ('&'), then
 	// just return the part after the operator.
 	// TODO: Strip parens if unnecessary?
 	if (expr.front() == '&')
 		return expr.substr(1);
-	else
+	else if (backend.native_pointers)
 		return join('*', expr);
+	else if (expression_type.storage == StorageClassPhysicalStorageBufferEXT &&
+	         expression_type.basetype != SPIRType::Struct && expression_type.pointer_depth == 1)
+	{
+		return join(enclose_expression(expr), ".value");
+	}
+	else
+		return expr;
 }
 
 string CompilerGLSL::address_of_expression(const std::string &expr)
@@ -2590,7 +2760,7 @@ string CompilerGLSL::to_dereferenced_expression(uint32_t id, bool register_expre
 {
 	auto &type = expression_type(id);
 	if (type.pointer && should_dereference(id))
-		return dereference_expression(to_enclosed_expression(id, register_expression_read));
+		return dereference_expression(type, to_enclosed_expression(id, register_expression_read));
 	else
 		return to_expression(id, register_expression_read);
 }
@@ -3629,7 +3799,7 @@ void CompilerGLSL::emit_uninitialized_temporary(uint32_t result_type, uint32_t r
 
 		// The result_id has not been made into an expression yet, so use flags interface.
 		add_local_variable_name(result_id);
-		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), ";");
+		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), ";");
 	}
 }
 
@@ -3664,7 +3834,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 	{
 		// The result_id has not been made into an expression yet, so use flags interface.
 		add_local_variable_name(result_id);
-		return join(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), " = ");
+		return join(flags_to_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), " = ");
 	}
 }
 
@@ -5933,6 +6103,21 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
 	uint32_t type_id = expression_type_id(base);
+
+	if (!backend.native_pointers)
+	{
+		if (ptr_chain)
+			SPIRV_CROSS_THROW("Backend does not support native pointers and does not support OpPtrAccessChain.");
+
+		// Wrapped buffer reference pointer types will need to poke into the internal "value" member before
+		// continuing the access chain.
+		if (should_dereference(base))
+		{
+			auto &type = get<SPIRType>(type_id);
+			expr = dereference_expression(type, expr);
+		}
+	}
+
 	const auto *type = &get_pointee_type(type_id);
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
@@ -6780,8 +6965,7 @@ void CompilerGLSL::flush_variable_declaration(uint32_t id)
 		{
 			auto &type = get<SPIRType>(var->basetype);
 			auto &flags = ir.meta[id].decoration.decoration_flags;
-			statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, join("_", id, "_copy")),
-			          ";");
+			statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, join("_", id, "_copy")), ";");
 		}
 		var->deferred_declaration = false;
 	}
@@ -9285,6 +9469,29 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 
+	case OpConvertUToPtr:
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		if (type.storage != StorageClassPhysicalStorageBufferEXT)
+			SPIRV_CROSS_THROW("Only StorageClassPhysicalStorageBufferEXT is supported by OpConvertUToPtr.");
+
+		auto op = type_to_glsl(type);
+		emit_unary_func_op(ops[0], ops[1], ops[2], op.c_str());
+		break;
+	}
+
+	case OpConvertPtrToU:
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		auto &ptr_type = expression_type(ops[2]);
+		if (ptr_type.storage != StorageClassPhysicalStorageBufferEXT)
+			SPIRV_CROSS_THROW("Only StorageClassPhysicalStorageBufferEXT is supported by OpConvertPtrToU.");
+
+		auto op = type_to_glsl(type);
+		emit_unary_func_op(ops[0], ops[1], ops[2], op.c_str());
+		break;
+	}
+
 	case OpUndef:
 		// Undefined value has been declared.
 		break;
@@ -9442,13 +9649,16 @@ void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
-	statement(layout_for_member(type, index), qualifiers, qualifier,
-	          flags_to_precision_qualifiers_glsl(membertype, memberflags),
+	statement(layout_for_member(type, index), qualifiers, qualifier, flags_to_qualifiers_glsl(membertype, memberflags),
 	          variable_decl(membertype, to_member_name(type, index)), ";");
 }
 
-const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &type, const Bitset &flags)
+const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags)
 {
+	// GL_EXT_buffer_reference variables can be marked as restrict.
+	if (flags.get(DecorationRestrictPointerEXT))
+		return "restrict ";
+
 	// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
 	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
 	    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
@@ -9501,7 +9711,7 @@ const char *CompilerGLSL::flags_to_precision_qualifiers_glsl(const SPIRType &typ
 
 const char *CompilerGLSL::to_precision_qualifiers_glsl(uint32_t id)
 {
-	return flags_to_precision_qualifiers_glsl(expression_type(id), ir.meta[id].decoration.decoration_flags);
+	return flags_to_qualifiers_glsl(expression_type(id), ir.meta[id].decoration.decoration_flags);
 }
 
 string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
@@ -9664,6 +9874,12 @@ string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 
 string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 {
+	if (type.pointer && type.storage == StorageClassPhysicalStorageBufferEXT && type.basetype != SPIRType::Struct)
+	{
+		// We are using a wrapped pointer type, and we should not emit any array declarations here.
+		return "";
+	}
+
 	if (type.array.empty())
 		return "";
 
@@ -9817,7 +10033,20 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 // depend on a specific object's use of that type.
 string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
-	// Ignore the pointer type since GLSL doesn't have pointers.
+	if (type.pointer && type.storage == StorageClassPhysicalStorageBufferEXT && type.basetype != SPIRType::Struct)
+	{
+		// Need to create a magic type name which compacts the entire type information.
+		string name = type_to_glsl(get_pointee_type(type));
+		for (size_t i = 0; i < type.array.size(); i++)
+		{
+			if (type.array_size_literal[i])
+				name += join(type.array[i], "_");
+			else
+				name += join("id", type.array[i], "_");
+		}
+		name += "Pointer";
+		return name;
+	}
 
 	switch (type.basetype)
 	{
@@ -10124,7 +10353,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	string decl;
 
 	auto &type = get<SPIRType>(func.return_type);
-	decl += flags_to_precision_qualifiers_glsl(type, return_flags);
+	decl += flags_to_qualifiers_glsl(type, return_flags);
 	decl += type_to_glsl(type);
 	decl += type_to_array_glsl(type);
 	decl += " ";
@@ -10931,7 +11160,7 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<uint32_t, uint32_t>
 		add_local_variable_name(tmp.second);
 		auto &flags = ir.meta[tmp.second].decoration.decoration_flags;
 		auto &type = get<SPIRType>(tmp.first);
-		statement(flags_to_precision_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
+		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), ";");
 
 		hoisted_temporaries.insert(tmp.second);
 		forced_temporaries.insert(tmp.second);
