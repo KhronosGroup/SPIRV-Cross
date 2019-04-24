@@ -8418,8 +8418,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		flush_all_atomic_capable_variables();
 		// FIXME: Image?
 		// OpAtomicLoad seems to only be relevant for atomic counters.
+		forced_temporaries.insert(ops[1]);
 		GLSL_UFOP(atomicCounter);
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 
 	case OpAtomicStore:
@@ -8459,7 +8459,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8469,7 +8468,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		forced_temporaries.insert(ops[1]);
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8480,7 +8478,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto expr = join(op, "(", to_expression(ops[2]), ", -", to_enclosed_expression(ops[5]), ")");
 		emit_op(ops[0], ops[1], expr, should_forward(ops[2]) && should_forward(ops[5]));
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8491,7 +8488,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		forced_temporaries.insert(ops[1]);
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8502,7 +8498,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		forced_temporaries.insert(ops[1]);
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8512,7 +8507,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		forced_temporaries.insert(ops[1]);
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8522,7 +8516,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		forced_temporaries.insert(ops[1]);
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
@@ -8532,7 +8525,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		forced_temporaries.insert(ops[1]);
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		flush_all_atomic_capable_variables();
-		register_read(ops[1], ops[2], should_forward(ops[2]));
 		break;
 	}
 
