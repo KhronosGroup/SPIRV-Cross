@@ -106,7 +106,9 @@ enum BufferPackingStandard
 	BufferPackingStd140EnhancedLayout,
 	BufferPackingStd430EnhancedLayout,
 	BufferPackingHLSLCbuffer,
-	BufferPackingHLSLCbufferPackOffset
+	BufferPackingHLSLCbufferPackOffset,
+	BufferPackingScalar,
+	BufferPackingScalarEnhancedLayout
 };
 
 struct EntryPoint
