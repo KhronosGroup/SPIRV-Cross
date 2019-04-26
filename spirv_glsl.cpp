@@ -2697,7 +2697,7 @@ string CompilerGLSL::enclose_expression(const string &expr)
 		return expr;
 }
 
-string CompilerGLSL::dereference_expression(const SPIRType &expression_type, const std::string &expr)
+string CompilerGLSL::dereference_expression(const SPIRType &expr_type, const std::string &expr)
 {
 	// If this expression starts with an address-of operator ('&'), then
 	// just return the part after the operator.
@@ -2706,8 +2706,8 @@ string CompilerGLSL::dereference_expression(const SPIRType &expression_type, con
 		return expr.substr(1);
 	else if (backend.native_pointers)
 		return join('*', expr);
-	else if (expression_type.storage == StorageClassPhysicalStorageBufferEXT &&
-	         expression_type.basetype != SPIRType::Struct && expression_type.pointer_depth == 1)
+	else if (expr_type.storage == StorageClassPhysicalStorageBufferEXT && expr_type.basetype != SPIRType::Struct &&
+	         expr_type.pointer_depth == 1)
 	{
 		return join(enclose_expression(expr), ".value");
 	}
