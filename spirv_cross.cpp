@@ -648,11 +648,11 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 
 		auto *var = compiler.maybe_get<SPIRVariable>(args[0]);
 		if (var && storage_class_is_interface(var->storage))
-			variables.insert(variable);
+			variables.insert(args[0]);
 
 		var = compiler.maybe_get<SPIRVariable>(args[1]);
 		if (var && storage_class_is_interface(var->storage))
-			variables.insert(variable);
+			variables.insert(args[1]);
 		break;
 	}
 
