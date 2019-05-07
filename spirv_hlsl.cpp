@@ -4508,6 +4508,25 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		HLSL_UFOP(reversebits);
 		break;
 
+	case OpArrayLength:
+	{
+		auto *var = maybe_get<SPIRVariable>(ops[2]);
+		if (!var)
+			SPIRV_CROSS_THROW("Array length must point directly to an SSBO block.");
+
+		auto &type = get<SPIRType>(var->basetype);
+		if (!has_decoration(type.self, DecorationBlock) && !has_decoration(type.self, DecorationBufferBlock))
+			SPIRV_CROSS_THROW("Array length expression must point to a block type.");
+
+		// This must be 32-bit uint, so we're good to go.
+		emit_uninitialized_temporary_expression(ops[0], ops[1]);
+		statement(to_expression(ops[2]), ".GetDimensions(", to_expression(ops[1]), ");");
+		uint32_t offset = type_struct_member_offset(type, ops[3]);
+		uint32_t stride = type_struct_member_array_stride(type, ops[3]);
+		statement(to_expression(ops[1]), " = (", to_expression(ops[1]), " - ", offset, ") / ", stride, ";");
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
