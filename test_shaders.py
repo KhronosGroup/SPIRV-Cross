@@ -143,7 +143,7 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     spirv_path = create_temporary()
     msl_path = create_temporary(os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -253,7 +253,7 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     spirv_path = create_temporary()
     hlsl_path = create_temporary(os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -281,7 +281,7 @@ def cross_compile_reflect(shader, spirv, opt, iterations, paths):
     spirv_path = create_temporary()
     reflect_path = create_temporary(os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -312,7 +312,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if vulkan or spirv:
         vulkan_glsl_path = create_temporary('vk' + os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
