@@ -4373,7 +4373,10 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 		// Manufacture automatic swizzle arg.
 		if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(arg_type))
-			decl += join(", constant uint32_t& ", to_swizzle_expression(arg.id));
+		{
+			bool is_array = !arg_type.array.empty();
+			decl += join(", constant uint32_t", is_array ? "* " : "& ", to_swizzle_expression(arg.id));
+		}
 
 		if (&arg != &func.arguments.back())
 			decl += ", ";
@@ -5847,9 +5850,13 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
 			{
 				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
-				entry_func.fixup_hooks_in.push_back([this, &var, var_id]() {
+				entry_func.fixup_hooks_in.push_back([this, &type, &var, var_id]() {
 					auto &aux_type = expression_type(aux_buffer_id);
-					statement("constant uint32_t& ", to_swizzle_expression(var_id), " = ", to_name(aux_buffer_id), ".",
+					bool is_array_type = !type.array.empty();
+
+					// If we have an array of images, we need to be able to index into it, so take a pointer instead.
+					statement("constant uint32_t", is_array_type ? "* " : "& ", to_swizzle_expression(var_id),
+					          is_array_type ? " = &" : " = ", to_name(aux_buffer_id), ".",
 					          to_member_name(aux_type, k_aux_mbr_idx_swizzle_const), "[",
 					          convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
 				});
