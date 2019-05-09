@@ -11,7 +11,13 @@ vec4 sample_in_func()
 	return texture(uSampler[2], vUV);
 }
 
+vec4 sample_single_in_func(sampler2D s)
+{
+	return texture(s, vUV);
+}
+
 void main()
 {
 	FragColor = sample_in_func();
+	FragColor += sample_single_in_func(uSampler[1]);
 }

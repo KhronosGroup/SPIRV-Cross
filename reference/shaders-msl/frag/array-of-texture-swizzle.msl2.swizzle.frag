@@ -145,11 +145,17 @@ float4 sample_in_func(thread const array<texture2d<float>, 4> uSampler, thread c
     return spvTextureSwizzle(uSampler[2].sample(uSamplerSmplr[2], vUV), uSamplerSwzl[2]);
 }
 
+float4 sample_single_in_func(thread const texture2d<float> s, thread const sampler sSmplr, constant uint32_t& sSwzl, thread float2& vUV)
+{
+    return spvTextureSwizzle(s.sample(sSmplr, vUV), sSwzl);
+}
+
 fragment main0_out main0(main0_in in [[stage_in]], constant spvAux& spvAuxBuffer [[buffer(30)]], array<texture2d<float>, 4> uSampler [[texture(0)]], array<sampler, 4> uSamplerSmplr [[sampler(0)]])
 {
     main0_out out = {};
     constant uint32_t* uSamplerSwzl = &spvAuxBuffer.swizzleConst[0];
     out.FragColor = sample_in_func(uSampler, uSamplerSmplr, uSamplerSwzl, in.vUV);
+    out.FragColor += sample_single_in_func(uSampler[1], uSamplerSmplr[1], uSamplerSwzl[1], in.vUV);
     return out;
 }
 

@@ -145,6 +145,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant spvAux& spvAuxBuffer
     main0_out out = {};
     constant uint32_t* uSamplerSwzl = &spvAuxBuffer.swizzleConst[0];
     out.FragColor = spvTextureSwizzle(uSampler[2].sample(uSamplerSmplr[2], in.vUV), uSamplerSwzl[2]);
+    out.FragColor += spvTextureSwizzle(uSampler[1].sample(uSamplerSmplr[1], in.vUV), uSamplerSwzl[1]);
     return out;
 }
 
