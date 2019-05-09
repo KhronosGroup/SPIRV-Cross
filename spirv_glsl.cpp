@@ -5772,6 +5772,10 @@ case OpGroupNonUniform##op: \
 
 string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
+	// OpBitcast can deal with pointers.
+	if (out_type.pointer || in_type.pointer)
+		return type_to_glsl(out_type);
+
 	if (out_type.basetype == in_type.basetype)
 		return "";
 
