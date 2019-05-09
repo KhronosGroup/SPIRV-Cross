@@ -4374,8 +4374,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		// Manufacture automatic swizzle arg.
 		if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(arg_type))
 		{
-			bool is_array = !arg_type.array.empty();
-			decl += join(", constant uint32_t", is_array ? "* " : "& ", to_swizzle_expression(arg.id));
+			bool arg_is_array = !arg_type.array.empty();
+			decl += join(", constant uint32_t", arg_is_array ? "* " : "& ", to_swizzle_expression(arg.id));
 		}
 
 		if (&arg != &func.arguments.back())
