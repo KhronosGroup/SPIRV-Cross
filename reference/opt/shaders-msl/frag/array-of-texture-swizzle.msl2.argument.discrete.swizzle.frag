@@ -5,6 +5,13 @@
 
 using namespace metal;
 
+struct spvDescriptorSetBuffer0
+{
+    constant uint* spvSwizzleConstants [[id(0)]];
+    array<texture2d<float>, 4> uSampler0 [[id(1)]];
+    array<sampler, 4> uSampler0Smplr [[id(5)]];
+};
+
 struct main0_out
 {
     float4 FragColor [[color(0)]];
@@ -135,22 +142,15 @@ inline vec<T, 4> spvGatherCompareSwizzle(sampler s, const thread Tex& t, Ts... p
     return t.gather_compare(s, spvForward<Ts>(params)...);
 }
 
-float4 sample_in_func(thread const array<texture2d<float>, 4> uSampler, thread const array<sampler, 4> uSamplerSmplr, constant uint32_t* uSamplerSwzl, thread float2& vUV)
-{
-    return spvTextureSwizzle(uSampler[2].sample(uSamplerSmplr[2], vUV), uSamplerSwzl[2]);
-}
-
-float4 sample_single_in_func(thread const texture2d<float> s, thread const sampler sSmplr, constant uint32_t& sSwzl, thread float2& vUV)
-{
-    return spvTextureSwizzle(s.sample(sSmplr, vUV), sSwzl);
-}
-
-fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvSwizzleConstants [[buffer(30)]], array<texture2d<float>, 4> uSampler [[texture(0)]], array<sampler, 4> uSamplerSmplr [[sampler(0)]])
+fragment main0_out main0(main0_in in [[stage_in]], constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant uint* spvSwizzleConstants [[buffer(30)]], texture2d<float> uSampler1 [[texture(0)]], sampler uSampler1Smplr [[sampler(0)]])
 {
     main0_out out = {};
-    constant uint32_t* uSamplerSwzl = &spvSwizzleConstants[0];
-    out.FragColor = sample_in_func(uSampler, uSamplerSmplr, uSamplerSwzl, in.vUV);
-    out.FragColor += sample_single_in_func(uSampler[1], uSamplerSmplr[1], uSamplerSwzl[1], in.vUV);
+    constant uint32_t* spvDescriptorSet0_uSampler0Swzl = &spvDescriptorSet0.spvSwizzleConstants[1];
+    constant uint32_t& uSampler1Swzl = spvSwizzleConstants[0];
+    out.FragColor = spvTextureSwizzle(spvDescriptorSet0.uSampler0[2].sample(spvDescriptorSet0.uSampler0Smplr[2], in.vUV), spvDescriptorSet0_uSampler0Swzl[2]);
+    out.FragColor += spvTextureSwizzle(uSampler1.sample(uSampler1Smplr, in.vUV), uSampler1Swzl);
+    out.FragColor += spvTextureSwizzle(spvDescriptorSet0.uSampler0[1].sample(spvDescriptorSet0.uSampler0Smplr[1], in.vUV), spvDescriptorSet0_uSampler0Swzl[1]);
+    out.FragColor += spvTextureSwizzle(uSampler1.sample(uSampler1Smplr, in.vUV), uSampler1Swzl);
     return out;
 }
 
