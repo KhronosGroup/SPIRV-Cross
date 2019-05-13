@@ -220,13 +220,18 @@ def shader_to_win_path(shader):
 
 ignore_fxc = False
 def validate_shader_hlsl(shader, force_no_external_validation, paths):
-    subprocess.check_call([paths.glslang, '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader])
+    if not '.nonuniformresource' in shader:
+        # glslang HLSL does not support this, so rely on fxc to test it.
+        subprocess.check_call([paths.glslang, '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader])
     is_no_fxc = '.nofxc.' in shader
     global ignore_fxc
     if (not ignore_fxc) and (not force_no_external_validation) and (not is_no_fxc):
         try:
             win_path = shader_to_win_path(shader)
-            subprocess.check_call(['fxc', '-nologo', shader_model_hlsl(shader), win_path])
+            args = ['fxc', '-nologo', shader_model_hlsl(shader), win_path]
+            if '.nonuniformresource.' in shader:
+                args.append('/enable_unbounded_descriptor_tables')
+            subprocess.check_call(args)
         except OSError as oe:
             if (oe.errno != errno.ENOENT): # Ignore not found errors
                 print('Failed to run FXC.')

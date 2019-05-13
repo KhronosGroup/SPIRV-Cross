@@ -577,7 +577,7 @@ string CompilerMSL::compile()
 	backend.use_initializer_list = true;
 	backend.use_typed_initializer_list = true;
 	backend.native_row_major_matrix = false;
-	backend.flexible_member_array_supported = false;
+	backend.unsized_array_supported = false;
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
 	backend.boolean_mix_support = false;
@@ -585,6 +585,7 @@ string CompilerMSL::compile()
 	backend.array_is_value_type = false;
 	backend.comparison_image_samples_scalar = true;
 	backend.native_pointers = true;
+	backend.nonuniform_qualifier = "";
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;

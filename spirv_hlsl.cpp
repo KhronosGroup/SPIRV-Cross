@@ -4647,6 +4647,27 @@ uint32_t CompilerHLSL::remap_num_workgroups_builtin()
 	return variable_id;
 }
 
+void CompilerHLSL::validate_shader_model()
+{
+	// Check for nonuniform qualifier.
+	// Instead of looping over all decorations to find this, just look at capabilities.
+	for (auto &cap : ir.declared_capabilities)
+	{
+		switch (cap)
+		{
+		case CapabilityShaderNonUniformEXT:
+		case CapabilityRuntimeDescriptorArrayEXT:
+			if (hlsl_options.shader_model < 51)
+				SPIRV_CROSS_THROW("Shader model 5.1 or higher is required to use bindless resources or NonUniformResourceIndex.");
+		default:
+			break;
+		}
+	}
+
+	if (ir.addressing_model != AddressingModelLogical)
+		SPIRV_CROSS_THROW("Only Logical addressing model can be used with HLSL.");
+}
+
 string CompilerHLSL::compile()
 {
 	// Do not deal with ES-isms like precision, older extensions and such.
@@ -4663,7 +4684,7 @@ string CompilerHLSL::compile()
 	backend.basic_uint_type = "uint";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = true;
-	backend.flexible_member_array_supported = false;
+	backend.unsized_array_supported = true;
 	backend.explicit_struct_type = false;
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
@@ -4672,8 +4693,10 @@ string CompilerHLSL::compile()
 	backend.can_declare_struct_inline = false;
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
+	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 
 	build_function_control_flow_graphs_and_analyze();
+	validate_shader_model();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
 
