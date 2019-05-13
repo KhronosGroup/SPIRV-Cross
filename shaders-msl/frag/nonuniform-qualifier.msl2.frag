@@ -2,8 +2,8 @@
 #extension GL_EXT_nonuniform_qualifier : require
 
 layout(binding = 0) uniform texture2D uSamplers[8];
-layout(binding = 16) uniform sampler2D uCombinedSamplers[8];
-layout(binding = 8) uniform sampler uSamps[8];
+layout(binding = 8) uniform sampler2D uCombinedSamplers[8];
+layout(binding = 1) uniform sampler uSamps[7];
 layout(location = 0) flat in int vIndex;
 layout(location = 1) in vec2 vUV;
 layout(location = 0) out vec4 FragColor;
