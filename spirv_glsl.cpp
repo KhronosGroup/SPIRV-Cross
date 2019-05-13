@@ -9918,7 +9918,7 @@ string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 		return to_expression(size);
 	else if (size)
 		return convert_to_string(size);
-	else if (!backend.flexible_member_array_supported)
+	else if (!backend.unsized_array_supported)
 	{
 		// For runtime-sized arrays, we can work around
 		// lack of standard support for this by simply having
@@ -11837,6 +11837,9 @@ void CompilerGLSL::bitcast_to_builtin_store(uint32_t target_id, std::string &exp
 
 void CompilerGLSL::convert_non_uniform_expression(const SPIRType &type, std::string &expr)
 {
+	if (*backend.nonuniform_qualifier == '\0')
+		return;
+
 	// Handle SPV_EXT_descriptor_indexing.
 	if (type.basetype == SPIRType::Sampler || type.basetype == SPIRType::SampledImage ||
 	    type.basetype == SPIRType::Image)

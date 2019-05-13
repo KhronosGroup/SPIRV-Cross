@@ -375,7 +375,7 @@ protected:
 		const char *nonuniform_qualifier = "nonuniformEXT";
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
-		bool flexible_member_array_supported = true;
+		bool unsized_array_supported = true;
 		bool explicit_struct_type = false;
 		bool use_initializer_list = false;
 		bool use_typed_initializer_list = false;
