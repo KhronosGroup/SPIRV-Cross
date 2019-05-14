@@ -431,7 +431,10 @@ if (SPIRV_CROSS_CLI)
 					target_compile_options(spirv-cross-c-api-test PRIVATE -std=c89 -Wall -Wextra)
 				endif()
 				add_test(NAME spirv-cross-c-api-test
-						COMMAND $<TARGET_FILE:spirv-cross-c-api-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c_api_test.spv)
+						COMMAND $<TARGET_FILE:spirv-cross-c-api-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/c_api_test.spv
+						${spirv-cross-abi-major}
+						${spirv-cross-abi-minor}
+						${spirv-cross-abi-patch})
 				add_test(NAME spirv-cross-small-vector-test
 						COMMAND $<TARGET_FILE:spirv-cross-small-vector-test>)
 				add_test(NAME spirv-cross-test
