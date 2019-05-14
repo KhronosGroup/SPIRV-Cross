@@ -4658,7 +4658,8 @@ void CompilerHLSL::validate_shader_model()
 		case CapabilityShaderNonUniformEXT:
 		case CapabilityRuntimeDescriptorArrayEXT:
 			if (hlsl_options.shader_model < 51)
-				SPIRV_CROSS_THROW("Shader model 5.1 or higher is required to use bindless resources or NonUniformResourceIndex.");
+				SPIRV_CROSS_THROW(
+				    "Shader model 5.1 or higher is required to use bindless resources or NonUniformResourceIndex.");
 		default:
 			break;
 		}
