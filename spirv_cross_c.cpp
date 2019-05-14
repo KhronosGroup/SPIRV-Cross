@@ -442,6 +442,9 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_GLSL_EMIT_PUSH_CONSTANT_AS_UNIFORM_BUFFER:
 		options->glsl.emit_push_constant_as_uniform_buffer = value != 0;
 		break;
+	case SPVC_COMPILER_OPTION_GLSL_EMIT_UNIFORM_BUFFER_AS_PLAIN_UNIFORMS:
+		options->glsl.emit_uniform_buffer_as_plain_uniforms = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_HLSL
