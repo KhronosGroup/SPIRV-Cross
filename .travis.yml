@@ -69,5 +69,4 @@ deploy:
   file: "${FILE_TO_UPLOAD}"
   skip_cleanup: true
   on:
-    repo: KhronosGroup/SPIRV-Cross
-    draft: true
+    tags: true
