@@ -344,6 +344,12 @@ protected:
 		SPVFuncImplRowMajor4x2,
 		SPVFuncImplRowMajor4x3,
 		SPVFuncImplTextureSwizzle,
+		SPVFuncImplSubgroupBallot,
+		SPVFuncImplSubgroupBallotBitExtract,
+		SPVFuncImplSubgroupBallotFindLSB,
+		SPVFuncImplSubgroupBallotFindMSB,
+		SPVFuncImplSubgroupBallotBitCount,
+		SPVFuncImplSubgroupAllEqual,
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
@@ -354,6 +360,7 @@ protected:
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
+	void emit_subgroup_op(const Instruction &i) override;
 	void emit_fixup() override;
 	std::string to_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                             const std::string &qualifier = "");
@@ -477,6 +484,8 @@ protected:
 	uint32_t builtin_base_instance_id = 0;
 	uint32_t builtin_invocation_id_id = 0;
 	uint32_t builtin_primitive_id_id = 0;
+	uint32_t builtin_subgroup_invocation_id_id = 0;
+	uint32_t builtin_subgroup_size_id = 0;
 	uint32_t aux_buffer_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
@@ -518,6 +527,7 @@ protected:
 	bool needs_aux_buffer_def = false;
 	bool used_aux_buffer = false;
 	bool added_builtin_tess_level = false;
+	bool needs_subgroup_invocation_id = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
@@ -561,6 +571,7 @@ protected:
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_resource_write = false;
+		bool needs_subgroup_invocation_id = false;
 	};
 
 	// OpcodeHandler that scans for uses of sampled images
