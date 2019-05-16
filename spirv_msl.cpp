@@ -7059,7 +7059,6 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 		{
 		default:
 			SPIRV_CROSS_THROW("iOS only supports quad-group operations.");
-		case OpGroupNonUniformElect:
 		case OpGroupNonUniformBroadcast:
 		case OpGroupNonUniformShuffle:
 		case OpGroupNonUniformShuffleXor:
@@ -7077,7 +7076,6 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 		{
 		default:
 			SPIRV_CROSS_THROW("Subgroup ops beyond broadcast and shuffle on macOS require Metal 2.0 and up.");
-		case OpGroupNonUniformElect:
 		case OpGroupNonUniformBroadcast:
 		case OpGroupNonUniformShuffle:
 		case OpGroupNonUniformShuffleXor:
@@ -7097,16 +7095,7 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 	switch (op)
 	{
 	case OpGroupNonUniformElect:
-		// Vulkan spec says we have to support this if we support subgroups at all.
-		// But Metal prior to macOS 10.14 doesn't have the simd_is_first() function, and
-		// iOS doesn't have it at all. So we fake it by comparing the subgroup-local
-		// ID to 0. This isn't quite correct: this is supposed to return if we're the
-		// lowest *active* thread, but we'll otherwise be unable to support subgroups
-		// on macOS 10.13 or iOS.
-		if (msl_options.is_macos() && msl_options.supports_msl_version(2, 1))
-			emit_op(result_type, id, "simd_is_first()", true);
-		else
-			emit_op(result_type, id, join("(", to_expression(builtin_subgroup_invocation_id_id), " == 0)"), true);
+		emit_op(result_type, id, "simd_is_first()", true);
 		break;
 
 	case OpGroupNonUniformBroadcast:
@@ -7833,11 +7822,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 
 	case OpAtomicLoad:
 		uses_atomics = true;
-		break;
-
-	case OpGroupNonUniformElect:
-		if (compiler.msl_options.is_ios() || !compiler.msl_options.supports_msl_version(2, 1))
-			needs_subgroup_invocation_id = true;
 		break;
 
 	case OpGroupNonUniformInverseBallot:

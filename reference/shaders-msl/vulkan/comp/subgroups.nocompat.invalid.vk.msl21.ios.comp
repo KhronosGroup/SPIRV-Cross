@@ -19,7 +19,6 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[quadgrou
     simdgroup_barrier(mem_flags::mem_device);
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_barrier(mem_flags::mem_texture);
-    bool elected = (gl_SubgroupInvocationID == 0);
     uint shuffled = quad_shuffle(10u, 8u);
     uint shuffled_xor = quad_shuffle_xor(30u, 8u);
     uint shuffled_up = quad_shuffle_up(20u, 4u);

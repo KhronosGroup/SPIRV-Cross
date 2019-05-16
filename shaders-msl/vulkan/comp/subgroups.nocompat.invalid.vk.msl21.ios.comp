@@ -24,7 +24,6 @@ void main()
 	subgroupMemoryBarrierBuffer();
 	subgroupMemoryBarrierShared();
 	subgroupMemoryBarrierImage();
-	bool elected = subgroupElect();
 
 	// shuffle
 	uint shuffled = subgroupShuffle(10u, 8u);
