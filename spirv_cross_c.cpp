@@ -1413,7 +1413,7 @@ unsigned spvc_type_get_bit_width(spvc_type type)
 	return type->width;
 }
 
-unsigned spvc_type_get_SmallVector_size(spvc_type type)
+unsigned spvc_type_get_vector_size(spvc_type type)
 {
 	return type->vecsize;
 }
