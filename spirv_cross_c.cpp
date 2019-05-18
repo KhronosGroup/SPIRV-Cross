@@ -1281,6 +1281,11 @@ const char *spvc_compiler_get_member_decoration_string(spvc_compiler compiler, s
 	    .c_str();
 }
 
+const char *spvc_compiler_get_member_name(spvc_compiler compiler, spvc_type_id id, unsigned member_index)
+{
+	return compiler->compiler->get_member_name(id, member_index).c_str();
+}
+
 spvc_result spvc_compiler_get_entry_points(spvc_compiler compiler, const spvc_entry_point **entry_points,
                                            size_t *num_entry_points)
 {
@@ -1646,6 +1651,32 @@ spvc_constant_id spvc_compiler_get_work_group_size_specialization_constants(spvc
 	z->id = tmpz.id;
 	z->constant_id = tmpz.constant_id;
 	return ret;
+}
+
+spvc_result spvc_compiler_get_active_buffer_ranges(spvc_compiler compiler,
+	spvc_variable_id id,
+	const spvc_buffer_range **ranges,
+	size_t *num_ranges)
+{
+	SPVC_BEGIN_SAFE_SCOPE
+	{
+		auto active_ranges = compiler->compiler->get_active_buffer_ranges(id);
+		SmallVector<spvc_buffer_range> translated;
+		translated.reserve(active_ranges.size());
+		for (auto &r : active_ranges)
+		{
+			spvc_buffer_range trans = { r.index, r.offset, r.range };
+			translated.push_back(trans);
+		}
+
+		auto ptr = spvc_allocate<TemporaryBuffer<spvc_buffer_range>>();
+		ptr->buffer = std::move(translated);
+		*ranges = ptr->buffer.data();
+		*num_ranges = ptr->buffer.size();
+		compiler->context->allocations.push_back(std::move(ptr));
+	}
+	SPVC_END_SAFE_SCOPE(compiler->context, SPVC_ERROR_OUT_OF_MEMORY)
+	return SPVC_SUCCESS;
 }
 
 float spvc_constant_get_scalar_fp16(spvc_constant constant, unsigned column, unsigned row)

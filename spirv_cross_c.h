@@ -112,6 +112,14 @@ typedef struct spvc_specialization_constant
 } spvc_specialization_constant;
 
 /* See C++ API. */
+typedef struct spvc_buffer_range
+{
+	unsigned index;
+	size_t offset;
+	size_t range;
+} spvc_buffer_range;
+
+/* See C++ API. */
 typedef struct spvc_hlsl_root_constants
 {
 	unsigned start;
@@ -578,6 +586,7 @@ SPVC_PUBLIC_API unsigned spvc_compiler_get_member_decoration(spvc_compiler compi
                                                              unsigned member_index, SpvDecoration decoration);
 SPVC_PUBLIC_API const char *spvc_compiler_get_member_decoration_string(spvc_compiler compiler, spvc_type_id id,
                                                                        unsigned member_index, SpvDecoration decoration);
+SPVC_PUBLIC_API const char *spvc_compiler_get_member_name(spvc_compiler compiler, spvc_type_id id, unsigned member_index);
 
 /*
  * Entry points.
@@ -669,6 +678,15 @@ SPVC_PUBLIC_API spvc_constant_id spvc_compiler_get_work_group_size_specializatio
                                                                                             spvc_specialization_constant *x,
                                                                                             spvc_specialization_constant *y,
                                                                                             spvc_specialization_constant *z);
+
+/*
+ * Buffer ranges
+ * Maps to C++ API.
+ */
+SPVC_PUBLIC_API spvc_result spvc_compiler_get_active_buffer_ranges(spvc_compiler compiler,
+	spvc_variable_id id,
+	const spvc_buffer_range **ranges,
+	size_t *num_ranges);
 
 /*
  * No stdint.h until C99, sigh :(
