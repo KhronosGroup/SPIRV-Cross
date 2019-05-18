@@ -1654,9 +1654,9 @@ spvc_constant_id spvc_compiler_get_work_group_size_specialization_constants(spvc
 }
 
 spvc_result spvc_compiler_get_active_buffer_ranges(spvc_compiler compiler,
-	spvc_variable_id id,
-	const spvc_buffer_range **ranges,
-	size_t *num_ranges)
+                                                   spvc_variable_id id,
+                                                   const spvc_buffer_range **ranges,
+                                                   size_t *num_ranges)
 {
 	SPVC_BEGIN_SAFE_SCOPE
 	{

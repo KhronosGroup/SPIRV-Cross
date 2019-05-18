@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 8
+#define SPVC_C_API_VERSION_MINOR 9
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -684,9 +684,9 @@ SPVC_PUBLIC_API spvc_constant_id spvc_compiler_get_work_group_size_specializatio
  * Maps to C++ API.
  */
 SPVC_PUBLIC_API spvc_result spvc_compiler_get_active_buffer_ranges(spvc_compiler compiler,
-	spvc_variable_id id,
-	const spvc_buffer_range **ranges,
-	size_t *num_ranges);
+                                                                   spvc_variable_id id,
+                                                                   const spvc_buffer_range **ranges,
+                                                                   size_t *num_ranges);
 
 /*
  * No stdint.h until C99, sigh :(
