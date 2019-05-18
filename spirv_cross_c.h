@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 7
+#define SPVC_C_API_VERSION_MINOR 8
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -290,9 +290,12 @@ SPVC_PUBLIC_API void spvc_msl_resource_binding_init(spvc_msl_resource_binding *b
 
 #define SPVC_MSL_PUSH_CONSTANT_DESC_SET (~(0u))
 #define SPVC_MSL_PUSH_CONSTANT_BINDING (0)
+#define SPVC_MSL_SWIZZLE_BUFFER_BINDING (~(1u))
+
+/* Obsolete. Sticks around for backwards compatibility. */
 #define SPVC_MSL_AUX_BUFFER_STRUCT_VERSION 1
 
-/* Runtime check for incompatibility. */
+/* Runtime check for incompatibility. Obsolete. */
 SPVC_PUBLIC_API unsigned spvc_msl_get_aux_buffer_struct_version(void);
 
 /* Maps to C++ API. */
@@ -407,7 +410,11 @@ typedef enum spvc_compiler_option
 
 	SPVC_COMPILER_OPTION_MSL_VERSION = 17 | SPVC_COMPILER_OPTION_MSL_BIT,
 	SPVC_COMPILER_OPTION_MSL_TEXEL_BUFFER_TEXTURE_WIDTH = 18 | SPVC_COMPILER_OPTION_MSL_BIT,
+
+	/* Obsolete, use SWIZZLE_BUFFER_INDEX instead. */
 	SPVC_COMPILER_OPTION_MSL_AUX_BUFFER_INDEX = 19 | SPVC_COMPILER_OPTION_MSL_BIT,
+	SPVC_COMPILER_OPTION_MSL_SWIZZLE_BUFFER_INDEX = 19 | SPVC_COMPILER_OPTION_MSL_BIT,
+
 	SPVC_COMPILER_OPTION_MSL_INDIRECT_PARAMS_BUFFER_INDEX = 20 | SPVC_COMPILER_OPTION_MSL_BIT,
 	SPVC_COMPILER_OPTION_MSL_SHADER_OUTPUT_BUFFER_INDEX = 21 | SPVC_COMPILER_OPTION_MSL_BIT,
 	SPVC_COMPILER_OPTION_MSL_SHADER_PATCH_OUTPUT_BUFFER_INDEX = 22 | SPVC_COMPILER_OPTION_MSL_BIT,
@@ -505,7 +512,11 @@ SPVC_PUBLIC_API spvc_variable_id spvc_compiler_hlsl_remap_num_workgroups_builtin
  * Maps to C++ API.
  */
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_rasterization_disabled(spvc_compiler compiler);
+
+/* Obsolete. Renamed to needs_swizzle_buffer. */
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler);
+SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_swizzle_buffer(spvc_compiler compiler);
+
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_patch_output_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_input_threadgroup_mem(spvc_compiler compiler);

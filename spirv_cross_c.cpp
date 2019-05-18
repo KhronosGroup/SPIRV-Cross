@@ -474,8 +474,8 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 		options->msl.texel_buffer_texture_width = value;
 		break;
 
-	case SPVC_COMPILER_OPTION_MSL_AUX_BUFFER_INDEX:
-		options->msl.aux_buffer_index = value;
+	case SPVC_COMPILER_OPTION_MSL_SWIZZLE_BUFFER_INDEX:
+		options->msl.swizzle_buffer_index = value;
 		break;
 
 	case SPVC_COMPILER_OPTION_MSL_INDIRECT_PARAMS_BUFFER_INDEX:
@@ -726,7 +726,7 @@ spvc_bool spvc_compiler_msl_is_rasterization_disabled(spvc_compiler compiler)
 #endif
 }
 
-spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler)
+spvc_bool spvc_compiler_msl_needs_swizzle_buffer(spvc_compiler compiler)
 {
 #if SPIRV_CROSS_C_API_MSL
 	if (compiler->backend != SPVC_BACKEND_MSL)
@@ -736,11 +736,16 @@ spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler)
 	}
 
 	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
-	return msl.needs_aux_buffer() ? SPVC_TRUE : SPVC_FALSE;
+	return msl.needs_swizzle_buffer() ? SPVC_TRUE : SPVC_FALSE;
 #else
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
 	return SPVC_FALSE;
 #endif
+}
+
+spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler)
+{
+	return spvc_compiler_msl_needs_swizzle_buffer(compiler);
 }
 
 spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler)

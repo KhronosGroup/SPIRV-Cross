@@ -5,11 +5,6 @@
 
 using namespace metal;
 
-struct spvAux
-{
-    uint swizzleConst[1];
-};
-
 struct main0_out
 {
     float4 FragColor [[color(0)]];
@@ -140,10 +135,10 @@ inline vec<T, 4> spvGatherCompareSwizzle(sampler s, const thread Tex& t, Ts... p
     return t.gather_compare(s, spvForward<Ts>(params)...);
 }
 
-fragment main0_out main0(main0_in in [[stage_in]], constant spvAux& spvAuxBuffer [[buffer(30)]], array<texture2d<float>, 4> uSampler [[texture(0)]], array<sampler, 4> uSamplerSmplr [[sampler(0)]])
+fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvSwizzleConstants [[buffer(30)]], array<texture2d<float>, 4> uSampler [[texture(0)]], array<sampler, 4> uSamplerSmplr [[sampler(0)]])
 {
     main0_out out = {};
-    constant uint32_t* uSamplerSwzl = &spvAuxBuffer.swizzleConst[0];
+    constant uint32_t* uSamplerSwzl = &spvSwizzleConstants[0];
     out.FragColor = spvTextureSwizzle(uSampler[2].sample(uSamplerSmplr[2], in.vUV), uSamplerSwzl[2]);
     out.FragColor += spvTextureSwizzle(uSampler[1].sample(uSamplerSmplr[1], in.vUV), uSamplerSwzl[1]);
     return out;
