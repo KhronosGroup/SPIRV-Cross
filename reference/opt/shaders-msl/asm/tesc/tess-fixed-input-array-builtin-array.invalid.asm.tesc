@@ -52,22 +52,38 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     if (gl_InvocationID < spvIndirectParams[0])
         gl_in[gl_InvocationID] = in;
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (gl_InvocationID >= 3)
-        return;
     VertexOutput _223[3] = { VertexOutput{ gl_in[0].gl_Position, gl_in[0].VertexOutput_uv }, VertexOutput{ gl_in[1].gl_Position, gl_in[1].VertexOutput_uv }, VertexOutput{ gl_in[2].gl_Position, gl_in[2].VertexOutput_uv } };
     VertexOutput param[3];
     spvArrayCopyFromStack1(param, _223);
-    gl_out[gl_InvocationID].gl_Position = param[gl_InvocationID].pos;
-    gl_out[gl_InvocationID]._entryPointOutput.uv = param[gl_InvocationID].uv;
+    if (gl_InvocationID < 3)
+    {
+        gl_out[gl_InvocationID].gl_Position = param[gl_InvocationID].pos;
+    }
+    if (gl_InvocationID < 3)
+    {
+        gl_out[gl_InvocationID]._entryPointOutput.uv = param[gl_InvocationID].uv;
+    }
     threadgroup_barrier(mem_flags::mem_device);
     if (int(gl_InvocationID) == 0)
     {
         float2 _174 = float2(1.0) + gl_in[0].VertexOutput_uv;
         float _175 = _174.x;
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_175);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_175);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(_175);
-        spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(_175);
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_175);
+        }
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_175);
+        }
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(_175);
+        }
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(_175);
+        }
     }
 }
 

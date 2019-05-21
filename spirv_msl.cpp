@@ -884,6 +884,18 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t base_id = ops[0];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+				if (get_execution_model() == ExecutionModelTessellationControl)
+				{
+					StorageClass storage = expression_type(ops[0]).storage;
+					if (storage == StorageClassUniform || storage == StorageClassOutput ||
+					    storage == StorageClassWorkgroup || storage == StorageClassAtomicCounter ||
+					    storage == StorageClassImage || storage == StorageClassStorageBuffer)
+					{
+						// Implicitly reads gl_InvocationID.
+						assert(builtin_invocation_id_id != 0);
+						added_arg_ids.insert(builtin_invocation_id_id);
+					}
+				}
 				break;
 			}
 
@@ -897,6 +909,14 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(base_id);
 				break;
 			}
+
+			case OpImageWrite:
+				if (get_execution_model() == ExecutionModelTessellationControl)
+				{
+					// Implicitly reads gl_InvocationID.
+					assert(builtin_invocation_id_id != 0);
+					added_arg_ids.insert(builtin_invocation_id_id);
+				}
 
 			default:
 				break;
@@ -1135,7 +1155,16 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 		entry_func.fixup_hooks_out.push_back([=, &var]() {
 			SPIRType &padded_type = this->get<SPIRType>(type_id);
+			if (get_execution_model() == ExecutionModelTessellationControl)
+			{
+				// Guard writes to ensure no extra input threads write outputs.
+				statement("if (", to_expression(builtin_invocation_id_id), " < ", get_entry_point().output_vertices,
+				          ")");
+				begin_scope();
+			}
 			statement(qual_var_name, " = ", remap_swizzle(padded_type, type_components, to_name(var.self)), ";");
+			if (get_execution_model() == ExecutionModelTessellationControl)
+				end_scope();
 		});
 	}
 	else if (!strip_array)
@@ -1143,8 +1172,18 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 	if (var.storage == StorageClassOutput && var.initializer != 0)
 	{
-		entry_func.fixup_hooks_in.push_back(
-		    [=, &var]() { statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
+		entry_func.fixup_hooks_in.push_back([=, &var]() {
+			if (get_execution_model() == ExecutionModelTessellationControl)
+			{
+				// Guard writes to ensure no extra input threads write outputs.
+				statement("if (", to_expression(builtin_invocation_id_id), " < ", get_entry_point().output_vertices,
+				          ")");
+				begin_scope();
+			}
+			statement(qual_var_name, " = ", to_expression(var.initializer), ";");
+			if (get_execution_model() == ExecutionModelTessellationControl)
+				end_scope();
+		});
 	}
 
 	// Copy the variable location from the original variable to the member
@@ -1326,6 +1365,13 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 
 			case StorageClassOutput:
 				entry_func.fixup_hooks_out.push_back([=, &var]() {
+					if (get_execution_model() == ExecutionModelTessellationControl)
+					{
+						// Guard writes to ensure no extra input threads write outputs.
+						statement("if (", to_expression(builtin_invocation_id_id), " < ",
+						          get_entry_point().output_vertices, ")");
+						begin_scope();
+					}
 					if (padded_output)
 					{
 						auto &padded_type = this->get<SPIRType>(type_id);
@@ -1336,6 +1382,8 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 					}
 					else
 						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
+					if (get_execution_model() == ExecutionModelTessellationControl)
+						end_scope();
 				});
 				break;
 
@@ -1476,8 +1524,17 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 
 			case StorageClassOutput:
 				entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
+					if (get_execution_model() == ExecutionModelTessellationControl)
+					{
+						// Guard writes to ensure no extra input threads write outputs.
+						statement("if (", to_expression(builtin_invocation_id_id), " < ",
+						          get_entry_point().output_vertices, ")");
+						begin_scope();
+					}
 					statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), ".",
 					          to_member_name(var_type, mbr_idx), "[", i, "];");
+					if (get_execution_model() == ExecutionModelTessellationControl)
+						end_scope();
 				});
 				break;
 
@@ -1539,7 +1596,16 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 
 		case StorageClassOutput:
 			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
+				if (get_execution_model() == ExecutionModelTessellationControl)
+				{
+					// Guard writes to ensure no extra input threads write outputs.
+					statement("if (", to_expression(builtin_invocation_id_id), " < ", get_entry_point().output_vertices,
+					          ")");
+					begin_scope();
+				}
 				statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(var_type, mbr_idx), ";");
+				if (get_execution_model() == ExecutionModelTessellationControl)
+					end_scope();
 			});
 			break;
 
@@ -1940,9 +2006,6 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				statement("    ", input_wg_var_name, "[", to_expression(builtin_invocation_id_id), "] = ", ib_var_ref,
 				          ";");
 				statement("threadgroup_barrier(mem_flags::mem_threadgroup);");
-				statement("if (", to_expression(builtin_invocation_id_id), " >= ", get_entry_point().output_vertices,
-				          ")");
-				statement("    return;");
 			});
 		}
 		break;
@@ -3739,7 +3802,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto &img_type = get<SPIRType>(type.self);
 
 		// Ensure this image has been marked as being written to and force a
-		// recommpile so that the image type output will include write access
+		// recompile so that the image type output will include write access
 		auto *p_var = maybe_get_backing_variable(img_id);
 		if (p_var && has_decoration(p_var->self, DecorationNonWritable))
 		{
@@ -3773,11 +3836,19 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto store_type = texel_type;
 		store_type.vecsize = 4;
 
+		if (get_execution_model() == ExecutionModelTessellationControl)
+		{
+			// Guard writes to ensure no extra input threads write outputs.
+			statement("if (", to_expression(builtin_invocation_id_id), " < ", get_entry_point().output_vertices, ")");
+			begin_scope();
+		}
 		statement(join(
 		    to_expression(img_id), ".write(", remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)),
 		    ", ",
 		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, &forward),
 		    ");"));
+		if (get_execution_model() == ExecutionModelTessellationControl)
+			end_scope();
 
 		if (p_var && variable_storage_is_aliased(*p_var))
 			flush_all_aliased_variables();
@@ -3924,14 +3995,35 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpStore:
+	{
 		if (is_out_of_bounds_tessellation_level(ops[0]))
 			break;
 
-		if (maybe_emit_array_assignment(ops[0], ops[1]))
-			break;
+		bool need_end_scope = false;
+		if (get_execution_model() == ExecutionModelTessellationControl)
+		{
+			// Only do this for writes to externally visible memory.
+			StorageClass storage = expression_type(ops[0]).storage;
+			if (storage == StorageClassUniform || storage == StorageClassOutput || storage == StorageClassWorkgroup ||
+			    storage == StorageClassAtomicCounter || storage == StorageClassImage ||
+			    storage == StorageClassStorageBuffer)
+			{
+				// Guard writes to ensure no extra input threads write outputs.
+				statement("if (", to_expression(builtin_invocation_id_id), " < ", get_entry_point().output_vertices,
+				          ")");
+				begin_scope();
+				need_end_scope = true;
+			}
+		}
 
-		CompilerGLSL::emit_instruction(instruction);
+		if (!maybe_emit_array_assignment(ops[0], ops[1]))
+			CompilerGLSL::emit_instruction(instruction);
+
+		if (need_end_scope)
+			end_scope();
+
 		break;
+	}
 
 	// Compute barriers
 	case OpMemoryBarrier:

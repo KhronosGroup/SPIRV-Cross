@@ -3,14 +3,13 @@
 
 using namespace metal;
 
-struct main0_patchOut
+struct StorageBuffer
 {
-    float3 vFoo;
+    int foo;
 };
 
-kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_PrimitiveID [[threadgroup_position_in_grid]], constant uint* spvIndirectParams [[buffer(29)]], device main0_patchOut* spvPatchOut [[buffer(27)]], device MTLQuadTessellationFactorsHalf* spvTessLevel [[buffer(26)]])
+kernel void main0(device StorageBuffer& storageBuffer [[buffer(0)]], texture2d<float, access::write> storageImage [[texture(1)]], uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_PrimitiveID [[threadgroup_position_in_grid]], constant uint* spvIndirectParams [[buffer(29)]], device MTLQuadTessellationFactorsHalf* spvTessLevel [[buffer(26)]])
 {
-    device main0_patchOut& patchOut = spvPatchOut[gl_PrimitiveID];
     if (gl_InvocationID < 1)
     {
         spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(8.8999996185302734375);
@@ -37,7 +36,11 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     }
     if (gl_InvocationID < 1)
     {
-        patchOut.vFoo = float3(1.0);
+        storageBuffer.foo = 0;
+    }
+    if (gl_InvocationID < 1)
+    {
+        storageImage.write(float4(0.0), uint2(int2(0)));
     }
 }
 

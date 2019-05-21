@@ -25,15 +25,37 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     if (gl_InvocationID < spvIndirectParams[0])
         gl_in[gl_InvocationID] = in;
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (gl_InvocationID >= 1)
-        return;
-    spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(8.8999996185302734375);
-    spvTessLevel[gl_PrimitiveID].insideTessellationFactor[1] = half(6.900000095367431640625);
-    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(8.8999996185302734375);
-    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(6.900000095367431640625);
-    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(3.900000095367431640625);
-    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[3] = half(4.900000095367431640625);
-    patchOut.vFoo = float3(1.0);
-    gl_out[gl_InvocationID].gl_Position = gl_in[0].gl_Position + gl_in[1].gl_Position;
+    if (gl_InvocationID < 1)
+    {
+        spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(8.8999996185302734375);
+    }
+    if (gl_InvocationID < 1)
+    {
+        spvTessLevel[gl_PrimitiveID].insideTessellationFactor[1] = half(6.900000095367431640625);
+    }
+    if (gl_InvocationID < 1)
+    {
+        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(8.8999996185302734375);
+    }
+    if (gl_InvocationID < 1)
+    {
+        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(6.900000095367431640625);
+    }
+    if (gl_InvocationID < 1)
+    {
+        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(3.900000095367431640625);
+    }
+    if (gl_InvocationID < 1)
+    {
+        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[3] = half(4.900000095367431640625);
+    }
+    if (gl_InvocationID < 1)
+    {
+        patchOut.vFoo = float3(1.0);
+    }
+    if (gl_InvocationID < 1)
+    {
+        gl_out[gl_InvocationID].gl_Position = gl_in[0].gl_Position + gl_in[1].gl_Position;
+    }
 }
 

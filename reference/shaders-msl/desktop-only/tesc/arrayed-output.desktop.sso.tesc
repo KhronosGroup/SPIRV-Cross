@@ -25,20 +25,45 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     if (gl_InvocationID < spvIndirectParams[0])
         gl_in[gl_InvocationID] = in;
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (gl_InvocationID >= 4)
-        return;
-    gl_out[gl_InvocationID].vVertex = gl_in[gl_InvocationID].vInput + gl_in[gl_InvocationID ^ 1].vInput;
+    if (gl_InvocationID < 4)
+    {
+        gl_out[gl_InvocationID].vVertex = gl_in[gl_InvocationID].vInput + gl_in[gl_InvocationID ^ 1].vInput;
+    }
     threadgroup_barrier(mem_flags::mem_device);
     if (gl_InvocationID == 0)
     {
-        patchOut.vPatch[0] = float3(10.0);
-        patchOut.vPatch[1] = float3(20.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(1.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(2.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(3.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[3] = half(4.0);
-        spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(1.0);
-        spvTessLevel[gl_PrimitiveID].insideTessellationFactor[1] = half(2.0);
+        if (gl_InvocationID < 4)
+        {
+            patchOut.vPatch[0] = float3(10.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            patchOut.vPatch[1] = float3(20.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(1.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(2.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(3.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[3] = half(4.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(1.0);
+        }
+        if (gl_InvocationID < 4)
+        {
+            spvTessLevel[gl_PrimitiveID].insideTessellationFactor[1] = half(2.0);
+        }
     }
 }
 

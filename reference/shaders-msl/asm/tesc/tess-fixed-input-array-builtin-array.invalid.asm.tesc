@@ -82,8 +82,6 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     if (gl_InvocationID < spvIndirectParams[0])
         gl_in[gl_InvocationID] = in;
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (gl_InvocationID >= 3)
-        return;
     VertexOutput p[3];
     p[0].pos = gl_in[0].gl_Position;
     p[0].uv = gl_in[0].VertexOutput_uv;
@@ -96,18 +94,36 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     spvArrayCopyFromStack1(param, p);
     uint param_1 = i;
     HSOut flattenTemp = _hs_main(param, param_1);
-    gl_out[gl_InvocationID].gl_Position = flattenTemp.pos;
-    gl_out[gl_InvocationID]._entryPointOutput.uv = flattenTemp.uv;
+    if (gl_InvocationID < 3)
+    {
+        gl_out[gl_InvocationID].gl_Position = flattenTemp.pos;
+    }
+    if (gl_InvocationID < 3)
+    {
+        gl_out[gl_InvocationID]._entryPointOutput.uv = flattenTemp.uv;
+    }
     threadgroup_barrier(mem_flags::mem_device);
     if (int(gl_InvocationID) == 0)
     {
         VertexOutput param_2[3];
         spvArrayCopyFromStack1(param_2, p);
         HSConstantOut _patchConstantResult = PatchHS(param_2);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_patchConstantResult.EdgeTess[0]);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_patchConstantResult.EdgeTess[1]);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(_patchConstantResult.EdgeTess[2]);
-        spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(_patchConstantResult.InsideTess);
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_patchConstantResult.EdgeTess[0]);
+        }
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_patchConstantResult.EdgeTess[1]);
+        }
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(_patchConstantResult.EdgeTess[2]);
+        }
+        if (gl_InvocationID < 3)
+        {
+            spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(_patchConstantResult.InsideTess);
+        }
     }
 }
 

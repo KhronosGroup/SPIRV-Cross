@@ -69,9 +69,12 @@ float tess_level(thread const float& lod, constant UBO& v_41)
     return v_41.uMaxTessLevel.y * exp2(-lod);
 }
 
-void compute_tess_levels(thread const float2& p0, constant UBO& v_41, device float2& vOutPatchPosBase, device float4& vPatchLods, device half (&gl_TessLevelOuter)[4], device half (&gl_TessLevelInner)[2])
+void compute_tess_levels(thread const float2& p0, constant UBO& v_41, device float2& vOutPatchPosBase, device float4& vPatchLods, device half (&gl_TessLevelOuter)[4], device half (&gl_TessLevelInner)[2], thread uint& gl_InvocationID)
 {
-    vOutPatchPosBase = p0;
+    if (gl_InvocationID < 1)
+    {
+        vOutPatchPosBase = p0;
+    }
     float2 param = p0 + (float2(-0.5) * v_41.uPatchSize);
     float l00 = lod_factor(param, v_41);
     float2 param_1 = p0 + (float2(0.5, -0.5) * v_41.uPatchSize);
@@ -91,19 +94,40 @@ void compute_tess_levels(thread const float2& p0, constant UBO& v_41, device flo
     float2 param_8 = p0 + (float2(1.5) * v_41.uPatchSize);
     float l22 = lod_factor(param_8, v_41);
     float4 lods = float4(dot(float4(l01, l11, l02, l12), float4(0.25)), dot(float4(l00, l10, l01, l11), float4(0.25)), dot(float4(l10, l20, l11, l21), float4(0.25)), dot(float4(l11, l21, l12, l22), float4(0.25)));
-    vPatchLods = lods;
+    if (gl_InvocationID < 1)
+    {
+        vPatchLods = lods;
+    }
     float4 outer_lods = fast::min(lods, lods.yzwx);
     float4 param_9 = outer_lods;
     float4 levels = tess_level(param_9, v_41);
-    gl_TessLevelOuter[0] = half(levels.x);
-    gl_TessLevelOuter[1] = half(levels.y);
-    gl_TessLevelOuter[2] = half(levels.z);
-    gl_TessLevelOuter[3] = half(levels.w);
+    if (gl_InvocationID < 1)
+    {
+        gl_TessLevelOuter[0] = half(levels.x);
+    }
+    if (gl_InvocationID < 1)
+    {
+        gl_TessLevelOuter[1] = half(levels.y);
+    }
+    if (gl_InvocationID < 1)
+    {
+        gl_TessLevelOuter[2] = half(levels.z);
+    }
+    if (gl_InvocationID < 1)
+    {
+        gl_TessLevelOuter[3] = half(levels.w);
+    }
     float min_lod = fast::min(fast::min(lods.x, lods.y), fast::min(lods.z, lods.w));
     float param_10 = fast::min(min_lod, l11);
     float inner = tess_level(param_10, v_41);
-    gl_TessLevelInner[0] = half(inner);
-    gl_TessLevelInner[1] = half(inner);
+    if (gl_InvocationID < 1)
+    {
+        gl_TessLevelInner[0] = half(inner);
+    }
+    if (gl_InvocationID < 1)
+    {
+        gl_TessLevelInner[1] = half(inner);
+    }
 }
 
 kernel void main0(main0_in in [[stage_in]], constant UBO& v_41 [[buffer(0)]], uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_PrimitiveID [[threadgroup_position_in_grid]], constant uint* spvIndirectParams [[buffer(29)]], device main0_patchOut* spvPatchOut [[buffer(27)]], device MTLQuadTessellationFactorsHalf* spvTessLevel [[buffer(26)]], threadgroup main0_in* gl_in [[threadgroup(0)]])
@@ -112,23 +136,39 @@ kernel void main0(main0_in in [[stage_in]], constant UBO& v_41 [[buffer(0)]], ui
     if (gl_InvocationID < spvIndirectParams[0])
         gl_in[gl_InvocationID] = in;
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (gl_InvocationID >= 1)
-        return;
     float2 p0 = gl_in[0].vPatchPosBase;
     float2 param = p0;
     if (!frustum_cull(param, v_41))
     {
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(-1.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(-1.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(-1.0);
-        spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[3] = half(-1.0);
-        spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(-1.0);
-        spvTessLevel[gl_PrimitiveID].insideTessellationFactor[1] = half(-1.0);
+        if (gl_InvocationID < 1)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(-1.0);
+        }
+        if (gl_InvocationID < 1)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(-1.0);
+        }
+        if (gl_InvocationID < 1)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(-1.0);
+        }
+        if (gl_InvocationID < 1)
+        {
+            spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[3] = half(-1.0);
+        }
+        if (gl_InvocationID < 1)
+        {
+            spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(-1.0);
+        }
+        if (gl_InvocationID < 1)
+        {
+            spvTessLevel[gl_PrimitiveID].insideTessellationFactor[1] = half(-1.0);
+        }
     }
     else
     {
         float2 param_1 = p0;
-        compute_tess_levels(param_1, v_41, patchOut.vOutPatchPosBase, patchOut.vPatchLods, spvTessLevel[gl_PrimitiveID].edgeTessellationFactor, spvTessLevel[gl_PrimitiveID].insideTessellationFactor);
+        compute_tess_levels(param_1, v_41, patchOut.vOutPatchPosBase, patchOut.vPatchLods, spvTessLevel[gl_PrimitiveID].edgeTessellationFactor, spvTessLevel[gl_PrimitiveID].insideTessellationFactor, gl_InvocationID);
     }
 }
 
