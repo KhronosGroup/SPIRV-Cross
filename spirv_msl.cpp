@@ -650,6 +650,7 @@ string CompilerMSL::compile()
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
 
+	fixup_type_alias();
 	replace_illegal_names();
 
 	struct_member_padding.clear();
@@ -691,6 +692,7 @@ string CompilerMSL::compile()
 
 	// Mark any non-stage-in structs to be tightly packed.
 	mark_packable_structs();
+	reorder_type_alias();
 
 	// Add fixup hooks required by shader inputs and outputs. This needs to happen before
 	// the loop, so the hooks aren't added multiple times.

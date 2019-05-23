@@ -872,65 +872,6 @@ bool Compiler::type_is_block_like(const SPIRType &type) const
 	return false;
 }
 
-void Compiler::fixup_type_alias()
-{
-	// Due to how some backends work, the "master" type of type_alias must be a block-like type if it exists.
-	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
-	// alias if the slave type is a block type.
-	ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
-		if (type.type_alias && type_is_block_like(type))
-		{
-			// Become the master.
-			ir.for_each_typed_id<SPIRType>([&](uint32_t other_id, SPIRType &other_type) {
-				if (other_id == type.self)
-					return;
-
-				if (other_type.type_alias == type.type_alias)
-					other_type.type_alias = type.self;
-			});
-
-			this->get<SPIRType>(type.type_alias).type_alias = self;
-			type.type_alias = 0;
-		}
-	});
-
-	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
-		if (type.type_alias && type_is_block_like(type))
-		{
-			// This is not allowed, drop the type_alias.
-			type.type_alias = 0;
-		}
-	});
-
-	// Reorder declaration of types so that the master of the type alias is always emitted first.
-	// We need this in case a type B depends on type A (A must come before in the vector), but A is an alias of a type Abuffer, which
-	// means declaration of A doesn't happen (yet), and order would be B, ABuffer and not ABuffer, B. Fix this up here.
-	auto &type_ids = ir.ids_for_type[TypeType];
-	for (auto alias_itr = begin(type_ids); alias_itr != end(type_ids); ++alias_itr)
-	{
-		auto &type = get<SPIRType>(*alias_itr);
-		if (type.type_alias != 0 && !has_extended_decoration(type.type_alias, SPIRVCrossDecorationPacked))
-		{
-			// We will skip declaring this type, so make sure the type_alias type comes before.
-			auto master_itr = find(begin(type_ids), end(type_ids), type.type_alias);
-			assert(master_itr != end(type_ids));
-
-			if (alias_itr < master_itr)
-			{
-				// Must also swap the type order for the constant-type joined array.
-				auto &joined_types = ir.ids_for_constant_or_type;
-				auto alt_alias_itr = find(begin(joined_types), end(joined_types), *alias_itr);
-				auto alt_master_itr = find(begin(joined_types), end(joined_types), *master_itr);
-				assert(alt_alias_itr != end(joined_types));
-				assert(alt_master_itr != end(joined_types));
-
-				swap(*alias_itr, *master_itr);
-				swap(*alt_alias_itr, *alt_master_itr);
-			}
-		}
-	}
-}
-
 void Compiler::parse_fixup()
 {
 	// Figure out specialization constants for work group sizes.
@@ -964,8 +905,6 @@ void Compiler::parse_fixup()
 				aliased_variables.push_back(var.self);
 		}
 	}
-
-	fixup_type_alias();
 }
 
 void Compiler::update_name_cache(unordered_set<string> &cache_primary, const unordered_set<string> &cache_secondary,

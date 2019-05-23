@@ -661,6 +661,9 @@ protected:
 
 	char current_locale_radix_character = '.';
 
+	void fixup_type_alias();
+	void reorder_type_alias();
+
 private:
 	void init();
 };

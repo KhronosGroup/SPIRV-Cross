@@ -494,6 +494,8 @@ string CompilerGLSL::compile()
 	backend.supports_extensions = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
+	fixup_type_alias();
+	reorder_type_alias();
 	build_function_control_flow_graphs_and_analyze();
 	find_static_extensions();
 	fixup_image_load_store_access();
@@ -11898,3 +11900,66 @@ void CompilerGLSL::reset_name_caches()
 	block_names.clear();
 	function_overloads.clear();
 }
+
+void CompilerGLSL::fixup_type_alias()
+{
+	// Due to how some backends work, the "master" type of type_alias must be a block-like type if it exists.
+	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
+	// alias if the slave type is a block type.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
+		if (type.type_alias && type_is_block_like(type))
+		{
+			// Become the master.
+			ir.for_each_typed_id<SPIRType>([&](uint32_t other_id, SPIRType &other_type) {
+				if (other_id == type.self)
+					return;
+
+				if (other_type.type_alias == type.type_alias)
+					other_type.type_alias = type.self;
+			});
+
+			this->get<SPIRType>(type.type_alias).type_alias = self;
+			type.type_alias = 0;
+		}
+	});
+
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+		if (type.type_alias && type_is_block_like(type))
+		{
+			// This is not allowed, drop the type_alias.
+			type.type_alias = 0;
+		}
+	});
+}
+
+void CompilerGLSL::reorder_type_alias()
+{
+	// Reorder declaration of types so that the master of the type alias is always emitted first.
+	// We need this in case a type B depends on type A (A must come before in the vector), but A is an alias of a type Abuffer, which
+	// means declaration of A doesn't happen (yet), and order would be B, ABuffer and not ABuffer, B. Fix this up here.
+	auto &type_ids = ir.ids_for_type[TypeType];
+	for (auto alias_itr = begin(type_ids); alias_itr != end(type_ids); ++alias_itr)
+	{
+		auto &type = get<SPIRType>(*alias_itr);
+		if (type.type_alias != 0 && !has_extended_decoration(type.type_alias, SPIRVCrossDecorationPacked))
+		{
+			// We will skip declaring this type, so make sure the type_alias type comes before.
+			auto master_itr = find(begin(type_ids), end(type_ids), type.type_alias);
+			assert(master_itr != end(type_ids));
+
+			if (alias_itr < master_itr)
+			{
+				// Must also swap the type order for the constant-type joined array.
+				auto &joined_types = ir.ids_for_constant_or_type;
+				auto alt_alias_itr = find(begin(joined_types), end(joined_types), *alias_itr);
+				auto alt_master_itr = find(begin(joined_types), end(joined_types), *master_itr);
+				assert(alt_alias_itr != end(joined_types));
+				assert(alt_master_itr != end(joined_types));
+
+				swap(*alias_itr, *master_itr);
+				swap(*alt_alias_itr, *alt_master_itr);
+			}
+		}
+	}
+}
+
