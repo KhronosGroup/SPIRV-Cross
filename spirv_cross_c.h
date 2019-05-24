@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 9
+#define SPVC_C_API_VERSION_MINOR 10
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -57,6 +57,9 @@ extern "C" {
  * Can be used to check for ABI mismatch if so-versioning did not catch it.
  */
 SPVC_PUBLIC_API void spvc_get_version(unsigned *major, unsigned *minor, unsigned *patch);
+
+/* Gets a human readable version string to identify which commit a particular binary was created from. */
+SPVC_PUBLIC_API const char *spvc_get_commit_revision_and_timestamp(void);
 
 /* These types are opaque to the user. */
 typedef struct spvc_context_s *spvc_context;

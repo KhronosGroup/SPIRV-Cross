@@ -33,6 +33,11 @@
 #if SPIRV_CROSS_C_API_REFLECT
 #include "spirv_reflect.hpp"
 #endif
+
+#ifdef HAVE_SPIRV_CROSS_GIT_VERSION
+#include "gitversion.h"
+#endif
+
 #include "spirv_parser.hpp"
 #include <memory>
 #include <new>
@@ -1900,6 +1905,15 @@ void spvc_get_version(unsigned *major, unsigned *minor, unsigned *patch)
 	*major = SPVC_C_API_VERSION_MAJOR;
 	*minor = SPVC_C_API_VERSION_MINOR;
 	*patch = SPVC_C_API_VERSION_PATCH;
+}
+
+const char *spvc_get_commit_revision_and_timestamp(void)
+{
+#ifdef HAVE_SPIRV_CROSS_GIT_VERSION
+	return SPIRV_CROSS_GIT_REVISION;
+#else
+	return "";
+#endif
 }
 
 #ifdef _MSC_VER
