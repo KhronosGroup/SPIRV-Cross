@@ -31,6 +31,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#ifdef HAVE_SPIRV_CROSS_GIT_VERSION
+#include "gitversion.h"
+#endif
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)
 #endif
@@ -545,8 +549,19 @@ struct CLIArguments
 	bool combined_samplers_inherit_bindings = false;
 };
 
+static void print_version()
+{
+#ifdef HAVE_SPIRV_CROSS_GIT_VERSION
+	fprintf(stderr, "%s\n", SPIRV_CROSS_GIT_REVISION);
+#else
+	fprintf(stderr, "Git revision unknown. Build with CMake to create timestamp and revision info.\n");
+#endif
+}
+
 static void print_help()
 {
+	print_version();
+
 	fprintf(stderr, "Usage: spirv-cross\n"
 	                "\t[--output <output path>]\n"
 	                "\t[SPIR-V file]\n"
@@ -555,6 +570,7 @@ static void print_help()
 	                "\t[--version <GLSL version>]\n"
 	                "\t[--dump-resources]\n"
 	                "\t[--help]\n"
+	                "\t[--revision]\n"
 	                "\t[--force-temporary]\n"
 	                "\t[--vulkan-semantics]\n"
 	                "\t[--flatten-ubo]\n"
@@ -1002,6 +1018,10 @@ static int main_inner(int argc, char *argv[])
 
 	cbs.add("--help", [](CLIParser &parser) {
 		print_help();
+		parser.end();
+	});
+	cbs.add("--revision", [](CLIParser &parser) {
+		print_version();
 		parser.end();
 	});
 	cbs.add("--output", [&args](CLIParser &parser) { args.output = parser.next_string(); });
