@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 10
+#define SPVC_C_API_VERSION_MINOR 11
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -302,6 +302,7 @@ SPVC_PUBLIC_API void spvc_msl_resource_binding_init(spvc_msl_resource_binding *b
 #define SPVC_MSL_PUSH_CONSTANT_DESC_SET (~(0u))
 #define SPVC_MSL_PUSH_CONSTANT_BINDING (0)
 #define SPVC_MSL_SWIZZLE_BUFFER_BINDING (~(1u))
+#define SPVC_MSL_BUFFER_SIZE_BUFFER_BINDING (~(2u))
 
 /* Obsolete. Sticks around for backwards compatibility. */
 #define SPVC_MSL_AUX_BUFFER_STRUCT_VERSION 1
@@ -446,6 +447,8 @@ typedef enum spvc_compiler_option
 
 	SPVC_COMPILER_OPTION_GLSL_EMIT_UNIFORM_BUFFER_AS_PLAIN_UNIFORMS = 35 | SPVC_COMPILER_OPTION_GLSL_BIT,
 
+	SPVC_COMPILER_OPTION_MSL_BUFFER_SIZE_BUFFER_INDEX = 36 | SPVC_COMPILER_OPTION_MSL_BIT,
+
 	SPVC_COMPILER_OPTION_INT_MAX = 0x7fffffff
 } spvc_compiler_option;
 
@@ -527,6 +530,7 @@ SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_is_rasterization_disabled(spvc_compi
 /* Obsolete. Renamed to needs_swizzle_buffer. */
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_aux_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_swizzle_buffer(spvc_compiler compiler);
+SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_buffer_size_buffer(spvc_compiler compiler);
 
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_output_buffer(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_patch_output_buffer(spvc_compiler compiler);
