@@ -11,7 +11,7 @@ layout(set = 1, binding = 2, std430) buffer SSBO1
 	float bz[];
 } ssbos[2];
 
-layout(set = 2, binding = 1, std140) buffer SSBO2
+layout(set = 2, binding = 5, std140) buffer SSBO2
 {
 	uint size2;
 	float w[];
