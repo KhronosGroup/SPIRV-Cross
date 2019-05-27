@@ -6146,7 +6146,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				});
 			}
 		}
-		else if ((var.storage == StorageClassStorageBuffer || (var.storage == StorageClassUniform && ssbo)) && !is_hidden_variable(var))
+		else if ((var.storage == StorageClassStorageBuffer || (var.storage == StorageClassUniform && ssbo)) &&
+		         !is_hidden_variable(var))
 		{
 			if (buffers_requiring_array_length.count(var.self))
 			{
@@ -8456,7 +8457,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kSwizzleBufferBinding);
 				resources_in_set[desc_set].push_back(
-						{ &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt) });
+				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt) });
 			}
 
 			if (set_needs_buffer_sizes[desc_set])
@@ -8467,7 +8468,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kBufferSizeBufferBinding);
 				resources_in_set[desc_set].push_back(
-						{ &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt) });
+				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt) });
 			}
 		}
 	}

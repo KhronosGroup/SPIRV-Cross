@@ -11971,4 +11971,3 @@ void CompilerGLSL::reorder_type_alias()
 		}
 	}
 }
-
