@@ -2764,13 +2764,22 @@ string CompilerGLSL::dereference_expression(const SPIRType &expr_type, const std
 
 string CompilerGLSL::address_of_expression(const std::string &expr)
 {
-	// If this expression starts with a dereference operator ('*'), then
-	// just return the part after the operator.
-	// TODO: Strip parens if unnecessary?
-	if (expr.front() == '*')
+	if (expr.size() > 3 && expr[0] == '(' && expr[1] == '*' && expr.back() == ')')
+	{
+		// If we have an expression which looks like (*foo), taking the address of it is the same as stripping
+		// the first two and last characters. We might have to enclose the expression.
+		// This doesn't work for cases like (*foo + 10),
+		// but this is an r-value expression which we cannot take the address of anyways.
+		return enclose_expression(expr.substr(2, expr.size() - 3));
+	}
+	else if (expr.front() == '*')
+	{
+		// If this expression starts with a dereference operator ('*'), then
+		// just return the part after the operator.
 		return expr.substr(1);
+	}
 	else
-		return join('&', expr);
+		return join('&', enclose_expression(expr));
 }
 
 // Just like to_expression except that we enclose the expression inside parentheses if needed.
@@ -11962,4 +11971,3 @@ void CompilerGLSL::reorder_type_alias()
 		}
 	}
 }
-

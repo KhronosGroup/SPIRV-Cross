@@ -538,6 +538,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_TEXTURE_BUFFER_NATIVE:
 		options->msl.texture_buffer_native = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_BUFFER_SIZE_BUFFER_INDEX:
+		options->msl.buffer_size_buffer_index = value;
+		break;
 #endif
 
 	default:
@@ -742,6 +746,23 @@ spvc_bool spvc_compiler_msl_needs_swizzle_buffer(spvc_compiler compiler)
 
 	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
 	return msl.needs_swizzle_buffer() ? SPVC_TRUE : SPVC_FALSE;
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_FALSE;
+#endif
+}
+
+spvc_bool spvc_compiler_msl_needs_buffer_size_buffer(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_FALSE;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	return msl.needs_buffer_size_buffer() ? SPVC_TRUE : SPVC_FALSE;
 #else
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
 	return SPVC_FALSE;
