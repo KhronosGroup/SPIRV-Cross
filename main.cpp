@@ -516,6 +516,7 @@ struct CLIArguments
 	bool msl_texture_buffer_native = false;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
+	bool emit_line_directives = false;
 	SmallVector<uint32_t> msl_discrete_descriptor_sets;
 	SmallVector<PLSArg> pls_in;
 	SmallVector<PLSArg> pls_out;
@@ -612,6 +613,7 @@ static void print_help()
 	                "\t[--rename-entry-point <old> <new> <stage>]\n"
 	                "\t[--combined-samplers-inherit-bindings]\n"
 	                "\t[--no-support-nonzero-baseinstance]\n"
+	                "\t[--emit-line-directives]\n"
 	                "\n");
 }
 
@@ -873,6 +875,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	opts.vertex.support_nonzero_base_instance = args.support_nonzero_baseinstance;
 	opts.emit_push_constant_as_uniform_buffer = args.glsl_emit_push_constant_as_ubo;
 	opts.emit_uniform_buffer_as_plain_uniforms = args.glsl_emit_ubo_as_plain_uniforms;
+	opts.emit_line_directives = args.emit_line_directives;
 	compiler->set_common_options(opts);
 
 	// Set HLSL specific options.
@@ -1133,6 +1136,7 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.combined_samplers_inherit_bindings = true; });
 
 	cbs.add("--no-support-nonzero-baseinstance", [&](CLIParser &) { args.support_nonzero_baseinstance = false; });
+	cbs.add("--emit-line-directives", [&args](CLIParser &) { args.emit_line_directives = true; });
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.error_handler = [] { print_help(); };

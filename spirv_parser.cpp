@@ -162,11 +162,15 @@ void Parser::parse(const Instruction &instruction)
 	case OpSourceContinued:
 	case OpSourceExtension:
 	case OpNop:
-	case OpLine:
 	case OpNoLine:
-	case OpString:
 	case OpModuleProcessed:
 		break;
+
+	case OpString:
+	{
+		set<SPIRString>(ops[0], extract_string(ir.spirv, instruction.offset + 1));
+		break;
+	}
 
 	case OpMemoryModel:
 		ir.addressing_model = static_cast<AddressingModel>(ops[0]);
@@ -1027,6 +1031,26 @@ void Parser::parse(const Instruction &instruction)
 		auto spec_op = static_cast<Op>(ops[2]);
 
 		set<SPIRConstantOp>(id, result_type, spec_op, ops + 3, length - 3);
+		break;
+	}
+
+	case OpLine:
+	{
+		// OpLine might come at global scope, but we don't care about those since they will not be declared in any
+		// meaningful correct order.
+		// For OpLine statements which
+		if (current_block)
+			current_block->ops.push_back(instruction);
+
+		if (current_function) // Line directives may arrive before first OpLabel.
+		{
+			// Store the first one we find and emit it before creating the function prototype.
+			if (current_function->entry_line.file_id == 0)
+			{
+				current_function->entry_line.file_id = ops[0];
+				current_function->entry_line.line_literal = ops[1];
+			}
+		}
 		break;
 	}
 
