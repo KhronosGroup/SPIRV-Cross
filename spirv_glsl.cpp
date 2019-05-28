@@ -1519,9 +1519,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	return res;
 }
 
-string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool check_std430)
+string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool support_std430_without_scalar_layout)
 {
-	if (check_std430 && buffer_is_packing_standard(type, BufferPackingStd430))
+	if (support_std430_without_scalar_layout && buffer_is_packing_standard(type, BufferPackingStd430))
 		return "std430";
 	else if (buffer_is_packing_standard(type, BufferPackingStd140))
 		return "std140";
@@ -1530,7 +1530,8 @@ string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool check
 		require_extension_internal("GL_EXT_scalar_block_layout");
 		return "scalar";
 	}
-	else if (check_std430 && buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
+	else if (support_std430_without_scalar_layout &&
+	         buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
 	{
 		if (options.es && !options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Push constant block cannot be expressed as neither std430 nor std140. ES-targets do "
@@ -1560,6 +1561,21 @@ string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool check
 		set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
 		require_extension_internal("GL_EXT_scalar_block_layout");
 		return "scalar";
+	}
+	else if (!support_std430_without_scalar_layout && options.vulkan_semantics &&
+	         buffer_is_packing_standard(type, BufferPackingStd430))
+	{
+		// UBOs can support std430 with GL_EXT_scalar_block_layout.
+		require_extension_internal("GL_EXT_scalar_block_layout");
+		return "std430";
+	}
+	else if (!support_std430_without_scalar_layout && options.vulkan_semantics &&
+	         buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
+	{
+		// UBOs can support std430 with GL_EXT_scalar_block_layout.
+		set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
+		require_extension_internal("GL_EXT_scalar_block_layout");
+		return "std430";
 	}
 	else
 	{
