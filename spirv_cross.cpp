@@ -3036,6 +3036,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 	}
 
 	case OpArrayLength:
+	case OpLine:
 		// Uses literals, but cannot be a phi variable or temporary, so ignore.
 		break;
 
@@ -4050,6 +4051,7 @@ bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &resul
 	case OpCommitWritePipe:
 	case OpGroupCommitReadPipe:
 	case OpGroupCommitWritePipe:
+	case OpLine:
 		return false;
 
 	default:

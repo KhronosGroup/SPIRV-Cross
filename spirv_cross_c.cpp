@@ -417,6 +417,9 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_FLIP_VERTEX_Y:
 		options->glsl.vertex.flip_vert_y = value != 0;
 		break;
+	case SPVC_COMPILER_OPTION_EMIT_LINE_DIRECTIVES:
+		options->glsl.emit_line_directives = value != 0;
+		break;
 
 	case SPVC_COMPILER_OPTION_GLSL_SUPPORT_NONZERO_BASE_INSTANCE:
 		options->glsl.vertex.support_nonzero_base_instance = value != 0;

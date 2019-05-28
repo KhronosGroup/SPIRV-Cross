@@ -9591,6 +9591,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Undefined value has been declared.
 		break;
 
+	case OpLine:
+	{
+		emit_line_directive(ops[0], ops[1]);
+		break;
+	}
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;
@@ -10530,6 +10536,8 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		}
 	}
 
+	if (func.entry_line.file_id != 0)
+		emit_line_directive(func.entry_line.file_id, func.entry_line.line_literal);
 	emit_function_prototype(func, return_flags);
 	begin_scope();
 
@@ -11985,5 +11993,19 @@ void CompilerGLSL::reorder_type_alias()
 				swap(*alt_alias_itr, *alt_master_itr);
 			}
 		}
+	}
+}
+
+void CompilerGLSL::emit_line_directive(uint32_t file_id, uint32_t line_literal)
+{
+	// If we are redirecting statements, ignore the line directive.
+	// Common case here is continue blocks.
+	if (redirect_statement)
+		return;
+
+	if (options.emit_line_directives)
+	{
+		require_extension_internal("GL_GOOGLE_cpp_style_line_directive");
+		statement_no_indent("#line ", line_literal, " \"", get<SPIRString>(file_id).str, "\"");
 	}
 }

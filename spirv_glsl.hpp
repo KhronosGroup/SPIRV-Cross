@@ -103,6 +103,10 @@ public:
 		// Does not apply to shader storage or push constant blocks.
 		bool emit_uniform_buffer_as_plain_uniforms = false;
 
+		// Emit OpLine directives if present in the module.
+		// May not correspond exactly to original source, but should be a good approximation.
+		bool emit_line_directives = true;
+
 		enum Precision
 		{
 			DontCare,
@@ -233,6 +237,7 @@ protected:
 	virtual void emit_spv_amd_gcn_shader_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                                        uint32_t count);
 	virtual void emit_header();
+	void emit_line_directive(uint32_t file_id, uint32_t line_literal);
 	void build_workgroup_size(SmallVector<std::string> &arguments, const SpecializationConstant &x,
 	                          const SpecializationConstant &y, const SpecializationConstant &z);
 
