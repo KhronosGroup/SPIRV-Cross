@@ -1038,11 +1038,14 @@ void Parser::parse(const Instruction &instruction)
 	{
 		// OpLine might come at global scope, but we don't care about those since they will not be declared in any
 		// meaningful correct order.
-		// For OpLine statements which
+		// Ignore all OpLine directives which live outside a function.
 		if (current_block)
 			current_block->ops.push_back(instruction);
 
-		if (current_function) // Line directives may arrive before first OpLabel.
+		// Line directives may arrive before first OpLabel.
+		// Treat this as the line of the function declaration,
+		// so warnings for arguments can propagate properly.
+		if (current_function)
 		{
 			// Store the first one we find and emit it before creating the function prototype.
 			if (current_function->entry_line.file_id == 0)
