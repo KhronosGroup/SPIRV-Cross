@@ -5,9 +5,9 @@
 
 using namespace metal;
 
-struct SSBO
+struct main0_out
 {
-    float FragColor;
+    float FragColor [[color(0)]];
 };
 
 inline uint4 spvSubgroupBallot(bool value)
@@ -64,28 +64,24 @@ inline bool spvSubgroupAllEqual(bool value)
     return simd_all(value) || !simd_any(value);
 }
 
-kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgroups_per_threadgroup]], uint gl_SubgroupID [[simdgroup_index_in_threadgroup]], uint gl_SubgroupSize [[thread_execution_width]], uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]])
+fragment main0_out main0()
 {
+    main0_out out = {};
+    uint gl_SubgroupSize = simd_sum(1);
+    uint gl_SubgroupInvocationID = simd_prefix_exclusive_sum(1);
     uint4 gl_SubgroupEqMask = gl_SubgroupInvocationID > 32 ? uint4(0, (1 << (gl_SubgroupInvocationID - 32)), uint2(0)) : uint4(1 << gl_SubgroupInvocationID, uint3(0));
     uint4 gl_SubgroupGeMask = uint4(extract_bits(0xFFFFFFFF, min(gl_SubgroupInvocationID, 32u), (uint)max(min((int)gl_SubgroupSize, 32) - (int)gl_SubgroupInvocationID, 0)), extract_bits(0xFFFFFFFF, (uint)max((int)gl_SubgroupInvocationID - 32, 0), (uint)max((int)gl_SubgroupSize - (int)max(gl_SubgroupInvocationID, 32u), 0)), uint2(0));
     uint4 gl_SubgroupGtMask = uint4(extract_bits(0xFFFFFFFF, min(gl_SubgroupInvocationID + 1, 32u), (uint)max(min((int)gl_SubgroupSize, 32) - (int)gl_SubgroupInvocationID - 1, 0)), extract_bits(0xFFFFFFFF, (uint)max((int)gl_SubgroupInvocationID + 1 - 32, 0), (uint)max((int)gl_SubgroupSize - (int)max(gl_SubgroupInvocationID + 1, 32u), 0)), uint2(0));
     uint4 gl_SubgroupLeMask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID + 1, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID + 1 - 32, 0)), uint2(0));
     uint4 gl_SubgroupLtMask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID - 32, 0)), uint2(0));
-    _9.FragColor = float(gl_NumSubgroups);
-    _9.FragColor = float(gl_SubgroupID);
-    _9.FragColor = float(gl_SubgroupSize);
-    _9.FragColor = float(gl_SubgroupInvocationID);
-    simdgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup | mem_flags::mem_texture);
-    simdgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup | mem_flags::mem_texture);
-    simdgroup_barrier(mem_flags::mem_device);
-    simdgroup_barrier(mem_flags::mem_threadgroup);
-    simdgroup_barrier(mem_flags::mem_texture);
+    out.FragColor = float(gl_SubgroupSize);
+    out.FragColor = float(gl_SubgroupInvocationID);
     bool elected = simd_is_first();
-    _9.FragColor = float4(gl_SubgroupEqMask).x;
-    _9.FragColor = float4(gl_SubgroupGeMask).x;
-    _9.FragColor = float4(gl_SubgroupGtMask).x;
-    _9.FragColor = float4(gl_SubgroupLeMask).x;
-    _9.FragColor = float4(gl_SubgroupLtMask).x;
+    out.FragColor = float4(gl_SubgroupEqMask).x;
+    out.FragColor = float4(gl_SubgroupGeMask).x;
+    out.FragColor = float4(gl_SubgroupGtMask).x;
+    out.FragColor = float4(gl_SubgroupLeMask).x;
+    out.FragColor = float4(gl_SubgroupLtMask).x;
     float4 broadcasted = simd_broadcast(float4(10.0), 8u);
     float3 first = simd_broadcast_first(float3(20.0));
     uint4 ballot_value = spvSubgroupBallot(true);
@@ -142,5 +138,6 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     float4 swap_vertical = quad_shuffle_xor(float4(20.0), 2u);
     float4 swap_diagonal = quad_shuffle_xor(float4(20.0), 3u);
     float4 quad_broadcast0 = quad_broadcast(float4(20.0), 3u);
+    return out;
 }
 
