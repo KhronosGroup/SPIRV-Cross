@@ -208,6 +208,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInFragCoord);
 			builtin_frag_coord_id = var_id;
+			mark_implicit_builtin(StorageClassInput, BuiltInFragCoord, var_id);
 		}
 
 		if (!has_sample_id && need_sample_pos)
@@ -234,6 +235,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleId);
 			builtin_sample_id_id = var_id;
+			mark_implicit_builtin(StorageClassInput, BuiltInSampleId, var_id);
 		}
 
 		if (need_vertex_params && (!has_vertex_idx || !has_base_vertex || !has_instance_idx || !has_base_instance))
@@ -263,7 +265,9 @@ void CompilerMSL::build_implicit_builtins()
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInVertexIndex);
 				builtin_vertex_idx_id = var_id;
+				mark_implicit_builtin(StorageClassInput, BuiltInVertexIndex, var_id);
 			}
+
 			if (!has_base_vertex)
 			{
 				uint32_t var_id = ir.increase_bound_by(1);
@@ -272,7 +276,9 @@ void CompilerMSL::build_implicit_builtins()
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInBaseVertex);
 				builtin_base_vertex_id = var_id;
+				mark_implicit_builtin(StorageClassInput, BuiltInBaseVertex, var_id);
 			}
+
 			if (!has_instance_idx)
 			{
 				uint32_t var_id = ir.increase_bound_by(1);
@@ -281,7 +287,9 @@ void CompilerMSL::build_implicit_builtins()
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInInstanceIndex);
 				builtin_instance_idx_id = var_id;
+				mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var_id);
 			}
+
 			if (!has_base_instance)
 			{
 				uint32_t var_id = ir.increase_bound_by(1);
@@ -290,6 +298,7 @@ void CompilerMSL::build_implicit_builtins()
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInBaseInstance);
 				builtin_base_instance_id = var_id;
+				mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var_id);
 			}
 		}
 
@@ -320,7 +329,9 @@ void CompilerMSL::build_implicit_builtins()
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInInvocationId);
 				builtin_invocation_id_id = var_id;
+				mark_implicit_builtin(StorageClassInput, BuiltInInvocationId, var_id);
 			}
+
 			if (!has_primitive_id)
 			{
 				uint32_t var_id = ir.increase_bound_by(1);
@@ -329,6 +340,7 @@ void CompilerMSL::build_implicit_builtins()
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInPrimitiveId);
 				builtin_primitive_id_id = var_id;
+				mark_implicit_builtin(StorageClassInput, BuiltInPrimitiveId, var_id);
 			}
 		}
 
@@ -356,6 +368,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupLocalInvocationId);
 			builtin_subgroup_invocation_id_id = var_id;
+			mark_implicit_builtin(StorageClassInput, BuiltInSubgroupLocalInvocationId, var_id);
 		}
 
 		if (!has_subgroup_size && need_subgroup_ge_mask)
@@ -382,6 +395,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupSize);
 			builtin_subgroup_size_id = var_id;
+			mark_implicit_builtin(StorageClassInput, BuiltInSubgroupSize, var_id);
 		}
 	}
 
@@ -404,6 +418,28 @@ void CompilerMSL::build_implicit_builtins()
 		set_decoration(var_id, DecorationBinding, msl_options.buffer_size_buffer_index);
 		buffer_size_buffer_id = var_id;
 	}
+}
+
+void CompilerMSL::mark_implicit_builtin(StorageClass storage, BuiltIn builtin, uint32_t id)
+{
+	Bitset *active_builtins = nullptr;
+	switch (storage)
+	{
+	case StorageClassInput:
+		active_builtins = &active_input_builtins;
+		break;
+
+	case StorageClassOutput:
+		active_builtins = &active_output_builtins;
+		break;
+
+	default:
+		break;
+	}
+
+	assert(active_builtins != nullptr);
+	active_builtins->set(builtin);
+	get_entry_point().interface_variables.push_back(id);
 }
 
 uint32_t CompilerMSL::build_constant_uint_array_pointer()
@@ -1905,21 +1941,38 @@ void CompilerMSL::fix_up_interface_member_indices(StorageClass storage, uint32_t
 // Returns the ID of the newly added variable, or zero if no variable was added.
 uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 {
-	// Accumulate the variables that should appear in the interface struct
+	// Accumulate the variables that should appear in the interface struct.
 	SmallVector<SPIRVariable *> vars;
-	bool incl_builtins = (storage == StorageClassOutput || is_tessellation_shader());
+	bool incl_builtins = storage == StorageClassOutput || is_tessellation_shader();
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
+		if (var.storage != storage)
+			return;
+
 		auto &type = this->get<SPIRType>(var.basetype);
-		BuiltIn bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
-		if (var.storage == storage && interface_variable_exists_in_entry_point(var.self) &&
-		    !is_hidden_variable(var, incl_builtins) && type.pointer &&
-		    (has_decoration(var_id, DecorationPatch) || is_patch_block(type)) == patch &&
-		    (!is_builtin_variable(var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
-		     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance || bi_type == BuiltInLayer ||
-		     bi_type == BuiltInViewportIndex || bi_type == BuiltInFragDepth || bi_type == BuiltInSampleMask ||
-		     (get_execution_model() == ExecutionModelTessellationEvaluation &&
-		      (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner))))
+
+		bool is_builtin = is_builtin_variable(var);
+		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+
+		// These builtins are part of the stage in/out structs.
+		bool is_interface_block_builtin =
+		    (bi_type == BuiltInPosition || bi_type == BuiltInPointSize || bi_type == BuiltInClipDistance ||
+		     bi_type == BuiltInCullDistance || bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
+		     bi_type == BuiltInFragDepth || bi_type == BuiltInSampleMask) ||
+		    (get_execution_model() == ExecutionModelTessellationEvaluation &&
+		     (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
+
+		bool is_active = interface_variable_exists_in_entry_point(var.self);
+		if (is_builtin && is_active)
+		{
+			// Only emit the builtin if it's active in this entry point. Interface variable list might lie.
+			is_active = has_active_builtin(bi_type, storage);
+		}
+
+		bool filter_patch_decoration = (has_decoration(var_id, DecorationPatch) || is_patch_block(type)) == patch;
+
+		if (is_active && !is_hidden_variable(var, incl_builtins) && type.pointer && filter_patch_decoration &&
+		    (!is_builtin || is_interface_block_builtin))
 		{
 			vars.push_back(&var);
 		}
@@ -5853,7 +5906,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
-		BuiltIn bi_type = ir.meta[var_id].decoration.builtin_type;
+		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
 
 		// Don't emit SamplePosition as a separate parameter. In the entry
 		// point, we get that by calling get_sample_position() on the sample ID.
@@ -5861,6 +5914,13 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 		    get_variable_data_type(var).basetype != SPIRType::Struct &&
 		    get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
 		{
+			// If the builtin is not part of the active input builtin set, don't emit it.
+			// Relevant for multiple entry-point modules which might declare unused builtins.
+			if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
+				return;
+
+			// These builtins are emitted specially. If we pass this branch, the builtin directly matches
+			// a MSL builtin.
 			if (bi_type != BuiltInSamplePosition && bi_type != BuiltInHelperInvocation &&
 			    bi_type != BuiltInPatchVertices && bi_type != BuiltInTessLevelInner &&
 			    bi_type != BuiltInTessLevelOuter && bi_type != BuiltInPosition && bi_type != BuiltInPointSize &&
