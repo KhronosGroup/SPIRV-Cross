@@ -105,7 +105,7 @@ public:
 
 		// Emit OpLine directives if present in the module.
 		// May not correspond exactly to original source, but should be a good approximation.
-		bool emit_line_directives = true;
+		bool emit_line_directives = false;
 
 		enum Precision
 		{
