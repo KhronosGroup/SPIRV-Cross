@@ -1410,6 +1410,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
 		attr.push_back("push_constant");
+	else if (var.storage == StorageClassShaderRecordBufferNV)
+		attr.push_back("shaderRecordNV");
 
 	if (flags.get(DecorationRowMajor))
 		attr.push_back("row_major");
@@ -1455,14 +1457,14 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	// Do not emit set = decoration in regular GLSL output, but
 	// we need to preserve it in Vulkan GLSL mode.
-	if (var.storage != StorageClassPushConstant)
+	if (var.storage != StorageClassPushConstant && var.storage != StorageClassShaderRecordBufferNV)
 	{
 		if (flags.get(DecorationDescriptorSet) && options.vulkan_semantics)
 			attr.push_back(join("set = ", dec.set));
 	}
 
 	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
-	bool ssbo_block = var.storage == StorageClassStorageBuffer ||
+	bool ssbo_block = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferNV ||
 	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
 	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
 	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
@@ -1482,6 +1484,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	// Make sure we don't emit binding layout for a classic uniform on GLSL 1.30.
 	if (!can_use_buffer_blocks && var.storage == StorageClassUniform)
+		can_use_binding = false;
+
+	if (var.storage == StorageClassShaderRecordBufferNV)
 		can_use_binding = false;
 
 	if (can_use_binding && flags.get(DecorationBinding))
@@ -1745,7 +1750,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 
 	Bitset flags = ir.get_buffer_block_flags(var);
-	bool ssbo = var.storage == StorageClassStorageBuffer ||
+	bool ssbo = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferNV ||
 	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 	bool is_restrict = ssbo && flags.get(DecorationRestrict);
 	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
@@ -1861,6 +1866,14 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	else if (var.storage == StorageClassHitAttributeNV)
 	{
 		return "hitAttributeNV ";
+	}
+	else if (var.storage == StorageClassCallableDataNV)
+	{
+		return "callableDataNV ";
+	}
+	else if (var.storage == StorageClassIncomingCallableDataNV)
+	{
+		return "callableDataInNV ";
 	}
 
 	return "";
@@ -2563,7 +2576,8 @@ void CompilerGLSL::emit_resources()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
-		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
+		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
+		                        type.storage == StorageClassShaderRecordBufferNV;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
 		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
@@ -2603,8 +2617,9 @@ void CompilerGLSL::emit_resources()
 
 		if (var.storage != StorageClassFunction && type.pointer &&
 		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassHitAttributeNV ||
-		     type.storage == StorageClassIncomingRayPayloadNV) &&
+		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassIncomingRayPayloadNV ||
+		     type.storage == StorageClassCallableDataNV || type.storage == StorageClassIncomingCallableDataNV ||
+		     type.storage == StorageClassHitAttributeNV) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
