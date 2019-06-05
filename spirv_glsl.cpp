@@ -1866,11 +1866,11 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	}
 	else if (var.storage == StorageClassCallableDataNV)
 	{
-		return "callableDataNV";
+		return "callableDataNV ";
 	}
 	else if (var.storage == StorageClassIncomingCallableDataNV)
 	{
-		return "callableDataInNV";
+		return "callableDataInNV ";
 	}
 
 	return "";
@@ -2614,8 +2614,9 @@ void CompilerGLSL::emit_resources()
 
 		if (var.storage != StorageClassFunction && type.pointer &&
 		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassHitAttributeNV ||
-		     type.storage == StorageClassIncomingRayPayloadNV) &&
+		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassIncomingRayPayloadNV ||
+		     type.storage == StorageClassCallableDataNV || type.storage == StorageClassIncomingCallableDataNV ||
+		     type.storage == StorageClassHitAttributeNV) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
