@@ -10573,6 +10573,8 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 	for (auto &v : func.local_variables)
 	{
 		auto &var = get<SPIRVariable>(v);
+		var.deferred_declaration = false;
+
 		if (var.storage == StorageClassWorkgroup)
 		{
 			// Special variable type which cannot have initializer,
@@ -10630,6 +10632,13 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		// Loop variables are never declared outside their for-loop, so block any implicit declaration.
 		if (var.loop_variable)
 			var.deferred_declaration = false;
+	}
+
+	// Enforce declaration order for regression testing purposes.
+	for (auto &block_id : func.blocks)
+	{
+		auto &block = get<SPIRBlock>(block_id);
+		sort(begin(block.dominated_variables), end(block.dominated_variables));
 	}
 
 	for (auto &line : current_function->fixup_hooks_in)
@@ -11260,8 +11269,6 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 
 void CompilerGLSL::flush_undeclared_variables(SPIRBlock &block)
 {
-	// Enforce declaration order for regression testing purposes.
-	sort(begin(block.dominated_variables), end(block.dominated_variables));
 	for (auto &v : block.dominated_variables)
 		flush_variable_declaration(v);
 }
@@ -11307,6 +11314,15 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	// If we have loop variables, stop masking out access to the variable now.
 	for (auto var : block.loop_variables)
 		get<SPIRVariable>(var).loop_variable_enable = true;
+
+	// Remember deferred declaration state. We will restore it before returning.
+	SmallVector<bool, 64> rearm_dominated_variables(block.dominated_variables.size());
+	for (size_t i = 0; i < block.dominated_variables.size(); i++)
+	{
+		uint32_t var_id = block.dominated_variables[i];
+		auto &var = get<SPIRVariable>(var_id);
+		rearm_dominated_variables[i] = var.deferred_declaration;
+	}
 
 	// This is the method often used by spirv-opt to implement loops.
 	// The loop header goes straight into the continue block.
@@ -11686,6 +11702,15 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	// Forget about control dependent expressions now.
 	block.invalidate_expressions.clear();
+
+	// After we return, we must be out of scope, so if we somehow have to re-emit this function,
+	// re-declare variables if necessary.
+	assert(rearm_dominated_variables.size() == block.dominated_variables.size());
+	for (size_t i = 0; i < block.dominated_variables.size(); i++)
+	{
+		uint32_t var = block.dominated_variables[i];
+		get<SPIRVariable>(var).deferred_declaration = rearm_dominated_variables[i];
+	}
 }
 
 void CompilerGLSL::begin_scope()
