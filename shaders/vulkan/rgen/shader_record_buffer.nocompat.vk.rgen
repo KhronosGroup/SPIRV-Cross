@@ -1,7 +1,7 @@
 #version 460
 #extension GL_NV_ray_tracing : require
 
-layout(shaderRecordNV) buffer sbt
+layout(shaderRecordNV, std430) buffer sbt
 {
     vec3 direction;
     float tmax;
