@@ -3354,20 +3354,24 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 		// actually need to be preserved across loop iterations. We can express this by adding
 		// a "read" access to the loop header.
 		// In the dominating block, we must see an OpStore or equivalent as the first access of an OpVariable.
-		// Should that fail, we look for the innermost loop header and tack on an access there.
+		// Should that fail, we look for the outermost loop header and tack on an access there.
 		// Phi nodes cannot have this problem.
 		if (dominating_block)
 		{
 			auto &variable = get<SPIRVariable>(var.first);
 			if (!variable.phi_variable)
 			{
-				auto &block = get<SPIRBlock>(dominating_block);
-				bool preserve = may_read_undefined_variable_in_block(block, var.first);
+				auto *block = &get<SPIRBlock>(dominating_block);
+				bool preserve = may_read_undefined_variable_in_block(*block, var.first);
 				if (preserve)
 				{
-					if (block.loop_dominator != SPIRBlock::NoDominator)
+					// Find the outermost loop scope.
+					while (block->loop_dominator != SPIRBlock::NoDominator)
+						block = &get<SPIRBlock>(block->loop_dominator);
+
+					if (block->self != dominating_block)
 					{
-						builder.add_block(block.loop_dominator);
+						builder.add_block(block->self);
 						dominating_block = builder.get_dominator();
 					}
 				}

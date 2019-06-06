@@ -8,19 +8,22 @@ void main()
 {
     bool written = false;
     float v;
-    for (mediump int i = 0; i < 4; i++)
+    for (mediump int j = 0; j < 10; j++)
     {
-        float w = 0.0;
-        if (written)
+        for (mediump int i = 0; i < 4; i++)
         {
-            w += v;
+            float w = 0.0;
+            if (written)
+            {
+                w += v;
+            }
+            else
+            {
+                v = 20.0;
+            }
+            v += float(i);
+            written = true;
         }
-        else
-        {
-            v = 20.0;
-        }
-        v += float(i);
-        written = true;
     }
     FragColor = vec4(1.0);
 }
