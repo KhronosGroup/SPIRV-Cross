@@ -3361,13 +3361,13 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 			auto &variable = get<SPIRVariable>(var.first);
 			if (!variable.phi_variable)
 			{
-				bool preserve = may_read_undefined_variable_in_block(get<SPIRBlock>(dominating_block), var.first);
+				auto &block = get<SPIRBlock>(dominating_block);
+				bool preserve = may_read_undefined_variable_in_block(block, var.first);
 				if (preserve)
 				{
-					uint32_t loop_dominator = cfg.find_loop_dominator(dominating_block);
-					if (loop_dominator != SPIRBlock::NoDominator)
+					if (block.loop_dominator != SPIRBlock::NoDominator)
 					{
-						builder.add_block(loop_dominator);
+						builder.add_block(block.loop_dominator);
 						dominating_block = builder.get_dominator();
 					}
 				}
