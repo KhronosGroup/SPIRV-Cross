@@ -3322,6 +3322,30 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 		// Add it to a per-block list of variables.
 		uint32_t dominating_block = builder.get_dominator();
 
+		// For variables whose dominating block is inside a loop, there is a risk that these variables
+		// actually need to be preserved across loop iterations. We can express this by adding
+		// a "read" access to the loop header.
+		// In the dominating block, we must see an OpStore or equivalent as the first access of an OpVariable.
+		// Should that fail, we look for the innermost loop header and tack on an access there.
+		// Phi nodes cannot have this problem.
+		if (dominating_block)
+		{
+			auto &variable = get<SPIRVariable>(var.first);
+			if (!variable.phi_variable)
+			{
+				bool preserve = may_read_undefined_variable_in_block(get<SPIRBlock>(dominating_block), var.first);
+				if (preserve)
+				{
+					uint32_t loop_dominator = cfg.find_loop_dominator(dominating_block);
+					if (loop_dominator)
+					{
+						builder.add_block(loop_dominator);
+						dominating_block = builder.get_dominator();
+					}
+				}
+			}
+		}
+
 		// If all blocks here are dead code, this will be 0, so the variable in question
 		// will be completely eliminated.
 		if (dominating_block)
@@ -3511,6 +3535,79 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 		sort(begin(header_block.loop_variables), end(header_block.loop_variables));
 		get<SPIRVariable>(loop_variable.first).loop_variable = true;
 	}
+}
+
+bool Compiler::may_read_undefined_variable_in_block(const SPIRBlock &block, uint32_t var)
+{
+	for (auto &op : block.ops)
+	{
+		auto *ops = stream(op);
+		switch (op.op)
+		{
+		case OpStore:
+		case OpCopyMemory:
+			if (ops[0] == var)
+				return false;
+			break;
+
+		case OpAccessChain:
+		case OpInBoundsAccessChain:
+		case OpPtrAccessChain:
+			// Access chains are generally used to partially read and write. It's too hard to analyze
+			// if all constituents are written fully before continuing, so just assume it's preserved.
+			// This is the same as the parameter preservation analysis.
+			if (ops[2] == var)
+				return true;
+			break;
+
+		case OpSelect:
+			// Variable pointers.
+			// We might read before writing.
+			if (ops[3] == var || ops[4] == var)
+				return true;
+			break;
+
+		case OpPhi:
+		{
+			// Variable pointers.
+			// We might read before writing.
+			if (op.length < 2)
+				break;
+
+			uint32_t count = op.length - 2;
+			for (uint32_t i = 0; i < count; i += 2)
+				if (ops[i + 2] == var)
+					return true;
+			break;
+		}
+
+		case OpCopyObject:
+		case OpLoad:
+			if (ops[2] == var)
+				return true;
+			break;
+
+		case OpFunctionCall:
+		{
+			if (op.length < 3)
+				break;
+
+			// May read before writing.
+			uint32_t count = op.length - 3;
+			for (uint32_t i = 0; i < count; i++)
+				if (ops[i + 3] == var)
+					return true;
+			break;
+		}
+
+		default:
+			break;
+		}
+	}
+
+	// Not accessed somehow, at least not in a usual fashion.
+	// It's likely accessed in a branch, so assume we must preserve.
+	return true;
 }
 
 Bitset Compiler::get_buffer_block_flags(uint32_t id) const

@@ -152,6 +152,56 @@ void CFG::add_branch(uint32_t from, uint32_t to)
 	add_unique(succeeding_edges[from], to);
 }
 
+uint32_t CFG::find_loop_dominator(uint32_t block_id) const
+{
+	while (block_id != 0)
+	{
+		auto itr = preceding_edges.find(block_id);
+		if (itr == end(preceding_edges))
+			return 0;
+		if (itr->second.empty())
+			return 0;
+
+		uint32_t pred_block_id = 0;
+		bool ignore_loop_header = false;
+
+		// If we are a merge block, go directly to the header block.
+		// Only consider a loop dominator if we are branching from inside a block to a loop header.
+		// NOTE: In the CFG we forced an edge from header to merge block always to support variable scopes properly.
+		for (auto &pred : itr->second)
+		{
+			auto &pred_block = compiler.get<SPIRBlock>(pred);
+			if (pred_block.merge == SPIRBlock::MergeLoop && pred_block.merge_block == block_id)
+			{
+				pred_block_id = pred;
+				ignore_loop_header = true;
+				break;
+			}
+			else if (pred_block.merge == SPIRBlock::MergeSelection && pred_block.next_block == block_id)
+			{
+				pred_block_id = pred;
+				break;
+			}
+		}
+
+		// No merge block means we can just pick any edge. Loop headers dominate the inner loop, so any path we
+		// take will lead there.
+		if (!pred_block_id)
+			pred_block_id = itr->second.front();
+
+		block_id = pred_block_id;
+
+		if (!ignore_loop_header && block_id)
+		{
+			auto &block = compiler.get<SPIRBlock>(block_id);
+			if (block.merge == SPIRBlock::MergeLoop)
+				return block_id;
+		}
+	}
+
+	return block_id;
+}
+
 DominatorBuilder::DominatorBuilder(const CFG &cfg_)
     : cfg(cfg_)
 {
