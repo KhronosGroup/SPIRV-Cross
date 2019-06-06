@@ -1609,6 +1609,12 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 	if (block.merge == SPIRBlock::MergeLoop)
 		return SPIRBlock::WhileLoop;
 
+	if (block.loop_dominator == SPIRBlock::NoDominator)
+	{
+		// Continue block is never reached from CFG.
+		return SPIRBlock::ComplexLoop;
+	}
+
 	auto &dominator = get<SPIRBlock>(block.loop_dominator);
 
 	if (execution_is_noop(block, dominator))
@@ -3275,6 +3281,28 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 
 	unordered_map<uint32_t, uint32_t> potential_loop_variables;
 
+	// Find the loop dominator block for each block.
+	for (auto &block_id : entry.blocks)
+	{
+		auto &block = get<SPIRBlock>(block_id);
+
+		auto itr = ir.continue_block_to_loop_header.find(block_id);
+		if (itr != end(ir.continue_block_to_loop_header) && itr->second != block_id)
+		{
+			// Continue block might be unreachable in the CFG, but we still like to know the loop dominator.
+			// Edge case is when continue block is also the loop header, don't set the dominator in this case.
+			block.loop_dominator = itr->second;
+		}
+		else
+		{
+			uint32_t loop_dominator = cfg.find_loop_dominator(block_id);
+			if (loop_dominator != block_id)
+				block.loop_dominator = loop_dominator;
+			else
+				block.loop_dominator = SPIRBlock::NoDominator;
+		}
+	}
+
 	// For each variable which is statically accessed.
 	for (auto &var : handler.accessed_variables_to_block)
 	{
@@ -3337,7 +3365,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				if (preserve)
 				{
 					uint32_t loop_dominator = cfg.find_loop_dominator(dominating_block);
-					if (loop_dominator)
+					if (loop_dominator != SPIRBlock::NoDominator)
 					{
 						builder.add_block(loop_dominator);
 						dominating_block = builder.get_dominator();

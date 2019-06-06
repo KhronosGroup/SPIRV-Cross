@@ -124,7 +124,8 @@ bool CFG::post_order_visit(uint32_t block_id)
 	// To the CFG, this is linear control flow, but we risk picking the do/while scope as our dominating block.
 	// This makes sure that if we are accessing a variable outside the do/while, we choose the loop header as dominator.
 	if (block.merge == SPIRBlock::MergeLoop)
-		add_branch(block_id, block.merge_block);
+		if (post_order_visit(block.merge_block))
+			add_branch(block_id, block.merge_block);
 
 	// Then visit ourselves. Start counting at one, to let 0 be a magic value for testing back vs. crossing edges.
 	visit_order[block_id].get() = ++visit_count;
@@ -154,15 +155,15 @@ void CFG::add_branch(uint32_t from, uint32_t to)
 
 uint32_t CFG::find_loop_dominator(uint32_t block_id) const
 {
-	while (block_id != 0)
+	while (block_id != SPIRBlock::NoDominator)
 	{
 		auto itr = preceding_edges.find(block_id);
 		if (itr == end(preceding_edges))
-			return 0;
+			return SPIRBlock::NoDominator;
 		if (itr->second.empty())
-			return 0;
+			return SPIRBlock::NoDominator;
 
-		uint32_t pred_block_id = 0;
+		uint32_t pred_block_id = SPIRBlock::NoDominator;
 		bool ignore_loop_header = false;
 
 		// If we are a merge block, go directly to the header block.
@@ -186,7 +187,7 @@ uint32_t CFG::find_loop_dominator(uint32_t block_id) const
 
 		// No merge block means we can just pick any edge. Loop headers dominate the inner loop, so any path we
 		// take will lead there.
-		if (!pred_block_id)
+		if (pred_block_id == SPIRBlock::NoDominator)
 			pred_block_id = itr->second.front();
 
 		block_id = pred_block_id;
