@@ -8799,8 +8799,11 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 			}
 
+			// We can't in general use the resource ID as the argument buffer index because they might conflict. For
+			// example, a texture and a sampler might have the same resource ID, but they must have different argument
+			// buffer IDs.
 			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationArgumentBufferID,
-			                               resource.index);
+			                               member_index);
 			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
 			                               var.self);
 			member_index++;
