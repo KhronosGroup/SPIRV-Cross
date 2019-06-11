@@ -7018,10 +7018,14 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "uint";
 		break;
 	case SPIRType::Int64:
-		type_name = "long"; // Currently unsupported
+		if (!msl_options.supports_msl_version(2, 2))
+			SPIRV_CROSS_THROW("64-bit integers are only supported in MSL 2.2 and above.");
+		type_name = "long";
 		break;
 	case SPIRType::UInt64:
-		type_name = "size_t";
+		if (!msl_options.supports_msl_version(2, 2))
+			SPIRV_CROSS_THROW("64-bit integers are only supported in MSL 2.2 and above.");
+		type_name = "ulong";
 		break;
 	case SPIRType::Half:
 		type_name = "half";
