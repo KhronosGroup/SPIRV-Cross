@@ -7598,7 +7598,14 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInPointSize:
 		return "point_size";
 	case BuiltInPosition:
-		return "position";
+		if (position_invariant)
+		{
+			if (!msl_options.supports_msl_version(2, 1))
+				SPIRV_CROSS_THROW("Invariant position is only supported on MSL 2.1 and up.");
+			return "position, invariant";
+		}
+		else
+			return "position";
 	case BuiltInLayer:
 		return "render_target_array_index";
 	case BuiltInViewportIndex:
