@@ -3848,7 +3848,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		statement(join(
 		    to_expression(img_id), ".write(", remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)),
 		    ", ",
-		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, &forward),
+		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, 0, &forward),
 		    ");"));
 
 		if (p_var && variable_storage_is_aliased(*p_var))
@@ -4660,7 +4660,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
 string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool, bool,
-                                     bool has_offset, bool, bool has_dref, uint32_t)
+                                     bool has_offset, bool, bool has_dref, uint32_t, uint32_t)
 {
 	// Special-case gather. We have to alter the component being looked up
 	// in the swizzle case.
@@ -4720,7 +4720,7 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
                                      uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
                                      uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
-                                     uint32_t sample, bool *p_forward)
+                                     uint32_t sample, uint32_t minlod, bool *p_forward)
 {
 	string farg_str;
 	if (!is_fetch)
@@ -4977,6 +4977,20 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		farg_str += ", gradient" + grad_opt + "(" + to_expression(grad_x) + ", " + to_expression(grad_y) + ")";
 	}
 
+	if (minlod)
+	{
+		if (msl_options.is_macos())
+		{
+			if (!msl_options.supports_msl_version(2, 2))
+				SPIRV_CROSS_THROW("min_lod_clamp() is only supported in MSL 2.2+ and up on macOS.");
+		}
+		else if (msl_options.is_ios())
+			SPIRV_CROSS_THROW("min_lod_clamp() is not supported on iOS.");
+
+		forward = forward && should_forward(minlod);
+		farg_str += ", min_lod_clamp(" + to_expression(minlod) + ")";
+	}
+
 	// Add offsets
 	string offset_expr;
 	if (coffset && !is_fetch)
@@ -5025,6 +5039,7 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	if (sample)
 	{
+		forward = forward && should_forward(sample);
 		farg_str += ", ";
 		farg_str += to_expression(sample);
 	}

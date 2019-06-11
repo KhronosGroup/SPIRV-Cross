@@ -4700,6 +4700,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	uint32_t offset = 0;
 	uint32_t coffsets = 0;
 	uint32_t sample = 0;
+	uint32_t minlod = 0;
 	uint32_t flags = 0;
 
 	if (length)
@@ -4725,14 +4726,15 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	test(offset, ImageOperandsOffsetMask);
 	test(coffsets, ImageOperandsConstOffsetsMask);
 	test(sample, ImageOperandsSampleMask);
+	test(minlod, ImageOperandsMinLodMask);
 
 	string expr;
 	bool forward = false;
 	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
-	                         (!!grad_x || !!grad_y), !!dref, lod);
+	                         (!!grad_x || !!grad_y), !!dref, lod, minlod);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
-	                         coffset, offset, bias, comp, sample, &forward);
+	                         coffset, offset, bias, comp, sample, minlod, &forward);
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
@@ -4797,8 +4799,11 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 // For some subclasses, the function is a method on the specified image.
 string CompilerGLSL::to_function_name(uint32_t tex, const SPIRType &imgtype, bool is_fetch, bool is_gather,
                                       bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad, bool,
-                                      uint32_t lod)
+                                      uint32_t lod, uint32_t minlod)
 {
+	if (minlod != 0)
+		SPIRV_CROSS_THROW("Sparse texturing not yet supported.");
+
 	string fname;
 
 	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
@@ -4877,7 +4882,7 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
                                       bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
                                       uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset,
-                                      uint32_t bias, uint32_t comp, uint32_t sample, bool *p_forward)
+                                      uint32_t bias, uint32_t comp, uint32_t sample, uint32_t /*minlod*/, bool *p_forward)
 {
 	string farg_str;
 	if (is_fetch)
