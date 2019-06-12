@@ -1956,7 +1956,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		bool is_interface_block_builtin =
 		    (bi_type == BuiltInPosition || bi_type == BuiltInPointSize || bi_type == BuiltInClipDistance ||
 		     bi_type == BuiltInCullDistance || bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
-		     bi_type == BuiltInFragDepth || bi_type == BuiltInSampleMask) ||
+		     bi_type == BuiltInFragDepth || bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask) ||
 		    (get_execution_model() == ExecutionModelTessellationEvaluation &&
 		     (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
 
@@ -2090,7 +2090,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	set_name(ib_type_id, to_name(ir.default_entry_point) + "_" + ib_var_ref);
 	set_name(ib_var_id, ib_var_ref);
 
-	for (auto p_var : vars)
+	for (auto *p_var : vars)
 	{
 		bool strip_array =
 		    (get_execution_model() == ExecutionModelTessellationControl ||
@@ -2188,7 +2188,8 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 	auto &type = get<SPIRType>(type_id);
 
 	if ((builtin == BuiltInSampleMask && is_array(type)) ||
-	    ((builtin == BuiltInLayer || builtin == BuiltInViewportIndex) && type.basetype != SPIRType::UInt))
+	    ((builtin == BuiltInLayer || builtin == BuiltInViewportIndex || builtin == BuiltInFragStencilRefEXT) &&
+	     type.basetype != SPIRType::UInt))
 	{
 		uint32_t next_id = ir.increase_bound_by(type.pointer ? 2 : 1);
 		uint32_t base_type_id = next_id++;
@@ -5632,6 +5633,11 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		{
 			switch (builtin)
 			{
+			case BuiltInFragStencilRefEXT:
+				if (!msl_options.supports_msl_version(2, 1))
+					SPIRV_CROSS_THROW("Stencil export only supported in MSL 2.1 and up.");
+				return string(" [[") + builtin_qualifier(builtin) + "]]";
+
 			case BuiltInSampleMask:
 			case BuiltInFragDepth:
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
@@ -7526,6 +7532,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInCullDistance:
 	case BuiltInLayer:
 	case BuiltInFragDepth:
+	case BuiltInFragStencilRefEXT:
 	case BuiltInSampleMask:
 		if (get_execution_model() == ExecutionModelTessellationControl)
 			break;
@@ -7664,6 +7671,9 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		else
 			return "depth(any)";
 
+	case BuiltInFragStencilRefEXT:
+		return "stencil";
+
 	// Compute function in
 	case BuiltInGlobalInvocationId:
 		return "thread_position_in_grid";
@@ -7786,6 +7796,9 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin)
 	// Fragment function out
 	case BuiltInFragDepth:
 		return "float";
+
+	case BuiltInFragStencilRefEXT:
+		return "uint";
 
 	// Compute function in
 	case BuiltInGlobalInvocationId:
@@ -8346,6 +8359,7 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	case BuiltInNumWorkgroups:
 	case BuiltInLayer:
 	case BuiltInViewportIndex:
+	case BuiltInFragStencilRefEXT:
 		expected_type = SPIRType::UInt;
 		break;
 
@@ -8386,6 +8400,7 @@ void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr
 	{
 	case BuiltInLayer:
 	case BuiltInViewportIndex:
+	case BuiltInFragStencilRefEXT:
 		expected_type = SPIRType::UInt;
 		break;
 
