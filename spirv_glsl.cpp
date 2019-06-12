@@ -6156,6 +6156,17 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInIncomingRayFlagsNV:
 		return "gl_IncomingRayFlagsNV";
 
+	case BuiltInFragStencilRefEXT:
+	{
+		if (!options.es)
+		{
+			require_extension_internal("GL_ARB_shader_stencil_export");
+			return "gl_FragStencilRefARB";
+		}
+		else
+			SPIRV_CROSS_THROW("Stencil export not supported in GLES.");
+	}
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
@@ -11825,6 +11836,7 @@ void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &ex
 	case BuiltInBaseVertex:
 	case BuiltInBaseInstance:
 	case BuiltInDrawIndex:
+	case BuiltInFragStencilRefEXT:
 		expected_type = SPIRType::Int;
 		break;
 
@@ -11860,6 +11872,7 @@ void CompilerGLSL::bitcast_to_builtin_store(uint32_t target_id, std::string &exp
 	case BuiltInLayer:
 	case BuiltInPrimitiveId:
 	case BuiltInViewportIndex:
+	case BuiltInFragStencilRefEXT:
 		expected_type = SPIRType::Int;
 		break;
 
