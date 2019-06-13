@@ -6156,6 +6156,26 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInIncomingRayFlagsNV:
 		return "gl_IncomingRayFlagsNV";
 
+	case BuiltInBaryCoordNV:
+	{
+		if (options.es && options.version < 320)
+			SPIRV_CROSS_THROW("gl_BaryCoordNV requires ESSL 320.");
+		else if (!options.es && options.version < 450)
+			SPIRV_CROSS_THROW("gl_BaryCoordNV requires GLSL 450.");
+		require_extension_internal("GL_NV_fragment_shader_barycentric");
+		return "gl_BaryCoordNV";
+	}
+
+	case BuiltInBaryCoordNoPerspNV:
+	{
+		if (options.es && options.version < 320)
+			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspNV requires ESSL 320.");
+		else if (!options.es && options.version < 450)
+			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspNV requires GLSL 450.");
+		require_extension_internal("GL_NV_fragment_shader_barycentric");
+		return "gl_BaryCoordNoPerspNV";
+	}
+
 	case BuiltInFragStencilRefEXT:
 	{
 		if (!options.es)
