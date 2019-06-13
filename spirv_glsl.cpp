@@ -10660,6 +10660,14 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 	end_scope();
 	processing_entry_point = false;
 	statement("");
+
+	// Make sure deferred declaration state for local variables is cleared when we are done with function.
+	// We risk declaring Private/Workgroup variables in places we are not supposed to otherwise.
+	for (auto &v : func.local_variables)
+	{
+		auto &var = get<SPIRVariable>(v);
+		var.deferred_declaration = false;
+	}
 }
 
 void CompilerGLSL::emit_fixup()
