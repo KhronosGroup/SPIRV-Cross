@@ -593,8 +593,10 @@ def test_shader_msl(stats, shader, args, paths):
     # executable from Xcode using args: `--msl --entry main --output msl_path spirv_path`.
 #    print('SPRIV shader: ' + spirv)
 
-    shader_is_msl22 = 'msl22' in shader
+    shader_is_msl22 = 'msl22' in joined_path
     skip_validation = shader_is_msl22 and (not args.msl22)
+    if '.invalid.' in joined_path:
+        skip_validation = True
 
     if (not args.force_no_external_validation) and (not skip_validation):
         validate_shader_msl(shader, args.opt)
