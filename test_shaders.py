@@ -740,6 +740,7 @@ def main():
         sys.stderr.write('Parallel execution is disabled when using the flags --update, --malisc or --force-no-external-validation\n')
         args.parallel = False
         
+    args.msl22 = False
     if args.msl:
         print_msl_compiler_version()
         args.msl22 = msl_compiler_supports_22()
