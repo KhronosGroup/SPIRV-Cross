@@ -7094,10 +7094,14 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "uint";
 		break;
 	case SPIRType::Int64:
-		type_name = "long"; // Currently unsupported
+		if (!msl_options.supports_msl_version(2, 2))
+			SPIRV_CROSS_THROW("64-bit integers are only supported in MSL 2.2 and above.");
+		type_name = "long";
 		break;
 	case SPIRType::UInt64:
-		type_name = "size_t";
+		if (!msl_options.supports_msl_version(2, 2))
+			SPIRV_CROSS_THROW("64-bit integers are only supported in MSL 2.2 and above.");
+		type_name = "ulong";
 		break;
 	case SPIRType::Half:
 		type_name = "half";
@@ -8004,6 +8008,13 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 	case SPIRType::SampledImage:
 	case SPIRType::Sampler:
 		SPIRV_CROSS_THROW("Querying alignment of opaque object.");
+
+	case SPIRType::Int64:
+		SPIRV_CROSS_THROW("long types are not supported in buffers in MSL.");
+	case SPIRType::UInt64:
+		SPIRV_CROSS_THROW("ulong types are not supported in buffers in MSL.");
+	case SPIRType::Double:
+		SPIRV_CROSS_THROW("double types are not supported in buffers in MSL.");
 
 	case SPIRType::Struct:
 	{
