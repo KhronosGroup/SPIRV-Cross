@@ -3,51 +3,22 @@
 
 using namespace metal;
 
-struct M0
+struct SSBO
 {
-    long v;
-    long2 b[2];
-    ulong c;
-    ulong d[5];
+    int s32;
+    uint u32;
 };
 
-struct SSBO0
-{
-    long4 a;
-    M0 m0;
-};
+constant long _162 = {};
 
-struct SSBO1
+kernel void main0(device SSBO& _96 [[buffer(0)]])
 {
-    ulong4 b;
-    M0 m0;
-};
-
-struct SSBO2
-{
-    long a[4];
-    long2 b[4];
-};
-
-struct SSBO3
-{
-    long a[4];
-    long2 b[4];
-};
-
-kernel void main0(device SSBO0& ssbo_0 [[buffer(0)]], device SSBO1& ssbo_1 [[buffer(1)]], device SSBO2& ssbo_2 [[buffer(2)]], device SSBO3& ssbo_3 [[buffer(3)]])
-{
-    ssbo_0.a += long4(10l, 20l, 30l, 40l);
-    ssbo_1.b += ulong4(999999999999999999ul, 8888888888888888ul, 77777777777777777ul, 6666666666666666ul);
-    ssbo_0.a += long4(20l);
-    ssbo_0.a = abs(ssbo_0.a + long4(ssbo_1.b));
-    ssbo_0.a += long4(1l);
-    ssbo_1.b += ulong4(long4(1l));
-    ssbo_0.a -= long4(1l);
-    ssbo_1.b -= ulong4(long4(1l));
-    ssbo_1.b = as_type<ulong4>(as_type<double4>(ssbo_0.a));
-    ssbo_0.a = as_type<long4>(as_type<double4>(ssbo_1.b));
-    ssbo_2.a[0] += 1l;
-    ssbo_3.a[0] += 2l;
+    long4 _137;
+    ulong4 _141;
+    _137 = abs((_137 + long4(30l, 40l, 50l, 60l)) + long4(_141 + ulong4(999999999999999999ul, 8888888888888888ul, 77777777777777777ul, 6666666666666666ul)));
+    _141 += ulong4(long4(999999999999999999l, 8888888888888888l, 77777777777777777l, 6666666666666666l));
+    ulong _109 = ulong(_162);
+    _96.s32 = int(uint(((ulong(_137.x) + _141.y) + _109) + _109));
+    _96.u32 = uint(((ulong(_137.y) + _141.z) + ulong(_162 + 1l)) + _109);
 }
 
