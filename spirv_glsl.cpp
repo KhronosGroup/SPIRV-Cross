@@ -288,8 +288,11 @@ static uint32_t pls_format_to_components(PlsFormat format)
 
 static const char *vector_swizzle(int vecsize, int index)
 {
-	static const char *swizzle[4][4] = {
-		{ ".x", ".y", ".z", ".w" }, { ".xy", ".yz", ".zw" }, { ".xyz", ".yzw" }, { "" }
+	static const char * const swizzle[4][4] = {
+		{ ".x", ".y", ".z", ".w" },
+		{ ".xy", ".yz", ".zw", nullptr },
+		{ ".xyz", ".yzw", nullptr, nullptr },
+		{ "", nullptr, nullptr, nullptr },
 	};
 
 	assert(vecsize >= 1 && vecsize <= 4);
@@ -11512,57 +11515,109 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		statement("switch (", to_expression(block.condition), ")");
 		begin_scope();
 
-		// Multiple case labels can branch to same block, so find all unique blocks.
-		bool emitted_default = false;
-		unordered_set<uint32_t> emitted_blocks;
+		// Find all unique case constructs.
+		unordered_map<uint32_t, SmallVector<uint32_t>> case_constructs;
+		SmallVector<uint32_t> block_declaration_order;
+		SmallVector<uint32_t> literals_to_merge;
 
+		// If a switch case branches to the default block for some reason, we can just remove that literal from consideration
+		// and let the default: block handle it.
+		// 2.11 in SPIR-V spec states that for fall-through cases, there is a very strict declaration order which we can take advantage of here.
+		// We only need to consider possible fallthrough if order[i] branches to order[i + 1].
 		for (auto &c : block.cases)
 		{
-			if (emitted_blocks.count(c.block) != 0)
-				continue;
-
-			// Emit all case labels which branch to our target.
-			// FIXME: O(n^2), revisit if we hit shaders with 100++ case labels ...
-			for (auto &other_case : block.cases)
+			if (c.block != block.next_block && c.block != block.default_block)
 			{
-				if (other_case.block == c.block)
+				if (!case_constructs.count(c.block))
+					block_declaration_order.push_back(c.block);
+				case_constructs[c.block].push_back(c.value);
+			}
+			else if (c.block == block.next_block && block.default_block != block.next_block)
+			{
+				// We might have to flush phi inside specific case labels.
+				// If we can piggyback on default:, do so instead.
+				literals_to_merge.push_back(c.value);
+			}
+		}
+
+		// Empty literal array -> default.
+		if (block.default_block != block.next_block)
+		{
+			auto &default_block = get<SPIRBlock>(block.default_block);
+
+			// We need to slide in the default block somewhere in this chain
+			// if there are fall-through scenarios since the default is declared separately in OpSwitch.
+			// Only consider trivial fall-through cases here.
+			size_t num_blocks = block_declaration_order.size();
+			bool injected_block = false;
+
+			for (size_t i = 0; i < num_blocks; i++)
+			{
+				auto &case_block = get<SPIRBlock>(block_declaration_order[i]);
+				if (case_block.merge == SPIRBlock::MergeNone && case_block.next_block == block.default_block)
+				{
+					// Fallthrough to default block, we must inject the default block here.
+					block_declaration_order.insert(begin(block_declaration_order) + i + 1, block.default_block);
+					injected_block = true;
+					break;
+				}
+				else if (default_block.merge == SPIRBlock::MergeNone && default_block.next_block == case_block.self)
+				{
+					// Default case is falling through to another case label, we must inject the default block here.
+					block_declaration_order.insert(begin(block_declaration_order) + i, block.default_block);
+					injected_block = true;
+					break;
+				}
+			}
+
+			// Order does not matter.
+			if (!injected_block)
+				block_declaration_order.push_back(block.default_block);
+
+			case_constructs[block.default_block] = {};
+		}
+
+		for (auto &target_block : block_declaration_order)
+		{
+			auto &literals = case_constructs[target_block];
+
+			if (literals.empty())
+			{
+				// Default case.
+				statement("default:");
+			}
+			else
+			{
+				for (auto &case_literal : literals)
 				{
 					// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
-					auto case_value = unsigned_case ? convert_to_string(uint32_t(other_case.value)) :
-					                                  convert_to_string(int32_t(other_case.value));
+					auto case_value = unsigned_case ? convert_to_string(uint32_t(case_literal)) :
+					                  convert_to_string(int32_t(case_literal));
 					statement("case ", case_value, label_suffix, ":");
 				}
 			}
 
-			// Maybe we share with default block?
-			if (block.default_block == c.block)
-			{
-				statement("default:");
-				emitted_default = true;
-			}
-
-			// Complete the target.
-			emitted_blocks.insert(c.block);
-
 			begin_scope();
-			branch(block.self, c.block);
+			branch(block.self, target_block);
 			end_scope();
 		}
 
-		if (!emitted_default)
+		// Might still have to flush phi variables if we branch from loop header directly to merge target.
+		if (flush_phi_required(block.self, block.next_block))
 		{
-			if (block.default_block != block.next_block)
+			if (block.default_block == block.next_block || !literals_to_merge.empty())
 			{
-				statement("default:");
-				begin_scope();
-				if (is_break(block.default_block))
-					SPIRV_CROSS_THROW("Cannot break; out of a switch statement and out of a loop at the same time ...");
-				branch(block.self, block.default_block);
-				end_scope();
-			}
-			else if (flush_phi_required(block.self, block.next_block))
-			{
-				statement("default:");
+				for (auto &case_literal : literals_to_merge)
+				{
+					// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
+					auto case_value = unsigned_case ? convert_to_string(uint32_t(case_literal)) :
+					                  convert_to_string(int32_t(case_literal));
+					statement("case ", case_value, label_suffix, ":");
+				}
+
+				if (block.default_block == block.next_block)
+					statement("default:");
+
 				begin_scope();
 				flush_phi(block.self, block.next_block);
 				statement("break;");
