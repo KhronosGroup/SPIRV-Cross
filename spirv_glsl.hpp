@@ -223,6 +223,7 @@ protected:
 
 	SPIRBlock *current_emitting_block = nullptr;
 	SPIRBlock *current_emitting_switch = nullptr;
+	bool current_emitting_switch_fallthrough = false;
 
 	virtual void emit_instruction(const Instruction &instr);
 	void emit_block_instructions(SPIRBlock &block);

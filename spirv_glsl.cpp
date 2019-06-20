@@ -11554,14 +11554,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			for (size_t i = 0; i < num_blocks; i++)
 			{
 				auto &case_block = get<SPIRBlock>(block_declaration_order[i]);
-				if (case_block.merge == SPIRBlock::MergeNone && case_block.next_block == block.default_block)
+				if (case_block.terminator == SPIRBlock::Direct && case_block.next_block == block.default_block)
 				{
 					// Fallthrough to default block, we must inject the default block here.
 					block_declaration_order.insert(begin(block_declaration_order) + i + 1, block.default_block);
 					injected_block = true;
 					break;
 				}
-				else if (default_block.merge == SPIRBlock::MergeNone && default_block.next_block == case_block.self)
+				else if (default_block.terminator == SPIRBlock::Direct && default_block.next_block == case_block.self)
 				{
 					// Default case is falling through to another case label, we must inject the default block here.
 					block_declaration_order.insert(begin(block_declaration_order) + i, block.default_block);
@@ -11577,8 +11577,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			case_constructs[block.default_block] = {};
 		}
 
-		for (auto &target_block : block_declaration_order)
+		size_t num_blocks = block_declaration_order.size();
+		for (size_t i = 0; i < num_blocks; i++)
 		{
+			uint32_t target_block = block_declaration_order[i];
 			auto &literals = case_constructs[target_block];
 
 			if (literals.empty())
@@ -11597,9 +11599,25 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				}
 			}
 
+			auto &case_block = get<SPIRBlock>(target_block);
+			if (i + 1 < num_blocks &&
+			    case_block.terminator == SPIRBlock::Direct &&
+			    case_block.next_block == block_declaration_order[i + 1])
+			{
+				// We will fall through here, so just terminate the block chain early.
+				// We still need to deal with Phi potentially.
+				// No need for a stack-like thing here since we only do fall-through when there is a
+				// single trivial branch to fall-through target..
+				current_emitting_switch_fallthrough = true;
+			}
+			else
+				current_emitting_switch_fallthrough = false;
+
 			begin_scope();
 			branch(block.self, target_block);
 			end_scope();
+
+			current_emitting_switch_fallthrough = false;
 		}
 
 		// Might still have to flush phi variables if we branch from loop header directly to merge target.
@@ -11699,22 +11717,26 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		if (block.merge != SPIRBlock::MergeSelection)
 			flush_phi(block.self, block.next_block);
 
-		// For merge selects we might have ignored the fact that a merge target
-		// could have been a break; or continue;
-		// We will need to deal with it here.
-		if (is_loop_break(block.next_block))
+		// For switch fallthrough cases, we terminate the chain here, but we still need to handle Phi.
+		if (!current_emitting_switch_fallthrough)
 		{
-			// Cannot check for just break, because switch statements will also use break.
-			assert(block.merge == SPIRBlock::MergeSelection);
-			statement("break;");
+			// For merge selects we might have ignored the fact that a merge target
+			// could have been a break; or continue;
+			// We will need to deal with it here.
+			if (is_loop_break(block.next_block))
+			{
+				// Cannot check for just break, because switch statements will also use break.
+				assert(block.merge == SPIRBlock::MergeSelection);
+				statement("break;");
+			}
+			else if (is_continue(block.next_block))
+			{
+				assert(block.merge == SPIRBlock::MergeSelection);
+				branch_to_continue(block.self, block.next_block);
+			}
+			else if (block.self != block.next_block)
+				emit_block_chain(get<SPIRBlock>(block.next_block));
 		}
-		else if (is_continue(block.next_block))
-		{
-			assert(block.merge == SPIRBlock::MergeSelection);
-			branch_to_continue(block.self, block.next_block);
-		}
-		else if (block.self != block.next_block)
-			emit_block_chain(get<SPIRBlock>(block.next_block));
 	}
 
 	if (block.merge == SPIRBlock::MergeLoop)
