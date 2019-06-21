@@ -561,6 +561,7 @@ protected:
 	uint32_t next_metal_resource_index_buffer = 0;
 	uint32_t next_metal_resource_index_texture = 0;
 	uint32_t next_metal_resource_index_sampler = 0;
+	uint32_t next_metal_resource_ids[kMaxArgumentBuffers] = {};
 
 	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
