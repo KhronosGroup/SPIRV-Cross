@@ -18,6 +18,7 @@
 #include "GLSL.std.450.h"
 #include "spirv_cfg.hpp"
 #include "spirv_parser.hpp"
+#include "spirv_common.hpp"
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -1141,8 +1142,12 @@ void Compiler::set_extended_decoration(uint32_t id, ExtendedDecorations decorati
 		dec.extended.ib_orig_id = value;
 		break;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		dec.extended.argument_buffer_id = value;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		dec.extended.resource_index_primary = value;
+		break;
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		dec.extended.resource_index_secondary = value;
 		break;
 	}
 }
@@ -1171,8 +1176,12 @@ void Compiler::set_extended_member_decoration(uint32_t type, uint32_t index, Ext
 		dec.extended.ib_orig_id = value;
 		break;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		dec.extended.argument_buffer_id = value;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		dec.extended.resource_index_primary = value;
+		break;
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		dec.extended.resource_index_secondary = value;
 		break;
 	}
 }
@@ -1198,8 +1207,11 @@ uint32_t Compiler::get_extended_decoration(uint32_t id, ExtendedDecorations deco
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		return dec.extended.argument_buffer_id;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		return dec.extended.resource_index_primary;
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		return dec.extended.resource_index_secondary;
 	}
 
 	return 0;
@@ -1229,8 +1241,11 @@ uint32_t Compiler::get_extended_member_decoration(uint32_t type, uint32_t index,
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		return dec.extended.argument_buffer_id;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		return dec.extended.resource_index_primary;
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		return dec.extended.resource_index_secondary;
 	}
 
 	return 0;
@@ -1257,8 +1272,11 @@ bool Compiler::has_extended_decoration(uint32_t id, ExtendedDecorations decorati
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id != 0;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		return dec.extended.argument_buffer_id != 0;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		return dec.extended.resource_index_primary != uint32_t(-1);
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		return dec.extended.resource_index_secondary != uint32_t(-1);
 	}
 
 	return false;
@@ -1288,8 +1306,11 @@ bool Compiler::has_extended_member_decoration(uint32_t type, uint32_t index, Ext
 	case SPIRVCrossDecorationInterfaceOrigID:
 		return dec.extended.ib_orig_id != 0;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		return dec.extended.argument_buffer_id != uint32_t(-1);
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		return dec.extended.resource_index_primary != uint32_t(-1);
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		return dec.extended.resource_index_secondary != uint32_t(-1);
 	}
 
 	return false;
@@ -1309,15 +1330,19 @@ void Compiler::unset_extended_decoration(uint32_t id, ExtendedDecorations decora
 		break;
 
 	case SPIRVCrossDecorationInterfaceMemberIndex:
-		dec.extended.ib_member_index = ~(0u);
+		dec.extended.ib_member_index = uint32_t(-1);
 		break;
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		dec.extended.ib_orig_id = 0;
 		break;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		dec.extended.argument_buffer_id = 0;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		dec.extended.resource_index_primary = uint32_t(-1);
+		break;
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		dec.extended.resource_index_secondary = uint32_t(-1);
 		break;
 	}
 }
@@ -1338,15 +1363,19 @@ void Compiler::unset_extended_member_decoration(uint32_t type, uint32_t index, E
 		break;
 
 	case SPIRVCrossDecorationInterfaceMemberIndex:
-		dec.extended.ib_member_index = ~(0u);
+		dec.extended.ib_member_index = uint32_t(-1);
 		break;
 
 	case SPIRVCrossDecorationInterfaceOrigID:
 		dec.extended.ib_orig_id = 0;
 		break;
 
-	case SPIRVCrossDecorationArgumentBufferID:
-		dec.extended.argument_buffer_id = 0;
+	case SPIRVCrossDecorationResourceIndexPrimary:
+		dec.extended.resource_index_primary = uint32_t(-1);
+		break;
+
+	case SPIRVCrossDecorationResourceIndexSecondary:
+		dec.extended.resource_index_secondary = uint32_t(-1);
 		break;
 	}
 }

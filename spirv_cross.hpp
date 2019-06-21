@@ -123,7 +123,10 @@ enum ExtendedDecorations
 	SPIRVCrossDecorationPackedType,
 	SPIRVCrossDecorationInterfaceMemberIndex,
 	SPIRVCrossDecorationInterfaceOrigID,
-	SPIRVCrossDecorationArgumentBufferID
+	SPIRVCrossDecorationResourceIndexPrimary,
+	// Used for decorations like resource indices for samplers when part of combined image samplers.
+	// A variable might need to hold two resource indices in this case.
+	SPIRVCrossDecorationResourceIndexSecondary,
 };
 
 class Compiler

@@ -13,7 +13,7 @@ struct main0_in
     float3 vUV [[user(locn0)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> uSampler2D [[texture(0)]], texture3d<float> uSampler3D [[texture(1)]], texturecube<float> uSamplerCube [[texture(2)]], texture2d<float> uTexture2D [[texture(4)]], texture3d<float> uTexture3D [[texture(5)]], texturecube<float> uTextureCube [[texture(6)]], sampler uSampler2DSmplr [[sampler(0)]], sampler uSampler3DSmplr [[sampler(1)]], sampler uSamplerCubeSmplr [[sampler(2)]], sampler uSampler [[sampler(3)]])
+fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> uSampler2D [[texture(0)]], texture3d<float> uSampler3D [[texture(1)]], texturecube<float> uSamplerCube [[texture(2)]], texture2d<float> uTexture2D [[texture(3)]], texture3d<float> uTexture3D [[texture(4)]], texturecube<float> uTextureCube [[texture(5)]], sampler uSampler2DSmplr [[sampler(0)]], sampler uSampler3DSmplr [[sampler(1)]], sampler uSamplerCubeSmplr [[sampler(2)]], sampler uSampler [[sampler(3)]])
 {
     main0_out out = {};
     out.FragColor = float2(0.0);
