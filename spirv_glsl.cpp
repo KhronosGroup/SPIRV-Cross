@@ -10726,6 +10726,8 @@ bool CompilerGLSL::flush_phi_required(uint32_t from, uint32_t to)
 void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 {
 	auto &child = get<SPIRBlock>(to);
+	if (child.ignore_phi_from_block == from)
+		return;
 
 	unordered_set<uint32_t> temporary_phi_variables;
 
@@ -11486,7 +11488,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	case SPIRBlock::MultiSelect:
 	{
 		auto &type = expression_type(block.condition);
-		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort;
+		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort ||
+		                     type.basetype == SPIRType::UByte;
 
 		if (block.merge == SPIRBlock::MergeNone)
 			SPIRV_CROSS_THROW("Switch statement is not structured");
@@ -11510,10 +11513,6 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		if (block.need_ladder_break)
 			statement("bool _", block.self, "_ladder_break = false;");
-
-		emit_block_hints(block);
-		statement("switch (", to_expression(block.condition), ")");
-		begin_scope();
 
 		// Find all unique case constructs.
 		unordered_map<uint32_t, SmallVector<uint32_t>> case_constructs;
@@ -11554,14 +11553,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			for (size_t i = 0; i < num_blocks; i++)
 			{
 				auto &case_block = get<SPIRBlock>(block_declaration_order[i]);
-				if (case_block.terminator == SPIRBlock::Direct && case_block.next_block == block.default_block)
+				if (execution_is_direct_branch(case_block, default_block))
 				{
 					// Fallthrough to default block, we must inject the default block here.
 					block_declaration_order.insert(begin(block_declaration_order) + i + 1, block.default_block);
 					injected_block = true;
 					break;
 				}
-				else if (default_block.terminator == SPIRBlock::Direct && default_block.next_block == case_block.self)
+				else if (execution_is_direct_branch(default_block, case_block))
 				{
 					// Default case is falling through to another case label, we must inject the default block here.
 					block_declaration_order.insert(begin(block_declaration_order) + i, block.default_block);
@@ -11578,6 +11577,68 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		}
 
 		size_t num_blocks = block_declaration_order.size();
+
+		// + before [] forces a reduction to pure function pointer.
+		const auto to_case_label = +[](uint32_t literal, bool is_unsigned_case) -> string {
+			return is_unsigned_case ? convert_to_string(literal) : convert_to_string(int32_t(literal));
+		};
+
+		// We need to deal with a complex scenario for OpPhi. If we have case-fallthrough and Phi in the picture,
+		// we need to flush phi nodes outside the switch block in a branch,
+		// and skip any Phi handling inside the case label to make fall-through work as expected.
+		// This kind of code-gen is super awkward and it's a last resort. Normally we would want to handle this
+		// inside the case label if at all possible.
+		for (size_t i = 1; i < num_blocks; i++)
+		{
+			if (flush_phi_required(block.self, block_declaration_order[i]) &&
+			    flush_phi_required(block_declaration_order[i - 1], block_declaration_order[i]))
+			{
+				uint32_t target_block = block_declaration_order[i];
+
+				// Make sure we flush Phi, it might have been marked to be ignored earlier.
+				get<SPIRBlock>(target_block).ignore_phi_from_block = 0;
+
+				auto &literals = case_constructs[target_block];
+
+				if (literals.empty())
+				{
+					// Oh boy, gotta make a complete negative test instead! o.o
+					// Find all possible literals that would *not* make us enter the default block.
+					// If none of those literals match, we flush Phi ...
+					SmallVector<string> conditions;
+					for (size_t j = 0; j < num_blocks; j++)
+					{
+						auto &negative_literals = case_constructs[block_declaration_order[j]];
+						for (auto &case_label : negative_literals)
+							conditions.push_back(join(to_enclosed_expression(block.condition), " != ", to_case_label(case_label, unsigned_case)));
+					}
+
+					statement("if (", merge(conditions, " && "), ")");
+					begin_scope();
+					flush_phi(block.self, target_block);
+					end_scope();
+				}
+				else
+				{
+					SmallVector<string> conditions;
+					conditions.reserve(literals.size());
+					for (auto &case_label : literals)
+						conditions.push_back(join(to_enclosed_expression(block.condition), " == ", to_case_label(case_label, unsigned_case)));
+					statement("if (", merge(conditions, " || "), ")");
+					begin_scope();
+					flush_phi(block.self, target_block);
+					end_scope();
+				}
+
+				// Mark the block so that we don't flush Phi from header to case label.
+				get<SPIRBlock>(target_block).ignore_phi_from_block = block.self;
+			}
+		}
+
+		emit_block_hints(block);
+		statement("switch (", to_expression(block.condition), ")");
+		begin_scope();
+
 		for (size_t i = 0; i < num_blocks; i++)
 		{
 			uint32_t target_block = block_declaration_order[i];
@@ -11593,16 +11654,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				for (auto &case_literal : literals)
 				{
 					// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
-					auto case_value = unsigned_case ? convert_to_string(uint32_t(case_literal)) :
-					                  convert_to_string(int32_t(case_literal));
-					statement("case ", case_value, label_suffix, ":");
+					statement("case ", to_case_label(case_literal, unsigned_case), label_suffix, ":");
 				}
 			}
 
 			auto &case_block = get<SPIRBlock>(target_block);
-			if (i + 1 < num_blocks &&
-			    case_block.terminator == SPIRBlock::Direct &&
-			    case_block.next_block == block_declaration_order[i + 1])
+			if (i + 1 < num_blocks && execution_is_direct_branch(case_block, get<SPIRBlock>(block_declaration_order[i + 1])))
 			{
 				// We will fall through here, so just terminate the block chain early.
 				// We still need to deal with Phi potentially.
@@ -11626,12 +11683,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			if (block.default_block == block.next_block || !literals_to_merge.empty())
 			{
 				for (auto &case_literal : literals_to_merge)
-				{
-					// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
-					auto case_value = unsigned_case ? convert_to_string(uint32_t(case_literal)) :
-					                  convert_to_string(int32_t(case_literal));
-					statement("case ", case_value, label_suffix, ":");
-				}
+					statement("case ", to_case_label(case_literal, unsigned_case), label_suffix, ":");
 
 				if (block.default_block == block.next_block)
 					statement("default:");
