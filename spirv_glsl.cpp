@@ -288,7 +288,7 @@ static uint32_t pls_format_to_components(PlsFormat format)
 
 static const char *vector_swizzle(int vecsize, int index)
 {
-	static const char * const swizzle[4][4] = {
+	static const char *const swizzle[4][4] = {
 		{ ".x", ".y", ".z", ".w" },
 		{ ".xy", ".yz", ".zw", nullptr },
 		{ ".xyz", ".yzw", nullptr, nullptr },
@@ -4885,7 +4885,8 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 string CompilerGLSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
                                       bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
                                       uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset,
-                                      uint32_t bias, uint32_t comp, uint32_t sample, uint32_t /*minlod*/, bool *p_forward)
+                                      uint32_t bias, uint32_t comp, uint32_t sample, uint32_t /*minlod*/,
+                                      bool *p_forward)
 {
 	string farg_str;
 	if (is_fetch)
@@ -11488,8 +11489,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	case SPIRBlock::MultiSelect:
 	{
 		auto &type = expression_type(block.condition);
-		bool unsigned_case = type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort ||
-		                     type.basetype == SPIRType::UByte;
+		bool unsigned_case =
+		    type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort || type.basetype == SPIRType::UByte;
 
 		if (block.merge == SPIRBlock::MergeNone)
 			SPIRV_CROSS_THROW("Switch statement is not structured");
@@ -11609,7 +11610,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 					{
 						auto &negative_literals = case_constructs[block_declaration_order[j]];
 						for (auto &case_label : negative_literals)
-							conditions.push_back(join(to_enclosed_expression(block.condition), " != ", to_case_label(case_label, unsigned_case)));
+							conditions.push_back(join(to_enclosed_expression(block.condition),
+							                          " != ", to_case_label(case_label, unsigned_case)));
 					}
 
 					statement("if (", merge(conditions, " && "), ")");
@@ -11622,7 +11624,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 					SmallVector<string> conditions;
 					conditions.reserve(literals.size());
 					for (auto &case_label : literals)
-						conditions.push_back(join(to_enclosed_expression(block.condition), " == ", to_case_label(case_label, unsigned_case)));
+						conditions.push_back(join(to_enclosed_expression(block.condition),
+						                          " == ", to_case_label(case_label, unsigned_case)));
 					statement("if (", merge(conditions, " || "), ")");
 					begin_scope();
 					flush_phi(block.self, target_block);
@@ -11658,7 +11661,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			}
 
 			auto &case_block = get<SPIRBlock>(target_block);
-			if (i + 1 < num_blocks && execution_is_direct_branch(case_block, get<SPIRBlock>(block_declaration_order[i + 1])))
+			if (i + 1 < num_blocks &&
+			    execution_is_direct_branch(case_block, get<SPIRBlock>(block_declaration_order[i + 1])))
 			{
 				// We will fall through here, so just terminate the block chain early.
 				// We still need to deal with Phi potentially.

@@ -17,8 +17,8 @@
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
 #include "spirv_cfg.hpp"
-#include "spirv_parser.hpp"
 #include "spirv_common.hpp"
+#include "spirv_parser.hpp"
 #include <algorithm>
 #include <cstring>
 #include <utility>
@@ -4406,4 +4406,3 @@ bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
 	// If parent type has same pointer depth, we must have an array of pointers.
 	return type.pointer_depth == get<SPIRType>(type.parent_type).pointer_depth;
 }
-

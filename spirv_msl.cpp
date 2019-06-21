@@ -1971,8 +1971,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		bool is_interface_block_builtin =
 		    (bi_type == BuiltInPosition || bi_type == BuiltInPointSize || bi_type == BuiltInClipDistance ||
 		     bi_type == BuiltInCullDistance || bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
-		     bi_type == BuiltInBaryCoordNV || bi_type == BuiltInBaryCoordNoPerspNV ||
-		     bi_type == BuiltInFragDepth || bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask) ||
+		     bi_type == BuiltInBaryCoordNV || bi_type == BuiltInBaryCoordNoPerspNV || bi_type == BuiltInFragDepth ||
+		     bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask) ||
 		    (get_execution_model() == ExecutionModelTessellationEvaluation &&
 		     (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
 
@@ -3872,11 +3872,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto store_type = texel_type;
 		store_type.vecsize = 4;
 
-		statement(join(
-		    to_expression(img_id), ".write(", remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)),
-		    ", ",
-		    to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0, 0, &forward),
-		    ");"));
+		statement(join(to_expression(img_id), ".write(",
+		               remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)), ", ",
+		               to_function_args(img_id, img_type, true, false, false, coord_id, 0, 0, 0, 0, lod, 0, 0, 0, 0, 0,
+		                                0, &forward),
+		               ");"));
 
 		if (p_var && variable_storage_is_aliased(*p_var))
 			flush_all_aliased_variables();
@@ -3947,12 +3947,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		// the reported LOD based on the sampler. NEAREST miplevel should
 		// round the LOD, but LINEAR miplevel should not round.
 		// Let's hope this does not become an issue ...
-		statement(to_expression(id), ".x = ",
-		          image_expr, ".calculate_clamped_lod(",
-		          sampler_expr, ", ", to_expression(coord_id), ");");
-		statement(to_expression(id), ".y = ",
-		          image_expr, ".calculate_unclamped_lod(",
-		          sampler_expr, ", ", to_expression(coord_id), ");");
+		statement(to_expression(id), ".x = ", image_expr, ".calculate_clamped_lod(", sampler_expr, ", ",
+		          to_expression(coord_id), ");");
+		statement(to_expression(id), ".y = ", image_expr, ".calculate_unclamped_lod(", sampler_expr, ", ",
+		          to_expression(coord_id), ");");
 		register_control_dependent_expression(id);
 		break;
 	}
@@ -5492,8 +5490,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	bool is_builtin = is_member_builtin(type, index, &builtin);
 
 	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary))
-		return join(" [[id(", get_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary),
-		            ")]]");
+		return join(" [[id(",
+		            get_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary), ")]]");
 
 	// Vertex function inputs
 	if (execution.model == ExecutionModelVertex && type.storage == StorageClassInput)
@@ -5664,7 +5662,8 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			    has_member_decoration(type.self, index, DecorationNoPerspective))
 			{
 				// NoPerspective is baked into the builtin type.
-				SPIRV_CROSS_THROW("Flat, Centroid, Sample, NoPerspective decorations are not supported for BaryCoord inputs.");
+				SPIRV_CROSS_THROW(
+				    "Flat, Centroid, Sample, NoPerspective decorations are not supported for BaryCoord inputs.");
 			}
 		}
 
@@ -6510,7 +6509,8 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	auto itr = resource_bindings.find({ execution.model, var_desc_set, var_binding });
 
 	auto resource_decoration = var_type.basetype == SPIRType::SampledImage && basetype == SPIRType::Sampler ?
-			SPIRVCrossDecorationResourceIndexSecondary : SPIRVCrossDecorationResourceIndexPrimary;
+	                               SPIRVCrossDecorationResourceIndexSecondary :
+	                               SPIRVCrossDecorationResourceIndexPrimary;
 
 	if (itr != end(resource_bindings))
 	{
@@ -8489,7 +8489,8 @@ void CompilerMSL::remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler
 	constexpr_samplers_by_id[id] = sampler;
 }
 
-void CompilerMSL::remap_constexpr_sampler_by_binding(uint32_t desc_set, uint32_t binding, const MSLConstexprSampler &sampler)
+void CompilerMSL::remap_constexpr_sampler_by_binding(uint32_t desc_set, uint32_t binding,
+                                                     const MSLConstexprSampler &sampler)
 {
 	constexpr_samplers_by_binding[{ desc_set, binding }] = sampler;
 }
@@ -8872,4 +8873,3 @@ size_t CompilerMSL::InternalHasher::operator()(const StageSetBinding &value) con
 	auto tmp_hash = (hash_model * 0x10001b31) ^ hash_set;
 	return (tmp_hash * 0x10001b31) ^ value.binding;
 }
-
