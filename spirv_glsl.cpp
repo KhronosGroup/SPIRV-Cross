@@ -11578,8 +11578,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		size_t num_blocks = block_declaration_order.size();
 
-		// + before [] forces a reduction to pure function pointer.
-		const auto to_case_label = +[](uint32_t literal, bool is_unsigned_case) -> string {
+		const auto to_case_label = [](uint32_t literal, bool is_unsigned_case) -> string {
 			return is_unsigned_case ? convert_to_string(literal) : convert_to_string(int32_t(literal));
 		};
 
