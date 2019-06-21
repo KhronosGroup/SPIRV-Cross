@@ -1041,8 +1041,7 @@ unsigned spvc_compiler_msl_get_automatic_resource_binding(spvc_compiler compiler
 	}
 
 	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
-	msl.get_automatic_msl_resource_binding(id);
-	return SPVC_SUCCESS;
+	return msl.get_automatic_msl_resource_binding(id);
 #else
 	(void)id;
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
@@ -1060,8 +1059,7 @@ unsigned spvc_compiler_msl_get_automatic_resource_binding_secondary(spvc_compile
 	}
 
 	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
-	msl.get_automatic_msl_resource_binding_secondary(id);
-	return SPVC_SUCCESS;
+	return msl.get_automatic_msl_resource_binding_secondary(id);
 #else
 	(void)id;
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
