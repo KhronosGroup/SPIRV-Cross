@@ -314,6 +314,19 @@ public:
 	// by remap_constexpr_sampler(_by_binding).
 	bool is_msl_resource_binding_used(spv::ExecutionModel model, uint32_t set, uint32_t binding);
 
+	// This must only be called after a successful call to CompilerMSL::compile().
+	// For a variable resource ID obtained through reflection API, report the automatically assigned resource index.
+	// If the descriptor set was part of an argument buffer, report the [[id(N)]],
+	// or [[buffer/texture/sampler]] binding for other resources.
+	// If the resource was a combined image sampler, report the image binding here,
+	// use the _secondary version of this call to query the sampler half of the resource.
+	// If no binding exists, uint32_t(-1) is returned.
+	uint32_t get_automatic_msl_resource_binding(uint32_t id) const;
+
+	// Same as get_automatic_msl_resource_binding, but should only be used for combined image samplers, in which case the
+	// sampler's binding is returned instead. For any other resource type, -1 is returned.
+	uint32_t get_automatic_msl_resource_binding_secondary(uint32_t id) const;
+
 	// Compiles the SPIR-V code into Metal Shading Language.
 	std::string compile() override;
 

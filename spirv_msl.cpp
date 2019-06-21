@@ -79,6 +79,16 @@ bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t de
 	return itr != end(resource_bindings) && itr->second.second;
 }
 
+uint32_t CompilerMSL::get_automatic_msl_resource_binding(uint32_t id) const
+{
+	return get_extended_decoration(id, SPIRVCrossDecorationResourceIndexPrimary);
+}
+
+uint32_t CompilerMSL::get_automatic_msl_resource_binding_secondary(uint32_t id) const
+{
+	return get_extended_decoration(id, SPIRVCrossDecorationResourceIndexSecondary);
+}
+
 void CompilerMSL::set_fragment_output_components(uint32_t location, uint32_t components)
 {
 	fragment_output_components[location] = components;
