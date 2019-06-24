@@ -161,6 +161,12 @@ static const uint32_t kSwizzleBufferBinding = ~(1u);
 // element to indicate the buffer binding for buffer size buffers to support OpArrayLength.
 static const uint32_t kBufferSizeBufferBinding = ~(2u);
 
+// Special constant used in a MSLResourceBinding binding
+// element to indicate the buffer binding used for the argument buffer itself.
+// This buffer binding should be kept as small as possible as all automatic bindings for buffers
+// will start at max(kArgumentBufferBinding) + 1.
+static const uint32_t kArgumentBufferBinding = ~(3u);
+
 static const uint32_t kMaxArgumentBuffers = 8;
 
 // Decompiles SPIR-V to Metal Shading Language
