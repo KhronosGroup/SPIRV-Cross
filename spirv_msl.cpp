@@ -6090,6 +6090,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 {
 	string ep_args = entry_point_arg_stage_in();
+	Bitset claimed_bindings;
 
 	for (uint32_t i = 0; i < kMaxArgumentBuffers; i++)
 	{
@@ -6104,12 +6105,30 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 		if (!ep_args.empty())
 			ep_args += ", ";
 
-		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(id);
-		ep_args += " [[buffer(" + convert_to_string(i) + ")]]";
+		// Check if the argument buffer binding itself has been remapped.
+		uint32_t buffer_binding;
+		auto itr = resource_bindings.find({ get_entry_point().model, i, kArgumentBufferBinding });
+		if (itr != end(resource_bindings))
+		{
+			buffer_binding = itr->second.first.msl_buffer;
+			itr->second.second = true;
+		}
+		else
+		{
+			// As a fallback, directly map desc set <-> binding.
+			// If that was taken, take the next buffer binding.
+			if (claimed_bindings.get(i))
+				buffer_binding = next_metal_resource_index_buffer;
+			else
+				buffer_binding = i;
+		}
 
-		// Makes it more practical for testing, since the push constant block can occupy the first available
-		// buffer slot if it's not bound explicitly.
-		next_metal_resource_index_buffer = i + 1;
+		claimed_bindings.set(buffer_binding);
+
+		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(id);
+		ep_args += " [[buffer(" + convert_to_string(buffer_binding) + ")]]";
+
+		next_metal_resource_index_buffer = max(next_metal_resource_index_buffer, buffer_binding + 1);
 	}
 
 	entry_point_args_discrete_descriptors(ep_args);

@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 14
+#define SPVC_C_API_VERSION_MINOR 15
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -303,6 +303,7 @@ SPVC_PUBLIC_API void spvc_msl_resource_binding_init(spvc_msl_resource_binding *b
 #define SPVC_MSL_PUSH_CONSTANT_BINDING (0)
 #define SPVC_MSL_SWIZZLE_BUFFER_BINDING (~(1u))
 #define SPVC_MSL_BUFFER_SIZE_BUFFER_BINDING (~(2u))
+#define SPVC_MSL_ARGUMENT_BUFFER_BINDING (~(3u))
 
 /* Obsolete. Sticks around for backwards compatibility. */
 #define SPVC_MSL_AUX_BUFFER_STRUCT_VERSION 1
