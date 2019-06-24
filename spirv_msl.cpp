@@ -7820,7 +7820,18 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		return "thread_index_in_threadgroup";
 
 	case BuiltInSubgroupSize:
-		return "thread_execution_width";
+		if (execution.model == ExecutionModelFragment)
+		{
+			if (!msl_options.supports_msl_version(2, 2))
+				SPIRV_CROSS_THROW("threads_per_simdgroup requires Metal 2.2 in fragment shaders.");
+			return "threads_per_simdgroup";
+		}
+		else
+		{
+			// thread_execution_width is an alias for threads_per_simdgroup, and it's only available since 1.0,
+			// but not in fragment.
+			return "thread_execution_width";
+		}
 
 	case BuiltInNumSubgroups:
 		if (!msl_options.supports_msl_version(2))
@@ -7833,9 +7844,18 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		return msl_options.is_ios() ? "quadgroup_index_in_threadgroup" : "simdgroup_index_in_threadgroup";
 
 	case BuiltInSubgroupLocalInvocationId:
-		if (!msl_options.supports_msl_version(2))
-			SPIRV_CROSS_THROW("Subgroup builtins require Metal 2.0.");
-		return msl_options.is_ios() ? "thread_index_in_quadgroup" : "thread_index_in_simdgroup";
+		if (execution.model == ExecutionModelFragment)
+		{
+			if (!msl_options.supports_msl_version(2, 2))
+				SPIRV_CROSS_THROW("thread_index_in_simdgroup requires Metal 2.2 in fragment shaders.");
+			return "thread_index_in_simdgroup";
+		}
+		else
+		{
+			if (!msl_options.supports_msl_version(2))
+				SPIRV_CROSS_THROW("Subgroup builtins require Metal 2.0.");
+			return msl_options.is_ios() ? "thread_index_in_quadgroup" : "thread_index_in_simdgroup";
+		}
 
 	case BuiltInSubgroupEqMask:
 	case BuiltInSubgroupGeMask:
@@ -8519,6 +8539,8 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	case BuiltInViewportIndex:
 	case BuiltInFragStencilRefEXT:
 	case BuiltInPrimitiveId:
+	case BuiltInSubgroupSize:
+	case BuiltInSubgroupLocalInvocationId:
 		expected_type = SPIRType::UInt;
 		break;
 
