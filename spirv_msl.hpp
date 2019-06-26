@@ -412,7 +412,7 @@ protected:
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
-	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
+	size_t get_declared_struct_member_size_msl(const SPIRType &struct_type, uint32_t index) const;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
 	std::string to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
