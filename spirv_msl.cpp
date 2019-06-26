@@ -1020,7 +1020,6 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_out = true;
 				}
 				type_id = get<SPIRVariable>(arg_id).basetype;
-				p_type = &get<SPIRType>(type_id);
 				uint32_t next_id = ir.increase_bound_by(1);
 				func.add_parameter(type_id, next_id, true);
 				set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
