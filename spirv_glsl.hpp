@@ -404,6 +404,7 @@ protected:
 		bool array_is_value_type = true;
 		bool comparison_image_samples_scalar = false;
 		bool native_pointers = false;
+		bool support_small_type_sampling_result = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
