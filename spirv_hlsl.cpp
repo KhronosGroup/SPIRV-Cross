@@ -4700,6 +4700,7 @@ string CompilerHLSL::compile()
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
+	backend.support_case_fallthrough = false;
 
 	fixup_type_alias();
 	reorder_type_alias();

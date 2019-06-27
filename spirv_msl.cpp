@@ -708,6 +708,7 @@ string CompilerMSL::compile()
 	backend.comparison_image_samples_scalar = true;
 	backend.native_pointers = true;
 	backend.nonuniform_qualifier = "";
+	backend.support_small_type_sampling_result = true;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
@@ -4765,6 +4766,21 @@ string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool
 	return fname;
 }
 
+string CompilerMSL::convert_to_f32(const string &expr, uint32_t components)
+{
+	SPIRType t;
+	t.basetype = SPIRType::Float;
+	t.vecsize = components;
+	t.columns = 1;
+	return join(type_to_glsl_constructor(t), "(", expr, ")");
+}
+
+static inline bool sampling_type_needs_f32_conversion(const SPIRType &type)
+{
+	// Double is not supported to begin with, but doesn't hurt to check for completion.
+	return type.basetype == SPIRType::Half || type.basetype == SPIRType::Double;
+}
+
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
 string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
                                      uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
@@ -4803,6 +4819,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		if (is_fetch)
 			tex_coords = "uint(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
+		else if (sampling_type_needs_f32_conversion(coord_type))
+			tex_coords = convert_to_f32(tex_coords, 1);
 
 		alt_coord_component = 1;
 		break;
@@ -4838,6 +4856,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		if (is_fetch)
 			tex_coords = "uint2(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
+		else if (sampling_type_needs_f32_conversion(coord_type))
+			tex_coords = convert_to_f32(tex_coords, 2);
 
 		alt_coord_component = 2;
 		break;
@@ -4848,6 +4868,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		if (is_fetch)
 			tex_coords = "uint3(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
+		else if (sampling_type_needs_f32_conversion(coord_type))
+			tex_coords = convert_to_f32(tex_coords, 3);
 
 		alt_coord_component = 3;
 		break;
@@ -4864,6 +4886,9 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			if (coord_type.vecsize > 3)
 				tex_coords = enclose_expression(tex_coords) + ".xyz";
 		}
+
+		if (sampling_type_needs_f32_conversion(coord_type))
+			tex_coords = convert_to_f32(tex_coords, 3);
 
 		alt_coord_component = 3;
 		break;
@@ -4895,7 +4920,12 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	// If projection, use alt coord as divisor
 	if (is_proj)
-		tex_coords += " / " + to_extract_component_expression(coord, alt_coord_component);
+	{
+		if (sampling_type_needs_f32_conversion(coord_type))
+			tex_coords += " / " + convert_to_f32(to_extract_component_expression(coord, alt_coord_component), 1);
+		else
+			tex_coords += " / " + to_extract_component_expression(coord, alt_coord_component);
+	}
 
 	if (!farg_str.empty())
 		farg_str += ", ";
@@ -4929,11 +4959,19 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		forward = forward && should_forward(dref);
 		farg_str += ", ";
 
+		auto &dref_type = expression_type(dref);
+
+		string dref_expr;
 		if (is_proj)
-			farg_str +=
-			    to_enclosed_expression(dref) + " / " + to_extract_component_expression(coord, alt_coord_component);
+			dref_expr =
+			    join(to_enclosed_expression(dref), " / ", to_extract_component_expression(coord, alt_coord_component));
 		else
-			farg_str += to_expression(dref);
+			dref_expr = to_expression(dref);
+
+		if (sampling_type_needs_f32_conversion(dref_type))
+			dref_expr = convert_to_f32(dref_expr, 1);
+
+		farg_str += dref_expr;
 
 		if (msl_options.is_macos() && (grad_x || grad_y))
 		{
