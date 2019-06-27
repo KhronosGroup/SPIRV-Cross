@@ -4963,7 +4963,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 		string dref_expr;
 		if (is_proj)
-			dref_expr = join(to_enclosed_expression(dref), " / ", to_extract_component_expression(coord, alt_coord_component));
+			dref_expr =
+			    join(to_enclosed_expression(dref), " / ", to_extract_component_expression(coord, alt_coord_component));
 		else
 			dref_expr = to_expression(dref);
 
