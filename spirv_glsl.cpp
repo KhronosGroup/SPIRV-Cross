@@ -11702,7 +11702,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			}
 
 			auto &case_block = get<SPIRBlock>(target_block);
-			if (i + 1 < num_blocks &&
+			if (backend.support_case_fallthrough && i + 1 < num_blocks &&
 			    execution_is_direct_branch(case_block, get<SPIRBlock>(block_declaration_order[i + 1])))
 			{
 				// We will fall through here, so just terminate the block chain early.
