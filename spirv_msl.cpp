@@ -2369,7 +2369,7 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 		// Increment the current offset to be positioned immediately after the current member.
 		// Don't do this for the last member since it can be unsized, and it is not relevant for padding purposes here.
 		if (mbr_idx + 1 < mbr_cnt)
-			curr_offset = mbr_offset + uint32_t(get_declared_struct_member_size(ib_type, mbr_idx));
+			curr_offset = mbr_offset + uint32_t(get_declared_struct_member_size_msl(ib_type, mbr_idx));
 	}
 }
 
@@ -8030,7 +8030,7 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 }
 
 // Returns the byte size of a struct member.
-size_t CompilerMSL::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const
+size_t CompilerMSL::get_declared_struct_member_size_msl(const SPIRType &struct_type, uint32_t index) const
 {
 	auto &type = get<SPIRType>(struct_type.member_types[index]);
 
