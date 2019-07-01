@@ -191,12 +191,14 @@ public:
 		uint32_t shader_patch_output_buffer_index = 27;
 		uint32_t shader_tess_factor_buffer_index = 26;
 		uint32_t buffer_size_buffer_index = 25;
+		uint32_t view_mask_buffer_index = 24;
 		uint32_t shader_input_wg_index = 0;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
 		bool tess_domain_origin_lower_left = false;
+		bool multiview = false;
 
 		// Enable use of MSL 2.0 indirect argument buffers.
 		// MSL 2.0 must also be enabled.
@@ -266,6 +268,13 @@ public:
 	bool needs_buffer_size_buffer() const
 	{
 		return !buffers_requiring_array_length.empty();
+	}
+
+	// Provide feedback to calling API to allow it to pass a buffer
+	// containing the view mask for the current multiview subpass.
+	bool needs_view_mask_buffer() const
+	{
+		return msl_options.multiview;
 	}
 
 	// Provide feedback to calling API to allow it to pass an output
@@ -526,12 +535,15 @@ protected:
 	uint32_t builtin_base_vertex_id = 0;
 	uint32_t builtin_instance_idx_id = 0;
 	uint32_t builtin_base_instance_id = 0;
+	uint32_t builtin_view_idx_id = 0;
+	uint32_t builtin_layer_id = 0;
 	uint32_t builtin_invocation_id_id = 0;
 	uint32_t builtin_primitive_id_id = 0;
 	uint32_t builtin_subgroup_invocation_id_id = 0;
 	uint32_t builtin_subgroup_size_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
+	uint32_t view_mask_buffer_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
