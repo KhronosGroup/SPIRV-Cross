@@ -3965,6 +3965,31 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpOuterProduct:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t a = ops[2];
+		uint32_t b = ops[3];
+
+		auto &type = get<SPIRType>(result_type);
+		string expr = type_to_glsl_constructor(type);
+		expr += "(";
+		for (uint32_t col = 0; col < type.columns; col++)
+		{
+			expr += to_enclosed_expression(a);
+			expr += " * ";
+			expr += to_extract_component_expression(b, col);
+			if (col + 1 < type.columns)
+				expr += ", ";
+		}
+		expr += ")";
+		emit_op(result_type, id, expr, should_forward(a) && should_forward(b));
+		inherit_expression_dependencies(id, a);
+		inherit_expression_dependencies(id, b);
+		break;
+	}
+
 	case OpFMod:
 	{
 		if (!requires_op_fmod)
