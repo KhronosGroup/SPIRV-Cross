@@ -1758,14 +1758,16 @@ void CompilerHLSL::emit_resources()
 		// FP16/FP64? No templates in HLSL.
 		statement("float SPIRV_Cross_Refract(float i, float n, float eta)");
 		begin_scope();
-		statement("float k = 1.0 - eta * eta * (1.0 - dot(n, i) * dot(n, i));");
+		statement("float NoI = n * i;");
+		statement("float NoI2 = NoI * NoI;");
+		statement("float k = 1.0 - eta * eta * (1.0 - NoI2);");
 		statement("if (k < 0.0)");
 		begin_scope();
 		statement("return 0.0;");
 		end_scope();
 		statement("else");
 		begin_scope();
-		statement("return eta * i - (eta * dot(n, i) + sqrt(k)) * n;");
+		statement("return eta * i - (eta * NoI + sqrt(k)) * n;");
 		end_scope();
 		end_scope();
 		statement("");

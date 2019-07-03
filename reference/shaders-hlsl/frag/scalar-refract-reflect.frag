@@ -18,14 +18,16 @@ float SPIRV_Cross_Reflect(float i, float n)
 
 float SPIRV_Cross_Refract(float i, float n, float eta)
 {
-    float k = 1.0 - eta * eta * (1.0 - dot(n, i) * dot(n, i));
+    float NoI = n * i;
+    float NoI2 = NoI * NoI;
+    float k = 1.0 - eta * eta * (1.0 - NoI2);
     if (k < 0.0)
     {
         return 0.0;
     }
     else
     {
-        return eta * i - (eta * dot(n, i) + sqrt(k)) * n;
+        return eta * i - (eta * NoI + sqrt(k)) * n;
     }
 }
 

@@ -18,20 +18,22 @@ struct main0_in
 template<typename T>
 inline T spvReflect(T i, T n)
 {
-    return i - T(2) * dot(n, i) * n;
+    return i - T(2) * i * n * n;
 }
 
 template<typename T>
 inline T spvRefract(T i, T n, T eta)
 {
-    T k = T(1) - eta * eta * (T(1) - dot(n, i) * dot(n, i));
+    T NoI = n * i;
+    T NoI2 = NoI * NoI;
+    T k = T(1) - eta * eta * (T(1) - NoI2);
     if (k < T(0))
     {
         return T(0);
     }
     else
     {
-        return eta * i - (eta * dot(n, i) + sqrt(k)) * n;
+        return eta * i - (eta * NoI + sqrt(k)) * n;
     }
 }
 

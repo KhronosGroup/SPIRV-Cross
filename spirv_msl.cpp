@@ -3194,7 +3194,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T>");
 			statement("inline T spvReflect(T i, T n)");
 			begin_scope();
-			statement("return i - T(2) * dot(n, i) * n;");
+			statement("return i - T(2) * i * n * n;");
 			end_scope();
 			statement("");
 			break;
@@ -3204,14 +3204,16 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T>");
 			statement("inline T spvRefract(T i, T n, T eta)");
 			begin_scope();
-			statement("T k = T(1) - eta * eta * (T(1) - dot(n, i) * dot(n, i));");
+			statement("T NoI = n * i;");
+			statement("T NoI2 = NoI * NoI;");
+			statement("T k = T(1) - eta * eta * (T(1) - NoI2);");
 			statement("if (k < T(0))");
 			begin_scope();
 			statement("return T(0);");
 			end_scope();
 			statement("else");
 			begin_scope();
-			statement("return eta * i - (eta * dot(n, i) + sqrt(k)) * n;");
+			statement("return eta * i - (eta * NoI + sqrt(k)) * n;");
 			end_scope();
 			end_scope();
 			statement("");
