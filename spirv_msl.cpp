@@ -3189,6 +3189,36 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplReflectScalar:
+			// Metal does not support scalar versions of these functions.
+			statement("template<typename T>");
+			statement("inline T spvReflect(T i, T n)");
+			begin_scope();
+			statement("return i - T(2) * i * n * n;");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRefractScalar:
+			// Metal does not support scalar versions of these functions.
+			statement("template<typename T>");
+			statement("inline T spvRefract(T i, T n, T eta)");
+			begin_scope();
+			statement("T NoI = n * i;");
+			statement("T NoI2 = NoI * NoI;");
+			statement("T k = T(1) - eta * eta * (T(1) - NoI2);");
+			statement("if (k < T(0))");
+			begin_scope();
+			statement("return T(0);");
+			end_scope();
+			statement("else");
+			begin_scope();
+			statement("return eta * i - (eta * NoI + sqrt(k)) * n;");
+			end_scope();
+			end_scope();
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -4705,6 +4735,20 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			// Returns -1 or 1 for valid input, sign() does the job.
 			emit_unary_func_op(result_type, id, args[0], "sign");
 		}
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+
+	case GLSLstd450Reflect:
+		if (get<SPIRType>(result_type).vecsize == 1)
+			emit_binary_func_op(result_type, id, args[0], args[1], "spvReflect");
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+
+	case GLSLstd450Refract:
+		if (get<SPIRType>(result_type).vecsize == 1)
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "spvRefract");
 		else
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
@@ -8660,7 +8704,7 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		uint32_t extension_set = args[2];
 		if (compiler.get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
 		{
-			GLSLstd450 op_450 = static_cast<GLSLstd450>(args[3]);
+			auto op_450 = static_cast<GLSLstd450>(args[3]);
 			switch (op_450)
 			{
 			case GLSLstd450Radians:
@@ -8675,6 +8719,22 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 				return SPVFuncImplFindUMsb;
 			case GLSLstd450SSign:
 				return SPVFuncImplSSign;
+			case GLSLstd450Reflect:
+			{
+				auto &type = compiler.get<SPIRType>(args[0]);
+				if (type.vecsize == 1)
+					return SPVFuncImplReflectScalar;
+				else
+					return SPVFuncImplNone;
+			}
+			case GLSLstd450Refract:
+			{
+				auto &type = compiler.get<SPIRType>(args[0]);
+				if (type.vecsize == 1)
+					return SPVFuncImplRefractScalar;
+				else
+					return SPVFuncImplNone;
+			}
 			case GLSLstd450MatrixInverse:
 			{
 				auto &mat_type = compiler.get<SPIRType>(args[0]);
