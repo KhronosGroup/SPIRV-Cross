@@ -1742,6 +1742,34 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+
+	if (requires_scalar_reflect)
+	{
+		// FP16/FP64? No templates in HLSL.
+		statement("float SPIRV_Cross_Reflect(float i, float n)");
+		begin_scope();
+		statement("return i - 2.0 * dot(n, i) * n;");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_scalar_refract)
+	{
+		// FP16/FP64? No templates in HLSL.
+		statement("float SPIRV_Cross_Refract(float i, float n, float eta)");
+		begin_scope();
+		statement("float k = 1.0 - eta * eta * (1.0 - dot(n, i) * dot(n, i));");
+		statement("if (k < 0.0)");
+		begin_scope();
+		statement("return 0.0;");
+		end_scope();
+		statement("else");
+		begin_scope();
+		statement("return eta * i - (eta * dot(n, i) + sqrt(k)) * n;");
+		end_scope();
+		end_scope();
+		statement("");
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
@@ -3251,6 +3279,34 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		{
 			// Returns -1 or 1 for valid input, sign() does the job.
 			emit_unary_func_op(result_type, id, args[0], "sign");
+		}
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+
+	case GLSLstd450Reflect:
+		if (get<SPIRType>(result_type).vecsize == 1)
+		{
+			if (!requires_scalar_reflect)
+			{
+				requires_scalar_reflect = true;
+				force_recompile();
+			}
+			emit_binary_func_op(result_type, id, args[0], args[1], "SPIRV_Cross_Reflect");
+		}
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+
+	case GLSLstd450Refract:
+		if (get<SPIRType>(result_type).vecsize == 1)
+		{
+			if (!requires_scalar_refract)
+			{
+				requires_scalar_refract = true;
+				force_recompile();
+			}
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "SPIRV_Cross_Refract");
 		}
 		else
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);

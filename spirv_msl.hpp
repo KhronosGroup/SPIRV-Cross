@@ -401,6 +401,8 @@ protected:
 		SPVFuncImplSubgroupBallotFindMSB,
 		SPVFuncImplSubgroupBallotBitCount,
 		SPVFuncImplSubgroupAllEqual,
+		SPVFuncImplReflectScalar,
+		SPVFuncImplRefractScalar,
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
