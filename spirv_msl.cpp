@@ -6183,7 +6183,10 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			    bi_type != BuiltInSubgroupGeMask && bi_type != BuiltInSubgroupGtMask &&
 			    bi_type != BuiltInSubgroupLeMask && bi_type != BuiltInSubgroupLtMask &&
 			    ((get_execution_model() == ExecutionModelFragment && msl_options.multiview) ||
-			     bi_type != BuiltInViewIndex))
+			     bi_type != BuiltInViewIndex) &&
+			    (get_execution_model() == ExecutionModelGLCompute ||
+			     (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2)) ||
+			     (bi_type != BuiltInSubgroupLocalInvocationId && bi_type != BuiltInSubgroupSize)))
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
@@ -6590,6 +6593,50 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					entry_func.fixup_hooks_in.push_back([=]() { statement(tc, ".y = 1.0 - ", tc, ".y;"); });
 				}
 				break;
+			case BuiltInSubgroupLocalInvocationId:
+				// This is natively supported in compute shaders.
+				if (get_execution_model() == ExecutionModelGLCompute)
+					break;
+
+				// This is natively supported in fragment shaders in MSL 2.2.
+				if (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2))
+					break;
+
+				if (msl_options.is_ios())
+					SPIRV_CROSS_THROW(
+					    "SubgroupLocalInvocationId cannot be used outside of compute shaders before MSL 2.2 on iOS.");
+
+				if (!msl_options.supports_msl_version(2, 1))
+					SPIRV_CROSS_THROW(
+					    "SubgroupLocalInvocationId cannot be used outside of compute shaders before MSL 2.1.");
+
+				// Shaders other than compute shaders don't support the SIMD-group
+				// builtins directly, but we can emulate them using the SIMD-group
+				// functions. This might break if some of the subgroup terminated
+				// before reaching the entry point.
+				entry_func.fixup_hooks_in.push_back([=]() {
+					statement(builtin_type_decl(bi_type), " ", to_expression(var_id),
+					          " = simd_prefix_exclusive_sum(1);");
+				});
+				break;
+			case BuiltInSubgroupSize:
+				// This is natively supported in compute shaders.
+				if (get_execution_model() == ExecutionModelGLCompute)
+					break;
+
+				// This is natively supported in fragment shaders in MSL 2.2.
+				if (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2))
+					break;
+
+				if (msl_options.is_ios())
+					SPIRV_CROSS_THROW("SubgroupSize cannot be used outside of compute shaders on iOS.");
+
+				if (!msl_options.supports_msl_version(2, 1))
+					SPIRV_CROSS_THROW("SubgroupSize cannot be used outside of compute shaders before Metal 2.1.");
+
+				entry_func.fixup_hooks_in.push_back(
+				    [=]() { statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = simd_sum(1);"); });
+				break;
 			case BuiltInSubgroupEqMask:
 				if (msl_options.is_ios())
 					SPIRV_CROSS_THROW("Subgroup ballot functionality is unavailable on iOS.");
@@ -6597,7 +6644,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					SPIRV_CROSS_THROW("Subgroup ballot functionality requires Metal 2.1.");
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-					          builtin_subgroup_invocation_id_id, " > 32 ? uint4(0, (1 << (",
+					          to_expression(builtin_subgroup_invocation_id_id), " > 32 ? uint4(0, (1 << (",
 					          to_expression(builtin_subgroup_invocation_id_id), " - 32)), uint2(0)) : uint4(1 << ",
 					          to_expression(builtin_subgroup_invocation_id_id), ", uint3(0));");
 				});
