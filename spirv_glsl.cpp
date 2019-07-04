@@ -9406,6 +9406,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			emit_spv_amd_gcn_shader_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
+		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_debug_info)
+		{
+			break; // Ignore SPIR-V debug information extended instructions.
+		}
 		else
 		{
 			statement("// unimplemented ext op ", instruction.op);
@@ -9671,6 +9675,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_line_directive(ops[0], ops[1]);
 		break;
 	}
+
+	case OpNoLine:
+		break;
 
 	default:
 		statement("// unimplemented op ", instruction.op);
