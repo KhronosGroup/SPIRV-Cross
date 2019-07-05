@@ -1071,6 +1071,7 @@ void Parser::parse(const Instruction &instruction)
 		// OpNoLine might come at global scope.
 		if (current_block)
 			current_block->ops.push_back(instruction);
+		break;
 	}
 
 	// Actual opcodes.
