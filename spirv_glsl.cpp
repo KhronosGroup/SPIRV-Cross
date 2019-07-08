@@ -11226,7 +11226,10 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			}
 
 			default:
-				SPIRV_CROSS_THROW("For/while loop detected, but need while/for loop semantics.");
+				block.disable_block_optimization = true;
+				force_recompile();
+				begin_scope(); // We'll see an end_scope() later.
+				return false;
 			}
 
 			begin_scope();
@@ -11300,7 +11303,10 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 			}
 
 			default:
-				SPIRV_CROSS_THROW("For/while loop detected, but need while/for loop semantics.");
+				block.disable_block_optimization = true;
+				force_recompile();
+				begin_scope(); // We'll see an end_scope() later.
+				return false;
 			}
 
 			begin_scope();
