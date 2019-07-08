@@ -832,8 +832,6 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 {
 	string res;
-	if (flags.get(DecorationNonUniformEXT))
-		res += "nonuniformEXT ";
 	//if (flags & (1ull << DecorationSmooth))
 	//    res += "smooth ";
 	if (flags.get(DecorationFlat))
@@ -4617,6 +4615,10 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 
 	inherited_expressions.push_back(coord);
 
+	// Make sure non-uniform decoration is back-propagated to where it needs to be.
+	if (has_decoration(img, DecorationNonUniformEXT))
+		propagate_nonuniform_qualifier(img);
+
 	switch (op)
 	{
 	case OpImageSampleDrefImplicitLod:
@@ -7567,8 +7569,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		unroll_array_from_complex_load(id, ptr, expr);
 
 		auto &type = get<SPIRType>(result_type);
-		if (has_decoration(id, DecorationNonUniformEXT))
+		// Shouldn't need to check for ID, but current glslang codegen requires it in some cases
+		// when loading Image/Sampler descriptors. It does not hurt to check ID as well.
+		if (has_decoration(id, DecorationNonUniformEXT) || has_decoration(ptr, DecorationNonUniformEXT))
+		{
+			propagate_nonuniform_qualifier(ptr);
 			convert_non_uniform_expression(type, expr);
+		}
 
 		if (ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
@@ -7649,6 +7656,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpStore:
 	{
 		auto *var = maybe_get<SPIRVariable>(ops[0]);
+
+		if (has_decoration(ops[0], DecorationNonUniformEXT))
+			propagate_nonuniform_qualifier(ops[0]);
 
 		if (var && var->statically_assigned)
 			var->static_expression = ops[1];
@@ -8032,7 +8042,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t rhs = ops[2];
 		bool pointer = get<SPIRType>(result_type).pointer;
 
-		if (expression_is_lvalue(rhs) && !pointer)
+		auto *chain = maybe_get<SPIRAccessChain>(rhs);
+		if (chain)
+		{
+			// Cannot lower to a SPIRExpression, just copy the object.
+			auto &e = set<SPIRAccessChain>(id, *chain);
+			e.self = id;
+		}
+		else if (expression_is_lvalue(rhs) && !pointer)
 		{
 			// Need a copy.
 			// For pointer types, we copy the pointer itself.
@@ -8051,6 +8068,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				auto *var = maybe_get_backing_variable(rhs);
 				e.loaded_from = var ? var->self : 0;
 			}
+
+			// If we're copying an access chain, need to inherit the read expressions.
+			auto *rhs_expr = maybe_get<SPIRExpression>(rhs);
+			if (rhs_expr)
+				e.implied_read_expressions = rhs_expr->implied_read_expressions;
 		}
 		break;
 	}
@@ -8985,6 +9007,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		emit_sampled_image_op(result_type, id, ops[2], ops[3]);
+		inherit_expression_dependencies(id, ops[2]);
+		inherit_expression_dependencies(id, ops[3]);
 		break;
 	}
 
@@ -12230,5 +12254,39 @@ void CompilerGLSL::emit_line_directive(uint32_t file_id, uint32_t line_literal)
 	{
 		require_extension_internal("GL_GOOGLE_cpp_style_line_directive");
 		statement_no_indent("#line ", line_literal, " \"", get<SPIRString>(file_id).str, "\"");
+	}
+}
+
+void CompilerGLSL::propagate_nonuniform_qualifier(uint32_t id)
+{
+	// SPIR-V might only tag the very last ID with NonUniformEXT, but for codegen,
+	// we need to know NonUniformEXT a little earlier, when the resource is actually loaded.
+	// Back-propagate the qualifier based on the expression dependency chain.
+
+	if (!has_decoration(id, DecorationNonUniformEXT))
+	{
+		set_decoration(id, DecorationNonUniformEXT);
+		force_recompile();
+	}
+
+	auto *e = maybe_get<SPIRExpression>(id);
+	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
+	auto *chain = maybe_get<SPIRAccessChain>(id);
+	if (e)
+	{
+		for (auto &expr : e->expression_dependencies)
+			propagate_nonuniform_qualifier(expr);
+		for (auto &expr : e->implied_read_expressions)
+			propagate_nonuniform_qualifier(expr);
+	}
+	else if (combined)
+	{
+		propagate_nonuniform_qualifier(combined->image);
+		propagate_nonuniform_qualifier(combined->sampler);
+	}
+	else if (chain)
+	{
+		for (auto &expr : chain->implied_read_expressions)
+			propagate_nonuniform_qualifier(expr);
 	}
 }

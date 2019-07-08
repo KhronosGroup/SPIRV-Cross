@@ -672,6 +672,8 @@ protected:
 	void fixup_type_alias();
 	void reorder_type_alias();
 
+	void propagate_nonuniform_qualifier(uint32_t id);
+
 private:
 	void init();
 };
