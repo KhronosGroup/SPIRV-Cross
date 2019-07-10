@@ -728,7 +728,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &var = get<SPIRVariable>(array_id);
 		const auto &type = get_variable_data_type(var);
 		string name = to_name(array_id);
-		statement(get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + name + "[] =");
+		statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(array_id), name, "[] =");
 		begin_scope();
 		for (uint32_t i = 0; i < type.array[0]; ++i)
 			statement(name + "_" + convert_to_string(i) + ",");
@@ -4594,7 +4594,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	string exp = string(op) + "(";
 
 	auto &type = get_pointee_type(expression_type(obj));
-	exp += "(volatile ";
+	exp += "(";
 	auto *var = maybe_get_backing_variable(obj);
 	if (!var)
 		SPIRV_CROSS_THROW("No backing variable for atomic operation.");
@@ -6190,11 +6190,19 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 {
 	const auto &type = get<SPIRType>(argument.basetype);
+	Bitset flags;
+	if (type.basetype == SPIRType::Struct &&
+	    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)))
+		flags = ir.get_buffer_block_flags(argument);
+	else
+		flags = get_decoration_bitset(argument.self);
+	const char *addr_space = nullptr;
 
 	switch (type.storage)
 	{
 	case StorageClassWorkgroup:
-		return "threadgroup";
+		addr_space = "threadgroup";
+		break;
 
 	case StorageClassStorageBuffer:
 	{
@@ -6202,9 +6210,10 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 		// we should not assume any constness here. Only for global SSBOs.
 		bool readonly = false;
 		if (has_decoration(type.self, DecorationBlock))
-			readonly = ir.get_buffer_block_flags(argument).get(DecorationNonWritable);
+			readonly = flags.get(DecorationNonWritable);
 
-		return readonly ? "const device" : "device";
+		addr_space = readonly ? "const device" : "device";
+		break;
 	}
 
 	case StorageClassUniform:
@@ -6215,54 +6224,61 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
 			if (ssbo)
 			{
-				bool readonly = ir.get_buffer_block_flags(argument).get(DecorationNonWritable);
-				return readonly ? "const device" : "device";
+				bool readonly = flags.get(DecorationNonWritable);
+				addr_space = readonly ? "const device" : "device";
 			}
 			else
-				return "constant";
+				addr_space = "constant";
+			break;
 		}
 		break;
 
 	case StorageClassFunction:
 	case StorageClassGeneric:
 		// No address space for plain values.
-		return type.pointer ? "thread" : "";
+		addr_space = type.pointer ? "thread" : "";
+		break;
 
 	case StorageClassInput:
 		if (get_execution_model() == ExecutionModelTessellationControl && argument.basevariable == stage_in_ptr_var_id)
-			return "threadgroup";
+			addr_space = "threadgroup";
 		break;
 
 	case StorageClassOutput:
 		if (capture_output_to_buffer)
-			return "device";
+			addr_space = "device";
 		break;
 
 	default:
 		break;
 	}
 
-	return "thread";
+	if (!addr_space)
+		addr_space = "thread";
+
+	return join(flags.get(DecorationVolatile) || flags.get(DecorationCoherent) ? "volatile " : "", addr_space);
 }
 
 string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id)
 {
+	// This can be called for variable pointer contexts as well, so be very careful about which method we choose.
+	Bitset flags;
+	if (ir.ids[id].get_type() == TypeVariable && type.basetype == SPIRType::Struct &&
+	    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)))
+		flags = get_buffer_block_flags(id);
+	else
+		flags = get_decoration_bitset(id);
+
+	const char *addr_space = nullptr;
 	switch (type.storage)
 	{
 	case StorageClassWorkgroup:
-		return "threadgroup";
+		addr_space = "threadgroup";
+		break;
 
 	case StorageClassStorageBuffer:
-	{
-		// This can be called for variable pointer contexts as well, so be very careful about which method we choose.
-		Bitset flags;
-		if (ir.ids[id].get_type() == TypeVariable && has_decoration(type.self, DecorationBlock))
-			flags = get_buffer_block_flags(id);
-		else
-			flags = get_decoration_bitset(id);
-
-		return flags.get(DecorationNonWritable) ? "const device" : "device";
-	}
+		addr_space = flags.get(DecorationNonWritable) ? "const device" : "device";
+		break;
 
 	case StorageClassUniform:
 	case StorageClassUniformConstant:
@@ -6271,37 +6287,53 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id)
 		{
 			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
 			if (ssbo)
-			{
-				// This can be called for variable pointer contexts as well, so be very careful about which method we choose.
-				Bitset flags;
-				if (ir.ids[id].get_type() == TypeVariable && has_decoration(type.self, DecorationBlock))
-					flags = get_buffer_block_flags(id);
-				else
-					flags = get_decoration_bitset(id);
-
-				return flags.get(DecorationNonWritable) ? "const device" : "device";
-			}
+				addr_space = flags.get(DecorationNonWritable) ? "const device" : "device";
 			else
-				return "constant";
+				addr_space = "constant";
 		}
 		else
-			return "constant";
+			addr_space = "constant";
+		break;
 
 	case StorageClassFunction:
 	case StorageClassGeneric:
 		// No address space for plain values.
-		return type.pointer ? "thread" : "";
+		addr_space = type.pointer ? "thread" : "";
+		break;
 
 	case StorageClassOutput:
 		if (capture_output_to_buffer)
-			return "device";
+			addr_space = "device";
 		break;
 
 	default:
 		break;
 	}
 
-	return "thread";
+	if (!addr_space)
+		addr_space = "thread";
+
+	return join(flags.get(DecorationVolatile) || flags.get(DecorationCoherent) ? "volatile " : "", addr_space);
+}
+
+const char *CompilerMSL::to_restrict(uint32_t id, bool space)
+{
+	// This can be called for variable pointer contexts as well, so be very careful about which method we choose.
+	Bitset flags;
+	if (ir.ids[id].get_type() == TypeVariable)
+	{
+		uint32_t type_id = expression_type_id(id);
+		auto &type = expression_type(id);
+		if (type.basetype == SPIRType::Struct &&
+		    (has_decoration(type_id, DecorationBlock) || has_decoration(type_id, DecorationBufferBlock)))
+			flags = get_buffer_block_flags(id);
+		else
+			flags = get_decoration_bitset(id);
+	}
+	else
+		flags = get_decoration_bitset(id);
+
+	return flags.get(DecorationRestrict) ? (space ? "restrict " : "restrict") : "";
 }
 
 string CompilerMSL::entry_point_arg_stage_in()
@@ -6469,7 +6501,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 
 		claimed_bindings.set(buffer_binding);
 
-		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_name(id);
+		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(id) + to_name(id);
 		ep_args += " [[buffer(" + convert_to_string(buffer_binding) + ")]]";
 
 		next_metal_resource_index_buffer = max(next_metal_resource_index_buffer, buffer_binding + 1);
@@ -6605,8 +6637,8 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				{
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + r.name + "_" +
-					           convert_to_string(i);
+					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + to_restrict(var_id) +
+					           r.name + "_" + convert_to_string(i);
 					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")]]";
 				}
 			}
@@ -6614,7 +6646,8 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
-				ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + r.name;
+				ep_args +=
+				    get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(var_id) + r.name;
 				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
 			}
 			break;
@@ -7087,6 +7120,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			// non-constant arrays, but we can create thread const from constant.
 			decl = string("thread const ") + decl;
 			decl += " (&";
+			const char *restrict_kw = to_restrict(name_id);
+			if (*restrict_kw)
+			{
+				decl += " ";
+				decl += restrict_kw;
+			}
 			decl += to_expression(name_id);
 			decl += ")";
 			decl += type_to_array_glsl(type);
@@ -7125,6 +7164,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 
 		decl += " (&";
+		const char *restrict_kw = to_restrict(name_id);
+		if (*restrict_kw)
+		{
+			decl += " ";
+			decl += restrict_kw;
+		}
 		decl += to_expression(name_id);
 		decl += ")";
 		decl += type_to_array_glsl(type);
@@ -7142,6 +7187,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		decl += "&";
 		decl += " ";
+		decl += to_restrict(name_id);
 		decl += to_expression(name_id);
 	}
 	else
@@ -7520,6 +7566,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	// Pointer?
 	if (type.pointer)
 	{
+		const char *restrict_kw;
 		type_name = join(get_type_address_space(type, id), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
 		switch (type.basetype)
 		{
@@ -7531,6 +7578,12 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		default:
 			// Anything else can be a raw pointer.
 			type_name += "*";
+			restrict_kw = to_restrict(id);
+			if (*restrict_kw)
+			{
+				type_name += " ";
+				type_name += restrict_kw;
+			}
 			break;
 		}
 		return type_name;
