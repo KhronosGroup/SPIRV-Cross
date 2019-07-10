@@ -2447,7 +2447,7 @@ void CompilerMSL::align_struct(SPIRType &ib_type)
 
 // Returns whether the specified struct member supports a packable type
 // variation that is smaller than the unpacked variation of that type.
-bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
+bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index, uint32_t base_offset)
 {
 	// We've already marked it as packable
 	if (has_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPacked))
@@ -2470,16 +2470,66 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 		return true;
 	}
 
-	// Check for array of struct, where the SPIR-V declares an array stride which is larger than the struct itself.
-	// This can happen for struct A { float a }; A a[]; in std140 layout.
-	// TODO: Emit a padded struct which can be used for this purpose.
-	if (is_array(mbr_type) && mbr_type.basetype == SPIRType::Struct)
+	uint32_t mbr_offset_curr = base_offset + get_member_decoration(ib_type.self, index, DecorationOffset);
+	if (mbr_type.basetype == SPIRType::Struct)
 	{
+		// If this is a struct type, check if any of its members need packing.
+		for (uint32_t i = 0; i < mbr_type.member_types.size(); i++)
+		{
+			if (is_member_packable(mbr_type, i, mbr_offset_curr))
+			{
+				set_extended_member_decoration(mbr_type.self, i, SPIRVCrossDecorationPacked);
+				set_extended_member_decoration(mbr_type.self, i, SPIRVCrossDecorationPackedType,
+				                               mbr_type.member_types[i]);
+			}
+		}
 		size_t declared_struct_size = get_declared_struct_size(mbr_type);
 		size_t alignment = get_declared_struct_member_alignment(ib_type, index);
 		declared_struct_size = (declared_struct_size + alignment - 1) & ~(alignment - 1);
-		if (type_struct_member_array_stride(ib_type, index) > declared_struct_size)
-			return true;
+		// Check for array of struct, where the SPIR-V declares an array stride which is larger than the struct itself.
+		// This can happen for struct A { float a }; A a[]; in std140 layout.
+		// TODO: Emit a padded struct which can be used for this purpose.
+		if (is_array(mbr_type))
+		{
+			size_t array_stride = type_struct_member_array_stride(ib_type, index);
+			if (array_stride > declared_struct_size)
+				return true;
+			if (array_stride < declared_struct_size)
+			{
+				// If the stride is *less* (i.e. more tightly packed), then
+				// we need to pack the members of the struct itself.
+				for (uint32_t i = 0; i < mbr_type.member_types.size(); i++)
+				{
+					if (is_member_packable(mbr_type, i, mbr_offset_curr + array_stride))
+					{
+						set_extended_member_decoration(mbr_type.self, i, SPIRVCrossDecorationPacked);
+						set_extended_member_decoration(mbr_type.self, i, SPIRVCrossDecorationPackedType,
+						                               mbr_type.member_types[i]);
+					}
+				}
+			}
+		}
+		else
+		{
+			// Pack if there is not enough space between this member and next.
+			if (index < ib_type.member_types.size() - 1)
+			{
+				uint32_t mbr_offset_next =
+				    base_offset + get_member_decoration(ib_type.self, index + 1, DecorationOffset);
+				if (declared_struct_size > mbr_offset_next - mbr_offset_curr)
+				{
+					for (uint32_t i = 0; i < mbr_type.member_types.size(); i++)
+					{
+						if (is_member_packable(mbr_type, i, mbr_offset_next))
+						{
+							set_extended_member_decoration(mbr_type.self, i, SPIRVCrossDecorationPacked);
+							set_extended_member_decoration(mbr_type.self, i, SPIRVCrossDecorationPackedType,
+							                               mbr_type.member_types[i]);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// TODO: Another sanity check for matrices. We currently do not support std140 matrices which need to be padded out per column.
@@ -2490,9 +2540,10 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 	if (mbr_type.vecsize == 1 || (is_matrix(mbr_type) && mbr_type.vecsize != 3))
 		return false;
 
-	// Only row-major matrices need to be packed.
-	if (is_matrix(mbr_type) && !has_member_decoration(ib_type.self, index, DecorationRowMajor))
-		return false;
+	// Pack if the member's offset doesn't conform to the type's usual
+	// alignment. For example, a float3 at offset 4.
+	if (mbr_offset_curr % get_declared_struct_member_alignment(ib_type, index))
+		return true;
 
 	if (is_array(mbr_type))
 	{
@@ -2509,16 +2560,11 @@ bool CompilerMSL::is_member_packable(SPIRType &ib_type, uint32_t index)
 	}
 	else
 	{
-		uint32_t mbr_offset_curr = get_member_decoration(ib_type.self, index, DecorationOffset);
-		// For vectors, pack if the member's offset doesn't conform to the
-		// type's usual alignment. For example, a float3 at offset 4.
-		if (!is_matrix(mbr_type) && (mbr_offset_curr % unpacked_mbr_size))
-			return true;
 		// Pack if there is not enough space between this member and next.
 		// If last member, only pack if it's a row-major matrix.
 		if (index < ib_type.member_types.size() - 1)
 		{
-			uint32_t mbr_offset_next = get_member_decoration(ib_type.self, index + 1, DecorationOffset);
+			uint32_t mbr_offset_next = base_offset + get_member_decoration(ib_type.self, index + 1, DecorationOffset);
 			return unpacked_mbr_size > mbr_offset_next - mbr_offset_curr;
 		}
 		else
@@ -2546,16 +2592,21 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 	{
 		// Special handling when storing to a float[] or float2[] in std140 layout.
 
-		auto &type = get<SPIRType>(get_extended_decoration(lhs_expression, SPIRVCrossDecorationPackedType));
+		uint32_t type_id = get_extended_decoration(lhs_expression, SPIRVCrossDecorationPackedType);
+		auto &type = get<SPIRType>(type_id);
 		string lhs = to_dereferenced_expression(lhs_expression);
 		string rhs = to_pointer_expression(rhs_expression);
+		uint32_t stride = get_decoration(type_id, DecorationArrayStride);
 
-		// Unpack the expression so we can store to it with a float or float2.
-		// It's still an l-value, so it's fine. Most other unpacking of expressions turn them into r-values instead.
-		if (is_scalar(type) && is_array(type))
-			lhs = enclose_expression(lhs) + ".x";
-		else if (is_vector(type) && type.vecsize == 2 && is_array(type))
-			lhs = enclose_expression(lhs) + ".xy";
+		if (is_array(type) && stride == 4 * type.width / 8)
+		{
+			// Unpack the expression so we can store to it with a float or float2.
+			// It's still an l-value, so it's fine. Most other unpacking of expressions turn them into r-values instead.
+			if (is_scalar(type))
+				lhs = enclose_expression(lhs) + ".x";
+			else if (is_vector(type) && type.vecsize == 2)
+				lhs = enclose_expression(lhs) + ".xy";
+		}
 
 		if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
 			statement(lhs, " = ", rhs, ";");
@@ -2568,13 +2619,18 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type, uint32_t packed_type_id)
 {
 	const SPIRType *packed_type = nullptr;
+	uint32_t stride = 0;
 	if (packed_type_id)
+	{
 		packed_type = &get<SPIRType>(packed_type_id);
+		stride = get_decoration(packed_type_id, DecorationArrayStride);
+	}
 
 	// float[] and float2[] cases are really just padding, so directly swizzle from the backing float4 instead.
-	if (packed_type && is_array(*packed_type) && is_scalar(*packed_type))
+	if (packed_type && is_array(*packed_type) && is_scalar(*packed_type) && stride == 4 * packed_type->width / 8)
 		return enclose_expression(expr_str) + ".x";
-	else if (packed_type && is_array(*packed_type) && is_vector(*packed_type) && packed_type->vecsize == 2)
+	else if (packed_type && is_array(*packed_type) && is_vector(*packed_type) && packed_type->vecsize == 2 &&
+	         stride == 4 * packed_type->width / 8)
 		return enclose_expression(expr_str) + ".xy";
 	else
 		return join(type_to_glsl(type), "(", expr_str, ")");
@@ -5653,7 +5709,8 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			td_line += ";";
 			add_typedef_line(td_line);
 		}
-		else if (is_array(membertype) && membertype.vecsize <= 2 && membertype.basetype != SPIRType::Struct)
+		else if (is_array(membertype) && membertype.vecsize <= 2 && membertype.basetype != SPIRType::Struct &&
+		         type_struct_member_array_stride(type, index) == 4 * membertype.width / 8)
 		{
 			// A "packed" float array, but we pad here instead to 4-vector.
 			override_type = membertype;
