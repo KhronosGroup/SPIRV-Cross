@@ -8489,9 +8489,15 @@ size_t CompilerMSL::get_declared_struct_member_alignment(const SPIRType &struct_
 			const SPIRType *packed_type = packed_type_id != 0 ? &get<SPIRType>(packed_type_id) : nullptr;
 			if (packed_type && is_array(*packed_type) && !is_matrix(*packed_type) &&
 			    packed_type->basetype != SPIRType::Struct)
-				return (packed_type->width / 8) * 4;
+			{
+				uint32_t stride = type_struct_member_array_stride(struct_type, index);
+				if (stride == (packed_type->width / 8) * 4)
+					return stride;
+				else
+					return packed_type->width / 8;
+			}
 			else
-				return (type.width / 8) * (type.columns == 3 ? 4 : type.columns);
+				return type.width / 8;
 		}
 		else
 			return (type.width / 8) * (type.vecsize == 3 ? 4 : type.vecsize);
