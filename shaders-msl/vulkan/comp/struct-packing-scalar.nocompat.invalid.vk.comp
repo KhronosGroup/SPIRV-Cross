@@ -29,7 +29,7 @@ struct S3
 
 struct S4
 {
-	vec2 c;
+    vec2 c;
 };
 
 struct Content
@@ -43,8 +43,15 @@ struct Content
     S3 m3;
     float m4;
 
-	S4 m3s[8];
+    S4 m3s[8];
 };
+
+layout(binding = 2, scalar) restrict buffer SSBO2
+{
+    float m0;
+    mat2 m1;
+    layout(row_major) mat3x2 m2;
+} ssbo_scalar2;
 
 layout(binding = 1, scalar) restrict buffer SSBO1
 {
@@ -61,7 +68,7 @@ layout(binding = 1, scalar) restrict buffer SSBO1
     layout(row_major) mat2x3 m6[4][2];
     layout(row_major) mat3x2 m7;
     float array[];
-} ssbo_430;
+} ssbo_scalar;
 
 layout(binding = 0, std140) restrict buffer SSBO0
 {
@@ -83,7 +90,10 @@ layout(binding = 0, std140) restrict buffer SSBO0
 
 void main()
 {
-    ssbo_430.content = ssbo_140.content;
-    ssbo_430.content.m1.a = ssbo_430.m2[1] * ssbo_430.content.m0.a[0];	// test packed matrix access
+    ssbo_scalar.content = ssbo_140.content;
+    ssbo_scalar.content.m1.a = ssbo_scalar.m2[1] * ssbo_scalar.content.m0.a[0];	// test packed matrix access
+    ssbo_scalar.m0 = ssbo_scalar2.m1;
+    ssbo_scalar2.m1 = ssbo_scalar.m4;
+    ssbo_scalar2.m2 = ssbo_scalar.m3;
 }
 
