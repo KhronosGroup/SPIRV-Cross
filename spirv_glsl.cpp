@@ -11957,6 +11957,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		uint32_t var = block.dominated_variables[i];
 		get<SPIRVariable>(var).deferred_declaration = rearm_dominated_variables[i];
 	}
+
+	// Just like for deferred declaration, we need to forget about loop variable enable
+	// if our block chain is reinstantiated later.
+	for (auto &var_id : block.loop_variables)
+		get<SPIRVariable>(var_id).loop_variable_enable = false;
 }
 
 void CompilerGLSL::begin_scope()
