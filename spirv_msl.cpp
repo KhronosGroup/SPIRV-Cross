@@ -6165,8 +6165,10 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 			                  execution.output_vertices, ") ]] vertex");
 		break;
 	case ExecutionModelFragment:
-		entry_type =
-		    execution.flags.get(ExecutionModeEarlyFragmentTests) ? "[[ early_fragment_tests ]] fragment" : "fragment";
+		entry_type = execution.flags.get(ExecutionModeEarlyFragmentTests) ||
+		                     execution.flags.get(ExecutionModePostDepthCoverage) ?
+		                 "[[ early_fragment_tests ]] fragment" :
+		                 "fragment";
 		break;
 	case ExecutionModelTessellationControl:
 		if (!msl_options.supports_msl_version(1, 2))
@@ -6330,6 +6332,7 @@ string CompilerMSL::entry_point_arg_stage_in()
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
+	SmallVector<pair<SPIRVariable *, BuiltIn>, 8> active_builtins;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
 
@@ -6343,6 +6346,9 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			// Relevant for multiple entry-point modules which might declare unused builtins.
 			if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
 				return;
+
+			// Remember this variable. We may need to correct its type.
+			active_builtins.push_back(make_pair(&var, bi_type));
 
 			// These builtins are emitted specially. If we pass this branch, the builtin directly matches
 			// a MSL builtin.
@@ -6363,10 +6369,25 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 					ep_args += ", ";
 
 				ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
-				ep_args += " [[" + builtin_qualifier(bi_type) + "]]";
+				ep_args += " [[" + builtin_qualifier(bi_type);
+				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
+				{
+					if (!msl_options.supports_msl_version(2))
+						SPIRV_CROSS_THROW("Post-depth coverage requires Metal 2.0.");
+					if (!msl_options.is_ios())
+						SPIRV_CROSS_THROW("Post-depth coverage is only supported on iOS.");
+					ep_args += ", post_depth_coverage";
+				}
+				ep_args += "]]";
 			}
 		}
 	});
+
+	// Correct the types of all encountered active builtins. We couldn't do this before
+	// because ensure_correct_builtin_type() may increase the bound, which isn't allowed
+	// while iterating over IDs.
+	for (auto &var : active_builtins)
+		var.first->basetype = ensure_correct_builtin_type(var.first->basetype, var.second);
 
 	// Vertex and instance index built-ins
 	if (needs_vertex_idx_arg)
