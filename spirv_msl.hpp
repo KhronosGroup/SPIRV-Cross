@@ -410,6 +410,8 @@ protected:
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
+	void emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t result_id, uint32_t op,
+	                                           const uint32_t *args, uint32_t count) override;
 	void emit_header() override;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
