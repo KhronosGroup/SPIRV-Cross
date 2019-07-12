@@ -2629,7 +2629,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			if (transpose)
 			{
 				lhs_e->need_transpose = false;
-				if (rhs_e) rhs_e->need_transpose = !rhs_e->need_transpose;
+				if (rhs_e)
+					rhs_e->need_transpose = !rhs_e->need_transpose;
 				lhs = to_dereferenced_expression(lhs_expression);
 				rhs = to_pointer_expression(rhs_expression);
 			}
@@ -2638,7 +2639,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			if (transpose)
 			{
 				lhs_e->need_transpose = true;
-				if (rhs_e) rhs_e->need_transpose = !rhs_e->need_transpose;
+				if (rhs_e)
+					rhs_e->need_transpose = !rhs_e->need_transpose;
 			}
 		}
 		else if (is_array(type) && stride == 4 * type.width / 8)
