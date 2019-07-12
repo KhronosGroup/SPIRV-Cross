@@ -5,6 +5,12 @@
 
 using namespace metal;
 
+struct SSBO
+{
+    uint4 u;
+    int4 i;
+};
+
 // Implementation of the GLSL findLSB() function
 template<typename T>
 T spvFindLSB(T x)
@@ -27,21 +33,21 @@ T spvFindUMSB(T x)
     return select(clz(T(0)) - (clz(x) + T(1)), T(-1), x == T(0));
 }
 
-kernel void main0()
+kernel void main0(device SSBO& _4 [[buffer(0)]])
 {
-    int signed_value = 0;
-    uint unsigned_value = 0u;
-    int s = extract_bits(signed_value, 5, 20);
-    uint u = extract_bits(unsigned_value, 6, 21);
-    s = insert_bits(s, 40, 5, 4);
-    u = insert_bits(u, 60u, 5, 4);
-    u = reverse_bits(u);
-    s = reverse_bits(s);
-    int v0 = popcount(u);
-    int v1 = popcount(s);
-    int v2 = int(spvFindUMSB(u));
-    int v3 = spvFindSMSB(s);
-    int v4 = int(spvFindLSB(u));
-    int v5 = spvFindLSB(s);
+    uint4 _19 = _4.u;
+    int4 _20 = _4.i;
+    _4.u = spvFindLSB(_19);
+    _4.i = int4(spvFindLSB(_19));
+    _4.u = uint4(spvFindLSB(_20));
+    _4.i = spvFindLSB(_20);
+    _4.u = spvFindUMSB(_19);
+    _4.i = int4(spvFindUMSB(_19));
+    _4.u = spvFindUMSB(uint4(_20));
+    _4.i = int4(spvFindUMSB(uint4(_20)));
+    _4.u = uint4(spvFindSMSB(int4(_19)));
+    _4.i = spvFindSMSB(int4(_19));
+    _4.u = uint4(spvFindSMSB(_20));
+    _4.i = spvFindSMSB(_20);
 }
 

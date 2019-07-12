@@ -3237,8 +3237,11 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		SPIRV_CROSS_THROW("packDouble2x32/unpackDouble2x32 not supported in HLSL.");
 
 	case GLSLstd450FindILsb:
-		emit_unary_func_op(result_type, id, args[0], "firstbitlow");
+	{
+		auto basetype = expression_type(args[0]).basetype;
+		emit_unary_func_op_cast(result_type, id, args[0], "firstbitlow", basetype, basetype);
 		break;
+	}
 
 	case GLSLstd450FindSMsb:
 		emit_unary_func_op_cast(result_type, id, args[0], "firstbithigh", int_type, int_type);
