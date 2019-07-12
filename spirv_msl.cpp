@@ -2629,7 +2629,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			if (transpose)
 			{
 				lhs_e->need_transpose = false;
-				if (rhs_e) rhs_e->need_transpose = !rhs_e->need_transpose;
+				if (rhs_e)
+					rhs_e->need_transpose = !rhs_e->need_transpose;
 				lhs = to_dereferenced_expression(lhs_expression);
 				rhs = to_pointer_expression(rhs_expression);
 			}
@@ -2638,7 +2639,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			if (transpose)
 			{
 				lhs_e->need_transpose = true;
-				if (rhs_e) rhs_e->need_transpose = !rhs_e->need_transpose;
+				if (rhs_e)
+					rhs_e->need_transpose = !rhs_e->need_transpose;
 			}
 		}
 		else if (is_array(type) && stride == 4 * type.width / 8)
@@ -2787,7 +2789,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindILsb:
 			statement("// Implementation of the GLSL findLSB() function");
 			statement("template<typename T>");
-			statement("T findLSB(T x)");
+			statement("T spvFindLSB(T x)");
 			begin_scope();
 			statement("return select(ctz(x), T(-1), x == T(0));");
 			end_scope();
@@ -2797,7 +2799,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindUMsb:
 			statement("// Implementation of the unsigned GLSL findMSB() function");
 			statement("template<typename T>");
-			statement("T findUMSB(T x)");
+			statement("T spvFindUMSB(T x)");
 			begin_scope();
 			statement("return select(clz(T(0)) - (clz(x) + T(1)), T(-1), x == T(0));");
 			end_scope();
@@ -2807,7 +2809,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindSMsb:
 			statement("// Implementation of the signed GLSL findMSB() function");
 			statement("template<typename T>");
-			statement("T findSMSB(T x)");
+			statement("T spvFindSMSB(T x)");
 			begin_scope();
 			statement("T v = select(x, T(-1) - x, x < T(0));");
 			statement("return select(clz(T(0)) - (clz(v) + T(1)), T(-1), v == T(0));");
@@ -4688,12 +4690,20 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		emit_unary_func_op(result_type, id, args[0], "rint");
 		break;
 
+	case GLSLstd450FindILsb:
+	{
+		// In this template version of findLSB, we return T.
+		auto basetype = expression_type(args[0]).basetype;
+		emit_unary_func_op_cast(result_type, id, args[0], "spvFindLSB", basetype, basetype);
+		break;
+	}
+
 	case GLSLstd450FindSMsb:
-		emit_unary_func_op_cast(result_type, id, args[0], "findSMSB", int_type, int_type);
+		emit_unary_func_op_cast(result_type, id, args[0], "spvFindSMSB", int_type, int_type);
 		break;
 
 	case GLSLstd450FindUMsb:
-		emit_unary_func_op_cast(result_type, id, args[0], "findUMSB", uint_type, uint_type);
+		emit_unary_func_op_cast(result_type, id, args[0], "spvFindUMSB", uint_type, uint_type);
 		break;
 
 	case GLSLstd450PackSnorm4x8:

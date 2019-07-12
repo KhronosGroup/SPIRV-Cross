@@ -5445,7 +5445,8 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 
 	// Bit-fiddling
 	case GLSLstd450FindILsb:
-		emit_unary_func_op(result_type, id, args[0], "findLSB");
+		// findLSB always returns int.
+		emit_unary_func_op_cast(result_type, id, args[0], "findLSB", expression_type(args[0]).basetype, int_type);
 		break;
 
 	case GLSLstd450FindSMsb:
