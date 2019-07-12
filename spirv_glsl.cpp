@@ -4493,7 +4493,7 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 	}
 
 	string mix_op;
-	bool has_boolean_mix = backend.boolean_mix_support &&
+	bool has_boolean_mix = *backend.boolean_mix_function &&
 	                       ((options.es && options.version >= 310) || (!options.es && options.version >= 450));
 	bool trivial_mix = to_trivial_mix_op(restype, mix_op, left, right, lerp);
 
@@ -4523,6 +4523,8 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 		inherit_expression_dependencies(id, right);
 		inherit_expression_dependencies(id, lerp);
 	}
+	else if (lerptype.basetype == SPIRType::Boolean)
+		emit_trinary_func_op(result_type, id, left, right, lerp, backend.boolean_mix_function);
 	else
 		emit_trinary_func_op(result_type, id, left, right, lerp, "mix");
 }

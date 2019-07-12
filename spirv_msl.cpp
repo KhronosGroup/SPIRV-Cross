@@ -757,6 +757,7 @@ string CompilerMSL::compile()
 	backend.basic_int16_type = "short";
 	backend.basic_uint16_type = "ushort";
 	backend.discard_literal = "discard_fragment()";
+	backend.boolean_mix_function = "select";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
 	backend.use_initializer_list = true;
@@ -765,7 +766,6 @@ string CompilerMSL::compile()
 	backend.unsized_array_supported = false;
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
-	backend.boolean_mix_support = false;
 	backend.allow_truncated_access_chain = true;
 	backend.array_is_value_type = false;
 	backend.comparison_image_samples_scalar = true;

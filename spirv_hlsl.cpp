@@ -4792,13 +4792,13 @@ string CompilerHLSL::compile()
 	backend.uint16_t_literal_suffix = "u";
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
+	backend.boolean_mix_function = "";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = true;
 	backend.unsized_array_supported = true;
 	backend.explicit_struct_type = false;
 	backend.use_initializer_list = true;
 	backend.use_constructor_splatting = false;
-	backend.boolean_mix_support = false;
 	backend.can_swizzle_scalar = true;
 	backend.can_declare_struct_inline = false;
 	backend.can_declare_arrays_inline = false;
