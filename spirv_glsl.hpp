@@ -369,6 +369,7 @@ protected:
 	struct BackendVariations
 	{
 		std::string discard_literal = "discard";
+		std::string demote_literal = "demote";
 		std::string null_pointer_literal = "";
 		bool float_literal_suffix = false;
 		bool double_literal_suffix = true;
