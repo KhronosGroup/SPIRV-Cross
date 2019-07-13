@@ -6290,6 +6290,12 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("Stencil export not supported in GLES.");
 	}
 
+	case BuiltInDeviceIndex:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for device group support.");
+		require_extension_internal("GL_EXT_device_group");
+		return "gl_DeviceIndex";
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}

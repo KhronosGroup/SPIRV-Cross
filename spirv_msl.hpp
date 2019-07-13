@@ -193,12 +193,14 @@ public:
 		uint32_t buffer_size_buffer_index = 25;
 		uint32_t view_mask_buffer_index = 24;
 		uint32_t shader_input_wg_index = 0;
+		uint32_t device_index = 0;
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
 		bool tess_domain_origin_lower_left = false;
 		bool multiview = false;
+		bool view_index_from_device_index = false;
 
 		// Enable use of MSL 2.0 indirect argument buffers.
 		// MSL 2.0 must also be enabled.
@@ -274,7 +276,7 @@ public:
 	// containing the view mask for the current multiview subpass.
 	bool needs_view_mask_buffer() const
 	{
-		return msl_options.multiview;
+		return msl_options.multiview && !msl_options.view_index_from_device_index;
 	}
 
 	// Provide feedback to calling API to allow it to pass an output
