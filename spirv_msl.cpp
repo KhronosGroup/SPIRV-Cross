@@ -105,7 +105,7 @@ void CompilerMSL::build_implicit_builtins()
 	    active_input_builtins.get(BuiltInSubgroupLtMask);
 	bool need_subgroup_ge_mask = !msl_options.is_ios() && (active_input_builtins.get(BuiltInSubgroupGeMask) ||
 	                                                       active_input_builtins.get(BuiltInSubgroupGtMask));
-	bool need_multiview = get_execution_model() == ExecutionModelVertex &&
+	bool need_multiview = get_execution_model() == ExecutionModelVertex && !msl_options.view_index_from_device_index &&
 	                      (msl_options.multiview || active_input_builtins.get(BuiltInViewIndex));
 	if (need_subpass_input || need_sample_pos || need_subgroup_mask || need_vertex_params || need_tesc_params ||
 	    need_multiview || needs_subgroup_invocation_id)
@@ -316,27 +316,6 @@ void CompilerMSL::build_implicit_builtins()
 				set_decoration(var_id, DecorationBuiltIn, BuiltInInstanceIndex);
 				builtin_instance_idx_id = var_id;
 				mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var_id);
-
-				if (need_multiview)
-				{
-					// Multiview shaders are not allowed to write to gl_Layer, ostensibly because
-					// it is implicitly written from gl_ViewIndex, but we have to do that explicitly.
-					// Note that we can't just abuse gl_ViewIndex for this purpose: it's an input, but
-					// gl_Layer is an output in vertex-pipeline shaders.
-					uint32_t type_ptr_out_id = ir.increase_bound_by(2);
-					SPIRType uint_type_ptr_out;
-					uint_type_ptr_out = uint_type;
-					uint_type_ptr_out.pointer = true;
-					uint_type_ptr_out.parent_type = type_id;
-					uint_type_ptr_out.storage = StorageClassOutput;
-					auto &ptr_out_type = set<SPIRType>(type_ptr_out_id, uint_type_ptr_out);
-					ptr_out_type.self = type_id;
-					var_id = type_ptr_out_id + 1;
-					set<SPIRVariable>(var_id, type_ptr_out_id, StorageClassOutput);
-					set_decoration(var_id, DecorationBuiltIn, BuiltInLayer);
-					builtin_layer_id = var_id;
-					mark_implicit_builtin(StorageClassOutput, BuiltInLayer, var_id);
-				}
 			}
 
 			if (need_vertex_params && !has_base_instance)
@@ -348,6 +327,27 @@ void CompilerMSL::build_implicit_builtins()
 				set_decoration(var_id, DecorationBuiltIn, BuiltInBaseInstance);
 				builtin_base_instance_id = var_id;
 				mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var_id);
+			}
+
+			if (need_multiview)
+			{
+				// Multiview shaders are not allowed to write to gl_Layer, ostensibly because
+				// it is implicitly written from gl_ViewIndex, but we have to do that explicitly.
+				// Note that we can't just abuse gl_ViewIndex for this purpose: it's an input, but
+				// gl_Layer is an output in vertex-pipeline shaders.
+				uint32_t type_ptr_out_id = ir.increase_bound_by(2);
+				SPIRType uint_type_ptr_out;
+				uint_type_ptr_out = uint_type;
+				uint_type_ptr_out.pointer = true;
+				uint_type_ptr_out.parent_type = type_id;
+				uint_type_ptr_out.storage = StorageClassOutput;
+				auto &ptr_out_type = set<SPIRType>(type_ptr_out_id, uint_type_ptr_out);
+				ptr_out_type.self = type_id;
+				uint32_t var_id = type_ptr_out_id + 1;
+				set<SPIRVariable>(var_id, type_ptr_out_id, StorageClassOutput);
+				set_decoration(var_id, DecorationBuiltIn, BuiltInLayer);
+				builtin_layer_id = var_id;
+				mark_implicit_builtin(StorageClassOutput, BuiltInLayer, var_id);
 			}
 
 			if (need_multiview && !has_view_idx)
@@ -6400,7 +6400,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			    bi_type != BuiltInClipDistance && bi_type != BuiltInCullDistance && bi_type != BuiltInSubgroupEqMask &&
 			    bi_type != BuiltInBaryCoordNV && bi_type != BuiltInBaryCoordNoPerspNV &&
 			    bi_type != BuiltInSubgroupGeMask && bi_type != BuiltInSubgroupGtMask &&
-			    bi_type != BuiltInSubgroupLeMask && bi_type != BuiltInSubgroupLtMask &&
+			    bi_type != BuiltInSubgroupLeMask && bi_type != BuiltInSubgroupLtMask && bi_type != BuiltInDeviceIndex &&
 			    ((get_execution_model() == ExecutionModelFragment && msl_options.multiview) ||
 			     bi_type != BuiltInViewIndex) &&
 			    (get_execution_model() == ExecutionModelGLCompute ||
@@ -6969,6 +6969,17 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = 0;");
 					});
 				}
+				else if (msl_options.view_index_from_device_index)
+				{
+					// In this case, we take the view index from that of the device we're running on.
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+						          msl_options.device_index, ";");
+					});
+					// We actually don't want to set the render_target_array_index here.
+					// Since every physical device is rendering a different view,
+					// there's no need for layered rendering here.
+				}
 				else if (get_execution_model() == ExecutionModelFragment)
 				{
 					// Because we adjusted the view index in the vertex shader, we have to
@@ -6997,6 +7008,15 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						          to_expression(view_mask_buffer_id), "[0];");
 					});
 				}
+				break;
+			case BuiltInDeviceIndex:
+				// Metal pipelines belong to the devices which create them, so we'll
+				// need to create a MTLPipelineState for every MTLDevice in a grouped
+				// VkDevice. We can assume, then, that the device index is constant.
+				entry_func.fixup_hooks_in.push_back([=]() {
+					statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+					          msl_options.device_index, ";");
+				});
 				break;
 			default:
 				break;
@@ -8495,6 +8515,14 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 	case BuiltInViewIndex:
 		return "uint";
 
+	case BuiltInHelperInvocation:
+		return "bool";
+
+	case BuiltInBaryCoordNV:
+	case BuiltInBaryCoordNoPerspNV:
+		// Use the type as declared, can be 1, 2 or 3 components.
+		return type_to_glsl(get_variable_data_type(get<SPIRVariable>(id)));
+
 	// Fragment function out
 	case BuiltInFragDepth:
 		return "float";
@@ -8521,13 +8549,8 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 	case BuiltInSubgroupLtMask:
 		return "uint4";
 
-	case BuiltInHelperInvocation:
-		return "bool";
-
-	case BuiltInBaryCoordNV:
-	case BuiltInBaryCoordNoPerspNV:
-		// Use the type as declared, can be 1, 2 or 3 components.
-		return type_to_glsl(get_variable_data_type(get<SPIRVariable>(id)));
+	case BuiltInDeviceIndex:
+		return "int";
 
 	default:
 		return "unsupported-built-in-type";
