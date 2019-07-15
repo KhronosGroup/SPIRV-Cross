@@ -4884,6 +4884,40 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	}
 }
 
+void CompilerMSL::emit_spv_amd_shader_trinary_minmax_op(uint32_t result_type, uint32_t id, uint32_t eop,
+                                                        const uint32_t *args, uint32_t count)
+{
+	enum AMDShaderTrinaryMinMax
+	{
+		FMin3AMD = 1,
+		UMin3AMD = 2,
+		SMin3AMD = 3,
+		FMax3AMD = 4,
+		UMax3AMD = 5,
+		SMax3AMD = 6,
+		FMid3AMD = 7,
+		UMid3AMD = 8,
+		SMid3AMD = 9
+	};
+
+	if (!msl_options.supports_msl_version(2, 1))
+		SPIRV_CROSS_THROW("Trinary min/max functions require MSL 2.1.");
+
+	auto op = static_cast<AMDShaderTrinaryMinMax>(eop);
+
+	switch (op)
+	{
+	case FMid3AMD:
+	case UMid3AMD:
+	case SMid3AMD:
+		emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "median3");
+		break;
+	default:
+		CompilerGLSL::emit_spv_amd_shader_trinary_minmax_op(result_type, id, eop, args, count);
+		break;
+	}
+}
+
 // Emit a structure declaration for the specified interface variable.
 void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 {
