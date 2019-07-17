@@ -4397,6 +4397,66 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	// SPV_INTEL_shader_integer_functions2
+	case OpUCountLeadingZerosINTEL:
+		MSL_UFOP(clz);
+		break;
+
+	case OpUCountTrailingZerosINTEL:
+		MSL_UFOP(ctz);
+		break;
+
+	case OpAbsISubINTEL:
+	case OpAbsUSubINTEL:
+		MSL_BFOP(absdiff);
+		break;
+
+	case OpIAddSatINTEL:
+	case OpUAddSatINTEL:
+		MSL_BFOP(addsat);
+		break;
+
+	case OpIAverageINTEL:
+	case OpUAverageINTEL:
+		MSL_BFOP(hadd);
+		break;
+
+	case OpIAverageRoundedINTEL:
+	case OpUAverageRoundedINTEL:
+		MSL_BFOP(rhadd);
+		break;
+
+	case OpISubSatINTEL:
+	case OpUSubSatINTEL:
+		MSL_BFOP(subsat);
+		break;
+
+	case OpIMul32x16INTEL:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t a = ops[2], b = ops[3];
+		bool forward = should_forward(a) && should_forward(b);
+		emit_op(result_type, id, join("int(short(", to_expression(a), ")) * int(short(", to_expression(b), "))"),
+		        forward);
+		inherit_expression_dependencies(id, a);
+		inherit_expression_dependencies(id, b);
+		break;
+	}
+
+	case OpUMul32x16INTEL:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t a = ops[2], b = ops[3];
+		bool forward = should_forward(a) && should_forward(b);
+		emit_op(result_type, id, join("uint(ushort(", to_expression(a), ")) * uint(ushort(", to_expression(b), "))"),
+		        forward);
+		inherit_expression_dependencies(id, a);
+		inherit_expression_dependencies(id, b);
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
