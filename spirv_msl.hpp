@@ -405,6 +405,7 @@ protected:
 		SPVFuncImplSubgroupAllEqual,
 		SPVFuncImplReflectScalar,
 		SPVFuncImplRefractScalar,
+		SPVFuncImplFaceForwardScalar,
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
