@@ -1772,6 +1772,16 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+
+	if (requires_scalar_faceforward)
+	{
+		// FP16/FP64? No templates in HLSL.
+		statement("float SPIRV_Cross_FaceForward(float n, float i, float nref)");
+		begin_scope();
+		statement("return i * nref < 0.0 ? n : -n;");
+		end_scope();
+		statement("");
+	}
 }
 
 string CompilerHLSL::layout_for_member(const SPIRType &type, uint32_t index)
@@ -3316,6 +3326,20 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 				force_recompile();
 			}
 			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "SPIRV_Cross_Refract");
+		}
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+
+	case GLSLstd450FaceForward:
+		if (get<SPIRType>(result_type).vecsize == 1)
+		{
+			if (!requires_scalar_faceforward)
+			{
+				requires_scalar_faceforward = true;
+				force_recompile();
+			}
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "SPIRV_Cross_FaceForward");
 		}
 		else
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);

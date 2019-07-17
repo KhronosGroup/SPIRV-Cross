@@ -3345,6 +3345,16 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplFaceForwardScalar:
+			// Metal does not support scalar versions of these functions.
+			statement("template<typename T>");
+			statement("inline T spvFaceForward(T n, T i, T nref)");
+			begin_scope();
+			statement("return i * nref < T(0) ? n : -n;");
+			end_scope();
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -4934,6 +4944,13 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	case GLSLstd450Refract:
 		if (get<SPIRType>(result_type).vecsize == 1)
 			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "spvRefract");
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+
+	case GLSLstd450FaceForward:
+		if (get<SPIRType>(result_type).vecsize == 1)
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "spvFaceForward");
 		else
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
@@ -9058,6 +9075,14 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 				auto &type = compiler.get<SPIRType>(args[0]);
 				if (type.vecsize == 1)
 					return SPVFuncImplRefractScalar;
+				else
+					return SPVFuncImplNone;
+			}
+			case GLSLstd450FaceForward:
+			{
+				auto &type = compiler.get<SPIRType>(args[0]);
+				if (type.vecsize == 1)
+					return SPVFuncImplFaceForwardScalar;
 				else
 					return SPVFuncImplNone;
 			}
