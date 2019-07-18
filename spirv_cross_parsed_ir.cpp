@@ -749,4 +749,36 @@ Meta *ParsedIR::find_meta(uint32_t id)
 		return nullptr;
 }
 
+ParsedIR::LoopLock ParsedIR::create_loop_lock() const
+{
+	return ParsedIR::LoopLock(&loop_iteration_depth);
+}
+
+ParsedIR::LoopLock::~LoopLock()
+{
+	if (lock)
+		(*lock)--;
+}
+
+ParsedIR::LoopLock::LoopLock(uint32_t *lock_)
+	: lock(lock_)
+{
+	if (lock)
+		(*lock)++;
+}
+
+ParsedIR::LoopLock::LoopLock(LoopLock &&other) SPIRV_CROSS_NOEXCEPT
+{
+	*this = move(other);
+}
+
+ParsedIR::LoopLock &ParsedIR::LoopLock::operator=(LoopLock &&other) SPIRV_CROSS_NOEXCEPT
+{
+	if (lock)
+		(*lock)--;
+	lock = other.lock;
+	other.lock = nullptr;
+	return *this;
+}
+
 } // namespace SPIRV_CROSS_NAMESPACE

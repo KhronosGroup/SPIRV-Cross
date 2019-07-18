@@ -143,21 +143,39 @@ public:
 	void add_typed_id(Types type, uint32_t id);
 	void remove_typed_id(Types type, uint32_t id);
 
+	class LoopLock
+	{
+	public:
+		explicit LoopLock(uint32_t *counter);
+		LoopLock(const LoopLock &) = delete;
+		void operator=(const LoopLock &) = delete;
+		LoopLock(LoopLock &&other) SPIRV_CROSS_NOEXCEPT;
+		LoopLock &operator=(LoopLock &&other) SPIRV_CROSS_NOEXCEPT;
+		~LoopLock();
+
+	private:
+		uint32_t *lock;
+	};
+
+	// This must be held while iterating over a type ID array.
+	// It will be undefined if someone calls set<>() while we're iterating over a data structure.
+	LoopLock create_loop_lock() const;
+
 	template <typename T, typename Op>
 	void for_each_typed_id(const Op &op)
 	{
-		loop_iteration_depth++;
+		auto loop_lock = create_loop_lock();
 		for (auto &id : ids_for_type[T::type])
 		{
 			if (ids[id].get_type() == static_cast<Types>(T::type))
 				op(id, get<T>(id));
 		}
-		loop_iteration_depth--;
 	}
 
 	template <typename T, typename Op>
 	void for_each_typed_id(const Op &op) const
 	{
+		auto loop_lock = create_loop_lock();
 		for (auto &id : ids_for_type[T::type])
 		{
 			if (ids[id].get_type() == static_cast<Types>(T::type))
@@ -194,7 +212,7 @@ private:
 		return variant_get<T>(ids[id]);
 	}
 
-	uint32_t loop_iteration_depth = 0;
+	mutable uint32_t loop_iteration_depth = 0;
 	std::string empty_string;
 	Bitset cleared_bitset;
 };

@@ -1040,6 +1040,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 	SpecializationConstant wg_x, wg_y, wg_z;
 	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
+	auto loop_lock = ir.create_loop_lock();
 	for (auto &id_ : ir.ids_for_constant_or_type)
 	{
 		auto &id = ir.ids[id_];
@@ -1821,7 +1822,7 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 	string packing_offset;
 	bool is_push_constant = type.storage == StorageClassPushConstant;
 
-	if ((has_extended_decoration(type.self, SPIRVCrossDecorationPacked) || is_push_constant) &&
+	if ((has_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset) || is_push_constant) &&
 	    has_member_decoration(type.self, index, DecorationOffset))
 	{
 		uint32_t offset = memb[index].offset - base_offset;
@@ -1856,7 +1857,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 		if (type.array.empty())
 		{
 			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
-				set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
+				set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 			else
 				SPIRV_CROSS_THROW("cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
 
@@ -1942,7 +1943,7 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 			auto &type = get<SPIRType>(var.basetype);
 
 			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset, layout.start, layout.end))
-				set_extended_decoration(type.self, SPIRVCrossDecorationPacked);
+				set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 			else
 				SPIRV_CROSS_THROW(
 				    "root constant cbuffer cannot be expressed with either HLSL packing layout or packoffset.");

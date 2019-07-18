@@ -267,7 +267,9 @@ protected:
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);
 	virtual void emit_uniform(const SPIRVariable &var);
-	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t packed_type_id);
+	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type,
+	                                           uint32_t physical_type_id,
+	                                           bool packed_type);
 
 	StringStream<> buffer;
 
@@ -347,8 +349,9 @@ protected:
 
 	virtual bool is_non_native_row_major_matrix(uint32_t id);
 	virtual bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index);
-	bool member_is_packed_type(const SPIRType &type, uint32_t index) const;
-	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, bool is_packed);
+	bool member_is_remapped_physical_type(const SPIRType& type, uint32_t index) const;
+	bool member_is_packed_physical_type(const SPIRType& type, uint32_t index) const;
+	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id, bool is_packed);
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
