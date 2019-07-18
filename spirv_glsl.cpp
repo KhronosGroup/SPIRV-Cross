@@ -2491,7 +2491,7 @@ void CompilerGLSL::emit_resources()
 	// spec op expressions will redirect to the constant name.
 	//
 	{
-		auto loop_lock = ir.create_loop_lock();
+		auto loop_lock = ir.create_loop_hard_lock();
 		for (auto &id_ : ir.ids_for_constant_or_type)
 		{
 			auto &id = ir.ids[id_];
@@ -12334,7 +12334,7 @@ void CompilerGLSL::reorder_type_alias()
 	// Reorder declaration of types so that the master of the type alias is always emitted first.
 	// We need this in case a type B depends on type A (A must come before in the vector), but A is an alias of a type Abuffer, which
 	// means declaration of A doesn't happen (yet), and order would be B, ABuffer and not ABuffer, B. Fix this up here.
-	auto loop_lock = ir.create_loop_lock();
+	auto loop_lock = ir.create_loop_hard_lock();
 
 	auto &type_ids = ir.ids_for_type[TypeType];
 	for (auto alias_itr = begin(type_ids); alias_itr != end(type_ids); ++alias_itr)

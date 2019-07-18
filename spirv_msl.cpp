@@ -2527,7 +2527,12 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 	// We're in deep trouble, and we need to create a new PhysicalType which matches up with what we expect.
 	// A lot of work goes here ...
-	SPIRV_CROSS_THROW("Unimplemented custom physical type case.");
+
+	auto physical_type = get<SPIRType>(ib_type.member_types[index]);
+	physical_type.vecsize = 4;
+	uint32_t type_id = ir.increase_bound_by(1);
+	set<SPIRType>(type_id, physical_type);
+	set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypeID, type_id);
 }
 
 uint32_t CompilerMSL::get_member_packed_type(SPIRType &type, uint32_t index)
@@ -3372,7 +3377,11 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	unordered_set<uint32_t> declared_structs;
 	unordered_set<uint32_t> aligned_structs;
 
-	auto loop_lock = ir.create_loop_lock();
+	// Very particular use of the soft loop lock.
+	// align_struct may need to create custom types on the fly, but we don't care about
+	// these types for purpose of iterating over them in ir.ids_for_type and friends.
+	auto loop_lock = ir.create_loop_soft_lock();
+
 	for (auto &id_ : ir.ids_for_constant_or_type)
 	{
 		auto &id = ir.ids[id_];
@@ -5811,17 +5820,9 @@ void CompilerMSL::emit_fixup()
 string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
                                      const string &qualifier)
 {
-	//auto &membertype = get<SPIRType>(member_type_id);
 	if (member_is_remapped_physical_type(type, index))
 		member_type_id = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypeID);
 	auto &physical_type = get<SPIRType>(member_type_id);
-
-	// If this member requires padding to maintain alignment, emit a dummy padding member before it.
-	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPadding))
-	{
-		uint32_t pad_len = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationPadding);
-		statement("char _m", index, "_pad", "[", to_string(pad_len), "];");
-	}
 
 	// If this member is packed, mark it as so.
 	string pack_pfx;
@@ -5886,6 +5887,13 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
                                      const string &qualifier, uint32_t)
 {
+	// If this member requires padding to maintain its declared offset, emit a dummy padding member before it.
+	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPadding))
+	{
+		uint32_t pad_len = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationPadding);
+		statement("char _m", index, "_pad", "[", to_string(pad_len), "];");
+	}
+
 	statement(to_struct_member(type, member_type_id, index, qualifier));
 }
 

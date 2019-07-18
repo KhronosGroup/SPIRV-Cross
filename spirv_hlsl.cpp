@@ -1040,7 +1040,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 	SpecializationConstant wg_x, wg_y, wg_z;
 	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
-	auto loop_lock = ir.create_loop_lock();
+	auto loop_lock = ir.create_loop_hard_lock();
 	for (auto &id_ : ir.ids_for_constant_or_type)
 	{
 		auto &id = ir.ids[id_];

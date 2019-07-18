@@ -158,13 +158,20 @@ public:
 	};
 
 	// This must be held while iterating over a type ID array.
-	// It will be undefined if someone calls set<>() while we're iterating over a data structure.
-	LoopLock create_loop_lock() const;
+	// It is undefined if someone calls set<>() while we're iterating over a data structure, so we must
+	// make sure that this case is avoided.
+
+	// If we have a hard lock, it is an error to call set<>(), and an exception is thrown.
+	// If we have a soft lock, we silently ignore any additions to the typed arrays.
+	// This should only be used for physical ID remapping where we need to create an ID, but we will never
+	// care about iterating over them.
+	LoopLock create_loop_hard_lock() const;
+	LoopLock create_loop_soft_lock() const;
 
 	template <typename T, typename Op>
 	void for_each_typed_id(const Op &op)
 	{
-		auto loop_lock = create_loop_lock();
+		auto loop_lock = create_loop_hard_lock();
 		for (auto &id : ids_for_type[T::type])
 		{
 			if (ids[id].get_type() == static_cast<Types>(T::type))
@@ -175,7 +182,7 @@ public:
 	template <typename T, typename Op>
 	void for_each_typed_id(const Op &op) const
 	{
-		auto loop_lock = create_loop_lock();
+		auto loop_lock = create_loop_hard_lock();
 		for (auto &id : ids_for_type[T::type])
 		{
 			if (ids[id].get_type() == static_cast<Types>(T::type))
@@ -212,7 +219,8 @@ private:
 		return variant_get<T>(ids[id]);
 	}
 
-	mutable uint32_t loop_iteration_depth = 0;
+	mutable uint32_t loop_iteration_depth_hard = 0;
+	mutable uint32_t loop_iteration_depth_soft = 0;
 	std::string empty_string;
 	Bitset cleared_bitset;
 };
