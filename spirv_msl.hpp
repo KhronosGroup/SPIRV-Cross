@@ -517,6 +517,14 @@ protected:
 	uint32_t get_declared_type_array_stride_msl(const SPIRType &type, bool packed) const;
 	uint32_t get_declared_type_matrix_stride_msl(const SPIRType &type, bool packed) const;
 	uint32_t get_declared_type_alignment_msl(const SPIRType &type, bool packed) const;
+
+	uint32_t get_declared_struct_member_size_msl(const SPIRType &struct_type, uint32_t index) const;
+	uint32_t get_declared_struct_member_array_stride_msl(const SPIRType &struct_type, uint32_t index) const;
+	uint32_t get_declared_struct_member_matrix_stride_msl(const SPIRType &struct_type, uint32_t index) const;
+	uint32_t get_declared_struct_member_alignment_msl(const SPIRType &struct_type, uint32_t index) const;
+
+	const SPIRType &get_physical_member_type(const SPIRType &struct_type, uint32_t index) const;
+
 	uint32_t get_declared_struct_size_msl(const SPIRType &struct_type) const;
 
 	std::string to_component_argument(uint32_t id);
