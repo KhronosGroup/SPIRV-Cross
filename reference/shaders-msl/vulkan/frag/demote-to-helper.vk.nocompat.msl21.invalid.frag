@@ -5,6 +5,7 @@ using namespace metal;
 
 fragment void main0()
 {
-    bool helper = simd_is_helper_thread();
+    bool _9 = simd_is_helper_thread();
+    bool helper = _9;
 }
 

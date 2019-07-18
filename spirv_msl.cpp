@@ -4473,7 +4473,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("simd_is_helper_thread() is only supported on macOS.");
 		else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
 			SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
-		emit_op(ops[0], ops[1], "simd_is_helper_thread()", true);
+		emit_op(ops[0], ops[1], "simd_is_helper_thread()", false);
 		break;
 
 	default:

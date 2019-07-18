@@ -4,6 +4,7 @@
 void main()
 {
     demote;
-    bool helper = helperInvocationEXT();
+    bool _9 = helperInvocationEXT();
+    bool helper = _9;
 }
 
