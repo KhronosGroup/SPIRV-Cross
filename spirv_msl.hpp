@@ -513,10 +513,10 @@ protected:
 	// MSL packing rules. These compute the effective packing rules as observed by the MSL compiler in the MSL output.
 	// These values can change depending on various extended decorations which control packing rules.
 	// We need to make these rules match up with SPIR-V declared rules.
-	uint32_t get_declared_type_size_msl(const SPIRType &type, bool packed) const;
-	uint32_t get_declared_type_array_stride_msl(const SPIRType &type, bool packed) const;
-	uint32_t get_declared_type_matrix_stride_msl(const SPIRType &type, bool packed) const;
-	uint32_t get_declared_type_alignment_msl(const SPIRType &type, bool packed) const;
+	uint32_t get_declared_type_size_msl(const SPIRType &type, bool packed, bool row_major) const;
+	uint32_t get_declared_type_array_stride_msl(const SPIRType &type, bool packed, bool row_major) const;
+	uint32_t get_declared_type_matrix_stride_msl(const SPIRType &type, bool packed, bool row_major) const;
+	uint32_t get_declared_type_alignment_msl(const SPIRType &type, bool packed, bool row_major) const;
 
 	uint32_t get_declared_struct_member_size_msl(const SPIRType &struct_type, uint32_t index) const;
 	uint32_t get_declared_struct_member_array_stride_msl(const SPIRType &struct_type, uint32_t index) const;
@@ -529,7 +529,8 @@ protected:
 
 	std::string to_component_argument(uint32_t id);
 	void align_struct(SPIRType &ib_type, std::unordered_set<uint32_t> &aligned_structs);
-	void check_member_packing_rules_msl(SPIRType &ib_type, uint32_t index);
+	void ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t index);
+	bool validate_member_packing_rules_msl(const SPIRType &type, uint32_t index) const;
 	uint32_t get_member_packed_type(SPIRType &ib_type, uint32_t index);
 	std::string get_argument_address_space(const SPIRVariable &argument);
 	std::string get_type_address_space(const SPIRType &type, uint32_t id);
