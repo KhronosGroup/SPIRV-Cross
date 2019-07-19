@@ -1416,6 +1416,7 @@ enum ExtendedDecorations
 	// Marks if the physical type is to be declared with tight packing rules, i.e. packed_floatN on MSL and friends.
 	// If this is set, PhysicalTypeID might also be set. It can be set to same as logical type if all we're doing
 	// is converting float3 to packed_float3 for example.
+	// If this is marked on a struct, it means the struct itself must use only Packed types for all its members.
 	SPIRVCrossDecorationPhysicalTypePacked,
 
 	// The padding in bytes before declaring this struct member.

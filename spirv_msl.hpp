@@ -535,6 +535,7 @@ protected:
 
 	std::string to_component_argument(uint32_t id);
 	void align_struct(SPIRType &ib_type, std::unordered_set<uint32_t> &aligned_structs);
+	void mark_scalar_layout_structs(const SPIRType &ib_type);
 	void ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t index);
 	bool validate_member_packing_rules_msl(const SPIRType &type, uint32_t index) const;
 	std::string get_argument_address_space(const SPIRVariable &argument);

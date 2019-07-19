@@ -2392,6 +2392,48 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 	return type_id;
 }
 
+void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
+{
+	uint32_t mbr_cnt = type.member_types.size();
+	for (uint32_t i = 0; i < mbr_cnt; i++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[i]);
+		if (mbr_type.basetype == SPIRType::Struct)
+		{
+			if (has_extended_decoration(mbr_type.self, SPIRVCrossDecorationPhysicalTypePacked))
+				continue;
+
+			uint32_t msl_alignment = get_declared_struct_member_alignment_msl(type, i);
+			uint32_t msl_size = get_declared_struct_member_size_msl(type, i);
+			uint32_t spirv_offset = type_struct_member_offset(type, i);
+			uint32_t spirv_offset_next;
+			if (i + 1 < mbr_cnt)
+				spirv_offset_next = type_struct_member_offset(type, i + 1);
+			else
+				spirv_offset_next = spirv_offset + msl_size;
+
+			// Both are complicated cases. In scalar layout, a struct of float3 might just consume 12 bytes,
+			// and the next member will be placed at offset 12.
+			bool struct_is_misaligned = (spirv_offset % msl_alignment) != 0;
+			bool struct_is_too_large = spirv_offset + msl_size > spirv_offset_next;
+
+			if (struct_is_misaligned || struct_is_too_large)
+			{
+				set_extended_decoration(mbr_type.self, SPIRVCrossDecorationPhysicalTypePacked);
+
+				// Problem case! Struct needs to be placed at an awkward alignment.
+				// Mark every member of the child struct as packed.
+				uint32_t child_mbr_cnt = mbr_type.member_types.size();
+				for (uint32_t j = 0; j < child_mbr_cnt; j++)
+					set_extended_member_decoration(mbr_type.self, j, SPIRVCrossDecorationPhysicalTypePacked);
+			}
+
+			// Traverse ...
+			mark_scalar_layout_structs(mbr_type);
+		}
+	}
+}
+
 // Sort the members of the struct type by offset, and pack and then pad members where needed
 // to align MSL members with SPIR-V offsets. The struct members are iterated twice. Packing
 // occurs first, followed by padding, because packing a member reduces both its size and its
@@ -2550,7 +2592,9 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 		uint32_t elems_per_stride = array_stride / (mbr_type.width / 8);
 
-		if (elems_per_stride > 4)
+		if (elems_per_stride == 3)
+			SPIRV_CROSS_THROW("Cannot use ArrayStride of 3 elements in remapping scenarios.");
+		else if (elems_per_stride > 4)
 			SPIRV_CROSS_THROW("Cannot represent vectors with more than 4 elements in MSL.");
 
 		auto physical_type = mbr_type;
@@ -2562,7 +2606,9 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		set_decoration(type_id, DecorationArrayStride, array_stride);
 
 		// Remove packed_ for vectors of size 1, 2 and 4.
-		if (elems_per_stride != 3)
+		if (has_extended_decoration(ib_type.self, SPIRVCrossDecorationPhysicalTypePacked))
+			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix scalar and std140 layout rules.");
+		else
 			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
 	}
 	else if (is_matrix(mbr_type))
@@ -2572,7 +2618,9 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 		uint32_t elems_per_stride = matrix_stride / (mbr_type.width / 8);
 
-		if (elems_per_stride > 4)
+		if (elems_per_stride == 3)
+			SPIRV_CROSS_THROW("Cannot use ArrayStride of 3 elements in remapping scenarios.");
+		else if (elems_per_stride > 4)
 			SPIRV_CROSS_THROW("Cannot represent vectors with more than 4 elements in MSL.");
 
 		bool row_major = has_member_decoration(ib_type.self, index, DecorationRowMajor);
@@ -2588,7 +2636,9 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypeID, type_id);
 
 		// Remove packed_ for vectors of size 1, 2 and 4.
-		if (elems_per_stride != 3)
+		if (has_extended_decoration(ib_type.self, SPIRVCrossDecorationPhysicalTypePacked))
+			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix scalar and std140 layout rules.");
+		else
 			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
 	}
 
@@ -3565,6 +3615,16 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 
 	unordered_set<uint32_t> declared_structs;
 	unordered_set<uint32_t> aligned_structs;
+
+	// First, we need to deal with scalar block layout.
+	// It is possible that a struct may have to be placed at an alignment which does not match the innate alignment of the struct itself.
+	// In that case, if such a case exists for a struct, we must force that all elements of the struct become packed_ types.
+	// This makes the struct alignment as small as physically possible.
+	// When we actually align the struct later, we can insert padding as necessary to make the packed members behave like normally aligned types.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t type_id, const SPIRType &type) {
+		if (type.basetype == SPIRType::Struct && has_extended_decoration(type_id, SPIRVCrossDecorationBufferBlockRepacked))
+			mark_scalar_layout_structs(type);
+	});
 
 	// Very particular use of the soft loop lock.
 	// align_struct may need to create custom types on the fly, but we don't care about
