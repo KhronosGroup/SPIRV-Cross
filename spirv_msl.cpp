@@ -2599,9 +2599,36 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression)
 {
-	// No physical type remapping, so can just emit a store directly.
-	if (!has_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID))
+	auto &type = expression_type(rhs_expression);
+
+	bool lhs_remapped_type = has_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID);
+	bool lhs_packed_type = has_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypePacked);
+	auto *lhs_e = maybe_get<SPIRExpression>(lhs_expression);
+	auto *rhs_e = maybe_get<SPIRExpression>(rhs_expression);
+
+	// No physical type remapping, and no packed type, so can just emit a store directly.
+	if (!lhs_remapped_type && !lhs_packed_type)
 	{
+		// We might not be dealing with remapped physical types or packed types,
+		// but we might be doing a clean store to a row-major matrix.
+		// In this case, we just flip transpose states, and emit the store, a transpose must be in the RHS expression, if any.
+		if (is_matrix(type) && lhs_e && lhs_e->need_transpose)
+		{
+			if (!rhs_e)
+				SPIRV_CROSS_THROW("Need to transpose right-side expression of a store to row-major matrix, but it is not a SPIRExpression.");
+			lhs_e->need_transpose = false;
+			rhs_e->need_transpose = !rhs_e->need_transpose;
+			CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
+			lhs_e->need_transpose = true;
+			rhs_e->need_transpose = !rhs_e->need_transpose;
+		}
+		else
+			CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
+	}
+	else if (!lhs_remapped_type && !is_matrix(type))
+	{
+		// Even if the target type is packed, we can directly store to it. We cannot store to packed matrices directly,
+		// since they are declared as array of vectors instead, and we need the fallback path below.
 		CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
 	}
 	else
@@ -2609,9 +2636,12 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 		// Special handling when storing to a remapped physical type.
 		// This is mostly to deal with std140 padded matrices or vectors.
 
-		uint32_t physical_type_id = get_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID);
+		uint32_t physical_type_id =
+				lhs_remapped_type ? get_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID) :
+				type.self;
+
 		auto &physical_type = get<SPIRType>(physical_type_id);
-		auto &type = expression_type(rhs_expression);
+
 		string lhs = to_dereferenced_expression(lhs_expression);
 		string rhs = to_pointer_expression(rhs_expression);
 
@@ -2626,38 +2656,114 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			// Packed matrices are stored as arrays of packed vectors, so we need
 			// to assign the vectors one at a time.
 			// For row-major matrices, we need to transpose the *right-hand* side,
-			// not the left-hand side. Otherwise, the changes will be lost.
+			// not the left-hand side.
 
-			auto *lhs_e = maybe_get<SPIRExpression>(lhs_expression);
-			auto *rhs_e = maybe_get<SPIRExpression>(rhs_expression);
+			// Lots of cases to cover here ...
+
 			bool transpose = lhs_e && lhs_e->need_transpose;
+			bool rhs_transpose = rhs_e && rhs_e->need_transpose;
+
+			// We're dealing with transpose manually.
+			if (rhs_transpose)
+				rhs_e->need_transpose = false;
+
 			if (transpose)
 			{
+				// We're dealing with transpose manually.
 				lhs_e->need_transpose = false;
-				if (rhs_e)
-					rhs_e->need_transpose = !rhs_e->need_transpose;
-				lhs = to_dereferenced_expression(lhs_expression);
-				rhs = to_pointer_expression(rhs_expression);
-			}
 
-			const char *store_swiz = "";
-			if (physical_type.vecsize != type.vecsize)
-				store_swiz = swizzle_lut[type.vecsize - 1];
+				const char *store_swiz = "";
+				if (physical_type.columns != type.columns)
+					store_swiz = swizzle_lut[type.columns - 1];
 
-			for (uint32_t i = 0; i < type.columns; i++)
-				statement(enclose_expression(lhs), "[", i, "]", store_swiz, " = ", enclose_expression(rhs), "[", i, "];");
+				if (rhs_transpose)
+				{
+					// If RHS is also transposed, we can just copy row by row.
+					for (uint32_t i = 0; i < type.vecsize; i++)
+					{
+						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						          "[", i, "]", store_swiz, " = ", to_enclosed_pointer_expression(rhs_expression), "[", i, "];");
+					}
+				}
+				else
+				{
+					auto vector_type = expression_type(rhs_expression);
+					vector_type.vecsize = vector_type.columns;
+					vector_type.columns = 1;
 
-			if (transpose)
-			{
+					// Transpose on the fly. Emitting a lot of full transpose() ops and extracting lanes seems very bad,
+					// so pick out individual components instead.
+					for (uint32_t i = 0; i < type.vecsize; i++)
+					{
+						string rhs_row = type_to_glsl_constructor(vector_type) + "(";
+						for (uint32_t j = 0; j < vector_type.vecsize; j++)
+						{
+							rhs_row += join(to_enclosed_pointer_expression(rhs_expression), "[", j, "][", i, "]");
+							if (j + 1 < vector_type.vecsize)
+								rhs_row += ", ";
+						}
+						rhs_row += ")";
+
+						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						          "[", i, "]", store_swiz, " = ", rhs_row, ");");
+					}
+				}
+
+				// We're dealing with transpose manually.
 				lhs_e->need_transpose = true;
-				if (rhs_e)
-					rhs_e->need_transpose = !rhs_e->need_transpose;
 			}
+			else
+			{
+				const char *store_swiz = "";
+				if (physical_type.vecsize != type.vecsize)
+					store_swiz = swizzle_lut[type.vecsize - 1];
+
+				if (rhs_transpose)
+				{
+					auto vector_type = expression_type(rhs_expression);
+					vector_type.columns = 1;
+
+					// Transpose on the fly. Emitting a lot of full transpose() ops and extracting lanes seems very bad,
+					// so pick out individual components instead.
+					for (uint32_t i = 0; i < type.columns; i++)
+					{
+						string rhs_row = type_to_glsl_constructor(vector_type) + "(";
+						for (uint32_t j = 0; j < vector_type.vecsize; j++)
+						{
+							rhs_row += join(to_enclosed_pointer_expression(rhs_expression), "[", j, "][", i, "]");
+							if (j + 1 < vector_type.vecsize)
+								rhs_row += ", ";
+						}
+						rhs_row += ")";
+
+						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						          "[", i, "]", store_swiz, " = ", rhs_row, ");");
+					}
+				}
+				else
+				{
+					// Copy column-by-column.
+					for (uint32_t i = 0; i < type.columns; i++)
+					{
+						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						          "[", i, "]", store_swiz, " = ", to_enclosed_pointer_expression(rhs_expression), "[", i, "];");
+					}
+				}
+			}
+
+			// We're dealing with transpose manually.
+			if (rhs_transpose)
+				rhs_e->need_transpose = true;
 		}
 		else if (is_array(physical_type) && physical_type.vecsize > type.vecsize)
 		{
-
 			assert(type.vecsize >= 1 && type.vecsize <= 3);
+
+			// If we have packed types, we cannot use swizzled stores.
+			// We could technically unroll the store for each element if needed.
+			// When remapping to a std140 physical type, we always get float4,
+			// and the packed decoration should always be removed.
+			assert(!lhs_packed_type);
 
 			// Unpack the expression so we can store to it with a float or float2.
 			// It's still an l-value, so it's fine. Most other unpacking of expressions turn them into r-values instead.
@@ -3064,6 +3170,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+#if 0
 		case SPVFuncImplRowMajor2x3:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
 			statement("float2x3 spvConvertFromRowMajor2x3(float2x3 m)");
@@ -3121,6 +3228,7 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			break;
+#endif
 
 		case SPVFuncImplTextureSwizzle:
 			statement("enum class spvSwizzle : uint");
@@ -5787,6 +5895,7 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 	if (!has_decoration(id, DecorationRowMajor))
 		return false;
 
+#if 0
 	// Generate a function that will swap matrix elements from row-major to column-major.
 	// Packed row-matrix should just use transpose() function.
 	if (!has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked))
@@ -5794,6 +5903,7 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 		const auto type = expression_type(id);
 		add_convert_row_major_matrix_function(type.columns, type.vecsize);
 	}
+#endif
 
 	return true;
 }
@@ -5809,6 +5919,7 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 	if (!has_member_decoration(type.self, index, DecorationRowMajor))
 		return false;
 
+#if 0
 	// Generate a function that will swap matrix elements from row-major to column-major.
 	// Packed row-matrix should just use transpose() function.
 	if (!has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypePacked))
@@ -5816,10 +5927,12 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 		const auto mbr_type = get<SPIRType>(type.member_types[index]);
 		add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
 	}
+#endif
 
 	return true;
 }
 
+#if 0
 // Adds a function suitable for converting a non-square row-major matrix to a column-major matrix.
 void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows)
 {
@@ -5848,16 +5961,17 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 		force_recompile();
 	}
 }
+#endif
 
 // Wraps the expression string in a function call that converts the
 // row_major matrix result of the expression to a column_major matrix.
 string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type,
-                                             uint32_t /*physical_type_id*/, bool is_packed)
+                                             uint32_t physical_type_id, bool is_packed)
 {
 	strip_enclosed_expression(exp_str);
 
+#if 0
 	string func_name;
-
 	// Square and packed matrices can just use transpose
 	if (exp_type.columns == exp_type.vecsize || is_packed)
 		func_name = "transpose";
@@ -5865,6 +5979,11 @@ string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp
 		func_name = string("spvConvertFromRowMajor") + to_string(exp_type.columns) + "x" + to_string(exp_type.vecsize);
 
 	return join(func_name, "(", exp_str, ")");
+#else
+	if (physical_type_id != 0 || is_packed)
+		exp_str = unpack_expression_type(exp_str, exp_type, physical_type_id, is_packed);
+	return join("transpose(", exp_str, ")");
+#endif
 }
 
 // Called automatically at the end of the entry point function
@@ -5898,6 +6017,13 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID))
 		orig_id = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID);
 
+	bool row_major = false;
+	if (is_matrix(physical_type))
+		row_major = has_member_decoration(type.self, index, DecorationRowMajor);
+
+	SPIRType row_major_physical_type;
+	const SPIRType *declared_type = &physical_type;
+
 	if (member_is_packed_physical_type(type, index))
 	{
 		// If we're packing a matrix, output an appropriate typedef
@@ -5910,7 +6036,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			uint32_t rows = physical_type.vecsize;
 			uint32_t cols = physical_type.columns;
 			pack_pfx = "packed_";
-			if (has_member_decoration(type.self, index, DecorationRowMajor))
+			if (row_major)
 			{
 				// These are stored transposed.
 				rows = physical_type.columns;
@@ -5930,6 +6056,13 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		else
 			pack_pfx = "packed_";
 	}
+	else if (row_major)
+	{
+		// Need to declare type with flipped vecsize/columns.
+		row_major_physical_type = physical_type;
+		swap(row_major_physical_type.vecsize, row_major_physical_type.columns);
+		declared_type = &row_major_physical_type;
+	}
 
 	// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
 	if (msl_options.is_ios() && physical_type.basetype == SPIRType::Image && physical_type.image.sampled == 2)
@@ -5946,7 +6079,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		array_type = type_to_array_glsl(physical_type);
 	}
 
-	return join(pack_pfx, type_to_glsl(physical_type, orig_id), " ", qualifier, to_member_name(type, index),
+	return join(pack_pfx, type_to_glsl(*declared_type, orig_id), " ", qualifier, to_member_name(type, index),
 	            member_attribute_qualifier(type, index), array_type, ";");
 }
 
@@ -8836,7 +8969,7 @@ uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_p
 			if (vecsize == 3)
 				vecsize = 4;
 
-			return vecsize * type.columns * (type.width / 8);
+			return vecsize * columns * (type.width / 8);
 		}
 	}
 	}

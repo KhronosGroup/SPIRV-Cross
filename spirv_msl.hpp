@@ -387,12 +387,14 @@ protected:
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
+#if 0
 		SPVFuncImplRowMajor2x3,
 		SPVFuncImplRowMajor2x4,
 		SPVFuncImplRowMajor3x2,
 		SPVFuncImplRowMajor3x4,
 		SPVFuncImplRowMajor4x2,
 		SPVFuncImplRowMajor4x3,
+#endif
 		SPVFuncImplTextureSwizzle,
 		SPVFuncImplSubgroupBallot,
 		SPVFuncImplSubgroupBallotBitExtract,
@@ -487,7 +489,11 @@ protected:
 	void emit_specialization_constants_and_structs();
 	void emit_interface_block(uint32_t ib_var_id);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
+
+#if 0
 	void add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows);
+#endif
+
 	void fix_up_shader_inputs_outputs();
 
 	std::string func_type_decl(SPIRType &type);
