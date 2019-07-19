@@ -2783,7 +2783,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 // Converts the format of the current expression from packed to unpacked,
 // by wrapping the expression in a constructor of the appropriate type.
 // Also, handle special physical ID remapping scenarios, similar to emit_store_statement().
-string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type, uint32_t physical_type_id, bool packed)
+string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type, uint32_t physical_type_id,
+                                           bool packed, bool row_major)
 {
 	(void)packed;
 
@@ -2810,18 +2811,31 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 		// pass each vector individually, so that they can be unpacked to normal vectors.
 		if (!physical_type)
 			physical_type = &type;
+
+		uint32_t vecsize = type.vecsize;
+		uint32_t columns = type.columns;
+		if (row_major)
+			swap(vecsize, columns);
+
+		uint32_t physical_vecsize = row_major ? physical_type->columns : physical_type->vecsize;
+
 		const char *base_type = type.width == 16 ? "half" : "float";
 		string unpack_expr = join(type_to_glsl(type), "(");
 
 		const char *load_swiz = "";
-		if (physical_type->vecsize != type.vecsize)
-			load_swiz = swizzle_lut[type.vecsize - 1];
 
-		for (uint32_t i = 0; i < type.columns; i++)
+		if (physical_vecsize != vecsize)
+			load_swiz = swizzle_lut[vecsize - 1];
+
+		for (uint32_t i = 0; i < columns; i++)
 		{
 			if (i > 0)
 				unpack_expr += ", ";
-			unpack_expr += join(base_type, physical_type->vecsize, "(", expr_str, "[", i, "]", ")", load_swiz);
+
+			if (packed)
+				unpack_expr += join(base_type, physical_vecsize, "(", expr_str, "[", i, "]", ")", load_swiz);
+			else
+				unpack_expr += join(expr_str, "[", i, "]", load_swiz);
 		}
 
 		unpack_expr += ")";
@@ -5981,7 +5995,7 @@ string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp
 	return join(func_name, "(", exp_str, ")");
 #else
 	if (physical_type_id != 0 || is_packed)
-		exp_str = unpack_expression_type(exp_str, exp_type, physical_type_id, is_packed);
+		exp_str = unpack_expression_type(exp_str, exp_type, physical_type_id, is_packed, true);
 	return join("transpose(", exp_str, ")");
 #endif
 }

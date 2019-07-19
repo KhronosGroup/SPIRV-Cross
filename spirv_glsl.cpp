@@ -2717,7 +2717,7 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 // by wrapping the expression in a constructor of the appropriate type.
 // GLSL does not support packed formats, so simply return the expression.
 // Subclasses that do will override.
-string CompilerGLSL::unpack_expression_type(string expr_str, const SPIRType &, uint32_t, bool)
+string CompilerGLSL::unpack_expression_type(string expr_str, const SPIRType &, uint32_t, bool, bool)
 {
 	return expr_str;
 }
@@ -2844,7 +2844,7 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expressio
 	{
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
 		                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
-		                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked));
+		                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), false);
 	}
 	else
 		return to_expression(id, register_expression_read);
@@ -2859,7 +2859,7 @@ string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id, bool register_
 	{
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
 		                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
-		                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked));
+		                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), false);
 	}
 	else
 		return to_enclosed_expression(id, register_expression_read);

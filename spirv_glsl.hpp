@@ -269,7 +269,7 @@ protected:
 	virtual void emit_uniform(const SPIRVariable &var);
 	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type,
 	                                           uint32_t physical_type_id,
-	                                           bool packed_type);
+	                                           bool packed_type, bool row_major);
 
 	StringStream<> buffer;
 
