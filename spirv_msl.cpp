@@ -2400,7 +2400,11 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 		auto &mbr_type = get<SPIRType>(type.member_types[i]);
 		if (mbr_type.basetype == SPIRType::Struct)
 		{
-			if (has_extended_decoration(mbr_type.self, SPIRVCrossDecorationPhysicalTypePacked))
+			auto *struct_type = &mbr_type;
+			while (!struct_type->array.empty())
+				struct_type = &get<SPIRType>(struct_type->parent_type);
+
+			if (has_extended_decoration(struct_type->self, SPIRVCrossDecorationPhysicalTypePacked))
 				continue;
 
 			uint32_t msl_alignment = get_declared_struct_member_alignment_msl(type, i);
@@ -2419,17 +2423,16 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 
 			if (struct_is_misaligned || struct_is_too_large)
 			{
-				set_extended_decoration(mbr_type.self, SPIRVCrossDecorationPhysicalTypePacked);
+				set_extended_decoration(struct_type->self, SPIRVCrossDecorationPhysicalTypePacked);
 
 				// Problem case! Struct needs to be placed at an awkward alignment.
 				// Mark every member of the child struct as packed.
-				uint32_t child_mbr_cnt = mbr_type.member_types.size();
+				uint32_t child_mbr_cnt = struct_type->member_types.size();
 				for (uint32_t j = 0; j < child_mbr_cnt; j++)
-					set_extended_member_decoration(mbr_type.self, j, SPIRVCrossDecorationPhysicalTypePacked);
+					set_extended_member_decoration(struct_type->self, j, SPIRVCrossDecorationPhysicalTypePacked);
 			}
 
-			// Traverse ...
-			mark_scalar_layout_structs(mbr_type);
+			mark_scalar_layout_structs(*struct_type);
 		}
 	}
 }
