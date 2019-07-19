@@ -531,7 +531,6 @@ protected:
 	void align_struct(SPIRType &ib_type, std::unordered_set<uint32_t> &aligned_structs);
 	void ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t index);
 	bool validate_member_packing_rules_msl(const SPIRType &type, uint32_t index) const;
-	uint32_t get_member_packed_type(SPIRType &ib_type, uint32_t index);
 	std::string get_argument_address_space(const SPIRVariable &argument);
 	std::string get_type_address_space(const SPIRType &type, uint32_t id);
 	const char *to_restrict(uint32_t id, bool space = true);

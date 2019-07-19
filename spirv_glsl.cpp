@@ -6561,7 +6561,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				is_invariant = true;
 
 			is_packed = member_is_packed_physical_type(*type, index);
-			if (member_is_packed_physical_type(*type, index))
+			if (member_is_remapped_physical_type(*type, index))
 				physical_type = get_extended_member_decoration(type->self, index, SPIRVCrossDecorationPhysicalTypeID);
 			else
 				physical_type = 0;
@@ -6572,6 +6572,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
+			// FIXME: This cannot work for storing into a row-major matrix, this expression will become an r-value.
+			// We should defer the row-major conversion until Load or Store.
 			if (row_major_matrix_needs_conversion)
 			{
 				expr = convert_row_major_matrix(expr, *type, physical_type, is_packed);
