@@ -9778,6 +9778,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpNoLine:
 		break;
 
+	case OpDemoteToHelperInvocationEXT:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
+		require_extension_internal("GL_EXT_demote_to_helper_invocation");
+		statement(backend.demote_literal, ";");
+		break;
+
+	case OpIsHelperInvocationEXT:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
+		require_extension_internal("GL_EXT_demote_to_helper_invocation");
+		emit_op(ops[0], ops[1], "helperInvocationEXT()", false);
+		break;
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;

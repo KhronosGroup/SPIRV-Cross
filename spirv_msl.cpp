@@ -757,6 +757,7 @@ string CompilerMSL::compile()
 	backend.basic_int16_type = "short";
 	backend.basic_uint16_type = "ushort";
 	backend.discard_literal = "discard_fragment()";
+	backend.demote_literal = "unsupported-demote";
 	backend.boolean_mix_function = "select";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
@@ -4466,6 +4467,14 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		inherit_expression_dependencies(id, b);
 		break;
 	}
+
+	case OpIsHelperInvocationEXT:
+		if (msl_options.is_ios())
+			SPIRV_CROSS_THROW("simd_is_helper_thread() is only supported on macOS.");
+		else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
+			SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
+		emit_op(ops[0], ops[1], "simd_is_helper_thread()", false);
+		break;
 
 	default:
 		CompilerGLSL::emit_instruction(instruction);

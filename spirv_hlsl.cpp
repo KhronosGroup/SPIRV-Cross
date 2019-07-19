@@ -4663,6 +4663,9 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpIsHelperInvocationEXT:
+		SPIRV_CROSS_THROW("helperInvocationEXT() is not supported in HLSL.");
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
@@ -4819,6 +4822,7 @@ string CompilerHLSL::compile()
 	backend.uint16_t_literal_suffix = "u";
 	backend.basic_int_type = "int";
 	backend.basic_uint_type = "uint";
+	backend.demote_literal = "discard";
 	backend.boolean_mix_function = "";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = true;
