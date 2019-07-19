@@ -45,7 +45,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant _15& _17 [[buffer(0)]]
         _13 = normalize(transpose(_17._m1) * float4(in.m_25.xyz, 0.0));
         break;
     } while (false);
-    float4 _39 = _44._m0 * float4(_44._m3 + (in.m_25.xyz * (_44._m6 + _44._m7)), 1.0);
+    float4 _39 = _44._m0 * float4(float3(_44._m3) + (in.m_25.xyz * (_44._m6 + _44._m7)), 1.0);
     out.m_72 = _13;
     float4 _74 = _39;
     _74.y = -_39.y;

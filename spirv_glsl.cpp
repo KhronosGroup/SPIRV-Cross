@@ -2840,7 +2840,9 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expressio
 	// If we need to transpose, it will also take care of unpacking rules.
 	auto *e = maybe_get<SPIRExpression>(id);
 	bool need_transpose = e && e->need_transpose;
-	if (!need_transpose && has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID))
+	bool is_remapped = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
+	bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+	if (!need_transpose && (is_remapped || is_packed))
 	{
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
 		                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
@@ -2855,7 +2857,9 @@ string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id, bool register_
 	// If we need to transpose, it will also take care of unpacking rules.
 	auto *e = maybe_get<SPIRExpression>(id);
 	bool need_transpose = e && e->need_transpose;
-	if (!need_transpose && has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID))
+	bool is_remapped = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
+	bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+	if (!need_transpose && (is_remapped || is_packed))
 	{
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
 		                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),

@@ -122,21 +122,21 @@ kernel void main0(device SSBO1& ssbo_scalar [[buffer(0)]], device SSBO0& ssbo_14
 {
     ssbo_scalar.content.m0s[0].a[0] = ssbo_140.content.m0s[0].a[0].xy;
     ssbo_scalar.content.m0s[0].b = ssbo_140.content.m0s[0].b;
-    ssbo_scalar.content.m1s[0].a = ssbo_140.content.m1s[0].a;
+    ssbo_scalar.content.m1s[0].a = float3(ssbo_140.content.m1s[0].a);
     ssbo_scalar.content.m1s[0].b = ssbo_140.content.m1s[0].b;
     ssbo_scalar.content.m2s[0].a[0] = ssbo_140.content.m2s[0].a[0];
     ssbo_scalar.content.m2s[0].b = ssbo_140.content.m2s[0].b;
     ssbo_scalar.content.m0.a[0] = ssbo_140.content.m0.a[0].xy;
     ssbo_scalar.content.m0.b = ssbo_140.content.m0.b;
-    ssbo_scalar.content.m1.a = ssbo_140.content.m1.a;
+    ssbo_scalar.content.m1.a = float3(ssbo_140.content.m1.a);
     ssbo_scalar.content.m1.b = ssbo_140.content.m1.b;
     ssbo_scalar.content.m2.a[0] = ssbo_140.content.m2.a[0];
     ssbo_scalar.content.m2.b = ssbo_140.content.m2.b;
     ssbo_scalar.content.m3.a = ssbo_140.content.m3.a;
     ssbo_scalar.content.m3.b = ssbo_140.content.m3.b;
     ssbo_scalar.content.m4 = ssbo_140.content.m4;
-    ssbo_scalar.content.m1.a = ssbo_scalar.m2[1] * ssbo_scalar.content.m0.a[0];
-    ssbo_scalar.m0 = ssbo_scalar2.m1;
+    ssbo_scalar.content.m1.a = float2x3(float3(ssbo_scalar.m2[1][0]), float3(ssbo_scalar.m2[1][1])) * float2(ssbo_scalar.content.m0.a[0]);
+    ssbo_scalar.m0 = float2x2(float2(ssbo_scalar2.m1[0]), float2(ssbo_scalar2.m1[1]));
     ssbo_scalar2.m1[0] = float2(ssbo_scalar.m4[0][0], ssbo_scalar.m4[1][0]));
     ssbo_scalar2.m1[1] = float2(ssbo_scalar.m4[0][1], ssbo_scalar.m4[1][1]));
     ssbo_scalar2.m2[0] = float3(ssbo_scalar.m3[0][0], ssbo_scalar.m3[1][0], ssbo_scalar.m3[2][0]));
