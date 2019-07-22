@@ -51,8 +51,8 @@ void copy_row_major_to_col_major(device SSBOCol& v_29, device SSBORow& v_41)
 
 void copy_row_major_to_row_major(device SSBORow& v_41)
 {
-    v_41.row_major0[0].xy = float2x2(v_41.row_major1[0], v_41.row_major1[1])[0];
-    v_41.row_major0[1].xy = float2x2(v_41.row_major1[0], v_41.row_major1[1])[1];
+    v_41.row_major0[0].xy = float2x2(v_41.row_major1[0].xy, v_41.row_major1[1].xy)[0];
+    v_41.row_major0[1].xy = float2x2(v_41.row_major1[0].xy, v_41.row_major1[1].xy)[1];
 }
 
 void copy_columns(device SSBOCol& v_29, device SSBORow& v_41)

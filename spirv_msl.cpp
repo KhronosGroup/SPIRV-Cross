@@ -2792,7 +2792,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					for (uint32_t i = 0; i < type.vecsize; i++)
 					{
 						statement(to_enclosed_expression(lhs_expression),
-						          "[", i, "]", store_swiz, " = ", to_enclosed_pointer_expression(rhs_expression), "[", i, "];");
+						          "[", i, "]", store_swiz, " = ", unpack_expression_explicit(rhs_expression, true), "[", i, "];");
 					}
 				}
 				else
@@ -2808,7 +2808,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						string rhs_row = type_to_glsl_constructor(vector_type) + "(";
 						for (uint32_t j = 0; j < vector_type.vecsize; j++)
 						{
-							rhs_row += join(to_enclosed_pointer_expression(rhs_expression), "[", j, "][", i, "]");
+							rhs_row += join(to_enclosed_unpacked_expression(rhs_expression), "[", j, "][", i, "]");
 							if (j + 1 < vector_type.vecsize)
 								rhs_row += ", ";
 						}
@@ -2961,7 +2961,7 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 		uint32_t physical_vecsize = row_major ? physical_type->columns : physical_type->vecsize;
 
 		const char *base_type = type.width == 16 ? "half" : "float";
-		string unpack_expr = join(type_to_glsl(type), "(");
+		string unpack_expr = join(base_type, columns, "x", vecsize, "(");
 
 		const char *load_swiz = "";
 

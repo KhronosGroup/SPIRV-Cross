@@ -42,15 +42,15 @@ void copy_col_major_to_col_major(device SSBOCol& v_29)
 
 void copy_col_major_to_row_major(device SSBOCol& v_29, device SSBORow& v_41)
 {
-    v_41.row_major0 = transpose(float4x2(v_29.col_major0[0], v_29.col_major0[1]));
+    v_41.row_major0 = transpose(float2x4(v_29.col_major0[0], v_29.col_major0[1]));
 }
 
 void copy_row_major_to_col_major(device SSBOCol& v_29, device SSBORow& v_41)
 {
-    v_29.col_major0[0].xy = float2(float4x2(v_41.row_major0[0], v_41.row_major0[1])[0][0], float4x2(v_41.row_major0[0], v_41.row_major0[1])[1][0]);
-    v_29.col_major0[1].xy = float2(float4x2(v_41.row_major0[0], v_41.row_major0[1])[0][1], float4x2(v_41.row_major0[0], v_41.row_major0[1])[1][1]);
-    v_29.col_major0[2].xy = float2(float4x2(v_41.row_major0[0], v_41.row_major0[1])[0][2], float4x2(v_41.row_major0[0], v_41.row_major0[1])[1][2]);
-    v_29.col_major0[3].xy = float2(float4x2(v_41.row_major0[0], v_41.row_major0[1])[0][3], float4x2(v_41.row_major0[0], v_41.row_major0[1])[1][3]);
+    v_29.col_major0[0].xy = float2(float2x4(v_41.row_major0[0], v_41.row_major0[1])[0][0], float2x4(v_41.row_major0[0], v_41.row_major0[1])[1][0]);
+    v_29.col_major0[1].xy = float2(float2x4(v_41.row_major0[0], v_41.row_major0[1])[0][1], float2x4(v_41.row_major0[0], v_41.row_major0[1])[1][1]);
+    v_29.col_major0[2].xy = float2(float2x4(v_41.row_major0[0], v_41.row_major0[1])[0][2], float2x4(v_41.row_major0[0], v_41.row_major0[1])[1][2]);
+    v_29.col_major0[3].xy = float2(float2x4(v_41.row_major0[0], v_41.row_major0[1])[0][3], float2x4(v_41.row_major0[0], v_41.row_major0[1])[1][3]);
 }
 
 void copy_row_major_to_row_major(device SSBORow& v_41)

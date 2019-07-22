@@ -51,7 +51,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant Block& _104 [[buffer(0
     main0_out out = {};
     out.gl_Position = in.a_position;
     float result = 1.0;
-    float2x3 param = transpose(float2x3(_104.var[0][0][0].xy, _104.var[0][0][1].xy, _104.var[0][0][2].xy));
+    float2x3 param = transpose(float3x2(_104.var[0][0][0].xy, _104.var[0][0][1].xy, _104.var[0][0][2].xy));
     float2x3 param_1 = float2x3(float3(2.0, 6.0, -6.0), float3(0.0, 5.0, 5.0));
     result *= compare_mat2x3(param, param_1);
     out.v_vtxResult = result;
