@@ -2841,7 +2841,9 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						string rhs_row = type_to_glsl_constructor(vector_type) + "(";
 						for (uint32_t j = 0; j < vector_type.vecsize; j++)
 						{
-							rhs_row += join(to_enclosed_pointer_expression(rhs_expression), "[", j, "][", i, "]");
+							// Need to explicitly unpack expression since we've mucked with transpose state.
+							auto unpacked_expr = unpack_expression_explicit(rhs_expression, true);
+							rhs_row += join(unpacked_expr, "[", j, "][", i, "]");
 							if (j + 1 < vector_type.vecsize)
 								rhs_row += ", ";
 						}
@@ -2857,7 +2859,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					for (uint32_t i = 0; i < type.columns; i++)
 					{
 						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
-						          "[", i, "]", store_swiz, " = ", to_enclosed_pointer_expression(rhs_expression), "[", i, "];");
+						          "[", i, "]", store_swiz, " = ", to_enclosed_unpacked_expression(rhs_expression), "[", i, "];");
 					}
 				}
 			}
@@ -2909,14 +2911,19 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 	}
 }
 
+string CompilerMSL::unpack_expression_explicit(uint32_t id, bool row_major)
+{
+	return unpack_expression_type(to_expression(id), expression_type(id),
+	                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
+	                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), row_major);
+}
+
 // Converts the format of the current expression from packed to unpacked,
 // by wrapping the expression in a constructor of the appropriate type.
 // Also, handle special physical ID remapping scenarios, similar to emit_store_statement().
 string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type, uint32_t physical_type_id,
                                            bool packed, bool row_major)
 {
-	(void)packed;
-
 	const SPIRType *physical_type = nullptr;
 	if (physical_type_id)
 		physical_type = &get<SPIRType>(physical_type_id);

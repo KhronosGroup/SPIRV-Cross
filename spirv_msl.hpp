@@ -439,6 +439,10 @@ protected:
 	                             uint32_t comp, uint32_t sample, uint32_t minlod, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id, bool is_packed, bool row_major) override;
+
+	// Special purpose unpack which overrides transpose state, used internally only for matrix packing.
+	std::string unpack_expression_explicit(uint32_t id, bool row_major);
+
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool skip_argument(uint32_t id) const override;
 	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain) override;
