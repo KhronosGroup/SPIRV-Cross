@@ -63,6 +63,7 @@ struct S0_1
 {
     float4 a[1];
     float b;
+    char _m0_final_padding[12];
 };
 
 struct S1_1
@@ -75,6 +76,7 @@ struct S2_1
 {
     float3 a[1];
     float b;
+    char _m0_final_padding[12];
 };
 
 struct S3_1
@@ -93,6 +95,7 @@ struct Content_1
     S2_1 m2;
     S3_1 m3;
     float m4;
+    char _m0_final_padding[12];
 };
 
 struct SSBO0

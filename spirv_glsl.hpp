@@ -249,6 +249,7 @@ protected:
 	virtual std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage);
 	virtual void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                                const std::string &qualifier = "", uint32_t base_offset = 0);
+	virtual void emit_struct_padding_target(const SPIRType &type);
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0);
 	std::string constant_expression(const SPIRConstant &c);
 	std::string constant_op_expression(const SPIRConstantOp &cop);

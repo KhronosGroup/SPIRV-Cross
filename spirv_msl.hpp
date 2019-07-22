@@ -423,6 +423,7 @@ protected:
 	                             const std::string &qualifier = "");
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
+	void emit_struct_padding_target(const SPIRType &type) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
@@ -531,7 +532,7 @@ protected:
 
 	const SPIRType &get_physical_member_type(const SPIRType &struct_type, uint32_t index) const;
 
-	uint32_t get_declared_struct_size_msl(const SPIRType &struct_type) const;
+	uint32_t get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment = false, bool ignore_padding = false) const;
 
 	std::string to_component_argument(uint32_t id);
 	void align_struct(SPIRType &ib_type, std::unordered_set<uint32_t> &aligned_structs);

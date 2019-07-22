@@ -1420,7 +1420,8 @@ enum ExtendedDecorations
 	SPIRVCrossDecorationPhysicalTypePacked,
 
 	// The padding in bytes before declaring this struct member.
-	SPIRVCrossDecorationPadding,
+	// If used on a struct type, marks the target size of a struct.
+	SPIRVCrossDecorationPaddingTarget,
 
 	SPIRVCrossDecorationInterfaceMemberIndex,
 	SPIRVCrossDecorationInterfaceOrigID,

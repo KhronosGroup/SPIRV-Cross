@@ -2420,6 +2420,27 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 			// and the next member will be placed at offset 12.
 			bool struct_is_misaligned = (spirv_offset % msl_alignment) != 0;
 			bool struct_is_too_large = spirv_offset + msl_size > spirv_offset_next;
+			uint32_t array_stride = 0;
+			bool struct_needs_explicit_padding = false;
+
+			// Verify that if a struct is used as an array that ArrayStride matches the effective size of the struct.
+			if (!mbr_type.array.empty())
+			{
+				array_stride = type_struct_member_array_stride(type, i);
+				uint32_t dimensions = type.array.size();
+				for (uint32_t dim = 1; dim < dimensions; dim++)
+				{
+					uint32_t array_size = to_array_size_literal(type, dim);
+					array_stride /= max(array_size, 1u);
+				}
+
+				// Set expected struct size based on ArrayStride.
+				struct_needs_explicit_padding = true;
+
+				// If struct size is larger than array stride, we might be able to fit, if we tightly pack.
+				if (get_declared_struct_size_msl(*struct_type) > array_stride)
+					struct_is_too_large = true;
+			}
 
 			if (struct_is_misaligned || struct_is_too_large)
 			{
@@ -2433,6 +2454,25 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 			}
 
 			mark_scalar_layout_structs(*struct_type);
+
+			if (struct_needs_explicit_padding)
+			{
+				msl_size = get_declared_struct_size_msl(*struct_type, true, true);
+				if (array_stride < msl_size)
+				{
+					SPIRV_CROSS_THROW("Cannot express an array stride smaller than size of struct type.");
+				}
+				else
+				{
+					if (has_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget))
+					{
+						if (array_stride != get_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget))
+							SPIRV_CROSS_THROW("A struct is used with different array strides. Cannot express this in MSL.");
+					}
+					else
+						set_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget, array_stride);
+				}
+			}
 		}
 	}
 }
@@ -2488,7 +2528,7 @@ void CompilerMSL::align_struct(SPIRType &ib_type, unordered_set<uint32_t> &align
 			// size rules, we'll pad to standard C-packing rules with a char[] array. If the member is farther
 			// away than C-packing, expects, add an inert padding member before the the member.
 			uint32_t padding_bytes = spirv_mbr_offset - aligned_msl_offset;
-			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPadding, padding_bytes);
+			set_extended_member_decoration(ib_type_id, mbr_idx, SPIRVCrossDecorationPaddingTarget, padding_bytes);
 
 			// Re-align as a sanity check that aligning post-padding matches up.
 			msl_offset += padding_bytes;
@@ -6165,13 +6205,23 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
                                      const string &qualifier, uint32_t)
 {
 	// If this member requires padding to maintain its declared offset, emit a dummy padding member before it.
-	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPadding))
+	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPaddingTarget))
 	{
-		uint32_t pad_len = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationPadding);
-		statement("char _m", index, "_pad", "[", to_string(pad_len), "];");
+		uint32_t pad_len = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationPaddingTarget);
+		statement("char _m", index, "_pad", "[", pad_len, "];");
 	}
 
 	statement(to_struct_member(type, member_type_id, index, qualifier));
+}
+
+void CompilerMSL::emit_struct_padding_target(const SPIRType &type)
+{
+	uint32_t struct_size = get_declared_struct_size_msl(type, true, true);
+	uint32_t target_size = get_extended_decoration(type.self, SPIRVCrossDecorationPaddingTarget);
+	if (target_size < struct_size)
+		SPIRV_CROSS_THROW("Cannot pad with negative bytes.");
+	else if (target_size > struct_size)
+		statement("char _m0_final_padding[", target_size - struct_size, "];");
 }
 
 // Return a MSL qualifier for the specified function attribute member
@@ -8983,8 +9033,12 @@ uint32_t CompilerMSL::get_declared_struct_member_matrix_stride_msl(const SPIRTyp
 	                                           has_member_decoration(type.self, index, DecorationRowMajor));
 }
 
-uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type) const
+uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment, bool ignore_padding) const
 {
+	// If we have a target size, that is the declared size as well.
+	if (!ignore_padding && has_extended_decoration(struct_type.self, SPIRVCrossDecorationPaddingTarget))
+		return get_extended_decoration(struct_type.self, SPIRVCrossDecorationPaddingTarget);
+
 	if (struct_type.member_types.empty())
 		return 0;
 
@@ -8992,10 +9046,14 @@ uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type) 
 
 	// In MSL, a struct's alignment is equal to the maximum alignment of any of its members.
 	uint32_t alignment = 1;
-	for (uint32_t i = 0; i < mbr_cnt; i++)
+
+	if (!ignore_alignment)
 	{
-		uint32_t mbr_alignment = get_declared_struct_member_alignment_msl(struct_type, i);
-		alignment = max(alignment, mbr_alignment);
+		for (uint32_t i = 0; i < mbr_cnt; i++)
+		{
+			uint32_t mbr_alignment = get_declared_struct_member_alignment_msl(struct_type, i);
+			alignment = max(alignment, mbr_alignment);
+		}
 	}
 
 	// Last member will always be matched to the final Offset decoration, but size of struct in MSL now depends

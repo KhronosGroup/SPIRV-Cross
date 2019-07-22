@@ -829,6 +829,9 @@ void CompilerGLSL::emit_struct(SPIRType &type)
 		emitted = true;
 	}
 
+	if (has_extended_decoration(type.self, SPIRVCrossDecorationPaddingTarget))
+		emit_struct_padding_target(type);
+
 	end_scope_decl();
 
 	if (emitted)
@@ -9970,6 +9973,10 @@ void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 
 	statement(layout_for_member(type, index), qualifiers, qualifier, flags_to_qualifiers_glsl(membertype, memberflags),
 	          variable_decl(membertype, to_member_name(type, index)), ";");
+}
+
+void CompilerGLSL::emit_struct_padding_target(const SPIRType &)
+{
 }
 
 const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags)
