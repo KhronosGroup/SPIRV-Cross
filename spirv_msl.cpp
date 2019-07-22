@@ -2699,6 +2699,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 	auto *lhs_e = maybe_get<SPIRExpression>(lhs_expression);
 	auto *rhs_e = maybe_get<SPIRExpression>(rhs_expression);
 
+	bool transpose = lhs_e && lhs_e->need_transpose;
+
 	// No physical type remapping, and no packed type, so can just emit a store directly.
 	if (!lhs_remapped_type && !lhs_packed_type)
 	{
@@ -2735,7 +2737,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 		else
 			CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
 	}
-	else if (!lhs_remapped_type && !is_matrix(type))
+	else if (!lhs_remapped_type && !is_matrix(type) && !transpose)
 	{
 		// Even if the target type is packed, we can directly store to it. We cannot store to packed matrices directly,
 		// since they are declared as array of vectors instead, and we need the fallback path below.
@@ -2752,18 +2754,14 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 
 		auto &physical_type = get<SPIRType>(physical_type_id);
 
-		string lhs = to_dereferenced_expression(lhs_expression);
-		string rhs = to_pointer_expression(rhs_expression);
-
 		static const char *swizzle_lut[] = {
 			".x",
 			".xy",
 			".xyz",
+			"",
 		};
 
-		bool transpose = lhs_e && lhs_e->need_transpose;
-
-		if (is_matrix(physical_type))
+		if (is_matrix(type))
 		{
 			// Packed matrices are stored as arrays of packed vectors, so we need
 			// to assign the vectors one at a time.
@@ -2792,7 +2790,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					// If RHS is also transposed, we can just copy row by row.
 					for (uint32_t i = 0; i < type.vecsize; i++)
 					{
-						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						statement(to_enclosed_expression(lhs_expression),
 						          "[", i, "]", store_swiz, " = ", to_enclosed_pointer_expression(rhs_expression), "[", i, "];");
 					}
 				}
@@ -2815,7 +2813,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						}
 						rhs_row += ")";
 
-						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						statement(to_enclosed_expression(lhs_expression),
 						          "[", i, "]", store_swiz, " = ", rhs_row, ";");
 					}
 				}
@@ -2833,8 +2831,6 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 				{
 					auto vector_type = expression_type(rhs_expression);
 					vector_type.columns = 1;
-					vector_type.pointer = false;
-					vector_type.pointer_depth = 0;
 
 					// Transpose on the fly. Emitting a lot of full transpose() ops and extracting lanes seems very bad,
 					// so pick out individual components instead.
@@ -2851,7 +2847,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						}
 						rhs_row += ")";
 
-						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						statement(to_enclosed_expression(lhs_expression),
 						          "[", i, "]", store_swiz, " = ", rhs_row, ";");
 					}
 				}
@@ -2860,7 +2856,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					// Copy column-by-column.
 					for (uint32_t i = 0; i < type.columns; i++)
 					{
-						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
+						statement(to_enclosed_expression(lhs_expression),
 						          "[", i, "]", store_swiz, " = ", to_enclosed_unpacked_expression(rhs_expression), "[", i, "];");
 					}
 				}
@@ -2877,7 +2873,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			// Storing a column to a row-major matrix. Unroll the write.
 			for (uint32_t c = 0; c < type.vecsize; c++)
 			{
-				auto lhs_expr = to_dereferenced_expression(lhs_expression);
+				auto lhs_expr = to_enclosed_expression(lhs_expression);
 				auto column_index = lhs_expr.find_last_of('[');
 				if (column_index != string::npos)
 				{
@@ -2898,13 +2894,19 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			// and the packed decoration should always be removed.
 			assert(!lhs_packed_type);
 
+			string lhs = to_dereferenced_expression(lhs_expression);
+			string rhs = to_pointer_expression(rhs_expression);
+
 			// Unpack the expression so we can store to it with a float or float2.
 			// It's still an l-value, so it's fine. Most other unpacking of expressions turn them into r-values instead.
 			lhs = enclose_expression(lhs) + swizzle_lut[type.vecsize - 1];
+			if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
+				statement(lhs, " = ", rhs, ";");
 		}
-
-		if (!is_matrix(type))
+		else if (!is_matrix(type))
 		{
+			string lhs = to_dereferenced_expression(lhs_expression);
+			string rhs = to_pointer_expression(rhs_expression);
 			if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
 				statement(lhs, " = ", rhs, ";");
 		}
