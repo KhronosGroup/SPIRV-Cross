@@ -2733,6 +2733,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 				}
 			}
 			lhs_e->need_transpose = true;
+			register_write(lhs_expression);
 		}
 		else
 			CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
