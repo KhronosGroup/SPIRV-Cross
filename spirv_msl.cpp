@@ -2722,7 +2722,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 				rhs_e->need_transpose = true;
 			}
 			else
-				statement(to_expression(lhs_expression), " = transpose(", to_expression(rhs_expression), ");");
+				statement(to_expression(lhs_expression), " = transpose(", to_unpacked_expression(rhs_expression), ");");
 
 			lhs_e->need_transpose = true;
 			register_write(lhs_expression);

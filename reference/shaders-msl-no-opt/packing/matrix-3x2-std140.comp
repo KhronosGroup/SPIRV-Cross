@@ -40,7 +40,7 @@ void copy_col_major_to_col_major(device SSBOCol& v_29)
 
 void copy_col_major_to_row_major(device SSBOCol& v_29, device SSBORow& v_41)
 {
-    v_41.row_major0 = transpose(v_29.col_major0);
+    v_41.row_major0 = transpose(float3x2(v_29.col_major0[0].xy, v_29.col_major0[1].xy, v_29.col_major0[2].xy));
 }
 
 void copy_row_major_to_col_major(device SSBOCol& v_29, device SSBORow& v_41)
