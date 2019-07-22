@@ -2816,7 +2816,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						rhs_row += ")";
 
 						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
-						          "[", i, "]", store_swiz, " = ", rhs_row, ");");
+						          "[", i, "]", store_swiz, " = ", rhs_row, ";");
 					}
 				}
 

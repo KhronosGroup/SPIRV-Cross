@@ -28,8 +28,8 @@ void load_store_to_variable_col_major(device SSBOCol& v_29)
 void load_store_to_variable_row_major(device SSBORow& v_41)
 {
     float3x2 loaded = transpose(float3x2(float3(v_41.row_major0[0]), float3(v_41.row_major0[1])));
-    v_41.row_major0[0] = float3(loaded[0][0], loaded[1][0], loaded[2][0]));
-    v_41.row_major0[1] = float3(loaded[0][1], loaded[1][1], loaded[2][1]));
+    v_41.row_major0[0] = float3(loaded[0][0], loaded[1][0], loaded[2][0]);
+    v_41.row_major0[1] = float3(loaded[0][1], loaded[1][1], loaded[2][1]);
 }
 
 void copy_col_major_to_col_major(device SSBOCol& v_29)
@@ -39,8 +39,8 @@ void copy_col_major_to_col_major(device SSBOCol& v_29)
 
 void copy_col_major_to_row_major(device SSBOCol& v_29, device SSBORow& v_41)
 {
-    v_41.row_major0[0] = float3(v_29.col_major0[0][0], v_29.col_major0[1][0], v_29.col_major0[2][0]));
-    v_41.row_major0[1] = float3(v_29.col_major0[0][1], v_29.col_major0[1][1], v_29.col_major0[2][1]));
+    v_41.row_major0[0] = float3(v_29.col_major0[0][0], v_29.col_major0[1][0], v_29.col_major0[2][0]);
+    v_41.row_major0[1] = float3(v_29.col_major0[0][1], v_29.col_major0[1][1], v_29.col_major0[2][1]);
 }
 
 void copy_row_major_to_col_major(device SSBOCol& v_29, device SSBORow& v_41)
