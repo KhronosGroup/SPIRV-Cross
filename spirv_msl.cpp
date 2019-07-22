@@ -2712,10 +2712,20 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			if (!rhs_e)
 				SPIRV_CROSS_THROW("Need to transpose right-side expression of a store to row-major matrix, but it is not a SPIRExpression.");
 			lhs_e->need_transpose = false;
-			rhs_e->need_transpose = !rhs_e->need_transpose;
-			CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
+
+			if (rhs_e && rhs_e->need_transpose)
+			{
+				// Direct copy, but might need to unpack RHS.
+				// Skip the transpose, as we will transpose when writing to LHS and transpose(transpose(T)) == T.
+				rhs_e->need_transpose = false;
+				statement(to_expression(lhs_expression), " = ", unpack_expression_explicit(rhs_expression, true), ";");
+				rhs_e->need_transpose = true;
+			}
+			else
+				statement(to_expression(lhs_expression), " = transpose(", to_expression(rhs_expression), ");");
+
 			lhs_e->need_transpose = true;
-			rhs_e->need_transpose = !rhs_e->need_transpose;
+			register_write(lhs_expression);
 		}
 		else if (lhs_e && lhs_e->need_transpose)
 		{
@@ -2929,6 +2939,10 @@ string CompilerMSL::unpack_expression_explicit(uint32_t id, bool row_major)
 string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type, uint32_t physical_type_id,
                                            bool packed, bool row_major)
 {
+	// Trivial case, nothing to do.
+	if (physical_type_id == 0 && !packed)
+		return expr_str;
+
 	const SPIRType *physical_type = nullptr;
 	if (physical_type_id)
 		physical_type = &get<SPIRType>(physical_type_id);
