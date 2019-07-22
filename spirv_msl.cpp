@@ -2833,6 +2833,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 				{
 					auto vector_type = expression_type(rhs_expression);
 					vector_type.columns = 1;
+					vector_type.pointer = false;
+					vector_type.pointer_depth = 0;
 
 					// Transpose on the fly. Emitting a lot of full transpose() ops and extracting lanes seems very bad,
 					// so pick out individual components instead.
@@ -2850,7 +2852,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						rhs_row += ")";
 
 						statement(enclose_expression(to_dereferenced_expression(lhs_expression)),
-						          "[", i, "]", store_swiz, " = ", rhs_row, ");");
+						          "[", i, "]", store_swiz, " = ", rhs_row, ";");
 					}
 				}
 				else

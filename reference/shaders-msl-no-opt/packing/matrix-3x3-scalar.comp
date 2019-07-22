@@ -52,9 +52,9 @@ void copy_col_major_to_row_major(device SSBOCol& v_29, device SSBORow& v_41)
 
 void copy_row_major_to_col_major(device SSBOCol& v_29, device SSBORow& v_41)
 {
-    v_29.col_major0[0] = float3(float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[0][0], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[1][0], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[2][0]));
-    v_29.col_major0[1] = float3(float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[0][1], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[1][1], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[2][1]));
-    v_29.col_major0[2] = float3(float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[0][2], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[1][2], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[2][2]));
+    v_29.col_major0[0] = float3(float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[0][0], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[1][0], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[2][0]);
+    v_29.col_major0[1] = float3(float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[0][1], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[1][1], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[2][1]);
+    v_29.col_major0[2] = float3(float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[0][2], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[1][2], float3x3(float3(v_41.row_major0[0]), float3(v_41.row_major0[1]), float3(v_41.row_major0[2]))[2][2]);
 }
 
 void copy_row_major_to_row_major(device SSBORow& v_41)
