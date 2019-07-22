@@ -3339,66 +3339,6 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
-#if 0
-		case SPVFuncImplRowMajor2x3:
-			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			statement("float2x3 spvConvertFromRowMajor2x3(float2x3 m)");
-			begin_scope();
-			statement("return float2x3(float3(m[0][0], m[0][2], m[1][1]), float3(m[0][1], m[1][0], m[1][2]));");
-			end_scope();
-			statement("");
-			break;
-
-		case SPVFuncImplRowMajor2x4:
-			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			statement("float2x4 spvConvertFromRowMajor2x4(float2x4 m)");
-			begin_scope();
-			statement("return float2x4(float4(m[0][0], m[0][2], m[1][0], m[1][2]), float4(m[0][1], m[0][3], m[1][1], "
-			          "m[1][3]));");
-			end_scope();
-			statement("");
-			break;
-
-		case SPVFuncImplRowMajor3x2:
-			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			statement("float3x2 spvConvertFromRowMajor3x2(float3x2 m)");
-			begin_scope();
-			statement("return float3x2(float2(m[0][0], m[1][1]), float2(m[0][1], m[2][0]), float2(m[1][0], m[2][1]));");
-			end_scope();
-			statement("");
-			break;
-
-		case SPVFuncImplRowMajor3x4:
-			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			statement("float3x4 spvConvertFromRowMajor3x4(float3x4 m)");
-			begin_scope();
-			statement("return float3x4(float4(m[0][0], m[0][3], m[1][2], m[2][1]), float4(m[0][1], m[1][0], m[1][3], "
-			          "m[2][2]), float4(m[0][2], m[1][1], m[2][0], m[2][3]));");
-			end_scope();
-			statement("");
-			break;
-
-		case SPVFuncImplRowMajor4x2:
-			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			statement("float4x2 spvConvertFromRowMajor4x2(float4x2 m)");
-			begin_scope();
-			statement("return float4x2(float2(m[0][0], m[2][0]), float2(m[0][1], m[2][1]), float2(m[1][0], m[3][0]), "
-			          "float2(m[1][1], m[3][1]));");
-			end_scope();
-			statement("");
-			break;
-
-		case SPVFuncImplRowMajor4x3:
-			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			statement("float4x3 spvConvertFromRowMajor4x3(float4x3 m)");
-			begin_scope();
-			statement("return float4x3(float3(m[0][0], m[1][1], m[2][2]), float3(m[0][1], m[1][2], m[3][0]), "
-			          "float3(m[0][2], m[2][0], m[3][1]), float3(m[1][0], m[2][1], m[3][2]));");
-			end_scope();
-			statement("");
-			break;
-#endif
-
 		case SPVFuncImplTextureSwizzle:
 			statement("enum class spvSwizzle : uint");
 			begin_scope();
@@ -6066,93 +6006,22 @@ bool CompilerMSL::is_patch_block(const SPIRType &type)
 // Checks whether the ID is a row_major matrix that requires conversion before use
 bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 {
-	return has_decoration(id, DecorationRowMajor);
-
-#if 0
-	// Generate a function that will swap matrix elements from row-major to column-major.
-	// Packed row-matrix should just use transpose() function.
-	if (!has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked))
-	{
-		const auto type = expression_type(id);
-		add_convert_row_major_matrix_function(type.columns, type.vecsize);
-	}
-
-	return true;
-#endif
+	auto *e = maybe_get<SPIRExpression>(id);
+	if (e)
+		return e->need_transpose;
+	else
+		return has_decoration(id, DecorationRowMajor);
 }
 
 // Checks whether the member is a row_major matrix that requires conversion before use
 bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
 {
 	return has_member_decoration(type.self, index, DecorationRowMajor);
-
-#if 0
-	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix)
-		return false;
-
-	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!has_member_decoration(type.self, index, DecorationRowMajor))
-		return false;
-
-	// Generate a function that will swap matrix elements from row-major to column-major.
-	// Packed row-matrix should just use transpose() function.
-	if (!has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypePacked))
-	{
-		const auto mbr_type = get<SPIRType>(type.member_types[index]);
-		add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
-	}
-
-	return true;
-#endif
 }
 
-#if 0
-// Adds a function suitable for converting a non-square row-major matrix to a column-major matrix.
-void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows)
-{
-	SPVFuncImpl spv_func;
-	if (cols == rows) // Square matrix...just use transpose() function
-		return;
-	else if (cols == 2 && rows == 3)
-		spv_func = SPVFuncImplRowMajor2x3;
-	else if (cols == 2 && rows == 4)
-		spv_func = SPVFuncImplRowMajor2x4;
-	else if (cols == 3 && rows == 2)
-		spv_func = SPVFuncImplRowMajor3x2;
-	else if (cols == 3 && rows == 4)
-		spv_func = SPVFuncImplRowMajor3x4;
-	else if (cols == 4 && rows == 2)
-		spv_func = SPVFuncImplRowMajor4x2;
-	else if (cols == 4 && rows == 3)
-		spv_func = SPVFuncImplRowMajor4x3;
-	else
-		SPIRV_CROSS_THROW("Could not convert row-major matrix.");
-
-	auto rslt = spv_function_implementations.insert(spv_func);
-	if (rslt.second)
-	{
-		suppress_missing_prototypes = true;
-		force_recompile();
-	}
-}
-#endif
-
-// Wraps the expression string in a function call that converts the
-// row_major matrix result of the expression to a column_major matrix.
 string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type,
                                              uint32_t physical_type_id, bool is_packed)
 {
-#if 0
-	string func_name;
-	// Square and packed matrices can just use transpose
-	if (exp_type.columns == exp_type.vecsize || is_packed)
-		func_name = "transpose";
-	else
-		func_name = string("spvConvertFromRowMajor") + to_string(exp_type.columns) + "x" + to_string(exp_type.vecsize);
-
-	return join(func_name, "(", exp_str, ")");
-#else
 	if (!is_matrix(exp_type))
 	{
 		return CompilerGLSL::convert_row_major_matrix(move(exp_str), exp_type, physical_type_id, is_packed);
@@ -6164,7 +6033,6 @@ string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp
 			exp_str = unpack_expression_type(exp_str, exp_type, physical_type_id, is_packed, true);
 		return join("transpose(", exp_str, ")");
 	}
-#endif
 }
 
 // Called automatically at the end of the entry point function

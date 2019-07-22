@@ -2986,8 +2986,10 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 		auto &e = get<SPIRExpression>(id);
 		if (e.base_expression)
 			return to_enclosed_expression(e.base_expression) + e.expression;
-		else if (e.need_transpose)
+		else if (e.need_transpose && !e.access_chain)
 		{
+			// This should not be reached for access chains, since we always deal explicitly with transpose state
+			// when consuming an access chain expression.
 			uint32_t physical_type_id = get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 			bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
 			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), physical_type_id, is_packed);
