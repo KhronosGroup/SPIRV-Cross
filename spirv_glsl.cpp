@@ -6579,15 +6579,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Matrix -> Vector
 		else if (type->columns > 1)
 		{
-			// FIXME: This cannot work for storing into a row-major matrix, this expression will become an r-value.
-			// We should defer the row-major conversion until Load or Store.
-			if (row_major_matrix_needs_conversion)
-			{
-				expr = convert_row_major_matrix(expr, *type, physical_type, is_packed);
-				row_major_matrix_needs_conversion = false;
-				is_packed = false;
-				physical_type = 0;
-			}
+			// If we have a row-major matrix here, we need to defer any transpose in case this access chain
+			// is used to store a column. We can resolve it right here and now if we access a scalar directly,
+			// by flipping indexing order of the matrix.
 
 			expr += "[";
 			if (index_is_literal)
@@ -6602,12 +6596,26 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
 		{
-			if (index_is_literal && !is_packed)
+			string deferred_index;
+			if (row_major_matrix_needs_conversion)
+			{
+				// Flip indexing order.
+				auto column_index = expr.find_last_of('[');
+				if (column_index != string::npos)
+				{
+					deferred_index = expr.substr(column_index);
+					expr.resize(column_index);
+				}
+				is_packed = false;
+				physical_type = 0;
+			}
+
+			if (index_is_literal && !is_packed && !row_major_matrix_needs_conversion)
 			{
 				expr += ".";
 				expr += index_to_swizzle(index);
 			}
-			else if (ir.ids[index].get_type() == TypeConstant && !is_packed)
+			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion)
 			{
 				auto &c = get<SPIRConstant>(index);
 				expr += ".";
@@ -6624,6 +6632,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += to_expression(index, register_expression_read);
 				expr += "]";
 			}
+
+			expr += deferred_index;
+			row_major_matrix_needs_conversion = false;
 
 			is_packed = false;
 			physical_type = 0;
@@ -9938,11 +9949,34 @@ bool CompilerGLSL::member_is_packed_physical_type(const SPIRType &type, uint32_t
 // row_major matrix result of the expression to a column_major matrix.
 // Base implementation uses the standard library transpose() function.
 // Subclasses may override to use a different function.
-string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType & /*exp_type*/,
+string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type,
                                               uint32_t /* physical_type_id */, bool /*is_packed*/)
 {
 	strip_enclosed_expression(exp_str);
-	return join("transpose(", exp_str, ")");
+	if (!is_matrix(exp_type))
+	{
+		auto column_index = exp_str.find_last_of('[');
+		if (column_index == string::npos)
+			return exp_str;
+
+		auto column_expr = exp_str.substr(column_index);
+		exp_str.resize(column_index);
+
+		auto transposed_expr = type_to_glsl_constructor(exp_type) + "(";
+
+		// Storing a column to a row-major matrix. Unroll the write.
+		for (uint32_t c = 0; c < exp_type.vecsize; c++)
+		{
+			transposed_expr += join(exp_str, '[', c, ']', column_expr);
+			if (c + 1 < exp_type.vecsize)
+				transposed_expr += ", ";
+		}
+
+		transposed_expr += ")";
+		return transposed_expr;
+	}
+	else
+		return join("transpose(", exp_str, ")");
 }
 
 string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uint32_t id)

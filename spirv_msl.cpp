@@ -2715,6 +2715,23 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			lhs_e->need_transpose = true;
 			rhs_e->need_transpose = !rhs_e->need_transpose;
 		}
+		else if (lhs_e && lhs_e->need_transpose)
+		{
+			lhs_e->need_transpose = false;
+
+			// Storing a column to a row-major matrix. Unroll the write.
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				auto lhs_expr = to_dereferenced_expression(lhs_expression);
+				auto column_index = lhs_expr.find_last_of('[');
+				if (column_index != string::npos)
+				{
+					statement(lhs_expr.insert(column_index, join('[', c, ']')), " = ",
+					          to_extract_component_expression(rhs_expression, c), ";");
+				}
+			}
+			lhs_e->need_transpose = true;
+		}
 		else
 			CompilerGLSL::emit_store_statement(lhs_expression, rhs_expression);
 	}
@@ -2744,6 +2761,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			".xyz",
 		};
 
+		bool transpose = lhs_e && lhs_e->need_transpose;
+
 		if (is_matrix(physical_type))
 		{
 			// Packed matrices are stored as arrays of packed vectors, so we need
@@ -2753,7 +2772,6 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 
 			// Lots of cases to cover here ...
 
-			bool transpose = lhs_e && lhs_e->need_transpose;
 			bool rhs_transpose = rhs_e && rhs_e->need_transpose;
 
 			// We're dealing with transpose manually.
@@ -2847,6 +2865,24 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 			// We're dealing with transpose manually.
 			if (rhs_transpose)
 				rhs_e->need_transpose = true;
+		}
+		else if (transpose)
+		{
+			lhs_e->need_transpose = false;
+
+			// Storing a column to a row-major matrix. Unroll the write.
+			for (uint32_t c = 0; c < type.vecsize; c++)
+			{
+				auto lhs_expr = to_dereferenced_expression(lhs_expression);
+				auto column_index = lhs_expr.find_last_of('[');
+				if (column_index != string::npos)
+				{
+					statement(lhs_expr.insert(column_index, join('[', c, ']')), " = ",
+					          to_extract_component_expression(rhs_expression, c), ";");
+				}
+			}
+
+			lhs_e->need_transpose = true;
 		}
 		else if (is_array(physical_type) && physical_type.vecsize > type.vecsize)
 		{
@@ -6004,13 +6040,7 @@ bool CompilerMSL::is_patch_block(const SPIRType &type)
 // Checks whether the ID is a row_major matrix that requires conversion before use
 bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 {
-	// Natively supported row-major matrices do not need to be converted.
-	if (backend.native_row_major_matrix)
-		return false;
-
-	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!has_decoration(id, DecorationRowMajor))
-		return false;
+	return has_decoration(id, DecorationRowMajor);
 
 #if 0
 	// Generate a function that will swap matrix elements from row-major to column-major.
@@ -6020,14 +6050,17 @@ bool CompilerMSL::is_non_native_row_major_matrix(uint32_t id)
 		const auto type = expression_type(id);
 		add_convert_row_major_matrix_function(type.columns, type.vecsize);
 	}
-#endif
 
 	return true;
+#endif
 }
 
 // Checks whether the member is a row_major matrix that requires conversion before use
 bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index)
 {
+	return has_member_decoration(type.self, index, DecorationRowMajor);
+
+#if 0
 	// Natively supported row-major matrices do not need to be converted.
 	if (backend.native_row_major_matrix)
 		return false;
@@ -6036,7 +6069,6 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 	if (!has_member_decoration(type.self, index, DecorationRowMajor))
 		return false;
 
-#if 0
 	// Generate a function that will swap matrix elements from row-major to column-major.
 	// Packed row-matrix should just use transpose() function.
 	if (!has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypePacked))
@@ -6044,9 +6076,9 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 		const auto mbr_type = get<SPIRType>(type.member_types[index]);
 		add_convert_row_major_matrix_function(mbr_type.columns, mbr_type.vecsize);
 	}
-#endif
 
 	return true;
+#endif
 }
 
 #if 0
@@ -6085,8 +6117,6 @@ void CompilerMSL::add_convert_row_major_matrix_function(uint32_t cols, uint32_t 
 string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type,
                                              uint32_t physical_type_id, bool is_packed)
 {
-	strip_enclosed_expression(exp_str);
-
 #if 0
 	string func_name;
 	// Square and packed matrices can just use transpose
@@ -6097,9 +6127,17 @@ string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp
 
 	return join(func_name, "(", exp_str, ")");
 #else
-	if (physical_type_id != 0 || is_packed)
-		exp_str = unpack_expression_type(exp_str, exp_type, physical_type_id, is_packed, true);
-	return join("transpose(", exp_str, ")");
+	if (!is_matrix(exp_type))
+	{
+		return CompilerGLSL::convert_row_major_matrix(move(exp_str), exp_type, physical_type_id, is_packed);
+	}
+	else
+	{
+		strip_enclosed_expression(exp_str);
+		if (physical_type_id != 0 || is_packed)
+			exp_str = unpack_expression_type(exp_str, exp_type, physical_type_id, is_packed, true);
+		return join("transpose(", exp_str, ")");
+	}
 #endif
 }
 
