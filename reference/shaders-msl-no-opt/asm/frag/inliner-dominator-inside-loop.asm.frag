@@ -172,8 +172,9 @@ fragment main0_out main0(main0_in in [[stage_in]], constant CB0& _19 [[buffer(0)
         _220 = _219;
         break;
     } while (false);
+    float2 _221 = _220.wy;
     float2 _223 = float2(1.0);
-    float2 _224 = (_220.wy * 2.0) - _223;
+    float2 _224 = (_221 * 2.0) - _223;
     float3 _232 = float3(_224, sqrt(fast::clamp(1.0 + dot(-_224, _224), 0.0, 1.0)));
     float2 _240 = (NormalDetailMapTexture.sample(NormalDetailMapSampler, (_166 * 0.0)).wy * 2.0) - _223;
     float2 _252 = _232.xy + (float3(_240, sqrt(fast::clamp(1.0 + dot(-_240, _240), 0.0, 1.0))).xy * 0.0);

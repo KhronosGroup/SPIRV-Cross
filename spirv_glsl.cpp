@@ -322,6 +322,7 @@ void CompilerGLSL::reset()
 	// Clear temporary usage tracking.
 	expression_usage_counts.clear();
 	forwarded_temporaries.clear();
+	suppressed_usage_tracking.clear();
 
 	reset_name_caches();
 
@@ -4019,9 +4020,14 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 	}
 }
 
-bool CompilerGLSL::expression_is_forwarded(uint32_t id)
+bool CompilerGLSL::expression_is_forwarded(uint32_t id) const
 {
-	return forwarded_temporaries.find(id) != end(forwarded_temporaries);
+	return forwarded_temporaries.count(id) != 0;
+}
+
+bool CompilerGLSL::expression_suppresses_usage_tracking(uint32_t id) const
+{
+	return suppressed_usage_tracking.count(id) != 0;
 }
 
 SPIRExpression &CompilerGLSL::emit_op(uint32_t result_type, uint32_t result_id, const string &rhs, bool forwarding,
@@ -4031,8 +4037,9 @@ SPIRExpression &CompilerGLSL::emit_op(uint32_t result_type, uint32_t result_id, 
 	{
 		// Just forward it without temporary.
 		// If the forward is trivial, we do not force flushing to temporary for this expression.
-		if (!suppress_usage_tracking)
-			forwarded_temporaries.insert(result_id);
+		forwarded_temporaries.insert(result_id);
+		if (suppress_usage_tracking)
+			suppressed_usage_tracking.insert(result_id);
 
 		return set<SPIRExpression>(result_id, rhs, result_type, true);
 	}
@@ -4648,7 +4655,8 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 		emit_binary_func_op(result_type, result_id, image_id, samp_id,
 		                    type_to_glsl(get<SPIRType>(result_type), result_id).c_str());
 
-		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
+		// Make sure to suppress usage tracking and any expression invalidation.
+		// It is illegal to create temporaries of opaque types.
 		forwarded_temporaries.erase(result_id);
 	}
 	else
@@ -7140,7 +7148,7 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 	return true;
 }
 
-bool CompilerGLSL::should_forward(uint32_t id)
+bool CompilerGLSL::should_forward(uint32_t id) const
 {
 	// If id is a variable we will try to forward it regardless of force_temporary check below
 	// This is important because otherwise we'll get local sampler copies (highp sampler2D foo = bar) that are invalid in OpenGL GLSL
@@ -7157,6 +7165,12 @@ bool CompilerGLSL::should_forward(uint32_t id)
 		return true;
 
 	return false;
+}
+
+bool CompilerGLSL::should_suppress_usage_tracking(uint32_t id) const
+{
+	// Used only by opcodes which don't do any real "work", they just swizzle data in some fashion.
+	return !expression_is_forwarded(id) || expression_suppresses_usage_tracking(id);
 }
 
 void CompilerGLSL::track_expression_read(uint32_t id)
@@ -7185,7 +7199,7 @@ void CompilerGLSL::track_expression_read(uint32_t id)
 
 	// If we try to read a forwarded temporary more than once we will stamp out possibly complex code twice.
 	// In this case, it's better to just bind the complex expression to the temporary and read that temporary twice.
-	if (expression_is_forwarded(id))
+	if (expression_is_forwarded(id) && !expression_suppresses_usage_tracking(id))
 	{
 		auto &v = expression_usage_counts[id];
 		v++;
@@ -7527,7 +7541,10 @@ void CompilerGLSL::emit_block_instructions(SPIRBlock &block)
 
 void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression &expr)
 {
-	if (forwarded_temporaries.count(expr.self))
+	// Allow trivially forwarded expressions like OpLoad or trivial shuffles,
+	// these will be marked as having suppressed usage tracking.
+	// Our only concern is to make sure arithmetic operations are done in similar ways.
+	if (expression_is_forwarded(expr.self) && !expression_suppresses_usage_tracking(expr.self))
 	{
 		forced_temporaries.insert(expr.self);
 		force_recompile();
@@ -8136,14 +8153,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// from expression causing it to be forced to an actual temporary in GLSL.
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
 			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT, &meta);
-			e = &emit_op(result_type, id, expr, true, !expression_is_forwarded(ops[2]));
+			e = &emit_op(result_type, id, expr, true, should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 			e->base_expression = ops[2];
 		}
 		else
 		{
 			auto expr = access_chain_internal(ops[2], &ops[3], length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
-			e = &emit_op(result_type, id, expr, should_forward(ops[2]), !expression_is_forwarded(ops[2]));
+			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
 
@@ -8265,7 +8282,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (shuffle)
 		{
 			should_fwd = should_forward(vec0) && should_forward(vec1);
-			trivial_forward = !expression_is_forwarded(vec0) && !expression_is_forwarded(vec1);
+			trivial_forward = should_suppress_usage_tracking(vec0) && should_suppress_usage_tracking(vec1);
 
 			// Constructor style and shuffling from two different vectors.
 			SmallVector<string> args;
@@ -8291,7 +8308,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			should_fwd = should_forward(vec0);
-			trivial_forward = !expression_is_forwarded(vec0);
+			trivial_forward = should_suppress_usage_tracking(vec0);
 
 			// We only source from first vector, so can use swizzle.
 			// If the vector is packed, unpack it before applying a swizzle (needed for MSL)
@@ -8311,8 +8328,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We inherit the forwardedness from our arguments to avoid flushing out to temporaries when it's not really needed.
 
 		emit_op(result_type, id, expr, should_fwd, trivial_forward);
+
 		inherit_expression_dependencies(id, vec0);
-		inherit_expression_dependencies(id, vec1);
+		if (vec0 != vec1)
+			inherit_expression_dependencies(id, vec1);
 		break;
 	}
 

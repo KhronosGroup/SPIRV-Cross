@@ -165,8 +165,9 @@ void main()
         _220 = _219;
         break;
     } while (false);
+    vec2 _221 = _220.wy;
     vec2 _223 = vec2(1.0);
-    vec2 _224 = (_220.wy * 2.0) - _223;
+    vec2 _224 = (_221 * 2.0) - _223;
     vec3 _232 = vec3(_224, sqrt(clamp(1.0 + dot(-_224, _224), 0.0, 1.0)));
     vec2 _240 = (texture(SPIRV_Cross_CombinedNormalDetailMapTextureNormalDetailMapSampler, _166 * 0.0).wy * 2.0) - _223;
     vec2 _252 = _232.xy + (vec3(_240, sqrt(clamp(1.0 + dot(-_240, _240), 0.0, 1.0))).xy * 0.0);
