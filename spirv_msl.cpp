@@ -1177,7 +1177,7 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 		set_extended_decoration(type.self, SPIRVCrossDecorationBufferBlockRepacked);
 
 		// Recurse
-		size_t mbr_cnt = type.member_types.size();
+		uint32_t mbr_cnt = uint32_t(type.member_types.size());
 		for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
 		{
 			uint32_t mbr_type_id = type.member_types[mbr_idx];
@@ -2398,7 +2398,7 @@ void CompilerMSL::mark_struct_members_packed(const SPIRType &type)
 
 	// Problem case! Struct needs to be placed at an awkward alignment.
 	// Mark every member of the child struct as packed.
-	uint32_t mbr_cnt = type.member_types.size();
+	uint32_t mbr_cnt = uint32_t(type.member_types.size());
 	for (uint32_t i = 0; i < mbr_cnt; i++)
 	{
 		auto &mbr_type = get<SPIRType>(type.member_types[i]);
@@ -2417,7 +2417,7 @@ void CompilerMSL::mark_struct_members_packed(const SPIRType &type)
 
 void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 {
-	uint32_t mbr_cnt = type.member_types.size();
+	uint32_t mbr_cnt = uint32_t(type.member_types.size());
 	for (uint32_t i = 0; i < mbr_cnt; i++)
 	{
 		auto &mbr_type = get<SPIRType>(type.member_types[i]);
@@ -2450,7 +2450,7 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 			if (!mbr_type.array.empty())
 			{
 				array_stride = type_struct_member_array_stride(type, i);
-				uint32_t dimensions = mbr_type.array.size() - 1;
+				uint32_t dimensions = uint32_t(mbr_type.array.size() - 1);
 				for (uint32_t dim = 0; dim < dimensions; dim++)
 				{
 					uint32_t array_size = to_array_size_literal(mbr_type, dim);
@@ -2533,7 +2533,7 @@ void CompilerMSL::align_struct(SPIRType &ib_type, unordered_set<uint32_t> &align
 
 		// Align current offset to the current member's default alignment. If the member was packed, it will observe
 		// the updated alignment here.
-		size_t msl_align_mask = get_declared_struct_member_alignment_msl(ib_type, mbr_idx) - 1;
+		uint32_t msl_align_mask = get_declared_struct_member_alignment_msl(ib_type, mbr_idx) - 1;
 		uint32_t aligned_msl_offset = (msl_offset + msl_align_mask) & ~msl_align_mask;
 
 		// Fetch the member offset as declared in the SPIRV.
@@ -2645,7 +2645,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		uint32_t array_stride = type_struct_member_array_stride(ib_type, index);
 
 		// Hack off array-of-arrays until we find the array stride per element we must have to make it work.
-		uint32_t dimensions = mbr_type.array.size() - 1;
+		uint32_t dimensions = uint32_t(mbr_type.array.size() - 1);
 		for (uint32_t dim = 0; dim < dimensions; dim++)
 			array_stride /= max(to_array_size_literal(mbr_type, dim), 1u);
 
@@ -8918,7 +8918,7 @@ uint32_t CompilerMSL::get_declared_type_array_stride_msl(const SPIRType &type, b
 	basic_type.array_size_literal.clear();
 	uint32_t value_size = get_declared_type_size_msl(basic_type, is_packed, row_major);
 
-	uint32_t dimensions = type.array.size();
+	uint32_t dimensions = uint32_t(type.array.size());
 	assert(dimensions > 0);
 	dimensions--;
 
@@ -8966,7 +8966,7 @@ uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type, 
 	if (struct_type.member_types.empty())
 		return 0;
 
-	uint32_t mbr_cnt = struct_type.member_types.size();
+	uint32_t mbr_cnt = uint32_t(struct_type.member_types.size());
 
 	// In MSL, a struct's alignment is equal to the maximum alignment of any of its members.
 	uint32_t alignment = 1;
