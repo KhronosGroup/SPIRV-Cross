@@ -3003,7 +3003,7 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 		auto &e = get<SPIRExpression>(id);
 		if (e.base_expression)
 			return to_enclosed_expression(e.base_expression) + e.expression;
-		else if (e.need_transpose && !e.access_chain)
+		else if (e.need_transpose)
 		{
 			// This should not be reached for access chains, since we always deal explicitly with transpose state
 			// when consuming an access chain expression.
@@ -6366,7 +6366,16 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool register_expression_read = (flags & ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT) == 0;
 
 	if (!chain_only)
+	{
+		// We handle transpose explicitly, so don't resolve that here.
+		auto *e = maybe_get<SPIRExpression>(base);
+		bool old_transpose = e && e->need_transpose;
+		if (e)
+			e->need_transpose = false;
 		expr = to_enclosed_expression(base, register_expression_read);
+		if (e)
+			e->need_transpose = old_transpose;
+	}
 
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
@@ -7674,19 +7683,39 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool old_need_transpose = false;
 
 		auto *ptr_expression = maybe_get<SPIRExpression>(ptr);
-		if (ptr_expression && ptr_expression->need_transpose)
+
+		if (forward)
 		{
-			old_need_transpose = true;
-			ptr_expression->need_transpose = false;
-			need_transpose = true;
+			// If we're forwarding the load, we're also going to forward transpose state, so don't transpose while
+			// taking the expression.
+			if (ptr_expression && ptr_expression->need_transpose)
+			{
+				old_need_transpose = true;
+				ptr_expression->need_transpose = false;
+				need_transpose = true;
+			}
+			else if (is_non_native_row_major_matrix(ptr))
+				need_transpose = true;
 		}
-		else if (is_non_native_row_major_matrix(ptr))
-			need_transpose = true;
 
 		// If we are forwarding this load,
 		// don't register the read to access chain here, defer that to when we actually use the expression,
 		// using the add_implied_read_expression mechanism.
-		auto expr = to_dereferenced_expression(ptr, !forward);
+		string expr;
+
+		bool is_packed = has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypePacked);
+		bool is_remapped = has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID);
+		if (forward || (!is_packed && !is_remapped))
+		{
+			// For the simple case, we do not need to deal with repacking.
+			expr = to_dereferenced_expression(ptr, false);
+		}
+		else
+		{
+			// If we are not forwarding the expression, we need to unpack and resolve any physical type remapping here before
+			// storing the expression to a temporary.
+			expr = to_unpacked_expression(ptr);
+		}
 
 		// We might need to bitcast in order to load from a builtin.
 		bitcast_from_builtin_load(ptr, expr, get<SPIRType>(result_type));
@@ -7705,7 +7734,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			convert_non_uniform_expression(type, expr);
 		}
 
-		if (ptr_expression)
+		if (forward && ptr_expression)
 			ptr_expression->need_transpose = old_need_transpose;
 
 		// By default, suppress usage tracking since using same expression multiple times does not imply any extra work.
@@ -7729,13 +7758,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		e->need_transpose = need_transpose;
 		register_read(id, ptr, forward);
 
-		// Pass through whether the result is of a packed type and the physical type ID.
-		if (has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypePacked))
-			set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
-		if (has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID))
+		if (forward)
 		{
-			set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID,
-			                        get_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID));
+			// Pass through whether the result is of a packed type and the physical type ID.
+			if (has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypePacked))
+				set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+			if (has_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID))
+			{
+				set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID,
+				                        get_extended_decoration(ptr, SPIRVCrossDecorationPhysicalTypeID));
+			}
+		}
+		else
+		{
+			// This might have been set on an earlier compilation iteration, force it to be unset.
+			unset_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+			unset_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 		}
 
 		inherit_expression_dependencies(id, ptr);
