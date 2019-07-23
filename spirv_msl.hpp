@@ -430,7 +430,8 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, uint32_t minlod, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
-	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id, bool is_packed, bool row_major) override;
+	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
+	                                   bool is_packed, bool row_major) override;
 
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool skip_argument(uint32_t id) const override;
@@ -442,7 +443,8 @@ protected:
 	bool is_patch_block(const SPIRType &type);
 	bool is_non_native_row_major_matrix(uint32_t id) override;
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
-	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id, bool is_packed) override;
+	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
+	                                     bool is_packed) override;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
@@ -521,7 +523,8 @@ protected:
 
 	const SPIRType &get_physical_member_type(const SPIRType &struct_type, uint32_t index) const;
 
-	uint32_t get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment = false, bool ignore_padding = false) const;
+	uint32_t get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment = false,
+	                                      bool ignore_padding = false) const;
 
 	std::string to_component_argument(uint32_t id);
 	void align_struct(SPIRType &ib_type, std::unordered_set<uint32_t> &aligned_structs);

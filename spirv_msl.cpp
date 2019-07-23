@@ -2466,8 +2466,10 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 				{
 					if (has_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget))
 					{
-						if (array_stride != get_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget))
-							SPIRV_CROSS_THROW("A struct is used with different array strides. Cannot express this in MSL.");
+						if (array_stride !=
+						    get_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget))
+							SPIRV_CROSS_THROW(
+							    "A struct is used with different array strides. Cannot express this in MSL.");
 					}
 					else
 						set_extended_decoration(struct_type->self, SPIRVCrossDecorationPaddingTarget, array_stride);
@@ -2650,7 +2652,8 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 		// Remove packed_ for vectors of size 1, 2 and 4.
 		if (has_extended_decoration(ib_type.self, SPIRVCrossDecorationPhysicalTypePacked))
-			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix scalar and std140 layout rules.");
+			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix "
+			                  "scalar and std140 layout rules.");
 		else
 			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
 	}
@@ -2680,7 +2683,8 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 		// Remove packed_ for vectors of size 1, 2 and 4.
 		if (has_extended_decoration(ib_type.self, SPIRVCrossDecorationPhysicalTypePacked))
-			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix scalar and std140 layout rules.");
+			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix "
+			                  "scalar and std140 layout rules.");
 		else
 			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
 	}
@@ -2710,7 +2714,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 		if (is_matrix(type) && lhs_e && lhs_e->need_transpose)
 		{
 			if (!rhs_e)
-				SPIRV_CROSS_THROW("Need to transpose right-side expression of a store to row-major matrix, but it is not a SPIRExpression.");
+				SPIRV_CROSS_THROW("Need to transpose right-side expression of a store to row-major matrix, but it is "
+				                  "not a SPIRExpression.");
 			lhs_e->need_transpose = false;
 
 			if (rhs_e && rhs_e->need_transpose)
@@ -2718,7 +2723,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 				// Direct copy, but might need to unpack RHS.
 				// Skip the transpose, as we will transpose when writing to LHS and transpose(transpose(T)) == T.
 				rhs_e->need_transpose = false;
-				statement(to_expression(lhs_expression), " = ", to_unpacked_row_major_matrix_expression(rhs_expression), ";");
+				statement(to_expression(lhs_expression), " = ", to_unpacked_row_major_matrix_expression(rhs_expression),
+				          ";");
 				rhs_e->need_transpose = true;
 			}
 			else
@@ -2760,8 +2766,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 		// This is mostly to deal with std140 padded matrices or vectors.
 
 		uint32_t physical_type_id =
-				lhs_remapped_type ? get_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID) :
-				type.self;
+		    lhs_remapped_type ? get_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID) : type.self;
 
 		auto &physical_type = get<SPIRType>(physical_type_id);
 
@@ -2801,8 +2806,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					// If RHS is also transposed, we can just copy row by row.
 					for (uint32_t i = 0; i < type.vecsize; i++)
 					{
-						statement(to_enclosed_expression(lhs_expression),
-						          "[", i, "]", store_swiz, " = ", to_unpacked_row_major_matrix_expression(rhs_expression), "[", i, "];");
+						statement(to_enclosed_expression(lhs_expression), "[", i, "]", store_swiz, " = ",
+						          to_unpacked_row_major_matrix_expression(rhs_expression), "[", i, "];");
 					}
 				}
 				else
@@ -2824,8 +2829,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						}
 						rhs_row += ")";
 
-						statement(to_enclosed_expression(lhs_expression),
-						          "[", i, "]", store_swiz, " = ", rhs_row, ";");
+						statement(to_enclosed_expression(lhs_expression), "[", i, "]", store_swiz, " = ", rhs_row, ";");
 					}
 				}
 
@@ -2858,8 +2862,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						}
 						rhs_row += ")";
 
-						statement(to_enclosed_expression(lhs_expression),
-						          "[", i, "]", store_swiz, " = ", rhs_row, ";");
+						statement(to_enclosed_expression(lhs_expression), "[", i, "]", store_swiz, " = ", rhs_row, ";");
 					}
 				}
 				else
@@ -2867,8 +2870,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					// Copy column-by-column.
 					for (uint32_t i = 0; i < type.columns; i++)
 					{
-						statement(to_enclosed_expression(lhs_expression),
-						          "[", i, "]", store_swiz, " = ", to_enclosed_unpacked_expression(rhs_expression), "[", i, "];");
+						statement(to_enclosed_expression(lhs_expression), "[", i, "]", store_swiz, " = ",
+						          to_enclosed_unpacked_expression(rhs_expression), "[", i, "];");
 					}
 				}
 			}
@@ -3660,7 +3663,8 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	// This makes the struct alignment as small as physically possible.
 	// When we actually align the struct later, we can insert padding as necessary to make the packed members behave like normally aligned types.
 	ir.for_each_typed_id<SPIRType>([&](uint32_t type_id, const SPIRType &type) {
-		if (type.basetype == SPIRType::Struct && has_extended_decoration(type_id, SPIRVCrossDecorationBufferBlockRepacked))
+		if (type.basetype == SPIRType::Struct &&
+		    has_extended_decoration(type_id, SPIRVCrossDecorationBufferBlockRepacked))
 			mark_scalar_layout_structs(type);
 	});
 
@@ -5993,8 +5997,8 @@ bool CompilerMSL::member_is_non_native_row_major_matrix(const SPIRType &type, ui
 	return has_member_decoration(type.self, index, DecorationRowMajor);
 }
 
-string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type,
-                                             uint32_t physical_type_id, bool is_packed)
+string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
+                                             bool is_packed)
 {
 	if (!is_matrix(exp_type))
 	{
@@ -8886,8 +8890,7 @@ const SPIRType &CompilerMSL::get_physical_member_type(const SPIRType &type, uint
 		return get<SPIRType>(type.member_types[index]);
 }
 
-uint32_t CompilerMSL::get_declared_type_array_stride_msl(const SPIRType &type,
-                                                         bool is_packed, bool row_major) const
+uint32_t CompilerMSL::get_declared_type_array_stride_msl(const SPIRType &type, bool is_packed, bool row_major) const
 {
 	// Array stride in MSL is always size * array_size. sizeof(float3) == 16,
 	// unlike GLSL and HLSL where array stride would be 16 and size 12.
@@ -8939,7 +8942,8 @@ uint32_t CompilerMSL::get_declared_struct_member_matrix_stride_msl(const SPIRTyp
 	                                           has_member_decoration(type.self, index, DecorationRowMajor));
 }
 
-uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment, bool ignore_padding) const
+uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment,
+                                                   bool ignore_padding) const
 {
 	// If we have a target size, that is the declared size as well.
 	if (!ignore_padding && has_extended_decoration(struct_type.self, SPIRVCrossDecorationPaddingTarget))

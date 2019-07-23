@@ -920,7 +920,8 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 	// SPIRVCrossDecorationPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
 	// This is only done selectively in GLSL as needed.
-	if (has_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset) && dec.decoration_flags.get(DecorationOffset))
+	if (has_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset) &&
+	    dec.decoration_flags.get(DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
 
 	if (attr.empty())
@@ -2516,7 +2517,7 @@ void CompilerGLSL::emit_resources()
 					if (!options.vulkan_semantics && c.specialization)
 					{
 						c.specialization_constant_macro_name =
-								constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+						    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
 					}
 					emit_constant(c);
 					emitted = true;
@@ -3008,7 +3009,8 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 			// when consuming an access chain expression.
 			uint32_t physical_type_id = get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 			bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
-			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), physical_type_id, is_packed);
+			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), physical_type_id,
+			                                is_packed);
 		}
 		else
 		{
@@ -8330,9 +8332,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			string expr;
 
 			if (opcode == OpMatrixTimesVector)
-				expr = join(to_enclosed_unpacked_expression(ops[3]), " * ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+				expr = join(to_enclosed_unpacked_expression(ops[3]), " * ",
+				            enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
 			else
-				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ", to_enclosed_unpacked_expression(ops[2]));
+				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ",
+				            to_enclosed_unpacked_expression(ops[2]));
 
 			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
 			emit_op(ops[0], ops[1], expr, forward);
@@ -9998,8 +10002,8 @@ bool CompilerGLSL::member_is_packed_physical_type(const SPIRType &type, uint32_t
 // row_major matrix result of the expression to a column_major matrix.
 // Base implementation uses the standard library transpose() function.
 // Subclasses may override to use a different function.
-string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type,
-                                              uint32_t /* physical_type_id */, bool /*is_packed*/)
+string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type, uint32_t /* physical_type_id */,
+                                              bool /*is_packed*/)
 {
 	strip_enclosed_expression(exp_str);
 	if (!is_matrix(exp_type))

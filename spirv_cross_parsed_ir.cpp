@@ -775,7 +775,7 @@ ParsedIR::LoopLock::~LoopLock()
 }
 
 ParsedIR::LoopLock::LoopLock(uint32_t *lock_)
-	: lock(lock_)
+    : lock(lock_)
 {
 	if (lock)
 		(*lock)++;
