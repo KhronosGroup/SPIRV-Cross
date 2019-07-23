@@ -2392,6 +2392,29 @@ uint32_t CompilerMSL::ensure_correct_attribute_type(uint32_t type_id, uint32_t l
 	return type_id;
 }
 
+void CompilerMSL::mark_struct_members_packed(const SPIRType &type)
+{
+	set_extended_decoration(type.self, SPIRVCrossDecorationPhysicalTypePacked);
+
+	// Problem case! Struct needs to be placed at an awkward alignment.
+	// Mark every member of the child struct as packed.
+	uint32_t mbr_cnt = type.member_types.size();
+	for (uint32_t i = 0; i < mbr_cnt; i++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[i]);
+		if (mbr_type.basetype == SPIRType::Struct)
+		{
+			// Recursively mark structs as packed.
+			auto *struct_type = &mbr_type;
+			while (!struct_type->array.empty())
+				struct_type = &get<SPIRType>(struct_type->parent_type);
+			mark_struct_members_packed(*struct_type);
+		}
+		else
+			set_extended_member_decoration(type.self, i, SPIRVCrossDecorationPhysicalTypePacked);
+	}
+}
+
 void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 {
 	uint32_t mbr_cnt = type.member_types.size();
@@ -2443,16 +2466,7 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 			}
 
 			if (struct_is_misaligned || struct_is_too_large)
-			{
-				set_extended_decoration(struct_type->self, SPIRVCrossDecorationPhysicalTypePacked);
-
-				// Problem case! Struct needs to be placed at an awkward alignment.
-				// Mark every member of the child struct as packed.
-				uint32_t child_mbr_cnt = struct_type->member_types.size();
-				for (uint32_t j = 0; j < child_mbr_cnt; j++)
-					set_extended_member_decoration(struct_type->self, j, SPIRVCrossDecorationPhysicalTypePacked);
-			}
-
+				mark_struct_members_packed(*struct_type);
 			mark_scalar_layout_structs(*struct_type);
 
 			if (struct_needs_explicit_padding)
