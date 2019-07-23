@@ -23,7 +23,7 @@ struct main0_in
 vertex main0_out main0(main0_in in [[stage_in]], constant UBO& _18 [[buffer(0)]])
 {
     main0_out out = {};
-    float2 v = in.aVertex * transpose(float4x2(_18.uMVP[0].xy, _18.uMVP[1].xy, _18.uMVP[2].xy, _18.uMVP[3].xy));
+    float2 v = float2x4(_18.uMVP[0], _18.uMVP[1]) * in.aVertex;
     out.gl_Position = (_18.uMVPR * in.aVertex) + (in.aVertex * _18.uMVPC);
     return out;
 }

@@ -8319,10 +8319,31 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpMatrixTimesMatrix:
+	{
+		auto *a = maybe_get<SPIRExpression>(ops[2]);
+		auto *b = maybe_get<SPIRExpression>(ops[3]);
+
+		// If both matrices need transpose, we can multiply in flipped order and tag the expression as transposed.
+		// a^T * b^T = (b * a)^T.
+		if (a && b && a->need_transpose && b->need_transpose)
+		{
+			a->need_transpose = false;
+			b->need_transpose = false;
+			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			get<SPIRExpression>(ops[1]).need_transpose = true;
+			a->need_transpose = true;
+			b->need_transpose = true;
+		}
+		else
+			GLSL_BOP(*);
+
+		break;
+	}
+
 	case OpFMul:
 	case OpMatrixTimesScalar:
 	case OpVectorTimesScalar:
-	case OpMatrixTimesMatrix:
 		GLSL_BOP(*);
 		break;
 

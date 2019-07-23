@@ -144,6 +144,6 @@ kernel void main0(device SSBO1& ssbo_430 [[buffer(0)]], device SSBO0& ssbo_140 [
     ssbo_430.content.m3s[5].c = _60.m3s[5].c;
     ssbo_430.content.m3s[6].c = _60.m3s[6].c;
     ssbo_430.content.m3s[7].c = _60.m3s[7].c;
-    ssbo_430.content.m1.a = transpose(ssbo_430.m6[1][1]) * ssbo_430.content.m3.a;
+    ssbo_430.content.m1.a = ssbo_430.content.m3.a * ssbo_430.m6[1][1];
 }
 

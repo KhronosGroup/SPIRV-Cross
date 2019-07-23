@@ -4563,9 +4563,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		// If the matrix needs transpose and it is square or packed, just flip the multiply order.
 		uint32_t mtx_id = ops[opcode == OpMatrixTimesVector ? 2 : 3];
 		auto *e = maybe_get<SPIRExpression>(mtx_id);
-		auto &t = expression_type(mtx_id);
-		bool is_packed = has_extended_decoration(mtx_id, SPIRVCrossDecorationPhysicalTypePacked);
-		if (e && e->need_transpose && (t.columns == t.vecsize || is_packed))
+		if (e && e->need_transpose)
 		{
 			e->need_transpose = false;
 			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");

@@ -4045,18 +4045,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	case OpMatrixTimesVector:
 	{
+		// Matrices are kept in a transposed state all the time, flip multiplication order always.
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
 
 	case OpVectorTimesMatrix:
 	{
+		// Matrices are kept in a transposed state all the time, flip multiplication order always.
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
 
 	case OpMatrixTimesMatrix:
 	{
+		// Matrices are kept in a transposed state all the time, flip multiplication order always.
 		emit_binary_func_op(ops[0], ops[1], ops[3], ops[2], "mul");
 		break;
 	}
