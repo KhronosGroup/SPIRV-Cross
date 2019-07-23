@@ -1340,13 +1340,19 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 		// Only care about packing if we are in the given range
 		if (offset >= start_offset)
 		{
+			uint32_t actual_offset = type_struct_member_offset(type, i);
+
 			// We only care about offsets in std140, std430, etc ...
 			// For EnhancedLayout variants, we have the flexibility to choose our own offsets.
 			if (!packing_has_flexible_offset(packing))
 			{
-				uint32_t actual_offset = type_struct_member_offset(type, i);
 				if (actual_offset != offset) // This cannot be the packing we're looking for.
 					return false;
+			}
+			else if ((actual_offset & (alignment - 1)) != 0)
+			{
+				// We still need to verify that alignment rules are observed, even if we have explicit offset.
+				return false;
 			}
 
 			// Verify array stride rules.
