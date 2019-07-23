@@ -2427,10 +2427,10 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 			if (!mbr_type.array.empty())
 			{
 				array_stride = type_struct_member_array_stride(type, i);
-				uint32_t dimensions = type.array.size();
-				for (uint32_t dim = 1; dim < dimensions; dim++)
+				uint32_t dimensions = mbr_type.array.size() - 1;
+				for (uint32_t dim = 0; dim < dimensions; dim++)
 				{
-					uint32_t array_size = to_array_size_literal(type, dim);
+					uint32_t array_size = to_array_size_literal(mbr_type, dim);
 					array_stride /= max(array_size, 1u);
 				}
 
@@ -2954,7 +2954,7 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 	};
 
 	// std140 array cases for vectors.
-	if (physical_type && is_array(*physical_type) && physical_type->vecsize > type.vecsize)
+	if (physical_type && is_vector(*physical_type) && is_array(*physical_type) && physical_type->vecsize > type.vecsize)
 	{
 		assert(type.vecsize >= 1 && type.vecsize <= 3);
 		return enclose_expression(expr_str) + swizzle_lut[type.vecsize - 1];

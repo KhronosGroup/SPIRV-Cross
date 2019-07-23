@@ -6545,9 +6545,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			BuiltIn builtin;
 			if (is_member_builtin(*type, index, &builtin))
 			{
-				// FIXME: We rely here on OpName on gl_in/gl_out to make this work properly.
-				// To make this properly work by omitting all OpName opcodes,
-				// we need to infer gl_in or gl_out based on the builtin, and stage.
 				if (access_chain_is_arrayed)
 				{
 					expr += ".";
@@ -6608,8 +6605,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					deferred_index = expr.substr(column_index);
 					expr.resize(column_index);
 				}
-				is_packed = false;
-				physical_type = 0;
 			}
 
 			if (index_is_literal && !is_packed && !row_major_matrix_needs_conversion)
