@@ -8330,9 +8330,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			string expr;
 
 			if (opcode == OpMatrixTimesVector)
-				expr = join(to_enclosed_expression(ops[3]), " * ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+				expr = join(to_enclosed_unpacked_expression(ops[3]), " * ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
 			else
-				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ", to_enclosed_expression(ops[2]));
+				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ", to_enclosed_unpacked_expression(ops[2]));
 
 			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
 			emit_op(ops[0], ops[1], expr, forward);

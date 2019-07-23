@@ -15,9 +15,9 @@ struct SSBO
 
 kernel void main0(device SSBO& _11 [[buffer(0)]])
 {
-    _11.v0 = _11.v1 * (float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2])) * float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2])));
-    _11.v0 = (_11.v1 * float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2]))) * float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2]));
-    _11.v0 = float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2])) * (float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2])) * _11.v1);
-    _11.v0 = (float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2])) * float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2]))) * _11.v1;
+    _11.v0 = float3(_11.v1) * (float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2])) * float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2])));
+    _11.v0 = (float3(_11.v1) * float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2]))) * float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2]));
+    _11.v0 = float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2])) * (float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2])) * float3(_11.v1));
+    _11.v0 = (float3x3(float3(_11.m1[0]), float3(_11.m1[1]), float3(_11.m1[2])) * float3x3(float3(_11.m0[0]), float3(_11.m0[1]), float3(_11.m0[2]))) * float3(_11.v1);
 }
 
