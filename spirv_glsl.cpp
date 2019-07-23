@@ -2864,7 +2864,8 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expressio
 
 	if (!need_transpose && (is_remapped || is_packed))
 	{
-		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
+		return unpack_expression_type(to_expression(id, register_expression_read),
+		                              get_pointee_type(expression_type_id(id)),
 		                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
 		                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), false);
 	}
