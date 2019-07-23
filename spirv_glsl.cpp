@@ -2838,6 +2838,15 @@ string CompilerGLSL::to_enclosed_expression(uint32_t id, bool register_expressio
 	return enclose_expression(to_expression(id, register_expression_read));
 }
 
+// Used explicitly when we want to read a row-major expression, but without any transpose shenanigans.
+// need_transpose must be forced to false.
+string CompilerGLSL::to_unpacked_row_major_matrix_expression(uint32_t id)
+{
+	return unpack_expression_type(to_expression(id), expression_type(id),
+	                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
+	                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), true);
+}
+
 string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expression_read)
 {
 	// If we need to transpose, it will also take care of unpacking rules.
@@ -2845,6 +2854,7 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expressio
 	bool need_transpose = e && e->need_transpose;
 	bool is_remapped = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 	bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+
 	if (!need_transpose && (is_remapped || is_packed))
 	{
 		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
@@ -8311,8 +8321,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (e && e->need_transpose)
 		{
 			e->need_transpose = false;
-			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
+			string expr;
+
+			if (opcode == OpMatrixTimesVector)
+				expr = join(to_enclosed_expression(ops[3]), " * ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+			else
+				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ", to_enclosed_expression(ops[2]));
+
+			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
+			emit_op(ops[0], ops[1], expr, forward);
 			e->need_transpose = true;
+			inherit_expression_dependencies(ops[1], ops[2]);
+			inherit_expression_dependencies(ops[1], ops[3]);
 		}
 		else
 			GLSL_BOP(*);
@@ -8330,10 +8350,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			a->need_transpose = false;
 			b->need_transpose = false;
-			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
-			get<SPIRExpression>(ops[1]).need_transpose = true;
+			auto expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ",
+			                 enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
+			auto &e = emit_op(ops[0], ops[1], expr, forward);
+			e.need_transpose = true;
 			a->need_transpose = true;
 			b->need_transpose = true;
+			inherit_expression_dependencies(ops[1], ops[2]);
+			inherit_expression_dependencies(ops[1], ops[3]);
 		}
 		else
 			GLSL_BOP(*);

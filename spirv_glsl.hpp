@@ -511,6 +511,7 @@ protected:
 	std::string to_rerolled_array_expression(const std::string &expr, const SPIRType &type);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
+	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
 	std::string to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_pointer_expression(uint32_t id, bool register_expression_read = true);

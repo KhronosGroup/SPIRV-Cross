@@ -2718,7 +2718,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 				// Direct copy, but might need to unpack RHS.
 				// Skip the transpose, as we will transpose when writing to LHS and transpose(transpose(T)) == T.
 				rhs_e->need_transpose = false;
-				statement(to_expression(lhs_expression), " = ", unpack_expression_explicit(rhs_expression, true), ";");
+				statement(to_expression(lhs_expression), " = ", to_unpacked_row_major_matrix_expression(rhs_expression), ";");
 				rhs_e->need_transpose = true;
 			}
 			else
@@ -2802,7 +2802,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 					for (uint32_t i = 0; i < type.vecsize; i++)
 					{
 						statement(to_enclosed_expression(lhs_expression),
-						          "[", i, "]", store_swiz, " = ", unpack_expression_explicit(rhs_expression, true), "[", i, "];");
+						          "[", i, "]", store_swiz, " = ", to_unpacked_row_major_matrix_expression(rhs_expression), "[", i, "];");
 					}
 				}
 				else
@@ -2851,7 +2851,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 						for (uint32_t j = 0; j < vector_type.vecsize; j++)
 						{
 							// Need to explicitly unpack expression since we've mucked with transpose state.
-							auto unpacked_expr = unpack_expression_explicit(rhs_expression, true);
+							auto unpacked_expr = to_unpacked_row_major_matrix_expression(rhs_expression);
 							rhs_row += join(unpacked_expr, "[", j, "][", i, "]");
 							if (j + 1 < vector_type.vecsize)
 								rhs_row += ", ";
@@ -2924,13 +2924,6 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 
 		register_write(lhs_expression);
 	}
-}
-
-string CompilerMSL::unpack_expression_explicit(uint32_t id, bool row_major)
-{
-	return unpack_expression_type(to_expression(id), expression_type(id),
-	                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
-	                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), row_major);
 }
 
 // Converts the format of the current expression from packed to unpacked,
@@ -4556,23 +4549,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (previous_instruction_opcode != OpMemoryBarrier)
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
-
-	case OpVectorTimesMatrix:
-	case OpMatrixTimesVector:
-	{
-		// If the matrix needs transpose and it is square or packed, just flip the multiply order.
-		uint32_t mtx_id = ops[opcode == OpMatrixTimesVector ? 2 : 3];
-		auto *e = maybe_get<SPIRExpression>(mtx_id);
-		if (e && e->need_transpose)
-		{
-			e->need_transpose = false;
-			emit_binary_op(ops[0], ops[1], ops[3], ops[2], "*");
-			e->need_transpose = true;
-		}
-		else
-			MSL_BOP(*);
-		break;
-	}
 
 	case OpOuterProduct:
 	{
