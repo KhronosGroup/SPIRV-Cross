@@ -10058,7 +10058,7 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 	return true;
 }
 
-// Checks if we need to remap physical type IDs when declaring the type ina buffer.
+// Checks if we need to remap physical type IDs when declaring the type in a buffer.
 bool CompilerGLSL::member_is_remapped_physical_type(const SPIRType &type, uint32_t index) const
 {
 	return has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypeID);
@@ -10089,7 +10089,7 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 
 		auto transposed_expr = type_to_glsl_constructor(exp_type) + "(";
 
-		// Storing a column to a row-major matrix. Unroll the write.
+		// Loading a column from a row-major matrix. Unroll the load.
 		for (uint32_t c = 0; c < exp_type.vecsize; c++)
 		{
 			transposed_expr += join(exp_str, '[', c, ']', column_expr);
