@@ -2881,7 +2881,8 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 		// according to GLSL spec, and it depends on the sampler itself.
 		// Just assume X == Y, so we will need to splat the result to a float2.
 		statement("float _", id, "_tmp = ", expr, ";");
-		emit_op(result_type, id, join("float2(_", id, "_tmp, _", id, "_tmp)"), true, true);
+		statement("float2 _", id, " = _", id, "_tmp.xx;");
+		set<SPIRExpression>(id, join("_", id), result_type, true);
 	}
 	else
 	{
@@ -2897,7 +2898,6 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 	case OpImageSampleImplicitLod:
 	case OpImageSampleProjImplicitLod:
 	case OpImageSampleProjDrefImplicitLod:
-	case OpImageQueryLod:
 		register_control_dependent_expression(id);
 		break;
 
