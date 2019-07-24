@@ -2410,7 +2410,7 @@ void CompilerMSL::mark_struct_members_packed(const SPIRType &type)
 				struct_type = &get<SPIRType>(struct_type->parent_type);
 			mark_struct_members_packed(*struct_type);
 		}
-		else
+		else if (!is_scalar(mbr_type))
 			set_extended_member_decoration(type.self, i, SPIRVCrossDecorationPhysicalTypePacked);
 	}
 }

@@ -10,25 +10,25 @@ typedef packed_float3 packed_rm_float3x2[2];
 struct S0
 {
     packed_float2 a[1];
-    packed_float b;
+    float b;
 };
 
 struct S1
 {
     packed_float3 a;
-    packed_float b;
+    float b;
 };
 
 struct S2
 {
     packed_float3 a[1];
-    packed_float b;
+    float b;
 };
 
 struct S3
 {
     packed_float2 a;
-    packed_float b;
+    float b;
 };
 
 struct Content
