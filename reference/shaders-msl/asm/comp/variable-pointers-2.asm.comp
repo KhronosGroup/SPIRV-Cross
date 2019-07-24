@@ -31,9 +31,10 @@ kernel void main0(device foo& buf [[buffer(0)]], constant bar& cb [[buffer(1)]],
 {
     device foo* _46 = select_buffer(buf, cb);
     device foo* _45 = _46;
+    device foo* _48 = _45;
     device int* _52;
     device int* _55;
-    _52 = &_45->a[0u];
+    _52 = &_48->a[0u];
     _55 = &buf.a[0u];
     int _57;
     int _58;

@@ -7829,11 +7829,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (meta.storage_is_invariant)
 			set_decoration(ops[1], DecorationInvariant);
 
+		// If we have some expression dependencies in our access chain, this access chain is technically a forwarded
+		// temporary which could be subject to invalidation.
+		// Need to assume we're forwarded while calling inherit_expression_depdendencies.
+		forwarded_temporaries.insert(ops[1]);
+		// The access chain itself is never forced to a temporary, but its dependencies might.
+		suppressed_usage_tracking.insert(ops[1]);
+
 		for (uint32_t i = 2; i < length; i++)
 		{
 			inherit_expression_dependencies(ops[1], ops[i]);
 			add_implied_read_expression(expr, ops[i]);
 		}
+
+		// If we have no dependencies after all, i.e., all indices in the access chain are immutable temporaries,
+		// we're not forwarded after all.
+		if (expr.expression_dependencies.empty())
+			forwarded_temporaries.erase(ops[1]);
 
 		break;
 	}
@@ -8230,9 +8242,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			// Need a copy.
 			// For pointer types, we copy the pointer itself.
-			statement(declare_temporary(result_type, id), to_expression(rhs), ";");
+			statement(declare_temporary(result_type, id), to_unpacked_expression(rhs), ";");
 			set<SPIRExpression>(id, to_name(id), result_type, true);
-			inherit_expression_dependencies(id, rhs);
 		}
 		else
 		{
@@ -8249,7 +8260,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// If we're copying an access chain, need to inherit the read expressions.
 			auto *rhs_expr = maybe_get<SPIRExpression>(rhs);
 			if (rhs_expr)
+			{
 				e.implied_read_expressions = rhs_expr->implied_read_expressions;
+				e.expression_dependencies = rhs_expr->expression_dependencies;
+			}
 		}
 		break;
 	}
@@ -11130,16 +11144,11 @@ void CompilerGLSL::branch_to_continue(uint32_t from, uint32_t to)
 	{
 		// Just emit the whole block chain as is.
 		auto usage_counts = expression_usage_counts;
-		auto invalid = invalid_expressions;
 
 		emit_block_chain(to_block);
 
-		// Expression usage counts and invalid expressions
-		// are moot after returning from the continue block.
-		// Since we emit the same block multiple times,
-		// we don't want to invalidate ourselves.
+		// Expression usage counts are moot after returning from the continue block.
 		expression_usage_counts = usage_counts;
-		invalid_expressions = invalid;
 	}
 	else
 	{
@@ -11182,7 +11191,6 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 {
 	flush_phi(from, to);
 	flush_control_dependent_expressions(from);
-	flush_all_active_variables();
 
 	// This is only a continue if we branch to our loop dominator.
 	if ((ir.block_meta[to] & ParsedIR::BLOCK_META_LOOP_HEADER_BIT) != 0 && get<SPIRBlock>(from).loop_dominator == to)

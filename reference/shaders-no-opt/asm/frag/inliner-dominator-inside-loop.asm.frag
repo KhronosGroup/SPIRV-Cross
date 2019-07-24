@@ -147,7 +147,6 @@ void main()
         _193 = _192;
         break;
     } while (false);
-    vec4 _194 = _193 * 1.0;
     vec4 _220;
     do
     {
@@ -165,16 +164,15 @@ void main()
         _220 = _219;
         break;
     } while (false);
-    vec2 _221 = _220.wy;
     vec2 _223 = vec2(1.0);
-    vec2 _224 = (_221 * 2.0) - _223;
+    vec2 _224 = (_220.wy * 2.0) - _223;
     vec3 _232 = vec3(_224, sqrt(clamp(1.0 + dot(-_224, _224), 0.0, 1.0)));
     vec2 _240 = (texture(SPIRV_Cross_CombinedNormalDetailMapTextureNormalDetailMapSampler, _166 * 0.0).wy * 2.0) - _223;
     vec2 _252 = _232.xy + (vec3(_240, sqrt(clamp(1.0 + dot(-_240, _240), 0.0, 1.0))).xy * 0.0);
     vec3 _253 = vec3(_252.x, _252.y, _232.z);
     vec2 _255 = _253.xy * _165;
     vec3 _256 = vec3(_255.x, _255.y, _253.z);
-    vec3 _271 = ((IN_Color.xyz * _194.xyz) * (1.0 + (_256.x * 0.300000011920928955078125))) * (texture(SPIRV_Cross_CombinedStudsMapTextureStudsMapSampler, _156.UvStuds).x * 2.0);
+    vec3 _271 = ((IN_Color.xyz * (_193 * 1.0).xyz) * (1.0 + (_256.x * 0.300000011920928955078125))) * (texture(SPIRV_Cross_CombinedStudsMapTextureStudsMapSampler, _156.UvStuds).x * 2.0);
     vec4 _298;
     do
     {

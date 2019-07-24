@@ -154,7 +154,6 @@ fragment main0_out main0(main0_in in [[stage_in]], constant CB0& _19 [[buffer(0)
         _193 = _192;
         break;
     } while (false);
-    float4 _194 = _193 * 1.0;
     float4 _220;
     do
     {
@@ -172,16 +171,15 @@ fragment main0_out main0(main0_in in [[stage_in]], constant CB0& _19 [[buffer(0)
         _220 = _219;
         break;
     } while (false);
-    float2 _221 = _220.wy;
     float2 _223 = float2(1.0);
-    float2 _224 = (_221 * 2.0) - _223;
+    float2 _224 = (_220.wy * 2.0) - _223;
     float3 _232 = float3(_224, sqrt(fast::clamp(1.0 + dot(-_224, _224), 0.0, 1.0)));
     float2 _240 = (NormalDetailMapTexture.sample(NormalDetailMapSampler, (_166 * 0.0)).wy * 2.0) - _223;
     float2 _252 = _232.xy + (float3(_240, sqrt(fast::clamp(1.0 + dot(-_240, _240), 0.0, 1.0))).xy * 0.0);
     float3 _253 = float3(_252.x, _252.y, _232.z);
     float2 _255 = _253.xy * _165;
     float3 _256 = float3(_255.x, _255.y, _253.z);
-    float3 _271 = ((in.IN_Color.xyz * _194.xyz) * (1.0 + (_256.x * 0.300000011920928955078125))) * (StudsMapTexture.sample(StudsMapSampler, _156.UvStuds).x * 2.0);
+    float3 _271 = ((in.IN_Color.xyz * (_193 * 1.0).xyz) * (1.0 + (_256.x * 0.300000011920928955078125))) * (StudsMapTexture.sample(StudsMapSampler, _156.UvStuds).x * 2.0);
     float4 _298;
     do
     {

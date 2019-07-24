@@ -51,22 +51,13 @@ fragment main0_out main0()
         out.FragColor += _62;
         int2 _148;
         _148 = int2(0);
-        int _102;
-        for (;;)
+        for (; _148.x < 10; )
         {
-            _102 = _148.x;
-            if (_102 < 10)
-            {
-                out.FragColor += _148.y;
-                int2 _144 = _148;
-                _144.x = _102 + 4;
-                _148 = _144;
-                continue;
-            }
-            else
-            {
-                break;
-            }
+            out.FragColor += _148.y;
+            int2 _144 = _148;
+            _144.x = _148.x + 4;
+            _148 = _144;
+            continue;
         }
         for (int _150 = _62; _150 < 40; )
         {
