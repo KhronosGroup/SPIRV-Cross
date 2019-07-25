@@ -1501,6 +1501,12 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 		const auto *true_block = maybe_get<SPIRBlock>(block.true_block);
 		const auto *merge_block = maybe_get<SPIRBlock>(dominator.merge_block);
 
+		// If we need to flush Phi in this block, we cannot have a DoWhile loop.
+		bool flush_phi_to_false = false_block && flush_phi_required(block.self, block.false_block);
+		bool flush_phi_to_true = true_block && flush_phi_required(block.self, block.true_block);
+		if (flush_phi_to_false || flush_phi_to_true)
+			return SPIRBlock::ComplexLoop;
+
 		bool positive_do_while = block.true_block == dominator.self &&
 		                         (block.false_block == dominator.merge_block ||
 		                          (false_block && merge_block && execution_is_noop(*false_block, *merge_block)));
@@ -4245,4 +4251,13 @@ bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
 
 	// If parent type has same pointer depth, we must have an array of pointers.
 	return type.pointer_depth == get<SPIRType>(type.parent_type).pointer_depth;
+}
+
+bool Compiler::flush_phi_required(uint32_t from, uint32_t to) const
+{
+	auto &child = get<SPIRBlock>(to);
+	for (auto &phi : child.phi_variables)
+		if (phi.parent == from)
+			return true;
+	return false;
 }

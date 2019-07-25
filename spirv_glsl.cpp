@@ -11060,15 +11060,6 @@ void CompilerGLSL::emit_fixup()
 	}
 }
 
-bool CompilerGLSL::flush_phi_required(uint32_t from, uint32_t to)
-{
-	auto &child = get<SPIRBlock>(to);
-	for (auto &phi : child.phi_variables)
-		if (phi.parent == from)
-			return true;
-	return false;
-}
-
 void CompilerGLSL::flush_phi(uint32_t from, uint32_t to)
 {
 	auto &child = get<SPIRBlock>(to);
@@ -11238,9 +11229,16 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 
 void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uint32_t false_block)
 {
-	// If we branch directly to a selection merge target, we don't really need a code path.
+	auto &from_block = get<SPIRBlock>(from);
+	uint32_t merge_block = from_block.merge == SPIRBlock::MergeSelection ? from_block.next_block : 0;
+
+	// If we branch directly to a selection merge target, we don't need a code path.
+	// This covers both merge out of if () / else () as well as a break for switch blocks.
 	bool true_sub = !is_conditional(true_block);
 	bool false_sub = !is_conditional(false_block);
+
+	bool true_block_is_selection_merge = true_block == merge_block;
+	bool false_block_is_selection_merge = false_block == merge_block;
 
 	if (true_sub)
 	{
@@ -11250,7 +11248,11 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 		branch(from, true_block);
 		end_scope();
 
-		if (false_sub || is_continue(false_block) || is_break(false_block))
+		// If we merge to continue, we handle that explicitly in emit_block_chain(),
+		// so there is no need to branch to it directly here.
+		// break; is required to handle ladder fallthrough cases, so keep that in for now, even
+		// if we could potentially handle it in emit_block_chain().
+		if (false_sub || (!false_block_is_selection_merge && is_continue(false_block)) || is_break(false_block))
 		{
 			statement("else");
 			begin_scope();
@@ -11265,7 +11267,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 			end_scope();
 		}
 	}
-	else if (false_sub && !true_sub)
+	else if (false_sub)
 	{
 		// Only need false path, use negative conditional.
 		emit_block_hints(get<SPIRBlock>(from));
@@ -11274,7 +11276,7 @@ void CompilerGLSL::branch(uint32_t from, uint32_t cond, uint32_t true_block, uin
 		branch(from, false_block);
 		end_scope();
 
-		if (is_continue(true_block) || is_break(true_block))
+		if ((!true_block_is_selection_merge && is_continue(true_block)) || is_break(true_block))
 		{
 			statement("else");
 			begin_scope();
