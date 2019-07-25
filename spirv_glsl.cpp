@@ -4654,16 +4654,16 @@ void CompilerGLSL::emit_sampled_image_op(uint32_t result_type, uint32_t result_i
 	{
 		emit_binary_func_op(result_type, result_id, image_id, samp_id,
 		                    type_to_glsl(get<SPIRType>(result_type), result_id).c_str());
-
-		// Make sure to suppress usage tracking and any expression invalidation.
-		// It is illegal to create temporaries of opaque types.
-		forwarded_temporaries.erase(result_id);
 	}
 	else
 	{
 		// Make sure to suppress usage tracking. It is illegal to create temporaries of opaque types.
 		emit_op(result_type, result_id, to_combined_image_sampler(image_id, samp_id), true, true);
 	}
+
+	// Make sure to suppress usage tracking and any expression invalidation.
+	// It is illegal to create temporaries of opaque types.
+	forwarded_temporaries.erase(result_id);
 }
 
 static inline bool image_opcode_is_sample_no_dref(Op op)
@@ -4976,10 +4976,18 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 		{
 			if (options.vulkan_semantics)
 			{
-				// Newer glslang supports this extension to deal with texture2D as argument to texture functions.
 				if (dummy_sampler_id)
-					SPIRV_CROSS_THROW("Vulkan GLSL should not have a dummy sampler for combining.");
-				require_extension_internal("GL_EXT_samplerless_texture_functions");
+				{
+					// Don't need to consider Shadow state since the dummy sampler is always non-shadow.
+					auto sampled_type = type;
+					sampled_type.basetype = SPIRType::SampledImage;
+					return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ", to_expression(dummy_sampler_id), ")");
+				}
+				else
+				{
+					// Newer glslang supports this extension to deal with texture2D as argument to texture functions.
+					require_extension_internal("GL_EXT_samplerless_texture_functions");
+				}
 			}
 			else
 			{
