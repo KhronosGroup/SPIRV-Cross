@@ -107,8 +107,11 @@ void CompilerMSL::build_implicit_builtins()
 	                                                       active_input_builtins.get(BuiltInSubgroupGtMask));
 	bool need_multiview = get_execution_model() == ExecutionModelVertex && !msl_options.view_index_from_device_index &&
 	                      (msl_options.multiview || active_input_builtins.get(BuiltInViewIndex));
+	bool need_dispatch_base =
+	    msl_options.dispatch_base && get_execution_model() == ExecutionModelGLCompute &&
+	    (active_input_builtins.get(BuiltInWorkgroupId) || active_input_builtins.get(BuiltInGlobalInvocationId));
 	if (need_subpass_input || need_sample_pos || need_subgroup_mask || need_vertex_params || need_tesc_params ||
-	    need_multiview || needs_subgroup_invocation_id)
+	    need_multiview || need_dispatch_base || needs_subgroup_invocation_id)
 	{
 		bool has_frag_coord = false;
 		bool has_sample_id = false;
@@ -121,6 +124,7 @@ void CompilerMSL::build_implicit_builtins()
 		bool has_subgroup_invocation_id = false;
 		bool has_subgroup_size = false;
 		bool has_view_idx = false;
+		uint32_t workgroup_id_type = 0;
 
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 			if (var.storage != StorageClassInput || !ir.meta[var.self].decoration.builtin)
@@ -208,6 +212,13 @@ void CompilerMSL::build_implicit_builtins()
 					has_view_idx = true;
 				}
 			}
+
+			// The base workgroup needs to have the same type and vector size
+			// as the workgroup or invocation ID, so keep track of the type that
+			// was used.
+			if (need_dispatch_base && workgroup_id_type == 0 &&
+			    (builtin == BuiltInWorkgroupId || builtin == BuiltInGlobalInvocationId))
+				workgroup_id_type = var.basetype;
 		});
 
 		if (!has_frag_coord && need_subpass_input)
@@ -456,6 +467,42 @@ void CompilerMSL::build_implicit_builtins()
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupSize);
 			builtin_subgroup_size_id = var_id;
 			mark_implicit_builtin(StorageClassInput, BuiltInSubgroupSize, var_id);
+		}
+
+		if (need_dispatch_base)
+		{
+			uint32_t var_id;
+			if (msl_options.supports_msl_version(1, 2))
+			{
+				// If we have MSL 1.2, we can (ab)use the [[grid_origin]] builtin
+				// to convey this information and save a buffer slot.
+				uint32_t offset = ir.increase_bound_by(1);
+				var_id = offset;
+
+				set<SPIRVariable>(var_id, workgroup_id_type, StorageClassInput);
+				set_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase);
+				get_entry_point().interface_variables.push_back(var_id);
+			}
+			else
+			{
+				// Otherwise, we need to fall back to a good ol' fashioned buffer.
+				uint32_t offset = ir.increase_bound_by(2);
+				var_id = offset;
+				uint32_t type_id = offset + 1;
+
+				SPIRType var_type = get<SPIRType>(workgroup_id_type);
+				var_type.storage = StorageClassUniform;
+				set<SPIRType>(type_id, var_type);
+
+				set<SPIRVariable>(var_id, type_id, StorageClassUniform);
+				// This should never match anything.
+				set_decoration(var_id, DecorationDescriptorSet, ~(5u));
+				set_decoration(var_id, DecorationBinding, msl_options.indirect_params_buffer_index);
+				set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary,
+				                        msl_options.indirect_params_buffer_index);
+			}
+			set_name(var_id, "spvDispatchBase");
+			builtin_dispatch_base_id = var_id;
 		}
 	}
 
@@ -802,6 +849,8 @@ string CompilerMSL::compile()
 		active_interface_variables.insert(view_mask_buffer_id);
 	if (builtin_layer_id)
 		active_interface_variables.insert(builtin_layer_id);
+	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
+		active_interface_variables.insert(builtin_dispatch_base_id);
 
 	// Create structs to hold input, output and uniform variables.
 	// Do output first to ensure out. is declared at top of entry function.
@@ -6748,6 +6797,19 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				ep_args += "]]";
 			}
 		}
+
+		if (var.storage == StorageClassInput &&
+		    has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
+		{
+			// This is a special implicit builtin, not corresponding to any SPIR-V builtin,
+			// which holds the base that was passed to vkCmdDispatchBase(). If it's present,
+			// assume we emitted it for a good reason.
+			assert(msl_options.supports_msl_version(1, 2));
+			if (!ep_args.empty())
+				ep_args += ", ";
+
+			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_origin]]";
+		}
 	});
 
 	// Correct the types of all encountered active builtins. We couldn't do this before
@@ -7023,7 +7085,11 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		default:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += type_to_glsl(type, var_id) + " " + r.name;
+			if (!type.pointer)
+				ep_args += get_type_address_space(get<SPIRType>(var.basetype), var_id) + " " +
+				           type_to_glsl(type, var_id) + "& " + r.name;
+			else
+				ep_args += type_to_glsl(type, var_id) + " " + r.name;
 			ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
 			break;
 		}
@@ -7341,6 +7407,35 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
 					          msl_options.device_index, ";");
+				});
+				break;
+			case BuiltInWorkgroupId:
+				if (!msl_options.dispatch_base || !active_input_builtins.get(BuiltInWorkgroupId))
+					break;
+
+				// The vkCmdDispatchBase() command lets the client set the base value
+				// of WorkgroupId. Metal has no direct equivalent; we must make this
+				// adjustment ourselves.
+				entry_func.fixup_hooks_in.push_back([=]() {
+					statement(to_expression(var_id), " += ", to_dereferenced_expression(builtin_dispatch_base_id), ";");
+				});
+				break;
+			case BuiltInGlobalInvocationId:
+				if (!msl_options.dispatch_base || !active_input_builtins.get(BuiltInGlobalInvocationId))
+					break;
+
+				// GlobalInvocationId is defined as LocalInvocationId + WorkgroupId * WorkgroupSize.
+				// This needs to be adjusted too.
+				entry_func.fixup_hooks_in.push_back([=]() {
+					auto &execution = this->get_entry_point();
+					uint32_t workgroup_size_id = execution.workgroup_size.constant;
+					if (workgroup_size_id)
+						statement(to_expression(var_id), " += ", to_dereferenced_expression(builtin_dispatch_base_id),
+						          " * ", to_expression(workgroup_size_id), ";");
+					else
+						statement(to_expression(var_id), " += ", to_dereferenced_expression(builtin_dispatch_base_id),
+						          " * uint3(", execution.workgroup_size.x, ", ", execution.workgroup_size.y, ", ",
+						          execution.workgroup_size.z, ");");
 				});
 				break;
 			default:
