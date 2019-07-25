@@ -972,6 +972,8 @@ protected:
 	bool reflection_ssbo_instance_name_is_significant() const;
 	std::string get_remapped_declared_block_name(uint32_t id, bool fallback_prefer_instance_name) const;
 
+	bool flush_phi_required(uint32_t from, uint32_t to) const;
+
 private:
 	// Used only to implement the old deprecated get_entry_point() interface.
 	const SPIREntryPoint &get_first_entry_point(const std::string &name) const;
