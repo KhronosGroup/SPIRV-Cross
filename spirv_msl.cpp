@@ -7427,7 +7427,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// GlobalInvocationId is defined as LocalInvocationId + WorkgroupId * WorkgroupSize.
 				// This needs to be adjusted too.
 				entry_func.fixup_hooks_in.push_back([=]() {
-					auto &execution = get_entry_point();
+					auto &execution = this->get_entry_point();
 					uint32_t workgroup_size_id = execution.workgroup_size.constant;
 					if (workgroup_size_id)
 						statement(to_expression(var_id), " += ", to_dereferenced_expression(builtin_dispatch_base_id),
