@@ -519,6 +519,7 @@ struct CLIArguments
 	bool msl_dispatch_base = false;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
+	bool vulkan_glsl_disable_ext_samplerless_texture_functions = false;
 	bool emit_line_directives = false;
 	SmallVector<uint32_t> msl_discrete_descriptor_sets;
 	SmallVector<PLSArg> pls_in;
@@ -585,6 +586,7 @@ static void print_help()
 	                "\t[--cpp-interface-name <name>]\n"
 	                "\t[--glsl-emit-push-constant-as-ubo]\n"
 	                "\t[--glsl-emit-ubo-as-plain-uniforms]\n"
+	                "\t[--vulkan-glsl-disable-ext-samplerless-texture-functions]\n"
 	                "\t[--msl]\n"
 	                "\t[--msl-version <MMmmpp>]\n"
 	                "\t[--msl-capture-output]\n"
@@ -768,7 +770,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
-		if (!args.vulkan_semantics)
+		if (!args.vulkan_semantics || args.vulkan_glsl_disable_ext_samplerless_texture_functions)
 			build_dummy_sampler = true;
 		compiler.reset(new CompilerGLSL(move(spirv_parser.get_parsed_ir())));
 	}
@@ -1061,6 +1063,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
 	cbs.add("--glsl-emit-push-constant-as-ubo", [&args](CLIParser &) { args.glsl_emit_push_constant_as_ubo = true; });
 	cbs.add("--glsl-emit-ubo-as-plain-uniforms", [&args](CLIParser &) { args.glsl_emit_ubo_as_plain_uniforms = true; });
+	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions", [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });

@@ -385,6 +385,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--glsl-emit-push-constant-as-ubo']
     if '.line.' in shader:
         extra_args += ['--emit-line-directives']
+    if '.no-samplerless.' in shader:
+        extra_args += ['--vulkan-glsl-disable-ext-samplerless-texture-functions']
 
     spirv_cross_path = paths.spirv_cross
 
