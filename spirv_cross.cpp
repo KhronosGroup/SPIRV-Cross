@@ -3294,10 +3294,11 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 		{
 			builder.add_block(block);
 
-			// If a temporary is used in more than one block, we might have to lift continue block
-			// access up to loop header like we did for variables.
 			if (blocks.size() != 1 && is_continue(block))
 			{
+				// The risk here is that inner loop can dominate the continue block.
+				// Any temporary we access in the continue block must be declared before the loop.
+				// This is moot for complex loops however.
 				auto &loop_header_block = get<SPIRBlock>(ir.continue_block_to_loop_header[block]);
 				assert(loop_header_block.merge == SPIRBlock::MergeLoop);
 
@@ -3305,14 +3306,17 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				if (!loop_header_block.complex_continue)
 					builder.add_block(loop_header_block.self);
 			}
-			else if (blocks.size() != 1 && is_single_block_loop(block))
-			{
-				// Awkward case, because the loop header is also the continue block.
-				force_temporary = true;
-			}
 		}
 
 		uint32_t dominating_block = builder.get_dominator();
+
+		if (blocks.size() != 1 && is_single_block_loop(dominating_block))
+		{
+			// Awkward case, because the loop header is also the continue block,
+			// so hoisting to loop header does not help.
+			force_temporary = true;
+		}
+
 		if (dominating_block)
 		{
 			// If we touch a variable in the dominating block, this is the expected setup.
