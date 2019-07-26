@@ -5260,6 +5260,32 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
 
+	case GLSLstd450Modf:
+	case GLSLstd450Frexp:
+	{
+		// Special case. If the variable is a scalar access chain, we cannot use it directly. We have to emit a temporary.
+		auto *ptr = maybe_get<SPIRExpression>(args[1]);
+		if (ptr && ptr->access_chain && is_scalar(expression_type(args[1])))
+		{
+			register_call_out_argument(args[1]);
+			forced_temporaries.insert(id);
+
+			// Need to create temporaries and copy over to access chain after.
+			// We cannot directly take the reference of a vector swizzle in MSL, even if it's scalar ...
+			uint32_t &tmp_id = extra_sub_expressions[id];
+			if (!tmp_id)
+				tmp_id = ir.increase_bound_by(1);
+
+			uint32_t tmp_type_id = get_pointee_type_id(ptr->expression_type);
+			emit_uninitialized_temporary_expression(tmp_type_id, tmp_id);
+			emit_binary_func_op(result_type, id, args[0], tmp_id, eop == GLSLstd450Modf ? "modf" : "frexp");
+			statement(to_expression(args[1]), " = ", to_expression(tmp_id), ";");
+		}
+		else
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
