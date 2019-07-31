@@ -441,8 +441,7 @@ protected:
 	void emit_variable_temporary_copies(const SPIRVariable &var);
 
 	bool should_dereference(uint32_t id);
-	bool should_forward(uint32_t id) const;
-	bool should_suppress_usage_tracking(uint32_t id) const;
+	bool should_forward(uint32_t id);
 	void emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp);
 	void emit_nminmax_op(uint32_t result_type, uint32_t id, uint32_t op0, uint32_t op1, GLSLstd450 op);
 	bool to_trivial_mix_op(const SPIRType &type, std::string &op, uint32_t left, uint32_t right, uint32_t lerp);
@@ -473,8 +472,7 @@ protected:
 	                                  uint32_t false_value);
 
 	void emit_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
-	bool expression_is_forwarded(uint32_t id) const;
-	bool expression_suppresses_usage_tracking(uint32_t id) const;
+	bool expression_is_forwarded(uint32_t id);
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 

@@ -814,7 +814,6 @@ protected:
 
 	std::unordered_set<uint32_t> forced_temporaries;
 	std::unordered_set<uint32_t> forwarded_temporaries;
-	std::unordered_set<uint32_t> suppressed_usage_tracking;
 	std::unordered_set<uint32_t> hoisted_temporaries;
 
 	Bitset active_input_builtins;
