@@ -4981,7 +4981,8 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 					// Don't need to consider Shadow state since the dummy sampler is always non-shadow.
 					auto sampled_type = type;
 					sampled_type.basetype = SPIRType::SampledImage;
-					return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ", to_expression(dummy_sampler_id), ")");
+					return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ",
+					            to_expression(dummy_sampler_id), ")");
 				}
 				else
 				{
@@ -7550,14 +7551,16 @@ void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression 
 	// Allow trivially forwarded expressions like OpLoad or trivial shuffles,
 	// these will be marked as having suppressed usage tracking.
 	// Our only concern is to make sure arithmetic operations are done in similar ways.
-	if (expression_is_forwarded(expr.self) && !expression_suppresses_usage_tracking(expr.self))
+	if (expression_is_forwarded(expr.self) && !expression_suppresses_usage_tracking(expr.self) &&
+	    forced_invariant_temporaries.count(expr.self) == 0)
 	{
 		forced_temporaries.insert(expr.self);
+		forced_invariant_temporaries.insert(expr.self);
 		force_recompile();
-	}
 
-	for (auto &dependent : expr.expression_dependencies)
-		disallow_forwarding_in_expression_chain(get<SPIRExpression>(dependent));
+		for (auto &dependent : expr.expression_dependencies)
+			disallow_forwarding_in_expression_chain(get<SPIRExpression>(dependent));
+	}
 }
 
 void CompilerGLSL::handle_store_to_invariant_variable(uint32_t store_id, uint32_t value_id)
