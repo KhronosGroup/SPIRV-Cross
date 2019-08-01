@@ -1063,7 +1063,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
 	cbs.add("--glsl-emit-push-constant-as-ubo", [&args](CLIParser &) { args.glsl_emit_push_constant_as_ubo = true; });
 	cbs.add("--glsl-emit-ubo-as-plain-uniforms", [&args](CLIParser &) { args.glsl_emit_ubo_as_plain_uniforms = true; });
-	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions", [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
+	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions",
+	        [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
