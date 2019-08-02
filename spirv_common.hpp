@@ -1431,6 +1431,9 @@ enum ExtendedDecorations
 	// Used for decorations like resource indices for samplers when part of combined image samplers.
 	// A variable might need to hold two resource indices in this case.
 	SPIRVCrossDecorationResourceIndexSecondary,
+	// Used for resource indices for multiplanar images when part of combined image samplers.
+	SPIRVCrossDecorationResourceIndexTertiary,
+	SPIRVCrossDecorationResourceIndexQuaternary,
 
 	// Marks a buffer block for using explicit offsets (GLSL/HLSL).
 	SPIRVCrossDecorationExplicitOffset,
@@ -1438,6 +1441,12 @@ enum ExtendedDecorations
 	// Apply to a variable in the Input storage class; marks it as holding the base group passed to vkCmdDispatchBase().
 	// In MSL, this is used to adjust the WorkgroupId and GlobalInvocationId variables.
 	SPIRVCrossDecorationBuiltInDispatchBase,
+
+	// Apply to a variable that is a function parameter; marks it as being a "dynamic"
+	// combined image-sampler. In MSL, this is used when a function parameter might hold
+	// either a regular combined image-sampler or one that has an attached sampler
+	// Y'CbCr conversion.
+	SPIRVCrossDecorationDynamicImageSampler,
 
 	SPIRVCrossDecorationCount
 };

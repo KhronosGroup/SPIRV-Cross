@@ -2719,7 +2719,7 @@ void CompilerGLSL::emit_resources()
 // Returns a string representation of the ID, usable as a function arg.
 // Default is to simply return the expression representation fo the arg ID.
 // Subclasses may override to modify the return value.
-string CompilerGLSL::to_func_call_arg(uint32_t id)
+string CompilerGLSL::to_func_call_arg(const SPIRFunction::Parameter &, uint32_t id)
 {
 	// Make sure that we use the name of the original variable, and not the parameter alias.
 	uint32_t name_id = id;
@@ -4796,12 +4796,40 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 {
 	auto *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
-	uint32_t length = i.length;
 
 	SmallVector<uint32_t> inherited_expressions;
 
 	uint32_t result_type_id = ops[0];
 	uint32_t id = ops[1];
+
+	bool forward = false;
+	string expr = to_texture_op(i, &forward, inherited_expressions);
+	emit_op(result_type_id, id, expr, forward);
+	for (auto &inherit : inherited_expressions)
+		inherit_expression_dependencies(id, inherit);
+
+	switch (op)
+	{
+	case OpImageSampleDrefImplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageSampleProjDrefImplicitLod:
+		register_control_dependent_expression(id);
+		break;
+
+	default:
+		break;
+	}
+}
+
+std::string CompilerGLSL::to_texture_op(const Instruction &i, bool *forward,
+                                        SmallVector<uint32_t> &inherited_expressions)
+{
+	auto *ops = stream(i);
+	auto op = static_cast<Op>(i.op);
+	uint32_t length = i.length;
+
+	uint32_t result_type_id = ops[0];
 	uint32_t img = ops[2];
 	uint32_t coord = ops[3];
 	uint32_t dref = 0;
@@ -4942,12 +4970,11 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	test(minlod, ImageOperandsMinLodMask);
 
 	string expr;
-	bool forward = false;
 	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
 	                         (!!grad_x || !!grad_y), !!dref, lod, minlod);
 	expr += "(";
 	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
-	                         coffset, offset, bias, comp, sample, minlod, &forward);
+	                         coffset, offset, bias, comp, sample, minlod, forward);
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
@@ -4989,22 +5016,7 @@ void CompilerGLSL::emit_texture_op(const Instruction &i)
 	if (op == OpImageRead)
 		expr = remap_swizzle(result_type, 4, expr);
 
-	emit_op(result_type_id, id, expr, forward);
-	for (auto &inherit : inherited_expressions)
-		inherit_expression_dependencies(id, inherit);
-
-	switch (op)
-	{
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
-		register_control_dependent_expression(id);
-		break;
-
-	default:
-		break;
-	}
+	return expr;
 }
 
 bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
@@ -8078,7 +8090,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (skip_argument(arg[i]))
 				continue;
 
-			arglist.push_back(to_func_call_arg(arg[i]));
+			arglist.push_back(to_func_call_arg(callee.arguments[i], arg[i]));
 		}
 
 		for (auto &combined : callee.combined_parameters)
@@ -10126,7 +10138,7 @@ void CompilerGLSL::append_global_func_args(const SPIRFunction &func, uint32_t in
 		if (var_id)
 			flush_variable_declaration(var_id);
 
-		arglist.push_back(to_func_call_arg(arg.id));
+		arglist.push_back(to_func_call_arg(arg, arg.id));
 	}
 }
 
