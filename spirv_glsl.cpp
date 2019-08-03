@@ -640,6 +640,19 @@ void CompilerGLSL::emit_header()
 				statement("#endif");
 			}
 		}
+		else if (ext == "GL_ARB_post_depth_coverage")
+		{
+			if (options.es)
+				statement("#extension GL_EXT_post_depth_coverage : require");
+			else
+			{
+				statement("#if defined(GL_ARB_post_depth_coverge)");
+				statement("#extension GL_ARB_post_depth_coverage : require");
+				statement("#else");
+				statement("#extension GL_EXT_post_depth_coverage : require");
+				statement("#endif");
+			}
+		}
 		else
 			statement("#extension ", ext, " : require");
 	}
