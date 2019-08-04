@@ -945,6 +945,27 @@ protected:
 	                              bool single_function);
 	bool may_read_undefined_variable_in_block(const SPIRBlock &block, uint32_t var);
 
+	// Finds all resources that are written to from inside the critical section, if present.
+	// The critical section is delimited by OpBeginInvocationInterlockEXT and
+	// OpEndInvocationInterlockEXT instructions. In MSL and HLSL, any resources written
+	// while inside the critical section must be placed in a raster order group.
+	struct InterlockedResourceAccessHandler : OpcodeHandler
+	{
+		InterlockedResourceAccessHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+		bool in_crit_sec = false;
+	};
+
+	void analyze_interlocked_resource_usage();
+	// The set of all resources written while inside the critical section, if present.
+	std::unordered_set<uint32_t> interlocked_resources;
+
 	void make_constant_null(uint32_t id, uint32_t type);
 
 	std::unordered_map<uint32_t, std::string> declared_block_names;
