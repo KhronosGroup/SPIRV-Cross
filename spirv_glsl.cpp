@@ -3342,10 +3342,18 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	{
 		// Handles Arrays and structures.
 		string res;
+		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+		bool bTrailingBracket = false;
 		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
 		    type.array.empty())
 		{
 			res = type_to_glsl_constructor(type) + "{ ";
+		}
+		else if (backend.use_initializer_list && backend.use_typed_initializer_list &&
+				 !type.array.empty())
+		{
+			res = type_to_glsl(type) + "({ ";
+			bTrailingBracket = true;
 		}
 		else if (backend.use_initializer_list)
 		{
@@ -3369,6 +3377,10 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		}
 
 		res += backend.use_initializer_list ? " }" : ")";
+		if (bTrailingBracket)
+			res += ")";
+		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+		
 		return res;
 	}
 	else if (c.columns() == 1)

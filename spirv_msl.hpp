@@ -537,6 +537,12 @@ protected:
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	void emit_struct_padding_target(const SPIRType &type) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
+	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+	std::string type_to_array_glsl(const SPIRType &type) override;
+	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+	/* UE Change Begin: Threadgroup arrays can't have a wrapper type */
+	std::string variable_decl(const SPIRVariable &variable) override;
+	/* UE Change End: Threadgroup arrays can't have a wrapper type */
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
@@ -750,6 +756,9 @@ protected:
 	bool has_sampled_images = false;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
+	/* UE Change Begin: Force the use of C style array declaration. */
+	bool use_builtin_array = false;
+	/* UE Change End: Force the use of C style array declaration. */
 	bool is_rasterization_disabled = false;
 	bool capture_output_to_buffer = false;
 	bool needs_swizzle_buffer_def = false;
