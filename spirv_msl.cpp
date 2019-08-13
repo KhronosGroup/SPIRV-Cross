@@ -656,6 +656,9 @@ std::string CompilerMSL::get_tess_factor_struct_name()
 void CompilerMSL::emit_entry_point_declarations()
 {
 	// FIXME: Get test coverage here ...
+	/* UE Change Begin: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
+	declare_complex_constant_arrays();
+	/* UE Change End: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
 
 	// Emit constexpr samplers here.
 	for (auto &samp : constexpr_samplers_by_id)
@@ -3241,7 +3244,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplMod:
 			statement("// Implementation of the GLSL mod() function, which is slightly different than Metal fmod()");
 			statement("template<typename Tx, typename Ty>");
-			statement("inline Tx mod(Tx x, Ty y)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("Tx mod(Tx x, Ty y)");
 			begin_scope();
 			statement("return x - y * floor(x / y);");
 			end_scope();
@@ -3251,7 +3257,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplRadians:
 			statement("// Implementation of the GLSL radians() function");
 			statement("template<typename T>");
-			statement("inline T radians(T d)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T radians(T d)");
 			begin_scope();
 			statement("return d * T(0.01745329251);");
 			end_scope();
@@ -3261,7 +3270,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplDegrees:
 			statement("// Implementation of the GLSL degrees() function");
 			statement("template<typename T>");
-			statement("inline T degrees(T r)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T degrees(T r)");
 			begin_scope();
 			statement("return r * T(57.2957795131);");
 			end_scope();
@@ -3271,7 +3283,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindILsb:
 			statement("// Implementation of the GLSL findLSB() function");
 			statement("template<typename T>");
-			statement("inline T spvFindLSB(T x)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T spvFindLSB(T x)");
 			begin_scope();
 			statement("return select(ctz(x), T(-1), x == T(0));");
 			end_scope();
@@ -3281,7 +3296,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindUMsb:
 			statement("// Implementation of the unsigned GLSL findMSB() function");
 			statement("template<typename T>");
-			statement("inline T spvFindUMSB(T x)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T spvFindUMSB(T x)");
 			begin_scope();
 			statement("return select(clz(T(0)) - (clz(x) + T(1)), T(-1), x == T(0));");
 			end_scope();
@@ -3291,7 +3309,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindSMsb:
 			statement("// Implementation of the signed GLSL findMSB() function");
 			statement("template<typename T>");
-			statement("inline T spvFindSMSB(T x)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T spvFindSMSB(T x)");
 			begin_scope();
 			statement("T v = select(x, T(-1) - x, x < T(0));");
 			statement("return select(clz(T(0)) - (clz(v) + T(1)), T(-1), v == T(0));");
@@ -3302,7 +3323,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplSSign:
 			statement("// Implementation of the GLSL sign() function for integer types");
 			statement("template<typename T, typename E = typename enable_if<is_integral<T>::value>::type>");
-			statement("inline T sign(T x)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T sign(T x)");
 			begin_scope();
 			statement("return select(select(select(x, T(0), x == T(0)), T(1), x > T(0)), T(-1), x < T(0));");
 			end_scope();
@@ -3376,7 +3400,10 @@ void CompilerMSL::emit_custom_functions()
 		{
 			string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
 			statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
-			statement("inline uint2 spvTexelBufferCoord(uint tc)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("uint2 spvTexelBufferCoord(uint tc)");
 			begin_scope();
 			statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
 			end_scope();
@@ -3386,14 +3413,20 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplInverse4x4:
 			statement("// Returns the determinant of a 2x2 matrix.");
-			statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float spvDet2x2(float a1, float a2, float b1, float b2)");
 			begin_scope();
 			statement("return a1 * b2 - b1 * a2;");
 			end_scope();
 			statement("");
 
 			statement("// Returns the determinant of a 3x3 matrix.");
-			statement("inline float spvDet3x3(float a1, float a2, float a3, float b1, float b2, float b3, float c1, "
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float spvDet3x3(float a1, float a2, float a3, float b1, float b2, float b3, float c1, "
 			          "float c2, float c3)");
 			begin_scope();
 			statement("return a1 * spvDet2x2(b2, b3, c2, c3) - b1 * spvDet2x2(a2, a3, c2, c3) + c1 * spvDet2x2(a2, a3, "
@@ -3402,7 +3435,10 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
-			statement("inline float4x4 spvInverse4x4(float4x4 m)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float4x4 spvInverse4x4(float4x4 m)");
 			begin_scope();
 			statement("float4x4 adj;	// The adjoint matrix (inverse after dividing by determinant)");
 			statement_no_indent("");
@@ -3458,7 +3494,10 @@ void CompilerMSL::emit_custom_functions()
 			if (spv_function_implementations.count(SPVFuncImplInverse4x4) == 0)
 			{
 				statement("// Returns the determinant of a 2x2 matrix.");
-				statement("inline float spvDet2x2(float a1, float a2, float b1, float b2)");
+				/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+				statement("static inline __attribute__((always_inline))");
+				/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+				statement("float spvDet2x2(float a1, float a2, float b1, float b2)");
 				begin_scope();
 				statement("return a1 * b2 - b1 * a2;");
 				end_scope();
@@ -3467,7 +3506,10 @@ void CompilerMSL::emit_custom_functions()
 
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
-			statement("inline float3x3 spvInverse3x3(float3x3 m)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float3x3 spvInverse3x3(float3x3 m)");
 			begin_scope();
 			statement("float3x3 adj;	// The adjoint matrix (inverse after dividing by determinant)");
 			statement_no_indent("");
@@ -3497,7 +3539,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplInverse2x2:
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
-			statement("inline float2x2 spvInverse2x2(float2x2 m)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float2x2 spvInverse2x2(float2x2 m)");
 			begin_scope();
 			statement("float2x2 adj;	// The adjoint matrix (inverse after dividing by determinant)");
 			statement_no_indent("");
@@ -3518,22 +3563,104 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+//<<<<<<< HEAD
 		case SPVFuncImplForwardArgs:
 			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };");
-			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
-			          "spvRemoveReference<T>::type& x)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename "
+					  "spvRemoveReference<T>::type& x)");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
 			begin_scope();
 			statement("return static_cast<thread T&&>(x);");
 			end_scope();
-			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
-			          "spvRemoveReference<T>::type&& x)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename "
+					  "spvRemoveReference<T>::type&& x)");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
 			begin_scope();
 			statement("return static_cast<thread T&&>(x);");
 			end_scope();
 			statement("");
 			break;
+//=======
+		case SPVFuncImplRowMajor2x3:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float2x3 spvConvertFromRowMajor2x3(float2x3 m)");
+			begin_scope();
+			statement("return float2x3(float3(m[0][0], m[0][2], m[1][1]), float3(m[0][1], m[1][0], m[1][2]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor2x4:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float2x4 spvConvertFromRowMajor2x4(float2x4 m)");
+			begin_scope();
+			statement("return float2x4(float4(m[0][0], m[0][2], m[1][0], m[1][2]), float4(m[0][1], m[0][3], m[1][1], "
+			          "m[1][3]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor3x2:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float3x2 spvConvertFromRowMajor3x2(float3x2 m)");
+			begin_scope();
+			statement("return float3x2(float2(m[0][0], m[1][1]), float2(m[0][1], m[2][0]), float2(m[1][0], m[2][1]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor3x4:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float3x4 spvConvertFromRowMajor3x4(float3x4 m)");
+			begin_scope();
+			statement("return float3x4(float4(m[0][0], m[0][3], m[1][2], m[2][1]), float4(m[0][1], m[1][0], m[1][3], "
+			          "m[2][2]), float4(m[0][2], m[1][1], m[2][0], m[2][3]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor4x2:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float4x2 spvConvertFromRowMajor4x2(float4x2 m)");
+			begin_scope();
+			statement("return float4x2(float2(m[0][0], m[2][0]), float2(m[0][1], m[2][1]), float2(m[1][0], m[3][0]), "
+					  "float2(m[1][1], m[3][1]));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplRowMajor4x3:
+			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("float4x3 spvConvertFromRowMajor4x3(float4x3 m)");
+			begin_scope();
+			statement("return float4x3(float3(m[0][0], m[1][1], m[2][2]), float3(m[0][1], m[1][2], m[3][0]), "
+					  "float3(m[0][2], m[2][0], m[3][1]), float3(m[1][0], m[2][1], m[3][2]));");
+			end_scope();
+			statement("");
+			break;
+//>>>>>>>>>>>
 
 		case SPVFuncImplGetSwizzle:
 			statement("enum class spvSwizzle : uint");
@@ -3548,7 +3675,10 @@ void CompilerMSL::emit_custom_functions()
 			end_scope_decl();
 			statement("");
 			statement("template<typename T>");
-			statement("inline T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)");
+            /* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+            statement("static inline __attribute__((always_inline))");
+            /* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)");
 			begin_scope();
 			statement("switch (s)");
 			begin_scope();
@@ -3574,7 +3704,10 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplTextureSwizzle:
 			statement("// Wrapper function that swizzles texture samples and fetches.");
 			statement("template<typename T>");
-			statement("inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)");
 			begin_scope();
 			statement("if (!s)");
 			statement("    return x;");
@@ -3585,7 +3718,10 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			statement("template<typename T>");
-			statement("inline T spvTextureSwizzle(T x, uint s)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("T spvTextureSwizzle(T x, uint s)");
 			begin_scope();
 			statement("return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;");
 			end_scope();
@@ -3596,8 +3732,11 @@ void CompilerMSL::emit_custom_functions()
 			statement("// Wrapper function that swizzles texture gathers.");
 			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
 			          "typename... Ts>");
-			statement("inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, "
-			          "uint sw, component c, Ts... params) METAL_CONST_ARG(c)");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, "
+					  "uint sw, component c, Ts... params) METAL_CONST_ARG(c)");
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();
@@ -3639,9 +3778,12 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplGatherCompareSwizzle:
 			statement("// Wrapper function that swizzles depth texture gathers.");
 			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
-			          "typename... Ts>");
-			statement("inline vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler "
-			          "s, uint sw, Ts... params) ");
+					  "typename... Ts>");
+			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("static inline __attribute__((always_inline))");
+			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement("vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler "
+					  "s, uint sw, Ts... params) ");
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();
@@ -4506,6 +4648,7 @@ void CompilerMSL::declare_undefined_values()
 		statement("");
 }
 
+/* UE Change Begin: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
 void CompilerMSL::declare_constant_arrays()
 {
 	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
@@ -4517,7 +4660,7 @@ void CompilerMSL::declare_constant_arrays()
 			return;
 
 		auto &type = this->get<SPIRType>(c.constant_type);
-		if (!type.array.empty())
+		if (!type.array.empty() && (is_scalar(type) || is_vector(type)))
 		{
 			auto name = to_name(c.self);
 			statement("constant ", CompilerGLSL::variable_decl(type, name), " = ", constant_expression(c), ";");
@@ -4528,6 +4671,30 @@ void CompilerMSL::declare_constant_arrays()
 	if (emitted)
 		statement("");
 }
+
+void CompilerMSL::declare_complex_constant_arrays()
+{
+	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
+	// global constants directly, so we are able to use constants as variable expressions.
+	bool emitted = false;
+	
+	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, SPIRConstant &c) {
+		if (c.specialization)
+			return;
+		
+		auto &type = this->get<SPIRType>(c.constant_type);
+		if (!type.array.empty() && !(is_scalar(type) || is_vector(type)))
+		{
+			auto name = to_name(c.self);
+			statement("", CompilerGLSL::variable_decl(type, name), " = ", constant_expression(c), ";");
+			emitted = true;
+		}
+	});
+	
+	if (emitted)
+		statement("");
+}
+/* UE Change End: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
 
 void CompilerMSL::emit_resources()
 {
@@ -6219,10 +6386,14 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		add_function_overload(func);
 
 	local_variable_names = resource_names;
+	string decl;
 
 	processing_entry_point = (func.self == ir.default_entry_point);
 
-	string decl = processing_entry_point ? "" : "inline ";
+    /* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+	if (!processing_entry_point)
+		statement("static inline __attribute__((always_inline))");
+    /* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
 
 	auto &type = get<SPIRType>(func.return_type);
 
