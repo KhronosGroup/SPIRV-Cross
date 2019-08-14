@@ -3965,6 +3965,19 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		}
 		break;
 
+	/* UE Change Begin: Metal tessellation likes empty structs which are then constant expressions. */
+	case SPIRType::Struct:
+		if (type.member_types.size() == 0)
+		{
+			res += "{ }";
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Invalid constant struct initialisation missing member initializers.");
+		}
+		break;
+	/* UE Change End: Metal tessellation likes empty structs which are then constant expressions. */
+
 	default:
 		SPIRV_CROSS_THROW("Invalid constant expression basetype.");
 	}

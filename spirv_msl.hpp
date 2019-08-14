@@ -288,6 +288,10 @@ public:
 		bool ios_use_framebuffer_fetch_subpasses = true;
 		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
+		/* UE Change Begin: Storage buffer robustness - clamps access to SSBOs to the size of the buffer */
+		bool enforce_storge_buffer_bounds = false;
+		/* UE Change End: Storage buffer robustness - clamps access to SSBOs to the size of the buffer */
+		
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
 
@@ -594,7 +598,9 @@ protected:
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
 	                                     bool is_packed) override;
-
+	/* UE Change Begin: Storage buffer robustness */
+	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags, AccessChainMeta *meta) override;
+	/* UE Change End: Storage buffer robustness */
 	void preprocess_op_codes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
@@ -850,6 +856,11 @@ protected:
 		/* UE Change Begin: Emulate texture2D atomic operations */
 		std::unordered_map<uint32_t, SPIRVariable*> image_pointers;
 		/* UE Change End: Emulate texture2D atomic operations */
+		/* UE Change Begin: Fix tessellation patch function processing */
+		std::unordered_map<uint32_t, uint32_t> invocation_ids;
+		std::unordered_set<uint32_t> variables_indexed_by_invocation;
+		bool passed_control_barrier = false;
+		/* UE Change End: Fix tessellation patch function processing */
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_resource_write = false;
