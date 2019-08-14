@@ -324,6 +324,10 @@ void CompilerGLSL::reset()
 	forwarded_temporaries.clear();
 	suppressed_usage_tracking.clear();
 
+	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	flushed_phi_variables.clear();
+	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	
 	reset_name_caches();
 
 	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, SPIRFunction &func) {
@@ -7440,23 +7444,31 @@ string CompilerGLSL::variable_decl_function_local(SPIRVariable &var)
 
 void CompilerGLSL::emit_variable_temporary_copies(const SPIRVariable &var)
 {
-	if (var.allocate_temporary_copy)
+	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	if (var.allocate_temporary_copy && flushed_phi_variables.find(var.self) == flushed_phi_variables.end())
 	{
 		auto &type = get<SPIRType>(var.basetype);
 		auto &flags = get_decoration_bitset(var.self);
 		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, join("_", var.self, "_copy")), ";");
+		flushed_phi_variables.insert(var.self);
 	}
+	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 }
 
 void CompilerGLSL::flush_variable_declaration(uint32_t id)
 {
+	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->deferred_declaration)
 	{
 		statement(variable_decl_function_local(*var), ";");
-		emit_variable_temporary_copies(*var);
 		var->deferred_declaration = false;
 	}
+	if (var)
+	{
+		emit_variable_temporary_copies(*var);
+	}
+	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 }
 
 bool CompilerGLSL::remove_duplicate_swizzle(string &op)

@@ -591,6 +591,9 @@ protected:
 	uint32_t indent = 0;
 
 	std::unordered_set<uint32_t> emitted_functions;
+	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	std::unordered_set<uint32_t> flushed_phi_variables;
+	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 
 	std::unordered_set<uint32_t> flattened_buffer_blocks;
 	std::unordered_set<uint32_t> flattened_structs;
