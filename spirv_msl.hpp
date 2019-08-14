@@ -281,6 +281,9 @@ public:
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
+		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+		bool ios_use_framebuffer_fetch_subpasses = true;
+		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
@@ -528,7 +531,9 @@ protected:
 	};
 
     /* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+    /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
     void emit_texture_op(const Instruction &i) override;
+    /* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
     /* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;

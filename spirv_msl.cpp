@@ -140,12 +140,14 @@ void CompilerMSL::build_implicit_builtins()
 			if (var.storage != StorageClassInput || !ir.meta[var.self].decoration.builtin)
 				return;
 
+            /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 			BuiltIn builtin = ir.meta[var.self].decoration.builtin_type;
-			if (need_subpass_input && builtin == BuiltInFragCoord)
+			if (need_subpass_input && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) && builtin == BuiltInFragCoord)
 			{
 				builtin_frag_coord_id = var.self;
 				has_frag_coord = true;
 			}
+			/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 			if (need_sample_pos && builtin == BuiltInSampleId)
 			{
@@ -231,7 +233,8 @@ void CompilerMSL::build_implicit_builtins()
 				workgroup_id_type = var.basetype;
 		});
 
-		if (!has_frag_coord && need_subpass_input)
+		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+		if (!has_frag_coord && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) && need_subpass_input)
 		{
 			uint32_t offset = ir.increase_bound_by(3);
 			uint32_t type_id = offset;
@@ -258,6 +261,7 @@ void CompilerMSL::build_implicit_builtins()
 			builtin_frag_coord_id = var_id;
 			mark_implicit_builtin(StorageClassInput, BuiltInFragCoord, var_id);
 		}
+		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 		if (!has_sample_id && need_sample_pos)
 		{
@@ -1134,12 +1138,14 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(base_id);
 
 				auto &type = get<SPIRType>(ops[0]);
-				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+				/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses))
 				{
 					// Implicitly reads gl_FragCoord.
 					assert(builtin_frag_coord_id != 0);
 					added_arg_ids.insert(builtin_frag_coord_id);
 				}
+				/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 				break;
 			}
@@ -5850,6 +5856,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	previous_instruction_opcode = opcode;
 }
 
+/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 /* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 static inline bool image_opcode_is_sample_no_dref(Op op)
 {
@@ -6048,6 +6055,13 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 	if (op == OpImageRead)
 		expr = remap_swizzle(get<SPIRType>(result_type), 4, expr);
 	
+	/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+	if (imgtype.image.dim == DimSubpassData && msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
+	{
+		expr = to_expression(img);
+	}
+	/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
+
 	emit_op(result_type, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
 		inherit_expression_dependencies(id, inherit);
@@ -6065,6 +6079,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 			break;
 	}
 }
+/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 /* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 
 void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem)
@@ -7073,10 +7088,15 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		break;
 
 	case DimSubpassData:
-		if (imgtype.image.ms)
-			tex_coords = "uint2(gl_FragCoord.xy)";
-		else
-			tex_coords = join("uint2(gl_FragCoord.xy), 0");
+		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+		if (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses)
+		{
+			if (imgtype.image.ms)
+				tex_coords = "uint2(gl_FragCoord.xy)";
+			else
+				tex_coords = join("uint2(gl_FragCoord.xy), 0");
+		}
+		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		break;
 
 	case Dim2D:
@@ -8861,22 +8881,32 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		{
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += image_type_glsl(type, var_id) + " " + r.name;
-			if (r.plane > 0)
-				ep_args += join(plane_name_suffix, r.plane);
-			ep_args += " [[texture(" + convert_to_string(r.index) + ")]]";
-
-			/* UE Change Begin: Emulate texture2D atomic operations */
-			if (atomic_vars.find(&var) != atomic_vars.end())
-			{
-				ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(get<SPIRType>(var.basetype).image.type), 0);
-				ep_args += "* " + r.name + "_atomic";
-				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
-			}
-			/* UE Change End: Emulate texture2D atomic operations */
-
+			
+            /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+            const auto &basetype = get<SPIRType>(var.basetype);
+            if (basetype.image.dim != DimSubpassData || !msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses)
+            {
+				ep_args += image_type_glsl(type, var_id) + " " + r.name;
+				ep_args += " [[texture(" + convert_to_string(r.index) + ")]]";
+            }
+            else
+            {
+                ep_args += image_type_glsl(type, var_id) + "4 " + r.name;
+                ep_args += " [[color(" + convert_to_string(r.index) + ")]]";
+            }
+            /* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
+                
+            /* UE Change Begin: Emulate texture2D atomic operations */
+            if (atomic_vars.find(&var) != atomic_vars.end())
+            {
+                ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(basetype.image.type), 0);
+                ep_args += "* " + r.name + "_atomic";
+                ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+            }
+            /* UE Change End: Emulate texture2D atomic operations */
+                
 			break;
-		}
+        }
 		default:
 			if (!ep_args.empty())
 				ep_args += ", ";
@@ -9461,7 +9491,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// Arrays of images and samplers are special cased.
 		if (!address_space.empty())
 			decl = join(address_space, " ", decl);
-
+		
 		decl += " (&";
 		const char *restrict_kw = to_restrict(name_id);
 		if (*restrict_kw)
@@ -10214,8 +10244,12 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			else
 				img_type_name += "texture2d";
 			break;
-		case Dim2D:
+        /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		case DimSubpassData:
+            if (msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
+                return type_to_glsl(get<SPIRType>(img_type.type));
+        /* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
+		case Dim2D:
 			if (img_type.ms && img_type.arrayed)
 			{
 				if (!msl_options.supports_msl_version(2, 1))
