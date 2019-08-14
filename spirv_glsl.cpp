@@ -333,7 +333,8 @@ void CompilerGLSL::reset()
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) { var.dependees.clear(); });
 
-	ir.reset_all_of_type<SPIRExpression>();
+    /* UE Change Begin: Track write-throughs for loop variables - dxc likes to generate them */
+    /* UE Change End: Track write-throughs for loop variables - dxc likes to generate them */
 	ir.reset_all_of_type<SPIRAccessChain>();
 
 	statement_count = 0;
