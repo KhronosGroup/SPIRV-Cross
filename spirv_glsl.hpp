@@ -528,7 +528,9 @@ protected:
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
 	std::string to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read = true);
-	std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
+    /* UE Change Begin: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+	virtual std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
+    /* UE Change End: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
 	std::string to_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_enclosed_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_extract_component_expression(uint32_t id, uint32_t index);

@@ -3120,6 +3120,32 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 	}
 }
 
+/* UE Change Begin: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+string CompilerMSL::to_dereferenced_expression(uint32_t id, bool register_expression_read)
+{
+	auto &type = expression_type(id);
+	if (!type.pointer || !should_dereference(id))
+	{
+		uint32_t packed_type_id = get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+		const SPIRType *packed_type = nullptr;
+		if (packed_type_id)
+			packed_type = &get<SPIRType>(packed_type_id);
+		
+		if (packed_type && is_array(*packed_type) && is_scalar(*packed_type))
+			return to_unpacked_expression(id, register_expression_read);
+	}
+	
+	return CompilerGLSL::to_dereferenced_expression(id, register_expression_read);
+}
+
+static bool expression_ends_with(string const& expr_str, std::string const& ending)
+{
+	if (expr_str.length() >= ending.length())
+		return (0 == expr_str.compare(expr_str.length() - ending.length(), ending.length(), ending));
+	else
+		return false;
+}
+
 // Converts the format of the current expression from packed to unpacked,
 // by wrapping the expression in a constructor of the appropriate type.
 // Also, handle special physical ID remapping scenarios, similar to emit_store_statement().
@@ -3141,7 +3167,7 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 	};
 
 	// std140 array cases for vectors.
-	if (physical_type && is_vector(*physical_type) && is_array(*physical_type) && physical_type->vecsize > type.vecsize)
+	if (physical_type && is_vector(*physical_type) && is_array(*physical_type) && physical_type->vecsize > type.vecsize && !expression_ends_with(expr_str, swizzle_lut[type.vecsize - 1]))
 	{
 		assert(type.vecsize >= 1 && type.vecsize <= 3);
 		return enclose_expression(expr_str) + swizzle_lut[type.vecsize - 1];
