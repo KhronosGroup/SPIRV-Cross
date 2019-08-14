@@ -8014,7 +8014,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	SPIRType row_major_physical_type;
 	const SPIRType *declared_type = &physical_type;
 
-	if (member_is_packed_physical_type(type, index))
+	if (member_is_packed_physical_type(type, index) && validate_member_packing_rules_msl(type, index))
 	{
 		// If we're packing a matrix, output an appropriate typedef
 		if (physical_type.basetype == SPIRType::Struct)
@@ -11941,7 +11941,15 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 			else if (ir.meta[base].decoration.builtin_type != BuiltInSampleMask)
 			/* UE Change End: Sample mask input for Metal is not an array */
 			{
-				append_index(index);
+				if (is_packed)
+				{
+					if (!remove_duplicate_swizzle(expr))
+						remove_unity_swizzle(base, expr);
+					append_index(index);
+					expr = unpack_expression_type(expr, *type, physical_type, is_packed, true);
+				}
+				else
+					append_index(index);
 			}
 			
 			type_id = type->parent_type;

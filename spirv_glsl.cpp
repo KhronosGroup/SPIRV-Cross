@@ -7567,7 +7567,7 @@ bool CompilerGLSL::remove_unity_swizzle(uint32_t base, string &op)
 	auto &type = expression_type(base);
 
 	// Sanity checking ...
-	assert(type.columns == 1 && type.array.empty());
+	assert(type.columns == 1); //  && type.array.empty()
 
 	if (type.vecsize == final_swiz.size())
 		op.erase(pos, string::npos);
