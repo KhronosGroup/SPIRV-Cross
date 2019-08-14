@@ -1,7 +1,63 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -102,8 +158,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2204;
-    float4 View_TranslucencyLightingVolumeMin[2];
-    float4 View_TranslucencyLightingVolumeInvSize[2];
+    unsafe_array<float4,2> View_TranslucencyLightingVolumeMin;
+    unsafe_array<float4,2> View_TranslucencyLightingVolumeInvSize;
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -143,7 +199,7 @@ struct type_View
     float PrePadding_View_2488;
     float PrePadding_View_2492;
     float4 View_SkyLightColor;
-    float4 View_SkyIrradianceEnvironmentMap[7];
+    unsafe_array<float4,7> View_SkyIrradianceEnvironmentMap;
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -154,8 +210,8 @@ struct type_View
     float PrePadding_View_2652;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    float4 View_GlobalVolumeCenterAndExtent[4];
-    float4 View_GlobalVolumeWorldToUVAddAndMul[4];
+    unsafe_array<float4,4> View_GlobalVolumeCenterAndExtent;
+    unsafe_array<float4,4> View_GlobalVolumeWorldToUVAddAndMul;
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -231,7 +287,7 @@ struct type_MobileShadowDepthPass
     float2 MobileShadowDepthPass_ShadowParams;
     float MobileShadowDepthPass_bClampToNearPlane;
     float PrePadding_MobileShadowDepthPass_156;
-    float4x4 MobileShadowDepthPass_ShadowViewProjectionMatrices[6];
+    unsafe_array<float4x4,6> MobileShadowDepthPass_ShadowViewProjectionMatrices;
 };
 
 struct type_EmitterDynamicUniforms
@@ -282,15 +338,16 @@ struct main0_in
 };
 
 // Returns 2D texture coords corresponding to 1D texel buffer coords
+static inline __attribute__((always_inline))
 uint2 spvTexelBufferCoord(uint tc)
 {
     return uint2(tc % 4096, tc / 4096);
 }
 
-vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buffer(1)]], constant type_Primitive& Primitive [[buffer(2)]], constant type_MobileShadowDepthPass& MobileShadowDepthPass [[buffer(3)]], constant type_EmitterDynamicUniforms& EmitterDynamicUniforms [[buffer(4)]], constant type_EmitterUniforms& EmitterUniforms [[buffer(5)]], constant type_Globals& _Globals [[buffer(6)]], texture2d<float> ParticleIndices [[texture(0)]], texture2d<float> PositionTexture [[texture(1)]], texture2d<float> VelocityTexture [[texture(2)]], texture2d<float> AttributesTexture [[texture(3)]], texture2d<float> CurveTexture [[texture(4)]], sampler PositionTextureSampler [[sampler(0)]], sampler VelocityTextureSampler [[sampler(1)]], sampler AttributesTextureSampler [[sampler(2)]], sampler CurveTextureSampler [[sampler(3)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]])
+vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buffer(1)]], constant type_Primitive& Primitive [[buffer(2)]], constant type_MobileShadowDepthPass& MobileShadowDepthPass [[buffer(3)]], constant type_EmitterDynamicUniforms& EmitterDynamicUniforms [[buffer(4)]], constant type_EmitterUniforms& EmitterUniforms [[buffer(5)]], constant type_Globals& _Globals [[buffer(6)]], texture2d<float> ParticleIndices [[texture(0)]], texture2d<float> PositionTexture [[texture(1)]], texture2d<float> VelocityTexture [[texture(2)]], texture2d<float> AttributesTexture [[texture(3)]], texture2d<float> CurveTexture [[texture(4)]], sampler PositionTextureSampler [[sampler(0)]], sampler VelocityTextureSampler [[sampler(1)]], sampler AttributesTextureSampler [[sampler(2)]], sampler CurveTextureSampler [[sampler(3)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseVertex [[base_vertex]], uint gl_BaseInstance [[base_instance]])
 {
     main0_out out = {};
-    float2 _133 = ParticleIndices.read(spvTexelBufferCoord((_Globals.ParticleIndicesOffset + ((gl_InstanceIndex * 16u) + (gl_VertexIndex / 4u))))).xy;
+    float2 _133 = ParticleIndices.read(spvTexelBufferCoord((_Globals.ParticleIndicesOffset + (((gl_InstanceIndex - gl_BaseInstance) * 16u) + ((gl_VertexIndex - gl_BaseVertex) / 4u))))).xy;
     float4 _137 = PositionTexture.sample(PositionTextureSampler, _133, level(0.0));
     float4 _145 = AttributesTexture.sample(AttributesTextureSampler, _133, level(0.0));
     float _146 = _137.w;

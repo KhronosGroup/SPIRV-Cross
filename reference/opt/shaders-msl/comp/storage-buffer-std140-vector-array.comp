@@ -1,33 +1,90 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
 struct Sub
 {
-    float4 f[2];
-    float4 f2[2];
-    float3 f3[2];
-    float4 f4[2];
+    unsafe_array<float4,2> f;
+    unsafe_array<float4,2> f2;
+    unsafe_array<float3,2> f3;
+    unsafe_array<float4,2> f4;
 };
 
 struct SSBO
 {
-    Sub sub[2];
+    unsafe_array<Sub,2> sub;
 };
 
 kernel void main0(device SSBO& _27 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
-    float _153[2];
+    unsafe_array<float,2> _153;
     _153[0] = _27.sub[gl_WorkGroupID.x].f[0].x;
     _153[1] = _27.sub[gl_WorkGroupID.x].f[1].x;
-    float2 _154[2];
+    unsafe_array<float2,2> _154;
     _154[0] = _27.sub[gl_WorkGroupID.x].f2[0].xy;
     _154[1] = _27.sub[gl_WorkGroupID.x].f2[1].xy;
-    float3 _155[2];
+    unsafe_array<float3,2> _155;
     _155[0] = _27.sub[gl_WorkGroupID.x].f3[0];
     _155[1] = _27.sub[gl_WorkGroupID.x].f3[1];
-    float4 _156[2];
+    unsafe_array<float4,2> _156;
     _156[0] = _27.sub[gl_WorkGroupID.x].f4[0];
     _156[1] = _27.sub[gl_WorkGroupID.x].f4[1];
     _153[gl_GlobalInvocationID.x] += 1.0;
@@ -42,7 +99,7 @@ kernel void main0(device SSBO& _27 [[buffer(0)]], uint3 gl_WorkGroupID [[threadg
     _27.sub[gl_WorkGroupID.x].f3[1] = _155[1];
     _27.sub[gl_WorkGroupID.x].f4[0] = _156[0];
     _27.sub[gl_WorkGroupID.x].f4[1] = _156[1];
-    _27.sub[0].f[0].x += 5.0;
+    _27.sub[0].f[0].x = float(_27.sub[0].f[0].x) + 5.0;
     _27.sub[0].f2[1].xy += float2(5.0);
 }
 

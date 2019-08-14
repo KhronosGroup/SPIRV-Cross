@@ -1,7 +1,63 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -10,8 +66,6 @@ struct myType
     float data;
 };
 
-constant myType _21[5] = { myType{ 0.0 }, myType{ 1.0 }, myType{ 0.0 }, myType{ 1.0 }, myType{ 0.0 } };
-
 struct main0_out
 {
     float4 o_color [[color(0)]];
@@ -19,67 +73,16 @@ struct main0_out
 
 // Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
 template<typename Tx, typename Ty>
-inline Tx mod(Tx x, Ty y)
+static inline __attribute__((always_inline))
+Tx mod(Tx x, Ty y)
 {
     return x - y * floor(x / y);
 }
 
-template<typename T, uint A>
-inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
 fragment main0_out main0(float4 gl_FragCoord [[position]])
 {
+    unsafe_array<myType,5> _21 = unsafe_array<myType,5>({ myType{ 0.0 }, myType{ 1.0 }, myType{ 0.0 }, myType{ 1.0 }, myType{ 0.0 } });
+    
     main0_out out = {};
     float2 uv = gl_FragCoord.xy;
     int index = int(mod(uv.x, 4.0));

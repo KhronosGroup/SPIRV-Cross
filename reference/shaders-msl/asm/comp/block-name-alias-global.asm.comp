@@ -1,5 +1,62 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -11,7 +68,7 @@ struct A
 
 struct A_1
 {
-    A Data[1];
+    unsafe_array<A,1> Data;
 };
 
 struct A_2
@@ -23,17 +80,17 @@ struct A_2
 
 struct A_3
 {
-    A_2 Data[1024];
+    unsafe_array<A_2,1024> Data;
 };
 
 struct B
 {
-    A Data[1];
+    unsafe_array<A,1> Data;
 };
 
 struct B_1
 {
-    A_2 Data[1024];
+    unsafe_array<A_2,1024> Data;
 };
 
 kernel void main0(device A_1& C1 [[buffer(0)]], constant A_3& C2 [[buffer(1)]], device B& C3 [[buffer(2)]], constant B_1& C4 [[buffer(3)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])

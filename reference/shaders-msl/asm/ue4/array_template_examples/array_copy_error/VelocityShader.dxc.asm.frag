@@ -1,5 +1,62 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -101,8 +158,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2268;
-    float4 View_TranslucencyLightingVolumeMin[2];
-    float4 View_TranslucencyLightingVolumeInvSize[2];
+    unsafe_array<float4,2> View_TranslucencyLightingVolumeMin;
+    unsafe_array<float4,2> View_TranslucencyLightingVolumeInvSize;
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -147,7 +204,7 @@ struct type_View
     float PrePadding_View_2584;
     float PrePadding_View_2588;
     float4 View_SkyLightColor;
-    float4 View_SkyIrradianceEnvironmentMap[7];
+    unsafe_array<float4,7> View_SkyIrradianceEnvironmentMap;
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -158,8 +215,8 @@ struct type_View
     float PrePadding_View_2748;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    float4 View_GlobalVolumeCenterAndExtent[4];
-    float4 View_GlobalVolumeWorldToUVAddAndMul[4];
+    unsafe_array<float4,4> View_GlobalVolumeCenterAndExtent;
+    unsafe_array<float4,4> View_GlobalVolumeWorldToUVAddAndMul;
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -198,8 +255,8 @@ struct type_PrimitiveFade
 
 struct type_Material
 {
-    float4 Material_VectorExpressions[9];
-    float4 Material_ScalarExpressions[3];
+    unsafe_array<float4,9> Material_VectorExpressions;
+    unsafe_array<float4,3> Material_ScalarExpressions;
 };
 
 constant float _98 = {};
@@ -223,7 +280,7 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)]], constant type_PrimitiveDither& PrimitiveDither [[buffer(1)]], constant type_PrimitiveFade& PrimitiveFade [[buffer(2)]], constant type_Material& Material [[buffer(3)]], texture2d<float> Material_Texture2D_0 [[texture(0)]], texture2d<float> Material_Texture2D_3 [[texture(1)]], sampler Material_Texture2D_0Sampler [[sampler(0)]], sampler Material_Texture2D_3Sampler [[sampler(1)]], float4 gl_FragCoord [[position]], bool gl_FrontFacing [[front_facing]])
 {
     main0_out out = {};
-    float4 in_var_TEXCOORD0[1] = {};
+    unsafe_array<float4,1> in_var_TEXCOORD0 = {};
     in_var_TEXCOORD0[0] = in.in_var_TEXCOORD0_0;
     float2 _135 = gl_FragCoord.xy - View.View_ViewRectMin.xy;
     float4 _140 = float4(_103, _103, gl_FragCoord.z, 1.0) * float4(gl_FragCoord.w);
@@ -235,6 +292,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     float _170 = mix(Material.Material_ScalarExpressions[0].y, Material.Material_ScalarExpressions[0].z, fast::min(fast::max(abs(dot(_151, in.in_var_TEXCOORD11_centroid.xyz)), 0.0), 1.0));
     float _172 = 1.0 / _170;
     float2 _174 = (float2(Material.Material_ScalarExpressions[0].x) * ((_152.xy * float2(-1.0)) / float2(_152.z))) * float2(_172);
+    float _180_copy;
     float2 _183;
     _183 = float2(0.0);
     float _188;
@@ -259,6 +317,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
             }
             else
             {
+                float _180_copy;
                 _180_copy = _180;
                 _180 -= _172;
                 _183 += _174;
@@ -267,6 +326,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
                 _189 = _180_copy;
                 continue;
             }
+            float _180_copy;
             _180_copy = _180;
             _180 -= _172;
             _183 += _174;

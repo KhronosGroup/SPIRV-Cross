@@ -1,11 +1,67 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
-constant float4 _20[2] = { float4(10.0), float4(20.0) };
+constant unsafe_array<float4,2> _20 = unsafe_array<float4,2>({ float4(10.0), float4(20.0) });
 
 struct main0_out
 {
@@ -18,79 +74,27 @@ struct main0_in
     float4 vInput1 [[attribute(1)]];
 };
 
-template<typename T, uint A>
-inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
+static inline __attribute__((always_inline))
+void test(thread unsafe_array<float4,2> (&SPIRV_Cross_return_value))
 {
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
+    SPIRV_Cross_return_value = _20;
 }
 
-template<typename T, uint A>
-inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
+static inline __attribute__((always_inline))
+void test2(thread unsafe_array<float4,2> (&SPIRV_Cross_return_value), thread float4& vInput0, thread float4& vInput1)
 {
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-inline void test(thread float4 (&SPIRV_Cross_return_value)[2])
-{
-    spvArrayCopyFromConstantToStack1(SPIRV_Cross_return_value, _20);
-}
-
-inline void test2(thread float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)
-{
-    float4 foobar[2];
+    unsafe_array<float4,2> foobar;
     foobar[0] = vInput0;
     foobar[1] = vInput1;
-    spvArrayCopyFromStackToStack1(SPIRV_Cross_return_value, foobar);
+    SPIRV_Cross_return_value = foobar;
 }
 
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    float4 _42[2];
+    unsafe_array<float4,2> _42;
     test(_42);
-    float4 _44[2];
+    unsafe_array<float4,2> _44;
     test2(_44, in.vInput0, in.vInput1);
     out.gl_Position = _42[0] + _44[1];
     return out;

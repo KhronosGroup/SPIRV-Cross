@@ -1,7 +1,63 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -19,7 +75,7 @@ struct HSOut
 
 struct HSConstantOut
 {
-    float EdgeTess[3];
+    unsafe_array<float,3> EdgeTess;
     float InsideTess;
 };
 
@@ -45,61 +101,8 @@ struct main0_in
     float4 gl_Position [[attribute(1)]];
 };
 
-template<typename T, uint A>
-inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
-{
-    for (uint i = 0; i < A; i++)
-    {
-        dst[i] = src[i];
-    }
-}
-
-inline HSOut _hs_main(thread const VertexOutput (&p)[3], thread const uint& i)
+static inline __attribute__((always_inline))
+HSOut _hs_main(thread const unsafe_array<VertexOutput,3> (&p), thread const uint& i)
 {
     HSOut _output;
     _output.pos = p[i].pos;
@@ -107,7 +110,8 @@ inline HSOut _hs_main(thread const VertexOutput (&p)[3], thread const uint& i)
     return _output;
 }
 
-inline HSConstantOut PatchHS(thread const VertexOutput (&_patch)[3])
+static inline __attribute__((always_inline))
+HSConstantOut PatchHS(thread const unsafe_array<VertexOutput,3> (&_patch))
 {
     HSConstantOut _output;
     _output.EdgeTess[0] = (float2(1.0) + _patch[0].uv).x;
@@ -125,7 +129,7 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (gl_InvocationID >= 3)
         return;
-    VertexOutput p[3];
+    unsafe_array<VertexOutput,3> p;
     p[0].pos = gl_in[0].gl_Position;
     p[0].uv = gl_in[0].VertexOutput_uv;
     p[1].pos = gl_in[1].gl_Position;
@@ -133,17 +137,17 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     p[2].pos = gl_in[2].gl_Position;
     p[2].uv = gl_in[2].VertexOutput_uv;
     uint i = gl_InvocationID;
-    VertexOutput param[3];
-    spvArrayCopyFromStackToStack1(param, p);
+    unsafe_array<VertexOutput,3> param;
+    param = p;
     uint param_1 = i;
     HSOut flattenTemp = _hs_main(param, param_1);
     gl_out[gl_InvocationID].gl_Position = flattenTemp.pos;
     gl_out[gl_InvocationID]._entryPointOutput.uv = flattenTemp.uv;
-    threadgroup_barrier(mem_flags::mem_device);
+    threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
     if (int(gl_InvocationID) == 0)
     {
-        VertexOutput param_2[3];
-        spvArrayCopyFromStackToStack1(param_2, p);
+        unsafe_array<VertexOutput,3> param_2;
+        param_2 = p;
         HSConstantOut _patchConstantResult = PatchHS(param_2);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_patchConstantResult.EdgeTess[0]);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_patchConstantResult.EdgeTess[1]);

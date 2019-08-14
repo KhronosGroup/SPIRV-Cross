@@ -1,12 +1,73 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
 // Returns 2D texture coords corresponding to 1D texel buffer coords
+<<<<<<< HEAD
 inline uint2 spvTexelBufferCoord(uint tc)
+=======
+static inline __attribute__((always_inline))
+uint2 spvTexelBufferCoord(uint tc)
+>>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
 {
     return uint2(tc % 4096, tc / 4096);
 }
@@ -14,11 +75,11 @@ inline uint2 spvTexelBufferCoord(uint tc)
 template<typename T> struct spvRemoveReference { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
+template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
 {
     return static_cast<thread T&&>(x);
 }
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
+template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
 {
     return static_cast<thread T&&>(x);
 }
@@ -35,7 +96,8 @@ enum class spvSwizzle : uint
 };
 
 template<typename T>
-inline T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
+static inline __attribute__((always_inline))
+T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
 {
     switch (s)
     {
@@ -58,7 +120,8 @@ inline T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
 
 // Wrapper function that swizzles texture samples and fetches.
 template<typename T>
-inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
+static inline __attribute__((always_inline))
+vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
 {
     if (!s)
         return x;
@@ -66,14 +129,21 @@ inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
 }
 
 template<typename T>
-inline T spvTextureSwizzle(T x, uint s)
+static inline __attribute__((always_inline))
+T spvTextureSwizzle(T x, uint s)
 {
     return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;
 }
 
 // Wrapper function that swizzles texture gathers.
+<<<<<<< HEAD
 template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename... Ts>
 inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, component c, Ts... params) METAL_CONST_ARG(c)
+=======
+template<typename T, typename Tex, typename... Ts>
+static inline __attribute__((always_inline))
+vec<T, 4> spvGatherSwizzle(sampler s, thread Tex const& t, Ts... params, component c, uint sw) METAL_CONST_ARG(c)
+>>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
 {
     if (sw)
     {
@@ -109,8 +179,14 @@ inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, co
 }
 
 // Wrapper function that swizzles depth texture gathers.
+<<<<<<< HEAD
 template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename... Ts>
 inline vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler s, uint sw, Ts... params) 
+=======
+template<typename T, typename Tex, typename... Ts>
+static inline __attribute__((always_inline))
+vec<T, 4> spvGatherCompareSwizzle(sampler s, thread Tex const& t, Ts... params, uint sw) 
+>>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
 {
     if (sw)
     {
@@ -131,7 +207,12 @@ inline vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler s, uint
     return t.gather_compare(s, spvForward<Ts>(params)...);
 }
 
+<<<<<<< HEAD
 inline float4 doSwizzle(thread texture1d<float> tex1d, thread const sampler tex1dSmplr, constant uint& tex1dSwzl, thread texture2d<float> tex2d, thread const sampler tex2dSmplr, constant uint& tex2dSwzl, thread texture3d<float> tex3d, thread const sampler tex3dSmplr, constant uint& tex3dSwzl, thread texturecube<float> texCube, thread const sampler texCubeSmplr, constant uint& texCubeSwzl, thread texture2d_array<float> tex2dArray, thread const sampler tex2dArraySmplr, constant uint& tex2dArraySwzl, thread texturecube_array<float> texCubeArray, thread const sampler texCubeArraySmplr, constant uint& texCubeArraySwzl, thread depth2d<float> depth2d, thread const sampler depth2dSmplr, constant uint& depth2dSwzl, thread depthcube<float> depthCube, thread const sampler depthCubeSmplr, constant uint& depthCubeSwzl, thread depth2d_array<float> depth2dArray, thread const sampler depth2dArraySmplr, constant uint& depth2dArraySwzl, thread depthcube_array<float> depthCubeArray, thread const sampler depthCubeArraySmplr, constant uint& depthCubeArraySwzl, thread texture2d<float> texBuffer)
+=======
+static inline __attribute__((always_inline))
+float4 doSwizzle(thread texture1d<float> tex1d, thread const sampler tex1dSmplr, constant uint& tex1dSwzl, thread texture2d<float> tex2d, thread const sampler tex2dSmplr, constant uint& tex2dSwzl, thread texture3d<float> tex3d, thread const sampler tex3dSmplr, constant uint& tex3dSwzl, thread texturecube<float> texCube, thread const sampler texCubeSmplr, constant uint& texCubeSwzl, thread texture2d_array<float> tex2dArray, thread const sampler tex2dArraySmplr, constant uint& tex2dArraySwzl, thread texturecube_array<float> texCubeArray, thread const sampler texCubeArraySmplr, constant uint& texCubeArraySwzl, thread depth2d<float> depth2d, thread const sampler depth2dSmplr, constant uint& depth2dSwzl, thread depthcube<float> depthCube, thread const sampler depthCubeSmplr, constant uint& depthCubeSwzl, thread depth2d_array<float> depth2dArray, thread const sampler depth2dArraySmplr, constant uint& depth2dArraySwzl, thread depthcube_array<float> depthCubeArray, thread const sampler depthCubeArraySmplr, constant uint& depthCubeArraySwzl, thread texture2d<float> texBuffer)
+>>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
 {
     float4 c = spvTextureSwizzle(tex1d.sample(tex1dSmplr, 0.0), tex1dSwzl);
     c = spvTextureSwizzle(tex2d.sample(tex2dSmplr, float2(0.0)), tex2dSwzl);

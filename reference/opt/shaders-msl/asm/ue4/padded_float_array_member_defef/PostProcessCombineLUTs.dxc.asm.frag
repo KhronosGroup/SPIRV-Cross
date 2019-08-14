@@ -1,5 +1,62 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -20,7 +77,7 @@ struct type_Globals
     float FilmShoulder;
     float FilmBlackClip;
     float FilmWhiteClip;
-    float4 LUTWeights[5];
+    unsafe_array<float4,5> LUTWeights;
     float3 ColorScale;
     float4 OverlayColor;
     float WhiteTemp;
@@ -53,12 +110,12 @@ struct type_Globals
     float ExpandGamut;
 };
 
-constant float _499[6] = { -4.0, -4.0, -3.1573765277862548828125, -0.485249996185302734375, 1.84773242473602294921875, 1.84773242473602294921875 };
-constant float _500[6] = { -0.718548238277435302734375, 2.0810306072235107421875, 3.66812419891357421875, 4.0, 4.0, 4.0 };
-constant float _503[10] = { -4.97062206268310546875, -3.0293781757354736328125, -2.1261999607086181640625, -1.5104999542236328125, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 };
-constant float _504[10] = { 0.80891323089599609375, 1.19108676910400390625, 1.5683000087738037109375, 1.94830000400543212890625, 2.308300018310546875, 2.63840007781982421875, 2.85949993133544921875, 2.9872608184814453125, 3.0127391815185546875, 3.0127391815185546875 };
-constant float _506[10] = { -2.3010299205780029296875, -2.3010299205780029296875, -1.9312000274658203125, -1.5204999446868896484375, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 };
-constant float _507[10] = { 0.801995217800140380859375, 1.19800484180450439453125, 1.5943000316619873046875, 1.99730002880096435546875, 2.3782999515533447265625, 2.7683999538421630859375, 3.0515000820159912109375, 3.2746293544769287109375, 3.32743072509765625, 3.32743072509765625 };
+constant unsafe_array<float,6> _499 = unsafe_array<float,6>({ -4.0, -4.0, -3.1573765277862548828125, -0.485249996185302734375, 1.84773242473602294921875, 1.84773242473602294921875 });
+constant unsafe_array<float,6> _500 = unsafe_array<float,6>({ -0.718548238277435302734375, 2.0810306072235107421875, 3.66812419891357421875, 4.0, 4.0, 4.0 });
+constant unsafe_array<float,10> _503 = unsafe_array<float,10>({ -4.97062206268310546875, -3.0293781757354736328125, -2.1261999607086181640625, -1.5104999542236328125, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 });
+constant unsafe_array<float,10> _504 = unsafe_array<float,10>({ 0.80891323089599609375, 1.19108676910400390625, 1.5683000087738037109375, 1.94830000400543212890625, 2.308300018310546875, 2.63840007781982421875, 2.85949993133544921875, 2.9872608184814453125, 3.0127391815185546875, 3.0127391815185546875 });
+constant unsafe_array<float,10> _506 = unsafe_array<float,10>({ -2.3010299205780029296875, -2.3010299205780029296875, -1.9312000274658203125, -1.5204999446868896484375, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 });
+constant unsafe_array<float,10> _507 = unsafe_array<float,10>({ 0.801995217800140380859375, 1.19800484180450439453125, 1.5943000316619873046875, 1.99730002880096435546875, 2.3782999515533447265625, 2.7683999538421630859375, 3.0515000820159912109375, 3.2746293544769287109375, 3.32743072509765625, 3.32743072509765625 });
 
 constant float3 _523 = {};
 constant float3 _3121 = {};
@@ -362,7 +419,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Globals& _Globa
     float _1276 = _1258.y;
     float4 _1279 = Texture1.sample(Texture1Sampler, float2(_1275, _1276));
     float4 _1283 = Texture1.sample(Texture1Sampler, float2(_1275 + 0.0625, _1276));
-    float3 _1289 = fast::max(float3(6.1035199905745685100555419921875e-05), (float3(_Globals.LUTWeights[0]) * _1256) + (float3(_Globals.LUTWeights[1]) * mix(_1279, _1283, float4(_1270 - _1271)).xyz));
+    float3 _1289 = fast::max(float3(6.1035199905745685100555419921875e-05), (float3(_Globals.LUTWeights[0].x) * _1256) + (float3(_Globals.LUTWeights[1].x) * mix(_1279, _1283, float4(_1270 - _1271)).xyz));
     bool3 _1290 = _1289 > float3(0.040449999272823333740234375);
     float3 _1293 = pow((_1289 * float3(0.94786727428436279296875)) + float3(0.0521326996386051177978515625), float3(2.400000095367431640625));
     float3 _1294 = _1289 * float3(0.077399380505084991455078125);

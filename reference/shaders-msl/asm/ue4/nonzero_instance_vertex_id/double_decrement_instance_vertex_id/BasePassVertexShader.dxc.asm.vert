@@ -1,7 +1,63 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -103,8 +159,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2268;
-    float4 View_TranslucencyLightingVolumeMin[2];
-    float4 View_TranslucencyLightingVolumeInvSize[2];
+    unsafe_array<float4,2> View_TranslucencyLightingVolumeMin;
+    unsafe_array<float4,2> View_TranslucencyLightingVolumeInvSize;
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -149,7 +205,7 @@ struct type_View
     float PrePadding_View_2584;
     float PrePadding_View_2588;
     float4 View_SkyLightColor;
-    float4 View_SkyIrradianceEnvironmentMap[7];
+    unsafe_array<float4,7> View_SkyIrradianceEnvironmentMap;
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -160,8 +216,8 @@ struct type_View
     float PrePadding_View_2748;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    float4 View_GlobalVolumeCenterAndExtent[4];
-    float4 View_GlobalVolumeWorldToUVAddAndMul[4];
+    unsafe_array<float4,4> View_GlobalVolumeCenterAndExtent;
+    unsafe_array<float4,4> View_GlobalVolumeWorldToUVAddAndMul;
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -216,10 +272,10 @@ struct type_Primitive
     uint PrePadding_Primitive_420;
     uint PrePadding_Primitive_424;
     uint PrePadding_Primitive_428;
-    float4 Primitive_CustomPrimitiveData[4];
+    unsafe_array<float4,4> Primitive_CustomPrimitiveData;
 };
 
-constant float2 _67[2] = { float2(0.0), float2(0.0) };
+constant unsafe_array<float2,2> _67 = { float2(0.0), float2(0.0) };
 
 constant float3x3 _68 = {};
 constant float4 _69 = {};
@@ -246,20 +302,8 @@ struct main0_in
     float4 in_var_ATTRIBUTE13 [[attribute(13)]];
 };
 
-// Implementation of an array copy function to cover GLSL's ability to copy an array via assignment.
-template<typename T, uint N>
-void spvArrayCopyFromStack1(thread T (&dst)[N], thread const T (&src)[N])
-{
-    for (uint i = 0; i < N; dst[i] = src[i], i++);
-}
-
-template<typename T, uint N>
-void spvArrayCopyFromConstant1(thread T (&dst)[N], constant T (&src)[N])
-{
-    for (uint i = 0; i < N; dst[i] = src[i], i++);
-}
-
 // Returns 2D texture coords corresponding to 1D texel buffer coords
+static inline __attribute__((always_inline))
 uint2 spvTexelBufferCoord(uint tc)
 {
     return uint2(tc % 4096, tc / 4096);
@@ -268,8 +312,8 @@ uint2 spvTexelBufferCoord(uint tc)
 vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buffer(1)]], constant type_Primitive& Primitive [[buffer(2)]], texture2d<float> BoneMatrices [[texture(0)]])
 {
     main0_out out = {};
-    float2 out_var_TEXCOORD0[2] = {};
-    float2 in_var_ATTRIBUTE5[2] = {};
+    unsafe_array<float2,2> out_var_TEXCOORD0 = {};
+    unsafe_array<float2,2> in_var_ATTRIBUTE5 = {};
     in_var_ATTRIBUTE5[0] = in.in_var_ATTRIBUTE5_0;
     in_var_ATTRIBUTE5[1] = in.in_var_ATTRIBUTE5_1;
     float4 _83 = float4(in.in_var_ATTRIBUTE4.x);
@@ -291,9 +335,9 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     _173[1] = cross(_167, _161) * float3(in.in_var_ATTRIBUTE2.w);
     float3 _178 = float4(in.in_var_ATTRIBUTE0.xyz, 1.0) * _156;
     float4 _205 = float4((((Primitive.Primitive_LocalToWorld[0u].xyz * _178.xxx) + (Primitive.Primitive_LocalToWorld[1u].xyz * _178.yyy)) + (Primitive.Primitive_LocalToWorld[2u].xyz * _178.zzz)) + (Primitive.Primitive_LocalToWorld[3u].xyz + float3(View.View_PreViewTranslation)), 1.0);
-    float2 _71[2];
-    spvArrayCopyFromStack1(_71, in_var_ATTRIBUTE5);
-    float2 _72[2] = { float2(0.0), float2(0.0) };
+    unsafe_array<float2,2> _71;
+    _71 = in_var_ATTRIBUTE5;
+    unsafe_array<float2,2> _72 = { float2(0.0), float2(0.0) };
     for (int _207 = 0; _207 < 2; )
     {
         _72[_207] = _71[_207];
@@ -313,7 +357,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     out.out_var_TEXCOORD10_centroid = float4(_241.x, _241.y, _241.z, _217.w);
     out.out_var_TEXCOORD11_centroid = float4(_240[2], in.in_var_ATTRIBUTE2.w * Primitive.Primitive_InvNonUniformScaleAndDeterminantSign.w);
     out.out_var_COLOR0 = in.in_var_ATTRIBUTE13;
-    spvArrayCopyFromStack1(out_var_TEXCOORD0, _72);
+    out_var_TEXCOORD0 = _72;
     out.out_var_VS_To_DS_Position = float4(_205.x, _205.y, _205.z, _205.w);
     out.out_var_TEXCOORD0_0 = out_var_TEXCOORD0[0];
     out.out_var_TEXCOORD0_1 = out_var_TEXCOORD0[1];

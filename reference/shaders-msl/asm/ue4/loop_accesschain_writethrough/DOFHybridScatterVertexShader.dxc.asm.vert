@@ -1,5 +1,62 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
+	
+template <typename T, size_t Num>
+struct unsafe_array
+{
+	T __Elements[Num ? Num : 1];
+	
+	constexpr size_t size() const thread { return Num; }
+	constexpr size_t max_size() const thread { return Num; }
+	constexpr bool empty() const thread { return Num == 0; }
+	
+	constexpr size_t size() const device { return Num; }
+	constexpr size_t max_size() const device { return Num; }
+	constexpr bool empty() const device { return Num == 0; }
+	
+	constexpr size_t size() const constant { return Num; }
+	constexpr size_t max_size() const constant { return Num; }
+	constexpr bool empty() const constant { return Num == 0; }
+	
+	constexpr size_t size() const threadgroup { return Num; }
+	constexpr size_t max_size() const threadgroup { return Num; }
+	constexpr bool empty() const threadgroup { return Num == 0; }
+	
+	thread T &operator[](size_t pos) thread
+	{
+		return __Elements[pos];
+	}
+	constexpr const thread T &operator[](size_t pos) const thread
+	{
+		return __Elements[pos];
+	}
+	
+	device T &operator[](size_t pos) device
+	{
+		return __Elements[pos];
+	}
+	constexpr const device T &operator[](size_t pos) const device
+	{
+		return __Elements[pos];
+	}
+	
+	constexpr const constant T &operator[](size_t pos) const constant
+	{
+		return __Elements[pos];
+	}
+	
+	threadgroup T &operator[](size_t pos) threadgroup
+	{
+		return __Elements[pos];
+	}
+	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
+	{
+		return __Elements[pos];
+	}
+};
 
 using namespace metal;
 
@@ -12,7 +69,7 @@ struct type_Globals
 
 struct type_StructuredBuffer_v4float
 {
-    float4 _m0[1];
+    unsafe_array<float4,1> _m0;
 };
 
 struct main0_out
@@ -27,17 +84,17 @@ struct main0_out
     float4 gl_Position [[position]];
 };
 
-vertex main0_out main0(const device type_StructuredBuffer_v4float& ScatterDrawList [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]])
+vertex main0_out main0(const device type_StructuredBuffer_v4float& ScatterDrawList [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseVertex [[base_vertex]], uint gl_BaseInstance [[base_instance]])
 {
     main0_out out = {};
-    uint _66 = gl_VertexIndex / 4u;
-    uint _68 = gl_VertexIndex - (_66 * 4u);
-    uint _70 = (16u * gl_InstanceIndex) + _66;
+    uint _66 = (gl_VertexIndex - gl_BaseVertex) / 4u;
+    uint _68 = (gl_VertexIndex - gl_BaseVertex) - (_66 * 4u);
+    uint _70 = (16u * (gl_InstanceIndex - gl_BaseInstance)) + _66;
     float _72;
     _72 = 0.0;
-    float4 _61[4];
-    float _62[4];
-    float2 _63[4];
+    unsafe_array<float4,4> _61;
+    unsafe_array<float,4> _62;
+    unsafe_array<float2,4> _63;
     float _73;
     uint _75 = 0u;
     for (;;)
