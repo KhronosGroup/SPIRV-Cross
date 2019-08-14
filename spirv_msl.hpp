@@ -477,14 +477,12 @@ protected:
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
-		//<<<<<<<<
 		SPVFuncImplRowMajor2x3,
 		SPVFuncImplRowMajor2x4,
 		SPVFuncImplRowMajor3x2,
 		SPVFuncImplRowMajor3x4,
 		SPVFuncImplRowMajor4x2,
 		SPVFuncImplRowMajor4x3,
-		//>>>>>>>>
 		// It is very important that this come before *Swizzle and ChromaReconstruct*, to ensure it's
 		// emitted before them.
 		SPVFuncImplForwardArgs,

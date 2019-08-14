@@ -3398,6 +3398,9 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplTexelBufferCoords:
 		{
+			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
+			if (msl_options.texel_buffer_texture_width > 0)
+			{
 			string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
 			statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
 			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
@@ -3408,6 +3411,13 @@ void CompilerMSL::emit_custom_functions()
 			statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
 			end_scope();
 			statement("");
+			}
+			else
+			{
+				statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
+				statement("#define spvTexelBufferCoord(tc, Tex) uint2(tc % Tex.get_width(), tc / Tex.get_width())");
+			}
+			/* UE Change End: Add support for Metal 2.1's new texture_buffer type. */
 			break;
 		}
 
@@ -3563,7 +3573,6 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
-//<<<<<<< HEAD
 		case SPVFuncImplForwardArgs:
 			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");
@@ -3584,7 +3593,7 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			break;
-//=======
+
 		case SPVFuncImplRowMajor2x3:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
 			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
@@ -3660,7 +3669,6 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			break;
-//>>>>>>>>>>>
 
 		case SPVFuncImplGetSwizzle:
 			statement("enum class spvSwizzle : uint");
@@ -6770,8 +6778,19 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		else
 		{
 			// Metal texel buffer textures are 2D, so convert 1D coord to 2D.
+			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
 			if (is_fetch)
+			{
+				if (msl_options.texel_buffer_texture_width > 0)
+				{
 				tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
+		}
+				else
+				{
+					tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ", " + to_expression(img) + ")";
+				}
+			}
+			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
 		}
 
 		alt_coord_component = 1;
