@@ -9635,7 +9635,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += "* " + to_expression(name_id) + "_atomic";
 	}
 	/* UE Change End: Emulate texture2D atomic operations */
-
+	
 	use_builtin_array = false;
 	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 	/* UE Change End: Force the use of C style array declaration. */
@@ -11397,6 +11397,7 @@ bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *ar
 
 		uint32_t id = args[1];
 		compiler.set<SPIRExpression>(id, "", result_type, true);
+		compiler.ir.ids[id].set_allow_type_rewrite();
 		break;
 	}
 	case OpImageSampleExplicitLod:
