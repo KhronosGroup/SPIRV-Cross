@@ -253,6 +253,10 @@ public:
 			macOS = 1
 		} Platform;
 
+		/* UE Change Begin: Provide the Metal bindings as part of the options structure as that is more convenient. */
+		std::vector<MSLVertexAttr> vtx_attrs;
+		std::vector<MSLResourceBinding> res_bindings;
+		/* UE Change End: Provide the Metal bindings as part of the options structure as that is more convenient. */
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
@@ -284,9 +288,9 @@ public:
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
-		/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+		/* UE Change Begin: Provide the Metal bindings as part of the options structure as that is more convenient. */
 		bool ios_support_base_vertex_instance = false;
-		/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
+		/* UE Change End: Provide the Metal bindings as part of the options structure as that is more convenient. */
 		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		bool ios_use_framebuffer_fetch_subpasses = true;
 		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
@@ -332,6 +336,19 @@ public:
 	void set_msl_options(const Options &opts)
 	{
 		msl_options = opts;
+		
+		/* UE Change Begin: Provide the Metal bindings as part of the options structure as that is more convenient. */
+		for (auto &va : msl_options.vtx_attrs)
+			vtx_attrs_by_location[va.location] = va;
+		
+		for (auto &rb : msl_options.res_bindings)
+		{
+			resource_bindings.insert({
+				StageSetBinding{ rb.stage, rb.desc_set, rb.binding },
+				std::pair<MSLResourceBinding, bool>(rb, true)
+			});
+		}
+		/* UE Change End: Provide the Metal bindings as part of the options structure as that is more convenient. */
 	}
 
 	// Provide feedback to calling API to allow runtime to disable pipeline
