@@ -2730,6 +2730,13 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 {
 	if (id == 0)
 		return;
+	
+	/* UE Change Begin: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
+	for (auto child_id : access_chain_children[id])
+	{
+		notify_variable_access(child_id, block);
+	}
+	/* UE Change End: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
 
 	if (id_is_phi_variable(id))
 		accessed_variables_to_block[id].insert(block);
@@ -2795,14 +2802,22 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
+		/* UE Change Begin: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get<SPIRVariable>(ptr);
 		if (var)
+		{
 			accessed_variables_to_block[var->self].insert(current_block->self);
+			access_chain_children[args[1]].insert(var->self);
+		}
 
 		// args[2] might be another access chain we have to track use of.
 		for (uint32_t i = 2; i < length; i++)
+		{
 			notify_variable_access(args[i], current_block->self);
+			access_chain_children[args[1]].insert(args[i]);
+		}
+		/* UE Change End: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
 
 		// Also keep track of the access chain pointer itself.
 		// In exceptionally rare cases, we can end up with a case where
