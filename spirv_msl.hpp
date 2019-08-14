@@ -487,6 +487,9 @@ protected:
 		/* UE Change Begin: Emulate texture2D atomic operations */
 		SPVFuncImplImage2DAtomicCoords,
 		/* UE Change End: Emulate texture2D atomic operations */
+		/* UE Change Begin: Storage buffer robustness */
+		SPVFuncImplStorageBufferCoords,
+		/* UE Change End: Storage buffer robustness */
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
