@@ -527,6 +527,9 @@ protected:
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
+    /* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+    void emit_texture_op(const Instruction &i) override;
+    /* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,

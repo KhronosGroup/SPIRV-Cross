@@ -2060,6 +2060,19 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	       end(execution.interface_variables);
 }
 
+const CombinedImageSampler* Compiler::find_combined_image_sampler(uint32_t id)
+{
+	auto iter = std::find_if(
+		combined_image_samplers.begin(),
+		combined_image_samplers.end(),
+		[id](const CombinedImageSampler& entry)
+		{
+			return entry.image_id == id;
+		}
+	);
+	return iter != combined_image_samplers.end() ? &(*iter) : nullptr;
+}
+
 void Compiler::CombinedImageSamplerHandler::push_remap_parameters(const SPIRFunction &func, const uint32_t *args,
                                                                   uint32_t length)
 {
@@ -3893,6 +3906,18 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 {
 	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
 	comparison_ids.insert(id);
+	
+	/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+	for (auto it = dependency_hierarchy.begin(); it != dependency_hierarchy.end(); ++it)
+	{
+		if (it->second.find(id) != it->second.end())
+		{
+			if (compiler.find_combined_image_sampler(it->first) == nullptr)
+				comparison_ids.insert(it->first);
+		}
+	}
+	/* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+	
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
 }
@@ -3930,19 +3955,34 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t result_type = args[0];
 		uint32_t result_id = args[1];
 		auto &type = compiler.get<SPIRType>(result_type);
-		if (type.image.depth || dref_combined_samplers.count(result_id) != 0)
+		
+		/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+		// This image must be a depth image.
+		uint32_t image = args[2];
+		uint32_t sampler = args[3];
+
+		bool dependent = false;
+		auto hier = dependency_hierarchy.find(sampler);
+		if (hier != dependency_hierarchy.end())
 		{
-			// This image must be a depth image.
-			uint32_t image = args[2];
+			for (auto it = hier->second.begin(); !dependent && it != hier->second.end(); ++it)
+			{
+				if (compiler.find_combined_image_sampler(*it) == nullptr)
+					dependent = (comparison_ids.find(*it) != comparison_ids.end());
+			}
+		}
+		
+		if (type.image.depth || dref_combined_samplers.count(result_id) != 0 || dependent)
+		{
 			add_hierarchy_to_comparison_ids(image);
 
 			// This sampler must be a SamplerComparisonState, and not a regular SamplerState.
-			uint32_t sampler = args[3];
 			add_hierarchy_to_comparison_ids(sampler);
 
 			// Mark the OpSampledImage itself as being comparison state.
 			comparison_ids.insert(result_id);
 		}
+		/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 		return true;
 	}
 

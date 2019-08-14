@@ -681,6 +681,10 @@ protected:
 	bool interface_variable_exists_in_entry_point(uint32_t id) const;
 
 	SmallVector<CombinedImageSampler> combined_image_samplers;
+	
+	// Returns a pointer to the combined image sampler with either image_id *or* sampler_id equal to argument 'id'.
+	// Returns null if there is no such entry.
+	const CombinedImageSampler* find_combined_image_sampler(uint32_t id);
 
 	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
 	{
