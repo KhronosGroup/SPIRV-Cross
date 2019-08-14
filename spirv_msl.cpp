@@ -8802,6 +8802,10 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 				buffer_binding = i;
 		}
 
+		/* UE Change Begin: Allow the caller to specify the Metal translation should use argument buffers */
+		buffer_binding += msl_options.argument_buffer_offset;
+		/* UE Change End: Allow the caller to specify the Metal translation should use argument buffers */
+		
 		claimed_bindings.set(buffer_binding);
 
 		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(id) + to_name(id);
@@ -12626,7 +12630,9 @@ void CompilerMSL::analyze_argument_buffers()
 				auto &var = set<SPIRVariable>(var_id, uint_ptr_type_id, StorageClassUniformConstant);
 				set_name(var_id, "spvBufferSizeConstants");
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
-				set_decoration(var_id, DecorationBinding, kBufferSizeBufferBinding);
+                /* UE Begin Change: Move this to the front of IABs for convenience of the runtime */
+                set_decoration(var_id, DecorationBinding, 0);
+                /* UE End Change: Move this to the front of IABs for convenience of the runtime */
 				resources_in_set[desc_set].push_back(
 				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
 			}

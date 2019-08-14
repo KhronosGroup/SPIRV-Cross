@@ -265,6 +265,9 @@ public:
 		uint32_t view_mask_buffer_index = 24;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
+		/* UE Change Begin: Allow the caller to specify the Metal translation should use argument buffers */
+		uint32_t argument_buffer_offset = 0;
+		/* UE Change End: Allow the caller to specify the Metal translation should use argument buffers */
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
