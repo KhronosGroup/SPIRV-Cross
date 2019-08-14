@@ -281,6 +281,9 @@ public:
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
+		/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+		bool ios_support_base_vertex_instance = false;
+		/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		bool ios_use_framebuffer_fetch_subpasses = true;
 		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
@@ -773,9 +776,16 @@ protected:
 	uint32_t patch_stage_out_var_id = 0;
 	uint32_t stage_in_ptr_var_id = 0;
 	uint32_t stage_out_ptr_var_id = 0;
+	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	int32_t needs_base_vertex_arg = 0;
+	int32_t needs_base_instance_arg = 0;
+	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 	bool has_sampled_images = false;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
+	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	bool builtin_declaration = false;
+	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 	/* UE Change Begin: Force the use of C style array declaration. */
 	bool use_builtin_array = false;
 	/* UE Change End: Force the use of C style array declaration. */

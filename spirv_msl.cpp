@@ -2315,11 +2315,23 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						// The first member of the indirect buffer is always the number of vertices
 						// to draw.
-						statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
-						          output_buffer_var_name, "[(", to_expression(builtin_instance_idx_id), " - ",
-						          to_expression(builtin_base_instance_id), ") * spvIndirectParams[0] + ",
-						          to_expression(builtin_vertex_idx_id), " - ", to_expression(builtin_base_vertex_id),
-						          "];");
+						/* UE Change Begin: We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice */
+						if (ir.source.hlsl == true)
+						{
+							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
+									  output_buffer_var_name, "[", to_expression(builtin_instance_idx_id), " * spvIndirectParams[0] + ",
+									  to_expression(builtin_vertex_idx_id),
+									  "];");
+						}
+						else
+						{
+							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
+									  output_buffer_var_name, "[(", to_expression(builtin_instance_idx_id), " - ",
+									  to_expression(builtin_base_instance_id), ") * spvIndirectParams[0] + ",
+									  to_expression(builtin_vertex_idx_id), " - ", to_expression(builtin_base_vertex_id),
+									  "];");
+						}
+						/* UE Change End: We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice */
 					}
 				});
 				break;
@@ -8024,7 +8036,11 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 		statement("char _m", index, "_pad", "[", pad_len, "];");
 	}
 
+    /* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+    builtin_declaration = true;
 	statement(to_struct_member(type, member_type_id, index, qualifier));
+    builtin_declaration = false;
+    /* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 }
 
 void CompilerMSL::emit_struct_padding_target(const SPIRType &type)
@@ -8572,6 +8588,8 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				if (!ep_args.empty())
 					ep_args += ", ";
 
+				/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+				builtin_declaration = true;
 				ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type);
 				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
@@ -8583,6 +8601,8 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 					ep_args += ", post_depth_coverage";
 				}
 				ep_args += "]]";
+                builtin_declaration = false;
+                /* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 			}
 		}
 
@@ -8612,6 +8632,14 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 	if (needs_instance_idx_arg)
 		ep_args += built_in_func_arg(BuiltInInstanceIndex, !ep_args.empty());
+
+	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	if (needs_base_vertex_arg > 0)
+		ep_args += built_in_func_arg(BuiltInBaseVertex, !ep_args.empty());
+	
+	if (needs_base_instance_arg > 0)
+		ep_args += built_in_func_arg(BuiltInBaseInstance, !ep_args.empty());
+	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 
 	if (capture_output_to_buffer)
 	{
@@ -10580,19 +10608,97 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	switch (builtin)
 	{
 
+	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
 	// Override GLSL compiler strictness
 	case BuiltInVertexId:
-		return "gl_VertexID";
+		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+		{
+			if (builtin_declaration)
+			{
+				needs_base_vertex_arg++;
+				return "gl_VertexID";
+			}
+			else
+			{
+				return "(gl_VertexID - gl_BaseVertex)";
+			}
+		}
+		else
+		{
+			return "gl_VertexID";
+		}
 	case BuiltInInstanceId:
-		return "gl_InstanceID";
+		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+		{
+			if (builtin_declaration)
+			{
+				needs_base_instance_arg++;
+				return "gl_InstanceID";
+			}
+			else
+			{
+				return "(gl_InstanceID - gl_BaseInstance)";
+			}
+		}
+		else
+		{
+			return "gl_InstanceID";
+		}
 	case BuiltInVertexIndex:
-		return "gl_VertexIndex";
+		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+		{
+			if (builtin_declaration)
+			{
+				needs_base_vertex_arg++;
+				return "gl_VertexIndex";
+			}
+			else
+			{
+				return "(gl_VertexIndex - gl_BaseVertex)";
+			}
+		}
+		else
+		{
+			return "gl_VertexIndex";
+		}
 	case BuiltInInstanceIndex:
-		return "gl_InstanceIndex";
+		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+		{
+			if (builtin_declaration)
+			{
+				needs_base_instance_arg++;
+				return "gl_InstanceIndex";
+			}
+			else
+			{
+				return "(gl_InstanceIndex - gl_BaseInstance)";
+			}
+		}
+		else
+		{
+			return "gl_InstanceIndex";
+		}
 	case BuiltInBaseVertex:
+		if (msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+		{
+			needs_base_vertex_arg--;
 		return "gl_BaseVertex";
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("BaseVertex requires Metal 1.1 and Mac or Apple A9+ hardware.");
+		}
 	case BuiltInBaseInstance:
+		if (msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
+		{
+			needs_base_instance_arg--;
 		return "gl_BaseInstance";
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("BaseInstance requires Metal 1.1 and Mac or Apple A9+ hardware.");
+		}
+	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 	case BuiltInDrawIndex:
 		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
@@ -10975,9 +11081,13 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 	if (prefix_comma)
 		bi_arg += ", ";
 
+	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	builtin_declaration = true;
 	bi_arg += builtin_type_decl(builtin);
 	bi_arg += " " + builtin_to_glsl(builtin, StorageClassInput);
 	bi_arg += " [[" + builtin_qualifier(builtin) + "]]";
+	builtin_declaration = false;
+	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 
 	return bi_arg;
 }
