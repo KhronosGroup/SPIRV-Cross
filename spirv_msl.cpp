@@ -10835,6 +10835,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInPointSize:
 		return "point_size";
 	case BuiltInPosition:
+//<<<<<<< HEAD
 		if (position_invariant)
 		{
 			if (!msl_options.supports_msl_version(2, 1))
@@ -10843,6 +10844,14 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		}
 		else
 			return "position";
+//=======
+//		/* UE Change Begin: Support invariant position for HLSL source. */
+//		if (msl_options.supports_msl_version(2, 1) && (execution.model == ExecutionModelVertex || execution.model == ExecutionModelTessellationEvaluation) && ir.source.hlsl == true)
+//			return "position, invariant";
+//		else
+//		return "position";
+//		/* UE Change End: Support invariant position for HLSL source. */
+//>>>>>>> 13dbe357... HLSL makes position calculations invariant by default to eliminate problems with depth-precision, Apple added a similar qualifier for Metal 2.1 that can and should be used in Vertex & Domain/TessEval shaders for the same effect.
 	case BuiltInLayer:
 		return "render_target_array_index";
 	case BuiltInViewportIndex:
