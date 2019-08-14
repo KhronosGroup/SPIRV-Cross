@@ -299,6 +299,8 @@ public:
 		bool enforce_storge_buffer_bounds = false;
 		/* UE Change End: Storage buffer robustness - clamps access to SSBOs to the size of the buffer */
 		
+		bool invariant_float_math = false;
+
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
 
