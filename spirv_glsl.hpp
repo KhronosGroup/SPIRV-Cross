@@ -458,6 +458,16 @@ protected:
 	                              SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
 	void emit_trinary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                               const char *op, SPIRType::BaseType input_type);
+	void emit_trinary_func_op_bitextract(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
+	                                     const char *op,
+	                                     SPIRType::BaseType expected_result_type,
+	                                     SPIRType::BaseType input_type0,
+	                                     SPIRType::BaseType input_type1,
+	                                     SPIRType::BaseType input_type2);
+	void emit_bitfield_insert_op(uint32_t result_type, uint32_t result_id,
+	                             uint32_t op0, uint32_t op1, uint32_t op2, uint32_t op3,
+	                             const char *op,
+	                             SPIRType::BaseType offset_count_type);
 
 	void emit_unary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	void emit_unrolled_unary_op(uint32_t result_type, uint32_t result_id, uint32_t operand, const char *op);

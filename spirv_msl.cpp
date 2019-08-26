@@ -4229,21 +4229,39 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	// Bitfield
 	case OpBitFieldInsert:
-		MSL_QFOP(insert_bits);
+	{
+		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5],
+		                        "insert_bits", SPIRType::UInt);
 		break;
+	}
 
 	case OpBitFieldSExtract:
-	case OpBitFieldUExtract:
-		MSL_TFOP(extract_bits);
+	{
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "extract_bits",
+		                                int_type, int_type,
+		                                SPIRType::UInt, SPIRType::UInt);
 		break;
+	}
+
+	case OpBitFieldUExtract:
+	{
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "extract_bits",
+		                                uint_type, uint_type,
+		                                SPIRType::UInt, SPIRType::UInt);
+		break;
+	}
 
 	case OpBitReverse:
+		// BitReverse does not have issues with sign since result type must match input type.
 		MSL_UFOP(reverse_bits);
 		break;
 
 	case OpBitCount:
-		MSL_UFOP(popcount);
+	{
+		auto basetype = expression_type(ops[2]).basetype;
+		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "popcount", basetype, basetype);
 		break;
+	}
 
 	case OpFRem:
 		MSL_BFOP(fmod);

@@ -4225,6 +4225,57 @@ void CompilerGLSL::emit_unary_func_op_cast(uint32_t result_type, uint32_t result
 	inherit_expression_dependencies(result_id, op0);
 }
 
+// Very special case. Handling bitfieldExtract requires us to deal with different bitcasts of different signs
+// and different vector sizes all at once. Need a special purpose method here.
+void CompilerGLSL::emit_trinary_func_op_bitextract(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                                   uint32_t op2, const char *op,
+                                                   SPIRType::BaseType expected_result_type,
+                                                   SPIRType::BaseType input_type0,
+                                                   SPIRType::BaseType input_type1,
+                                                   SPIRType::BaseType input_type2)
+{
+	auto &out_type = get<SPIRType>(result_type);
+	auto expected_type = out_type;
+	expected_type.basetype = input_type0;
+
+	string cast_op0 =
+			expression_type(op0).basetype != input_type0 ? bitcast_glsl(expected_type, op0) : to_unpacked_expression(op0);
+
+	auto op1_expr = to_unpacked_expression(op1);
+	auto op2_expr = to_unpacked_expression(op2);
+
+	// Use value casts here instead. Input must be exactly int or uint, but SPIR-V might be 16-bit.
+	expected_type.basetype = input_type1;
+	expected_type.vecsize = 1;
+	string cast_op1 =
+			expression_type(op1).basetype != input_type1 ? join(type_to_glsl_constructor(expected_type), "(", op1_expr, ")") : op1_expr;
+
+	expected_type.basetype = input_type2;
+	expected_type.vecsize = 1;
+	string cast_op2 =
+			expression_type(op2).basetype != input_type2 ? join(type_to_glsl_constructor(expected_type), "(", op2_expr, ")") : op2_expr;
+
+	string expr;
+	if (out_type.basetype != expected_result_type)
+	{
+		expected_type.vecsize = out_type.vecsize;
+		expected_type.basetype = expected_result_type;
+		expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(op, "(", cast_op0, ", ", cast_op1, ", ", cast_op2, ")");
+		expr += ')';
+	}
+	else
+	{
+		expr += join(op, "(", cast_op0, ", ", cast_op1, ", ", cast_op2, ")");
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1) && should_forward(op2));
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+	inherit_expression_dependencies(result_id, op2);
+}
+
 void CompilerGLSL::emit_trinary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                              uint32_t op2, const char *op, SPIRType::BaseType input_type)
 {
@@ -4305,6 +4356,46 @@ void CompilerGLSL::emit_quaternary_func_op(uint32_t result_type, uint32_t result
 	emit_op(result_type, result_id,
 	        join(op, "(", to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ", ",
 	             to_unpacked_expression(op2), ", ", to_unpacked_expression(op3), ")"),
+	        forward);
+
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+	inherit_expression_dependencies(result_id, op2);
+	inherit_expression_dependencies(result_id, op3);
+}
+
+void CompilerGLSL::emit_bitfield_insert_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                           uint32_t op2, uint32_t op3, const char *op,
+                                           SPIRType::BaseType offset_count_type)
+{
+	// Only need to cast offset/count arguments. Types of base/insert must be same as result type,
+	// and bitfieldInsert is sign invariant.
+	bool forward = should_forward(op0) && should_forward(op1) &&
+	               should_forward(op2) && should_forward(op3);
+
+	auto op0_expr = to_unpacked_expression(op0);
+	auto op1_expr = to_unpacked_expression(op1);
+	auto op2_expr = to_unpacked_expression(op2);
+	auto op3_expr = to_unpacked_expression(op3);
+
+	SPIRType target_type;
+	target_type.vecsize = 1;
+	target_type.basetype = offset_count_type;
+
+	if (expression_type(op2).basetype != offset_count_type)
+	{
+		// Value-cast here. Input might be 16-bit. GLSL requires int.
+		op2_expr = join(type_to_glsl_constructor(target_type), "(", op2_expr, ")");
+	}
+
+	if (expression_type(op3).basetype != offset_count_type)
+	{
+		// Value-cast here. Input might be 16-bit. GLSL requires int.
+		op3_expr = join(type_to_glsl_constructor(target_type), "(", op3_expr, ")");
+	}
+
+	emit_op(result_type, result_id,
+	        join(op, "(", op0_expr, ", ", op1_expr, ", ", op2_expr, ", ", op3_expr, ")"),
 	        forward);
 
 	inherit_expression_dependencies(result_id, op0);
@@ -8981,23 +9072,39 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	// Bitfield
 	case OpBitFieldInsert:
-		// TODO: The signedness of inputs is strict in GLSL, but not in SPIR-V, bitcast if necessary.
-		GLSL_QFOP(bitfieldInsert);
+	{
+		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5],
+		                        "bitfieldInsert", SPIRType::Int);
 		break;
+	}
 
 	case OpBitFieldSExtract:
-	case OpBitFieldUExtract:
-		// TODO: The signedness of inputs is strict in GLSL, but not in SPIR-V, bitcast if necessary.
-		GLSL_TFOP(bitfieldExtract);
+	{
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract",
+		                                int_type, int_type,
+		                                SPIRType::Int, SPIRType::Int);
 		break;
+	}
+
+	case OpBitFieldUExtract:
+	{
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract",
+		                                uint_type, uint_type,
+		                                SPIRType::Int, SPIRType::Int);
+		break;
+	}
 
 	case OpBitReverse:
+		// BitReverse does not have issues with sign since result type must match input type.
 		GLSL_UFOP(bitfieldReverse);
 		break;
 
 	case OpBitCount:
-		GLSL_UFOP(bitCount);
+	{
+		auto basetype = expression_type(ops[2]).basetype;
+		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "bitCount", basetype, int_type);
 		break;
+	}
 
 	// Atomics
 	case OpAtomicExchange:
