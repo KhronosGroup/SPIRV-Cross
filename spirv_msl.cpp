@@ -6281,29 +6281,6 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 			bar_stmt += "mem_flags::mem_none";
 	}
 
-	if (msl_options.is_ios() && (msl_options.supports_msl_version(2) && !msl_options.supports_msl_version(2, 1)))
-	{
-		bar_stmt += ", ";
-
-		switch (mem_scope)
-		{
-		case ScopeCrossDevice:
-		case ScopeDevice:
-			bar_stmt += "memory_scope_device";
-			break;
-
-		case ScopeSubgroup:
-		case ScopeInvocation:
-			bar_stmt += "memory_scope_simdgroup";
-			break;
-
-		case ScopeWorkgroup:
-		default:
-			bar_stmt += "memory_scope_threadgroup";
-			break;
-		}
-	}
-
 	bar_stmt += ");";
 
 	statement(bar_stmt);
