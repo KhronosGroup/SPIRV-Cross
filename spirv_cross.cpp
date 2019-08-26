@@ -1396,38 +1396,6 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 		return false;
 }
 
-bool Compiler::block_is_outside_flow_control_from_block(const SPIRBlock &from, const SPIRBlock &to)
-{
-	auto *start = &from;
-
-	if (start->self == to.self)
-		return true;
-
-	// Break cycles.
-	if (is_continue(start->self))
-		return false;
-
-	// If our select block doesn't merge, we must break or continue in these blocks,
-	// so if continues occur branchless within these blocks, consider them branchless as well.
-	// This is typically used for loop control.
-	if (start->terminator == SPIRBlock::Select && start->merge == SPIRBlock::MergeNone &&
-	    (block_is_outside_flow_control_from_block(get<SPIRBlock>(start->true_block), to) ||
-	     block_is_outside_flow_control_from_block(get<SPIRBlock>(start->false_block), to)))
-	{
-		return true;
-	}
-	else if (start->merge_block && block_is_outside_flow_control_from_block(get<SPIRBlock>(start->merge_block), to))
-	{
-		return true;
-	}
-	else if (start->next_block && block_is_outside_flow_control_from_block(get<SPIRBlock>(start->next_block), to))
-	{
-		return true;
-	}
-	else
-		return false;
-}
-
 bool Compiler::execution_is_noop(const SPIRBlock &from, const SPIRBlock &to) const
 {
 	if (!execution_is_branchless(from, to))
@@ -3436,10 +3404,11 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 		// merge can occur. Walk the CFG to see if we find anything.
 
 		seen_blocks.clear();
-		cfg.walk_from(seen_blocks, header_block.merge_block, [&](uint32_t walk_block) {
+		cfg.walk_from(seen_blocks, header_block.merge_block, [&](uint32_t walk_block) -> bool {
 			// We found a block which accesses the variable outside the loop.
 			if (blocks.find(walk_block) != end(blocks))
 				static_loop_init = false;
+			return true;
 		});
 
 		if (!static_loop_init)
@@ -3801,6 +3770,15 @@ bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uin
 	}
 
 	return true;
+}
+
+const CFG &Compiler::get_cfg_for_current_function() const
+{
+	assert(current_function);
+	auto cfg_itr = function_cfgs.find(current_function->self);
+	assert(cfg_itr != end(function_cfgs));
+	assert(cfg_itr->second);
+	return *cfg_itr->second;
 }
 
 void Compiler::build_function_control_flow_graphs_and_analyze()
