@@ -148,14 +148,35 @@ bool CFG::post_order_visit(uint32_t block_id)
 		// Add a fake branch so any dominator in either the if (), or else () block, or a lone case statement
 		// will be hoisted out to outside the selection merge.
 		// If size > 1, the variable will be automatically hoisted, so we should not mess with it.
+		// The exception here is switch blocks, where we can have multiple edges to merge block,
+		// all coming from same scope, so be more conservative in this case.
 		// Adding fake branches unconditionally breaks parameter preservation analysis,
 		// which looks at how variables are accessed through the CFG.
 		auto pred_itr = preceding_edges.find(block.next_block);
 		if (pred_itr != end(preceding_edges))
 		{
 			auto &pred = pred_itr->second;
-			if (pred.size() == 1 && *pred.begin() != block_id)
-				add_branch(block_id, block.next_block);
+			auto succ_itr = succeeding_edges.find(block_id);
+			uint32_t num_succeeding_edges = 0;
+			if (succ_itr != end(succeeding_edges))
+				num_succeeding_edges = succ_itr->second.size();
+
+			if (block.terminator == SPIRBlock::MultiSelect && num_succeeding_edges == 1)
+			{
+				// Multiple branches can come from the same scope due to "break;", so we need to assume that all branches
+				// come from same case scope in worst case, even if there are multiple preceding edges.
+				// If we have more than one succeeding edge from the block header, it should be impossible
+				// to have a dominator be inside the block.
+				// Only case this can go wrong is if we have 2 or more edges from block header and
+				// 2 or more edges to merge block, and still have dominator be inside a case label.
+				if (!pred.empty())
+					add_branch(block_id, block.next_block);
+			}
+			else
+			{
+				if (pred.size() == 1 && *pred.begin() != block_id)
+					add_branch(block_id, block.next_block);
+			}
 		}
 		else
 		{
