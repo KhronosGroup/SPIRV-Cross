@@ -11285,7 +11285,7 @@ void CompilerGLSL::branch_to_continue(uint32_t from, uint32_t to)
 
 		// Some simplification for for-loops. We always end up with a useless continue;
 		// statement since we branch to a loop block.
-		// Walk the CFG, if we uncoditionally execute the block calling continue assuming we're in the loop block,
+		// Walk the CFG, if we unconditionally execute the block calling continue assuming we're in the loop block,
 		// we can avoid writing out an explicit continue statement.
 		// Similar optimization to return statements if we know we're outside flow control.
 		if (!outside_control_flow)
@@ -11297,6 +11297,8 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 {
 	flush_phi(from, to);
 	flush_control_dependent_expressions(from);
+
+	bool to_is_continue = is_continue(to);
 
 	// This is only a continue if we branch to our loop dominator.
 	if ((ir.block_meta[to] & ParsedIR::BLOCK_META_LOOP_HEADER_BIT) != 0 && get<SPIRBlock>(from).loop_dominator == to)
@@ -11326,12 +11328,25 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 		}
 		statement("break;");
 	}
-	else if (is_continue(to) || (from == to))
+	else if (to_is_continue || from == to)
 	{
 		// For from == to case can happen for a do-while loop which branches into itself.
 		// We don't mark these cases as continue blocks, but the only possible way to branch into
 		// ourselves is through means of continue blocks.
-		branch_to_continue(from, to);
+
+		// If we are merging to a continue block, there is no need to emit the block chain for continue here.
+		// We can branch to the continue block after we merge execution.
+
+		// Here we make use of structured control flow rules from spec:
+		// 2.11: - the merge block declared by a header block cannot be a merge block declared by any other header block
+		//       - each header block must strictly dominate its merge block, unless the merge block is unreachable in the CFG
+		// If we are branching to a merge block, we must be inside a construct which dominates the merge block.
+		auto &block_meta = ir.block_meta[to];
+		bool branching_to_merge =
+		    (block_meta & (ParsedIR::BLOCK_META_SELECTION_MERGE_BIT | ParsedIR::BLOCK_META_MULTISELECT_MERGE_BIT |
+		                   ParsedIR::BLOCK_META_LOOP_MERGE_BIT)) != 0;
+		if (!to_is_continue || !branching_to_merge)
+			branch_to_continue(from, to);
 	}
 	else if (!is_conditional(to))
 		emit_block_chain(get<SPIRBlock>(to));
