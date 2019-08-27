@@ -5,24 +5,7 @@
 
 using namespace metal;
 
-struct myType
-{
-    float data;
-};
-
-constant myType _21[5] = { myType{ 0.0 }, myType{ 1.0 }, myType{ 0.0 }, myType{ 1.0 }, myType{ 0.0 } };
-
-struct main0_out
-{
-    float4 o_color [[color(0)]];
-};
-
-// Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
-template<typename Tx, typename Ty>
-Tx mod(Tx x, Ty y)
-{
-    return x - y * floor(x / y);
-}
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(8u, 1u, 1u);
 
 template<typename T, uint A>
 void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
@@ -78,20 +61,19 @@ void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgr
     }
 }
 
-fragment main0_out main0(float4 gl_FragCoord [[position]])
+kernel void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
 {
-    main0_out out = {};
-    float2 uv = gl_FragCoord.xy;
-    int index = int(mod(uv.x, 4.0));
-    myType elt = _21[index];
-    if (elt.data > 0.0)
+    threadgroup float shared_group[8][8];
+    threadgroup float shared_group_alt[8][8];
+    float blob[8];
+    for (int i = 0; i < 8; i++)
     {
-        out.o_color = float4(0.0, 1.0, 0.0, 1.0);
+        blob[i] = float(i);
     }
-    else
-    {
-        out.o_color = float4(1.0, 0.0, 0.0, 1.0);
-    }
-    return out;
+    spvArrayCopyFromStackToThreadGroup1(shared_group[gl_LocalInvocationIndex], blob);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    float copied_blob[8];
+    spvArrayCopyFromThreadGroupToStack1(copied_blob, shared_group[gl_LocalInvocationIndex ^ 1u]);
+    spvArrayCopyFromThreadGroupToThreadGroup1(shared_group_alt[gl_LocalInvocationIndex], shared_group[gl_LocalInvocationIndex]);
 }
 

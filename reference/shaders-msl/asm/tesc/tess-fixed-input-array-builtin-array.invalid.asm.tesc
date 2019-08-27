@@ -45,17 +45,58 @@ struct main0_in
     float4 gl_Position [[attribute(1)]];
 };
 
-// Implementation of an array copy function to cover GLSL's ability to copy an array via assignment.
-template<typename T, uint N>
-void spvArrayCopyFromStack1(thread T (&dst)[N], thread const T (&src)[N])
+template<typename T, uint A>
+void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 {
-    for (uint i = 0; i < N; dst[i] = src[i], i++);
+    for (uint i = 0; i < A; i++)
+    {
+        dst[i] = src[i];
+    }
 }
 
-template<typename T, uint N>
-void spvArrayCopyFromConstant1(thread T (&dst)[N], constant T (&src)[N])
+template<typename T, uint A>
+void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
 {
-    for (uint i = 0; i < N; dst[i] = src[i], i++);
+    for (uint i = 0; i < A; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint A>
+void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
+{
+    for (uint i = 0; i < A; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint A>
+void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
+{
+    for (uint i = 0; i < A; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint A>
+void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
+{
+    for (uint i = 0; i < A; i++)
+    {
+        dst[i] = src[i];
+    }
+}
+
+template<typename T, uint A>
+void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
+{
+    for (uint i = 0; i < A; i++)
+    {
+        dst[i] = src[i];
+    }
 }
 
 HSOut _hs_main(thread const VertexOutput (&p)[3], thread const uint& i)
@@ -93,7 +134,7 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     p[2].uv = gl_in[2].VertexOutput_uv;
     uint i = gl_InvocationID;
     VertexOutput param[3];
-    spvArrayCopyFromStack1(param, p);
+    spvArrayCopyFromStackToStack1(param, p);
     uint param_1 = i;
     HSOut flattenTemp = _hs_main(param, param_1);
     gl_out[gl_InvocationID].gl_Position = flattenTemp.pos;
@@ -102,7 +143,7 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     if (int(gl_InvocationID) == 0)
     {
         VertexOutput param_2[3];
-        spvArrayCopyFromStack1(param_2, p);
+        spvArrayCopyFromStackToStack1(param_2, p);
         HSConstantOut _patchConstantResult = PatchHS(param_2);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_patchConstantResult.EdgeTess[0]);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_patchConstantResult.EdgeTess[1]);

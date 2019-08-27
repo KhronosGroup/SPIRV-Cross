@@ -265,6 +265,15 @@ SPIRVariable *Compiler::maybe_get_backing_variable(uint32_t chain)
 	return var;
 }
 
+StorageClass Compiler::get_backing_variable_storage(uint32_t ptr)
+{
+	auto *var = maybe_get_backing_variable(ptr);
+	if (var)
+		return var->storage;
+	else
+		return expression_type(ptr).storage;
+}
+
 void Compiler::register_read(uint32_t expr, uint32_t chain, bool forwarded)
 {
 	auto &e = get<SPIRExpression>(expr);
