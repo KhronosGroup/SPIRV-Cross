@@ -3185,40 +3185,41 @@ void CompilerMSL::emit_custom_functions()
 			break;
 
 		case SPVFuncImplArrayCopy:
-			statement("// Implementation of an array copy function to cover GLSL's ability to copy an array via "
-			          "assignment.");
-			statement("template<typename T, uint N>");
-			statement("void spvArrayCopyFromStack1(thread T (&dst)[N], thread const T (&src)[N])");
-			begin_scope();
-			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
-			end_scope();
-			statement("");
-
-			statement("template<typename T, uint N>");
-			statement("void spvArrayCopyFromConstant1(thread T (&dst)[N], constant T (&src)[N])");
-			begin_scope();
-			statement("for (uint i = 0; i < N; dst[i] = src[i], i++);");
-			end_scope();
-			statement("");
-			break;
-
 		case SPVFuncImplArrayOfArrayCopy2Dim:
 		case SPVFuncImplArrayOfArrayCopy3Dim:
 		case SPVFuncImplArrayOfArrayCopy4Dim:
 		case SPVFuncImplArrayOfArrayCopy5Dim:
 		case SPVFuncImplArrayOfArrayCopy6Dim:
 		{
+			// Unfortunately we cannot template on the address space, so combinatorial explosion it is.
 			static const char *function_name_tags[] = {
-				"FromStack",
-				"FromConstant",
+				"FromConstantToStack",
+				"FromConstantToThreadGroup",
+				"FromStackToStack",
+				"FromStackToThreadGroup",
+				"FromThreadGroupToStack",
+				"FromThreadGroupToThreadGroup",
 			};
 
 			static const char *src_address_space[] = {
-				"thread const",
 				"constant",
+				"constant",
+				"thread const",
+				"thread const",
+				"threadgroup const",
+				"threadgroup const",
 			};
 
-			for (uint32_t variant = 0; variant < 2; variant++)
+			static const char *dst_address_space[] = {
+				"thread",
+				"threadgroup",
+				"thread",
+				"threadgroup",
+				"thread",
+				"threadgroup",
+			};
+
+			for (uint32_t variant = 0; variant < 6; variant++)
 			{
 				uint32_t dimensions = spv_func - SPVFuncImplArrayCopyMultidimBase;
 				string tmp = "template<typename T";
@@ -3238,17 +3239,24 @@ void CompilerMSL::emit_custom_functions()
 					array_arg += "]";
 				}
 
-				statement("void spvArrayCopy", function_name_tags[variant], dimensions, "(thread T (&dst)", array_arg,
+				statement("void spvArrayCopy", function_name_tags[variant], dimensions, "(", dst_address_space[variant],
+				          " T (&dst)",
+				          array_arg,
 				          ", ", src_address_space[variant], " T (&src)", array_arg, ")");
 
 				begin_scope();
 				statement("for (uint i = 0; i < A; i++)");
 				begin_scope();
-				statement("spvArrayCopy", function_name_tags[variant], dimensions - 1, "(dst[i], src[i]);");
+
+				if (dimensions == 1)
+					statement("dst[i] = src[i];");
+				else
+					statement("spvArrayCopy", function_name_tags[variant], dimensions - 1, "(dst[i], src[i]);");
 				end_scope();
 				end_scope();
 				statement("");
 			}
+
 			break;
 		}
 
@@ -4890,7 +4898,8 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	flush_all_active_variables();
 }
 
-void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
+void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id,
+                                  StorageClass lhs_storage, StorageClass rhs_storage)
 {
 	// Assignment from an array initializer is fine.
 	auto &type = expression_type(rhs_id);
@@ -4932,7 +4941,29 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id)
 		force_recompile();
 	}
 
-	const char *tag = is_constant ? "FromConstant" : "FromStack";
+	bool lhs_thread = lhs_storage == StorageClassFunction ||
+	                  lhs_storage == StorageClassGeneric ||
+	                  lhs_storage == StorageClassPrivate;
+	bool rhs_thread = rhs_storage == StorageClassFunction ||
+	                  rhs_storage == StorageClassGeneric ||
+	                  rhs_storage == StorageClassPrivate;
+
+	const char *tag = nullptr;
+	if (lhs_thread && is_constant)
+		tag = "FromConstantToStack";
+	else if (lhs_storage == StorageClassWorkgroup && is_constant)
+		tag = "FromConstantToThreadGroup";
+	else if (lhs_thread && rhs_thread)
+		tag = "FromStackToStack";
+	else if (lhs_storage == StorageClassWorkgroup && rhs_thread)
+		tag = "FromStackToThreadGroup";
+	else if (lhs_thread && rhs_storage == StorageClassWorkgroup)
+		tag = "FromThreadGroupToStack";
+	else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassWorkgroup)
+		tag = "FromThreadGroupToThreadGroup";
+	else
+		SPIRV_CROSS_THROW("Unknown storage class used for copying arrays.");
+
 	statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
 }
 
@@ -4969,7 +5000,7 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	emit_array_copy(to_expression(id_lhs), id_rhs);
+	emit_array_copy(to_expression(id_lhs), id_rhs, get_backing_variable_storage(id_lhs), get_backing_variable_storage(id_rhs));
 	register_write(id_lhs);
 
 	return true;
