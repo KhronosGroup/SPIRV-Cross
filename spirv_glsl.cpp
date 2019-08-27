@@ -8265,6 +8265,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (has_extended_decoration(ops[2], SPIRVCrossDecorationPhysicalTypePacked))
 			allow_base_expression = false;
 
+		// Cannot use base expression for row-major matrix row-extraction since we need to interleave access pattern
+		// into the base expression.
+		if (is_non_native_row_major_matrix(ops[2]))
+			allow_base_expression = false;
+
 		AccessChainMeta meta;
 		SPIRExpression *e = nullptr;
 
