@@ -657,7 +657,6 @@ protected:
 
 	bool function_is_pure(const SPIRFunction &func);
 	bool block_is_pure(const SPIRBlock &block);
-	bool block_is_outside_flow_control_from_block(const SPIRBlock &from, const SPIRBlock &to);
 
 	bool execution_is_branchless(const SPIRBlock &from, const SPIRBlock &to) const;
 	bool execution_is_direct_branch(const SPIRBlock &from, const SPIRBlock &to) const;
@@ -883,6 +882,8 @@ protected:
 
 	void build_function_control_flow_graphs_and_analyze();
 	std::unordered_map<uint32_t, std::unique_ptr<CFG>> function_cfgs;
+	const CFG &get_cfg_for_current_function() const;
+
 	struct CFGBuilder : OpcodeHandler
 	{
 		CFGBuilder(Compiler &compiler_);

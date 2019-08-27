@@ -11276,16 +11276,16 @@ void CompilerGLSL::branch_to_continue(uint32_t from, uint32_t to)
 
 		if (loop_dominator != 0)
 		{
-			auto &dominator = get<SPIRBlock>(loop_dominator);
+			auto &cfg = get_cfg_for_current_function();
 
 			// For non-complex continue blocks, we implicitly branch to the continue block
 			// by having the continue block be part of the loop header in for (; ; continue-block).
-			outside_control_flow = block_is_outside_flow_control_from_block(dominator, from_block);
+			outside_control_flow = cfg.node_terminates_control_flow_in_sub_graph(loop_dominator, from);
 		}
 
 		// Some simplification for for-loops. We always end up with a useless continue;
 		// statement since we branch to a loop block.
-		// Walk the CFG, if we uncoditionally execute the block calling continue assuming we're in the loop block,
+		// Walk the CFG, if we unconditionally execute the block calling continue assuming we're in the loop block,
 		// we can avoid writing out an explicit continue statement.
 		// Similar optimization to return statements if we know we're outside flow control.
 		if (!outside_control_flow)
@@ -11297,6 +11297,8 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 {
 	flush_phi(from, to);
 	flush_control_dependent_expressions(from);
+
+	bool to_is_continue = is_continue(to);
 
 	// This is only a continue if we branch to our loop dominator.
 	if ((ir.block_meta[to] & ParsedIR::BLOCK_META_LOOP_HEADER_BIT) != 0 && get<SPIRBlock>(from).loop_dominator == to)
@@ -11326,12 +11328,25 @@ void CompilerGLSL::branch(uint32_t from, uint32_t to)
 		}
 		statement("break;");
 	}
-	else if (is_continue(to) || (from == to))
+	else if (to_is_continue || from == to)
 	{
 		// For from == to case can happen for a do-while loop which branches into itself.
 		// We don't mark these cases as continue blocks, but the only possible way to branch into
 		// ourselves is through means of continue blocks.
-		branch_to_continue(from, to);
+
+		// If we are merging to a continue block, there is no need to emit the block chain for continue here.
+		// We can branch to the continue block after we merge execution.
+
+		// Here we make use of structured control flow rules from spec:
+		// 2.11: - the merge block declared by a header block cannot be a merge block declared by any other header block
+		//       - each header block must strictly dominate its merge block, unless the merge block is unreachable in the CFG
+		// If we are branching to a merge block, we must be inside a construct which dominates the merge block.
+		auto &block_meta = ir.block_meta[to];
+		bool branching_to_merge =
+		    (block_meta & (ParsedIR::BLOCK_META_SELECTION_MERGE_BIT | ParsedIR::BLOCK_META_MULTISELECT_MERGE_BIT |
+		                   ParsedIR::BLOCK_META_LOOP_MERGE_BIT)) != 0;
+		if (!to_is_continue || !branching_to_merge)
+			branch_to_continue(from, to);
 	}
 	else if (!is_conditional(to))
 		emit_block_chain(get<SPIRBlock>(to));
@@ -12180,11 +12195,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 
 	case SPIRBlock::Return:
+	{
 		for (auto &line : current_function->fixup_hooks_out)
 			line();
 
 		if (processing_entry_point)
 			emit_fixup();
+
+		auto &cfg = get_cfg_for_current_function();
 
 		if (block.return_value)
 		{
@@ -12196,7 +12214,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 					emit_array_copy("SPIRV_Cross_return_value", block.return_value);
 
-				if (!block_is_outside_flow_control_from_block(get<SPIRBlock>(current_function->entry_block), block) ||
+				if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||
 				    block.loop_dominator != SPIRBlock::NoDominator)
 				{
 					statement("return;");
@@ -12209,16 +12227,17 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 					statement("return ", to_expression(block.return_value), ";");
 			}
 		}
-		// If this block is the very final block and not called from control flow,
-		// we do not need an explicit return which looks out of place. Just end the function here.
-		// In the very weird case of for(;;) { return; } executing return is unconditional,
-		// but we actually need a return here ...
-		else if (!block_is_outside_flow_control_from_block(get<SPIRBlock>(current_function->entry_block), block) ||
+		else if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||
 		         block.loop_dominator != SPIRBlock::NoDominator)
 		{
+			// If this block is the very final block and not called from control flow,
+			// we do not need an explicit return which looks out of place. Just end the function here.
+			// In the very weird case of for(;;) { return; } executing return is unconditional,
+			// but we actually need a return here ...
 			statement("return;");
 		}
 		break;
+	}
 
 	case SPIRBlock::Kill:
 		statement(backend.discard_literal, ";");
