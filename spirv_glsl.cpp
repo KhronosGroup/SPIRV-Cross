@@ -4230,8 +4230,7 @@ void CompilerGLSL::emit_unary_func_op_cast(uint32_t result_type, uint32_t result
 void CompilerGLSL::emit_trinary_func_op_bitextract(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                                    uint32_t op2, const char *op,
                                                    SPIRType::BaseType expected_result_type,
-                                                   SPIRType::BaseType input_type0,
-                                                   SPIRType::BaseType input_type1,
+                                                   SPIRType::BaseType input_type0, SPIRType::BaseType input_type1,
                                                    SPIRType::BaseType input_type2)
 {
 	auto &out_type = get<SPIRType>(result_type);
@@ -4239,7 +4238,7 @@ void CompilerGLSL::emit_trinary_func_op_bitextract(uint32_t result_type, uint32_
 	expected_type.basetype = input_type0;
 
 	string cast_op0 =
-			expression_type(op0).basetype != input_type0 ? bitcast_glsl(expected_type, op0) : to_unpacked_expression(op0);
+	    expression_type(op0).basetype != input_type0 ? bitcast_glsl(expected_type, op0) : to_unpacked_expression(op0);
 
 	auto op1_expr = to_unpacked_expression(op1);
 	auto op2_expr = to_unpacked_expression(op2);
@@ -4247,13 +4246,15 @@ void CompilerGLSL::emit_trinary_func_op_bitextract(uint32_t result_type, uint32_
 	// Use value casts here instead. Input must be exactly int or uint, but SPIR-V might be 16-bit.
 	expected_type.basetype = input_type1;
 	expected_type.vecsize = 1;
-	string cast_op1 =
-			expression_type(op1).basetype != input_type1 ? join(type_to_glsl_constructor(expected_type), "(", op1_expr, ")") : op1_expr;
+	string cast_op1 = expression_type(op1).basetype != input_type1 ?
+	                      join(type_to_glsl_constructor(expected_type), "(", op1_expr, ")") :
+	                      op1_expr;
 
 	expected_type.basetype = input_type2;
 	expected_type.vecsize = 1;
-	string cast_op2 =
-			expression_type(op2).basetype != input_type2 ? join(type_to_glsl_constructor(expected_type), "(", op2_expr, ")") : op2_expr;
+	string cast_op2 = expression_type(op2).basetype != input_type2 ?
+	                      join(type_to_glsl_constructor(expected_type), "(", op2_expr, ")") :
+	                      op2_expr;
 
 	string expr;
 	if (out_type.basetype != expected_result_type)
@@ -4370,8 +4371,7 @@ void CompilerGLSL::emit_bitfield_insert_op(uint32_t result_type, uint32_t result
 {
 	// Only need to cast offset/count arguments. Types of base/insert must be same as result type,
 	// and bitfieldInsert is sign invariant.
-	bool forward = should_forward(op0) && should_forward(op1) &&
-	               should_forward(op2) && should_forward(op3);
+	bool forward = should_forward(op0) && should_forward(op1) && should_forward(op2) && should_forward(op3);
 
 	auto op0_expr = to_unpacked_expression(op0);
 	auto op1_expr = to_unpacked_expression(op1);
@@ -4394,8 +4394,7 @@ void CompilerGLSL::emit_bitfield_insert_op(uint32_t result_type, uint32_t result
 		op3_expr = join(type_to_glsl_constructor(target_type), "(", op3_expr, ")");
 	}
 
-	emit_op(result_type, result_id,
-	        join(op, "(", op0_expr, ", ", op1_expr, ", ", op2_expr, ", ", op3_expr, ")"),
+	emit_op(result_type, result_id, join(op, "(", op0_expr, ", ", op1_expr, ", ", op2_expr, ", ", op3_expr, ")"),
 	        forward);
 
 	inherit_expression_dependencies(result_id, op0);
@@ -9098,23 +9097,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	// Bitfield
 	case OpBitFieldInsert:
 	{
-		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5],
-		                        "bitfieldInsert", SPIRType::Int);
+		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], "bitfieldInsert", SPIRType::Int);
 		break;
 	}
 
 	case OpBitFieldSExtract:
 	{
-		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract",
-		                                int_type, int_type,
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract", int_type, int_type,
 		                                SPIRType::Int, SPIRType::Int);
 		break;
 	}
 
 	case OpBitFieldUExtract:
 	{
-		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract",
-		                                uint_type, uint_type,
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract", uint_type, uint_type,
 		                                SPIRType::Int, SPIRType::Int);
 		break;
 	}
@@ -12238,8 +12234,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				// The backend is responsible for setting this up, and redirection the return values as appropriate.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
-					emit_array_copy("SPIRV_Cross_return_value", block.return_value,
-					                StorageClassFunction, get_backing_variable_storage(block.return_value));
+					emit_array_copy("SPIRV_Cross_return_value", block.return_value, StorageClassFunction,
+					                get_backing_variable_storage(block.return_value));
 				}
 
 				if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||

@@ -772,8 +772,8 @@ protected:
 		uint32_t remap_parameter(uint32_t id);
 		void push_remap_parameters(const SPIRFunction &func, const uint32_t *args, uint32_t length);
 		void pop_remap_parameters();
-		void register_combined_image_sampler(SPIRFunction &caller, uint32_t combined_id, uint32_t texture_id, uint32_t sampler_id,
-		                                     bool depth);
+		void register_combined_image_sampler(SPIRFunction &caller, uint32_t combined_id, uint32_t texture_id,
+		                                     uint32_t sampler_id, bool depth);
 	};
 
 	struct DummySamplerForCombinedImageHandler : OpcodeHandler

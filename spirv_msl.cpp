@@ -3193,30 +3193,16 @@ void CompilerMSL::emit_custom_functions()
 		{
 			// Unfortunately we cannot template on the address space, so combinatorial explosion it is.
 			static const char *function_name_tags[] = {
-				"FromConstantToStack",
-				"FromConstantToThreadGroup",
-				"FromStackToStack",
-				"FromStackToThreadGroup",
-				"FromThreadGroupToStack",
-				"FromThreadGroupToThreadGroup",
+				"FromConstantToStack",    "FromConstantToThreadGroup", "FromStackToStack",
+				"FromStackToThreadGroup", "FromThreadGroupToStack",    "FromThreadGroupToThreadGroup",
 			};
 
 			static const char *src_address_space[] = {
-				"constant",
-				"constant",
-				"thread const",
-				"thread const",
-				"threadgroup const",
-				"threadgroup const",
+				"constant", "constant", "thread const", "thread const", "threadgroup const", "threadgroup const",
 			};
 
 			static const char *dst_address_space[] = {
-				"thread",
-				"threadgroup",
-				"thread",
-				"threadgroup",
-				"thread",
-				"threadgroup",
+				"thread", "threadgroup", "thread", "threadgroup", "thread", "threadgroup",
 			};
 
 			for (uint32_t variant = 0; variant < 6; variant++)
@@ -3240,9 +3226,7 @@ void CompilerMSL::emit_custom_functions()
 				}
 
 				statement("void spvArrayCopy", function_name_tags[variant], dimensions, "(", dst_address_space[variant],
-				          " T (&dst)",
-				          array_arg,
-				          ", ", src_address_space[variant], " T (&src)", array_arg, ")");
+				          " T (&dst)", array_arg, ", ", src_address_space[variant], " T (&src)", array_arg, ")");
 
 				begin_scope();
 				statement("for (uint i = 0; i < A; i++)");
@@ -4238,23 +4222,20 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	// Bitfield
 	case OpBitFieldInsert:
 	{
-		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5],
-		                        "insert_bits", SPIRType::UInt);
+		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], "insert_bits", SPIRType::UInt);
 		break;
 	}
 
 	case OpBitFieldSExtract:
 	{
-		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "extract_bits",
-		                                int_type, int_type,
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "extract_bits", int_type, int_type,
 		                                SPIRType::UInt, SPIRType::UInt);
 		break;
 	}
 
 	case OpBitFieldUExtract:
 	{
-		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "extract_bits",
-		                                uint_type, uint_type,
+		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "extract_bits", uint_type, uint_type,
 		                                SPIRType::UInt, SPIRType::UInt);
 		break;
 	}
@@ -4898,8 +4879,8 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	flush_all_active_variables();
 }
 
-void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id,
-                                  StorageClass lhs_storage, StorageClass rhs_storage)
+void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass lhs_storage,
+                                  StorageClass rhs_storage)
 {
 	// Assignment from an array initializer is fine.
 	auto &type = expression_type(rhs_id);
@@ -4941,12 +4922,10 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id,
 		force_recompile();
 	}
 
-	bool lhs_thread = lhs_storage == StorageClassFunction ||
-	                  lhs_storage == StorageClassGeneric ||
-	                  lhs_storage == StorageClassPrivate;
-	bool rhs_thread = rhs_storage == StorageClassFunction ||
-	                  rhs_storage == StorageClassGeneric ||
-	                  rhs_storage == StorageClassPrivate;
+	bool lhs_thread =
+	    lhs_storage == StorageClassFunction || lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate;
+	bool rhs_thread =
+	    rhs_storage == StorageClassFunction || rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate;
 
 	const char *tag = nullptr;
 	if (lhs_thread && is_constant)
@@ -5000,7 +4979,8 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	emit_array_copy(to_expression(id_lhs), id_rhs, get_backing_variable_storage(id_lhs), get_backing_variable_storage(id_rhs));
+	emit_array_copy(to_expression(id_lhs), id_rhs, get_backing_variable_storage(id_lhs),
+	                get_backing_variable_storage(id_rhs));
 	register_write(id_lhs);
 
 	return true;
