@@ -2144,15 +2144,15 @@ bool Compiler::CombinedImageSamplerHandler::end_function_scope(const uint32_t *a
 			if (s)
 				sampler_id = s->self;
 
-			register_combined_image_sampler(caller, image_id, sampler_id, param.depth);
+			register_combined_image_sampler(caller, 0, image_id, sampler_id, param.depth);
 		}
 	}
 
 	return true;
 }
 
-void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t image_id,
-                                                                            uint32_t sampler_id, bool depth)
+void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIRFunction &caller, uint32_t combined_module_id,
+                                                                            uint32_t image_id, uint32_t sampler_id, bool depth)
 {
 	// We now have a texture ID and a sampler ID which will either be found as a global
 	// or a parameter in our own function. If both are global, they will not need a parameter,
@@ -2212,12 +2212,15 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		// Build new variable.
 		compiler.set<SPIRVariable>(combined_id, ptr_type_id, StorageClassFunction, 0);
 
-		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
-		auto &new_flags = compiler.ir.meta[combined_id].decoration.decoration_flags;
-		auto &old_flags = compiler.ir.meta[sampler_id].decoration.decoration_flags;
-		new_flags.reset();
-		if (old_flags.get(DecorationRelaxedPrecision))
-			new_flags.set(DecorationRelaxedPrecision);
+		// Inherit RelaxedPrecision.
+		// If any of OpSampledImage, underlying image or sampler are marked, inherit the decoration.
+		bool relaxed_precision =
+				compiler.has_decoration(sampler_id, DecorationRelaxedPrecision) ||
+				compiler.has_decoration(image_id, DecorationRelaxedPrecision) ||
+				(combined_module_id && compiler.has_decoration(combined_module_id, DecorationRelaxedPrecision));
+
+		if (relaxed_precision)
+			compiler.set_decoration(combined_id, DecorationRelaxedPrecision);
 
 		param.id = combined_id;
 
@@ -2424,8 +2427,10 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 			if (sampler)
 				sampler_id = sampler->self;
 
+			uint32_t combined_id = args[1];
+
 			auto &combined_type = compiler.get<SPIRType>(args[0]);
-			register_combined_image_sampler(callee, image_id, sampler_id, combined_type.image.depth);
+			register_combined_image_sampler(callee, combined_id, image_id, sampler_id, combined_type.image.depth);
 		}
 	}
 
@@ -2444,6 +2449,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	if (itr == end(compiler.combined_image_samplers))
 	{
 		uint32_t sampled_type;
+		uint32_t combined_module_id;
 		if (is_fetch)
 		{
 			// Have to invent the sampled image type.
@@ -2453,10 +2459,12 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 			type.self = sampled_type;
 			type.basetype = SPIRType::SampledImage;
 			type.image.depth = false;
+			combined_module_id = 0;
 		}
 		else
 		{
 			sampled_type = args[0];
+			combined_module_id = args[1];
 		}
 
 		auto id = compiler.ir.increase_bound_by(2);
@@ -2476,12 +2484,14 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		compiler.set<SPIRVariable>(combined_id, type_id, StorageClassUniformConstant, 0);
 
 		// Inherit RelaxedPrecision (and potentially other useful flags if deemed relevant).
-		auto &new_flags = compiler.ir.meta[combined_id].decoration.decoration_flags;
-		// Fetch inherits precision from the image, not sampler (there is no sampler).
-		auto &old_flags = compiler.ir.meta[is_fetch ? image_id : sampler_id].decoration.decoration_flags;
-		new_flags.reset();
-		if (old_flags.get(DecorationRelaxedPrecision))
-			new_flags.set(DecorationRelaxedPrecision);
+		// If any of OpSampledImage, underlying image or sampler are marked, inherit the decoration.
+		bool relaxed_precision =
+				(sampler_id && compiler.has_decoration(sampler_id, DecorationRelaxedPrecision)) ||
+				(image_id && compiler.has_decoration(image_id, DecorationRelaxedPrecision)) ||
+				(combined_module_id && compiler.has_decoration(combined_module_id, DecorationRelaxedPrecision));
+
+		if (relaxed_precision)
+			compiler.set_decoration(combined_id, DecorationRelaxedPrecision);
 
 		// Propagate the array type for the original image as well.
 		auto *var = compiler.maybe_get_backing_variable(image_id);
