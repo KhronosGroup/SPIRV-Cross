@@ -5368,9 +5368,10 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		add_function_overload(func);
 
 	local_variable_names = resource_names;
-	string decl;
 
 	processing_entry_point = (func.self == ir.default_entry_point);
+    
+    string decl = processing_entry_point ? "" : "inline ";
 
 	auto &type = get<SPIRType>(func.return_type);
 
@@ -5381,7 +5382,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 	else
 	{
 		// We cannot return arrays in MSL, so "return" through an out variable.
-		decl = "void";
+		decl += "void";
 	}
 
 	decl += " ";
