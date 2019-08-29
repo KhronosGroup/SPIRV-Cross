@@ -9634,6 +9634,10 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	case BuiltInSubgroupSize:
 	case BuiltInSubgroupLocalInvocationId:
 	case BuiltInViewIndex:
+	case BuiltInVertexIndex:
+	case BuiltInInstanceIndex:
+	case BuiltInBaseInstance:
+	case BuiltInBaseVertex:
 		expected_type = SPIRType::UInt;
 		break;
 

@@ -136,7 +136,7 @@ float4 read_location(thread const int& location, constant VertexBuffer& v_227, t
 {
     int param = location;
     attr_desc desc = fetch_desc(param, v_227);
-    int vertex_id = gl_VertexIndex - int(v_227.vertex_base_index);
+    int vertex_id = int(gl_VertexIndex) - int(v_227.vertex_base_index);
     if (desc.is_volatile != 0)
     {
         attr_desc param_1 = desc;
