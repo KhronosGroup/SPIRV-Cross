@@ -19,7 +19,7 @@ struct main0_in
 };
 
 template<typename T, uint A>
-void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
+inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -28,7 +28,7 @@ void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
+inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -37,7 +37,7 @@ void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T 
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
+inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -46,7 +46,7 @@ void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
+inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -55,7 +55,7 @@ void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
+inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -64,7 +64,7 @@ void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
+inline void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -72,12 +72,12 @@ void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgr
     }
 }
 
-void test(thread float4 (&SPIRV_Cross_return_value)[2])
+inline void test(thread float4 (&SPIRV_Cross_return_value)[2])
 {
     spvArrayCopyFromConstantToStack1(SPIRV_Cross_return_value, _20);
 }
 
-void test2(thread float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)
+inline void test2(thread float4 (&SPIRV_Cross_return_value)[2], thread float4& vInput0, thread float4& vInput1)
 {
     float4 foobar[2];
     foobar[0] = vInput0;

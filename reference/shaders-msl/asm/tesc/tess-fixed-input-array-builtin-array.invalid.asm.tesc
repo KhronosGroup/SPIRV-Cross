@@ -46,7 +46,7 @@ struct main0_in
 };
 
 template<typename T, uint A>
-void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
+inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -55,7 +55,7 @@ void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
+inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -64,7 +64,7 @@ void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T 
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
+inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -73,7 +73,7 @@ void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
+inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -82,7 +82,7 @@ void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
+inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -91,7 +91,7 @@ void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T
 }
 
 template<typename T, uint A>
-void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
+inline void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -99,7 +99,7 @@ void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgr
     }
 }
 
-HSOut _hs_main(thread const VertexOutput (&p)[3], thread const uint& i)
+inline HSOut _hs_main(thread const VertexOutput (&p)[3], thread const uint& i)
 {
     HSOut _output;
     _output.pos = p[i].pos;
@@ -107,7 +107,7 @@ HSOut _hs_main(thread const VertexOutput (&p)[3], thread const uint& i)
     return _output;
 }
 
-HSConstantOut PatchHS(thread const VertexOutput (&_patch)[3])
+inline HSConstantOut PatchHS(thread const VertexOutput (&_patch)[3])
 {
     HSConstantOut _output;
     _output.EdgeTess[0] = (float2(1.0) + _patch[0].uv).x;
