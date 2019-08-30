@@ -3225,8 +3225,9 @@ void CompilerMSL::emit_custom_functions()
 					array_arg += "]";
 				}
 
-				statement("inline void spvArrayCopy", function_name_tags[variant], dimensions, "(", dst_address_space[variant],
-				          " T (&dst)", array_arg, ", ", src_address_space[variant], " T (&src)", array_arg, ")");
+				statement("inline void spvArrayCopy", function_name_tags[variant], dimensions, "(",
+				          dst_address_space[variant], " T (&dst)", array_arg, ", ", src_address_space[variant],
+				          " T (&src)", array_arg, ")");
 
 				begin_scope();
 				statement("for (uint i = 0; i < A; i++)");
@@ -5370,8 +5371,8 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 	local_variable_names = resource_names;
 
 	processing_entry_point = (func.self == ir.default_entry_point);
-    
-    string decl = processing_entry_point ? "" : "inline ";
+
+	string decl = processing_entry_point ? "" : "inline ";
 
 	auto &type = get<SPIRType>(func.return_type);
 
