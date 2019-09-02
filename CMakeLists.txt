@@ -287,7 +287,7 @@ if (SPIRV_CROSS_STATIC)
 endif()
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 16)
+set(spirv-cross-abi-minor 17)
 set(spirv-cross-abi-patch 0)
 
 if (SPIRV_CROSS_SHARED)
@@ -461,6 +461,10 @@ if (SPIRV_CROSS_CLI)
 				target_link_libraries(spirv-cross-msl-resource-binding-test spirv-cross-c)
 				set_target_properties(spirv-cross-msl-resource-binding-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 
+				add_executable(spirv-cross-msl-ycbcr-conversion-test tests-other/msl_ycbcr_conversion_test.cpp)
+				target_link_libraries(spirv-cross-msl-ycbcr-conversion-test spirv-cross-c)
+				set_target_properties(spirv-cross-msl-ycbcr-conversion-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
 				if (CMAKE_COMPILER_IS_GNUCXX OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
 					target_compile_options(spirv-cross-c-api-test PRIVATE -std=c89 -Wall -Wextra)
 				endif()
@@ -475,6 +479,10 @@ if (SPIRV_CROSS_CLI)
 						COMMAND $<TARGET_FILE:spirv-cross-msl-constexpr-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_constexpr_test.spv)
 				add_test(NAME spirv-cross-msl-resource-binding-test
 						COMMAND $<TARGET_FILE:spirv-cross-msl-resource-binding-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_resource_binding.spv)
+				add_test(NAME spirv-cross-msl-ycbcr-conversion-test
+						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test.spv)
+				add_test(NAME spirv-cross-msl-ycbcr-conversion-test-2
+						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test_2.spv)
 				add_test(NAME spirv-cross-test
 						COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
 						${spirv-cross-externals}

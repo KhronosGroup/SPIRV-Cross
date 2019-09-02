@@ -1152,6 +1152,8 @@ static uint32_t get_default_extended_decoration(ExtendedDecorations decoration)
 	{
 	case SPIRVCrossDecorationResourceIndexPrimary:
 	case SPIRVCrossDecorationResourceIndexSecondary:
+	case SPIRVCrossDecorationResourceIndexTertiary:
+	case SPIRVCrossDecorationResourceIndexQuaternary:
 	case SPIRVCrossDecorationInterfaceMemberIndex:
 		return ~(0u);
 
