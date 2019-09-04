@@ -4290,9 +4290,9 @@ void Compiler::InterlockedResourceAccessPrepassHandler::rearm_current_block(cons
 
 bool Compiler::InterlockedResourceAccessPrepassHandler::begin_function_scope(const uint32_t *args, uint32_t length)
 {
-	if (length < 2)
+	if (length < 3)
 		return false;
-	call_stack.push_back(args[1]);
+	call_stack.push_back(args[2]);
 	return true;
 }
 
@@ -4304,13 +4304,13 @@ bool Compiler::InterlockedResourceAccessPrepassHandler::end_function_scope(const
 
 bool Compiler::InterlockedResourceAccessHandler::begin_function_scope(const uint32_t *args, uint32_t length)
 {
-	if (length < 2)
+	if (length < 3)
 		return false;
 
-	if (args[1] == interlock_function_id)
+	if (args[2] == interlock_function_id)
 		call_stack_is_interlocked = true;
 
-	call_stack.push_back(args[1]);
+	call_stack.push_back(args[2]);
 	return true;
 }
 
@@ -4545,20 +4545,27 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 
 void Compiler::analyze_interlocked_resource_usage()
 {
-	InterlockedResourceAccessPrepassHandler prepass_handler(*this, ir.default_entry_point);
-	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), prepass_handler);
+	if (get_execution_model() == ExecutionModelFragment &&
+	    (get_entry_point().flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+	     get_entry_point().flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+	     get_entry_point().flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+	     get_entry_point().flags.get(ExecutionModeSampleInterlockUnorderedEXT)))
+	{
+		InterlockedResourceAccessPrepassHandler prepass_handler(*this, ir.default_entry_point);
+		traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), prepass_handler);
 
-	InterlockedResourceAccessHandler handler(*this, ir.default_entry_point);
-	handler.interlock_function_id = prepass_handler.interlock_function_id;
-	handler.split_function_case = prepass_handler.split_function_case;
-	handler.control_flow_interlock = prepass_handler.control_flow_interlock;
-	handler.use_critical_section = !handler.split_function_case && !handler.control_flow_interlock;
+		InterlockedResourceAccessHandler handler(*this, ir.default_entry_point);
+		handler.interlock_function_id = prepass_handler.interlock_function_id;
+		handler.split_function_case = prepass_handler.split_function_case;
+		handler.control_flow_interlock = prepass_handler.control_flow_interlock;
+		handler.use_critical_section = !handler.split_function_case && !handler.control_flow_interlock;
 
-	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+		traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 
-	// For GLSL. If we hit any of these cases, we have to fall back to conservative approach.
-	interlocked_is_complex = !handler.use_critical_section ||
-	                         handler.interlock_function_id != ir.default_entry_point;
+		// For GLSL. If we hit any of these cases, we have to fall back to conservative approach.
+		interlocked_is_complex = !handler.use_critical_section ||
+		                         handler.interlock_function_id != ir.default_entry_point;
+	}
 }
 
 bool Compiler::type_is_array_of_pointers(const SPIRType &type) const

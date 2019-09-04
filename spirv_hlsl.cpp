@@ -4867,12 +4867,7 @@ string CompilerHLSL::compile()
 	validate_shader_model();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
-	if (get_execution_model() == ExecutionModelFragment &&
-	    (get_entry_point().flags.get(ExecutionModePixelInterlockOrderedEXT) ||
-	     get_entry_point().flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
-	     get_entry_point().flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
-	     get_entry_point().flags.get(ExecutionModeSampleInterlockUnorderedEXT)))
-		analyze_interlocked_resource_usage();
+	analyze_interlocked_resource_usage();
 
 	// Subpass input needs SV_Position.
 	if (need_subpass_input)

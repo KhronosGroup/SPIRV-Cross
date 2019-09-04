@@ -511,6 +511,7 @@ string CompilerGLSL::compile()
 	fixup_image_load_store_access();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
+	analyze_interlocked_resource_usage();
 
 	// Shaders might cast unrelated data to pointers of non-block types.
 	// Find all such instances and make sure we can cast the pointers to a synthesized block type.
@@ -534,6 +535,25 @@ string CompilerGLSL::compile()
 
 		pass_count++;
 	} while (is_forcing_recompilation());
+
+	// Implement the interlocked wrapper function at the end.
+	// The body was implemented in lieu of main().
+	if (interlocked_is_complex)
+	{
+		statement("void main()");
+		begin_scope();
+		statement("// Interlocks were used in a way not compatible with GLSL, this is very slow.");
+		if (options.es)
+			statement("beginInvocationInterlockNV();");
+		else
+			statement("beginInvocationInterlockARB();");
+		statement("spvMainInterlockedBody();");
+		if (options.es)
+			statement("endInvocationInterlockNV();");
+		else
+			statement("endInvocationInterlockARB();");
+		end_scope();
+	}
 
 	// Entry point in GLSL is always main().
 	get_entry_point().name = "main";
@@ -10139,28 +10159,24 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpBeginInvocationInterlockEXT:
-		if (options.es)
+		// If the interlock is complex, we emit this elsewhere.
+		if (!interlocked_is_complex)
 		{
-			require_extension_internal("GL_NV_fragment_shader_interlock");
-			statement("beginInvocationInterlockNV();");
-		}
-		else
-		{
-			require_extension_internal("GL_ARB_fragment_shader_interlock");
-			statement("beginInvocationInterlockARB();");
+			if (options.es)
+				statement("beginInvocationInterlockNV();");
+			else
+				statement("beginInvocationInterlockARB();");
 		}
 		break;
 
 	case OpEndInvocationInterlockEXT:
-		if (options.es)
+		// If the interlock is complex, we emit this elsewhere.
+		if (!interlocked_is_complex)
 		{
-			require_extension_internal("GL_NV_fragment_shader_interlock");
-			statement("endInvocationInterlockNV();");
-		}
-		else
-		{
-			require_extension_internal("GL_ARB_fragment_shader_interlock");
-			statement("endInvocationInterlockARB();");
+			if (options.es)
+				statement("endInvocationInterlockNV();");
+			else
+				statement("endInvocationInterlockARB();");
 		}
 		break;
 
@@ -11077,7 +11093,13 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 
 	if (func.self == ir.default_entry_point)
 	{
-		decl += "main";
+		// If we need complex fallback in GLSL, we just wrap main() in a function
+		// and interlock the entire shader ...
+		if (interlocked_is_complex)
+			decl += "spvMainInterlockedBody";
+		else
+			decl += "main";
+
 		processing_entry_point = true;
 	}
 	else

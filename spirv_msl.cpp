@@ -852,12 +852,7 @@ string CompilerMSL::compile()
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
 	analyze_sampled_image_usage();
-	if (get_execution_model() == ExecutionModelFragment &&
-	    (get_entry_point().flags.get(ExecutionModePixelInterlockOrderedEXT) ||
-	     get_entry_point().flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
-	     get_entry_point().flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
-	     get_entry_point().flags.get(ExecutionModeSampleInterlockUnorderedEXT)))
-		analyze_interlocked_resource_usage();
+	analyze_interlocked_resource_usage();
 	preprocess_op_codes();
 	build_implicit_builtins();
 
