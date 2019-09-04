@@ -10166,6 +10166,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				statement("beginInvocationInterlockNV();");
 			else
 				statement("beginInvocationInterlockARB();");
+
+			flush_all_active_variables();
+			// Make sure forwarding doesn't propagate outside interlock region.
 		}
 		break;
 
@@ -10177,6 +10180,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				statement("endInvocationInterlockNV();");
 			else
 				statement("endInvocationInterlockARB();");
+
+			flush_all_active_variables();
+			// Make sure forwarding doesn't propagate outside interlock region.
 		}
 		break;
 
