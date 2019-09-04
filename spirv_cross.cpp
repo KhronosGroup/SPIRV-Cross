@@ -1507,6 +1507,7 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
 {
 	handler.set_current_block(block);
+	handler.rearm_current_block(block);
 
 	// Ideally, perhaps traverse the CFG instead of all blocks in order to eliminate dead blocks,
 	// but this shouldn't be a problem in practice unless the SPIR-V is doing insane things like recursing
@@ -1530,6 +1531,8 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 					return false;
 				if (!handler.end_function_scope(ops, i.length))
 					return false;
+
+				handler.rearm_current_block(block);
 			}
 		}
 	}
@@ -4280,7 +4283,7 @@ bool Compiler::InterlockedResourceAccessPrepassHandler::handle(Op op, const uint
 	return true;
 }
 
-void Compiler::InterlockedResourceAccessPrepassHandler::set_current_block(const SPIRBlock &block)
+void Compiler::InterlockedResourceAccessPrepassHandler::rearm_current_block(const SPIRBlock &block)
 {
 	current_block_id = block.self;
 }
@@ -4303,12 +4306,19 @@ bool Compiler::InterlockedResourceAccessHandler::begin_function_scope(const uint
 {
 	if (length < 2)
 		return false;
+
+	if (args[1] == interlock_function_id)
+		call_stack_is_interlocked = true;
+
 	call_stack.push_back(args[1]);
 	return true;
 }
 
 bool Compiler::InterlockedResourceAccessHandler::end_function_scope(const uint32_t *, uint32_t)
 {
+	if (call_stack.back() == interlock_function_id)
+		call_stack_is_interlocked = false;
+
 	call_stack.pop_back();
 	return true;
 }
@@ -4316,7 +4326,7 @@ bool Compiler::InterlockedResourceAccessHandler::end_function_scope(const uint32
 void Compiler::InterlockedResourceAccessHandler::access_potential_resource(uint32_t id)
 {
 	if ((use_critical_section && in_crit_sec) ||
-	    (control_flow_interlock && call_stack.back() == interlock_function_id) ||
+	    (control_flow_interlock && call_stack_is_interlocked) ||
 	    split_function_case)
 	{
 		compiler.interlocked_resources.insert(id);
@@ -4545,7 +4555,10 @@ void Compiler::analyze_interlocked_resource_usage()
 	handler.use_critical_section = !handler.split_function_case && !handler.control_flow_interlock;
 
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
-	interlocked_complex = !handler.use_critical_section;
+
+	// For GLSL. If we hit any of these cases, we have to fall back to conservative approach.
+	interlocked_is_complex = !handler.use_critical_section ||
+	                         handler.interlock_function_id != ir.default_entry_point;
 }
 
 bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
