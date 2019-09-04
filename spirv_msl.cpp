@@ -852,6 +852,7 @@ string CompilerMSL::compile()
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
 	analyze_sampled_image_usage();
+	analyze_interlocked_resource_usage();
 	preprocess_op_codes();
 	build_implicit_builtins();
 
@@ -5541,6 +5542,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		emit_op(ops[0], ops[1], "simd_is_helper_thread()", false);
 		break;
 
+	case OpBeginInvocationInterlockEXT:
+	case OpEndInvocationInterlockEXT:
+		if (!msl_options.supports_msl_version(2, 0))
+			SPIRV_CROSS_THROW("Raster order groups require MSL 2.0.");
+		break; // Nothing to do in the body
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
@@ -7436,8 +7443,15 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	bool is_builtin = is_member_builtin(type, index, &builtin);
 
 	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary))
-		return join(" [[id(",
-		            get_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary), ")]]");
+	{
+		string quals = join(
+		    " [[id(", get_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary), ")");
+		if (interlocked_resources.count(
+		        get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID)))
+			quals += ", raster_order_group(0)";
+		quals += "]]";
+		return quals;
+	}
 
 	// Vertex function inputs
 	if (execution.model == ExecutionModelVertex && type.storage == StorageClassInput)
@@ -8239,7 +8253,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 						ep_args += ", ";
 					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + to_restrict(var_id) +
 					           r.name + "_" + convert_to_string(i);
-					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")]]";
+					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")";
+					if (interlocked_resources.count(var_id))
+						ep_args += ", raster_order_group(0)";
+					ep_args += "]]";
 				}
 			}
 			else
@@ -8248,7 +8265,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					ep_args += ", ";
 				ep_args +=
 				    get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(var_id) + r.name;
-				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+				ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
+				if (interlocked_resources.count(var_id))
+					ep_args += ", raster_order_group(0)";
+				ep_args += "]]";
 			}
 			break;
 		}
@@ -8264,7 +8284,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			ep_args += image_type_glsl(type, var_id) + " " + r.name;
 			if (r.plane > 0)
 				ep_args += join(plane_name_suffix, r.plane);
-			ep_args += " [[texture(" + convert_to_string(r.index) + ")]]";
+			ep_args += " [[texture(" + convert_to_string(r.index) + ")";
+			if (interlocked_resources.count(var_id))
+				ep_args += ", raster_order_group(0)";
+			ep_args += "]]";
 			break;
 		default:
 			if (!ep_args.empty())
@@ -8274,7 +8297,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				           type_to_glsl(type, var_id) + "& " + r.name;
 			else
 				ep_args += type_to_glsl(type, var_id) + " " + r.name;
-			ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
+			if (interlocked_resources.count(var_id))
+				ep_args += ", raster_order_group(0)";
+			ep_args += "]]";
 			break;
 		}
 	}

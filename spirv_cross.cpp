@@ -1507,6 +1507,7 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
 {
 	handler.set_current_block(block);
+	handler.rearm_current_block(block);
 
 	// Ideally, perhaps traverse the CFG instead of all blocks in order to eliminate dead blocks,
 	// but this shouldn't be a problem in practice unless the SPIR-V is doing insane things like recursing
@@ -1530,6 +1531,8 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 					return false;
 				if (!handler.end_function_scope(ops, i.length))
 					return false;
+
+				handler.rearm_current_block(block);
 			}
 		}
 	}
@@ -3798,7 +3801,12 @@ bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uin
 const CFG &Compiler::get_cfg_for_current_function() const
 {
 	assert(current_function);
-	auto cfg_itr = function_cfgs.find(current_function->self);
+	return get_cfg_for_function(current_function->self);
+}
+
+const CFG &Compiler::get_cfg_for_function(uint32_t id) const
+{
+	auto cfg_itr = function_cfgs.find(id);
 	assert(cfg_itr != end(function_cfgs));
 	assert(cfg_itr->second);
 	return *cfg_itr->second;
@@ -4247,6 +4255,317 @@ void Compiler::analyze_non_block_pointer_types()
 	for (auto type : handler.types)
 		physical_storage_non_block_pointer_types.push_back(type);
 	sort(begin(physical_storage_non_block_pointer_types), end(physical_storage_non_block_pointer_types));
+}
+
+bool Compiler::InterlockedResourceAccessPrepassHandler::handle(Op op, const uint32_t *, uint32_t)
+{
+	if (op == OpBeginInvocationInterlockEXT || op == OpEndInvocationInterlockEXT)
+	{
+		if (interlock_function_id != 0 && interlock_function_id != call_stack.back())
+		{
+			// Most complex case, we have no sensible way of dealing with this
+			// other than taking the 100% conservative approach, exit early.
+			split_function_case = true;
+			return false;
+		}
+		else
+		{
+			interlock_function_id = call_stack.back();
+			// If this call is performed inside control flow we have a problem.
+			auto &cfg = compiler.get_cfg_for_function(interlock_function_id);
+
+			uint32_t from_block_id = compiler.get<SPIRFunction>(interlock_function_id).entry_block;
+			bool outside_control_flow = cfg.node_terminates_control_flow_in_sub_graph(from_block_id, current_block_id);
+			if (!outside_control_flow)
+				control_flow_interlock = true;
+		}
+	}
+	return true;
+}
+
+void Compiler::InterlockedResourceAccessPrepassHandler::rearm_current_block(const SPIRBlock &block)
+{
+	current_block_id = block.self;
+}
+
+bool Compiler::InterlockedResourceAccessPrepassHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 3)
+		return false;
+	call_stack.push_back(args[2]);
+	return true;
+}
+
+bool Compiler::InterlockedResourceAccessPrepassHandler::end_function_scope(const uint32_t *, uint32_t)
+{
+	call_stack.pop_back();
+	return true;
+}
+
+bool Compiler::InterlockedResourceAccessHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 3)
+		return false;
+
+	if (args[2] == interlock_function_id)
+		call_stack_is_interlocked = true;
+
+	call_stack.push_back(args[2]);
+	return true;
+}
+
+bool Compiler::InterlockedResourceAccessHandler::end_function_scope(const uint32_t *, uint32_t)
+{
+	if (call_stack.back() == interlock_function_id)
+		call_stack_is_interlocked = false;
+
+	call_stack.pop_back();
+	return true;
+}
+
+void Compiler::InterlockedResourceAccessHandler::access_potential_resource(uint32_t id)
+{
+	if ((use_critical_section && in_crit_sec) ||
+	    (control_flow_interlock && call_stack_is_interlocked) ||
+	    split_function_case)
+	{
+		compiler.interlocked_resources.insert(id);
+	}
+}
+
+bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	// Only care about critical section analysis if we have simple case.
+	if (use_critical_section)
+	{
+		if (opcode == OpBeginInvocationInterlockEXT)
+		{
+			in_crit_sec = true;
+			return true;
+		}
+
+		if (opcode == OpEndInvocationInterlockEXT)
+		{
+			// End critical section--nothing more to do.
+			return false;
+		}
+	}
+
+	// We need to figure out where images and buffers are loaded from, so do only the bare bones compilation we need.
+	switch (opcode)
+	{
+	case OpLoad:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t ptr = args[2];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+
+		// We're only concerned with buffer and image memory here.
+		if (!var)
+			break;
+
+		switch (var->storage)
+		{
+		default:
+			break;
+
+		case StorageClassUniformConstant:
+		{
+			uint32_t result_type = args[0];
+			uint32_t id = args[1];
+			compiler.set<SPIRExpression>(id, "", result_type, true);
+			compiler.register_read(id, ptr, true);
+			break;
+		}
+
+		case StorageClassUniform:
+			// Must have BufferBlock; we only care about SSBOs.
+			if (!compiler.has_decoration(compiler.get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+				break;
+			// fallthrough
+		case StorageClassStorageBuffer:
+			access_potential_resource(var->self);
+			break;
+		}
+		break;
+	}
+
+	case OpInBoundsAccessChain:
+	case OpAccessChain:
+	case OpPtrAccessChain:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+
+		auto &type = compiler.get<SPIRType>(result_type);
+		if (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
+		    type.storage == StorageClassStorageBuffer)
+		{
+			uint32_t id = args[1];
+			uint32_t ptr = args[2];
+			compiler.set<SPIRExpression>(id, "", result_type, true);
+			compiler.register_read(id, ptr, true);
+			compiler.ir.ids[id].set_allow_type_rewrite();
+		}
+		break;
+	}
+
+	case OpImageTexelPointer:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+		uint32_t id = args[1];
+		uint32_t ptr = args[2];
+		auto &e = compiler.set<SPIRExpression>(id, "", result_type, true);
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+		if (var)
+			e.loaded_from = var->self;
+		break;
+	}
+
+	case OpStore:
+	case OpImageWrite:
+	case OpAtomicStore:
+	{
+		if (length < 1)
+			return false;
+
+		uint32_t ptr = args[0];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+		if (var && (var->storage == StorageClassUniform || var->storage == StorageClassUniformConstant ||
+		            var->storage == StorageClassStorageBuffer))
+		{
+			access_potential_resource(var->self);
+		}
+
+		break;
+	}
+
+	case OpCopyMemory:
+	{
+		if (length < 2)
+			return false;
+
+		uint32_t dst = args[0];
+		uint32_t src = args[1];
+		auto *dst_var = compiler.maybe_get_backing_variable(dst);
+		auto *src_var = compiler.maybe_get_backing_variable(src);
+
+		if (dst_var && (dst_var->storage == StorageClassUniform || dst_var->storage == StorageClassStorageBuffer))
+			access_potential_resource(dst_var->self);
+
+		if (src_var)
+		{
+			if (src_var->storage != StorageClassUniform && src_var->storage != StorageClassStorageBuffer)
+				break;
+
+			if (src_var->storage == StorageClassUniform &&
+			    !compiler.has_decoration(compiler.get<SPIRType>(src_var->basetype).self, DecorationBufferBlock))
+			{
+				break;
+			}
+
+			access_potential_resource(src_var->self);
+		}
+
+		break;
+	}
+
+	case OpImageRead:
+	case OpAtomicLoad:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t ptr = args[2];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+
+		// We're only concerned with buffer and image memory here.
+		if (!var)
+			break;
+
+		switch (var->storage)
+		{
+		default:
+			break;
+
+		case StorageClassUniform:
+			// Must have BufferBlock; we only care about SSBOs.
+			if (!compiler.has_decoration(compiler.get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+				break;
+			// fallthrough
+		case StorageClassUniformConstant:
+		case StorageClassStorageBuffer:
+			access_potential_resource(var->self);
+			break;
+		}
+		break;
+	}
+
+	case OpAtomicExchange:
+	case OpAtomicCompareExchange:
+	case OpAtomicIIncrement:
+	case OpAtomicIDecrement:
+	case OpAtomicIAdd:
+	case OpAtomicISub:
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+	case OpAtomicAnd:
+	case OpAtomicOr:
+	case OpAtomicXor:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t ptr = args[2];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+		if (var && (var->storage == StorageClassUniform || var->storage == StorageClassUniformConstant ||
+		            var->storage == StorageClassStorageBuffer))
+		{
+			access_potential_resource(var->self);
+		}
+
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	return true;
+}
+
+void Compiler::analyze_interlocked_resource_usage()
+{
+	if (get_execution_model() == ExecutionModelFragment &&
+	    (get_entry_point().flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+	     get_entry_point().flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+	     get_entry_point().flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+	     get_entry_point().flags.get(ExecutionModeSampleInterlockUnorderedEXT)))
+	{
+		InterlockedResourceAccessPrepassHandler prepass_handler(*this, ir.default_entry_point);
+		traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), prepass_handler);
+
+		InterlockedResourceAccessHandler handler(*this, ir.default_entry_point);
+		handler.interlock_function_id = prepass_handler.interlock_function_id;
+		handler.split_function_case = prepass_handler.split_function_case;
+		handler.control_flow_interlock = prepass_handler.control_flow_interlock;
+		handler.use_critical_section = !handler.split_function_case && !handler.control_flow_interlock;
+
+		traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+
+		// For GLSL. If we hit any of these cases, we have to fall back to conservative approach.
+		interlocked_is_complex = !handler.use_critical_section ||
+		                         handler.interlock_function_id != ir.default_entry_point;
+	}
 }
 
 bool Compiler::type_is_array_of_pointers(const SPIRType &type) const

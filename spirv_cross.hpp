@@ -710,6 +710,13 @@ protected:
 		{
 		}
 
+		// Called after returning from a function or when entering a block,
+		// can be called multiple times per block,
+		// while set_current_block is only called on block entry.
+		virtual void rearm_current_block(const SPIRBlock &)
+		{
+		}
+
 		virtual bool begin_function_scope(const uint32_t *, uint32_t)
 		{
 			return true;
@@ -884,10 +891,11 @@ protected:
 	void build_function_control_flow_graphs_and_analyze();
 	std::unordered_map<uint32_t, std::unique_ptr<CFG>> function_cfgs;
 	const CFG &get_cfg_for_current_function() const;
+	const CFG &get_cfg_for_function(uint32_t id) const;
 
 	struct CFGBuilder : OpcodeHandler
 	{
-		CFGBuilder(Compiler &compiler_);
+		explicit CFGBuilder(Compiler &compiler_);
 
 		bool follow_function_call(const SPIRFunction &func) override;
 		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
@@ -932,7 +940,7 @@ protected:
 
 	struct PhysicalStorageBufferPointerHandler : OpcodeHandler
 	{
-		PhysicalStorageBufferPointerHandler(Compiler &compiler_);
+		explicit PhysicalStorageBufferPointerHandler(Compiler &compiler_);
 		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
 		Compiler &compiler;
 		std::unordered_set<uint32_t> types;
@@ -944,6 +952,61 @@ protected:
 	void find_function_local_luts(SPIRFunction &function, const AnalyzeVariableScopeAccessHandler &handler,
 	                              bool single_function);
 	bool may_read_undefined_variable_in_block(const SPIRBlock &block, uint32_t var);
+
+	// Finds all resources that are written to from inside the critical section, if present.
+	// The critical section is delimited by OpBeginInvocationInterlockEXT and
+	// OpEndInvocationInterlockEXT instructions. In MSL and HLSL, any resources written
+	// while inside the critical section must be placed in a raster order group.
+	struct InterlockedResourceAccessHandler : OpcodeHandler
+	{
+		InterlockedResourceAccessHandler(Compiler &compiler_, uint32_t entry_point_id)
+		    : compiler(compiler_)
+		{
+			call_stack.push_back(entry_point_id);
+		}
+
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool end_function_scope(const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+		bool in_crit_sec = false;
+
+		uint32_t interlock_function_id = 0;
+		bool split_function_case = false;
+		bool control_flow_interlock = false;
+		bool use_critical_section = false;
+		bool call_stack_is_interlocked = false;
+		SmallVector<uint32_t> call_stack;
+
+		void access_potential_resource(uint32_t id);
+	};
+
+	struct InterlockedResourceAccessPrepassHandler : OpcodeHandler
+	{
+		InterlockedResourceAccessPrepassHandler(Compiler &compiler_, uint32_t entry_point_id)
+			: compiler(compiler_)
+		{
+			call_stack.push_back(entry_point_id);
+		}
+
+		void rearm_current_block(const SPIRBlock &block) override;
+		bool handle(spv::Op op, const uint32_t *args, uint32_t length) override;
+		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
+		bool end_function_scope(const uint32_t *args, uint32_t length) override;
+
+		Compiler &compiler;
+		uint32_t interlock_function_id = 0;
+		uint32_t current_block_id = 0;
+		bool split_function_case = false;
+		bool control_flow_interlock = false;
+		SmallVector<uint32_t> call_stack;
+	};
+
+	void analyze_interlocked_resource_usage();
+	// The set of all resources written while inside the critical section, if present.
+	std::unordered_set<uint32_t> interlocked_resources;
+	bool interlocked_is_complex = false;
 
 	void make_constant_null(uint32_t id, uint32_t type);
 

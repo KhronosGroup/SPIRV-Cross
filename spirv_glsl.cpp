@@ -511,6 +511,7 @@ string CompilerGLSL::compile()
 	fixup_image_load_store_access();
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
+	analyze_interlocked_resource_usage();
 
 	// Shaders might cast unrelated data to pointers of non-block types.
 	// Find all such instances and make sure we can cast the pointers to a synthesized block type.
@@ -534,6 +535,25 @@ string CompilerGLSL::compile()
 
 		pass_count++;
 	} while (is_forcing_recompilation());
+
+	// Implement the interlocked wrapper function at the end.
+	// The body was implemented in lieu of main().
+	if (interlocked_is_complex)
+	{
+		statement("void main()");
+		begin_scope();
+		statement("// Interlocks were used in a way not compatible with GLSL, this is very slow.");
+		if (options.es)
+			statement("beginInvocationInterlockNV();");
+		else
+			statement("beginInvocationInterlockARB();");
+		statement("spvMainInterlockedBody();");
+		if (options.es)
+			statement("endInvocationInterlockNV();");
+		else
+			statement("endInvocationInterlockARB();");
+		end_scope();
+	}
 
 	// Entry point in GLSL is always main().
 	get_entry_point().name = "main";
@@ -604,6 +624,26 @@ void CompilerGLSL::emit_header()
 	// Needed for: layout(post_depth_coverage) in;
 	if (execution.flags.get(ExecutionModePostDepthCoverage))
 		require_extension_internal("GL_ARB_post_depth_coverage");
+
+	// Needed for: layout({pixel,sample}_interlock_[un]ordered) in;
+	if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+	    execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+	    execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+	    execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+	{
+		if (options.es)
+		{
+			if (options.version < 310)
+				SPIRV_CROSS_THROW("At least ESSL 3.10 required for fragment shader interlock.");
+			require_extension_internal("GL_NV_fragment_shader_interlock");
+		}
+		else
+		{
+			if (options.version < 420)
+				require_extension_internal("GL_ARB_shader_image_load_store");
+			require_extension_internal("GL_ARB_fragment_shader_interlock");
+		}
+	}
 
 	for (auto &ext : forced_extensions)
 	{
@@ -783,6 +823,15 @@ void CompilerGLSL::emit_header()
 			inputs.push_back("early_fragment_tests");
 		if (execution.flags.get(ExecutionModePostDepthCoverage))
 			inputs.push_back("post_depth_coverage");
+
+		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT))
+			inputs.push_back("pixel_interlock_ordered");
+		else if (execution.flags.get(ExecutionModePixelInterlockUnorderedEXT))
+			inputs.push_back("pixel_interlock_unordered");
+		else if (execution.flags.get(ExecutionModeSampleInterlockOrderedEXT))
+			inputs.push_back("sample_interlock_ordered");
+		else if (execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+			inputs.push_back("sample_interlock_unordered");
 
 		if (!options.es && execution.flags.get(ExecutionModeDepthGreater))
 			statement("layout(depth_greater) out float gl_FragDepth;");
@@ -10109,6 +10158,34 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_op(ops[0], ops[1], "helperInvocationEXT()", false);
 		break;
 
+	case OpBeginInvocationInterlockEXT:
+		// If the interlock is complex, we emit this elsewhere.
+		if (!interlocked_is_complex)
+		{
+			if (options.es)
+				statement("beginInvocationInterlockNV();");
+			else
+				statement("beginInvocationInterlockARB();");
+
+			flush_all_active_variables();
+			// Make sure forwarding doesn't propagate outside interlock region.
+		}
+		break;
+
+	case OpEndInvocationInterlockEXT:
+		// If the interlock is complex, we emit this elsewhere.
+		if (!interlocked_is_complex)
+		{
+			if (options.es)
+				statement("endInvocationInterlockNV();");
+			else
+				statement("endInvocationInterlockARB();");
+
+			flush_all_active_variables();
+			// Make sure forwarding doesn't propagate outside interlock region.
+		}
+		break;
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;
@@ -11022,7 +11099,13 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 
 	if (func.self == ir.default_entry_point)
 	{
-		decl += "main";
+		// If we need complex fallback in GLSL, we just wrap main() in a function
+		// and interlock the entire shader ...
+		if (interlocked_is_complex)
+			decl += "spvMainInterlockedBody";
+		else
+			decl += "main";
+
 		processing_entry_point = true;
 	}
 	else
