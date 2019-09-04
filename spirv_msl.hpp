@@ -54,9 +54,9 @@ struct MSLVertexAttr
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
 // Taken together, the stage, desc_set and binding combine to form a reference to a resource
 // descriptor used in a particular shading stage.
-// If using MSL 2.0 argument buffers, and the descriptor set is not marked as a discrete descriptor set,
-// the binding reference we remap to will become an [[id(N)]] attribute within
-// the "descriptor set" argument buffer structure.
+// If using MSL 2.0 argument buffers, the descriptor set is not marked as a discrete descriptor set,
+// and (for iOS only) the resource is not a storage image (sampled != 2), the binding reference we
+// remap to will become an [[id(N)]] attribute within the "descriptor set" argument buffer structure.
 // For resources which are bound in the "classic" MSL 1.0 way or discrete descriptors, the remap will become a
 // [[buffer(N)]], [[texture(N)]] or [[sampler(N)]] depending on the resource types used.
 struct MSLResourceBinding
