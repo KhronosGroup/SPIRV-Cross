@@ -605,6 +605,26 @@ void CompilerGLSL::emit_header()
 	if (execution.flags.get(ExecutionModePostDepthCoverage))
 		require_extension_internal("GL_ARB_post_depth_coverage");
 
+	// Needed for: layout({pixel,sample}_interlock_[un]ordered) in;
+	if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+	    execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+	    execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+	    execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+	{
+		if (options.es)
+		{
+			if (options.version < 310)
+				SPIRV_CROSS_THROW("At least ESSL 3.10 required for fragment shader interlock.");
+			require_extension_internal("GL_NV_fragment_shader_interlock");
+		}
+		else
+		{
+			if (options.version < 420)
+				require_extension_internal("GL_ARB_shader_image_load_store");
+			require_extension_internal("GL_ARB_fragment_shader_interlock");
+		}
+	}
+
 	for (auto &ext : forced_extensions)
 	{
 		if (ext == "GL_EXT_shader_explicit_arithmetic_types_float16")
@@ -783,6 +803,15 @@ void CompilerGLSL::emit_header()
 			inputs.push_back("early_fragment_tests");
 		if (execution.flags.get(ExecutionModePostDepthCoverage))
 			inputs.push_back("post_depth_coverage");
+
+		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT))
+			inputs.push_back("pixel_interlock_ordered");
+		else if (execution.flags.get(ExecutionModePixelInterlockUnorderedEXT))
+			inputs.push_back("pixel_interlock_unordered");
+		else if (execution.flags.get(ExecutionModeSampleInterlockOrderedEXT))
+			inputs.push_back("sample_interlock_ordered");
+		else if (execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+			inputs.push_back("sample_interlock_unordered");
 
 		if (!options.es && execution.flags.get(ExecutionModeDepthGreater))
 			statement("layout(depth_greater) out float gl_FragDepth;");
@@ -10107,6 +10136,32 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
 		require_extension_internal("GL_EXT_demote_to_helper_invocation");
 		emit_op(ops[0], ops[1], "helperInvocationEXT()", false);
+		break;
+
+	case OpBeginInvocationInterlockEXT:
+		if (options.es)
+		{
+			require_extension_internal("GL_NV_fragment_shader_interlock");
+			statement("beginInvocationInterlockNV();");
+		}
+		else
+		{
+			require_extension_internal("GL_ARB_fragment_shader_interlock");
+			statement("beginInvocationInterlockARB();");
+		}
+		break;
+
+	case OpEndInvocationInterlockEXT:
+		if (options.es)
+		{
+			require_extension_internal("GL_NV_fragment_shader_interlock");
+			statement("endInvocationInterlockNV();");
+		}
+		else
+		{
+			require_extension_internal("GL_ARB_fragment_shader_interlock");
+			statement("endInvocationInterlockARB();");
+		}
 		break;
 
 	default:

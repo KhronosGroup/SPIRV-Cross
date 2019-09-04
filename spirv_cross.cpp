@@ -4249,6 +4249,221 @@ void Compiler::analyze_non_block_pointer_types()
 	sort(begin(physical_storage_non_block_pointer_types), end(physical_storage_non_block_pointer_types));
 }
 
+bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
+{
+	if (opcode == OpBeginInvocationInterlockEXT)
+	{
+		in_crit_sec = true;
+		return true;
+	}
+
+	if (opcode == OpEndInvocationInterlockEXT)
+	{
+		// End critical section--nothing more to do.
+		return false;
+	}
+
+	// We need to figure out where images and buffers are loaded from, so do only the bare bones compilation we need.
+	switch (opcode)
+	{
+	case OpLoad:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t ptr = args[2];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+
+		// We're only concerned with buffer and image memory here.
+		if (!var)
+			break;
+
+		switch (var->storage)
+		{
+		default:
+			break;
+
+		case StorageClassUniformConstant:
+		{
+			uint32_t result_type = args[0];
+			uint32_t id = args[1];
+			compiler.set<SPIRExpression>(id, "", result_type, true);
+			compiler.register_read(id, ptr, true);
+			break;
+		}
+
+		case StorageClassUniform:
+			// Must have BufferBlock; we only care about SSBOs.
+			if (!compiler.has_decoration(compiler.get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+				break;
+			// fallthrough
+		case StorageClassStorageBuffer:
+			if (!in_crit_sec)
+				break;
+
+			compiler.interlocked_resources.insert(var->self);
+			break;
+		}
+		break;
+	}
+
+	case OpInBoundsAccessChain:
+	case OpAccessChain:
+	case OpPtrAccessChain:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+
+		auto &type = compiler.get<SPIRType>(result_type);
+		if (type.storage == StorageClassUniform || type.storage == StorageClassUniformConstant ||
+		    type.storage == StorageClassStorageBuffer)
+		{
+			uint32_t id = args[1];
+			uint32_t ptr = args[2];
+			compiler.set<SPIRExpression>(id, "", result_type, true);
+			compiler.register_read(id, ptr, true);
+		}
+		break;
+	}
+
+	case OpImageTexelPointer:
+	{
+		if (length < 3)
+			return false;
+
+		uint32_t result_type = args[0];
+		uint32_t id = args[1];
+		uint32_t ptr = args[2];
+		auto &e = compiler.set<SPIRExpression>(id, "", result_type, true);
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+		if (var)
+			e.loaded_from = var->self;
+	}
+
+	case OpStore:
+	case OpImageWrite:
+	case OpAtomicStore:
+	{
+		if (length < 1)
+			return false;
+
+		if (!in_crit_sec)
+			break;
+
+		uint32_t ptr = args[0];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+		if (var && (var->storage == StorageClassUniform || var->storage == StorageClassUniformConstant ||
+		            var->storage == StorageClassStorageBuffer))
+			compiler.interlocked_resources.insert(var->self);
+
+		break;
+	}
+
+	case OpCopyMemory:
+	{
+		if (length < 2)
+			return false;
+
+		if (!in_crit_sec)
+			break;
+
+		uint32_t dst = args[0];
+		uint32_t src = args[1];
+		auto *dst_var = compiler.maybe_get_backing_variable(dst);
+		auto *src_var = compiler.maybe_get_backing_variable(src);
+		if (dst_var && (dst_var->storage == StorageClassUniform || dst_var->storage == StorageClassStorageBuffer))
+			compiler.interlocked_resources.insert(dst_var->self);
+		if (src_var)
+		{
+			if (src_var->storage != StorageClassUniform && src_var->storage != StorageClassStorageBuffer)
+				break;
+			if (src_var->storage == StorageClassUniform &&
+			    !compiler.has_decoration(compiler.get<SPIRType>(src_var->basetype).self, DecorationBufferBlock))
+				break;
+			compiler.interlocked_resources.insert(src_var->self);
+		}
+
+		break;
+	}
+
+	case OpImageRead:
+	case OpAtomicLoad:
+	{
+		if (length < 3)
+			return false;
+
+		if (!in_crit_sec)
+			break;
+
+		uint32_t ptr = args[2];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+
+		// We're only concerned with buffer and image memory here.
+		if (!var)
+			break;
+
+		switch (var->storage)
+		{
+		default:
+			break;
+
+		case StorageClassUniform:
+			// Must have BufferBlock; we only care about SSBOs.
+			if (!compiler.has_decoration(compiler.get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+				break;
+			// fallthrough
+		case StorageClassUniformConstant:
+		case StorageClassStorageBuffer:
+			compiler.interlocked_resources.insert(var->self);
+			break;
+		}
+		break;
+	}
+
+	case OpAtomicExchange:
+	case OpAtomicCompareExchange:
+	case OpAtomicIIncrement:
+	case OpAtomicIDecrement:
+	case OpAtomicIAdd:
+	case OpAtomicISub:
+	case OpAtomicSMin:
+	case OpAtomicUMin:
+	case OpAtomicSMax:
+	case OpAtomicUMax:
+	case OpAtomicAnd:
+	case OpAtomicOr:
+	case OpAtomicXor:
+	{
+		if (length < 3)
+			return false;
+
+		if (!in_crit_sec)
+			break;
+
+		uint32_t ptr = args[2];
+		auto *var = compiler.maybe_get_backing_variable(ptr);
+		if (var && (var->storage == StorageClassUniform || var->storage == StorageClassUniformConstant ||
+		            var->storage == StorageClassStorageBuffer))
+			compiler.interlocked_resources.insert(var->self);
+
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	return true;
+}
+
+void Compiler::analyze_interlocked_resource_usage()
+{
+	InterlockedResourceAccessHandler handler(*this);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+}
+
 bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
 {
 	if (!type.pointer)
