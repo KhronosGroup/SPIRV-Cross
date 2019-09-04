@@ -3798,7 +3798,12 @@ bool Compiler::CombinedImageSamplerDrefHandler::handle(spv::Op opcode, const uin
 const CFG &Compiler::get_cfg_for_current_function() const
 {
 	assert(current_function);
-	auto cfg_itr = function_cfgs.find(current_function->self);
+	return get_cfg_for_function(current_function->self);
+}
+
+const CFG &Compiler::get_cfg_for_function(uint32_t id) const
+{
+	auto cfg_itr = function_cfgs.find(id);
 	assert(cfg_itr != end(function_cfgs));
 	assert(cfg_itr->second);
 	return *cfg_itr->second;
@@ -4249,18 +4254,91 @@ void Compiler::analyze_non_block_pointer_types()
 	sort(begin(physical_storage_non_block_pointer_types), end(physical_storage_non_block_pointer_types));
 }
 
+bool Compiler::InterlockedResourceAccessPrepassHandler::handle(Op op, const uint32_t *, uint32_t)
+{
+	if (op == OpBeginInvocationInterlockEXT || op == OpEndInvocationInterlockEXT)
+	{
+		if (interlock_function_id != 0 && interlock_function_id != call_stack.back())
+		{
+			// Most complex case, we have no sensible way of dealing with this
+			// other than taking the 100% conservative approach, exit early.
+			split_function_case = true;
+			return false;
+		}
+		else
+		{
+			interlock_function_id = call_stack.back();
+			// If this call is performed inside control flow we have a problem.
+			auto &cfg = compiler.get_cfg_for_function(interlock_function_id);
+
+			uint32_t from_block_id = compiler.get<SPIRFunction>(interlock_function_id).entry_block;
+			bool outside_control_flow = cfg.node_terminates_control_flow_in_sub_graph(from_block_id, current_block_id);
+			if (!outside_control_flow)
+				control_flow_interlock = true;
+		}
+	}
+	return true;
+}
+
+void Compiler::InterlockedResourceAccessPrepassHandler::set_current_block(const SPIRBlock &block)
+{
+	current_block_id = block.self;
+}
+
+bool Compiler::InterlockedResourceAccessPrepassHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 2)
+		return false;
+	call_stack.push_back(args[1]);
+	return true;
+}
+
+bool Compiler::InterlockedResourceAccessPrepassHandler::end_function_scope(const uint32_t *, uint32_t)
+{
+	call_stack.pop_back();
+	return true;
+}
+
+bool Compiler::InterlockedResourceAccessHandler::begin_function_scope(const uint32_t *args, uint32_t length)
+{
+	if (length < 2)
+		return false;
+	call_stack.push_back(args[1]);
+	return true;
+}
+
+bool Compiler::InterlockedResourceAccessHandler::end_function_scope(const uint32_t *, uint32_t)
+{
+	call_stack.pop_back();
+	return true;
+}
+
+void Compiler::InterlockedResourceAccessHandler::access_potential_resource(uint32_t id)
+{
+	if ((use_critical_section && in_crit_sec) ||
+	    (control_flow_interlock && call_stack.back() == interlock_function_id) ||
+	    split_function_case)
+	{
+		compiler.interlocked_resources.insert(id);
+	}
+}
+
 bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
-	if (opcode == OpBeginInvocationInterlockEXT)
+	// Only care about critical section analysis if we have simple case.
+	if (use_critical_section)
 	{
-		in_crit_sec = true;
-		return true;
-	}
+		if (opcode == OpBeginInvocationInterlockEXT)
+		{
+			in_crit_sec = true;
+			return true;
+		}
 
-	if (opcode == OpEndInvocationInterlockEXT)
-	{
-		// End critical section--nothing more to do.
-		return false;
+		if (opcode == OpEndInvocationInterlockEXT)
+		{
+			// End critical section--nothing more to do.
+			return false;
+		}
 	}
 
 	// We need to figure out where images and buffers are loaded from, so do only the bare bones compilation we need.
@@ -4298,10 +4376,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 				break;
 			// fallthrough
 		case StorageClassStorageBuffer:
-			if (!in_crit_sec)
-				break;
-
-			compiler.interlocked_resources.insert(var->self);
+			access_potential_resource(var->self);
 			break;
 		}
 		break;
@@ -4324,6 +4399,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 			uint32_t ptr = args[2];
 			compiler.set<SPIRExpression>(id, "", result_type, true);
 			compiler.register_read(id, ptr, true);
+			compiler.ir.ids[id].set_allow_type_rewrite();
 		}
 		break;
 	}
@@ -4340,6 +4416,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 		auto *var = compiler.maybe_get_backing_variable(ptr);
 		if (var)
 			e.loaded_from = var->self;
+		break;
 	}
 
 	case OpStore:
@@ -4349,14 +4426,13 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 		if (length < 1)
 			return false;
 
-		if (!in_crit_sec)
-			break;
-
 		uint32_t ptr = args[0];
 		auto *var = compiler.maybe_get_backing_variable(ptr);
 		if (var && (var->storage == StorageClassUniform || var->storage == StorageClassUniformConstant ||
 		            var->storage == StorageClassStorageBuffer))
-			compiler.interlocked_resources.insert(var->self);
+		{
+			access_potential_resource(var->self);
+		}
 
 		break;
 	}
@@ -4366,23 +4442,26 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 		if (length < 2)
 			return false;
 
-		if (!in_crit_sec)
-			break;
-
 		uint32_t dst = args[0];
 		uint32_t src = args[1];
 		auto *dst_var = compiler.maybe_get_backing_variable(dst);
 		auto *src_var = compiler.maybe_get_backing_variable(src);
+
 		if (dst_var && (dst_var->storage == StorageClassUniform || dst_var->storage == StorageClassStorageBuffer))
-			compiler.interlocked_resources.insert(dst_var->self);
+			access_potential_resource(dst_var->self);
+
 		if (src_var)
 		{
 			if (src_var->storage != StorageClassUniform && src_var->storage != StorageClassStorageBuffer)
 				break;
+
 			if (src_var->storage == StorageClassUniform &&
 			    !compiler.has_decoration(compiler.get<SPIRType>(src_var->basetype).self, DecorationBufferBlock))
+			{
 				break;
-			compiler.interlocked_resources.insert(src_var->self);
+			}
+
+			access_potential_resource(src_var->self);
 		}
 
 		break;
@@ -4393,9 +4472,6 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 	{
 		if (length < 3)
 			return false;
-
-		if (!in_crit_sec)
-			break;
 
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get_backing_variable(ptr);
@@ -4416,7 +4492,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 			// fallthrough
 		case StorageClassUniformConstant:
 		case StorageClassStorageBuffer:
-			compiler.interlocked_resources.insert(var->self);
+			access_potential_resource(var->self);
 			break;
 		}
 		break;
@@ -4439,14 +4515,13 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 		if (length < 3)
 			return false;
 
-		if (!in_crit_sec)
-			break;
-
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get_backing_variable(ptr);
 		if (var && (var->storage == StorageClassUniform || var->storage == StorageClassUniformConstant ||
 		            var->storage == StorageClassStorageBuffer))
-			compiler.interlocked_resources.insert(var->self);
+		{
+			access_potential_resource(var->self);
+		}
 
 		break;
 	}
@@ -4460,8 +4535,17 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 
 void Compiler::analyze_interlocked_resource_usage()
 {
-	InterlockedResourceAccessHandler handler(*this);
+	InterlockedResourceAccessPrepassHandler prepass_handler(*this, ir.default_entry_point);
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), prepass_handler);
+
+	InterlockedResourceAccessHandler handler(*this, ir.default_entry_point);
+	handler.interlock_function_id = prepass_handler.interlock_function_id;
+	handler.split_function_case = prepass_handler.split_function_case;
+	handler.control_flow_interlock = prepass_handler.control_flow_interlock;
+	handler.use_critical_section = !handler.split_function_case && !handler.control_flow_interlock;
+
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+	interlocked_complex = !handler.use_critical_section;
 }
 
 bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
