@@ -356,8 +356,16 @@ void ParsedIR::mark_used_as_array_length(uint32_t id)
 	case TypeConstantOp:
 	{
 		auto &cop = get<SPIRConstantOp>(id);
-		for (uint32_t arg_id : cop.arguments)
-			mark_used_as_array_length(arg_id);
+		if (cop.opcode == OpCompositeExtract)
+			mark_used_as_array_length(cop.arguments[0]);
+		else if (cop.opcode == OpCompositeInsert)
+		{
+			mark_used_as_array_length(cop.arguments[0]);
+			mark_used_as_array_length(cop.arguments[1]);
+		}
+		else
+			for (uint32_t arg_id : cop.arguments)
+				mark_used_as_array_length(arg_id);
 		break;
 	}
 
