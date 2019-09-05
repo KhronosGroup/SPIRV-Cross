@@ -1433,7 +1433,7 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	else if (!strip_array)
 		ir.meta[var.self].decoration.qualified_alias = qual_var_name;
 
-	if (var.storage == StorageClassOutput && var.initializer != 0)
+	if (var.storage == StorageClassOutput && var.initializer != ID(0))
 	{
 		entry_func.fixup_hooks_in.push_back(
 		    [=, &var]() { statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
@@ -2653,7 +2653,7 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 void CompilerMSL::align_struct(SPIRType &ib_type, unordered_set<uint32_t> &aligned_structs)
 {
 	// We align structs recursively, so stop any redundant work.
-	uint32_t &ib_type_id = ib_type.self;
+	ID &ib_type_id = ib_type.self;
 	if (aligned_structs.count(ib_type_id))
 		return;
 	aligned_structs.insert(ib_type_id);
@@ -2932,8 +2932,9 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 		// Special handling when storing to a remapped physical type.
 		// This is mostly to deal with std140 padded matrices or vectors.
 
-		uint32_t physical_type_id =
-		    lhs_remapped_type ? get_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID) : type.self;
+		TypeID physical_type_id = lhs_remapped_type ?
+		                              ID(get_extended_decoration(lhs_expression, SPIRVCrossDecorationPhysicalTypeID)) :
+		                              type.self;
 
 		auto &physical_type = get<SPIRType>(physical_type_id);
 
@@ -4555,7 +4556,7 @@ void CompilerMSL::emit_resources()
 void CompilerMSL::emit_specialization_constants_and_structs()
 {
 	SpecializationConstant wg_x, wg_y, wg_z;
-	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 	bool emitted = false;
 
 	unordered_set<uint32_t> declared_structs;
@@ -4649,7 +4650,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			// Output non-builtin interface structs. These include local function structs
 			// and structs nested within uniform and read-write buffers.
 			auto &type = id.get<SPIRType>();
-			uint32_t type_id = type.self;
+			TypeID type_id = type.self;
 
 			bool is_struct = (type.basetype == SPIRType::Struct) && type.array.empty();
 			bool is_block =
@@ -4885,7 +4886,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	// expression so we don't try to dereference it as a variable pointer.
 	// Don't do this if the index is a constant 1, though. We need to drop stores
 	// to that one.
-	auto *m = ir.find_meta(var ? var->self : 0);
+	auto *m = ir.find_meta(var ? var->self : ID(0));
 	if (get_execution_model() == ExecutionModelTessellationControl && var && m &&
 	    m->decoration.builtin_type == BuiltInTessLevelInner && get_entry_point().flags.get(ExecutionModeTriangles))
 	{
@@ -6219,7 +6220,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	local_variable_names = resource_names;
 
-	processing_entry_point = (func.self == ir.default_entry_point);
+	processing_entry_point = func.self == ir.default_entry_point;
 
 	string decl = processing_entry_point ? "" : "inline ";
 
@@ -6264,7 +6265,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		for (auto var_id : vars_needing_early_declaration)
 		{
 			auto &ed_var = get<SPIRVariable>(var_id);
-			uint32_t &initializer = ed_var.initializer;
+			ID &initializer = ed_var.initializer;
 			if (!initializer)
 				initializer = ir.increase_bound_by(1);
 
@@ -6341,14 +6342,14 @@ static bool needs_chroma_reconstruction(const MSLConstexprSampler *constexpr_sam
 }
 
 // Returns the texture sampling function string for the specified image and sampling characteristics.
-string CompilerMSL::to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool, bool,
+string CompilerMSL::to_function_name(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool, bool,
                                      bool, bool, bool has_dref, uint32_t, uint32_t)
 {
 	const MSLConstexprSampler *constexpr_sampler = nullptr;
 	bool is_dynamic_img_sampler = false;
 	if (auto *var = maybe_get_backing_variable(img))
 	{
-		constexpr_sampler = find_constexpr_sampler(var->basevariable ? var->basevariable : var->self);
+		constexpr_sampler = find_constexpr_sampler(var->basevariable ? var->basevariable : VariableID(var->self));
 		is_dynamic_img_sampler = has_extended_decoration(var->self, SPIRVCrossDecorationDynamicImageSampler);
 	}
 
@@ -6504,16 +6505,16 @@ static inline bool sampling_type_needs_f32_conversion(const SPIRType &type)
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-                                     uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x, uint32_t grad_y,
-                                     uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias, uint32_t comp,
-                                     uint32_t sample, uint32_t minlod, bool *p_forward)
+string CompilerMSL::to_function_args(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
+                                     bool is_proj, uint32_t coord, uint32_t, uint32_t dref, uint32_t grad_x,
+                                     uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
+                                     uint32_t comp, uint32_t sample, uint32_t minlod, bool *p_forward)
 {
 	const MSLConstexprSampler *constexpr_sampler = nullptr;
 	bool is_dynamic_img_sampler = false;
 	if (auto *var = maybe_get_backing_variable(img))
 	{
-		constexpr_sampler = find_constexpr_sampler(var->basevariable ? var->basevariable : var->self);
+		constexpr_sampler = find_constexpr_sampler(var->basevariable ? var->basevariable : VariableID(var->self));
 		is_dynamic_img_sampler = has_extended_decoration(var->self, SPIRVCrossDecorationDynamicImageSampler);
 	}
 
@@ -6959,7 +6960,7 @@ string CompilerMSL::to_texture_op(const Instruction &i, bool *forward, SmallVect
 	bool is_dynamic_img_sampler = false;
 	if (auto *var = maybe_get_backing_variable(img))
 	{
-		constexpr_sampler = find_constexpr_sampler(var->basevariable ? var->basevariable : var->self);
+		constexpr_sampler = find_constexpr_sampler(var->basevariable ? var->basevariable : VariableID(var->self));
 		is_dynamic_img_sampler = has_extended_decoration(var->self, SPIRVCrossDecorationDynamicImageSampler);
 	}
 
@@ -7166,7 +7167,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 		// so just create a thread local copy in the current function.
 		arg_str = join("_", id, "_array_copy");
 		auto &constants = current_function->constant_arrays_needed_on_stack;
-		auto itr = find(begin(constants), end(constants), id);
+		auto itr = find(begin(constants), end(constants), ID(id));
 		if (itr == end(constants))
 		{
 			force_recompile();
@@ -7284,7 +7285,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 string CompilerMSL::to_sampler_expression(uint32_t id)
 {
 	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
-	auto expr = to_expression(combined ? combined->image : id);
+	auto expr = to_expression(combined ? combined->image : VariableID(id));
 	auto index = expr.find_first_of('[');
 
 	uint32_t samp_id = 0;
@@ -7305,7 +7306,7 @@ string CompilerMSL::to_swizzle_expression(uint32_t id)
 {
 	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
 
-	auto expr = to_expression(combined ? combined->image : id);
+	auto expr = to_expression(combined ? combined->image : VariableID(id));
 	auto index = expr.find_first_of('[');
 
 	// If an image is part of an argument buffer translate this to a legal identifier.
@@ -10904,7 +10905,7 @@ CompilerMSL::MemberSorter::MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
 	meta.members.resize(max(type.member_types.size(), meta.members.size()));
 }
 
-void CompilerMSL::remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler &sampler)
+void CompilerMSL::remap_constexpr_sampler(VariableID id, const MSLConstexprSampler &sampler)
 {
 	auto &type = get<SPIRType>(get<SPIRVariable>(id).basetype);
 	if (type.basetype != SPIRType::SampledImage && type.basetype != SPIRType::Sampler)

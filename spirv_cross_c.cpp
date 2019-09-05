@@ -162,7 +162,7 @@ struct spvc_compiler_options_s : ScratchMemoryAllocation
 
 struct spvc_set_s : ScratchMemoryAllocation
 {
-	std::unordered_set<uint32_t> set;
+	std::unordered_set<VariableID> set;
 };
 
 // Dummy-inherit to we can keep our opaque type handle type safe in C-land as well,
