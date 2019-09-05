@@ -8161,15 +8161,19 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 	SmallVector<Resource> resources;
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
 		    !is_hidden_variable(var))
 		{
 			auto &type = get_variable_data_type(var);
-			uint32_t var_id = var.self;
 
-			if (var.storage != StorageClassPushConstant)
+			// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
+			// But we won't know when the argument buffer is encoded whether this image will have
+			// a NonWritable decoration. So just use discrete arguments for all storage images
+			// on iOS.
+			if (!(msl_options.is_ios() && type.basetype == SPIRType::Image && type.image.sampled == 2) &&
+				var.storage != StorageClassPushConstant)
 			{
 				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 				if (descriptor_set_is_argument_buffer(desc_set))
@@ -11034,9 +11038,12 @@ void CompilerMSL::analyze_argument_buffers()
 			else if (!constexpr_sampler)
 			{
 				// constexpr samplers are not declared as resources.
-				add_resource_name(var_id);
-				resources_in_set[desc_set].push_back(
-				    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+				if (!msl_options.is_ios() || type.basetype != SPIRType::Image || type.image.sampled != 2)
+				{
+					add_resource_name(var_id);
+					resources_in_set[desc_set].push_back(
+					    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+				}
 			}
 
 			// Check if this descriptor set needs a swizzle buffer.
