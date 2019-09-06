@@ -332,6 +332,7 @@ protected:
 
 	void begin_scope();
 	void end_scope();
+	void end_scope(const std::string &trailer);
 	void end_scope_decl();
 	void end_scope_decl(const std::string &decl);
 

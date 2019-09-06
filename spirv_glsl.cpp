@@ -12483,6 +12483,14 @@ void CompilerGLSL::end_scope()
 	statement("}");
 }
 
+void CompilerGLSL::end_scope(const string &trailer)
+{
+	if (!indent)
+		SPIRV_CROSS_THROW("Popping empty indent stack.");
+	indent--;
+	statement("}", trailer);
+}
+
 void CompilerGLSL::end_scope_decl()
 {
 	if (!indent)
