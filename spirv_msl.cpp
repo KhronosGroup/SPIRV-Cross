@@ -805,15 +805,21 @@ void CompilerMSL::emit_entry_point_declarations()
 	}
 
 	// Emit dynamic buffers here.
-	for (auto &buffer : buffers_requiring_dynamic_offset)
+	for (auto &dynamic_buffer : buffers_requiring_dynamic_offset)
 	{
-		const auto &var = get<SPIRVariable>(buffer.second.second);
+		if (!dynamic_buffer.second.second)
+		{
+			// Could happen if no buffer was used at requested binding point.
+			continue;
+		}
+
+		const auto &var = get<SPIRVariable>(dynamic_buffer.second.second);
 		uint32_t var_id = var.self;
 		const auto &type = get_variable_data_type(var);
 		string name = to_name(var.self);
 		uint32_t desc_set = get_decoration(var.self, DecorationDescriptorSet);
 		uint32_t arg_id = argument_buffer_ids[desc_set];
-		uint32_t base_index = buffer.second.first;
+		uint32_t base_index = dynamic_buffer.second.first;
 
 		if (!type.array.empty())
 		{
