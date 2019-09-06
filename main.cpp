@@ -522,6 +522,7 @@ struct CLIArguments
 	bool vulkan_glsl_disable_ext_samplerless_texture_functions = false;
 	bool emit_line_directives = false;
 	SmallVector<uint32_t> msl_discrete_descriptor_sets;
+	SmallVector<pair<uint32_t, uint32_t>> msl_dynamic_buffers;
 	SmallVector<PLSArg> pls_in;
 	SmallVector<PLSArg> pls_out;
 	SmallVector<Remap> remaps;
@@ -600,6 +601,7 @@ static void print_help()
 	                "\t[--msl-multiview]\n"
 	                "\t[--msl-view-index-from-device-index]\n"
 	                "\t[--msl-dispatch-base]\n"
+	                "\t[--msl-dynamic-buffer <set index> <binding>]\n"
 	                "\t[--hlsl]\n"
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
@@ -764,6 +766,9 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
+		uint32_t i = 0;
+		for (auto &v : args.msl_dynamic_buffers)
+			msl_comp->add_dynamic_buffer(v.first, v.second, i++);
 	}
 	else if (args.hlsl)
 		compiler.reset(new CompilerHLSL(move(spirv_parser.get_parsed_ir())));
@@ -1086,6 +1091,10 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-view-index-from-device-index",
 	        [&args](CLIParser &) { args.msl_view_index_from_device_index = true; });
 	cbs.add("--msl-dispatch-base", [&args](CLIParser &) { args.msl_dispatch_base = true; });
+	cbs.add("--msl-dynamic-buffer", [&args](CLIParser &parser) {
+		args.msl_argument_buffers = true;
+		args.msl_dynamic_buffers.push_back(make_pair(parser.next_uint(), parser.next_uint()));
+	});
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();

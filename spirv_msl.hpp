@@ -263,6 +263,7 @@ public:
 		uint32_t shader_tess_factor_buffer_index = 26;
 		uint32_t buffer_size_buffer_index = 25;
 		uint32_t view_mask_buffer_index = 24;
+		uint32_t dynamic_offsets_buffer_index = 23;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		bool enable_point_size_builtin = true;
@@ -396,6 +397,14 @@ public:
 	// is_msl_resource_binding_used() will return true after calling ::compile() if
 	// the set/binding combination was used by the MSL code.
 	void add_msl_resource_binding(const MSLResourceBinding &resource);
+
+	// desc_set and binding are the SPIR-V descriptor set and binding of a buffer resource
+	// in this shader. index is the index within the dynamic offset buffer to use. This
+	// function marks that resource as using a dynamic offset (VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+	// or VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC). This function only has any effect if argument buffers
+	// are enabled. If so, the buffer will have its address adjusted at the beginning of the shader with
+	// an offset taken from the dynamic offset buffer.
+	void add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32_t index);
 
 	// When using MSL argument buffers, we can force "classic" MSL 1.0 binding schemes for certain descriptor sets.
 	// This corresponds to VK_KHR_push_descriptor in Vulkan.
@@ -688,6 +697,7 @@ protected:
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;
+	uint32_t dynamic_offsets_buffer_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
@@ -717,6 +727,7 @@ protected:
 		uint32_t desc_set;
 		uint32_t binding;
 		bool operator==(const SetBindingPair &other) const;
+		bool operator<(const SetBindingPair &other) const;
 	};
 
 	struct StageSetBinding
@@ -778,6 +789,9 @@ protected:
 
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<uint32_t> buffer_arrays;
+
+	// Must be ordered since array is in a specific order.
+	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
 
 	uint32_t argument_buffer_ids[kMaxArgumentBuffers];
 	uint32_t argument_buffer_discrete_mask = 0;
