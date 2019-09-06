@@ -846,10 +846,10 @@ void CompilerMSL::emit_entry_point_declarations()
 					string arrays;
 					for (uint32_t i = uint32_t(type.array.size()); i; --i)
 						arrays += join("[", indices[i - 1], "]");
-					statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false),
-					          ")((", get_argument_address_space(var), " char* ", to_restrict(var_id, false), ")",
-					          to_name(arg_id), ".", ensure_valid_name(name, "m"), arrays, " + ",
-					          to_name(dynamic_offsets_buffer_id), "[", base_index + j, "]),");
+					statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ",
+					          to_restrict(var_id, false), ")((", get_argument_address_space(var), " char* ",
+					          to_restrict(var_id, false), ")", to_name(arg_id), ".", ensure_valid_name(name, "m"),
+					          arrays, " + ", to_name(dynamic_offsets_buffer_id), "[", base_index + j, "]),");
 
 					while (++indices[dim] >= to_array_size_literal(type, dim) && dim < type.array.size() - 1)
 					{
