@@ -565,6 +565,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_DISPATCH_BASE:
 		options->msl.dispatch_base = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_DYNAMIC_OFFSETS_BUFFER_INDEX:
+		options->msl.dynamic_offsets_buffer_index = value;
+		break;
 #endif
 
 	default:
@@ -897,6 +901,27 @@ spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
 	return SPVC_SUCCESS;
 #else
 	(void)binding;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
+spvc_result spvc_compiler_msl_add_dynamic_buffer(spvc_compiler compiler, unsigned desc_set, unsigned binding, unsigned index)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	msl.add_dynamic_buffer(desc_set, binding, index);
+	return SPVC_SUCCESS;
+#else
+	(void)binding;
+	(void)desc_set;
+	(void)index;
 	compiler->context->report_error("MSL function used on a non-MSL backend.");
 	return SPVC_ERROR_INVALID_ARGUMENT;
 #endif

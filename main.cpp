@@ -1093,6 +1093,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-dispatch-base", [&args](CLIParser &) { args.msl_dispatch_base = true; });
 	cbs.add("--msl-dynamic-buffer", [&args](CLIParser &parser) {
 		args.msl_argument_buffers = true;
+		// Make sure next_uint() is called in-order.
 		uint32_t desc_set = parser.next_uint();
 		uint32_t binding = parser.next_uint();
 		args.msl_dynamic_buffers.push_back(make_pair(desc_set, binding));
