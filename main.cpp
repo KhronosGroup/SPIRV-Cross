@@ -246,7 +246,7 @@ static void print_resources(const Compiler &compiler, const char *tag, const Sma
 		                compiler.get_decoration_bitset(type.self).get(DecorationBufferBlock);
 		bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == StorageClassUniform ||
 		                                   compiler.get_storage_class(res.id) == StorageClassUniformConstant);
-		uint32_t fallback_id = !is_push_constant && is_block ? res.base_type_id : res.id;
+		ID fallback_id = !is_push_constant && is_block ? ID(res.base_type_id) : ID(res.id);
 
 		uint32_t block_size = 0;
 		uint32_t runtime_array_stride = 0;
@@ -268,7 +268,7 @@ static void print_resources(const Compiler &compiler, const char *tag, const Sma
 		for (auto arr : type.array)
 			array = join("[", arr ? convert_to_string(arr) : "", "]") + array;
 
-		fprintf(stderr, " ID %03u : %s%s", res.id,
+		fprintf(stderr, " ID %03u : %s%s", uint32_t(res.id),
 		        !res.name.empty() ? res.name.c_str() : compiler.get_fallback_name(fallback_id).c_str(), array.c_str());
 
 		if (mask.get(DecorationLocation))
@@ -442,7 +442,7 @@ static void print_spec_constants(const Compiler &compiler)
 	fprintf(stderr, "Specialization constants\n");
 	fprintf(stderr, "==================\n\n");
 	for (auto &c : spec_constants)
-		fprintf(stderr, "ID: %u, Spec ID: %u\n", c.id, c.constant_id);
+		fprintf(stderr, "ID: %u, Spec ID: %u\n", uint32_t(c.id), c.constant_id);
 	fprintf(stderr, "==================\n\n");
 }
 

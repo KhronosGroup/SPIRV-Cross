@@ -1045,7 +1045,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 {
 	bool emitted = false;
 	SpecializationConstant wg_x, wg_y, wg_z;
-	uint32_t workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
+	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
 	auto loop_lock = ir.create_loop_hard_lock();
 	for (auto &id_ : ir.ids_for_constant_or_type)
@@ -2489,7 +2489,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
-	uint32_t img = ops[2];
+	VariableID img = ops[2];
 	uint32_t coord = ops[3];
 	uint32_t dref = 0;
 	uint32_t comp = 0;
@@ -3724,7 +3724,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		e.row_major_matrix = row_major_matrix;
 		e.matrix_stride = matrix_stride;
 		e.immutable = should_forward(ops[2]);
-		e.loaded_from = backing_variable ? backing_variable->self : 0;
+		e.loaded_from = backing_variable ? backing_variable->self : ID(0);
 
 		if (chain)
 		{
@@ -4494,7 +4494,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
-		e.loaded_from = var ? var->self : 0;
+		e.loaded_from = var ? var->self : ID(0);
 		break;
 	}
 
@@ -4764,7 +4764,7 @@ void CompilerHLSL::add_vertex_attribute_remap(const HLSLVertexAttributeRemap &ve
 	remap_vertex_attributes.push_back(vertex_attributes);
 }
 
-uint32_t CompilerHLSL::remap_num_workgroups_builtin()
+VariableID CompilerHLSL::remap_num_workgroups_builtin()
 {
 	update_active_builtins();
 

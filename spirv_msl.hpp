@@ -363,21 +363,21 @@ public:
 	// buffer if the shader needs it.
 	bool needs_output_buffer() const
 	{
-		return capture_output_to_buffer && stage_out_var_id != 0;
+		return capture_output_to_buffer && stage_out_var_id != ID(0);
 	}
 
 	// Provide feedback to calling API to allow it to pass a patch output
 	// buffer if the shader needs it.
 	bool needs_patch_output_buffer() const
 	{
-		return capture_output_to_buffer && patch_stage_out_var_id != 0;
+		return capture_output_to_buffer && patch_stage_out_var_id != ID(0);
 	}
 
 	// Provide feedback to calling API to allow it to pass an input threadgroup
 	// buffer if the shader needs it.
 	bool needs_input_threadgroup_mem() const
 	{
-		return capture_output_to_buffer && stage_in_var_id != 0;
+		return capture_output_to_buffer && stage_in_var_id != ID(0);
 	}
 
 	explicit CompilerMSL(std::vector<uint32_t> spirv);
@@ -450,7 +450,7 @@ public:
 	// This can be used on both combined image/samplers (sampler2D) or standalone samplers.
 	// The remapped sampler must not be an array of samplers.
 	// Prefer remap_constexpr_sampler_by_binding unless you're also doing reflection anyways.
-	void remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler &sampler);
+	void remap_constexpr_sampler(VariableID id, const MSLConstexprSampler &sampler);
 
 	// Same as remap_constexpr_sampler, except you provide set/binding, rather than variable ID.
 	// Remaps based on ID take priority over set/binding remaps.
@@ -551,10 +551,10 @@ protected:
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
-	std::string to_function_name(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+	std::string to_function_name(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
 	                             bool has_array_offsets, bool has_offset, bool has_grad, bool has_dref, uint32_t lod,
 	                             uint32_t minlod) override;
-	std::string to_function_args(uint32_t img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
+	std::string to_function_args(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
 	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, uint32_t minlod, bool *p_forward) override;
@@ -752,12 +752,12 @@ protected:
 	// Intentionally uninitialized, works around MSVC 2013 bug.
 	uint32_t next_metal_resource_ids[kMaxArgumentBuffers];
 
-	uint32_t stage_in_var_id = 0;
-	uint32_t stage_out_var_id = 0;
-	uint32_t patch_stage_in_var_id = 0;
-	uint32_t patch_stage_out_var_id = 0;
-	uint32_t stage_in_ptr_var_id = 0;
-	uint32_t stage_out_ptr_var_id = 0;
+	VariableID stage_in_var_id = 0;
+	VariableID stage_out_var_id = 0;
+	VariableID patch_stage_in_var_id = 0;
+	VariableID patch_stage_out_var_id = 0;
+	VariableID stage_in_ptr_var_id = 0;
+	VariableID stage_out_ptr_var_id = 0;
 	bool has_sampled_images = false;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;

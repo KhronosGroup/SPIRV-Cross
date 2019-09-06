@@ -114,7 +114,7 @@ public:
 	// If non-zero, this returns the variable ID of a cbuffer which corresponds to
 	// the cbuffer declared above. By default, no binding or descriptor set decoration is set,
 	// so the calling application should declare explicit bindings on this ID before calling compile().
-	uint32_t remap_num_workgroups_builtin();
+	VariableID remap_num_workgroups_builtin();
 
 private:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
