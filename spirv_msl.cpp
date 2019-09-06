@@ -61,6 +61,12 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 	resource_bindings[tuple] = { binding, false };
 }
 
+void CompilerMSL::add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32_t index)
+{
+	SetBindingPair pair = { desc_set, binding };
+	buffers_requiring_dynamic_offset[pair] = { index, 0 };
+}
+
 void CompilerMSL::add_discrete_descriptor_set(uint32_t desc_set)
 {
 	if (desc_set < kMaxArgumentBuffers)
@@ -548,6 +554,18 @@ void CompilerMSL::build_implicit_builtins()
 		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary, msl_options.view_mask_buffer_index);
 		view_mask_buffer_id = var_id;
 	}
+
+	if (!buffers_requiring_dynamic_offset.empty())
+	{
+		uint32_t var_id = build_constant_uint_array_pointer();
+		set_name(var_id, "spvDynamicOffsets");
+		// This should never match anything.
+		set_decoration(var_id, DecorationDescriptorSet, ~(5u));
+		set_decoration(var_id, DecorationBinding, msl_options.dynamic_offsets_buffer_index);
+		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary,
+		                        msl_options.dynamic_offsets_buffer_index);
+		dynamic_offsets_buffer_id = var_id;
+	}
 }
 
 void CompilerMSL::mark_implicit_builtin(StorageClass storage, BuiltIn builtin, uint32_t id)
@@ -786,6 +804,72 @@ void CompilerMSL::emit_entry_point_declarations()
 			          "(", merge(args), ");");
 	}
 
+	// Emit dynamic buffers here.
+	for (auto &dynamic_buffer : buffers_requiring_dynamic_offset)
+	{
+		if (!dynamic_buffer.second.second)
+		{
+			// Could happen if no buffer was used at requested binding point.
+			continue;
+		}
+
+		const auto &var = get<SPIRVariable>(dynamic_buffer.second.second);
+		uint32_t var_id = var.self;
+		const auto &type = get_variable_data_type(var);
+		string name = to_name(var.self);
+		uint32_t desc_set = get_decoration(var.self, DecorationDescriptorSet);
+		uint32_t arg_id = argument_buffer_ids[desc_set];
+		uint32_t base_index = dynamic_buffer.second.first;
+
+		if (!type.array.empty())
+		{
+			// This is complicated, because we need to support arrays of arrays.
+			// And it's even worse if the outermost dimension is a runtime array, because now
+			// all this complicated goop has to go into the shader itself. (FIXME)
+			if (!type.array[type.array.size() - 1])
+				SPIRV_CROSS_THROW("Runtime arrays with dynamic offsets are not supported yet.");
+			else
+			{
+				statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id), name,
+				          type_to_array_glsl(type), " =");
+				uint32_t dim = uint32_t(type.array.size());
+				uint32_t j = 0;
+				for (SmallVector<uint32_t> indices(type.array.size());
+				     indices[type.array.size() - 1] < to_array_size_literal(type); j++)
+				{
+					while (dim > 0)
+					{
+						begin_scope();
+						--dim;
+					}
+
+					string arrays;
+					for (uint32_t i = uint32_t(type.array.size()); i; --i)
+						arrays += join("[", indices[i - 1], "]");
+					statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false),
+					          ")((", get_argument_address_space(var), " char* ", to_restrict(var_id, false), ")",
+					          to_name(arg_id), ".", ensure_valid_name(name, "m"), arrays, " + ",
+					          to_name(dynamic_offsets_buffer_id), "[", base_index + j, "]),");
+
+					while (++indices[dim] >= to_array_size_literal(type, dim) && dim < type.array.size() - 1)
+					{
+						end_scope(",");
+						indices[dim++] = 0;
+					}
+				}
+				end_scope_decl();
+				statement_no_indent("");
+			}
+		}
+		else
+		{
+			statement(get_argument_address_space(var), " auto& ", to_restrict(var_id), name, " = *(",
+			          get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false), ")((",
+			          get_argument_address_space(var), " char* ", to_restrict(var_id, false), ")", to_name(arg_id), ".",
+			          ensure_valid_name(name, "m"), " + ", to_name(dynamic_offsets_buffer_id), "[", base_index, "]);");
+		}
+	}
+
 	// Emit buffer arrays here.
 	for (uint32_t array_id : buffer_arrays)
 	{
@@ -794,8 +878,8 @@ void CompilerMSL::emit_entry_point_declarations()
 		string name = to_name(array_id);
 		statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(array_id), name, "[] =");
 		begin_scope();
-		for (uint32_t i = 0; i < type.array[0]; ++i)
-			statement(name + "_" + convert_to_string(i) + ",");
+		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
+			statement(name, "_", i, ",");
 		end_scope_decl();
 		statement_no_indent("");
 	}
@@ -865,6 +949,8 @@ string CompilerMSL::compile()
 		active_interface_variables.insert(buffer_size_buffer_id);
 	if (view_mask_buffer_id)
 		active_interface_variables.insert(view_mask_buffer_id);
+	if (dynamic_offsets_buffer_id)
+		active_interface_variables.insert(dynamic_offsets_buffer_id);
 	if (builtin_layer_id)
 		active_interface_variables.insert(builtin_layer_id);
 	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
@@ -4702,7 +4788,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 						}
 						else if (is_array(mbr_type))
 						{
-							for (uint32_t k = 0; k < mbr_type.array[0]; k++, index++)
+							for (uint32_t k = 0; k < to_array_size_literal(mbr_type, 0); k++, index++)
 							{
 								set<SPIRConstant>(const_mbr_id, type_id, index, false);
 								auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), mbr_type, nullptr,
@@ -4731,7 +4817,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				else // Must be an array
 				{
 					assert(is_array(*type));
-					for (uint32_t j = 0; j < type->array[0]; j++, index++)
+					for (uint32_t j = 0; j < to_array_size_literal(*type, 0); j++, index++)
 					{
 						set<SPIRConstant>(const_mbr_id, type_id, index, false);
 						auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), *type, nullptr, true);
@@ -8173,7 +8259,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			// a NonWritable decoration. So just use discrete arguments for all storage images
 			// on iOS.
 			if (!(msl_options.is_ios() && type.basetype == SPIRType::Image && type.image.sampled == 2) &&
-				var.storage != StorageClassPushConstant)
+			    var.storage != StorageClassPushConstant)
 			{
 				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 				if (descriptor_set_is_argument_buffer(desc_set))
@@ -8707,7 +8793,7 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	uint32_t binding_stride = 1;
 	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
-		binding_stride *= type.array_size_literal[i] ? type.array[i] : get<SPIRConstant>(type.array[i]).scalar();
+		binding_stride *= to_array_size_literal(type, i);
 
 	assert(binding_stride != 0);
 
@@ -11180,6 +11266,9 @@ void CompilerMSL::analyze_argument_buffers()
 			}
 			else
 			{
+				uint32_t binding = get_decoration(var.self, DecorationBinding);
+				SetBindingPair pair = { desc_set, binding };
+
 				if (resource.basetype == SPIRType::Image || resource.basetype == SPIRType::Sampler ||
 				    resource.basetype == SPIRType::SampledImage)
 				{
@@ -11187,6 +11276,12 @@ void CompilerMSL::analyze_argument_buffers()
 					buffer_type.member_types.push_back(get_variable_data_type_id(var));
 					if (resource.plane == 0)
 						set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
+				}
+				else if (buffers_requiring_dynamic_offset.count(pair))
+				{
+					// Don't set the qualified name here; we'll define a variable holding the corrected buffer address later.
+					buffer_type.member_types.push_back(var.basetype);
+					buffers_requiring_dynamic_offset[pair].second = var.self;
 				}
 				else
 				{
@@ -11211,6 +11306,11 @@ void CompilerMSL::analyze_argument_buffers()
 bool CompilerMSL::SetBindingPair::operator==(const SetBindingPair &other) const
 {
 	return desc_set == other.desc_set && binding == other.binding;
+}
+
+bool CompilerMSL::SetBindingPair::operator<(const SetBindingPair &other) const
+{
+	return desc_set < other.desc_set || (desc_set == other.desc_set && binding < other.binding);
 }
 
 bool CompilerMSL::StageSetBinding::operator==(const StageSetBinding &other) const
