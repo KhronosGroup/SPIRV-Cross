@@ -980,84 +980,129 @@ void CompilerMSL::preprocess_op_codes()
 	}
 	
 	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	// UnsafeArray
 	{
 		if (msl_options.invariant_float_math)
 		{
 			add_header_line("template <typename T> T fmul(T l, T r) { return metal::fma(l, r, T(0)); }");
 			add_header_line("template <typename T> T fadd(T l, T r) { return metal::fma(T(1), l, r); }");
 			
-			add_header_line("template <typename T, int Cols, int Rows> metal::vec<T, Rows> fmul_mv(metal::matrix<T, Cols, Rows> m, metal::vec<T, Cols> v) { metal::vec<T, Rows> res = metal::vec<T, Rows>(0); for(uint i = Cols; i > 0; --i) { res = metal::fma(m[i-1], metal::vec<T, Rows>(v[i-1]), res); } return res; }");
-			
+			add_header_line("template <typename T, int Cols, int Rows>");
+			add_header_line("metal::vec<T, Rows> fmul_mv(metal::matrix<T, Cols, Rows> m, metal::vec<T, Cols> v)");
+			add_header_line("{");
+			add_header_line("    metal::vec<T, Rows> res = metal::vec<T, Rows>(0);");
+			add_header_line("    for(uint i = Cols; i > 0; --i)");
+			add_header_line("    {");
+			add_header_line("        res = metal::fma(m[i-1], metal::vec<T, Rows>(v[i-1]), res);");
+			add_header_line("    }");
+			add_header_line("    return res;");
+			add_header_line("}");
+
 			add_header_line("template <typename T, int LCols, int LRows, int RCols, int RRows>");
 			add_header_line("metal::matrix<T, RCols, LRows> fmul_mat(metal::matrix<T, LCols, LRows> l, metal::matrix<T, RCols, RRows> r)");
 			add_header_line("{");
-			add_header_line("	metal::matrix<T, RCols, LRows> res;");
-			add_header_line("	for(uint i = 0; i < RCols; i++)");
-			add_header_line("	{");
-			add_header_line("		metal::vec<T, RCols> tmp(0);");
-			add_header_line("		for(uint j = 0; j < LCols; j++)");
-			add_header_line("		{");
-			add_header_line("			tmp = metal::fma(metal::vec<T, RCols>(r[i][j]),l[j],tmp);");
-			add_header_line("		}");
-			add_header_line("		res[i] = tmp;");
-			add_header_line("	}");
-			add_header_line("	return res;");
+			add_header_line("    metal::matrix<T, RCols, LRows> res;");
+			add_header_line("    for(uint i = 0; i < RCols; i++)");
+			add_header_line("    {");
+			add_header_line("        metal::vec<T, RCols> tmp(0);");
+			add_header_line("        for(uint j = 0; j < LCols; j++)");
+			add_header_line("        {");
+			add_header_line("            tmp = metal::fma(metal::vec<T, RCols>(r[i][j]),l[j],tmp);");
+			add_header_line("        }");
+			add_header_line("        res[i] = tmp;");
+			add_header_line("    }");
+			add_header_line("    return res;");
 			add_header_line("}");
 		}
 		
+		if (msl_options.emulate_cube_array)
+		{
+			add_header_line("static inline __attribute__((always_inline)) float3 spvCubemapTo2DArrayFace(float3 P)");
+			add_header_line("{");
+			add_header_line("    float3 Coords = metal::abs(P.xyz);");
+			add_header_line("    float CubeFace = 0;");
+			add_header_line("    float ProjectionAxis = 0;");
+			add_header_line("    float u = 0;");
+			add_header_line("    float v = 0;");
+			add_header_line("    if(Coords.x >= Coords.y && Coords.x >= Coords.z)");
+			add_header_line("    {");
+			add_header_line("        CubeFace = P.x >= 0 ? 0 : 1;");
+			add_header_line("        ProjectionAxis = Coords.x;");
+			add_header_line("        u = P.x >= 0 ? -P.z : P.z;");
+			add_header_line("        v = -P.y;");
+			add_header_line("    }");
+			add_header_line("    else if(Coords.y >= Coords.x && Coords.y >= Coords.z)");
+			add_header_line("    {");
+			add_header_line("        CubeFace = P.y >= 0 ? 2 : 3;");
+			add_header_line("        ProjectionAxis = Coords.y;");
+			add_header_line("        u = P.x;");
+			add_header_line("        v = P.y >= 0 ? P.z : -P.z;");
+			add_header_line("    }");
+			add_header_line("    else");
+			add_header_line("    {");
+			add_header_line("        CubeFace = P.z >= 0 ? 4 : 5;");
+			add_header_line("        ProjectionAxis = Coords.z;");
+			add_header_line("        u = P.z >= 0 ? P.x : -P.x;");
+			add_header_line("        v = -P.y;");
+			add_header_line("    }");
+			add_header_line("    u = 0.5 * (u/ProjectionAxis + 1);");
+			add_header_line("    v = 0.5 * (v/ProjectionAxis + 1);");
+			add_header_line("    return float3(u, v, CubeFace);");
+			add_header_line("}");
+		}
+		
+		// UnsafeArray
 		add_header_line("template <typename T, size_t Num>");
 		add_header_line("struct unsafe_array");
 		add_header_line("{");
-		add_header_line("	T __Elements[Num ? Num : 1];");
-		add_header_line("	");
-		add_header_line("	constexpr size_t size() const thread { return Num; }");
-		add_header_line("	constexpr size_t max_size() const thread { return Num; }");
-		add_header_line("	constexpr bool empty() const thread { return Num == 0; }");
-		add_header_line("	");
-		add_header_line("	constexpr size_t size() const device { return Num; }");
-		add_header_line("	constexpr size_t max_size() const device { return Num; }");
-		add_header_line("	constexpr bool empty() const device { return Num == 0; }");
-		add_header_line("	");
-		add_header_line("	constexpr size_t size() const constant { return Num; }");
-		add_header_line("	constexpr size_t max_size() const constant { return Num; }");
-		add_header_line("	constexpr bool empty() const constant { return Num == 0; }");
-		add_header_line("	");
-		add_header_line("	constexpr size_t size() const threadgroup { return Num; }");
-		add_header_line("	constexpr size_t max_size() const threadgroup { return Num; }");
-		add_header_line("	constexpr bool empty() const threadgroup { return Num == 0; }");
-		add_header_line("	");
-		add_header_line("	thread T &operator[](size_t pos) thread");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
-		add_header_line("	constexpr const thread T &operator[](size_t pos) const thread");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
-		add_header_line("	");
-		add_header_line("	device T &operator[](size_t pos) device");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
-		add_header_line("	constexpr const device T &operator[](size_t pos) const device");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
-		add_header_line("	");
-		add_header_line("	constexpr const constant T &operator[](size_t pos) const constant");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
-		add_header_line("	");
-		add_header_line("	threadgroup T &operator[](size_t pos) threadgroup");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
-		add_header_line("	constexpr const threadgroup T &operator[](size_t pos) const threadgroup");
-		add_header_line("	{");
-		add_header_line("		return __Elements[pos];");
-		add_header_line("	}");
+		add_header_line("    T __Elements[Num ? Num : 1];");
+		add_header_line("    ");
+		add_header_line("    constexpr size_t size() const thread { return Num; }");
+		add_header_line("    constexpr size_t max_size() const thread { return Num; }");
+		add_header_line("    constexpr bool empty() const thread { return Num == 0; }");
+		add_header_line("    ");
+		add_header_line("    constexpr size_t size() const device { return Num; }");
+		add_header_line("    constexpr size_t max_size() const device { return Num; }");
+		add_header_line("    constexpr bool empty() const device { return Num == 0; }");
+		add_header_line("    ");
+		add_header_line("    constexpr size_t size() const constant { return Num; }");
+		add_header_line("    constexpr size_t max_size() const constant { return Num; }");
+		add_header_line("    constexpr bool empty() const constant { return Num == 0; }");
+		add_header_line("    ");
+		add_header_line("    constexpr size_t size() const threadgroup { return Num; }");
+		add_header_line("    constexpr size_t max_size() const threadgroup { return Num; }");
+		add_header_line("    constexpr bool empty() const threadgroup { return Num == 0; }");
+		add_header_line("    ");
+		add_header_line("    thread T &operator[](size_t pos) thread");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    constexpr const thread T &operator[](size_t pos) const thread");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    ");
+		add_header_line("    device T &operator[](size_t pos) device");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    constexpr const device T &operator[](size_t pos) const device");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    ");
+		add_header_line("    constexpr const constant T &operator[](size_t pos) const constant");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    ");
+		add_header_line("    threadgroup T &operator[](size_t pos) threadgroup");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    constexpr const threadgroup T &operator[](size_t pos) const threadgroup");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
 		add_header_line("};");
 	}
 	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
@@ -5673,7 +5718,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			expr += ", " + img_exp + ".get_depth(" + lod + ")";
 
 		if (img_is_array)
+		{
 			expr += ", " + img_exp + ".get_array_size()";
+			if (img_dim == DimCube && msl_options.emulate_cube_array)
+				expr += " / 6";
+		}
 
 		expr += ")";
 
@@ -7300,30 +7349,41 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 
 	if (!farg_str.empty())
 		farg_str += ", ";
-	farg_str += tex_coords;
-
-	// If fetch from cube, add face explicitly
-	if (is_cube_fetch)
+	
+	if (imgtype.image.arrayed && msl_options.emulate_cube_array)
 	{
-		// Special case for cube arrays, face and layer are packed in one dimension.
+		farg_str += "spvCubemapTo2DArrayFace(" + tex_coords + ").xy";
+		
+		if (is_cube_fetch)
+			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ")";
+		else
+			farg_str += ", uint(spvCubemapTo2DArrayFace(" + tex_coords + ").z) + (uint(" + to_extract_component_expression(coord, 2) + ") * 6u)";
+	}
+	else
+	{
+		farg_str += tex_coords;
+		
+		// If fetch from cube, add face explicitly
+		if (is_cube_fetch)
+		{
+			// Special case for cube arrays, face and layer are packed in one dimension.
+			if (imgtype.image.arrayed)
+				farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ") % 6u";
+			else
+				farg_str += ", uint(" + round_fp_tex_coords(to_extract_component_expression(coord, 2), coord_is_fp) + ")";
+		}
+		
+		// If array, use alt coord
 		if (imgtype.image.arrayed)
-			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ") % 6u";
-		else
-			farg_str += ", uint(" + round_fp_tex_coords(to_extract_component_expression(coord, 2), coord_is_fp) + ")";
+		{
+			// Special case for cube arrays, face and layer are packed in one dimension.
+			if (imgtype.image.dim == DimCube && is_fetch)
+				farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ") / 6u";
+			else
+				farg_str += ", uint(" + round_fp_tex_coords(to_extract_component_expression(coord, alt_coord_component), coord_is_fp) + ")";
+		}
 	}
-
-	// If array, use alt coord
-	if (imgtype.image.arrayed)
-	{
-		// Special case for cube arrays, face and layer are packed in one dimension.
-		if (imgtype.image.dim == DimCube && is_fetch)
-			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ") / 6u";
-		else
-			farg_str += ", uint(" +
-			            round_fp_tex_coords(to_extract_component_expression(coord, alt_coord_component), coord_is_fp) +
-			            ")";
-	}
-
+	
 	// Depth compare reference value
 	if (dref)
 	{
@@ -7426,7 +7486,10 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			grad_opt = "3d";
 			break;
 		case DimCube:
-			grad_opt = "cube";
+			if (imgtype.image.arrayed && msl_options.emulate_cube_array)
+				grad_opt = "2d";
+			else
+				grad_opt = "cube";
 			break;
 		default:
 			grad_opt = "unsupported_gradient_dimension";
@@ -10366,7 +10429,10 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			img_type_name += "depth3d_unsupported_by_metal";
 			break;
 		case DimCube:
-			img_type_name += (img_type.arrayed ? "depthcube_array" : "depthcube");
+			if (!msl_options.emulate_cube_array)
+				img_type_name += (img_type.arrayed ? "depthcube_array" : "depthcube");
+			else
+				img_type_name += (img_type.arrayed ? "depth2d_array" : "depthcube");
 			break;
 		default:
 			img_type_name += "unknown_depth_texture_type";
@@ -10416,7 +10482,10 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			img_type_name += "texture3d";
 			break;
 		case DimCube:
-			img_type_name += (img_type.arrayed ? "texturecube_array" : "texturecube");
+			if (!msl_options.emulate_cube_array)
+				img_type_name += (img_type.arrayed ? "texturecube_array" : "texturecube");
+			else
+				img_type_name += (img_type.arrayed ? "texture2d_array" : "texturecube");
 			break;
 		default:
 			img_type_name += "unknown_texture_type";
