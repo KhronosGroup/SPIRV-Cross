@@ -10969,6 +10969,11 @@ void CompilerGLSL::flatten_buffer_block(uint32_t id)
 	flattened_buffer_blocks.insert(id);
 }
 
+bool CompilerGLSL::supports_combined_samplers() const
+{
+	return true; // GLSL always supports combined texture-samplers.
+}
+
 bool CompilerGLSL::check_atomic_image(uint32_t id)
 {
 	auto &type = expression_type(id);

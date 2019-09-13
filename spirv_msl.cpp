@@ -104,6 +104,11 @@ void CompilerMSL::set_fragment_output_components(uint32_t location, uint32_t com
 	fragment_output_components[location] = components;
 }
 
+bool CompilerMSL::supports_combined_samplers() const
+{
+	return false; // Metal does not support combined texture-samplers
+}
+
 void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
@@ -3483,21 +3488,21 @@ void CompilerMSL::emit_custom_functions()
 			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
 			if (msl_options.texel_buffer_texture_width > 0)
 			{
-			string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
-			statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("uint2 spvTexelBufferCoord(uint tc)");
-			begin_scope();
-			statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
-			end_scope();
-			statement("");
+				string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
+				statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
+				/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+				statement("static inline __attribute__((always_inline))");
+				/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+				statement("uint2 spvTexelBufferCoord(uint tc)");
+				begin_scope();
+				statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
+				end_scope();
+				statement("");
 			}
 			else
 			{
 				statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
-				statement("#define spvTexelBufferCoord(tc, Tex) uint2(tc % Tex.get_width(), tc / Tex.get_width())");
+				statement("#define spvTexelBufferCoord(tc, Tex) uint2((tc) % (Tex).get_width(), (tc) / (Tex).get_width())");
 			}
 			/* UE Change End: Add support for Metal 2.1's new texture_buffer type. */
 			break;
@@ -3507,16 +3512,16 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplImage2DAtomicCoords:
 		{
 			statement("// Returns buffer coords corresponding to 2D texture coords for emulating 2D texture atomics");
-			statement("#define spvImage2DAtomicCoord(tc, Tex) ((Tex.get_width() * tc.x) + tc.y)");
+			statement("#define spvImage2DAtomicCoord(tc, Tex) (((Tex).get_width() * (tc).x) + (tc).y)");
 			break;
 		}
 		/* UE Change End: Emulate texture2D atomic operations */
-				
+
 		/* UE Change Begin: Storage buffer robustness */
 		case SPVFuncImplStorageBufferCoords:
 		{
 			statement("// Returns buffer coords clamped to storage buffer size");
-			statement("#define spvStorageBufferCoords(idx, sizes, type, coord) metal::min(coord, (sizes[idx*2] / sizeof(type)) - 1)");
+			statement("#define spvStorageBufferCoords(idx, sizes, type, coord) metal::min((coord), (sizes[(idx)*2] / sizeof(type)) - 1)");
 			break;
 		}
 		/* UE Change End: Storage buffer robustness */
@@ -6300,13 +6305,13 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 {
 	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
 	bool lhs_thread =
-		lhs_storage == StorageClassFunction || lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate;
+		lhs_storage == StorageClassOutput || lhs_storage == StorageClassFunction || lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate;
 	bool rhs_thread =
-		rhs_storage == StorageClassFunction || rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate;
+		rhs_storage == StorageClassInput || rhs_storage == StorageClassFunction || rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate;
 	
 	// If threadgroup storage qualifiers are *not* used:
 	// Avoid spvCopy* wrapper functions; Otherwise, unsafe_array<> template cannot be used with that storage qualifier.
-	if (lhs_thread && rhs_thread)
+	if (lhs_thread && rhs_thread && !use_builtin_array)
 	{
 		statement(lhs, " = ", to_expression(rhs_id), ";");
 	}
@@ -8893,17 +8898,17 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		SPIRType::BaseType basetype;
 		uint32_t index;
 		uint32_t plane;
+		uint32_t secondary_index;
 	};
 
 	SmallVector<Resource> resources;
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
 		    !is_hidden_variable(var))
 		{
 			auto &type = get_variable_data_type(var);
-			uint32_t var_id = var.self;
 
 			if (var.storage != StorageClassPushConstant)
 			{
@@ -8923,6 +8928,14 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				}
 			}
 
+			/* UE Change Begin: Emulate texture2D atomic operations */
+			uint32_t secondary_index = 0;
+			if (atomic_vars.find(&var) != atomic_vars.end())
+			{
+				secondary_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
+			}
+			/* UE Change End: Emulate texture2D atomic operations */
+			
 			if (type.basetype == SPIRType::SampledImage)
 			{
 				add_resource_name(var_id);
@@ -8933,12 +8946,12 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 				for (uint32_t i = 0; i < plane_count; i++)
 					resources.push_back({ &var, to_name(var_id), SPIRType::Image,
-					                      get_metal_resource_index(var, SPIRType::Image, i), i });
+					                      get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
 
 				if (type.image.dim != DimBuffer && !constexpr_sampler)
 				{
 					resources.push_back({ &var, to_sampler_expression(var_id), SPIRType::Sampler,
-					                      get_metal_resource_index(var, SPIRType::Sampler), 0 });
+					                      get_metal_resource_index(var, SPIRType::Sampler), 0, 0 });
 				}
 			}
 			else if (!constexpr_sampler)
@@ -8946,7 +8959,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				// constexpr samplers are not declared as resources.
 				add_resource_name(var_id);
 				resources.push_back(
-				    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+				    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0, secondary_index });
 			}
 		}
 	});
@@ -9038,7 +9051,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
             {
                 ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(basetype.image.type), 0);
                 ep_args += "* " + r.name + "_atomic";
-                ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+                ep_args += " [[buffer(" + convert_to_string(r.secondary_index) + ")]]";
             }
             /* UE Change End: Emulate texture2D atomic operations */
                 
@@ -9446,8 +9459,8 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	}
 
 	// If we have already allocated an index, keep using it.
-	if (has_extended_decoration(var.self, resource_decoration))
-		return get_extended_decoration(var.self, resource_decoration);
+//	if (has_extended_decoration(var.self, resource_decoration))
+//		return get_extended_decoration(var.self, resource_decoration);
 
 	// If we did not explicitly remap, allocate bindings on demand.
 	// We cannot reliably use Binding decorations since SPIR-V and MSL's binding models are very different.

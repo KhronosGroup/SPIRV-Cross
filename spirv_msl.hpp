@@ -483,6 +483,9 @@ public:
 	// to use for a particular location. The default is 4 if number of components is not overridden.
 	void set_fragment_output_components(uint32_t location, uint32_t components);
 
+	// Returns false, because Metal does not support combined texture-samplers.
+	virtual bool supports_combined_samplers() const override;
+	
 protected:
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.

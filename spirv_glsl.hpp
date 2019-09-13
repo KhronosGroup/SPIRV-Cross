@@ -211,6 +211,9 @@ public:
 	// The name of the uniform array will be the same as the interface block name.
 	void flatten_buffer_block(uint32_t id);
 
+	// Returns true, because GLSL always supports combined texture-samplers.
+	virtual bool supports_combined_samplers() const override;
+	
 protected:
 	void reset();
 	void emit_function(SPIRFunction &func, const Bitset &return_flags);

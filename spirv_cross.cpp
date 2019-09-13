@@ -2060,19 +2060,6 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	       end(execution.interface_variables);
 }
 
-const CombinedImageSampler* Compiler::find_combined_image_sampler(uint32_t id)
-{
-	auto iter = std::find_if(
-		combined_image_samplers.begin(),
-		combined_image_samplers.end(),
-		[id](const CombinedImageSampler& entry)
-		{
-			return entry.image_id == id;
-		}
-	);
-	return iter != combined_image_samplers.end() ? &(*iter) : nullptr;
-}
-
 void Compiler::CombinedImageSamplerHandler::push_remap_parameters(const SPIRFunction &func, const uint32_t *args,
                                                                   uint32_t length)
 {
@@ -3552,6 +3539,11 @@ Bitset Compiler::get_buffer_block_flags(uint32_t id) const
 	return ir.get_buffer_block_flags(get<SPIRVariable>(id));
 }
 
+bool Compiler::supports_combined_samplers() const
+{
+	return false; // default implementation
+}
+
 bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
 {
 	if (type.basetype == SPIRType::Struct)
@@ -3923,11 +3915,11 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 	comparison_ids.insert(id);
 	
 	/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
-	for (auto it = dependency_hierarchy.begin(); it != dependency_hierarchy.end(); ++it)
+	if (!compiler.supports_combined_samplers())
 	{
-		if (it->second.find(id) != it->second.end())
+		for (auto it = dependency_hierarchy.begin(); it != dependency_hierarchy.end(); ++it)
 		{
-			if (compiler.find_combined_image_sampler(it->first) == nullptr)
+			if (it->second.find(id) != it->second.end())
 				comparison_ids.insert(it->first);
 		}
 	}
@@ -3936,6 +3928,26 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
 }
+
+/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(uint32_t id) const
+{
+	if (compiler.supports_combined_samplers())
+		return false;
+	
+	auto hierarchy_iter = dependency_hierarchy.find(id);
+	if (hierarchy_iter != dependency_hierarchy.end())
+	{
+		for (uint32_t dependent_id : hierarchy_iter->second)
+		{
+			if (comparison_ids.find(dependent_id) != comparison_ids.end())
+				return true;
+		}
+	}
+	
+	return false;
+}
+/* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
@@ -3976,16 +3988,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t image = args[2];
 		uint32_t sampler = args[3];
 
-		bool dependent = false;
-		auto hier = dependency_hierarchy.find(sampler);
-		if (hier != dependency_hierarchy.end())
-		{
-			for (auto it = hier->second.begin(); !dependent && it != hier->second.end(); ++it)
-			{
-				if (compiler.find_combined_image_sampler(*it) == nullptr)
-					dependent = (comparison_ids.find(*it) != comparison_ids.end());
-			}
-		}
+		bool dependent = !compiler.supports_combined_samplers() && (dependent_used_for_comparison(sampler) || dependent_used_for_comparison(image));
 		
 		if (type.image.depth || dref_combined_samplers.count(result_id) != 0 || dependent)
 		{

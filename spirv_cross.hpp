@@ -486,6 +486,9 @@ public:
 	// of direct decorations on the variable itself.
 	// The most common use here is to check if a buffer is readonly or writeonly.
 	Bitset get_buffer_block_flags(uint32_t id) const;
+	
+	// Returns true if the target language supports combined texture-samplers. Returns fasle by default.
+	virtual bool supports_combined_samplers() const;
 
 protected:
 	const uint32_t *stream(const Instruction &instr) const
@@ -682,10 +685,6 @@ protected:
 
 	SmallVector<CombinedImageSampler> combined_image_samplers;
 	
-	// Returns a pointer to the combined image sampler with either image_id *or* sampler_id equal to argument 'id'.
-	// Returns null if there is no such entry.
-	const CombinedImageSampler* find_combined_image_sampler(uint32_t id);
-
 	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
 	{
 		if (variable_remap_callback)
@@ -883,6 +882,11 @@ protected:
 
 		void add_hierarchy_to_comparison_ids(uint32_t ids);
 		bool need_subpass_input = false;
+		
+		/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+		// Returns true if a dependent resource in the dependency hierarchy of the specified image or sampler has been used for comparison.
+		bool dependent_used_for_comparison(uint32_t id) const;
+		/* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 	};
 
 	void build_function_control_flow_graphs_and_analyze();
