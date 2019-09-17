@@ -3525,19 +3525,19 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			
 			statement("template<typename T, int Cols, int Rows>");
-			statement("vec<T, Rows> spvFMulMatrixVector(const matrix<T, Cols, Rows>& m, const vec<T, Cols>& v)");
-			statement("{");
+			statement("vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)");
+			begin_scope();
 			statement("vec<T, Rows> res = vec<T, Rows>(0);");
 			statement("for (uint i = Cols; i > 0; --i)");
-			statement("{");
+			begin_scope();
 			statement("res = fma(m[i - 1], vec<T, Rows>(v[i - 1]), res);");
-			statement("}");
+			end_scope();
 			statement("return res;");
-			statement("}");
+			end_scope();
 			statement("");
 			
 			statement("template<typename T, int LCols, int LRows, int RCols, int RRows>");
-			statement("matrix<T, RCols, LRows> spvFMulMatrixMatrix(const matrix<T, LCols, LRows>& l, const matrix<T, RCols, RRows>& r)");
+			statement("matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T, RCols, RRows> r)");
 			begin_scope();
 			statement("matrix<T, RCols, LRows> res;");
 			statement("for (uint i = 0; i < RCols; i++)");
