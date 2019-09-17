@@ -4767,8 +4767,8 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 		// If any parameter originates from a parameter, we will find it in our argument list.
 		bool global_image = image_itr == end(args);
 		bool global_sampler = sampler_itr == end(args);
-		VariableID iid = global_image ? image_id : VariableID(image_itr - begin(args));
-		VariableID sid = global_sampler ? samp_id : VariableID(sampler_itr - begin(args));
+		VariableID iid = global_image ? image_id : VariableID(uint32_t(image_itr - begin(args)));
+		VariableID sid = global_sampler ? samp_id : VariableID(uint32_t(sampler_itr - begin(args)));
 
 		auto &combined = current_function->combined_parameters;
 		auto itr = find_if(begin(combined), end(combined), [=](const SPIRFunction::CombinedImageSamplerParameter &p) {
