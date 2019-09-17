@@ -523,6 +523,12 @@ protected:
 		/* UE Change Begin: Storage buffer robustness */
 		SPVFuncImplStorageBufferCoords,
 		/* UE Change End: Storage buffer robustness */
+		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+		SPVFuncImplFMul,
+		SPVFuncImplFAdd,
+		SPVFuncImplCubemapTo2DArrayFace,
+		SPVFuncImplUnsafeArray,
+		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
@@ -674,6 +680,7 @@ protected:
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
 	uint32_t ensure_correct_attribute_type(uint32_t type_id, uint32_t location);
 
+	void emit_custom_templates();
 	void emit_custom_functions();
 	void emit_resources();
 	void emit_specialization_constants_and_structs();

@@ -810,12 +810,16 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &base_type = get<SPIRType>(var.basetype);
 		new_type.storage = base_type.storage;
 		string name = to_name(array_id);
-		statement("unsafe_array<" + get_argument_address_space(var) + " " + type_to_glsl(new_type) + "*," + convert_to_string(type.array[0]) + "> " + name + " =");
+		
+		add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
+		
+		statement("spvUnsafeArray<" + get_argument_address_space(var) + " " + type_to_glsl(new_type) + "*, " + convert_to_string(type.array[0]) + "> " + name + " =");
 		begin_scope();
 		for (uint32_t i = 0; i < type.array[0]; ++i)
 			statement(name + "_" + convert_to_string(i) + ",");
 		end_scope_decl();
 		statement_no_indent("");
+		
 		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 		/* UE Change End: Force the use of C style array declaration. */
 	}
@@ -949,6 +953,7 @@ string CompilerMSL::compile()
 		buffer.reset();
 
 		emit_header();
+		emit_custom_templates();
 		emit_specialization_constants_and_structs();
 		emit_resources();
 		emit_custom_functions();
@@ -978,134 +983,6 @@ void CompilerMSL::preprocess_op_codes()
 	{
 		add_header_line("#include <metal_atomic>");
 	}
-	
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	{
-		if (msl_options.invariant_float_math)
-		{
-			add_header_line("template <typename T> T fmul(T l, T r) { return metal::fma(l, r, T(0)); }");
-			add_header_line("template <typename T> T fadd(T l, T r) { return metal::fma(T(1), l, r); }");
-			
-			add_header_line("template <typename T, int Cols, int Rows>");
-			add_header_line("metal::vec<T, Rows> fmul_mv(metal::matrix<T, Cols, Rows> m, metal::vec<T, Cols> v)");
-			add_header_line("{");
-			add_header_line("    metal::vec<T, Rows> res = metal::vec<T, Rows>(0);");
-			add_header_line("    for(uint i = Cols; i > 0; --i)");
-			add_header_line("    {");
-			add_header_line("        res = metal::fma(m[i-1], metal::vec<T, Rows>(v[i-1]), res);");
-			add_header_line("    }");
-			add_header_line("    return res;");
-			add_header_line("}");
-
-			add_header_line("template <typename T, int LCols, int LRows, int RCols, int RRows>");
-			add_header_line("metal::matrix<T, RCols, LRows> fmul_mat(metal::matrix<T, LCols, LRows> l, metal::matrix<T, RCols, RRows> r)");
-			add_header_line("{");
-			add_header_line("    metal::matrix<T, RCols, LRows> res;");
-			add_header_line("    for(uint i = 0; i < RCols; i++)");
-			add_header_line("    {");
-			add_header_line("        metal::vec<T, RCols> tmp(0);");
-			add_header_line("        for(uint j = 0; j < LCols; j++)");
-			add_header_line("        {");
-			add_header_line("            tmp = metal::fma(metal::vec<T, RCols>(r[i][j]),l[j],tmp);");
-			add_header_line("        }");
-			add_header_line("        res[i] = tmp;");
-			add_header_line("    }");
-			add_header_line("    return res;");
-			add_header_line("}");
-		}
-		
-		if (msl_options.emulate_cube_array)
-		{
-			add_header_line("static inline __attribute__((always_inline)) float3 spvCubemapTo2DArrayFace(float3 P)");
-			add_header_line("{");
-			add_header_line("    float3 Coords = metal::abs(P.xyz);");
-			add_header_line("    float CubeFace = 0;");
-			add_header_line("    float ProjectionAxis = 0;");
-			add_header_line("    float u = 0;");
-			add_header_line("    float v = 0;");
-			add_header_line("    if(Coords.x >= Coords.y && Coords.x >= Coords.z)");
-			add_header_line("    {");
-			add_header_line("        CubeFace = P.x >= 0 ? 0 : 1;");
-			add_header_line("        ProjectionAxis = Coords.x;");
-			add_header_line("        u = P.x >= 0 ? -P.z : P.z;");
-			add_header_line("        v = -P.y;");
-			add_header_line("    }");
-			add_header_line("    else if(Coords.y >= Coords.x && Coords.y >= Coords.z)");
-			add_header_line("    {");
-			add_header_line("        CubeFace = P.y >= 0 ? 2 : 3;");
-			add_header_line("        ProjectionAxis = Coords.y;");
-			add_header_line("        u = P.x;");
-			add_header_line("        v = P.y >= 0 ? P.z : -P.z;");
-			add_header_line("    }");
-			add_header_line("    else");
-			add_header_line("    {");
-			add_header_line("        CubeFace = P.z >= 0 ? 4 : 5;");
-			add_header_line("        ProjectionAxis = Coords.z;");
-			add_header_line("        u = P.z >= 0 ? P.x : -P.x;");
-			add_header_line("        v = -P.y;");
-			add_header_line("    }");
-			add_header_line("    u = 0.5 * (u/ProjectionAxis + 1);");
-			add_header_line("    v = 0.5 * (v/ProjectionAxis + 1);");
-			add_header_line("    return float3(u, v, CubeFace);");
-			add_header_line("}");
-		}
-		
-		// UnsafeArray
-		add_header_line("template <typename T, size_t Num>");
-		add_header_line("struct unsafe_array");
-		add_header_line("{");
-		add_header_line("    T __Elements[Num ? Num : 1];");
-		add_header_line("    ");
-		add_header_line("    constexpr size_t size() const thread { return Num; }");
-		add_header_line("    constexpr size_t max_size() const thread { return Num; }");
-		add_header_line("    constexpr bool empty() const thread { return Num == 0; }");
-		add_header_line("    ");
-		add_header_line("    constexpr size_t size() const device { return Num; }");
-		add_header_line("    constexpr size_t max_size() const device { return Num; }");
-		add_header_line("    constexpr bool empty() const device { return Num == 0; }");
-		add_header_line("    ");
-		add_header_line("    constexpr size_t size() const constant { return Num; }");
-		add_header_line("    constexpr size_t max_size() const constant { return Num; }");
-		add_header_line("    constexpr bool empty() const constant { return Num == 0; }");
-		add_header_line("    ");
-		add_header_line("    constexpr size_t size() const threadgroup { return Num; }");
-		add_header_line("    constexpr size_t max_size() const threadgroup { return Num; }");
-		add_header_line("    constexpr bool empty() const threadgroup { return Num == 0; }");
-		add_header_line("    ");
-		add_header_line("    thread T& operator [] (size_t pos) thread");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    constexpr const thread T& operator [] (size_t pos) const thread");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    ");
-		add_header_line("    device T& operator [] (size_t pos) device");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    constexpr const device T& operator [] (size_t pos) const device");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    ");
-		add_header_line("    constexpr const constant T& operator [] (size_t pos) const constant");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    ");
-		add_header_line("    threadgroup T& operator [] (size_t pos) threadgroup");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("};");
-	}
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 
 	// Metal vertex functions that write to resources must disable rasterization and return void.
 	if (preproc.uses_resource_write)
@@ -3329,6 +3206,61 @@ void CompilerMSL::add_typedef_line(const string &line)
 		force_recompile();
 }
 
+/* UE Change Begin: Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared */
+void CompilerMSL::emit_custom_templates()
+{
+	for (const auto& spv_func : spv_function_implementations)
+	{
+		switch (spv_func)
+		{
+			case SPVFuncImplUnsafeArray:
+				statement("template<typename T, size_t Num>");
+				statement("struct spvUnsafeArray");
+				begin_scope();
+				statement("T elements[Num ? Num : 1];");
+				statement("");
+				statement("thread T& operator [] (size_t pos) thread");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("constexpr const thread T& operator [] (size_t pos) const thread");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("");
+				statement("device T& operator [] (size_t pos) device");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("constexpr const device T& operator [] (size_t pos) const device");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("");
+				statement("constexpr const constant T& operator [] (size_t pos) const constant");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("");
+				statement("threadgroup T& operator [] (size_t pos) threadgroup");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("constexpr const threadgroup T& operator [] (size_t pos) const threadgroup");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				end_scope_decl();
+				statement("");
+				break;
+				
+			default:
+				break;
+		}
+	}
+}
+/* UE Change End: Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared */
+
 // Emits any needed custom function bodies.
 void CompilerMSL::emit_custom_functions()
 {
@@ -3369,7 +3301,7 @@ void CompilerMSL::emit_custom_functions()
 		spv_function_implementations.insert(SPVFuncImplGetSwizzle);
 	}
 
-	for (auto &spv_func : spv_function_implementations)
+	for (const auto& spv_func : spv_function_implementations)
 	{
 		switch (spv_func)
 		{
@@ -3506,7 +3438,7 @@ void CompilerMSL::emit_custom_functions()
 					array_arg += "]";
 				}
 
-				statement("inline void spvArrayCopy", function_name_tags[variant], dimensions, "(",
+				statement("static inline __attribute__((always_inline)) void spvArrayCopy", function_name_tags[variant], dimensions, "(",
 				          dst_address_space[variant], " T (&dst)", array_arg, ", ", src_address_space[variant],
 				          " T (&src)", array_arg, ")");
 
@@ -3547,7 +3479,8 @@ void CompilerMSL::emit_custom_functions()
 			else
 			{
 				statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
-				statement("#define spvTexelBufferCoord(tc, Tex) uint2((tc) % (Tex).get_width(), (tc) / (Tex).get_width())");
+				statement("#define spvTexelBufferCoord(tc, tex) uint2((tc) % (tex).get_width(), (tc) / (tex).get_width())");
+				statement("");
 			}
 			/* UE Change End: Add support for Metal 2.1's new texture_buffer type. */
 			break;
@@ -3557,7 +3490,8 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplImage2DAtomicCoords:
 		{
 			statement("// Returns buffer coords corresponding to 2D texture coords for emulating 2D texture atomics");
-			statement("#define spvImage2DAtomicCoord(tc, Tex) (((Tex).get_width() * (tc).x) + (tc).y)");
+			statement("#define spvImage2DAtomicCoord(tc, tex) (((tex).get_width() * (tc).x) + (tc).y)");
+			statement("");
 			break;
 		}
 		/* UE Change End: Emulate texture2D atomic operations */
@@ -3567,10 +3501,97 @@ void CompilerMSL::emit_custom_functions()
 		{
 			statement("// Returns buffer coords clamped to storage buffer size");
 			statement("#define spvStorageBufferCoords(idx, sizes, type, coord) metal::min((coord), (sizes[(idx)*2] / sizeof(type)) - 1)");
+			statement("");
 			break;
 		}
 		/* UE Change End: Storage buffer robustness */
 
+		/* UE Change Begin */
+		case SPVFuncImplFAdd:
+			statement("template<typename T>");
+			statement("T spvFAdd(T l, T r)");
+			begin_scope();
+			statement("return fma(T(1), l, r);");
+			end_scope();
+			statement("");
+			break;
+			
+		case SPVFuncImplFMul:
+			statement("template<typename T>");
+			statement("T spvFMul(T l, T r)");
+			begin_scope();
+			statement("return fma(l, r, T(0));");
+			end_scope();
+			statement("");
+			
+			statement("template<typename T, int Cols, int Rows>");
+			statement("vec<T, Rows> spvFMulMatrixVector(const matrix<T, Cols, Rows>& m, const vec<T, Cols>& v)");
+			statement("{");
+			statement("vec<T, Rows> res = vec<T, Rows>(0);");
+			statement("for (uint i = Cols; i > 0; --i)");
+			statement("{");
+			statement("res = fma(m[i - 1], vec<T, Rows>(v[i - 1]), res);");
+			statement("}");
+			statement("return res;");
+			statement("}");
+			statement("");
+			
+			statement("template<typename T, int LCols, int LRows, int RCols, int RRows>");
+			statement("matrix<T, RCols, LRows> spvFMulMatrixMatrix(const matrix<T, LCols, LRows>& l, const matrix<T, RCols, RRows>& r)");
+			begin_scope();
+			statement("matrix<T, RCols, LRows> res;");
+			statement("for (uint i = 0; i < RCols; i++)");
+			begin_scope();
+			statement("vec<T, RCols> tmp(0);");
+			statement("for (uint j = 0; j < LCols; j++)");
+			begin_scope();
+			statement("tmp = fma(vec<T, RCols>(r[i][j]), l[j], tmp);");
+			end_scope();
+			statement("res[i] = tmp;");
+			end_scope();
+			statement("return res;");
+			end_scope();
+			statement("");
+			break;
+			
+		case SPVFuncImplCubemapTo2DArrayFace:
+			statement("static inline __attribute__((always_inline))");
+			statement("float3 spvCubemapTo2DArrayFace(float3 P)");
+			begin_scope();
+			statement("float3 Coords = abs(P.xyz);");
+			statement("float CubeFace = 0;");
+			statement("float ProjectionAxis = 0;");
+			statement("float u = 0;");
+			statement("float v = 0;");
+			statement("if (Coords.x >= Coords.y && Coords.x >= Coords.z)");
+			begin_scope();
+			statement("CubeFace = P.x >= 0 ? 0 : 1;");
+			statement("ProjectionAxis = Coords.x;");
+			statement("u = P.x >= 0 ? -P.z : P.z;");
+			statement("v = -P.y;");
+			end_scope();
+			statement("else if (Coords.y >= Coords.x && Coords.y >= Coords.z)");
+			begin_scope();
+			statement("CubeFace = P.y >= 0 ? 2 : 3;");
+			statement("ProjectionAxis = Coords.y;");
+			statement("u = P.x;");
+			statement("v = P.y >= 0 ? P.z : -P.z;");
+			end_scope();
+			statement("else");
+			begin_scope();
+			statement("CubeFace = P.z >= 0 ? 4 : 5;");
+			statement("ProjectionAxis = Coords.z;");
+			statement("u = P.z >= 0 ? P.x : -P.x;");
+			statement("v = -P.y;");
+			end_scope();
+			statement("u = 0.5 * (u/ProjectionAxis + 1);");
+			statement("v = 0.5 * (v/ProjectionAxis + 1);");
+			statement("return float3(u, v, CubeFace);");
+			end_scope();
+			statement("");
+			break;
+		/* UE Change End */
+				
 		case SPVFuncImplInverse4x4:
 			statement("// Returns the determinant of a 2x2 matrix.");
 			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
@@ -5435,14 +5456,14 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			
 	case OpFMul:
 		if (msl_options.invariant_float_math)
-			MSL_BFOP(fmul);
+			MSL_BFOP(spvFMul);
 		else
 			MSL_BOP(*);
 		break;
 			
 	case OpFAdd:
 		if (msl_options.invariant_float_math)
-			MSL_BFOP(fadd);
+			MSL_BFOP(spvFAdd);
 		else
 			MSL_BOP(+);
 		break;
@@ -5891,7 +5912,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				  (is_matrix(*type_a) && is_vector(*type_b)) ||
 				  (is_vector(*type_a) && is_matrix(*type_b)) ) )
 			{
-				expr += "fmul_mat(";
+				expr += "spvFMulMatrixMatrix(";
 				expr += to_enclosed_expression(a);
 				expr += ", ";
 				expr += to_extract_component_expression(b, col);
@@ -5932,7 +5953,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			{
 				if (msl_options.invariant_float_math)
 				{
-					expr = join("fmul_mv(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
+					expr = join("spvFMulMatrixVector(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
 								to_enclosed_unpacked_expression(ops[2]), ")");
 				}
 				else
@@ -5949,7 +5970,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			inherit_expression_dependencies(ops[1], ops[3]);
 		}
 		else if (opcode == OpMatrixTimesVector && msl_options.invariant_float_math)
-			MSL_BFOP(fmul_mv);
+			MSL_BFOP(spvFMulMatrixVector);
 		else
 			MSL_BOP(*);
 		break;
@@ -5970,7 +5991,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			std::string expr;
 			if (msl_options.invariant_float_math)
 			{
-				expr = join("fmul_mat(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
+				expr = join("spvFMulMatrixMatrix(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
 							enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
 			}
 			else
@@ -5988,7 +6009,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			inherit_expression_dependencies(ops[1], ops[3]);
 		}
 		else if (msl_options.invariant_float_math)
-			MSL_BFOP(fmul_mat);
+			MSL_BFOP(spvFMulMatrixMatrix);
 		else
 			MSL_BOP(*);
 		
@@ -6441,7 +6462,7 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 		rhs_storage == StorageClassInput || rhs_storage == StorageClassFunction || rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate;
 	
 	// If threadgroup storage qualifiers are *not* used:
-	// Avoid spvCopy* wrapper functions; Otherwise, unsafe_array<> template cannot be used with that storage qualifier.
+	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
 	if (lhs_thread && rhs_thread && !use_builtin_array)
 	{
 		statement(lhs, " = ", to_expression(rhs_id), ";");
@@ -6496,11 +6517,11 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 		else
 			SPIRV_CROSS_THROW("Unknown storage class used for copying arrays.");
 
-		// Pass internal array of unsafe_array<> into wrapper functions
+		// Pass internal array of spvUnsafeArray<> into wrapper functions
 		if (lhs_thread)
-			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".__Elements, ", to_expression(rhs_id), ");");
+			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".elements, ", to_expression(rhs_id), ");");
 		else if (rhs_thread)
-			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ".__Elements);");
+			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ".elements);");
 		else
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
 	}
@@ -7440,6 +7461,8 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ")";
 		else
 			farg_str += ", uint(spvCubemapTo2DArrayFace(" + tex_coords + ").z) + (uint(" + to_extract_component_expression(coord, 2) + ") * 6u)";
+		
+		add_spv_func_and_recompile(SPVFuncImplCubemapTo2DArrayFace);
 	}
 	else
 	{
@@ -9726,11 +9749,13 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)), arg.id);
 	else if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) && is_array(type))
 	{
+		add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
+		
 		auto new_type = type;
 		new_type.array.clear();
 		const auto &base_type = get<SPIRType>(var.basetype);
 		new_type.storage = base_type.storage;
-		decl += join("unsafe_array<" + address_space + " " + type_to_glsl(new_type) + "*," + convert_to_string(type.array[0]) + ">");
+		decl += join("spvUnsafeArray<" + address_space + " " + type_to_glsl(new_type) + "*, " + convert_to_string(type.array[0]) + ">");
 		
 		address_space = "thread";
 		if (msl_options.argument_buffers)
@@ -10231,13 +10256,13 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			new_type.pointer = true;
 			new_type.array.clear();
 			
-			type_name = "unsafe_array<";
+			add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
+			
+			type_name = "spvUnsafeArray<";
 			type_name += join(get_type_address_space(type, id), " ", type_to_glsl(new_type, id));
-			for (auto i = uint32_t(type.array.size()); i; i--)
+			for (auto i = uint32_t(type.array.size()); i > 0; i--)
 			{
-				type_name += ",";
-				type_name += to_array_size(type, i - 1);
-				type_name += ">";
+				type_name += join(", ", to_array_size(type, i - 1), ">");
 			}
 			return type_name;
 		}
@@ -10357,15 +10382,16 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		}
 		else if (options.flatten_multidimensional_arrays)
 		{
-			string res = "unsafe_array<";
-			res += type_name;
-			res += ",";
+			add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
+			string res = join("spvUnsafeArray<", type_name, ", ");
+			
 			for (auto i = uint32_t(type.array.size()); i; i--)
 			{
 				res += enclose_expression(to_array_size(type, i - 1));
 				if (i > 1)
 					res += " * ";
 			}
+			
 			res += ">";
 			return res;
 		}
@@ -10381,12 +10407,14 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 									  "options.flatten_multidimensional_arrays to true.");
 			}
 			
+			add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
 			string res;
 			string sizes;
+			
 			for (auto i = uint32_t(type.array.size()); i; i--)
 			{
-				res += "unsafe_array<";
-				sizes += ",";
+				res += "spvUnsafeArray<";
+				sizes += ", ";
 				sizes += to_array_size(type, i - 1);
 				sizes += ">";
 			}
@@ -12334,6 +12362,26 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 
 	case OpFMod:
 		return SPVFuncImplMod;
+			
+	/* UE Change Begin */
+	case OpFAdd:
+		if (compiler.msl_options.invariant_float_math)
+		{
+			return SPVFuncImplFAdd;
+		}
+		break;
+			
+	case OpFMul:
+	case OpOuterProduct:
+	case OpMatrixTimesVector:
+	case OpVectorTimesMatrix:
+	case OpMatrixTimesMatrix:
+		if (compiler.msl_options.invariant_float_math)
+		{
+			return SPVFuncImplFMul;
+		}
+		break;
+	/* UE Change End */
 
 	case OpFunctionCall:
 	{
@@ -12348,6 +12396,11 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
         /* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 		break;
 	}
+
+	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+	case OpTypeArray:
+		return SPVFuncImplUnsafeArray;
+	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 
 	/* UE Change Begin: Emulate texture2D atomic operations */
 	case OpAtomicExchange:
