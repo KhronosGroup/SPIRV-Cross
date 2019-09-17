@@ -41,6 +41,9 @@ option(SPIRV_CROSS_FORCE_STL_TYPES "Force use of STL types instead of STL replac
 
 option(SPIRV_CROSS_SKIP_INSTALL "Skips installation targets." OFF)
 
+option(SPIRV_CROSS_WERROR "Fail build on warnings." OFF)
+option(SPIRV_CROSS_MISC_WARNINGS "Misc warnings useful for Travis runs." OFF)
+
 if(${CMAKE_GENERATOR} MATCHES "Makefile")
 	if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
 		message(FATAL_ERROR "Build out of tree to avoid overwriting Makefile")
@@ -79,7 +82,15 @@ if(SPIRV_CROSS_FORCE_STL_TYPES)
 endif()
 
 if (CMAKE_COMPILER_IS_GNUCXX OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
-	set(spirv-compiler-options ${spirv-compiler-options} -Wall -Wextra -Werror -Wshadow)
+	set(spirv-compiler-options ${spirv-compiler-options} -Wall -Wextra -Wshadow)
+	if (SPIRV_CROSS_MISC_WARNINGS)
+		if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
+			set(spirv-compiler-options ${spirv-compiler-options} -Wshorten-64-to-32)
+		endif()
+	endif()
+	if (SPIRV_CROSS_WERROR)
+		set(spirv-compiler-options ${spirv-compiler-options} -Werror)
+	endif()
 
 	if (SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
 		set(spirv-compiler-options ${spirv-compiler-options} -fno-exceptions)
