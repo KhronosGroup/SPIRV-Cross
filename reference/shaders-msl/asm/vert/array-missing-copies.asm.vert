@@ -1,63 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-template <typename T, size_t Num>
-struct unsafe_array
-{
-    T __Elements[Num ? Num : 1];
-    
-    constexpr size_t size() const thread { return Num; }
-    constexpr size_t max_size() const thread { return Num; }
-    constexpr bool empty() const thread { return Num == 0; }
-    
-    constexpr size_t size() const device { return Num; }
-    constexpr size_t max_size() const device { return Num; }
-    constexpr bool empty() const device { return Num == 0; }
-    
-    constexpr size_t size() const constant { return Num; }
-    constexpr size_t max_size() const constant { return Num; }
-    constexpr bool empty() const constant { return Num == 0; }
-    
-    constexpr size_t size() const threadgroup { return Num; }
-    constexpr size_t max_size() const threadgroup { return Num; }
-    constexpr bool empty() const threadgroup { return Num == 0; }
-    
-    thread T &operator[](size_t pos) thread
-    {
-        return __Elements[pos];
-    }
-    constexpr const thread T &operator[](size_t pos) const thread
-    {
-        return __Elements[pos];
-    }
-    
-    device T &operator[](size_t pos) device
-    {
-        return __Elements[pos];
-    }
-    constexpr const device T &operator[](size_t pos) const device
-    {
-        return __Elements[pos];
-    }
-    
-    constexpr const constant T &operator[](size_t pos) const constant
-    {
-        return __Elements[pos];
-    }
-    
-    threadgroup T &operator[](size_t pos) threadgroup
-    {
-        return __Elements[pos];
-    }
-    constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-    {
-        return __Elements[pos];
-    }
-};
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct type_View
 {
@@ -156,8 +142,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2204;
-    unsafe_array<float4,2> View_TranslucencyLightingVolumeMin;
-    unsafe_array<float4,2> View_TranslucencyLightingVolumeInvSize;
+    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeMin;
+    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeInvSize;
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -197,7 +183,7 @@ struct type_View
     float PrePadding_View_2488;
     float PrePadding_View_2492;
     float4 View_SkyLightColor;
-    unsafe_array<float4,7> View_SkyIrradianceEnvironmentMap;
+    spvUnsafeArray<float4, 7> View_SkyIrradianceEnvironmentMap;
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -208,8 +194,8 @@ struct type_View
     float PrePadding_View_2652;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    unsafe_array<float4,4> View_GlobalVolumeCenterAndExtent;
-    unsafe_array<float4,4> View_GlobalVolumeWorldToUVAddAndMul;
+    spvUnsafeArray<float4, 4> View_GlobalVolumeCenterAndExtent;
+    spvUnsafeArray<float4, 4> View_GlobalVolumeWorldToUVAddAndMul;
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -264,8 +250,8 @@ struct type_MobileBasePass
     float2 MobileBasePass_PlanarReflection_PlanarReflectionParameters2;
     float PrePadding_MobileBasePass_PlanarReflection_296;
     float PrePadding_MobileBasePass_PlanarReflection_300;
-    unsafe_array<float4x4,2> MobileBasePass_PlanarReflection_ProjectionWithExtraFOV;
-    unsafe_array<float4,2> MobileBasePass_PlanarReflection_PlanarReflectionScreenScaleBias;
+    spvUnsafeArray<float4x4, 2> MobileBasePass_PlanarReflection_ProjectionWithExtraFOV;
+    spvUnsafeArray<float4, 2> MobileBasePass_PlanarReflection_PlanarReflectionScreenScaleBias;
     float2 MobileBasePass_PlanarReflection_PlanarReflectionScreenBound;
     uint MobileBasePass_PlanarReflection_bIsStereo;
 };
@@ -312,7 +298,7 @@ struct type_Globals
     float4 LodBias;
     float4 LodValues;
     float4 SectionLods;
-    unsafe_array<float4,4> NeighborSectionLod;
+    spvUnsafeArray<float4, 4> NeighborSectionLod;
 };
 
 struct main0_out
@@ -335,10 +321,10 @@ struct main0_in
 vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)]], constant type_MobileBasePass& MobileBasePass [[buffer(1)]], constant type_Primitive& Primitive [[buffer(2)]], constant type_LandscapeParameters& LandscapeParameters [[buffer(3)]], constant type_Globals& _Globals [[buffer(4)]])
 {
     main0_out out = {};
-    unsafe_array<float4,2> in_var_ATTRIBUTE1 = {};
+    spvUnsafeArray<float4, 2> in_var_ATTRIBUTE1 = {};
     in_var_ATTRIBUTE1[0] = in.in_var_ATTRIBUTE1_0;
     in_var_ATTRIBUTE1[1] = in.in_var_ATTRIBUTE1_1;
-    unsafe_array<float4,1> _97;
+    spvUnsafeArray<float4, 1> _97;
     for (int _107 = 0; _107 < 1; )
     {
         _97[_107] = float4(0.0);

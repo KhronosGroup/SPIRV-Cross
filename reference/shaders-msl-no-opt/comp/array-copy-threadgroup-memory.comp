@@ -1,14 +1,54 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(8u, 1u, 1u);
 
 template<typename T, uint A>
-inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
+static inline __attribute__((always_inline)) void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -17,7 +57,7 @@ inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&sr
 }
 
 template<typename T, uint A>
-inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
+static inline __attribute__((always_inline)) void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -26,7 +66,7 @@ inline void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], cons
 }
 
 template<typename T, uint A>
-inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
+static inline __attribute__((always_inline)) void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -35,7 +75,7 @@ inline void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&s
 }
 
 template<typename T, uint A>
-inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
+static inline __attribute__((always_inline)) void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -44,7 +84,7 @@ inline void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread 
 }
 
 template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
+static inline __attribute__((always_inline)) void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -53,7 +93,7 @@ inline void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup 
 }
 
 template<typename T, uint A>
-inline void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
+static inline __attribute__((always_inline)) void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -65,15 +105,15 @@ kernel void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
 {
     threadgroup float shared_group[8][8];
     threadgroup float shared_group_alt[8][8];
-    float blob[8];
+    spvUnsafeArray<float, 8> blob;
     for (int i = 0; i < 8; i++)
     {
         blob[i] = float(i);
     }
-    spvArrayCopyFromStackToThreadGroup1(shared_group[gl_LocalInvocationIndex], blob);
+    spvArrayCopyFromStackToThreadGroup1(shared_group[gl_LocalInvocationIndex], blob.elements);
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    float copied_blob[8];
-    spvArrayCopyFromThreadGroupToStack1(copied_blob, shared_group[gl_LocalInvocationIndex ^ 1u]);
+    spvUnsafeArray<float, 8> copied_blob;
+    spvArrayCopyFromThreadGroupToStack1(copied_blob.elements, shared_group[gl_LocalInvocationIndex ^ 1u]);
     spvArrayCopyFromThreadGroupToThreadGroup1(shared_group_alt[gl_LocalInvocationIndex], shared_group[gl_LocalInvocationIndex]);
 }
 

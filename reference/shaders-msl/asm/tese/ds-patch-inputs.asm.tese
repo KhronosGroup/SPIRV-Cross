@@ -1,63 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-template <typename T, size_t Num>
-struct unsafe_array
-{
-    T __Elements[Num ? Num : 1];
-    
-    constexpr size_t size() const thread { return Num; }
-    constexpr size_t max_size() const thread { return Num; }
-    constexpr bool empty() const thread { return Num == 0; }
-    
-    constexpr size_t size() const device { return Num; }
-    constexpr size_t max_size() const device { return Num; }
-    constexpr bool empty() const device { return Num == 0; }
-    
-    constexpr size_t size() const constant { return Num; }
-    constexpr size_t max_size() const constant { return Num; }
-    constexpr bool empty() const constant { return Num == 0; }
-    
-    constexpr size_t size() const threadgroup { return Num; }
-    constexpr size_t max_size() const threadgroup { return Num; }
-    constexpr bool empty() const threadgroup { return Num == 0; }
-    
-    thread T &operator[](size_t pos) thread
-    {
-        return __Elements[pos];
-    }
-    constexpr const thread T &operator[](size_t pos) const thread
-    {
-        return __Elements[pos];
-    }
-    
-    device T &operator[](size_t pos) device
-    {
-        return __Elements[pos];
-    }
-    constexpr const device T &operator[](size_t pos) const device
-    {
-        return __Elements[pos];
-    }
-    
-    constexpr const constant T &operator[](size_t pos) const constant
-    {
-        return __Elements[pos];
-    }
-    
-    threadgroup T &operator[](size_t pos) threadgroup
-    {
-        return __Elements[pos];
-    }
-    constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-    {
-        return __Elements[pos];
-    }
-};
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct type_ShadowDepthPass
 {
@@ -156,8 +142,8 @@ struct type_ShadowDepthPass
     float PrePadding_ShadowDepthPass_612;
     float PrePadding_ShadowDepthPass_616;
     float PrePadding_ShadowDepthPass_620;
-    unsafe_array<float4x4,6> ShadowDepthPass_ShadowViewProjectionMatrices;
-    unsafe_array<float4x4,6> ShadowDepthPass_ShadowViewMatrices;
+    spvUnsafeArray<float4x4, 6> ShadowDepthPass_ShadowViewProjectionMatrices;
+    spvUnsafeArray<float4x4, 6> ShadowDepthPass_ShadowViewMatrices;
 };
 
 constant float4 _90 = {};
@@ -189,7 +175,7 @@ struct main0_patchIn
 [[ patch(triangle, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant type_ShadowDepthPass& ShadowDepthPass [[buffer(0)]], float3 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    unsafe_array<unsafe_array<float4,3>,3> in_var_PN_POSITION = {};
+    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> in_var_PN_POSITION = {};
     float _119 = gl_TessCoord.x * gl_TessCoord.x;
     float _120 = gl_TessCoord.y * gl_TessCoord.y;
     float _121 = gl_TessCoord.z * gl_TessCoord.z;
@@ -199,7 +185,7 @@ struct main0_patchIn
     float4 _139 = float4(_119 * 3.0);
     float4 _143 = float4(_120 * 3.0);
     float4 _150 = float4(_121 * 3.0);
-    float4 _164 = ((((((((((unsafe_array<float4,3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[0] * float4(_119)) * _127) + ((unsafe_array<float4,3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[0] * float4(_120)) * _131)) + ((unsafe_array<float4,3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[0] * float4(_121)) * _136)) + ((unsafe_array<float4,3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[1] * _139) * _131)) + ((unsafe_array<float4,3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[2] * _143) * _127)) + ((unsafe_array<float4,3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[1] * _143) * _136)) + ((unsafe_array<float4,3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[2] * _150) * _131)) + ((unsafe_array<float4,3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[1] * _150) * _127)) + ((unsafe_array<float4,3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[2] * _139) * _136)) + ((((patchIn.in_var_PN_POSITION9 * float4(6.0)) * _136) * _127) * _131);
+    float4 _164 = (((((((((((spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[0]) * float4(_119)) * _127) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[0]) * float4(_120)) * _131)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[0]) * float4(_121)) * _136)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[1]) * _139) * _131)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[2]) * _143) * _127)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[1]) * _143) * _136)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[2]) * _150) * _131)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[1]) * _150) * _127)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[2]) * _139) * _136)) + ((((patchIn.in_var_PN_POSITION9 * float4(6.0)) * _136) * _127) * _131);
     float3 _179 = ((patchIn.gl_in[0].in_var_TEXCOORD10_centroid.xyz * float3(gl_TessCoord.x)) + (patchIn.gl_in[1].in_var_TEXCOORD10_centroid.xyz * float3(gl_TessCoord.y))).xyz + (patchIn.gl_in[2].in_var_TEXCOORD10_centroid.xyz * float3(gl_TessCoord.z));
     float4 _182 = ((patchIn.gl_in[0].in_var_TEXCOORD11_centroid * _127) + (patchIn.gl_in[1].in_var_TEXCOORD11_centroid * _131)) + (patchIn.gl_in[2].in_var_TEXCOORD11_centroid * _136);
     float4x4 _92 = ShadowDepthPass.ShadowDepthPass_ViewMatrix;

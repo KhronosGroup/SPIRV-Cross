@@ -1,11 +1,53 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
 struct S0
 {
-    float2 a[1];
+    spvUnsafeArray<float2, 1> a;
     float b;
     char _m0_final_padding[4];
 };
@@ -18,7 +60,7 @@ struct S1
 
 struct S2
 {
-    float3 a[1];
+    spvUnsafeArray<float3, 1> a;
     float b;
     char _m0_final_padding[12];
 };
@@ -36,37 +78,37 @@ struct S4
 
 struct Content
 {
-    S0 m0s[1];
-    S1 m1s[1];
-    S2 m2s[1];
+    spvUnsafeArray<S0, 1> m0s;
+    spvUnsafeArray<S1, 1> m1s;
+    spvUnsafeArray<S2, 1> m2s;
     S0 m0;
     S1 m1;
     S2 m2;
     S3 m3;
     float m4;
-    S4 m3s[8];
+    spvUnsafeArray<S4, 8> m3s;
     char _m0_final_padding[8];
 };
 
 struct SSBO1
 {
     Content content;
-    Content content1[2];
+    spvUnsafeArray<Content, 2> content1;
     Content content2;
     float2x2 m0;
     float2x2 m1;
-    float2x3 m2[4];
+    spvUnsafeArray<float2x3, 4> m2;
     float3x2 m3;
     float2x2 m4;
-    float2x2 m5[9];
-    float3x2 m6[4][2];
+    spvUnsafeArray<float2x2, 9> m5;
+    spvUnsafeArray<spvUnsafeArray<float3x2, 4>, 2> m6;
     float2x3 m7;
-    float array[1];
+    spvUnsafeArray<float, 1> array;
 };
 
 struct S0_1
 {
-    float4 a[1];
+    spvUnsafeArray<float4, 1> a;
     float b;
     char _m0_final_padding[12];
 };
@@ -79,7 +121,7 @@ struct S1_1
 
 struct S2_1
 {
-    float3 a[1];
+    spvUnsafeArray<float3, 1> a;
     float b;
     char _m0_final_padding[12];
 };
@@ -98,24 +140,24 @@ struct S4_1
 
 struct Content_1
 {
-    S0_1 m0s[1];
-    S1_1 m1s[1];
-    S2_1 m2s[1];
+    spvUnsafeArray<S0_1, 1> m0s;
+    spvUnsafeArray<S1_1, 1> m1s;
+    spvUnsafeArray<S2_1, 1> m2s;
     S0_1 m0;
     S1_1 m1;
     S2_1 m2;
     S3_1 m3;
     float m4;
     char _m8_pad[8];
-    S4_1 m3s[8];
+    spvUnsafeArray<S4_1, 8> m3s;
 };
 
 struct SSBO0
 {
     Content_1 content;
-    Content_1 content1[2];
+    spvUnsafeArray<Content_1, 2> content1;
     Content_1 content2;
-    float4 array[1];
+    spvUnsafeArray<float4, 1> array;
 };
 
 kernel void main0(device SSBO1& ssbo_430 [[buffer(0)]], device SSBO0& ssbo_140 [[buffer(1)]])

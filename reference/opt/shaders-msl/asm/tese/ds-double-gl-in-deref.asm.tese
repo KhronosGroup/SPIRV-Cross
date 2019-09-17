@@ -1,63 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-template <typename T, size_t Num>
-struct unsafe_array
-{
-    T __Elements[Num ? Num : 1];
-    
-    constexpr size_t size() const thread { return Num; }
-    constexpr size_t max_size() const thread { return Num; }
-    constexpr bool empty() const thread { return Num == 0; }
-    
-    constexpr size_t size() const device { return Num; }
-    constexpr size_t max_size() const device { return Num; }
-    constexpr bool empty() const device { return Num == 0; }
-    
-    constexpr size_t size() const constant { return Num; }
-    constexpr size_t max_size() const constant { return Num; }
-    constexpr bool empty() const constant { return Num == 0; }
-    
-    constexpr size_t size() const threadgroup { return Num; }
-    constexpr size_t max_size() const threadgroup { return Num; }
-    constexpr bool empty() const threadgroup { return Num == 0; }
-    
-    thread T &operator[](size_t pos) thread
-    {
-        return __Elements[pos];
-    }
-    constexpr const thread T &operator[](size_t pos) const thread
-    {
-        return __Elements[pos];
-    }
-    
-    device T &operator[](size_t pos) device
-    {
-        return __Elements[pos];
-    }
-    constexpr const device T &operator[](size_t pos) const device
-    {
-        return __Elements[pos];
-    }
-    
-    constexpr const constant T &operator[](size_t pos) const constant
-    {
-        return __Elements[pos];
-    }
-    
-    threadgroup T &operator[](size_t pos) threadgroup
-    {
-        return __Elements[pos];
-    }
-    constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-    {
-        return __Elements[pos];
-    }
-};
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct type_View
 {
@@ -157,8 +143,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2268;
-    unsafe_array<float4,2> View_TranslucencyLightingVolumeMin;
-    unsafe_array<float4,2> View_TranslucencyLightingVolumeInvSize;
+    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeMin;
+    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeInvSize;
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -203,7 +189,7 @@ struct type_View
     float PrePadding_View_2584;
     float PrePadding_View_2588;
     float4 View_SkyLightColor;
-    unsafe_array<float4,7> View_SkyIrradianceEnvironmentMap;
+    spvUnsafeArray<float4, 7> View_SkyIrradianceEnvironmentMap;
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -214,8 +200,8 @@ struct type_View
     float PrePadding_View_2748;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    unsafe_array<float4,4> View_GlobalVolumeCenterAndExtent;
-    unsafe_array<float4,4> View_GlobalVolumeWorldToUVAddAndMul;
+    spvUnsafeArray<float4, 4> View_GlobalVolumeCenterAndExtent;
+    spvUnsafeArray<float4, 4> View_GlobalVolumeWorldToUVAddAndMul;
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -339,8 +325,8 @@ struct type_ShadowDepthPass
     float PrePadding_ShadowDepthPass_612;
     float PrePadding_ShadowDepthPass_616;
     float PrePadding_ShadowDepthPass_620;
-    unsafe_array<float4x4,6> ShadowDepthPass_ShadowViewProjectionMatrices;
-    unsafe_array<float4x4,6> ShadowDepthPass_ShadowViewMatrices;
+    spvUnsafeArray<float4x4, 6> ShadowDepthPass_ShadowViewProjectionMatrices;
+    spvUnsafeArray<float4x4, 6> ShadowDepthPass_ShadowViewMatrices;
 };
 
 constant float4 _113 = {};
@@ -380,9 +366,9 @@ struct main0_patchIn
 [[ patch(triangle, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant type_View& View [[buffer(0)]], constant type_ShadowDepthPass& ShadowDepthPass [[buffer(1)]], texture2d<float> Material_Texture2D_3 [[texture(0)]], sampler Material_Texture2D_3Sampler [[sampler(0)]], float3 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    unsafe_array<float4,1> out_var_TEXCOORD0 = {};
-    unsafe_array<unsafe_array<float4,3>,1> in_var_TEXCOORD0 = {};
-    unsafe_array<unsafe_array<float4,3>,3> in_var_PN_POSITION = {};
+    spvUnsafeArray<float4, 1> out_var_TEXCOORD0 = {};
+    spvUnsafeArray<spvUnsafeArray<float4, 3>, 1> in_var_TEXCOORD0 = {};
+    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> in_var_PN_POSITION = {};
     float _157 = gl_TessCoord.x * gl_TessCoord.x;
     float _158 = gl_TessCoord.y * gl_TessCoord.y;
     float _159 = gl_TessCoord.z * gl_TessCoord.z;
@@ -392,12 +378,12 @@ struct main0_patchIn
     float4 _177 = float4(_157 * 3.0);
     float4 _181 = float4(_158 * 3.0);
     float4 _188 = float4(_159 * 3.0);
-    float4 _202 = ((((((((((unsafe_array<float4,3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[0] * float4(_157)) * _165) + ((unsafe_array<float4,3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[0] * float4(_158)) * _169)) + ((unsafe_array<float4,3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[0] * float4(_159)) * _174)) + ((unsafe_array<float4,3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[1] * _177) * _169)) + ((unsafe_array<float4,3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[2] * _181) * _165)) + ((unsafe_array<float4,3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[1] * _181) * _174)) + ((unsafe_array<float4,3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[2] * _188) * _169)) + ((unsafe_array<float4,3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[1] * _188) * _165)) + ((unsafe_array<float4,3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[2] * _177) * _174)) + ((((patchIn.in_var_PN_POSITION9 * float4(6.0)) * _174) * _165) * _169);
+    float4 _202 = (((((((((((spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[0]) * float4(_157)) * _165) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[0]) * float4(_158)) * _169)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[0]) * float4(_159)) * _174)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[1]) * _177) * _169)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 })[2]) * _181) * _165)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[1]) * _181) * _174)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 })[2]) * _188) * _169)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[1]) * _188) * _165)) + (((spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 })[2]) * _177) * _174)) + ((((patchIn.in_var_PN_POSITION9 * float4(6.0)) * _174) * _165) * _169);
     float3 _226 = ((patchIn.gl_in[0].in_var_TEXCOORD10_centroid.xyz * float3(gl_TessCoord.x)) + (patchIn.gl_in[1].in_var_TEXCOORD10_centroid.xyz * float3(gl_TessCoord.y))).xyz + (patchIn.gl_in[2].in_var_TEXCOORD10_centroid.xyz * float3(gl_TessCoord.z));
     float4 _229 = ((patchIn.gl_in[0].in_var_TEXCOORD11_centroid * _165) + (patchIn.gl_in[1].in_var_TEXCOORD11_centroid * _169)) + (patchIn.gl_in[2].in_var_TEXCOORD11_centroid * _174);
     float4 _231 = ((patchIn.gl_in[0].in_var_COLOR0 * _165) + (patchIn.gl_in[1].in_var_COLOR0 * _169)) + (patchIn.gl_in[2].in_var_COLOR0 * _174);
-    float4 _233 = ((unsafe_array<float4,1>({ patchIn.gl_in[0].in_var_TEXCOORD0_0 })[0] * _165) + (unsafe_array<float4,1>({ patchIn.gl_in[1].in_var_TEXCOORD0_0 })[0] * _169)) + (unsafe_array<float4,1>({ patchIn.gl_in[2].in_var_TEXCOORD0_0 })[0] * _174);
-    unsafe_array<float4,1> _234 = { _233 };
+    float4 _233 = (((spvUnsafeArray<float4, 1>({ patchIn.gl_in[0].in_var_TEXCOORD0_0 })[0]) * _165) + ((spvUnsafeArray<float4, 1>({ patchIn.gl_in[1].in_var_TEXCOORD0_0 })[0]) * _169)) + ((spvUnsafeArray<float4, 1>({ patchIn.gl_in[2].in_var_TEXCOORD0_0 })[0]) * _174);
+    spvUnsafeArray<float4, 1> _234 = { _233 };
     float3 _236 = _229.xyz;
     float3 _264 = _202.xyz + (((float3((Material_Texture2D_3.sample(Material_Texture2D_3Sampler, (float2(View.View_GameTime * 0.20000000298023223876953125, View.View_GameTime * (-0.699999988079071044921875)) + (_233.zw * float2(1.0, 2.0))), level(-1.0)).x * 10.0) * (1.0 - _231.x)) * _236) * float3(0.5)) * float3(((patchIn.gl_in[0].in_var_PN_WorldDisplacementMultiplier * gl_TessCoord.x) + (patchIn.gl_in[1].in_var_PN_WorldDisplacementMultiplier * gl_TessCoord.y)) + (patchIn.gl_in[2].in_var_PN_WorldDisplacementMultiplier * gl_TessCoord.z)));
     float4 _270 = ShadowDepthPass.ShadowDepthPass_ProjectionMatrix * float4(_264.x, _264.y, _264.z, _202.w);

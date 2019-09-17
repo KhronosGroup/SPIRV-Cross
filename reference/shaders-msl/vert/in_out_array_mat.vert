@@ -4,62 +4,46 @@
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-	
-template <typename T, size_t Num>
-struct unsafe_array
-{
-	T __Elements[Num ? Num : 1];
-	
-	constexpr size_t size() const thread { return Num; }
-	constexpr size_t max_size() const thread { return Num; }
-	constexpr bool empty() const thread { return Num == 0; }
-	
-	constexpr size_t size() const device { return Num; }
-	constexpr size_t max_size() const device { return Num; }
-	constexpr bool empty() const device { return Num == 0; }
-	
-	constexpr size_t size() const constant { return Num; }
-	constexpr size_t max_size() const constant { return Num; }
-	constexpr bool empty() const constant { return Num == 0; }
-	
-	constexpr size_t size() const threadgroup { return Num; }
-	constexpr size_t max_size() const threadgroup { return Num; }
-	constexpr bool empty() const threadgroup { return Num == 0; }
-	
-	thread T &operator[](size_t pos) thread
-	{
-		return __Elements[pos];
-	}
-	constexpr const thread T &operator[](size_t pos) const thread
-	{
-		return __Elements[pos];
-	}
-	
-	device T &operator[](size_t pos) device
-	{
-		return __Elements[pos];
-	}
-	constexpr const device T &operator[](size_t pos) const device
-	{
-		return __Elements[pos];
-	}
-	
-	constexpr const constant T &operator[](size_t pos) const constant
-	{
-		return __Elements[pos];
-	}
-	
-	threadgroup T &operator[](size_t pos) threadgroup
-	{
-		return __Elements[pos];
-	}
-	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-	{
-		return __Elements[pos];
-	}
-};
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct UBO
 {
@@ -95,14 +79,14 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-void write_deeper_in_function(thread float4x4& outTransModel, constant UBO& ubo, thread float4& color, thread unsafe_array<float4,3> (&colors))
+void write_deeper_in_function(thread float4x4& outTransModel, constant UBO& ubo, thread float4& color, thread spvUnsafeArray<float4, 3> (&colors))
 {
     outTransModel[1].y = ubo.lodBias;
     color = colors[2];
 }
 
 static inline __attribute__((always_inline))
-void write_in_function(thread float4x4& outTransModel, constant UBO& ubo, thread float4& color, thread unsafe_array<float4,3> (&colors), thread float3& inNormal)
+void write_in_function(thread float4x4& outTransModel, constant UBO& ubo, thread float4& color, thread spvUnsafeArray<float4, 3> (&colors), thread float3& inNormal)
 {
     outTransModel[2] = float4(inNormal, 1.0);
     write_deeper_in_function(outTransModel, ubo, color, colors);
@@ -112,7 +96,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant UBO& ubo [[buffer(0)]]
 {
     main0_out out = {};
     float4x4 outTransModel = {};
-    unsafe_array<float4,3> colors = {};
+    spvUnsafeArray<float4, 3> colors = {};
     float4x4 inViewMat = {};
     colors[0] = in.colors_0;
     colors[1] = in.colors_1;

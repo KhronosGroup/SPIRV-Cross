@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -37,7 +39,8 @@ struct main0_patchIn
     patch_control_point<main0_in> gl_in;
 };
 
-inline void set_from_function(thread float4& gl_Position, thread patch_control_point<main0_in>& gl_in, thread float4& vColors, thread Foo& vFoo)
+static inline __attribute__((always_inline))
+void set_from_function(thread float4& gl_Position, thread patch_control_point<main0_in>& gl_in, thread float4& vColors, thread Foo& vFoo)
 {
     gl_Position = gl_in[0].Block_a;
     gl_Position += gl_in[0].Block_b;

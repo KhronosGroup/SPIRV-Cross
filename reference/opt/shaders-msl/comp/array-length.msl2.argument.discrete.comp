@@ -1,28 +1,70 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
 struct SSBO
 {
     uint size;
-    float4 v[1];
+    spvUnsafeArray<float4, 1> v;
 };
 
 struct SSBO1
 {
-    float bz[1];
+    spvUnsafeArray<float, 1> bz;
 };
 
 struct SSBO2
 {
     uint size2;
-    float4 w[1];
+    spvUnsafeArray<float4, 1> w;
 };
 
 struct SSBO3
 {
-    float bz[1];
+    spvUnsafeArray<float, 1> bz;
 };
 
 struct spvDescriptorSetBuffer0
@@ -33,13 +75,13 @@ struct spvDescriptorSetBuffer0
 
 struct spvDescriptorSetBuffer1
 {
-    device SSBO1* ssbos [[id(0)]][2];
+    spvUnsafeArray<device thread SSBO1*, 2> ssbos [[id(0)]];
     constant uint* spvBufferSizeConstants [[id(2)]];
 };
 
-kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant uint* spvBufferSizeConstants [[buffer(25)]], device SSBO2& _38 [[buffer(2)]], device SSBO3* ssbos2_0 [[buffer(3)]], device SSBO3* ssbos2_1 [[buffer(4)]])
+kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant uint* spvBufferSizeConstants [[buffer(5)]], device SSBO2& _38 [[buffer(2)]], device SSBO3* ssbos2_0 [[buffer(3)]], device SSBO3* ssbos2_1 [[buffer(4)]])
 {
-    device SSBO3* ssbos2[] =
+    spvUnsafeArray<device SSBO3*, 2> ssbos2 =
     {
         ssbos2_0,
         ssbos2_1,
@@ -47,8 +89,8 @@ kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0
 
     constant uint& spvDescriptorSet0_m_16BufferSize = spvDescriptorSet0.spvBufferSizeConstants[0];
     constant uint* spvDescriptorSet1_ssbosBufferSize = &spvDescriptorSet1.spvBufferSizeConstants[0];
-    constant uint& _38BufferSize = spvBufferSizeConstants[2];
-    constant uint* ssbos2BufferSize = &spvBufferSizeConstants[3];
+    constant uint& _38BufferSize = spvBufferSizeConstants[6];
+    constant uint* ssbos2BufferSize = &spvBufferSizeConstants[7];
     (*spvDescriptorSet0.m_16).size = ((uint(int((spvDescriptorSet0_m_16BufferSize - 16) / 16)) + uint(int((spvDescriptorSet1_ssbosBufferSize[1] - 0) / 4))) + uint(int((_38BufferSize - 16) / 16))) + uint(int((ssbos2BufferSize[0] - 0) / 4));
 }
 

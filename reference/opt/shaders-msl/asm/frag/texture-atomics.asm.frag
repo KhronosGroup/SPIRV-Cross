@@ -5,65 +5,50 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 #include <metal_atomic>
-template <typename T, size_t Num>
-struct unsafe_array
-{
-    T __Elements[Num ? Num : 1];
-    
-    constexpr size_t size() const thread { return Num; }
-    constexpr size_t max_size() const thread { return Num; }
-    constexpr bool empty() const thread { return Num == 0; }
-    
-    constexpr size_t size() const device { return Num; }
-    constexpr size_t max_size() const device { return Num; }
-    constexpr bool empty() const device { return Num == 0; }
-    
-    constexpr size_t size() const constant { return Num; }
-    constexpr size_t max_size() const constant { return Num; }
-    constexpr bool empty() const constant { return Num == 0; }
-    
-    constexpr size_t size() const threadgroup { return Num; }
-    constexpr size_t max_size() const threadgroup { return Num; }
-    constexpr bool empty() const threadgroup { return Num == 0; }
-    
-    thread T &operator[](size_t pos) thread
-    {
-        return __Elements[pos];
-    }
-    constexpr const thread T &operator[](size_t pos) const thread
-    {
-        return __Elements[pos];
-    }
-    
-    device T &operator[](size_t pos) device
-    {
-        return __Elements[pos];
-    }
-    constexpr const device T &operator[](size_t pos) const device
-    {
-        return __Elements[pos];
-    }
-    
-    constexpr const constant T &operator[](size_t pos) const constant
-    {
-        return __Elements[pos];
-    }
-    
-    threadgroup T &operator[](size_t pos) threadgroup
-    {
-        return __Elements[pos];
-    }
-    constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-    {
-        return __Elements[pos];
-    }
-};
 
 using namespace metal;
 
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
 struct type_StructuredBuffer_v4float
 {
-    unsafe_array<float4,1> _m0;
+    spvUnsafeArray<float4, 1> _m0;
 };
 
 struct type_Globals
@@ -85,6 +70,7 @@ struct main0_in
 
 // Returns buffer coords clamped to storage buffer size
 #define spvStorageBufferCoords(idx, sizes, type, coord) metal::min((coord), (sizes[(idx)*2] / sizeof(type)) - 1)
+
 fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredBuffer_v4float& CulledObjectBoxBounds [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], texture2d<uint> RWShadowTileNumCulledObjects [[texture(0)]], device atomic_uint* RWShadowTileNumCulledObjects_atomic [[buffer(2)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
@@ -103,7 +89,7 @@ fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredB
     {
         float _122 = _96.x;
         float _123 = _96.y;
-        unsafe_array<float3,8> _73;
+        spvUnsafeArray<float3, 8> _73;
         _73[0] = float3(_122, _123, -1000.0);
         float _126 = _100.x;
         _73[1] = float3(_126, _123, -1000.0);

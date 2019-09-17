@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -12,7 +14,8 @@ struct main0_out
     uint gl_FragStencilRefARB [[stencil]];
 };
 
-inline void update_stencil(thread uint& gl_FragStencilRefARB)
+static inline __attribute__((always_inline))
+void update_stencil(thread uint& gl_FragStencilRefARB)
 {
     gl_FragStencilRefARB = uint(int(gl_FragStencilRefARB) + 10);
 }

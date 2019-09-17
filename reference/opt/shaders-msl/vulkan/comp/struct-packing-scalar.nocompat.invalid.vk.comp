@@ -1,15 +1,57 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
-typedef packed_float2 packed_float2x2[2];
-typedef packed_float3 packed_float2x3[2];
-typedef packed_float3 packed_rm_float3x2[2];
+typedef float2x2 packed_float2x2;
+typedef float2x3 packed_float2x3;
+typedef float2x3 packed_rm_float3x2;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct S0
 {
-    packed_float2 a[1];
+    packed_spvUnsafeArray<float2, 1> a;
     float b;
 };
 
@@ -21,7 +63,7 @@ struct S1
 
 struct S2
 {
-    packed_float3 a[1];
+    packed_spvUnsafeArray<float3, 1> a;
     float b;
 };
 
@@ -33,9 +75,9 @@ struct S3
 
 struct Content
 {
-    S0 m0s[1];
-    S1 m1s[1];
-    S2 m2s[1];
+    spvUnsafeArray<S0, 1> m0s;
+    spvUnsafeArray<S1, 1> m1s;
+    spvUnsafeArray<S2, 1> m2s;
     S0 m0;
     S1 m1;
     S2 m2;
@@ -46,22 +88,22 @@ struct Content
 struct SSBO1
 {
     Content content;
-    Content content1[2];
+    spvUnsafeArray<Content, 2> content1;
     Content content2;
     float2x2 m0;
     float2x2 m1;
-    packed_float2x3 m2[4];
+    spvUnsafeArray<packed_float2x3, 4> m2;
     float3x2 m3;
     float2x2 m4;
-    float2x2 m5[9];
-    float3x2 m6[4][2];
+    spvUnsafeArray<float2x2, 9> m5;
+    spvUnsafeArray<spvUnsafeArray<float3x2, 4>, 2> m6;
     packed_rm_float3x2 m7;
-    float array[1];
+    spvUnsafeArray<float, 1> array;
 };
 
 struct S0_1
 {
-    float4 a[1];
+    spvUnsafeArray<float4, 1> a;
     float b;
     char _m0_final_padding[12];
 };
@@ -74,7 +116,7 @@ struct S1_1
 
 struct S2_1
 {
-    float3 a[1];
+    spvUnsafeArray<float3, 1> a;
     float b;
     char _m0_final_padding[12];
 };
@@ -87,9 +129,9 @@ struct S3_1
 
 struct Content_1
 {
-    S0_1 m0s[1];
-    S1_1 m1s[1];
-    S2_1 m2s[1];
+    spvUnsafeArray<S0_1, 1> m0s;
+    spvUnsafeArray<S1_1, 1> m1s;
+    spvUnsafeArray<S2_1, 1> m2s;
     S0_1 m0;
     S1_1 m1;
     S2_1 m2;
@@ -101,17 +143,17 @@ struct Content_1
 struct SSBO0
 {
     Content_1 content;
-    Content_1 content1[2];
+    spvUnsafeArray<Content_1, 2> content1;
     Content_1 content2;
     float2x4 m0;
     float2x4 m1;
-    float2x3 m2[4];
+    spvUnsafeArray<float2x3, 4> m2;
     float3x4 m3;
     float2x4 m4;
-    float2x4 m5[9];
-    float3x4 m6[4][2];
+    spvUnsafeArray<float2x4, 9> m5;
+    spvUnsafeArray<spvUnsafeArray<float3x4, 4>, 2> m6;
     float2x3 m7;
-    float4 array[1];
+    spvUnsafeArray<float4, 1> array;
 };
 
 struct SSBO2
@@ -123,22 +165,22 @@ struct SSBO2
 
 kernel void main0(device SSBO1& ssbo_scalar [[buffer(0)]], device SSBO0& ssbo_140 [[buffer(1)]], device SSBO2& ssbo_scalar2 [[buffer(2)]])
 {
-    ssbo_scalar.content.m0s[0].a[0] = ssbo_140.content.m0s[0].a[0].xy;
+    spvUnsafeArray<float2, 1>(ssbo_scalar.content.m0s[0].a[0]) = ssbo_140.content.m0s[0].a[0].xy;
     ssbo_scalar.content.m0s[0].b = ssbo_140.content.m0s[0].b;
     ssbo_scalar.content.m1s[0].a = float3(ssbo_140.content.m1s[0].a);
     ssbo_scalar.content.m1s[0].b = ssbo_140.content.m1s[0].b;
-    ssbo_scalar.content.m2s[0].a[0] = ssbo_140.content.m2s[0].a[0];
+    spvUnsafeArray<float3, 1>(ssbo_scalar.content.m2s[0].a[0]) = ssbo_140.content.m2s[0].a[0];
     ssbo_scalar.content.m2s[0].b = ssbo_140.content.m2s[0].b;
-    ssbo_scalar.content.m0.a[0] = ssbo_140.content.m0.a[0].xy;
+    spvUnsafeArray<float2, 1>(ssbo_scalar.content.m0.a[0]) = ssbo_140.content.m0.a[0].xy;
     ssbo_scalar.content.m0.b = ssbo_140.content.m0.b;
     ssbo_scalar.content.m1.a = float3(ssbo_140.content.m1.a);
     ssbo_scalar.content.m1.b = ssbo_140.content.m1.b;
-    ssbo_scalar.content.m2.a[0] = ssbo_140.content.m2.a[0];
+    spvUnsafeArray<float3, 1>(ssbo_scalar.content.m2.a[0]) = ssbo_140.content.m2.a[0];
     ssbo_scalar.content.m2.b = ssbo_140.content.m2.b;
     ssbo_scalar.content.m3.a = ssbo_140.content.m3.a;
     ssbo_scalar.content.m3.b = ssbo_140.content.m3.b;
     ssbo_scalar.content.m4 = ssbo_140.content.m4;
-    ssbo_scalar.content.m1.a = float2x3(float3(ssbo_scalar.m2[1][0]), float3(ssbo_scalar.m2[1][1])) * float2(ssbo_scalar.content.m0.a[0]);
+    ssbo_scalar.content.m1.a = float2x3(float3(float3x2(float2(ssbo_scalar.m2[1][0]), float2(ssbo_scalar.m2[1][1]), float2(ssbo_scalar.m2[1][2]))[0]), float3(float3x2(float2(ssbo_scalar.m2[1][0]), float2(ssbo_scalar.m2[1][1]), float2(ssbo_scalar.m2[1][2]))[1])) * float2(spvUnsafeArray<float2, 1>(ssbo_scalar.content.m0.a[0]));
     ssbo_scalar.m0 = float2x2(float2(ssbo_scalar2.m1[0]), float2(ssbo_scalar2.m1[1]));
     ssbo_scalar2.m1[0] = float2(ssbo_scalar.m4[0][0], ssbo_scalar.m4[1][0]);
     ssbo_scalar2.m1[1] = float2(ssbo_scalar.m4[0][1], ssbo_scalar.m4[1][1]);

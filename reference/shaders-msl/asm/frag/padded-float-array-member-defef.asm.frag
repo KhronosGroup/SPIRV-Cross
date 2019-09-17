@@ -1,63 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-template <typename T, size_t Num>
-struct unsafe_array
-{
-    T __Elements[Num ? Num : 1];
-    
-    constexpr size_t size() const thread { return Num; }
-    constexpr size_t max_size() const thread { return Num; }
-    constexpr bool empty() const thread { return Num == 0; }
-    
-    constexpr size_t size() const device { return Num; }
-    constexpr size_t max_size() const device { return Num; }
-    constexpr bool empty() const device { return Num == 0; }
-    
-    constexpr size_t size() const constant { return Num; }
-    constexpr size_t max_size() const constant { return Num; }
-    constexpr bool empty() const constant { return Num == 0; }
-    
-    constexpr size_t size() const threadgroup { return Num; }
-    constexpr size_t max_size() const threadgroup { return Num; }
-    constexpr bool empty() const threadgroup { return Num == 0; }
-    
-    thread T &operator[](size_t pos) thread
-    {
-        return __Elements[pos];
-    }
-    constexpr const thread T &operator[](size_t pos) const thread
-    {
-        return __Elements[pos];
-    }
-    
-    device T &operator[](size_t pos) device
-    {
-        return __Elements[pos];
-    }
-    constexpr const device T &operator[](size_t pos) const device
-    {
-        return __Elements[pos];
-    }
-    
-    constexpr const constant T &operator[](size_t pos) const constant
-    {
-        return __Elements[pos];
-    }
-    
-    threadgroup T &operator[](size_t pos) threadgroup
-    {
-        return __Elements[pos];
-    }
-    constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-    {
-        return __Elements[pos];
-    }
-};
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct type_Globals
 {
@@ -76,7 +62,7 @@ struct type_Globals
     float FilmShoulder;
     float FilmBlackClip;
     float FilmWhiteClip;
-    unsafe_array<float4,5> LUTWeights;
+    spvUnsafeArray<float4, 5> LUTWeights;
     float3 ColorScale;
     float4 OverlayColor;
     float WhiteTemp;
@@ -109,12 +95,12 @@ struct type_Globals
     float ExpandGamut;
 };
 
-constant unsafe_array<float,6> _499 = unsafe_array<float,6>({ -4.0, -4.0, -3.1573765277862548828125, -0.485249996185302734375, 1.84773242473602294921875, 1.84773242473602294921875 });
-constant unsafe_array<float,6> _500 = unsafe_array<float,6>({ -0.718548238277435302734375, 2.0810306072235107421875, 3.66812419891357421875, 4.0, 4.0, 4.0 });
-constant unsafe_array<float,10> _503 = unsafe_array<float,10>({ -4.97062206268310546875, -3.0293781757354736328125, -2.1261999607086181640625, -1.5104999542236328125, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 });
-constant unsafe_array<float,10> _504 = unsafe_array<float,10>({ 0.80891323089599609375, 1.19108676910400390625, 1.5683000087738037109375, 1.94830000400543212890625, 2.308300018310546875, 2.63840007781982421875, 2.85949993133544921875, 2.9872608184814453125, 3.0127391815185546875, 3.0127391815185546875 });
-constant unsafe_array<float,10> _506 = unsafe_array<float,10>({ -2.3010299205780029296875, -2.3010299205780029296875, -1.9312000274658203125, -1.5204999446868896484375, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 });
-constant unsafe_array<float,10> _507 = unsafe_array<float,10>({ 0.801995217800140380859375, 1.19800484180450439453125, 1.5943000316619873046875, 1.99730002880096435546875, 2.3782999515533447265625, 2.7683999538421630859375, 3.0515000820159912109375, 3.2746293544769287109375, 3.32743072509765625, 3.32743072509765625 });
+constant spvUnsafeArray<float, 6> _499 = spvUnsafeArray<float, 6>({ -4.0, -4.0, -3.1573765277862548828125, -0.485249996185302734375, 1.84773242473602294921875, 1.84773242473602294921875 });
+constant spvUnsafeArray<float, 6> _500 = spvUnsafeArray<float, 6>({ -0.718548238277435302734375, 2.0810306072235107421875, 3.66812419891357421875, 4.0, 4.0, 4.0 });
+constant spvUnsafeArray<float, 10> _503 = spvUnsafeArray<float, 10>({ -4.97062206268310546875, -3.0293781757354736328125, -2.1261999607086181640625, -1.5104999542236328125, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 });
+constant spvUnsafeArray<float, 10> _504 = spvUnsafeArray<float, 10>({ 0.80891323089599609375, 1.19108676910400390625, 1.5683000087738037109375, 1.94830000400543212890625, 2.308300018310546875, 2.63840007781982421875, 2.85949993133544921875, 2.9872608184814453125, 3.0127391815185546875, 3.0127391815185546875 });
+constant spvUnsafeArray<float, 10> _506 = spvUnsafeArray<float, 10>({ -2.3010299205780029296875, -2.3010299205780029296875, -1.9312000274658203125, -1.5204999446868896484375, -1.0578000545501708984375, -0.4668000042438507080078125, 0.11937999725341796875, 0.7088134288787841796875, 1.2911865711212158203125, 1.2911865711212158203125 });
+constant spvUnsafeArray<float, 10> _507 = spvUnsafeArray<float, 10>({ 0.801995217800140380859375, 1.19800484180450439453125, 1.5943000316619873046875, 1.99730002880096435546875, 2.3782999515533447265625, 2.7683999538421630859375, 3.0515000820159912109375, 3.2746293544769287109375, 3.32743072509765625, 3.32743072509765625 });
 
 constant float3 _523 = {};
 constant float3 _525 = {};

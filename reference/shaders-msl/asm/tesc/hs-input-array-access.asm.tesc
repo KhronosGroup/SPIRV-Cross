@@ -1,63 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-template <typename T, size_t Num>
-struct unsafe_array
-{
-    T __Elements[Num ? Num : 1];
-    
-    constexpr size_t size() const thread { return Num; }
-    constexpr size_t max_size() const thread { return Num; }
-    constexpr bool empty() const thread { return Num == 0; }
-    
-    constexpr size_t size() const device { return Num; }
-    constexpr size_t max_size() const device { return Num; }
-    constexpr bool empty() const device { return Num == 0; }
-    
-    constexpr size_t size() const constant { return Num; }
-    constexpr size_t max_size() const constant { return Num; }
-    constexpr bool empty() const constant { return Num == 0; }
-    
-    constexpr size_t size() const threadgroup { return Num; }
-    constexpr size_t max_size() const threadgroup { return Num; }
-    constexpr bool empty() const threadgroup { return Num == 0; }
-    
-    thread T &operator[](size_t pos) thread
-    {
-        return __Elements[pos];
-    }
-    constexpr const thread T &operator[](size_t pos) const thread
-    {
-        return __Elements[pos];
-    }
-    
-    device T &operator[](size_t pos) device
-    {
-        return __Elements[pos];
-    }
-    constexpr const device T &operator[](size_t pos) const device
-    {
-        return __Elements[pos];
-    }
-    
-    constexpr const constant T &operator[](size_t pos) const constant
-    {
-        return __Elements[pos];
-    }
-    
-    threadgroup T &operator[](size_t pos) threadgroup
-    {
-        return __Elements[pos];
-    }
-    constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-    {
-        return __Elements[pos];
-    }
-};
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct FVertexFactoryInterpolantsVSToPS
 {
@@ -97,7 +83,7 @@ struct FHullShaderConstantDominantEdgeData
 struct FPNTessellationHSToDS
 {
     FHitProxyVSToDS PassSpecificData;
-    unsafe_array<float4,3> WorldPosition;
+    spvUnsafeArray<float4, 3> WorldPosition;
     float3 DisplacementScale;
     float TessellationMultiplier;
     float WorldDisplacementMultiplier;
@@ -203,8 +189,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2268;
-    unsafe_array<float4,2> View_TranslucencyLightingVolumeMin;
-    unsafe_array<float4,2> View_TranslucencyLightingVolumeInvSize;
+    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeMin;
+    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeInvSize;
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -249,7 +235,7 @@ struct type_View
     float PrePadding_View_2584;
     float PrePadding_View_2588;
     float4 View_SkyLightColor;
-    unsafe_array<float4,7> View_SkyIrradianceEnvironmentMap;
+    spvUnsafeArray<float4, 7> View_SkyIrradianceEnvironmentMap;
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -260,8 +246,8 @@ struct type_View
     float PrePadding_View_2748;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    unsafe_array<float4,4> View_GlobalVolumeCenterAndExtent;
-    unsafe_array<float4,4> View_GlobalVolumeWorldToUVAddAndMul;
+    spvUnsafeArray<float4, 4> View_GlobalVolumeCenterAndExtent;
+    spvUnsafeArray<float4, 4> View_GlobalVolumeWorldToUVAddAndMul;
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -316,7 +302,7 @@ struct type_Primitive
     uint PrePadding_Primitive_420;
     uint PrePadding_Primitive_424;
     uint PrePadding_Primitive_428;
-    unsafe_array<float4,4> Primitive_CustomPrimitiveData;
+    spvUnsafeArray<float4, 4> Primitive_CustomPrimitiveData;
 };
 
 constant float4 _136 = {};
@@ -333,7 +319,7 @@ struct main0_out
     float2 out_var_PN_DominantVertex;
     float4 out_var_PN_DominantVertex1;
     float3 out_var_PN_DominantVertex2;
-    unsafe_array<float4,3> out_var_PN_POSITION;
+    spvUnsafeArray<float4, 3> out_var_PN_POSITION;
     float out_var_PN_TessellationMultiplier;
     float out_var_PN_WorldDisplacementMultiplier;
     float4 out_var_TEXCOORD10_centroid;
@@ -365,8 +351,8 @@ kernel void main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (gl_InvocationID >= 3)
         return;
-    unsafe_array<FHitProxyVSToDS,12> _226 = { FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[0].in_var_TEXCOORD10_centroid, gl_in[0].in_var_TEXCOORD11_centroid } }, gl_in[0].in_var_VS_To_DS_Position, gl_in[0].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[1].in_var_TEXCOORD10_centroid, gl_in[1].in_var_TEXCOORD11_centroid } }, gl_in[1].in_var_VS_To_DS_Position, gl_in[1].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[2].in_var_TEXCOORD10_centroid, gl_in[2].in_var_TEXCOORD11_centroid } }, gl_in[2].in_var_VS_To_DS_Position, gl_in[2].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[3].in_var_TEXCOORD10_centroid, gl_in[3].in_var_TEXCOORD11_centroid } }, gl_in[3].in_var_VS_To_DS_Position, gl_in[3].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[4].in_var_TEXCOORD10_centroid, gl_in[4].in_var_TEXCOORD11_centroid } }, gl_in[4].in_var_VS_To_DS_Position, gl_in[4].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[5].in_var_TEXCOORD10_centroid, gl_in[5].in_var_TEXCOORD11_centroid } }, gl_in[5].in_var_VS_To_DS_Position, gl_in[5].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[6].in_var_TEXCOORD10_centroid, gl_in[6].in_var_TEXCOORD11_centroid } }, gl_in[6].in_var_VS_To_DS_Position, gl_in[6].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[7].in_var_TEXCOORD10_centroid, gl_in[7].in_var_TEXCOORD11_centroid } }, gl_in[7].in_var_VS_To_DS_Position, gl_in[7].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[8].in_var_TEXCOORD10_centroid, gl_in[8].in_var_TEXCOORD11_centroid } }, gl_in[8].in_var_VS_To_DS_Position, gl_in[8].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[9].in_var_TEXCOORD10_centroid, gl_in[9].in_var_TEXCOORD11_centroid } }, gl_in[9].in_var_VS_To_DS_Position, gl_in[9].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[10].in_var_TEXCOORD10_centroid, gl_in[10].in_var_TEXCOORD11_centroid } }, gl_in[10].in_var_VS_To_DS_Position, gl_in[10].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[11].in_var_TEXCOORD10_centroid, gl_in[11].in_var_TEXCOORD11_centroid } }, gl_in[11].in_var_VS_To_DS_Position, gl_in[11].in_var_VS_To_DS_VertexID } };
-    unsafe_array<FHitProxyVSToDS,12> param_var_I;
+    spvUnsafeArray<FHitProxyVSToDS, 12> _226 = { FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[0].in_var_TEXCOORD10_centroid, gl_in[0].in_var_TEXCOORD11_centroid } }, gl_in[0].in_var_VS_To_DS_Position, gl_in[0].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[1].in_var_TEXCOORD10_centroid, gl_in[1].in_var_TEXCOORD11_centroid } }, gl_in[1].in_var_VS_To_DS_Position, gl_in[1].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[2].in_var_TEXCOORD10_centroid, gl_in[2].in_var_TEXCOORD11_centroid } }, gl_in[2].in_var_VS_To_DS_Position, gl_in[2].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[3].in_var_TEXCOORD10_centroid, gl_in[3].in_var_TEXCOORD11_centroid } }, gl_in[3].in_var_VS_To_DS_Position, gl_in[3].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[4].in_var_TEXCOORD10_centroid, gl_in[4].in_var_TEXCOORD11_centroid } }, gl_in[4].in_var_VS_To_DS_Position, gl_in[4].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[5].in_var_TEXCOORD10_centroid, gl_in[5].in_var_TEXCOORD11_centroid } }, gl_in[5].in_var_VS_To_DS_Position, gl_in[5].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[6].in_var_TEXCOORD10_centroid, gl_in[6].in_var_TEXCOORD11_centroid } }, gl_in[6].in_var_VS_To_DS_Position, gl_in[6].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[7].in_var_TEXCOORD10_centroid, gl_in[7].in_var_TEXCOORD11_centroid } }, gl_in[7].in_var_VS_To_DS_Position, gl_in[7].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[8].in_var_TEXCOORD10_centroid, gl_in[8].in_var_TEXCOORD11_centroid } }, gl_in[8].in_var_VS_To_DS_Position, gl_in[8].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[9].in_var_TEXCOORD10_centroid, gl_in[9].in_var_TEXCOORD11_centroid } }, gl_in[9].in_var_VS_To_DS_Position, gl_in[9].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[10].in_var_TEXCOORD10_centroid, gl_in[10].in_var_TEXCOORD11_centroid } }, gl_in[10].in_var_VS_To_DS_Position, gl_in[10].in_var_VS_To_DS_VertexID }, FHitProxyVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ gl_in[11].in_var_TEXCOORD10_centroid, gl_in[11].in_var_TEXCOORD11_centroid } }, gl_in[11].in_var_VS_To_DS_Position, gl_in[11].in_var_VS_To_DS_VertexID } };
+    spvUnsafeArray<FHitProxyVSToDS, 12> param_var_I;
     param_var_I = _226;
     float4 _243 = float4(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, 0.0);
     float3 _247 = Primitive.Primitive_NonUniformScale.xyz * float3x3(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0.xyz, cross(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0.xyz) * float3(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.w), param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz);
@@ -402,7 +388,7 @@ kernel void main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)
     float4 _332 = float4(param_var_I[_250].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, 0.0);
     float4 _340 = float4(param_var_I[_252].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, 0.0);
     float4 _348 = float4(param_var_I[_253].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, 0.0);
-    unsafe_array<float4,3> _398 = { param_var_I[gl_InvocationID].Position, (((((float4(2.0) * param_var_I[gl_InvocationID].Position) + param_var_I[_250].Position) - (float4(dot(param_var_I[_250].Position - param_var_I[gl_InvocationID].Position, _243)) * _243)) * float4(0.3333333432674407958984375)) + ((((float4(2.0) * param_var_I[_252].Position) + param_var_I[_253].Position) - (float4(dot(param_var_I[_253].Position - param_var_I[_252].Position, _340)) * _340)) * float4(0.3333333432674407958984375))) * float4(0.5), (((((float4(2.0) * param_var_I[_250].Position) + param_var_I[gl_InvocationID].Position) - (float4(dot(param_var_I[gl_InvocationID].Position - param_var_I[_250].Position, _332)) * _332)) * float4(0.3333333432674407958984375)) + ((((float4(2.0) * param_var_I[_253].Position) + param_var_I[_252].Position) - (float4(dot(param_var_I[_252].Position - param_var_I[_253].Position, _348)) * _348)) * float4(0.3333333432674407958984375))) * float4(0.5) };
+    spvUnsafeArray<float4, 3> _398 = { param_var_I[gl_InvocationID].Position, (((((float4(2.0) * param_var_I[gl_InvocationID].Position) + param_var_I[_250].Position) - (float4(dot(param_var_I[_250].Position - param_var_I[gl_InvocationID].Position, _243)) * _243)) * float4(0.3333333432674407958984375)) + ((((float4(2.0) * param_var_I[_252].Position) + param_var_I[_253].Position) - (float4(dot(param_var_I[_253].Position - param_var_I[_252].Position, _340)) * _340)) * float4(0.3333333432674407958984375))) * float4(0.5), (((((float4(2.0) * param_var_I[_250].Position) + param_var_I[gl_InvocationID].Position) - (float4(dot(param_var_I[gl_InvocationID].Position - param_var_I[_250].Position, _332)) * _332)) * float4(0.3333333432674407958984375)) + ((((float4(2.0) * param_var_I[_253].Position) + param_var_I[_252].Position) - (float4(dot(param_var_I[_252].Position - param_var_I[_253].Position, _348)) * _348)) * float4(0.3333333432674407958984375))) * float4(0.5) };
     gl_out[gl_InvocationID].out_var_TEXCOORD10_centroid = param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0;
     gl_out[gl_InvocationID].out_var_TEXCOORD11_centroid = param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2;
     gl_out[gl_InvocationID].out_var_VS_To_DS_Position = param_var_I[gl_InvocationID].Position;

@@ -1,9 +1,12 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
-typedef packed_float3 packed_rm_float3x3[3];
+typedef float3x3 packed_rm_float3x3;
 
 struct SSBO
 {

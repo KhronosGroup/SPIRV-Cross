@@ -4,83 +4,21 @@
 
 #include <metal_stdlib>
 #include <simd/simd.h>
-	
-template <typename T, size_t Num>
-struct unsafe_array
-{
-	T __Elements[Num ? Num : 1];
-	
-	constexpr size_t size() const thread { return Num; }
-	constexpr size_t max_size() const thread { return Num; }
-	constexpr bool empty() const thread { return Num == 0; }
-	
-	constexpr size_t size() const device { return Num; }
-	constexpr size_t max_size() const device { return Num; }
-	constexpr bool empty() const device { return Num == 0; }
-	
-	constexpr size_t size() const constant { return Num; }
-	constexpr size_t max_size() const constant { return Num; }
-	constexpr bool empty() const constant { return Num == 0; }
-	
-	constexpr size_t size() const threadgroup { return Num; }
-	constexpr size_t max_size() const threadgroup { return Num; }
-	constexpr bool empty() const threadgroup { return Num == 0; }
-	
-	thread T &operator[](size_t pos) thread
-	{
-		return __Elements[pos];
-	}
-	constexpr const thread T &operator[](size_t pos) const thread
-	{
-		return __Elements[pos];
-	}
-	
-	device T &operator[](size_t pos) device
-	{
-		return __Elements[pos];
-	}
-	constexpr const device T &operator[](size_t pos) const device
-	{
-		return __Elements[pos];
-	}
-	
-	constexpr const constant T &operator[](size_t pos) const constant
-	{
-		return __Elements[pos];
-	}
-	
-	threadgroup T &operator[](size_t pos) threadgroup
-	{
-		return __Elements[pos];
-	}
-	constexpr const threadgroup T &operator[](size_t pos) const threadgroup
-	{
-		return __Elements[pos];
-	}
-};
 
 using namespace metal;
 
 // Implementation of the GLSL findLSB() function
 template<typename T>
-<<<<<<< HEAD
-inline T spvFindLSB(T x)
-=======
 static inline __attribute__((always_inline))
-T findLSB(T x)
->>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
+T spvFindLSB(T x)
 {
     return select(ctz(x), T(-1), x == T(0));
 }
 
 // Implementation of the signed GLSL findMSB() function
 template<typename T>
-<<<<<<< HEAD
-inline T spvFindSMSB(T x)
-=======
 static inline __attribute__((always_inline))
-T findSMSB(T x)
->>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
+T spvFindSMSB(T x)
 {
     T v = select(x, T(-1) - x, x < T(0));
     return select(clz(T(0)) - (clz(v) + T(1)), T(-1), v == T(0));
@@ -88,12 +26,8 @@ T findSMSB(T x)
 
 // Implementation of the unsigned GLSL findMSB() function
 template<typename T>
-<<<<<<< HEAD
-inline T spvFindUMSB(T x)
-=======
 static inline __attribute__((always_inline))
-T findUMSB(T x)
->>>>>>> 22755a0c... Update the Metal shaders to account for changes in the shader compilation.
+T spvFindUMSB(T x)
 {
     return select(clz(T(0)) - (clz(x) + T(1)), T(-1), x == T(0));
 }
