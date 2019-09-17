@@ -1072,34 +1072,34 @@ void CompilerMSL::preprocess_op_codes()
 		add_header_line("    constexpr size_t max_size() const threadgroup { return Num; }");
 		add_header_line("    constexpr bool empty() const threadgroup { return Num == 0; }");
 		add_header_line("    ");
-		add_header_line("    thread T &operator[](size_t pos) thread");
+		add_header_line("    thread T& operator [] (size_t pos) thread");
 		add_header_line("    {");
 		add_header_line("        return __Elements[pos];");
 		add_header_line("    }");
-		add_header_line("    constexpr const thread T &operator[](size_t pos) const thread");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    ");
-		add_header_line("    device T &operator[](size_t pos) device");
-		add_header_line("    {");
-		add_header_line("        return __Elements[pos];");
-		add_header_line("    }");
-		add_header_line("    constexpr const device T &operator[](size_t pos) const device");
+		add_header_line("    constexpr const thread T& operator [] (size_t pos) const thread");
 		add_header_line("    {");
 		add_header_line("        return __Elements[pos];");
 		add_header_line("    }");
 		add_header_line("    ");
-		add_header_line("    constexpr const constant T &operator[](size_t pos) const constant");
+		add_header_line("    device T& operator [] (size_t pos) device");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    constexpr const device T& operator [] (size_t pos) const device");
 		add_header_line("    {");
 		add_header_line("        return __Elements[pos];");
 		add_header_line("    }");
 		add_header_line("    ");
-		add_header_line("    threadgroup T &operator[](size_t pos) threadgroup");
+		add_header_line("    constexpr const constant T& operator [] (size_t pos) const constant");
 		add_header_line("    {");
 		add_header_line("        return __Elements[pos];");
 		add_header_line("    }");
-		add_header_line("    constexpr const threadgroup T &operator[](size_t pos) const threadgroup");
+		add_header_line("    ");
+		add_header_line("    threadgroup T& operator [] (size_t pos) threadgroup");
+		add_header_line("    {");
+		add_header_line("        return __Elements[pos];");
+		add_header_line("    }");
+		add_header_line("    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup");
 		add_header_line("    {");
 		add_header_line("        return __Elements[pos];");
 		add_header_line("    }");
@@ -5913,6 +5913,88 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpVectorTimesMatrix:
+	case OpMatrixTimesVector:
+	{
+		// If the matrix needs transpose, just flip the multiply order.
+		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
+		if (e && e->need_transpose)
+		{
+			e->need_transpose = false;
+			string expr;
+			
+			if (opcode == OpMatrixTimesVector)
+			{
+				expr = join(to_enclosed_unpacked_expression(ops[3]), " * ",
+							enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+			}
+			else
+			{
+				if (msl_options.invariant_float_math)
+				{
+					expr = join("fmul_mv(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
+								to_enclosed_unpacked_expression(ops[2]), ")");
+				}
+				else
+				{
+					expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ",
+								to_enclosed_unpacked_expression(ops[2]));
+				}
+			}
+			
+			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
+			emit_op(ops[0], ops[1], expr, forward);
+			e->need_transpose = true;
+			inherit_expression_dependencies(ops[1], ops[2]);
+			inherit_expression_dependencies(ops[1], ops[3]);
+		}
+		else if (opcode == OpMatrixTimesVector && msl_options.invariant_float_math)
+			MSL_BFOP(fmul_mv);
+		else
+			MSL_BOP(*);
+		break;
+	}
+		
+	case OpMatrixTimesMatrix:
+	{
+		auto *a = maybe_get<SPIRExpression>(ops[2]);
+		auto *b = maybe_get<SPIRExpression>(ops[3]);
+		
+		// If both matrices need transpose, we can multiply in flipped order and tag the expression as transposed.
+		// a^T * b^T = (b * a)^T.
+		if (a && b && a->need_transpose && b->need_transpose)
+		{
+			a->need_transpose = false;
+			b->need_transpose = false;
+			
+			std::string expr;
+			if (msl_options.invariant_float_math)
+			{
+				expr = join("fmul_mat(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
+							enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
+			}
+			else
+			{
+				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ",
+							enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+			}
+			
+			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
+			auto &e = emit_op(ops[0], ops[1], expr, forward);
+			e.need_transpose = true;
+			a->need_transpose = true;
+			b->need_transpose = true;
+			inherit_expression_dependencies(ops[1], ops[2]);
+			inherit_expression_dependencies(ops[1], ops[3]);
+		}
+		else if (msl_options.invariant_float_math)
+			MSL_BFOP(fmul_mat);
+		else
+			MSL_BOP(*);
+		
+		break;
+	}
+		
 	case OpIAddCarry:
 	case OpISubBorrow:
 	{
@@ -9521,9 +9603,25 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		}
 	}
 
+	/* UE Change Begin: Always determine resource index */
 	// If we have already allocated an index, keep using it.
 //	if (has_extended_decoration(var.self, resource_decoration))
 //		return get_extended_decoration(var.self, resource_decoration);
+	/* UE Change End: Always determine resource index */
+
+	/* UE Change Begin: Allow user to enable decoration binding */
+	// If there is no explicit mapping of bindings to MSL, use the declared binding.
+	if (msl_options.enable_decoration_binding)
+	{
+		if (has_decoration(var.self, DecorationBinding))
+		{
+			var_binding = get_decoration(var.self, DecorationBinding);
+			// Avoid emitting sentinel bindings.
+			if (var_binding < 0x80000000u)
+				return var_binding;
+		}
+	}
+	/* UE Change End: Allow user to enable decoration binding */
 
 	// If we did not explicitly remap, allocate bindings on demand.
 	// We cannot reliably use Binding decorations since SPIR-V and MSL's binding models are very different.

@@ -304,6 +304,10 @@ public:
 		/* UE Change Begin: Emulate texturecube_array with texture2d_array for iOS where this type is not available */
 		bool emulate_cube_array = false;
 		/* UE Change End: Emulate texturecube_array with texture2d_array for iOS where this type is not available */
+		
+		/* UE Change Begin: Allow user to enable decoration binding */
+		bool enable_decoration_binding = false;
+		/* UE Change End: Allow user to enable decoration binding */
 
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
