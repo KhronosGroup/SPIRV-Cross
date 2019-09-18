@@ -17,11 +17,15 @@ uint2 spvTexelBufferCoord(uint tc)
 template<typename T> struct spvRemoveReference { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
+template<typename T>
+static inline __attribute__((always_inline))
+constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
 {
     return static_cast<thread T&&>(x);
 }
-template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
+template<typename T>
+static inline __attribute__((always_inline))
+constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
 {
     return static_cast<thread T&&>(x);
 }

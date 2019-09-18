@@ -48,7 +48,8 @@ struct spvUnsafeArray
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(8u, 1u, 1u);
 
 template<typename T, uint A>
-static inline __attribute__((always_inline)) void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
+static inline __attribute__((always_inline))
+void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -57,7 +58,8 @@ static inline __attribute__((always_inline)) void spvArrayCopyFromConstantToStac
 }
 
 template<typename T, uint A>
-static inline __attribute__((always_inline)) void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
+static inline __attribute__((always_inline))
+void spvArrayCopyFromConstantToThreadGroup1(threadgroup T (&dst)[A], constant T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -66,7 +68,8 @@ static inline __attribute__((always_inline)) void spvArrayCopyFromConstantToThre
 }
 
 template<typename T, uint A>
-static inline __attribute__((always_inline)) void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
+static inline __attribute__((always_inline))
+void spvArrayCopyFromStackToStack1(thread T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -75,7 +78,8 @@ static inline __attribute__((always_inline)) void spvArrayCopyFromStackToStack1(
 }
 
 template<typename T, uint A>
-static inline __attribute__((always_inline)) void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
+static inline __attribute__((always_inline))
+void spvArrayCopyFromStackToThreadGroup1(threadgroup T (&dst)[A], thread const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -84,7 +88,8 @@ static inline __attribute__((always_inline)) void spvArrayCopyFromStackToThreadG
 }
 
 template<typename T, uint A>
-static inline __attribute__((always_inline)) void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
+static inline __attribute__((always_inline))
+void spvArrayCopyFromThreadGroupToStack1(thread T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
@@ -93,7 +98,8 @@ static inline __attribute__((always_inline)) void spvArrayCopyFromThreadGroupToS
 }
 
 template<typename T, uint A>
-static inline __attribute__((always_inline)) void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
+static inline __attribute__((always_inline))
+void spvArrayCopyFromThreadGroupToThreadGroup1(threadgroup T (&dst)[A], threadgroup const T (&src)[A])
 {
     for (uint i = 0; i < A; i++)
     {
