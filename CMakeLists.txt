@@ -44,6 +44,8 @@ option(SPIRV_CROSS_SKIP_INSTALL "Skips installation targets." OFF)
 option(SPIRV_CROSS_WERROR "Fail build on warnings." OFF)
 option(SPIRV_CROSS_MISC_WARNINGS "Misc warnings useful for Travis runs." OFF)
 
+option(SPIRV_CROSS_FORCE_PIC "Force position-independent code for all targets." OFF)
+
 if(${CMAKE_GENERATOR} MATCHES "Makefile")
 	if(${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_CURRENT_BINARY_DIR})
 		message(FATAL_ERROR "Build out of tree to avoid overwriting Makefile")
@@ -146,6 +148,9 @@ macro(spirv_cross_add_library name config_name library_type)
 			$<INSTALL_INTERFACE:include/spirv_cross>)
 	set_target_properties(${name} PROPERTIES
 			PUBLIC_HEADERS "${hdrs}")
+	if (SPIRV_CROSS_FORCE_PIC)
+		set_target_properties(${name} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+	endif()
 	target_compile_options(${name} PRIVATE ${spirv-compiler-options})
 	target_compile_definitions(${name} PRIVATE ${spirv-compiler-defines})
 	if (SPIRV_CROSS_NAMESPACE_OVERRIDE)
