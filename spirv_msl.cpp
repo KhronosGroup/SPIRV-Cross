@@ -27,6 +27,7 @@ using namespace std;
 
 static const uint32_t k_unknown_location = ~0u;
 static const uint32_t k_unknown_component = ~0u;
+static const char* force_inline = "static inline __attribute__((always_inline))";
 
 CompilerMSL::CompilerMSL(std::vector<uint32_t> spirv_)
     : CompilerGLSL(move(spirv_))
@@ -145,14 +146,13 @@ void CompilerMSL::build_implicit_builtins()
 			if (var.storage != StorageClassInput || !ir.meta[var.self].decoration.builtin)
 				return;
 
-            /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+            // Use Metal's native frame-buffer fetch API for subpass inputs.
 			BuiltIn builtin = ir.meta[var.self].decoration.builtin_type;
 			if (need_subpass_input && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) && builtin == BuiltInFragCoord)
 			{
 				builtin_frag_coord_id = var.self;
 				has_frag_coord = true;
 			}
-			/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 			if (need_sample_pos && builtin == BuiltInSampleId)
 			{
@@ -238,7 +238,7 @@ void CompilerMSL::build_implicit_builtins()
 				workgroup_id_type = var.basetype;
 		});
 
-		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+		// Use Metal's native frame-buffer fetch API for subpass inputs.
 		if (!has_frag_coord && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) && need_subpass_input)
 		{
 			uint32_t offset = ir.increase_bound_by(3);
@@ -266,7 +266,6 @@ void CompilerMSL::build_implicit_builtins()
 			builtin_frag_coord_id = var_id;
 			mark_implicit_builtin(StorageClassInput, BuiltInFragCoord, var_id);
 		}
-		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 		if (!has_sample_id && need_sample_pos)
 		{
@@ -665,9 +664,8 @@ std::string CompilerMSL::get_tess_factor_struct_name()
 void CompilerMSL::emit_entry_point_declarations()
 {
 	// FIXME: Get test coverage here ...
-	/* UE Change Begin: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
+	// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 	declare_complex_constant_arrays();
-	/* UE Change End: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
 
 	// Emit constexpr samplers here.
 	for (auto &samp : constexpr_samplers_by_id)
@@ -801,8 +799,7 @@ void CompilerMSL::emit_entry_point_declarations()
 	// Emit buffer arrays here.
 	for (uint32_t array_id : buffer_arrays)
 	{
-		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-		/* UE Change Begin: Force the use of C style array declaration. */
+		// Allow Metal to use the array<T> template to make arrays a value type
 		const auto &var = get<SPIRVariable>(array_id);
 		const auto &type = get_variable_data_type(var);
 		auto new_type = type;
@@ -819,9 +816,6 @@ void CompilerMSL::emit_entry_point_declarations()
 			statement(name + "_" + convert_to_string(i) + ",");
 		end_scope_decl();
 		statement_no_indent("");
-		
-		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-		/* UE Change End: Force the use of C style array declaration. */
 	}
 	// For some reason, without this, we end up emitting the arrays twice.
 	buffer_arrays.clear();
@@ -856,9 +850,7 @@ string CompilerMSL::compile()
 	backend.can_declare_arrays_inline = false;
 	backend.can_return_array = false;
 	backend.allow_truncated_access_chain = true;
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	backend.array_is_value_type = true;
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+	backend.array_is_value_type = true; // <-- Allow Metal to use the array<T> template to make arrays a value type
 	backend.comparison_image_samples_scalar = true;
 	backend.native_pointers = true;
 	backend.nonuniform_qualifier = "";
@@ -973,10 +965,9 @@ void CompilerMSL::preprocess_op_codes()
 
 	suppress_missing_prototypes = preproc.suppress_missing_prototypes;
 
-    /* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+    // Disable warning about missing braces for array<T> template to make arrays a value type
     add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-braces\"");
-    /* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-    
+	
     add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"");
 
 	if (preproc.uses_atomics)
@@ -1087,15 +1078,14 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
 
+				// Use Metal's native frame-buffer fetch API for subpass inputs.
 				auto &type = get<SPIRType>(ops[0]);
-				/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses))
 				{
 					// Implicitly reads gl_FragCoord.
 					assert(builtin_frag_coord_id != 0);
 					added_arg_ids.insert(builtin_frag_coord_id);
 				}
-				/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 				break;
 			}
@@ -1138,7 +1128,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				break;
 			}
 
-			/* UE Change Begin: Emulate texture2D atomic operations */
+			// Emulate texture2D atomic operations
 			case OpImageTexelPointer:
 			{
 				// When using the pointer, we need to know which variable it is actually loaded from.
@@ -1151,7 +1141,6 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				}
 				break;
 			}
-			/* UE Change End: Emulate texture2D atomic operations */
 
 			default:
 				break;
@@ -2265,7 +2254,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						// The first member of the indirect buffer is always the number of vertices
 						// to draw.
-						/* UE Change Begin: We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice */
+						// We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice
 						if (ir.source.hlsl == true)
 						{
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref, " = ",
@@ -2281,7 +2270,6 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 									  to_expression(builtin_vertex_idx_id), " - ", to_expression(builtin_base_vertex_id),
 									  "];");
 						}
-						/* UE Change End: We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice */
 					}
 				});
 				break;
@@ -3070,7 +3058,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 	}
 }
 
-/* UE Change Begin: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+// Metal expands float[]/float2[] members inside structs to float4[] so we must unpack
 string CompilerMSL::to_dereferenced_expression(uint32_t id, bool register_expression_read)
 {
 	auto &type = expression_type(id);
@@ -3206,7 +3194,7 @@ void CompilerMSL::add_typedef_line(const string &line)
 		force_recompile();
 }
 
-/* UE Change Begin: Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared */
+// Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared
 void CompilerMSL::emit_custom_templates()
 {
 	for (const auto& spv_func : spv_function_implementations)
@@ -3259,9 +3247,10 @@ void CompilerMSL::emit_custom_templates()
 		}
 	}
 }
-/* UE Change End: Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared */
 
 // Emits any needed custom function bodies.
+// Metal helper functions must be static force-inline, i.e. static inline __attribute__((always_inline))
+// otherwise they will cause problems when linked together in a single Metallib.
 void CompilerMSL::emit_custom_functions()
 {
 	for (uint32_t i = SPVFuncImplArrayCopyMultidimMax; i >= 2; i--)
@@ -3300,7 +3289,7 @@ void CompilerMSL::emit_custom_functions()
 		spv_function_implementations.insert(SPVFuncImplForwardArgs);
 		spv_function_implementations.insert(SPVFuncImplGetSwizzle);
 	}
-
+	
 	for (const auto& spv_func : spv_function_implementations)
 	{
 		switch (spv_func)
@@ -3308,9 +3297,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplMod:
 			statement("// Implementation of the GLSL mod() function, which is slightly different than Metal fmod()");
 			statement("template<typename Tx, typename Ty>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("Tx mod(Tx x, Ty y)");
 			begin_scope();
 			statement("return x - y * floor(x / y);");
@@ -3321,9 +3308,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplRadians:
 			statement("// Implementation of the GLSL radians() function");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T radians(T d)");
 			begin_scope();
 			statement("return d * T(0.01745329251);");
@@ -3334,9 +3319,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplDegrees:
 			statement("// Implementation of the GLSL degrees() function");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T degrees(T r)");
 			begin_scope();
 			statement("return r * T(57.2957795131);");
@@ -3347,9 +3330,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindILsb:
 			statement("// Implementation of the GLSL findLSB() function");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T spvFindLSB(T x)");
 			begin_scope();
 			statement("return select(ctz(x), T(-1), x == T(0));");
@@ -3360,9 +3341,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindUMsb:
 			statement("// Implementation of the unsigned GLSL findMSB() function");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T spvFindUMSB(T x)");
 			begin_scope();
 			statement("return select(clz(T(0)) - (clz(x) + T(1)), T(-1), x == T(0));");
@@ -3373,9 +3352,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplFindSMsb:
 			statement("// Implementation of the signed GLSL findMSB() function");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T spvFindSMSB(T x)");
 			begin_scope();
 			statement("T v = select(x, T(-1) - x, x < T(0));");
@@ -3387,9 +3364,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplSSign:
 			statement("// Implementation of the GLSL sign() function for integer types");
 			statement("template<typename T, typename E = typename enable_if<is_integral<T>::value>::type>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T sign(T x)");
 			begin_scope();
 			statement("return select(select(select(x, T(0), x == T(0)), T(1), x > T(0)), T(-1), x < T(0));");
@@ -3438,7 +3413,8 @@ void CompilerMSL::emit_custom_functions()
 					array_arg += "]";
 				}
 
-				statement("static inline __attribute__((always_inline)) void spvArrayCopy", function_name_tags[variant], dimensions, "(",
+				statement(force_inline);
+				statement("void spvArrayCopy", function_name_tags[variant], dimensions, "(",
 				          dst_address_space[variant], " T (&dst)", array_arg, ", ", src_address_space[variant],
 				          " T (&src)", array_arg, ")");
 
@@ -3457,19 +3433,14 @@ void CompilerMSL::emit_custom_functions()
 			break;
 		}
 
-		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-
+		// Support for Metal 2.1's new texture_buffer type.
 		case SPVFuncImplTexelBufferCoords:
 		{
-			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
 			if (msl_options.texel_buffer_texture_width > 0)
 			{
 				string tex_width_str = convert_to_string(msl_options.texel_buffer_texture_width);
 				statement("// Returns 2D texture coords corresponding to 1D texel buffer coords");
-				/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-				statement("static inline __attribute__((always_inline))");
-				/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+				statement(force_inline);
 				statement("uint2 spvTexelBufferCoord(uint tc)");
 				begin_scope();
 				statement(join("return uint2(tc % ", tex_width_str, ", tc / ", tex_width_str, ");"));
@@ -3482,11 +3453,10 @@ void CompilerMSL::emit_custom_functions()
 				statement("#define spvTexelBufferCoord(tc, tex) uint2((tc) % (tex).get_width(), (tc) / (tex).get_width())");
 				statement("");
 			}
-			/* UE Change End: Add support for Metal 2.1's new texture_buffer type. */
 			break;
 		}
 
-		/* UE Change Begin: Emulate texture2D atomic operations */
+		// Emulate texture2D atomic operations
 		case SPVFuncImplImage2DAtomicCoords:
 		{
 			statement("// Returns buffer coords corresponding to 2D texture coords for emulating 2D texture atomics");
@@ -3494,9 +3464,8 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 		}
-		/* UE Change End: Emulate texture2D atomic operations */
 
-		/* UE Change Begin: Storage buffer robustness */
+		// Storage buffer robustness
 		case SPVFuncImplStorageBufferCoords:
 		{
 			statement("// Returns buffer coords clamped to storage buffer size");
@@ -3504,9 +3473,8 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 		}
-		/* UE Change End: Storage buffer robustness */
 
-		/* UE Change Begin */
+		// "fadd" intrinsic support
 		case SPVFuncImplFAdd:
 			statement("template<typename T>");
 			statement("T spvFAdd(T l, T r)");
@@ -3516,6 +3484,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 			
+		// "fmul' intrinsic support
 		case SPVFuncImplFMul:
 			statement("template<typename T>");
 			statement("T spvFMul(T l, T r)");
@@ -3554,8 +3523,9 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 			
+		// Emulate texturecube_array with texture2d_array for iOS where this type is not available
 		case SPVFuncImplCubemapTo2DArrayFace:
-			statement("static inline __attribute__((always_inline))");
+			statement(force_inline);
 			statement("float3 spvCubemapTo2DArrayFace(float3 P)");
 			begin_scope();
 			statement("float3 Coords = abs(P.xyz);");
@@ -3590,13 +3560,10 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			break;
-		/* UE Change End */
 				
 		case SPVFuncImplInverse4x4:
 			statement("// Returns the determinant of a 2x2 matrix.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float spvDet2x2(float a1, float a2, float b1, float b2)");
 			begin_scope();
 			statement("return a1 * b2 - b1 * a2;");
@@ -3604,9 +3571,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 
 			statement("// Returns the determinant of a 3x3 matrix.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float spvDet3x3(float a1, float a2, float a3, float b1, float b2, float b3, float c1, "
 			          "float c2, float c3)");
 			begin_scope();
@@ -3616,9 +3581,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float4x4 spvInverse4x4(float4x4 m)");
 			begin_scope();
 			statement("float4x4 adj;	// The adjoint matrix (inverse after dividing by determinant)");
@@ -3675,9 +3638,7 @@ void CompilerMSL::emit_custom_functions()
 			if (spv_function_implementations.count(SPVFuncImplInverse4x4) == 0)
 			{
 				statement("// Returns the determinant of a 2x2 matrix.");
-				/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-				statement("static inline __attribute__((always_inline))");
-				/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+				statement(force_inline);
 				statement("float spvDet2x2(float a1, float a2, float b1, float b2)");
 				begin_scope();
 				statement("return a1 * b2 - b1 * a2;");
@@ -3687,9 +3648,7 @@ void CompilerMSL::emit_custom_functions()
 
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float3x3 spvInverse3x3(float3x3 m)");
 			begin_scope();
 			statement("float3x3 adj;	// The adjoint matrix (inverse after dividing by determinant)");
@@ -3720,9 +3679,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplInverse2x2:
 			statement("// Returns the inverse of a matrix, by using the algorithm of calculating the classical");
 			statement("// adjoint and dividing by the determinant. The contents of the matrix are changed.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float2x2 spvInverse2x2(float2x2 m)");
 			begin_scope();
 			statement("float2x2 adj;	// The adjoint matrix (inverse after dividing by determinant)");
@@ -3748,17 +3705,17 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename "
-					  "spvRemoveReference<T>::type& x)");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+
+			statement("template<typename T>");
+			statement(force_inline);
+			statement("constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)");
 			begin_scope();
 			statement("return static_cast<thread T&&>(x);");
 			end_scope();
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("template<typename T> static inline __attribute__((always_inline)) constexpr thread T&& spvForward(thread typename "
-					  "spvRemoveReference<T>::type&& x)");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+
+			statement("template<typename T>");
+			statement(force_inline);
+			statement("constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)");
 			begin_scope();
 			statement("return static_cast<thread T&&>(x);");
 			end_scope();
@@ -3767,9 +3724,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplRowMajor2x3:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float2x3 spvConvertFromRowMajor2x3(float2x3 m)");
 			begin_scope();
 			statement("return float2x3(float3(m[0][0], m[0][2], m[1][1]), float3(m[0][1], m[1][0], m[1][2]));");
@@ -3779,9 +3734,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplRowMajor2x4:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float2x4 spvConvertFromRowMajor2x4(float2x4 m)");
 			begin_scope();
 			statement("return float2x4(float4(m[0][0], m[0][2], m[1][0], m[1][2]), float4(m[0][1], m[0][3], m[1][1], "
@@ -3792,9 +3745,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplRowMajor3x2:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float3x2 spvConvertFromRowMajor3x2(float3x2 m)");
 			begin_scope();
 			statement("return float3x2(float2(m[0][0], m[1][1]), float2(m[0][1], m[2][0]), float2(m[1][0], m[2][1]));");
@@ -3804,9 +3755,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplRowMajor3x4:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float3x4 spvConvertFromRowMajor3x4(float3x4 m)");
 			begin_scope();
 			statement("return float3x4(float4(m[0][0], m[0][3], m[1][2], m[2][1]), float4(m[0][1], m[1][0], m[1][3], "
@@ -3817,9 +3766,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplRowMajor4x2:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float4x2 spvConvertFromRowMajor4x2(float4x2 m)");
 			begin_scope();
 			statement("return float4x2(float2(m[0][0], m[2][0]), float2(m[0][1], m[2][1]), float2(m[1][0], m[3][0]), "
@@ -3830,9 +3777,7 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplRowMajor4x3:
 			statement("// Implementation of a conversion of matrix content from RowMajor to ColumnMajor organization.");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("float4x3 spvConvertFromRowMajor4x3(float4x3 m)");
 			begin_scope();
 			statement("return float4x3(float3(m[0][0], m[1][1], m[2][2]), float3(m[0][1], m[1][2], m[3][0]), "
@@ -3854,9 +3799,7 @@ void CompilerMSL::emit_custom_functions()
 			end_scope_decl();
 			statement("");
 			statement("template<typename T>");
-            /* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-            statement("static inline __attribute__((always_inline))");
-            /* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)");
 			begin_scope();
 			statement("switch (s)");
@@ -3883,9 +3826,7 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplTextureSwizzle:
 			statement("// Wrapper function that swizzles texture samples and fetches.");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)");
 			begin_scope();
 			statement("if (!s)");
@@ -3897,9 +3838,7 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			statement("template<typename T>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("T spvTextureSwizzle(T x, uint s)");
 			begin_scope();
 			statement("return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;");
@@ -3911,9 +3850,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("// Wrapper function that swizzles texture gathers.");
 			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
 			          "typename... Ts>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, "
 					  "uint sw, component c, Ts... params) METAL_CONST_ARG(c)");
 			begin_scope();
@@ -3958,9 +3895,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("// Wrapper function that swizzles depth texture gathers.");
 			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
 					  "typename... Ts>");
-			/* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
-			statement("static inline __attribute__((always_inline))");
-			/* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+			statement(force_inline);
 			statement("vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler "
 					  "s, uint sw, Ts... params) ");
 			begin_scope();
@@ -4827,7 +4762,7 @@ void CompilerMSL::declare_undefined_values()
 		statement("");
 }
 
-/* UE Change Begin: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
+// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 void CompilerMSL::declare_constant_arrays()
 {
 	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
@@ -4851,6 +4786,7 @@ void CompilerMSL::declare_constant_arrays()
 		statement("");
 }
 
+// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 void CompilerMSL::declare_complex_constant_arrays()
 {
 	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
@@ -4873,7 +4809,6 @@ void CompilerMSL::declare_complex_constant_arrays()
 	if (emitted)
 		statement("");
 }
-/* UE Change End: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
 
 void CompilerMSL::emit_resources()
 {
@@ -5290,7 +5225,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	switch (opcode)
 	{
-	/* UE Change Begin: Sample mask input for Metal is not an array */
+	// Sample mask input for Metal is not an array
 	case OpLoad:
 	{
 		uint32_t id = ops[1];
@@ -5302,7 +5237,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
-	/* UE Change End: Sample mask input for Metal is not an array */
 
 	// Comparisons
 	case OpIEqual:
@@ -5593,7 +5527,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	/* UE Change Begin: Emulate texture2D atomic operations */
+	// Emulate texture2D atomic operations
 	case OpImageTexelPointer:
 	{
 		// When using the pointer, we need to know which variable it is actually loaded from.
@@ -5610,7 +5544,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				coord = join("spvImage2DAtomicCoord(", coord, ", ", to_expression(ops[2]), ")");
 			}
 			
-			/* UE Change Begin: Storage buffer robustness */
+			// Storage buffer robustness
 			if (msl_options.enforce_storge_buffer_bounds)
 			{
 				const auto *var_type = var ? maybe_get<SPIRType>(var->basetype) : nullptr;
@@ -5626,7 +5560,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
                     coord = join("spvStorageBufferCoords(", convert_to_string(var_index), ", spvBufferSizeConstants, ", type_to_glsl(innertype), ", ", coord, ")");
                 }
 			}
-			/* UE Change End: Storage buffer robustness */
 			
 			auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), "_atomic[", coord, "]"), result_type, true);
 			e.loaded_from = var ? var->self : 0;
@@ -5642,7 +5575,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		}
 		break;
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
 
 	case OpImageWrite:
 	{
@@ -6150,27 +6082,26 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	previous_instruction_opcode = opcode;
 }
 
-/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
-/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
 static inline bool image_opcode_is_sample_no_dref(Op op)
 {
 	switch (op)
 	{
-		case OpImageSampleExplicitLod:
-		case OpImageSampleImplicitLod:
-		case OpImageSampleProjExplicitLod:
-		case OpImageSampleProjImplicitLod:
-		case OpImageFetch:
-		case OpImageRead:
-		case OpImageSparseSampleExplicitLod:
-		case OpImageSparseSampleImplicitLod:
-		case OpImageSparseSampleProjExplicitLod:
-		case OpImageSparseSampleProjImplicitLod:
-		case OpImageSparseFetch:
-		case OpImageSparseRead:
+	case OpImageSampleExplicitLod:
+	case OpImageSampleImplicitLod:
+	case OpImageSampleProjExplicitLod:
+	case OpImageSampleProjImplicitLod:
+	case OpImageFetch:
+	case OpImageRead:
+	case OpImageSparseSampleExplicitLod:
+	case OpImageSparseSampleImplicitLod:
+	case OpImageSparseSampleProjExplicitLod:
+	case OpImageSparseSampleProjImplicitLod:
+	case OpImageSparseFetch:
+	case OpImageSparseRead:
 		return true;
 		
-		default:
+	default:
 		return false;
 	}
 }
@@ -6349,12 +6280,11 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 	if (op == OpImageRead)
 		expr = remap_swizzle(get<SPIRType>(result_type), 4, expr);
 	
-	/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+	// Use Metal's native frame-buffer fetch API for subpass inputs.
 	if (imgtype.image.dim == DimSubpassData && msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
 	{
 		expr = to_expression(img);
 	}
-	/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 
 	emit_op(result_type, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
@@ -6373,8 +6303,6 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 			break;
 	}
 }
-/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
-/* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 
 void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem)
 {
@@ -6404,11 +6332,11 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 		if (get_execution_model() == ExecutionModelTessellationControl ||
 		    (mem_sem & (MemorySemanticsUniformMemoryMask | MemorySemanticsCrossWorkgroupMemoryMask)))
 			mem_flags += "mem_flags::mem_device";
-		/* UE Change Begin: Fix tessellation patch function processing */
+		
+		// Fix tessellation patch function processing
 		if (get_execution_model() == ExecutionModelTessellationControl ||
 			(mem_sem & (MemorySemanticsSubgroupMemoryMask | MemorySemanticsWorkgroupMemoryMask |
 		               MemorySemanticsAtomicCounterMemoryMask)))
-		/* UE Change End: Fix tessellation patch function processing */
 		{
 			if (!mem_flags.empty())
 				mem_flags += " | ";
@@ -6455,11 +6383,20 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass lhs_storage,
                                   StorageClass rhs_storage)
 {
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	bool lhs_thread =
-		lhs_storage == StorageClassOutput || lhs_storage == StorageClassFunction || lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate;
-	bool rhs_thread =
-		rhs_storage == StorageClassInput || rhs_storage == StorageClassFunction || rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate;
+	// Allow Metal to use the array<T> template to make arrays a value type.
+	// This, however, cannot be used for threadgroup address specifiers, so consider the custom array copy as fallback.
+	bool lhs_thread = (
+		lhs_storage == StorageClassOutput ||
+		lhs_storage == StorageClassFunction ||
+		lhs_storage == StorageClassGeneric ||
+		lhs_storage == StorageClassPrivate
+	);
+	bool rhs_thread = (
+		rhs_storage == StorageClassInput ||
+		rhs_storage == StorageClassFunction ||
+		rhs_storage == StorageClassGeneric ||
+		rhs_storage == StorageClassPrivate
+	);
 	
 	// If threadgroup storage qualifiers are *not* used:
 	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
@@ -6468,7 +6405,6 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 		statement(lhs, " = ", to_expression(rhs_id), ";");
 	}
 	else
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 	{
 		// Assignment from an array initializer is fine.
 		auto &type = expression_type(rhs_id);
@@ -6579,7 +6515,8 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	auto *var = maybe_get_backing_variable(obj);
 	if (!var)
 		SPIRV_CROSS_THROW("No backing variable for atomic operation.");
-	/* UE Change Begin: Emulate texture2D atomic operations */
+	
+	// Emulate texture2D atomic operations
 	const auto &res_type = get<SPIRType>(var->basetype);
 	if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
 	{
@@ -6587,9 +6524,9 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	}
 	else
 	{
-	exp += get_argument_address_space(*var);
+		exp += get_argument_address_space(*var);
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
+	
 	exp += " atomic_";
 	exp += type_to_glsl(type);
 	exp += "*)";
@@ -6963,10 +6900,9 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	processing_entry_point = (func.self == ir.default_entry_point);
 
-    /* UE Change Begin: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+	// Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib.
 	if (!processing_entry_point)
-		statement("static inline __attribute__((always_inline))");
-    /* UE Change End: Metal helper functions must be static force-inline otherwise they will cause problems when linked together in a single Metallib. */
+		statement(force_inline);
 
 	auto &type = get<SPIRType>(func.return_type);
 
@@ -7343,26 +7279,25 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 		else
 		{
 			// Metal texel buffer textures are 2D, so convert 1D coord to 2D.
-			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
+			// Support for Metal 2.1's new texture_buffer type.
 			if (is_fetch)
 			{
 				if (msl_options.texel_buffer_texture_width > 0)
 				{
-				tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
-		}
+					tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ")";
+				}
 				else
 				{
 					tex_coords = "spvTexelBufferCoord(" + round_fp_tex_coords(tex_coords, coord_is_fp) + ", " + to_expression(img) + ")";
 				}
 			}
-			/* UE Change Begin: Add support for Metal 2.1's new texture_buffer type. */
 		}
 
 		alt_coord_component = 1;
 		break;
 
 	case DimSubpassData:
-		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+		// Use Metal's native frame-buffer fetch API for subpass inputs.
 		if (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses)
 		{
 			if (imgtype.image.ms)
@@ -7370,7 +7305,6 @@ string CompilerMSL::to_function_args(uint32_t img, const SPIRType &imgtype, bool
 			else
 				tex_coords = join("uint2(gl_FragCoord.xy), 0");
 		}
-		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		break;
 
 	case Dim2D:
@@ -8052,13 +7986,12 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 			arg_str += ")";
 	}
 
-	/* UE Change Begin: Emulate texture2D atomic operations */
+	// Emulate texture2D atomic operations
 	auto *backing_var = maybe_get_backing_variable(var_id);
 	if (atomic_vars.find(backing_var) != atomic_vars.end())
 	{
 		arg_str += ", " + to_expression(var_id) + "_atomic";
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
 	
 	return arg_str;
 }
@@ -8208,7 +8141,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	// If this member is packed, mark it as so.
 	string pack_pfx;
 	
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+	// Allow Metal to use the array<T> template to make arrays a value type
 	string packed_array_type;
 	string unpacked_array_type;
 
@@ -8275,11 +8208,9 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	if (physical_type.basetype != SPIRType::Image && physical_type.basetype != SPIRType::Sampler &&
 	    physical_type.basetype != SPIRType::SampledImage)
 	{
-		/* UE Change Begin: Force the use of C style array declaration. */
+		// Force the use of C style array declaration.
 		BuiltIn builtin = BuiltInMax;
 		use_builtin_array = is_member_builtin(type, index, &builtin);
-		/* UE Change End: Force the use of C style array declaration. */
-		
 		array_type = type_to_array_glsl(physical_type);
 	}
 	
@@ -8297,7 +8228,6 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			result.replace(it, unpacked_array_type.length(), packed_array_type);
 		}
 	}
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 	
 	use_builtin_array = false;
 	return result;
@@ -8314,11 +8244,10 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 		statement("char _m", index, "_pad", "[", pad_len, "];");
 	}
 
-    /* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+    // Handle HLSL-style 0-based vertex/instance index.
     builtin_declaration = true;
 	statement(to_struct_member(type, member_type_id, index, qualifier));
     builtin_declaration = false;
-    /* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 }
 
 void CompilerMSL::emit_struct_padding_target(const SPIRType &type)
@@ -8866,7 +8795,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				if (!ep_args.empty())
 					ep_args += ", ";
 
-				/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+				// Handle HLSL-style 0-based vertex/instance index.
 				builtin_declaration = true;
 				ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
 				ep_args += " [[" + builtin_qualifier(bi_type);
@@ -8880,7 +8809,6 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				}
 				ep_args += "]]";
                 builtin_declaration = false;
-                /* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 			}
 		}
 
@@ -8911,13 +8839,12 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 	if (needs_instance_idx_arg)
 		ep_args += built_in_func_arg(BuiltInInstanceIndex, !ep_args.empty());
 
-	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	// Handle HLSL-style 0-based vertex/instance index.
 	if (needs_base_vertex_arg > 0)
 		ep_args += built_in_func_arg(BuiltInBaseVertex, !ep_args.empty());
 	
 	if (needs_base_instance_arg > 0)
 		ep_args += built_in_func_arg(BuiltInBaseInstance, !ep_args.empty());
-	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 
 	if (capture_output_to_buffer)
 	{
@@ -9011,9 +8938,8 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 				buffer_binding = i;
 		}
 
-		/* UE Change Begin: Allow the caller to specify the Metal translation should use argument buffers */
+		// Allow the caller to specify the Metal translation should use argument buffers
 		buffer_binding += msl_options.argument_buffer_offset;
-		/* UE Change End: Allow the caller to specify the Metal translation should use argument buffers */
 		
 		claimed_bindings.set(buffer_binding);
 
@@ -9096,13 +9022,12 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				}
 			}
 
-			/* UE Change Begin: Emulate texture2D atomic operations */
+			// Emulate texture2D atomic operations
 			uint32_t secondary_index = 0;
 			if (atomic_vars.find(&var) != atomic_vars.end())
 			{
 				secondary_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 			}
-			/* UE Change End: Emulate texture2D atomic operations */
 			
 			if (type.basetype == SPIRType::SampledImage)
 			{
@@ -9163,8 +9088,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (array_size == 0)
 					SPIRV_CROSS_THROW("Unsized arrays of buffers are not supported in MSL.");
 
-				/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-				/* UE Change Begin: Force the use of C style array declaration. */
+				// Allow Metal to use the array<T> template to make arrays a value type
 				use_builtin_array = true;
 				buffer_arrays.push_back(var_id);
 				for (uint32_t i = 0; i < array_size; ++i)
@@ -9176,8 +9100,6 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")]]";
 				}
 				use_builtin_array = false;
-				/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-				/* UE Change End: Force the use of C style array declaration. */
 			}
 			else
 			{
@@ -9200,7 +9122,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			if (!ep_args.empty())
 				ep_args += ", ";
 			
-            /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+            // Use Metal's native frame-buffer fetch API for subpass inputs.
             const auto &basetype = get<SPIRType>(var.basetype);
             if (basetype.image.dim != DimSubpassData || !msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses)
             {
@@ -9212,17 +9134,15 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
                 ep_args += image_type_glsl(type, var_id) + "4 " + r.name;
                 ep_args += " [[color(" + convert_to_string(r.index) + ")]]";
             }
-            /* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
-                
-            /* UE Change Begin: Emulate texture2D atomic operations */
+			
+            // Emulate texture2D atomic operations
             if (atomic_vars.find(&var) != atomic_vars.end())
             {
                 ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(basetype.image.type), 0);
                 ep_args += "* " + r.name + "_atomic";
                 ep_args += " [[buffer(" + convert_to_string(r.secondary_index) + ")]]";
             }
-            /* UE Change End: Emulate texture2D atomic operations */
-                
+			
 			break;
         }
 		default:
@@ -9626,16 +9546,13 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		}
 	}
 
-	/* UE Change Begin: Always determine resource index */
-	// If we have already allocated an index, keep using it.
-//	if (has_extended_decoration(var.self, resource_decoration))
-//		return get_extended_decoration(var.self, resource_decoration);
-	/* UE Change End: Always determine resource index */
+	// Always determine resource index and don't opt out if the variable already has the "resource_decoration" flag.
+	// This doesn't work with atomics that need to be split into two resources.
 
-	/* UE Change Begin: Allow user to enable decoration binding */
-	// If there is no explicit mapping of bindings to MSL, use the declared binding.
+	// Allow user to enable decoration binding
 	if (msl_options.enable_decoration_binding)
 	{
+		// If there is no explicit mapping of bindings to MSL, use the declared binding.
 		if (has_decoration(var.self, DecorationBinding))
 		{
 			var_binding = get_decoration(var.self, DecorationBinding);
@@ -9644,7 +9561,6 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 				return var_binding;
 		}
 	}
-	/* UE Change End: Allow user to enable decoration binding */
 
 	// If we did not explicitly remap, allocate bindings on demand.
 	// We cannot reliably use Binding decorations since SPIR-V and MSL's binding models are very different.
@@ -9735,8 +9651,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	                              spv_function_implementations.count(SPVFuncImplDynamicImageSampler);
 
 	
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	/* UE Change Begin: Force the use of C style array declaration. */
+	// Allow Metal to use the array<T> template to make arrays a value type
 	string address_space = get_argument_address_space(var);
 	bool builtin = is_builtin_variable(var);
 	use_builtin_array = builtin;
@@ -9862,18 +9777,15 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += to_expression(name_id);
 	}
 
-	/* UE Change Begin: Emulate texture2D atomic operations */
+	// Emulate texture2D atomic operations
 	auto *backing_var = maybe_get_backing_variable(name_id);
 	if (atomic_vars.find(backing_var) != atomic_vars.end())
 	{
 		decl += ", device atomic_" + type_to_glsl(get<SPIRType>(var_type.image.type), 0);
 		decl += "* " + to_expression(name_id) + "_atomic";
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
 	
 	use_builtin_array = false;
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-	/* UE Change End: Force the use of C style array declaration. */
 
 	return decl;
 }
@@ -10244,8 +10156,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	if (type.pointer)
 	{
 		const char *restrict_kw;
-		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-		/* UE Change Begin: Force the use of C style array declaration. */
+		// Allow Metal to use the array<T> template to make arrays a value type
 		if (use_builtin_array || type.array.size() == 0)
 		{
 			type_name = join(get_type_address_space(type, id), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
@@ -10266,8 +10177,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			}
 			return type_name;
 		}
-		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-		/* UE Change End: Force the use of C style array declaration. */
+		
 		switch (type.basetype)
 		{
 		case SPIRType::Image:
@@ -10293,10 +10203,9 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	{
 	case SPIRType::Struct:
 		// Need OpName lookup here to get a "sensible" name for a struct.
-        /* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+        // Allow Metal to use the array<T> template to make arrays a value type
 		type_name = to_name(type.self);
 		break;
-        /* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
@@ -10369,7 +10278,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	if (type.vecsize > 1)
 		type_name += to_string(type.vecsize);
 
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+	// Allow Metal to use the array<T> template to make arrays a value type
 	if (type.array.empty())
 	{
 		return type_name;
@@ -10423,13 +10332,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			return res;
 		}
 	}
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 }
 
 string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 {
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	/* UE Change Begin: Force the use of C style array declaration. */
+	// Allow Metal to use the array<T> template to make arrays a value type
 	switch (type.basetype)
 	{
 		case SPIRType::AtomicCounter:
@@ -10445,11 +10352,9 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 				return "";
 		}
 	}
-	/* UE Change End: Force the use of C style array declaration. */
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 }
 
-/* UE Change Begin: Threadgroup arrays can't have a wrapper type */
+// Threadgroup arrays can't have a wrapper type
 std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 {
 	if (variable.storage == StorageClassWorkgroup)
@@ -10463,7 +10368,6 @@ std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 	}
 	return expr;
 }
-/* UE Change End: Threadgroup arrays can't have a wrapper type */
 
 std::string CompilerMSL::sampler_type(const SPIRType &type)
 {
@@ -10585,11 +10489,10 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			else
 				img_type_name += "texture2d";
 			break;
-        /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		case DimSubpassData:
+			// Use Metal's native frame-buffer fetch API for subpass inputs.
             if (msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
                 return type_to_glsl(get<SPIRType>(img_type.type));
-        /* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
 		case Dim2D:
 			if (img_type.ms && img_type.arrayed)
 			{
@@ -10924,7 +10827,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	switch (builtin)
 	{
 
-	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	// Handle HLSL-style 0-based vertex/instance index.
 	// Override GLSL compiler strictness
 	case BuiltInVertexId:
 		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
@@ -10998,7 +10901,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
 			needs_base_vertex_arg--;
-		return "gl_BaseVertex";
+			return "gl_BaseVertex";
 		}
 		else
 		{
@@ -11008,13 +10911,12 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
 			needs_base_instance_arg--;
-		return "gl_BaseInstance";
+			return "gl_BaseInstance";
 		}
 		else
 		{
 			SPIRV_CROSS_THROW("BaseInstance requires Metal 1.1 and Mac or Apple A9+ hardware.");
 		}
-	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 	case BuiltInDrawIndex:
 		SPIRV_CROSS_THROW("DrawIndex is not supported in MSL.");
 
@@ -11397,13 +11299,12 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 	if (prefix_comma)
 		bi_arg += ", ";
 
-	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
+	// Handle HLSL-style 0-based vertex/instance index.
 	builtin_declaration = true;
 	bi_arg += builtin_type_decl(builtin);
 	bi_arg += " " + builtin_to_glsl(builtin, StorageClassInput);
 	bi_arg += " [[" + builtin_qualifier(builtin) + "]]";
 	builtin_declaration = false;
-	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
 
 	return bi_arg;
 }
@@ -11698,14 +11599,13 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		suppress_missing_prototypes = true;
 		break;
 
-	/* UE Change Begin: Emulate texture2D atomic operations */
+	// Emulate texture2D atomic operations
 	case OpImageTexelPointer:
 	{
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
 		image_pointers[args[1]] = var;
 		break;
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
 			
 	case OpImageWrite:
 		uses_resource_write = true;
@@ -11715,6 +11615,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		check_resource_write(args[0]);
 		break;
 
+	// Emulate texture2D atomic operations
 	case OpAtomicExchange:
 	case OpAtomicCompareExchange:
 	case OpAtomicCompareExchangeWeak:
@@ -11729,7 +11630,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpAtomicAnd:
 	case OpAtomicOr:
 	case OpAtomicXor:
-	/* UE Change Begin: Emulate texture2D atomic operations */
 	{
 		uses_atomics = true;
 		auto it = image_pointers.find(args[2]);
@@ -11763,7 +11663,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		}
 		break;
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
 
 	case OpGroupNonUniformInverseBallot:
 		needs_subgroup_invocation_id = true;
@@ -11782,7 +11681,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		break;
 	}
 
-	/* UE Change Begin: Fix tessellation patch function processing */
+	// Fix tessellation patch function processing
 	case OpLoad:
 	{
 		if(compiler.get_execution_model() == ExecutionModelTessellationControl)
@@ -11817,8 +11716,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		passed_control_barrier = true;
 		break;
 	}
-	/* UE Change End: Fix tessellation patch function processing */
-			
+
 	case OpInBoundsAccessChain:
 	case OpAccessChain:
 	case OpPtrAccessChain:
@@ -11828,7 +11726,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		uint32_t id = args[1];
 		uint32_t ptr = args[2];
 		
-		/* UE Change Begin: Fix tessellation patch function processing */
+		// Fix tessellation patch function processing
 		if(compiler.get_execution_model() == ExecutionModelTessellationControl)
 		{
 			uint32_t source_id = args[3];
@@ -11873,7 +11771,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 				}
 			}
 		}
-		/* UE Change End: Fix tessellation patch function processing */
 		
 		compiler.set<SPIRExpression>(id, "", result_type, true);
 		compiler.register_read(id, ptr, true);
@@ -11902,9 +11799,9 @@ void CompilerMSL::OpCodePreprocessor::check_resource_write(uint32_t var_id)
 		uses_resource_write = true;
 }
 
-/* UE Change Begin: Storage buffer robustness */
-/* UE Change Begin: Fix loads from tessellation control inputs not being forwarded to the gl_in structure array */
-/* UE Change Begin: Fix loads from tessellation evaluation inputs not being forwarded to the stage_in structure array */
+// Storage buffer robustness
+// Fix loads from tessellation control inputs not being forwarded to the gl_in structure array
+// Fix loads from tessellation evaluation inputs not being forwarded to the stage_in structure array
 std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags, AccessChainMeta *meta)
 {
 	string expr;
@@ -11958,11 +11855,11 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
+	// Workaround SPIRV losing an array indirection in tessellation shaders - not the best solution but enough to keep things progressing.
 	auto* tess_var = maybe_get_backing_variable(base);
 	bool tess_control_input = (get_execution_model() == ExecutionModelTessellationControl && tess_var && tess_var->storage == StorageClassInput);
 	bool tess_eval_input = (get_execution_model() == ExecutionModelTessellationEvaluation && tess_var && tess_var->storage == StorageClassInput && expr.find("gl_in") == string::npos) && expr != "gl_TessLevelInner" && expr != "gl_TessLevelOuter";
 	bool tess_eval_input_array = (get_execution_model() == ExecutionModelTessellationEvaluation && access_chain_is_arrayed && expr.find("gl_in[") != string::npos);
-    /* UE Change Begin: Workaround SPIRV losing an array indirection in tessellation shaders - not the best solution but enough to keep things progressing. */
 	bool tess_control_input_array = ((get_execution_model() == ExecutionModelTessellationControl || get_execution_model() == ExecutionModelTessellationEvaluation) && type->array.size() == 2 && type->array[0] >= 1);
 	uint32_t tess_control_input_array_num = type->array[0];
 	
@@ -11975,11 +11872,13 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 	const auto append_index = [&](uint32_t index) {
 		std::string name;
 		
-		if (tess_control_input) {
+		if (tess_control_input)
+		{
 			name = expr;
 			expr = "gl_in";
 		}
-		else if (tess_eval_input && !tess_eval_input_array) {
+		else if (tess_eval_input && !tess_eval_input_array)
+		{
 			name = expr;
 			expr = to_expression(patch_stage_in_var_id) + ".gl_in";
 		}
@@ -12060,7 +11959,6 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 			}
 		}
 	};
-    /* UE Change End: Workaround SPIRV losing an array indirection in tessellation shaders - not the best solution but enough to keep things progressing. */
 	
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -12140,8 +12038,8 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 				auto builtin = ir.meta[base].decoration.builtin_type;
 				switch (builtin)
 				{
-						// case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
-						// case BuiltInClipDistance:
+					// case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
+					// case BuiltInClipDistance:
 					case BuiltInPosition:
 					case BuiltInPointSize:
 						if (var->storage == StorageClassInput)
@@ -12181,9 +12079,8 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 				if (!pending_array_enclose)
 					expr += "]";
 			}
-			/* UE Change Begin: Sample mask input for Metal is not an array */
+			// Sample mask input for Metal is not an array
 			else if (ir.meta[base].decoration.builtin_type != BuiltInSampleMask)
-			/* UE Change End: Sample mask input for Metal is not an array */
 			{
 				if (is_packed)
 				{
@@ -12328,16 +12225,13 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 	
 	return expr;
 }
-/* UE Change End: Fix loads from tessellation evaluation inputs not being forwarded to the stage_in structure array */
-/* UE Change End: Fix loads from tessellation control inputs not being forwarded to the gl_in structure array */
-/* UE Change End: Storage buffer robustness */
 
 // Returns an enumeration of a SPIR-V function that needs to be output for certain Op codes.
 CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op opcode, const uint32_t *args)
 {
 	switch (opcode)
 	{
-	/* UE Change Begin: Storage buffer robustness */
+	// Storage buffer robustness
 	case OpInBoundsAccessChain:
 	case OpAccessChain:
 	case OpPtrAccessChain:
@@ -12358,12 +12252,10 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		}
 		break;
 	}
-	/* UE Change End: Storage buffer robustness */
 
 	case OpFMod:
 		return SPVFuncImplMod;
 			
-	/* UE Change Begin */
 	case OpFAdd:
 		if (compiler.msl_options.invariant_float_math)
 		{
@@ -12381,28 +12273,22 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 			return SPVFuncImplFMul;
 		}
 		break;
-	/* UE Change End */
 
 	case OpFunctionCall:
-	{
-		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-		break;
-	}
-
 	case OpStore:
+	case OpCompositeConstruct:
 	{
-        /* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-        /* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+		// Allow Metal to use the array<T> template to make arrays a value type
 		break;
 	}
 
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
 	case OpTypeArray:
+	{
+		// Allow Metal to use the array<T> template to make arrays a value type
 		return SPVFuncImplUnsafeArray;
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+	}
 
-	/* UE Change Begin: Emulate texture2D atomic operations */
+	// Emulate texture2D atomic operations
 	case OpAtomicExchange:
 	case OpAtomicCompareExchange:
 	case OpAtomicCompareExchangeWeak:
@@ -12424,23 +12310,21 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		if (it != image_pointers.end())
 		{
 			uint32_t tid = it->second->basetype;
-			/* UE Change Begin: Storage buffer robustness */
+			
+			// Storage buffer robustness
             if (compiler.msl_options.enforce_storge_buffer_bounds)
             {
                 compiler.buffers_requiring_array_length.insert(args[opcode == OpAtomicStore ? 0 : 2]);
             }
-			/* UE Change End: Storage buffer robustness */
 			
 			if (tid && compiler.get<SPIRType>(tid).image.dim == Dim2D)
 				return SPVFuncImplImage2DAtomicCoords;
 
-			/* UE Change Begin: Storage buffer robustness */
 			return SPVFuncImplStorageBufferCoords;
-			/* UE Change End: Storage buffer robustness */
 		}
 		break;
 	}
-	/* UE Change End: Emulate texture2D atomic operations */
+
 	case OpImageFetch:
 	case OpImageRead:
 	case OpImageWrite:
@@ -12466,14 +12350,9 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpImageSampleProjDrefImplicitLod:
 	case OpImageGather:
 	case OpImageDrefGather:
+	{
 		if (compiler.msl_options.swizzle_texture_samples)
 			return SPVFuncImplTextureSwizzle;
-		break;
-
-	case OpCompositeConstruct:
-	{
-        /* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-        /* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 		break;
 	}
 

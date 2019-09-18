@@ -2718,12 +2718,11 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 	if (id == 0)
 		return;
 	
-	/* UE Change Begin: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
+	// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
 	for (auto child_id : access_chain_children[id])
 	{
 		notify_variable_access(child_id, block);
 	}
-	/* UE Change End: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
 
 	if (id_is_phi_variable(id))
 		accessed_variables_to_block[id].insert(block);
@@ -2789,7 +2788,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
-		/* UE Change Begin: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
+		// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get<SPIRVariable>(ptr);
 		if (var)
@@ -2804,7 +2803,6 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 			notify_variable_access(args[i], current_block->self);
 			access_chain_children[args[1]].insert(args[i]);
 		}
-		/* UE Change End: Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers. */
 
 		// Also keep track of the access chain pointer itself.
 		// In exceptionally rare cases, we can end up with a case where
@@ -3914,7 +3912,7 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
 	comparison_ids.insert(id);
 	
-	/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
 	if (!compiler.supports_combined_samplers())
 	{
 		for (auto it = dependency_hierarchy.begin(); it != dependency_hierarchy.end(); ++it)
@@ -3923,13 +3921,12 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 				comparison_ids.insert(it->first);
 		}
 	}
-	/* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 	
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
 }
 
-/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
 bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(uint32_t id) const
 {
 	if (compiler.supports_combined_samplers())
@@ -3947,7 +3944,6 @@ bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(u
 	
 	return false;
 }
-/* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
@@ -3983,7 +3979,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t result_id = args[1];
 		auto &type = compiler.get<SPIRType>(result_type);
 		
-		/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
+		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
 		// This image must be a depth image.
 		uint32_t image = args[2];
 		uint32_t sampler = args[3];
@@ -4000,7 +3996,6 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 			// Mark the OpSampledImage itself as being comparison state.
 			comparison_ids.insert(result_id);
 		}
-		/* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 		return true;
 	}
 

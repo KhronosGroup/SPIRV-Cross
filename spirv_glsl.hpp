@@ -340,15 +340,11 @@ protected:
 
 	Options options;
 
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	virtual std::string type_to_array_glsl(const SPIRType &type);
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+	virtual std::string type_to_array_glsl(const SPIRType &type); // Allow Metal to use the array<T> template to make arrays a value type
 	std::string to_array_size(const SPIRType &type, uint32_t index);
 	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
 	uint32_t to_array_size_literal(const SPIRType &type) const;
-	/* UE Change Begin: Threadgroup arrays can't have a wrapper type */
-	virtual std::string variable_decl(const SPIRVariable &variable);
-	/* UE Change End: Threadgroup arrays can't have a wrapper type */
+	virtual std::string variable_decl(const SPIRVariable &variable); // Threadgroup arrays can't have a wrapper type
 	std::string variable_decl_function_local(SPIRVariable &variable);
 
 	void add_local_variable_name(uint32_t id);
@@ -493,10 +489,9 @@ protected:
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 
-	/* UE Change Begin: Storage buffer robustness */
+	// Storage buffer robustness
 	virtual std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
 											  AccessChainMeta *meta);
-	/* UE Change End: Storage buffer robustness */
 
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
 	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);
@@ -531,9 +526,10 @@ protected:
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
 	std::string to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read = true);
-    /* UE Change Begin: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+	
+    // Metal expands float[]/float2[] members inside structs to float4[] so we must unpack
 	virtual std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
-    /* UE Change End: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+	
 	std::string to_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_enclosed_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_extract_component_expression(uint32_t id, uint32_t index);
@@ -594,9 +590,9 @@ protected:
 	uint32_t indent = 0;
 
 	std::unordered_set<uint32_t> emitted_functions;
-	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	std::unordered_set<uint32_t> flushed_phi_variables;
-	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 
 	std::unordered_set<uint32_t> flattened_buffer_blocks;
 	std::unordered_set<uint32_t> flattened_structs;

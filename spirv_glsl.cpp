@@ -324,9 +324,8 @@ void CompilerGLSL::reset()
 	forwarded_temporaries.clear();
 	suppressed_usage_tracking.clear();
 
-	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	flushed_phi_variables.clear();
-	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 	
 	reset_name_caches();
 
@@ -337,8 +336,8 @@ void CompilerGLSL::reset()
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) { var.dependees.clear(); });
 
-    /* UE Change Begin: Track write-throughs for loop variables - dxc likes to generate them */
-    /* UE Change End: Track write-throughs for loop variables - dxc likes to generate them */
+    // Track write-throughs for loop variables - dxc likes to generate them
+	
 	ir.reset_all_of_type<SPIRAccessChain>();
 
 	statement_count = 0;
@@ -3347,7 +3346,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	{
 		// Handles Arrays and structures.
 		string res;
-		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+		// Allow Metal to use the array<T> template to make arrays a value type
 		bool bTrailingBracket = false;
 		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
 		    type.array.empty())
@@ -3384,7 +3383,6 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		res += backend.use_initializer_list ? " }" : ")";
 		if (bTrailingBracket)
 			res += ")";
-		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
 		
 		return res;
 	}
@@ -3970,7 +3968,7 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 		}
 		break;
 
-	/* UE Change Begin: Metal tessellation likes empty structs which are then constant expressions. */
+	// Metal tessellation likes empty structs which are then constant expressions.
 	case SPIRType::Struct:
 		if (type.member_types.size() == 0)
 		{
@@ -3981,7 +3979,6 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 			SPIRV_CROSS_THROW("Invalid constant struct initialisation missing member initializers.");
 		}
 		break;
-	/* UE Change End: Metal tessellation likes empty structs which are then constant expressions. */
 
 	default:
 		SPIRV_CROSS_THROW("Invalid constant expression basetype.");
@@ -7444,7 +7441,7 @@ string CompilerGLSL::variable_decl_function_local(SPIRVariable &var)
 
 void CompilerGLSL::emit_variable_temporary_copies(const SPIRVariable &var)
 {
-	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	if (var.allocate_temporary_copy && flushed_phi_variables.find(var.self) == flushed_phi_variables.end())
 	{
 		auto &type = get<SPIRType>(var.basetype);
@@ -7452,12 +7449,11 @@ void CompilerGLSL::emit_variable_temporary_copies(const SPIRVariable &var)
 		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, join("_", var.self, "_copy")), ";");
 		flushed_phi_variables.insert(var.self);
 	}
-	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 }
 
 void CompilerGLSL::flush_variable_declaration(uint32_t id)
 {
-	/* UE Change Begin: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->deferred_declaration)
 	{
@@ -7468,7 +7464,6 @@ void CompilerGLSL::flush_variable_declaration(uint32_t id)
 	{
 		emit_variable_temporary_copies(*var);
 	}
-	/* UE Change End: Ensure that we declare phi-variable copies even if the original declaration isn't deferred */
 }
 
 bool CompilerGLSL::remove_duplicate_swizzle(string &op)

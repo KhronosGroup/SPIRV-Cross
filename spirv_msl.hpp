@@ -253,10 +253,10 @@ public:
 			macOS = 1
 		} Platform;
 
-		/* UE Change Begin: Provide the Metal bindings as part of the options structure as that is more convenient. */
+		// Provide the Metal bindings as part of the options structure as that is more convenient.
 		std::vector<MSLVertexAttr> vtx_attrs;
 		std::vector<MSLResourceBinding> res_bindings;
-		/* UE Change End: Provide the Metal bindings as part of the options structure as that is more convenient. */
+		
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
@@ -269,9 +269,7 @@ public:
 		uint32_t view_mask_buffer_index = 24;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
-		/* UE Change Begin: Allow the caller to specify the Metal translation should use argument buffers */
-		uint32_t argument_buffer_offset = 0;
-		/* UE Change End: Allow the caller to specify the Metal translation should use argument buffers */
+		uint32_t argument_buffer_offset = 0; // Allow the caller to specify the Metal translation should use argument buffers
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
@@ -288,26 +286,14 @@ public:
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
-		/* UE Change Begin: Provide the Metal bindings as part of the options structure as that is more convenient. */
-		bool ios_support_base_vertex_instance = false;
-		/* UE Change End: Provide the Metal bindings as part of the options structure as that is more convenient. */
-		/* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
-		bool ios_use_framebuffer_fetch_subpasses = true;
-		/* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
-
-		/* UE Change Begin: Storage buffer robustness - clamps access to SSBOs to the size of the buffer */
-		bool enforce_storge_buffer_bounds = false;
-		/* UE Change End: Storage buffer robustness - clamps access to SSBOs to the size of the buffer */
+		bool ios_support_base_vertex_instance = false; // Provide the Metal bindings as part of the options structure as that is more convenient.
+		bool ios_use_framebuffer_fetch_subpasses = true; // Use Metal's native frame-buffer fetch API for subpass inputs.
+		bool enforce_storge_buffer_bounds = false; // Storage buffer robustness - clamps access to SSBOs to the size of the buffer
 		
 		bool invariant_float_math = false;
 		
-		/* UE Change Begin: Emulate texturecube_array with texture2d_array for iOS where this type is not available */
-		bool emulate_cube_array = false;
-		/* UE Change End: Emulate texturecube_array with texture2d_array for iOS where this type is not available */
-		
-		/* UE Change Begin: Allow user to enable decoration binding */
-		bool enable_decoration_binding = false;
-		/* UE Change End: Allow user to enable decoration binding */
+		bool emulate_cube_array = false; // Emulate texturecube_array with texture2d_array for iOS where this type is not available
+		bool enable_decoration_binding = false; // Allow user to enable decoration binding
 
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
@@ -347,7 +333,7 @@ public:
 	{
 		msl_options = opts;
 		
-		/* UE Change Begin: Provide the Metal bindings as part of the options structure as that is more convenient. */
+		// Provide the Metal bindings as part of the options structure as that is more convenient.
 		for (auto &va : msl_options.vtx_attrs)
 			vtx_attrs_by_location[va.location] = va;
 		
@@ -358,7 +344,6 @@ public:
 				std::pair<MSLResourceBinding, bool>(rb, true)
 			});
 		}
-		/* UE Change End: Provide the Metal bindings as part of the options structure as that is more convenient. */
 	}
 
 	// Provide feedback to calling API to allow runtime to disable pipeline
@@ -517,18 +502,12 @@ protected:
 		SPVFuncImplArrayOfArrayCopy5Dim = SPVFuncImplArrayCopyMultidimBase + 5,
 		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
 		SPVFuncImplTexelBufferCoords,
-		/* UE Change Begin: Emulate texture2D atomic operations */
-		SPVFuncImplImage2DAtomicCoords,
-		/* UE Change End: Emulate texture2D atomic operations */
-		/* UE Change Begin: Storage buffer robustness */
-		SPVFuncImplStorageBufferCoords,
-		/* UE Change End: Storage buffer robustness */
-		/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
+		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
+		SPVFuncImplStorageBufferCoords, // Storage buffer robustness
 		SPVFuncImplFMul,
 		SPVFuncImplFAdd,
 		SPVFuncImplCubemapTo2DArrayFace,
-		SPVFuncImplUnsafeArray,
-		/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
+		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
@@ -579,11 +558,9 @@ protected:
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
-    /* UE Change Begin: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
-    /* UE Change Begin: Use Metal's native frame-buffer fetch API for subpass inputs. */
+    // If the underlying resource has been used for comparison then duplicate loads of that resource must be too
+    // Use Metal's native frame-buffer fetch API for subpass inputs.
     void emit_texture_op(const Instruction &i) override;
-    /* UE Change End: Use Metal's native frame-buffer fetch API for subpass inputs. */
-    /* UE Change End: If the underlying resource has been used for comparison then duplicate loads of that resource must be too */
 	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
@@ -603,12 +580,8 @@ protected:
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	void emit_struct_padding_target(const SPIRType &type) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
-	/* UE Change Begin: Allow Metal to use the array<T> template to make arrays a value type */
-	std::string type_to_array_glsl(const SPIRType &type) override;
-	/* UE Change End: Allow Metal to use the array<T> template to make arrays a value type */
-	/* UE Change Begin: Threadgroup arrays can't have a wrapper type */
-	std::string variable_decl(const SPIRVariable &variable) override;
-	/* UE Change End: Threadgroup arrays can't have a wrapper type */
+	std::string type_to_array_glsl(const SPIRType &type) override; // Allow Metal to use the array<T> template to make arrays a value type
+	std::string variable_decl(const SPIRVariable &variable) override; // Threadgroup arrays can't have a wrapper type
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
@@ -622,9 +595,10 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, uint32_t minlod, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
-	/* UE Change Begin: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+	
+	// Metal expands float[]/float2[] members inside structs to float4[] so we must unpack
 	virtual std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true) override;
-	/* UE Change End: Metal expands float[]/float2[] members inside structs to float4[] so we must unpack */
+	
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                   bool is_packed, bool row_major) override;
 
@@ -635,17 +609,19 @@ protected:
 	void replace_illegal_names() override;
 	void declare_undefined_values() override;
 	void declare_constant_arrays();
-	/* UE Change Begin: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
+	
+	// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 	void declare_complex_constant_arrays();
-	/* UE Change End: Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries */
+	
 	bool is_patch_block(const SPIRType &type);
 	bool is_non_native_row_major_matrix(uint32_t id) override;
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
 	                                     bool is_packed) override;
-	/* UE Change Begin: Storage buffer robustness */
+	
+	// Storage buffer robustness
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags, AccessChainMeta *meta) override;
-	/* UE Change End: Storage buffer robustness */
+	
 	void preprocess_op_codes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
@@ -828,19 +804,13 @@ protected:
 	uint32_t patch_stage_out_var_id = 0;
 	uint32_t stage_in_ptr_var_id = 0;
 	uint32_t stage_out_ptr_var_id = 0;
-	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
-	int32_t needs_base_vertex_arg = 0;
-	int32_t needs_base_instance_arg = 0;
-	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
+	int32_t needs_base_vertex_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
+	int32_t needs_base_instance_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
 	bool has_sampled_images = false;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
-	/* UE Change Begin: Handle HLSL-style 0-based vertex/instance index. */
-	bool builtin_declaration = false;
-	/* UE Change End: Handle HLSL-style 0-based vertex/instance index. */
-	/* UE Change Begin: Force the use of C style array declaration. */
-	bool use_builtin_array = false;
-	/* UE Change End: Force the use of C style array declaration. */
+	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
+	bool use_builtin_array = false; // Force the use of C style array declaration.
 	bool is_rasterization_disabled = false;
 	bool capture_output_to_buffer = false;
 	bool needs_swizzle_buffer_def = false;
@@ -869,9 +839,7 @@ protected:
 
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<uint32_t> buffer_arrays;
-    /* UE Change Begin: Emulate texture2D atomic operations */
-    std::set<SPIRVariable *> atomic_vars;
-    /* UE Change End: Emulate texture2D atomic operations */
+    std::set<SPIRVariable *> atomic_vars; // Emulate texture2D atomic operations
 
 	uint32_t argument_buffer_ids[kMaxArgumentBuffers];
 	uint32_t argument_buffer_discrete_mask = 0;
@@ -899,14 +867,10 @@ protected:
 
 		CompilerMSL &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
-		/* UE Change Begin: Emulate texture2D atomic operations */
-		std::unordered_map<uint32_t, SPIRVariable*> image_pointers;
-		/* UE Change End: Emulate texture2D atomic operations */
-		/* UE Change Begin: Fix tessellation patch function processing */
-		std::unordered_map<uint32_t, uint32_t> invocation_ids;
-		std::unordered_set<uint32_t> variables_indexed_by_invocation;
-		bool passed_control_barrier = false;
-		/* UE Change End: Fix tessellation patch function processing */
+		std::unordered_map<uint32_t, SPIRVariable*> image_pointers; // Emulate texture2D atomic operations
+		std::unordered_map<uint32_t, uint32_t> invocation_ids; // Fix tessellation patch function processing
+		std::unordered_set<uint32_t> variables_indexed_by_invocation; // Fix tessellation patch function processing
+		bool passed_control_barrier = false; // Fix tessellation patch function processing
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_resource_write = false;
