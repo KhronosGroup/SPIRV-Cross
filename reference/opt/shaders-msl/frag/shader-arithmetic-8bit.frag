@@ -35,9 +35,9 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], device SSBO& ssbo [[buffer(0)]], constant Push& registers [[buffer(1)]], constant UBO& ubo [[buffer(2)]])
 {
     main0_out out = {};
-    short _196 = 10;
+    short _196 = short(10);
     int _197 = 20;
-    char2 _201 = as_type<char2>(10);
+    char2 _201 = as_type<char2>(short(10));
     char2 _198 = _201;
     char4 _199 = as_type<char4>(20);
     _196 = as_type<short>(_201);
@@ -46,9 +46,9 @@ fragment main0_out main0(main0_in in [[stage_in]], device SSBO& ssbo [[buffer(0)
     ssbo.i8[1] = _199.y;
     ssbo.i8[2] = _199.z;
     ssbo.i8[3] = _199.w;
-    ushort _220 = 10u;
+    ushort _220 = ushort(10);
     uint _221 = 20u;
-    uchar2 _225 = as_type<uchar2>(10u);
+    uchar2 _225 = as_type<uchar2>(ushort(10));
     uchar2 _222 = _225;
     uchar4 _223 = as_type<uchar4>(20u);
     _220 = as_type<ushort>(_225);
