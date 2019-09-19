@@ -216,17 +216,19 @@ void CompilerMSL::build_implicit_builtins()
 
 			if (need_multiview)
 			{
-				if (builtin == BuiltInInstanceIndex)
+				switch (builtin)
 				{
+				case BuiltInInstanceIndex:
 					// The view index here is derived from the instance index.
 					builtin_instance_idx_id = var.self;
 					has_instance_idx = true;
-				}
-
-				if (builtin == BuiltInViewIndex)
-				{
+					break;
+				case BuiltInViewIndex:
 					builtin_view_idx_id = var.self;
 					has_view_idx = true;
+					break;
+				default:
+					break;
 				}
 			}
 
@@ -555,6 +557,35 @@ void CompilerMSL::build_implicit_builtins()
 		set_decoration(var_id, DecorationBinding, msl_options.view_mask_buffer_index);
 		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary, msl_options.view_mask_buffer_index);
 		view_mask_buffer_id = var_id;
+	}
+}
+
+// Checks if the specified builtin variable (e.g. gl_InstanceIndex) is marked as active.
+// If not, it marks it as active and forces a recompilation.
+// This might be used when the optimization of inactive builtins was too optimistic (e.g. when "spvOut" is emitted).
+void CompilerMSL::ensure_builtin(spv::StorageClass storage, spv::BuiltIn builtin)
+{
+	Bitset *active_builtins = nullptr;
+	switch (storage)
+	{
+		case StorageClassInput:
+			active_builtins = &active_input_builtins;
+			break;
+			
+		case StorageClassOutput:
+			active_builtins = &active_output_builtins;
+			break;
+			
+		default:
+			break;
+	}
+	
+	// At this point, the specified builtin variable must have already been declared in the entry point.
+	// If not, mark as active and force recompile.
+	if (active_builtins != nullptr && !active_builtins->get(builtin))
+	{
+		active_builtins->set(builtin);
+		force_recompile();
 	}
 }
 
@@ -10830,6 +10861,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	// Handle HLSL-style 0-based vertex/instance index.
 	// Override GLSL compiler strictness
 	case BuiltInVertexId:
+		ensure_builtin(StorageClassInput, BuiltInVertexId);
 		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
 			if (builtin_declaration)
@@ -10839,6 +10871,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			else
 			{
+				ensure_builtin(StorageClassInput, BuiltInBaseVertex);
 				return "(gl_VertexID - gl_BaseVertex)";
 			}
 		}
@@ -10847,6 +10880,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			return "gl_VertexID";
 		}
 	case BuiltInInstanceId:
+		ensure_builtin(StorageClassInput, BuiltInInstanceId);
 		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
 			if (builtin_declaration)
@@ -10856,6 +10890,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			else
 			{
+				ensure_builtin(StorageClassInput, BuiltInBaseInstance);
 				return "(gl_InstanceID - gl_BaseInstance)";
 			}
 		}
@@ -10864,6 +10899,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			return "gl_InstanceID";
 		}
 	case BuiltInVertexIndex:
+		ensure_builtin(StorageClassInput, BuiltInVertexIndex);
 		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
 			if (builtin_declaration)
@@ -10873,6 +10909,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			else
 			{
+				ensure_builtin(StorageClassInput, BuiltInBaseVertex);
 				return "(gl_VertexIndex - gl_BaseVertex)";
 			}
 		}
@@ -10881,6 +10918,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			return "gl_VertexIndex";
 		}
 	case BuiltInInstanceIndex:
+		ensure_builtin(StorageClassInput, BuiltInInstanceIndex);
 		if ((ir.source.hlsl == true) && msl_options.supports_msl_version(1, 1) && (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
 			if (builtin_declaration)
@@ -10890,6 +10928,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			else
 			{
+				ensure_builtin(StorageClassInput, BuiltInBaseInstance);
 				return "(gl_InstanceIndex - gl_BaseInstance)";
 			}
 		}
