@@ -1,12 +1,54 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
 struct SSBO
 {
-    char i8[16];
-    uchar u8[16];
+    spvUnsafeArray<char, 16> i8;
+    spvUnsafeArray<uchar, 16> u8;
 };
 
 struct Push
@@ -37,10 +79,9 @@ fragment main0_out main0(main0_in in [[stage_in]], device SSBO& ssbo [[buffer(0)
     main0_out out = {};
     short _196 = short(10);
     int _197 = 20;
-    char2 _201 = as_type<char2>(short(10));
-    char2 _198 = _201;
-    char4 _199 = as_type<char4>(20);
-    _196 = as_type<short>(_201);
+    char2 _198 = as_type<char2>(_196);
+    char4 _199 = as_type<char4>(_197);
+    _196 = as_type<short>(_198);
     _197 = as_type<int>(_199);
     ssbo.i8[0] = _199.x;
     ssbo.i8[1] = _199.y;
@@ -48,10 +89,9 @@ fragment main0_out main0(main0_in in [[stage_in]], device SSBO& ssbo [[buffer(0)
     ssbo.i8[3] = _199.w;
     ushort _220 = ushort(10);
     uint _221 = 20u;
-    uchar2 _225 = as_type<uchar2>(ushort(10));
-    uchar2 _222 = _225;
-    uchar4 _223 = as_type<uchar4>(20u);
-    _220 = as_type<ushort>(_225);
+    uchar2 _222 = as_type<uchar2>(_220);
+    uchar4 _223 = as_type<uchar4>(_221);
+    _220 = as_type<ushort>(_222);
     _221 = as_type<uint>(_223);
     ssbo.u8[0] = _223.x;
     ssbo.u8[1] = _223.y;
@@ -59,34 +99,21 @@ fragment main0_out main0(main0_in in [[stage_in]], device SSBO& ssbo [[buffer(0)
     ssbo.u8[3] = _223.w;
     char4 _246 = char4(in.vColor);
     char4 _244 = _246;
-    char4 _251 = _246 + char4(registers.i8);
-    _244 = _251;
-    char4 _254 = _251 + char4(-40);
-    _244 = _254;
-    char4 _256 = _254 + char4(-50);
-    _244 = _256;
-    char4 _258 = _256 + char4(char(10), char(20), char(30), char(40));
-    _244 = _258;
-    char4 _263 = _258 + char4(ssbo.i8[4]);
-    _244 = _263;
-    char4 _268 = _263 + char4(ubo.i8);
-    _244 = _268;
-    out.FragColorInt = int4(_268);
-    uchar4 _274 = uchar4(_246);
-    uchar4 _271 = _274;
-    uchar4 _279 = _274 + uchar4(registers.u8);
-    _271 = _279;
-    uchar4 _282 = _279 + uchar4(216);
-    _271 = _282;
-    uchar4 _284 = _282 + uchar4(206);
-    _271 = _284;
-    uchar4 _286 = _284 + uchar4(uchar(10), uchar(20), uchar(30), uchar(40));
-    _271 = _286;
-    uchar4 _291 = _286 + uchar4(ssbo.u8[4]);
-    _271 = _291;
-    uchar4 _296 = _291 + uchar4(ubo.u8);
-    _271 = _296;
-    out.FragColorUint = uint4(_296);
+    _244 += char4(registers.i8);
+    _244 += char4(-40);
+    _244 += char4(-50);
+    _244 += char4(char(10), char(20), char(30), char(40));
+    _244 += char4(ssbo.i8[4]);
+    _244 += char4(ubo.i8);
+    out.FragColorInt = int4(_244);
+    uchar4 _271 = uchar4(_246);
+    _271 += uchar4(registers.u8);
+    _271 += uchar4(216);
+    _271 += uchar4(206);
+    _271 += uchar4(uchar(10), uchar(20), uchar(30), uchar(40));
+    _271 += uchar4(ssbo.u8[4]);
+    _271 += uchar4(ubo.u8);
+    out.FragColorUint = uint4(_271);
     return out;
 }
 

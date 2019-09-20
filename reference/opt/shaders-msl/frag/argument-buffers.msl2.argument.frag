@@ -1,7 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct SSBO
 {
@@ -42,12 +84,12 @@ struct spvDescriptorSetBuffer1
     array<texture2d<float>, 4> uTexture2 [[id(0)]];
     array<sampler, 2> uSampler [[id(4)]];
     device SSBO* m_60 [[id(6)]];
-    const device SSBOs* ssbos [[id(7)]][2];
+    spvUnsafeArray<const device thread SSBOs*, 2> ssbos [[id(7)]];
 };
 
 struct spvDescriptorSetBuffer2
 {
-    constant UBOs* ubos [[id(0)]][4];
+    spvUnsafeArray<constant thread UBOs*, 4> ubos [[id(0)]];
 };
 
 struct main0_out

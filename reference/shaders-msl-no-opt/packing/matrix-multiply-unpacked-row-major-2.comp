@@ -1,9 +1,12 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
-typedef packed_float3 packed_rm_float3x3[3];
+typedef float3x3 packed_rm_float3x3;
 
 struct SSBO
 {
@@ -12,8 +15,6 @@ struct SSBO
     packed_float3 v0;
     packed_float3 v1;
 };
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 kernel void main0(device SSBO& _11 [[buffer(0)]])
 {

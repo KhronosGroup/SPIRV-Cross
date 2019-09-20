@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -10,12 +12,14 @@ struct EmptyStructTest
     int empty_struct_member;
 };
 
-inline float GetValue(thread const EmptyStructTest& self)
+static inline __attribute__((always_inline))
+float GetValue(thread const EmptyStructTest& self)
 {
     return 0.0;
 }
 
-inline float GetValue_1(EmptyStructTest self)
+static inline __attribute__((always_inline))
+float GetValue_1(EmptyStructTest self)
 {
     return 0.0;
 }

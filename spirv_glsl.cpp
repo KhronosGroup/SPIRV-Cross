@@ -324,6 +324,9 @@ void CompilerGLSL::reset()
 	forwarded_temporaries.clear();
 	suppressed_usage_tracking.clear();
 
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
+	flushed_phi_variables.clear();
+	
 	reset_name_caches();
 
 	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, SPIRFunction &func) {
@@ -333,7 +336,8 @@ void CompilerGLSL::reset()
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) { var.dependees.clear(); });
 
-	ir.reset_all_of_type<SPIRExpression>();
+    // Track write-throughs for loop variables - dxc likes to generate them
+	
 	ir.reset_all_of_type<SPIRAccessChain>();
 
 	statement_count = 0;
@@ -3394,10 +3398,18 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	{
 		// Handles Arrays and structures.
 		string res;
+		// Allow Metal to use the array<T> template to make arrays a value type
+		bool bTrailingBracket = false;
 		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
 		    type.array.empty())
 		{
 			res = type_to_glsl_constructor(type) + "{ ";
+		}
+		else if (backend.use_initializer_list && backend.use_typed_initializer_list &&
+				 !type.array.empty())
+		{
+			res = type_to_glsl(type) + "({ ";
+			bTrailingBracket = true;
 		}
 		else if (backend.use_initializer_list)
 		{
@@ -3421,6 +3433,9 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		}
 
 		res += backend.use_initializer_list ? " }" : ")";
+		if (bTrailingBracket)
+			res += ")";
+		
 		return res;
 	}
 	else if (c.columns() == 1)
@@ -4006,6 +4021,18 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 				if (i + 1 < c.vector_size())
 					res += ", ";
 			}
+		}
+		break;
+
+	// Metal tessellation likes empty structs which are then constant expressions.
+	case SPIRType::Struct:
+		if (type.member_types.size() == 0)
+		{
+			res += "{ }";
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Invalid constant struct initialisation missing member initializers.");
 		}
 		break;
 
@@ -7470,22 +7497,28 @@ string CompilerGLSL::variable_decl_function_local(SPIRVariable &var)
 
 void CompilerGLSL::emit_variable_temporary_copies(const SPIRVariable &var)
 {
-	if (var.allocate_temporary_copy)
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
+	if (var.allocate_temporary_copy && flushed_phi_variables.find(var.self) == flushed_phi_variables.end())
 	{
 		auto &type = get<SPIRType>(var.basetype);
 		auto &flags = get_decoration_bitset(var.self);
 		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, join("_", var.self, "_copy")), ";");
+		flushed_phi_variables.insert(var.self);
 	}
 }
 
 void CompilerGLSL::flush_variable_declaration(uint32_t id)
 {
+	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->deferred_declaration)
 	{
 		statement(variable_decl_function_local(*var), ";");
-		emit_variable_temporary_copies(*var);
 		var->deferred_declaration = false;
+	}
+	if (var)
+	{
+		emit_variable_temporary_copies(*var);
 	}
 }
 
@@ -7585,7 +7618,7 @@ bool CompilerGLSL::remove_unity_swizzle(uint32_t base, string &op)
 	auto &type = expression_type(base);
 
 	// Sanity checking ...
-	assert(type.columns == 1 && type.array.empty());
+	assert(type.columns == 1); //  && type.array.empty()
 
 	if (type.vecsize == final_swiz.size())
 		op.erase(pos, string::npos);
@@ -9614,7 +9647,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
-		auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), ", ", to_expression(ops[3])), result_type, true);
+
+		auto coord_expr = to_expression(ops[3]);
+		auto target_coord_type = expression_type(ops[3]);
+		target_coord_type.basetype = SPIRType::Int;
+		coord_expr = bitcast_expression(target_coord_type, expression_type(ops[3]).basetype, coord_expr);
+
+		auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), ", ", coord_expr), result_type, true);
 
 		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
@@ -11007,6 +11046,11 @@ void CompilerGLSL::flatten_buffer_block(VariableID id)
 		SPIRV_CROSS_THROW(name + " is an empty struct.");
 
 	flattened_buffer_blocks.insert(id);
+}
+
+bool CompilerGLSL::supports_combined_samplers() const
+{
+	return true; // GLSL always supports combined texture-samplers.
 }
 
 bool CompilerGLSL::check_atomic_image(uint32_t id)

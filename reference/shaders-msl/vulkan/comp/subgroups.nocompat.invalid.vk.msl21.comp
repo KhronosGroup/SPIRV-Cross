@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -9,8 +11,6 @@ struct SSBO
 {
     float FragColor;
 };
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 inline uint4 spvSubgroupBallot(bool value)
 {

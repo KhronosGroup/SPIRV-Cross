@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -10,7 +12,8 @@ struct main0_out
     float4 FragColor [[color(0)]];
 };
 
-inline float4 samp(thread const texture2d<float> t, thread const sampler s)
+static inline __attribute__((always_inline))
+float4 samp(thread const texture2d<float> t, thread const sampler s)
 {
     return t.sample(s, float2(0.5));
 }

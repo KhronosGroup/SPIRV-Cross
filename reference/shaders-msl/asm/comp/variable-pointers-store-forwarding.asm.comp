@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -15,7 +17,8 @@ struct bar
     int b;
 };
 
-inline device int* _24(device foo& a, device bar& b, thread uint3& gl_GlobalInvocationID)
+static inline __attribute__((always_inline))
+device int* _24(device foo& a, device bar& b, thread uint3& gl_GlobalInvocationID)
 {
     return (gl_GlobalInvocationID.x != 0u) ? &a.a : &b.b;
 }

@@ -253,6 +253,10 @@ public:
 			macOS = 1
 		} Platform;
 
+		// Provide the Metal bindings as part of the options structure as that is more convenient.
+		std::vector<MSLVertexAttr> vtx_attrs;
+		std::vector<MSLResourceBinding> res_bindings;
+		
 		Platform platform = macOS;
 		uint32_t msl_version = make_msl_version(1, 2);
 		uint32_t texel_buffer_texture_width = 4096; // Width of 2D Metal textures used as 1D texel buffers
@@ -266,6 +270,7 @@ public:
 		uint32_t dynamic_offsets_buffer_index = 23;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
+		uint32_t argument_buffer_offset = 0; // Allow the caller to specify the Metal translation should use argument buffers
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
@@ -282,6 +287,14 @@ public:
 		// Fragment output in MSL must have at least as many components as the render pass.
 		// Add support to explicit pad out components.
 		bool pad_fragment_output_components = false;
+		bool ios_support_base_vertex_instance = false; // Provide the Metal bindings as part of the options structure as that is more convenient.
+		bool ios_use_framebuffer_fetch_subpasses = true; // Use Metal's native frame-buffer fetch API for subpass inputs.
+		bool enforce_storge_buffer_bounds = false; // Storage buffer robustness - clamps access to SSBOs to the size of the buffer
+		
+		bool invariant_float_math = false;
+		
+		bool emulate_cube_array = false; // Emulate texturecube_array with texture2d_array for iOS where this type is not available
+		bool enable_decoration_binding = false; // Allow user to enable decoration binding
 
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
@@ -320,6 +333,18 @@ public:
 	void set_msl_options(const Options &opts)
 	{
 		msl_options = opts;
+		
+		// Provide the Metal bindings as part of the options structure as that is more convenient.
+		for (auto &va : msl_options.vtx_attrs)
+			vtx_attrs_by_location[va.location] = va;
+		
+		for (auto &rb : msl_options.res_bindings)
+		{
+			resource_bindings.insert({
+				StageSetBinding{ rb.stage, rb.desc_set, rb.binding },
+				std::pair<MSLResourceBinding, bool>(rb, true)
+			});
+		}
 	}
 
 	// Provide feedback to calling API to allow runtime to disable pipeline
@@ -460,6 +485,9 @@ public:
 	// to use for a particular location. The default is 4 if number of components is not overridden.
 	void set_fragment_output_components(uint32_t location, uint32_t components);
 
+	// Returns false, because Metal does not support combined texture-samplers.
+	virtual bool supports_combined_samplers() const override;
+	
 protected:
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
@@ -483,9 +511,21 @@ protected:
 		SPVFuncImplArrayOfArrayCopy5Dim = SPVFuncImplArrayCopyMultidimBase + 5,
 		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
 		SPVFuncImplTexelBufferCoords,
+		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
+		SPVFuncImplStorageBufferCoords, // Storage buffer robustness
+		SPVFuncImplFMul,
+		SPVFuncImplFAdd,
+		SPVFuncImplCubemapTo2DArrayFace,
+		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
+		SPVFuncImplRowMajor2x3,
+		SPVFuncImplRowMajor2x4,
+		SPVFuncImplRowMajor3x2,
+		SPVFuncImplRowMajor3x4,
+		SPVFuncImplRowMajor4x2,
+		SPVFuncImplRowMajor4x3,
 		// It is very important that this come before *Swizzle and ChromaReconstruct*, to ensure it's
 		// emitted before them.
 		SPVFuncImplForwardArgs,
@@ -527,6 +567,9 @@ protected:
 		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
+    // If the underlying resource has been used for comparison then duplicate loads of that resource must be too
+    // Use Metal's native frame-buffer fetch API for subpass inputs.
+    void emit_texture_op(const Instruction &i) override;
 	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
@@ -546,6 +589,8 @@ protected:
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	void emit_struct_padding_target(const SPIRType &type) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
+	std::string type_to_array_glsl(const SPIRType &type) override; // Allow Metal to use the array<T> template to make arrays a value type
+	std::string variable_decl(const SPIRVariable &variable) override; // Threadgroup arrays can't have a wrapper type
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
@@ -559,6 +604,10 @@ protected:
 	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
 	                             uint32_t comp, uint32_t sample, uint32_t minlod, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
+	
+	// Metal expands float[]/float2[] members inside structs to float4[] so we must unpack
+	virtual std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true) override;
+	
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                   bool is_packed, bool row_major) override;
 
@@ -569,12 +618,19 @@ protected:
 	void replace_illegal_names() override;
 	void declare_undefined_values() override;
 	void declare_constant_arrays();
+	
+	// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
+	void declare_complex_constant_arrays();
+	
 	bool is_patch_block(const SPIRType &type);
 	bool is_non_native_row_major_matrix(uint32_t id) override;
 	bool member_is_non_native_row_major_matrix(const SPIRType &type, uint32_t index) override;
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
 	                                     bool is_packed) override;
-
+	
+	// Storage buffer robustness
+	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags, AccessChainMeta *meta) override;
+	
 	void preprocess_op_codes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
@@ -609,6 +665,7 @@ protected:
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
 	uint32_t ensure_correct_attribute_type(uint32_t type_id, uint32_t location);
 
+	void emit_custom_templates();
 	void emit_custom_functions();
 	void emit_resources();
 	void emit_specialization_constants_and_structs();
@@ -708,6 +765,8 @@ protected:
 	bool emit_tessellation_access_chain(const uint32_t *ops, uint32_t length);
 	bool is_out_of_bounds_tessellation_level(uint32_t id_lhs);
 
+	void ensure_builtin(spv::StorageClass storage, spv::BuiltIn builtin);
+	
 	void mark_implicit_builtin(spv::StorageClass storage, spv::BuiltIn builtin, uint32_t id);
 
 	std::string convert_to_f32(const std::string &expr, uint32_t components);
@@ -758,9 +817,13 @@ protected:
 	VariableID patch_stage_out_var_id = 0;
 	VariableID stage_in_ptr_var_id = 0;
 	VariableID stage_out_ptr_var_id = 0;
+	int32_t needs_base_vertex_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
+	int32_t needs_base_instance_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
 	bool has_sampled_images = false;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
+	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
+	bool use_builtin_array = false; // Force the use of C style array declaration.
 	bool is_rasterization_disabled = false;
 	bool capture_output_to_buffer = false;
 	bool needs_swizzle_buffer_def = false;
@@ -789,6 +852,7 @@ protected:
 
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<uint32_t> buffer_arrays;
+    std::set<SPIRVariable *> atomic_vars; // Emulate texture2D atomic operations
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
@@ -819,6 +883,10 @@ protected:
 
 		CompilerMSL &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
+		std::unordered_map<uint32_t, SPIRVariable*> image_pointers; // Emulate texture2D atomic operations
+		std::unordered_map<uint32_t, uint32_t> invocation_ids; // Fix tessellation patch function processing
+		std::unordered_set<uint32_t> variables_indexed_by_invocation; // Fix tessellation patch function processing
+		bool passed_control_barrier = false; // Fix tessellation patch function processing
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_resource_write = false;

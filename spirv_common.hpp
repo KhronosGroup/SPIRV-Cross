@@ -1415,12 +1415,12 @@ public:
 			group->pools[type]->free_opaque(holder);
 		holder = nullptr;
 
-		if (!allow_type_rewrite && type != TypeNone && type != new_type)
+		/*if (!allow_type_rewrite && type != TypeNone && type != new_type)
 		{
 			if (val)
 				group->pools[new_type]->free_opaque(val);
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
-		}
+		}*/
 
 		holder = val;
 		type = new_type;

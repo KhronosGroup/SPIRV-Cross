@@ -1,7 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 #ifndef SPIRV_CROSS_CONSTANT_ID_0
 #define SPIRV_CROSS_CONSTANT_ID_0 100
@@ -14,14 +56,14 @@ constant int b = SPIRV_CROSS_CONSTANT_ID_1;
 
 struct A
 {
-    int member0[a];
-    int member1[b];
+    spvUnsafeArray<int, a> member0;
+    spvUnsafeArray<int, b> member1;
 };
 
 struct B
 {
-    int member0[b];
-    int member1[a];
+    spvUnsafeArray<int, b> member0;
+    spvUnsafeArray<int, a> member1;
 };
 
 #ifndef SPIRV_CROSS_CONSTANT_ID_2
@@ -34,13 +76,12 @@ struct SSBO
 {
     A member_a;
     B member_b;
-    int v[a];
-    int w[d];
+    spvUnsafeArray<int, a> v;
+    spvUnsafeArray<int, d> w;
 };
 
 constant int e_tmp [[function_constant(3)]];
 constant int e = is_function_constant_defined(e_tmp) ? e_tmp : 400;
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 kernel void main0(device SSBO& _22 [[buffer(0)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {

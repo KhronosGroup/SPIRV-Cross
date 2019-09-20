@@ -1,13 +1,53 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
+
 struct foo
 {
-    int a[128];
+    spvUnsafeArray<int, 128> a;
     uint b;
     float2 c;
 };
@@ -19,20 +59,23 @@ struct bar
 
 struct baz
 {
-    int e[128];
+    spvUnsafeArray<int, 128> e;
 };
 
-inline device int* select_buffer(device foo& buf, device baz& buf2, constant bar& cb)
+static inline __attribute__((always_inline))
+device int* select_buffer(device foo& buf, device baz& buf2, constant bar& cb)
 {
     return (cb.d != 0) ? &buf.a[0u] : &buf2.e[0u];
 }
 
-inline device int* select_buffer_null(device foo& buf, constant bar& cb)
+static inline __attribute__((always_inline))
+device int* select_buffer_null(device foo& buf, constant bar& cb)
 {
     return (cb.d != 0) ? &buf.a[0u] : nullptr;
 }
 
-inline threadgroup int* select_tgsm(constant bar& cb, threadgroup int (&tgsm)[128])
+static inline __attribute__((always_inline))
+threadgroup int* select_tgsm(constant bar& cb, threadgroup int (&tgsm)[128])
 {
     return (cb.d != 0) ? &tgsm[0u] : nullptr;
 }

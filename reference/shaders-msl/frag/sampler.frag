@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -16,7 +18,8 @@ struct main0_in
     float2 vTex [[user(locn1)]];
 };
 
-inline float4 sample_texture(thread const texture2d<float> tex, thread const sampler texSmplr, thread const float2& uv)
+static inline __attribute__((always_inline))
+float4 sample_texture(thread const texture2d<float> tex, thread const sampler texSmplr, thread const float2& uv)
 {
     return tex.sample(texSmplr, uv);
 }

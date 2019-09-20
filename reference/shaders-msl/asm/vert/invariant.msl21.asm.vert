@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -10,7 +12,8 @@ struct main0_out
     float4 gl_Position [[position, invariant]];
 };
 
-inline float4 _main()
+static inline __attribute__((always_inline))
+float4 _main()
 {
     return float4(1.0);
 }

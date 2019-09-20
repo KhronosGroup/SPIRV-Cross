@@ -1,3 +1,6 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -7,8 +10,6 @@ struct SSBO
 {
     float FragColor;
 };
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[quadgroups_per_threadgroup]], uint gl_SubgroupID [[quadgroup_index_in_threadgroup]], uint gl_SubgroupSize [[thread_execution_width]], uint gl_SubgroupInvocationID [[thread_index_in_quadgroup]])
 {

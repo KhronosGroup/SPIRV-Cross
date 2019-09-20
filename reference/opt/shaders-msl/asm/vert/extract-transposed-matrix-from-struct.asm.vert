@@ -1,7 +1,49 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct InstanceData
 {
@@ -11,7 +53,7 @@ struct InstanceData
 
 struct gInstanceData
 {
-    InstanceData _data[1];
+    spvUnsafeArray<InstanceData, 1> _data;
 };
 
 struct main0_out
@@ -25,11 +67,11 @@ struct main0_in
     float3 PosL [[attribute(0)]];
 };
 
-vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]])
+vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseInstance [[base_instance]])
 {
     main0_out out = {};
-    out.gl_Position = float4(in.PosL, 1.0) * gInstanceData_1._data[gl_InstanceIndex].MATRIX_MVP;
-    out._entryPointOutput_Color = gInstanceData_1._data[gl_InstanceIndex].Color;
+    out.gl_Position = float4(in.PosL, 1.0) * gInstanceData_1._data[(gl_InstanceIndex - gl_BaseInstance)].MATRIX_MVP;
+    out._entryPointOutput_Color = gInstanceData_1._data[(gl_InstanceIndex - gl_BaseInstance)].Color;
     return out;
 }
 

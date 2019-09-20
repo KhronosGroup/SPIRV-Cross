@@ -1,3 +1,4 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
@@ -11,8 +12,6 @@ struct SSBO
     uint u32;
     int i32;
 };
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 kernel void main0(device SSBO& ssbo [[buffer(0)]])
 {

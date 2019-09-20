@@ -1,9 +1,49 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct UBO
 {
@@ -12,7 +52,7 @@ struct UBO
     float2 uPatchSize;
     float2 uMaxTessLevel;
     float uDistanceMod;
-    float4 uFrustum[6];
+    spvUnsafeArray<float4, 6> uFrustum;
 };
 
 struct main0_patchOut
@@ -26,7 +66,8 @@ struct main0_in
     float2 vPatchPosBase [[attribute(0)]];
 };
 
-inline bool frustum_cull(thread const float2& p0, constant UBO& v_41)
+static inline __attribute__((always_inline))
+bool frustum_cull(thread const float2& p0, constant UBO& v_41)
 {
     float2 min_xz = (p0 - float2(10.0)) * v_41.uScale.xy;
     float2 max_xz = ((p0 + v_41.uPatchSize) + float2(10.0)) * v_41.uScale.xy;
@@ -49,7 +90,8 @@ inline bool frustum_cull(thread const float2& p0, constant UBO& v_41)
     return !_215;
 }
 
-inline float lod_factor(thread const float2& pos_, constant UBO& v_41)
+static inline __attribute__((always_inline))
+float lod_factor(thread const float2& pos_, constant UBO& v_41)
 {
     float2 pos = pos_ * v_41.uScale.xy;
     float3 dist_to_cam = v_41.uCamPos - float3(pos.x, 0.0, pos.y);
@@ -57,17 +99,20 @@ inline float lod_factor(thread const float2& pos_, constant UBO& v_41)
     return fast::clamp(level, 0.0, v_41.uMaxTessLevel.x);
 }
 
-inline float4 tess_level(thread const float4& lod, constant UBO& v_41)
+static inline __attribute__((always_inline))
+float4 tess_level(thread const float4& lod, constant UBO& v_41)
 {
     return exp2(-lod) * v_41.uMaxTessLevel.y;
 }
 
-inline float tess_level(thread const float& lod, constant UBO& v_41)
+static inline __attribute__((always_inline))
+float tess_level(thread const float& lod, constant UBO& v_41)
 {
     return v_41.uMaxTessLevel.y * exp2(-lod);
 }
 
-inline void compute_tess_levels(thread const float2& p0, constant UBO& v_41, device float2& vOutPatchPosBase, device float4& vPatchLods, device half (&gl_TessLevelOuter)[4], device half (&gl_TessLevelInner)[2])
+static inline __attribute__((always_inline))
+void compute_tess_levels(thread const float2& p0, constant UBO& v_41, device float2& vOutPatchPosBase, device float4& vPatchLods, device half (&gl_TessLevelOuter)[4], device half (&gl_TessLevelInner)[2])
 {
     vOutPatchPosBase = p0;
     float2 param = p0 + (float2(-0.5) * v_41.uPatchSize);

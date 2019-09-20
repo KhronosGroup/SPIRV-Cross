@@ -486,6 +486,9 @@ public:
 	// of direct decorations on the variable itself.
 	// The most common use here is to check if a buffer is readonly or writeonly.
 	Bitset get_buffer_block_flags(VariableID id) const;
+	
+	// Returns true if the target language supports combined texture-samplers. Returns fasle by default.
+	virtual bool supports_combined_samplers() const;
 
 protected:
 	const uint32_t *stream(const Instruction &instr) const
@@ -683,7 +686,7 @@ protected:
 	bool interface_variable_exists_in_entry_point(uint32_t id) const;
 
 	SmallVector<CombinedImageSampler> combined_image_samplers;
-
+	
 	void remap_variable_type_name(const SPIRType &type, const std::string &var_name, std::string &type_name) const
 	{
 		if (variable_remap_callback)
@@ -888,6 +891,10 @@ protected:
 
 		void add_hierarchy_to_comparison_ids(uint32_t ids);
 		bool need_subpass_input = false;
+		
+		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
+		// Returns true if a dependent resource in the dependency hierarchy of the specified image or sampler has been used for comparison.
+		bool dependent_used_for_comparison(uint32_t id) const;
 	};
 
 	void build_function_control_flow_graphs_and_analyze();
@@ -925,6 +932,8 @@ protected:
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> complete_write_variables_to_block;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> partial_write_variables_to_block;
 		std::unordered_set<uint32_t> access_chain_expressions;
+		// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
+		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> access_chain_children;
 		const SPIRBlock *current_block = nullptr;
 	};
 

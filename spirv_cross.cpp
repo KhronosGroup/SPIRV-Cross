@@ -2728,6 +2728,12 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 {
 	if (id == 0)
 		return;
+	
+	// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
+	for (auto child_id : access_chain_children[id])
+	{
+		notify_variable_access(child_id, block);
+	}
 
 	if (id_is_phi_variable(id))
 		accessed_variables_to_block[id].insert(block);
@@ -2793,14 +2799,21 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		if (length < 3)
 			return false;
 
+		// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
 		uint32_t ptr = args[2];
 		auto *var = compiler.maybe_get<SPIRVariable>(ptr);
 		if (var)
+		{
 			accessed_variables_to_block[var->self].insert(current_block->self);
+			access_chain_children[args[1]].insert(var->self);
+		}
 
 		// args[2] might be another access chain we have to track use of.
 		for (uint32_t i = 2; i < length; i++)
+		{
 			notify_variable_access(args[i], current_block->self);
+			access_chain_children[args[1]].insert(args[i]);
+		}
 
 		// Also keep track of the access chain pointer itself.
 		// In exceptionally rare cases, we can end up with a case where
@@ -3536,6 +3549,11 @@ Bitset Compiler::get_buffer_block_flags(VariableID id) const
 	return ir.get_buffer_block_flags(get<SPIRVariable>(id));
 }
 
+bool Compiler::supports_combined_samplers() const
+{
+	return false; // default implementation
+}
+
 bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
 {
 	if (type.basetype == SPIRType::Struct)
@@ -3910,8 +3928,38 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 {
 	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
 	comparison_ids.insert(id);
+	
+	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
+	if (!compiler.supports_combined_samplers())
+	{
+		for (auto it = dependency_hierarchy.begin(); it != dependency_hierarchy.end(); ++it)
+		{
+			if (it->second.find(id) != it->second.end())
+				comparison_ids.insert(it->first);
+		}
+	}
+	
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
+}
+
+// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
+bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(uint32_t id) const
+{
+	if (compiler.supports_combined_samplers())
+		return false;
+	
+	auto hierarchy_iter = dependency_hierarchy.find(id);
+	if (hierarchy_iter != dependency_hierarchy.end())
+	{
+		for (uint32_t dependent_id : hierarchy_iter->second)
+		{
+			if (comparison_ids.find(dependent_id) != comparison_ids.end())
+				return true;
+		}
+	}
+	
+	return false;
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
@@ -3947,14 +3995,19 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t result_type = args[0];
 		uint32_t result_id = args[1];
 		auto &type = compiler.get<SPIRType>(result_type);
-		if (type.image.depth || dref_combined_samplers.count(result_id) != 0)
+		
+		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
+		// This image must be a depth image.
+		uint32_t image = args[2];
+		uint32_t sampler = args[3];
+
+		bool dependent = !compiler.supports_combined_samplers() && (dependent_used_for_comparison(sampler) || dependent_used_for_comparison(image));
+		
+		if (type.image.depth || dref_combined_samplers.count(result_id) != 0 || dependent)
 		{
-			// This image must be a depth image.
-			uint32_t image = args[2];
 			add_hierarchy_to_comparison_ids(image);
 
 			// This sampler must be a SamplerComparisonState, and not a regular SamplerState.
-			uint32_t sampler = args[3];
 			add_hierarchy_to_comparison_ids(sampler);
 
 			// Mark the OpSampledImage itself as being comparison state.

@@ -1,9 +1,49 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
+
+template<typename T, size_t Num>
+struct spvUnsafeArray
+{
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
+};
 
 struct V2F
 {
@@ -25,7 +65,7 @@ struct InstanceData_1
 
 struct gInstanceData
 {
-    InstanceData_1 _data[1];
+    spvUnsafeArray<InstanceData_1, 1> _data;
 };
 
 struct main0_out
@@ -39,7 +79,8 @@ struct main0_in
     float3 PosL [[attribute(0)]];
 };
 
-inline V2F _VS(thread const float3& PosL, thread const uint& instanceID, const device gInstanceData& gInstanceData_1)
+static inline __attribute__((always_inline))
+V2F _VS(thread const float3& PosL, thread const uint& instanceID, const device gInstanceData& gInstanceData_1)
 {
     InstanceData instData;
     instData.MATRIX_MVP = transpose(gInstanceData_1._data[instanceID].MATRIX_MVP);
@@ -50,11 +91,11 @@ inline V2F _VS(thread const float3& PosL, thread const uint& instanceID, const d
     return v2f;
 }
 
-vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]])
+vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseInstance [[base_instance]])
 {
     main0_out out = {};
     float3 PosL = in.PosL;
-    uint instanceID = gl_InstanceIndex;
+    uint instanceID = (gl_InstanceIndex - gl_BaseInstance);
     float3 param = PosL;
     uint param_1 = instanceID;
     V2F flattenTemp = _VS(param, param_1, gInstanceData_1);

@@ -1,4 +1,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -10,22 +12,26 @@ struct main0_out
     float4 FragColor [[color(0)]];
 };
 
-inline float4 foo(thread const float4& foo_1)
+static inline __attribute__((always_inline))
+float4 foo(thread const float4& foo_1)
 {
     return foo_1 + float4(1.0);
 }
 
-inline float4 foo(thread const float3& foo_1)
+static inline __attribute__((always_inline))
+float4 foo(thread const float3& foo_1)
 {
     return foo_1.xyzz + float4(1.0);
 }
 
-inline float4 foo_1(thread const float4& foo_2)
+static inline __attribute__((always_inline))
+float4 foo_1(thread const float4& foo_2)
 {
     return foo_2 + float4(2.0);
 }
 
-inline float4 foo(thread const float2& foo_2)
+static inline __attribute__((always_inline))
+float4 foo(thread const float2& foo_2)
 {
     return foo_2.xyxy + float4(2.0);
 }

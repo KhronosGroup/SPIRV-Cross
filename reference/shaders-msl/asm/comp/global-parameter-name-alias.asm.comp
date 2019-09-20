@@ -1,22 +1,64 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
-struct ssbo
+template<typename T, size_t Num>
+struct spvUnsafeArray
 {
-    uint _data[1];
+    T elements[Num ? Num : 1];
+    
+    thread T& operator [] (size_t pos) thread
+    {
+        return elements[pos];
+    }
+    constexpr const thread T& operator [] (size_t pos) const thread
+    {
+        return elements[pos];
+    }
+    
+    device T& operator [] (size_t pos) device
+    {
+        return elements[pos];
+    }
+    constexpr const device T& operator [] (size_t pos) const device
+    {
+        return elements[pos];
+    }
+    
+    constexpr const constant T& operator [] (size_t pos) const constant
+    {
+        return elements[pos];
+    }
+    
+    threadgroup T& operator [] (size_t pos) threadgroup
+    {
+        return elements[pos];
+    }
+    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
+    {
+        return elements[pos];
+    }
 };
 
-inline void Load(thread const uint& size, const device ssbo& ssbo_1)
+struct ssbo
+{
+    spvUnsafeArray<uint, 1> _data;
+};
+
+static inline __attribute__((always_inline))
+void Load(thread const uint& size, const device ssbo& ssbo_1)
 {
     int byteAddrTemp = int(size >> uint(2));
     uint4 data = uint4(ssbo_1._data[byteAddrTemp], ssbo_1._data[byteAddrTemp + 1], ssbo_1._data[byteAddrTemp + 2], ssbo_1._data[byteAddrTemp + 3]);
 }
 
-inline void _main(thread const uint3& id, const device ssbo& ssbo_1)
+static inline __attribute__((always_inline))
+void _main(thread const uint3& id, const device ssbo& ssbo_1)
 {
     uint param = 4u;
     Load(param, ssbo_1);

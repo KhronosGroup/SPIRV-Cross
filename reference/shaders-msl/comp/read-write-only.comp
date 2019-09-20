@@ -1,3 +1,6 @@
+#pragma clang diagnostic ignored "-Wmissing-braces"
+#pragma clang diagnostic ignored "-Wunused-variable"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -20,8 +23,6 @@ struct SSBO1
     float4 data2;
     float4 data3;
 };
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 kernel void main0(device SSBO2& _10 [[buffer(0)]], const device SSBO0& _15 [[buffer(1)]], device SSBO1& _21 [[buffer(2)]])
 {
