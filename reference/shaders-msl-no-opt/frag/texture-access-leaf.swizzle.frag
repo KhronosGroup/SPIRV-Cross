@@ -1,6 +1,4 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
-#pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -18,14 +16,12 @@ template<typename T> struct spvRemoveReference { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
 template<typename T>
-static inline __attribute__((always_inline))
-constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
+inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
 {
     return static_cast<thread T&&>(x);
 }
 template<typename T>
-static inline __attribute__((always_inline))
-constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
+inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
 {
     return static_cast<thread T&&>(x);
 }
@@ -42,8 +38,7 @@ enum class spvSwizzle : uint
 };
 
 template<typename T>
-static inline __attribute__((always_inline))
-T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
+inline T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
 {
     switch (s)
     {
@@ -66,8 +61,7 @@ T spvGetSwizzle(vec<T, 4> x, T c, spvSwizzle s)
 
 // Wrapper function that swizzles texture samples and fetches.
 template<typename T>
-static inline __attribute__((always_inline))
-vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
+inline vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
 {
     if (!s)
         return x;
@@ -75,16 +69,14 @@ vec<T, 4> spvTextureSwizzle(vec<T, 4> x, uint s)
 }
 
 template<typename T>
-static inline __attribute__((always_inline))
-T spvTextureSwizzle(T x, uint s)
+inline T spvTextureSwizzle(T x, uint s)
 {
     return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;
 }
 
 // Wrapper function that swizzles texture gathers.
 template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename... Ts>
-static inline __attribute__((always_inline))
-vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, component c, Ts... params) METAL_CONST_ARG(c)
+inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, component c, Ts... params) METAL_CONST_ARG(c)
 {
     if (sw)
     {
@@ -121,8 +113,7 @@ vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, component
 
 // Wrapper function that swizzles depth texture gathers.
 template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename... Ts>
-static inline __attribute__((always_inline))
-vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler s, uint sw, Ts... params) 
+inline vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler s, uint sw, Ts... params) 
 {
     if (sw)
     {

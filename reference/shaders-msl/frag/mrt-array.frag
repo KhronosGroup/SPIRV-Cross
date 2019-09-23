@@ -1,6 +1,5 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -61,8 +60,7 @@ struct main0_in
 
 // Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
 template<typename Tx, typename Ty>
-static inline __attribute__((always_inline))
-Tx mod(Tx x, Ty y)
+inline Tx mod(Tx x, Ty y)
 {
     return x - y * floor(x / y);
 }

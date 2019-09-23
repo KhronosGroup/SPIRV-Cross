@@ -326,7 +326,7 @@ void CompilerGLSL::reset()
 
 	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	flushed_phi_variables.clear();
-	
+
 	reset_name_caches();
 
 	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, SPIRFunction &func) {
@@ -336,8 +336,7 @@ void CompilerGLSL::reset()
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) { var.dependees.clear(); });
 
-    // Track write-throughs for loop variables - dxc likes to generate them
-	
+	ir.reset_all_of_type<SPIRExpression>();
 	ir.reset_all_of_type<SPIRAccessChain>();
 
 	statement_count = 0;
@@ -3398,18 +3397,18 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	{
 		// Handles Arrays and structures.
 		string res;
+
 		// Allow Metal to use the array<T> template to make arrays a value type
-		bool bTrailingBracket = false;
+		bool needs_trailing_tracket = false;
 		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
 		    type.array.empty())
 		{
 			res = type_to_glsl_constructor(type) + "{ ";
 		}
-		else if (backend.use_initializer_list && backend.use_typed_initializer_list &&
-				 !type.array.empty())
+		else if (backend.use_initializer_list && backend.use_typed_initializer_list && !type.array.empty())
 		{
 			res = type_to_glsl(type) + "({ ";
-			bTrailingBracket = true;
+			needs_trailing_tracket = true;
 		}
 		else if (backend.use_initializer_list)
 		{
@@ -3433,9 +3432,9 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		}
 
 		res += backend.use_initializer_list ? " }" : ")";
-		if (bTrailingBracket)
+		if (needs_trailing_tracket)
 			res += ")";
-		
+
 		return res;
 	}
 	else if (c.columns() == 1)
@@ -7618,7 +7617,7 @@ bool CompilerGLSL::remove_unity_swizzle(uint32_t base, string &op)
 	auto &type = expression_type(base);
 
 	// Sanity checking ...
-	assert(type.columns == 1); //  && type.array.empty()
+	assert(type.columns == 1 && type.array.empty());
 
 	if (type.vecsize == final_swiz.size())
 		op.erase(pos, string::npos);

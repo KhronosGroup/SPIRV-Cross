@@ -1056,8 +1056,7 @@ struct SPIRConstant : IVariant
 		type = TypeConstant
 	};
 
-	union Constant
-	{
+	union Constant {
 		uint32_t u32;
 		int32_t i32;
 		float f32;
@@ -1095,8 +1094,7 @@ struct SPIRConstant : IVariant
 		int e = (u16_value >> 10) & 0x1f;
 		int m = (u16_value >> 0) & 0x3ff;
 
-		union
-		{
+		union {
 			float f32;
 			uint32_t u32;
 		} u;
@@ -1415,12 +1413,12 @@ public:
 			group->pools[type]->free_opaque(holder);
 		holder = nullptr;
 
-		/*if (!allow_type_rewrite && type != TypeNone && type != new_type)
+		if (!allow_type_rewrite && type != TypeNone && type != new_type)
 		{
 			if (val)
 				group->pools[new_type]->free_opaque(val);
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
-		}*/
+		}
 
 		holder = val;
 		type = new_type;

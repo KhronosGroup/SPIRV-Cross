@@ -1,6 +1,4 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
-#pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -33,32 +31,28 @@ struct main0_in
 
 // Implementation of the GLSL radians() function
 template<typename T>
-static inline __attribute__((always_inline))
-T radians(T d)
+inline T radians(T d)
 {
     return d * T(0.01745329251);
 }
 
 // Implementation of the GLSL degrees() function
 template<typename T>
-static inline __attribute__((always_inline))
-T degrees(T r)
+inline T degrees(T r)
 {
     return r * T(57.2957795131);
 }
 
 // Implementation of the GLSL findLSB() function
 template<typename T>
-static inline __attribute__((always_inline))
-T spvFindLSB(T x)
+inline T spvFindLSB(T x)
 {
     return select(ctz(x), T(-1), x == T(0));
 }
 
 // Implementation of the signed GLSL findMSB() function
 template<typename T>
-static inline __attribute__((always_inline))
-T spvFindSMSB(T x)
+inline T spvFindSMSB(T x)
 {
     T v = select(x, T(-1) - x, x < T(0));
     return select(clz(T(0)) - (clz(v) + T(1)), T(-1), v == T(0));

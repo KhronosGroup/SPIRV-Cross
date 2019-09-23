@@ -2728,7 +2728,7 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 {
 	if (id == 0)
 		return;
-	
+
 	// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
 	for (auto child_id : access_chain_children[id])
 	{
@@ -3928,17 +3928,17 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 {
 	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
 	comparison_ids.insert(id);
-	
+
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
 	if (!compiler.supports_combined_samplers())
 	{
-		for (auto it = dependency_hierarchy.begin(); it != dependency_hierarchy.end(); ++it)
+		for (const auto &hierarchy : dependency_hierarchy)
 		{
-			if (it->second.find(id) != it->second.end())
-				comparison_ids.insert(it->first);
+			if (hierarchy.second.find(id) != hierarchy.second.end())
+				comparison_ids.insert(hierarchy.first);
 		}
 	}
-	
+
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
 }
@@ -3948,7 +3948,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(u
 {
 	if (compiler.supports_combined_samplers())
 		return false;
-	
+
 	auto hierarchy_iter = dependency_hierarchy.find(id);
 	if (hierarchy_iter != dependency_hierarchy.end())
 	{
@@ -3958,7 +3958,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(u
 				return true;
 		}
 	}
-	
+
 	return false;
 }
 
@@ -3995,14 +3995,15 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t result_type = args[0];
 		uint32_t result_id = args[1];
 		auto &type = compiler.get<SPIRType>(result_type);
-		
+
 		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
 		// This image must be a depth image.
 		uint32_t image = args[2];
 		uint32_t sampler = args[3];
 
-		bool dependent = !compiler.supports_combined_samplers() && (dependent_used_for_comparison(sampler) || dependent_used_for_comparison(image));
-		
+		bool dependent = !compiler.supports_combined_samplers() &&
+		                 (dependent_used_for_comparison(sampler) || dependent_used_for_comparison(image));
+
 		if (type.image.depth || dref_combined_samplers.count(result_id) != 0 || dependent)
 		{
 			add_hierarchy_to_comparison_ids(image);

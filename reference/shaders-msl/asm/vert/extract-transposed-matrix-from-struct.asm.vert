@@ -1,6 +1,5 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -91,11 +90,11 @@ V2F _VS(thread const float3& PosL, thread const uint& instanceID, const device g
     return v2f;
 }
 
-vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseInstance [[base_instance]])
+vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]])
 {
     main0_out out = {};
     float3 PosL = in.PosL;
-    uint instanceID = (gl_InstanceIndex - gl_BaseInstance);
+    uint instanceID = gl_InstanceIndex;
     float3 param = PosL;
     uint param_1 = instanceID;
     V2F flattenTemp = _VS(param, param_1, gInstanceData_1);

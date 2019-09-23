@@ -1,6 +1,4 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
-#pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -15,16 +13,14 @@ struct SSBO
 
 // Implementation of the GLSL findLSB() function
 template<typename T>
-static inline __attribute__((always_inline))
-T spvFindLSB(T x)
+inline T spvFindLSB(T x)
 {
     return select(ctz(x), T(-1), x == T(0));
 }
 
 // Implementation of the signed GLSL findMSB() function
 template<typename T>
-static inline __attribute__((always_inline))
-T spvFindSMSB(T x)
+inline T spvFindSMSB(T x)
 {
     T v = select(x, T(-1) - x, x < T(0));
     return select(clz(T(0)) - (clz(v) + T(1)), T(-1), v == T(0));
@@ -32,8 +28,7 @@ T spvFindSMSB(T x)
 
 // Implementation of the unsigned GLSL findMSB() function
 template<typename T>
-static inline __attribute__((always_inline))
-T spvFindUMSB(T x)
+inline T spvFindUMSB(T x)
 {
     return select(clz(T(0)) - (clz(x) + T(1)), T(-1), x == T(0));
 }

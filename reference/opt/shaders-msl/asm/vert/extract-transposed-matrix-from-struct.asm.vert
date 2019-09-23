@@ -1,6 +1,5 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -67,11 +66,11 @@ struct main0_in
     float3 PosL [[attribute(0)]];
 };
 
-vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseInstance [[base_instance]])
+vertex main0_out main0(main0_in in [[stage_in]], const device gInstanceData& gInstanceData_1 [[buffer(0)]], uint gl_InstanceIndex [[instance_id]])
 {
     main0_out out = {};
-    out.gl_Position = float4(in.PosL, 1.0) * gInstanceData_1._data[(gl_InstanceIndex - gl_BaseInstance)].MATRIX_MVP;
-    out._entryPointOutput_Color = gInstanceData_1._data[(gl_InstanceIndex - gl_BaseInstance)].Color;
+    out.gl_Position = float4(in.PosL, 1.0) * gInstanceData_1._data[gl_InstanceIndex].MATRIX_MVP;
+    out._entryPointOutput_Color = gInstanceData_1._data[gl_InstanceIndex].Color;
     return out;
 }
 

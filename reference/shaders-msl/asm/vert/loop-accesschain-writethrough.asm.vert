@@ -1,6 +1,5 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wmissing-braces"
-#pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -69,12 +68,12 @@ struct main0_out
     float4 gl_Position [[position]];
 };
 
-vertex main0_out main0(constant type_Globals& _Globals [[buffer(0)]], const device type_StructuredBuffer_v4float& ScatterDrawList [[buffer(1)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseVertex [[base_vertex]], uint gl_BaseInstance [[base_instance]])
+vertex main0_out main0(constant type_Globals& _Globals [[buffer(0)]], const device type_StructuredBuffer_v4float& ScatterDrawList [[buffer(1)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]])
 {
     main0_out out = {};
-    uint _66 = (gl_VertexIndex - gl_BaseVertex) / 4u;
-    uint _68 = (gl_VertexIndex - gl_BaseVertex) - (_66 * 4u);
-    uint _70 = (16u * (gl_InstanceIndex - gl_BaseInstance)) + _66;
+    uint _66 = gl_VertexIndex / 4u;
+    uint _68 = gl_VertexIndex - (_66 * 4u);
+    uint _70 = (16u * gl_InstanceIndex) + _66;
     float _72;
     _72 = 0.0;
     spvUnsafeArray<float4, 4> _61;

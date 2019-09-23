@@ -211,9 +211,6 @@ public:
 	// The name of the uniform array will be the same as the interface block name.
 	void flatten_buffer_block(VariableID id);
 
-	// Returns true, because GLSL always supports combined texture-samplers.
-	virtual bool supports_combined_samplers() const override;
-	
 protected:
 	void reset();
 	void emit_function(SPIRFunction &func, const Bitset &return_flags);
@@ -275,6 +272,9 @@ protected:
 	virtual void emit_uniform(const SPIRVariable &var);
 	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                           bool packed_type, bool row_major);
+
+	// Returns true, because GLSL always supports combined texture-samplers.
+	virtual bool supports_combined_samplers() const override;
 
 	StringStream<> buffer;
 
@@ -341,7 +341,8 @@ protected:
 
 	Options options;
 
-	virtual std::string type_to_array_glsl(const SPIRType &type); // Allow Metal to use the array<T> template to make arrays a value type
+	virtual std::string type_to_array_glsl(
+	    const SPIRType &type); // Allow Metal to use the array<T> template to make arrays a value type
 	std::string to_array_size(const SPIRType &type, uint32_t index);
 	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
 	uint32_t to_array_size_literal(const SPIRType &type) const;
@@ -491,8 +492,8 @@ protected:
 	                        bool suppress_usage_tracking = false);
 
 	// Storage buffer robustness
-	virtual std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
-											  AccessChainMeta *meta);
+	virtual std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
+	                                          AccessChainFlags flags, AccessChainMeta *meta);
 
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
 	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);
@@ -527,10 +528,7 @@ protected:
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
 	std::string to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read = true);
-	
-    // Metal expands float[]/float2[] members inside structs to float4[] so we must unpack
-	virtual std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
-	
+	std::string to_dereferenced_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_enclosed_pointer_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_extract_component_expression(uint32_t id, uint32_t index);
@@ -591,7 +589,7 @@ protected:
 	uint32_t indent = 0;
 
 	std::unordered_set<uint32_t> emitted_functions;
-	
+
 	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
 	std::unordered_set<uint32_t> flushed_phi_variables;
 
