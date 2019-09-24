@@ -18,13 +18,11 @@ struct main0_in
 template<typename T> struct spvRemoveReference { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T>
-inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
+template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
 {
     return static_cast<thread T&&>(x);
 }
-template<typename T>
-inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
+template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
 {
     return static_cast<thread T&&>(x);
 }
@@ -80,19 +78,19 @@ inline T spvTextureSwizzle(T x, uint s)
 static inline __attribute__((always_inline))
 float4 sample_in_func(thread const array<texture2d<float>, 4> uSampler, thread const array<sampler, 4> uSamplerSmplr, constant uint* uSamplerSwzl, thread float2& vUV)
 {
-    return uSampler[2].sample(uSamplerSmplr[2], vUV);
+    return spvTextureSwizzle(uSampler[2].sample(uSamplerSmplr[2], vUV), uSamplerSwzl[2]);
 }
 
 static inline __attribute__((always_inline))
 float4 sample_single_in_func(thread const texture2d<float> s, thread const sampler sSmplr, constant uint& sSwzl, thread float2& vUV)
 {
-    return s.sample(sSmplr, vUV);
+    return spvTextureSwizzle(s.sample(sSmplr, vUV), sSwzl);
 }
 
-fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvSwizzleConstants [[buffer(0)]], array<texture2d<float>, 4> uSampler [[texture(0)]], array<sampler, 4> uSamplerSmplr [[sampler(0)]])
+fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvSwizzleConstants [[buffer(30)]], array<texture2d<float>, 4> uSampler [[texture(0)]], array<sampler, 4> uSamplerSmplr [[sampler(0)]])
 {
     main0_out out = {};
-    constant uint* uSamplerSwzl = &spvSwizzleConstants[4];
+    constant uint* uSamplerSwzl = &spvSwizzleConstants[0];
     out.FragColor = sample_in_func(uSampler, uSamplerSmplr, uSamplerSwzl, in.vUV);
     out.FragColor += sample_single_in_func(uSampler[1], uSamplerSmplr[1], uSamplerSwzl[1], in.vUV);
     return out;

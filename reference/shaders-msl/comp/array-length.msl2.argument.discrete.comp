@@ -66,6 +66,8 @@ struct SSBO3
     spvUnsafeArray<float, 1> bz;
 };
 
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
 struct spvDescriptorSetBuffer0
 {
     device SSBO* v_16 [[id(0)]];
@@ -88,7 +90,7 @@ uint get_size(device SSBO& v_16, constant uint& v_16BufferSize, constant spvUnsa
     return len;
 }
 
-kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant uint* spvBufferSizeConstants [[buffer(5)]], device SSBO2& v_38 [[buffer(2)]], device SSBO3* ssbos2_0 [[buffer(3)]], device SSBO3* ssbos2_1 [[buffer(4)]])
+kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant uint* spvBufferSizeConstants [[buffer(25)]], device SSBO2& v_38 [[buffer(2)]], device SSBO3* ssbos2_0 [[buffer(3)]], device SSBO3* ssbos2_1 [[buffer(4)]])
 {
     spvUnsafeArray<device SSBO3*, 2> ssbos2 =
     {
@@ -98,8 +100,8 @@ kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0
 
     constant uint& spvDescriptorSet0_v_16BufferSize = spvDescriptorSet0.spvBufferSizeConstants[0];
     constant uint* spvDescriptorSet1_ssbosBufferSize = &spvDescriptorSet1.spvBufferSizeConstants[0];
-    constant uint& v_38BufferSize = spvBufferSizeConstants[6];
-    constant uint* ssbos2BufferSize = &spvBufferSizeConstants[7];
+    constant uint& v_38BufferSize = spvBufferSizeConstants[2];
+    constant uint* ssbos2BufferSize = &spvBufferSizeConstants[3];
     (*spvDescriptorSet0.v_16).size = get_size((*spvDescriptorSet0.v_16), spvDescriptorSet0_v_16BufferSize, spvDescriptorSet1.ssbos, spvDescriptorSet1_ssbosBufferSize, v_38, v_38BufferSize, ssbos2, ssbos2BufferSize);
 }
 

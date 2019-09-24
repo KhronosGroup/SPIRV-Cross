@@ -3806,15 +3806,13 @@ void CompilerMSL::emit_custom_functions()
 			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");
 			statement("template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };");
-
-			statement("template<typename T>");
-			statement("inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)");
+			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
+			          "spvRemoveReference<T>::type& x)");
 			begin_scope();
 			statement("return static_cast<thread T&&>(x);");
 			end_scope();
-
-			statement("template<typename T>");
-			statement("inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)");
+			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
+			          "spvRemoveReference<T>::type&& x)");
 			begin_scope();
 			statement("return static_cast<thread T&&>(x);");
 			end_scope();
@@ -6123,203 +6121,22 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	previous_instruction_opcode = opcode;
 }
 
-// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
-static inline bool image_opcode_is_sample_no_dref(Op op)
-{
-	switch (op)
-	{
-	case OpImageSampleExplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjExplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageFetch:
-	case OpImageRead:
-	case OpImageSparseSampleExplicitLod:
-	case OpImageSparseSampleImplicitLod:
-	case OpImageSparseSampleProjExplicitLod:
-	case OpImageSparseSampleProjImplicitLod:
-	case OpImageSparseFetch:
-	case OpImageSparseRead:
-		return true;
-
-	default:
-		return false;
-	}
-}
-
 void CompilerMSL::emit_texture_op(const Instruction &i)
 {
 	auto *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
-	uint32_t length = i.length;
 
-	vector<uint32_t> inherited_expressions;
+	SmallVector<uint32_t> inherited_expressions;
 
-	uint32_t result_type = ops[0];
+	uint32_t result_type_id = ops[0];
 	uint32_t id = ops[1];
 	uint32_t img = ops[2];
-	uint32_t coord = ops[3];
-	uint32_t dref = 0;
-	uint32_t comp = 0;
-	bool gather = false;
-	bool proj = false;
-	bool fetch = false;
-	const uint32_t *opt = nullptr;
 
-	inherited_expressions.push_back(coord);
-
-	switch (op)
-	{
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleDrefExplicitLod:
-		dref = ops[4];
-		opt = &ops[5];
-		length -= 5;
-		break;
-
-	case OpImageSampleProjDrefImplicitLod:
-	case OpImageSampleProjDrefExplicitLod:
-		dref = ops[4];
-		opt = &ops[5];
-		length -= 5;
-		proj = true;
-		break;
-
-	case OpImageDrefGather:
-		dref = ops[4];
-		opt = &ops[5];
-		length -= 5;
-		gather = true;
-		break;
-
-	case OpImageGather:
-		comp = ops[4];
-		opt = &ops[5];
-		length -= 5;
-		gather = true;
-		break;
-
-	case OpImageFetch:
-	case OpImageRead: // Reads == fetches in Metal (other langs will not get here)
-		opt = &ops[4];
-		length -= 4;
-		fetch = true;
-		break;
-
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleProjExplicitLod:
-		opt = &ops[4];
-		length -= 4;
-		proj = true;
-		break;
-
-	default:
-		opt = &ops[4];
-		length -= 4;
-		break;
-	}
-
-	// Bypass pointers because we need the real image struct
 	auto &type = expression_type(img);
 	auto &imgtype = get<SPIRType>(type.self);
 
-	uint32_t coord_components = 0;
-	switch (imgtype.image.dim)
-	{
-	case spv::Dim1D:
-		coord_components = 1;
-		break;
-	case spv::Dim2D:
-		coord_components = 2;
-		break;
-	case spv::Dim3D:
-		coord_components = 3;
-		break;
-	case spv::DimCube:
-		coord_components = 3;
-		break;
-	case spv::DimBuffer:
-		coord_components = 1;
-		break;
-	default:
-		coord_components = 2;
-		break;
-	}
-
-	if (dref)
-		inherited_expressions.push_back(dref);
-
-	if (proj)
-		coord_components++;
-	if (imgtype.image.arrayed)
-		coord_components++;
-
-	uint32_t bias = 0;
-	uint32_t lod = 0;
-	uint32_t grad_x = 0;
-	uint32_t grad_y = 0;
-	uint32_t coffset = 0;
-	uint32_t offset = 0;
-	uint32_t coffsets = 0;
-	uint32_t sample = 0;
-	uint32_t minlod = 0;
-	uint32_t flags = 0;
-
-	if (length)
-	{
-		flags = *opt++;
-		length--;
-	}
-
-	auto test = [&](uint32_t &v, uint32_t flag) {
-		if (length && (flags & flag))
-		{
-			v = *opt++;
-			inherited_expressions.push_back(v);
-			length--;
-		}
-	};
-
-	test(bias, ImageOperandsBiasMask);
-	test(lod, ImageOperandsLodMask);
-	test(grad_x, ImageOperandsGradMask);
-	test(grad_y, ImageOperandsGradMask);
-	test(coffset, ImageOperandsConstOffsetMask);
-	test(offset, ImageOperandsOffsetMask);
-	test(coffsets, ImageOperandsConstOffsetsMask);
-	test(sample, ImageOperandsSampleMask);
-	test(minlod, ImageOperandsMinLodMask);
-
-	string expr;
 	bool forward = false;
-	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
-	                         (!!grad_x || !!grad_y), !!dref, lod, minlod);
-	expr += "(";
-	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
-	                         coffset, offset, bias, comp, sample, minlod, &forward);
-	expr += ")";
-
-	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
-	if (is_legacy() && image_is_comparison(imgtype, img))
-		expr += ".r";
-
-	// Sampling from a texture which was deduced to be a depth image, might actually return 1 component here.
-	// Remap back to 4 components as sampling opcodes expect.
-	bool image_is_depth;
-	const auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
-	if (combined)
-		image_is_depth = image_is_comparison(imgtype, combined->image);
-	else
-		image_is_depth = image_is_comparison(imgtype, img);
-
-	if (image_is_depth && backend.comparison_image_samples_scalar && image_opcode_is_sample_no_dref(op))
-	{
-		expr = remap_swizzle(get<SPIRType>(result_type), 1, expr);
-	}
-
-	// Deals with reads from MSL. We might need to downconvert to fewer components.
-	if (op == OpImageRead)
-		expr = remap_swizzle(get<SPIRType>(result_type), 4, expr);
+	string expr = to_texture_op(i, &forward, inherited_expressions);
 
 	// Use Metal's native frame-buffer fetch API for subpass inputs.
 	if (imgtype.image.dim == DimSubpassData && msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
@@ -6327,7 +6144,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 		expr = to_expression(img);
 	}
 
-	emit_op(result_type, id, expr, forward);
+	emit_op(result_type_id, id, expr, forward);
 	for (auto &inherit : inherited_expressions)
 		inherit_expression_dependencies(id, inherit);
 
@@ -9634,8 +9451,9 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		}
 	}
 
-	// Always determine resource index and don't opt out if the variable already has the "resource_decoration" flag.
-	// This doesn't work with atomics that need to be split into two resources.
+	// If we have already allocated an index, keep using it.
+	if (has_extended_decoration(var.self, resource_decoration))
+		return get_extended_decoration(var.self, resource_decoration);
 
 	// Allow user to enable decoration binding
 	if (msl_options.enable_decoration_binding)

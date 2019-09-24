@@ -359,7 +359,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     }
     float3 _484 = float3(_276);
     float3 _488;
-    _488 = ((float3(_423 * fast::max(0.0, dot(_206, MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDirectionAndShadowTransition.xyz))) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightColor.xyz) * (_270 + float3(_276 * (_439 * fast::min(_446 * _446, 65504.0))))) + ((_481 * float3(fast::clamp(1.0, 0.0, 1.0))) * _484);
+    _488 = ((float3(_423 * fast::max(0.0, dot(_206, MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDirectionAndShadowTransition.xyz))) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightColor.xyz) * (_270 + float3(_276 * (_439 * fast::min(_446 * _446, 65504.0))))) + (_481 * _484);
     float _537;
     int _491 = 0;
     for (;;)
@@ -393,7 +393,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
             break;
         }
     }
-    float3 _567 = (mix(_488 + fast::max(float3(0.0), float3(0.0)), _270 + _484, float3(View.View_UnlitViewmodeMask)) * float3(in.in_var_TEXCOORD7.w)) + in.in_var_TEXCOORD7.xyz;
+    float3 _567 = (mix(_488, _270 + _484, float3(View.View_UnlitViewmodeMask)) * float3(in.in_var_TEXCOORD7.w)) + in.in_var_TEXCOORD7.xyz;
     float4 _571 = float4(_567.x, _567.y, _567.z, _137.w);
     _571.w = fast::min(in.in_var_TEXCOORD8.w, 65500.0);
     out.out_var_SV_Target0 = _571;

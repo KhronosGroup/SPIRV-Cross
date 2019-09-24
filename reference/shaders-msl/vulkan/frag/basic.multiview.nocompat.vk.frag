@@ -58,7 +58,7 @@ struct main0_in
     float2 vTex_3 [[user(locn4)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvViewMask [[buffer(0)]], texture2d<float> uTex [[texture(0)]], sampler uTexSmplr [[sampler(0)]], uint gl_ViewIndex [[render_target_array_index]])
+fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvViewMask [[buffer(24)]], texture2d<float> uTex [[texture(0)]], sampler uTexSmplr [[sampler(0)]], uint gl_ViewIndex [[render_target_array_index]])
 {
     main0_out out = {};
     spvUnsafeArray<float2, 4> vTex = {};

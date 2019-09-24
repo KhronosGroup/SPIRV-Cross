@@ -51,6 +51,8 @@ struct BUF
     float c;
 };
 
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
 constant spvUnsafeArray<float, 2> _16 = spvUnsafeArray<float, 2>({ 1.0, 2.0 });
 constant spvUnsafeArray<float, 2> _19 = spvUnsafeArray<float, 2>({ 3.0, 4.0 });
 constant spvUnsafeArray<spvUnsafeArray<float, 2>, 2> _20 = spvUnsafeArray<spvUnsafeArray<float, 2>, 2>({ spvUnsafeArray<float, 2>({ 1.0, 2.0 }), spvUnsafeArray<float, 2>({ 3.0, 4.0 }) });

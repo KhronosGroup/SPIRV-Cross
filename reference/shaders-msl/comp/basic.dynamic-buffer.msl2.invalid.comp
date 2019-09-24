@@ -75,7 +75,7 @@ struct spvDescriptorSetBuffer1
     spvUnsafeArray<device thread spvUnsafeArray<spvUnsafeArray<Baz, 3>, 2>*, 3>, 3>, 2> baz [[id(0)]];
 };
 
-kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant uint* spvDynamicOffsets [[buffer(2)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant uint* spvDynamicOffsets [[buffer(23)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
     constant auto& _34 = *(constant Foo* )((constant char* )spvDescriptorSet0.m_34 + spvDynamicOffsets[0]);
     device spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<Baz, 3>, 3>, 2>* baz =

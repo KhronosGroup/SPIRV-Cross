@@ -59,6 +59,8 @@ struct dstbuffer
     spvUnsafeArray<s2, 1> test;
 };
 
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
 kernel void main0(device dstbuffer& _19 [[buffer(0)]])
 {
     _19.test[0].b.a = 0;

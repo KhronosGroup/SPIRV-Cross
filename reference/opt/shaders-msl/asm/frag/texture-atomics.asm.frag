@@ -71,7 +71,7 @@ struct main0_in
 // Returns buffer coords clamped to storage buffer size
 #define spvStorageBufferCoords(idx, sizes, type, coord) metal::min((coord), (sizes[(idx)*2] / sizeof(type)) - 1)
 
-fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredBuffer_v4float& CulledObjectBoxBounds [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], texture2d<uint> RWShadowTileNumCulledObjects [[texture(0)]], device atomic_uint* RWShadowTileNumCulledObjects_atomic [[buffer(2)]], float4 gl_FragCoord [[position]])
+fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredBuffer_v4float& CulledObjectBoxBounds [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], texture2d<uint> RWShadowTileNumCulledObjects [[texture(2)]], device atomic_uint* RWShadowTileNumCulledObjects_atomic [[buffer(2)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
     uint2 _77 = uint2(gl_FragCoord.xy);

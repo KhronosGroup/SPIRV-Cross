@@ -55,7 +55,9 @@ struct SSBO1
     spvUnsafeArray<float, 1> bz;
 };
 
-kernel void main0(constant uint* spvBufferSizeConstants [[buffer(3)]], device SSBO& _14 [[buffer(0)]], device SSBO1* ssbos_0 [[buffer(1)]], device SSBO1* ssbos_1 [[buffer(2)]])
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+kernel void main0(constant uint* spvBufferSizeConstants [[buffer(25)]], device SSBO& _14 [[buffer(0)]], device SSBO1* ssbos_0 [[buffer(1)]], device SSBO1* ssbos_1 [[buffer(2)]])
 {
     spvUnsafeArray<device SSBO1*, 2> ssbos =
     {
@@ -63,8 +65,8 @@ kernel void main0(constant uint* spvBufferSizeConstants [[buffer(3)]], device SS
         ssbos_1,
     };
 
-    constant uint& _14BufferSize = spvBufferSizeConstants[4];
-    constant uint* ssbosBufferSize = &spvBufferSizeConstants[5];
+    constant uint& _14BufferSize = spvBufferSizeConstants[0];
+    constant uint* ssbosBufferSize = &spvBufferSizeConstants[1];
     _14.size = uint(int((_14BufferSize - 16) / 16) + int((ssbosBufferSize[1] - 0) / 4));
 }
 
