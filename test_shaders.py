@@ -195,6 +195,10 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-argument-buffers')
     if '.texture-buffer-native.' in shader:
         msl_args.append('--msl-texture-buffer-native')
+    if '.framebuffer-fetch.' in shader:
+        msl_args.append('--msl-framebuffer-fetch')
+    if '.emulate-cube-array.' in shader:
+        msl_args.append('--msl-emulate-cube-array')
     if '.discrete.' in shader:
         # Arbitrary for testing purposes.
         msl_args.append('--msl-discrete-descriptor-set')

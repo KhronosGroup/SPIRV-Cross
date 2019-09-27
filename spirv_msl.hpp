@@ -291,7 +291,7 @@ public:
 		bool ios_support_base_vertex_instance = false;
 
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
-		bool ios_use_framebuffer_fetch_subpasses = true;
+		bool ios_use_framebuffer_fetch_subpasses = false;
 
 		// Storage buffer robustness - clamps access to SSBOs to the size of the buffer
 		bool enforce_storge_buffer_bounds = false;
@@ -576,9 +576,16 @@ protected:
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	void emit_struct_padding_target(const SPIRType &type) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
-	std::string type_to_array_glsl(
-	    const SPIRType &type) override; // Allow Metal to use the array<T> template to make arrays a value type
-	std::string variable_decl(const SPIRVariable &variable) override; // Threadgroup arrays can't have a wrapper type
+
+	// Allow Metal to use the array<T> template to make arrays a value type
+	std::string type_to_array_glsl(const SPIRType &type) override;
+
+	// Threadgroup arrays can't have a wrapper type
+	std::string variable_decl(const SPIRVariable &variable) override;
+
+	// GCC workaround of lambdas calling protected functions (for older GCC versions)
+	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
+
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;

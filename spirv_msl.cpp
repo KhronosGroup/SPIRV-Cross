@@ -4782,7 +4782,7 @@ void CompilerMSL::declare_undefined_values()
 	bool emitted = false;
 	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, SPIRUndef &undef) {
 		auto &type = this->get<SPIRType>(undef.basetype);
-		statement("constant ", CompilerGLSL::variable_decl(type, to_name(undef.self), undef.self), " = {};");
+		statement("constant ", variable_decl(type, to_name(undef.self), undef.self), " = {};");
 		emitted = true;
 	});
 
@@ -4805,7 +4805,7 @@ void CompilerMSL::declare_constant_arrays()
 		if (!type.array.empty() && (is_scalar(type) || is_vector(type)))
 		{
 			auto name = to_name(c.self);
-			statement("constant ", CompilerGLSL::variable_decl(type, name), " = ", constant_expression(c), ";");
+			statement("constant ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
 	});
@@ -4829,7 +4829,7 @@ void CompilerMSL::declare_complex_constant_arrays()
 		if (!type.array.empty() && !(is_scalar(type) || is_vector(type)))
 		{
 			auto name = to_name(c.self);
-			statement("", CompilerGLSL::variable_decl(type, name), " = ", constant_expression(c), ";");
+			statement("", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
 		}
 	});
@@ -4940,7 +4940,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			auto &c = id.get<SPIRConstantOp>();
 			auto &type = get<SPIRType>(c.basetype);
 			auto name = to_name(c.self);
-			statement("constant ", CompilerGLSL::variable_decl(type, name), " = ", constant_op_expression(c), ";");
+			statement("constant ", variable_decl(type, name), " = ", constant_op_expression(c), ";");
 			emitted = true;
 		}
 		else if (id.get_type() == TypeType)
@@ -5066,7 +5066,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			if (is_matrix(*type) || is_array(*type) || type->basetype == SPIRType::Struct)
 			{
 				std::string temp_name = join(to_name(var->self), "_", ops[1]);
-				statement(CompilerGLSL::variable_decl(*type, temp_name, var->self), ";");
+				statement(variable_decl(*type, temp_name, var->self), ";");
 				// Set up the initializer for this temporary variable.
 				indices.push_back(const_mbr_id);
 				if (type->basetype == SPIRType::Struct)
@@ -6123,43 +6123,32 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 void CompilerMSL::emit_texture_op(const Instruction &i)
 {
-	auto *ops = stream(i);
-	auto op = static_cast<Op>(i.op);
-
-	SmallVector<uint32_t> inherited_expressions;
-
-	uint32_t result_type_id = ops[0];
-	uint32_t id = ops[1];
-	uint32_t img = ops[2];
-
-	auto &type = expression_type(img);
-	auto &imgtype = get<SPIRType>(type.self);
-
-	bool forward = false;
-	string expr = to_texture_op(i, &forward, inherited_expressions);
-
-	// Use Metal's native frame-buffer fetch API for subpass inputs.
-	if (imgtype.image.dim == DimSubpassData && msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
+	if (msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
 	{
-		expr = to_expression(img);
+		auto *ops = stream(i);
+
+		uint32_t result_type_id = ops[0];
+		uint32_t id = ops[1];
+		uint32_t img = ops[2];
+
+		auto &type = expression_type(img);
+		auto &imgtype = get<SPIRType>(type.self);
+
+		// Use Metal's native frame-buffer fetch API for subpass inputs.
+		if (imgtype.image.dim == DimSubpassData)
+		{
+			SmallVector<uint32_t> inherited_expressions;
+			bool forward = false;
+			to_texture_op(i, &forward, inherited_expressions);
+
+			string expr = to_expression(img);
+			emit_op(result_type_id, id, expr, forward);
+			return;
+		}
 	}
 
-	emit_op(result_type_id, id, expr, forward);
-	for (auto &inherit : inherited_expressions)
-		inherit_expression_dependencies(id, inherit);
-
-	switch (op)
-	{
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
-		register_control_dependent_expression(id);
-		break;
-
-	default:
-		break;
-	}
+	// Fallback to default implementation
+	CompilerGLSL::emit_texture_op(i);
 }
 
 void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem)
@@ -7261,7 +7250,7 @@ string CompilerMSL::to_function_args(VariableID img, const SPIRType &imgtype, bo
 	if (!farg_str.empty())
 		farg_str += ", ";
 
-	if (imgtype.image.arrayed && msl_options.emulate_cube_array)
+	if (imgtype.image.dim == DimCube && imgtype.image.arrayed && msl_options.emulate_cube_array)
 	{
 		farg_str += "spvCubemapTo2DArrayFace(" + tex_coords + ").xy";
 
@@ -7269,7 +7258,7 @@ string CompilerMSL::to_function_args(VariableID img, const SPIRType &imgtype, bo
 			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ")";
 		else
 			farg_str += ", uint(spvCubemapTo2DArrayFace(" + tex_coords + ").z) + (uint(" +
-			            to_extract_component_expression(coord, 2) + ") * 6u)";
+			            round_fp_tex_coords(to_extract_component_expression(coord, alt_coord_component), coord_is_fp) + ") * 6u)";
 
 		add_spv_func_and_recompile(SPVFuncImplCubemapTo2DArrayFace);
 	}
@@ -10275,6 +10264,12 @@ std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 	return expr;
 }
 
+// GCC workaround of lambdas calling protected funcs
+std::string CompilerMSL::variable_decl(const SPIRType &type, const std::string &name, uint32_t id)
+{
+	return CompilerGLSL::variable_decl(type, name, id);
+}
+
 std::string CompilerMSL::sampler_type(const SPIRType &type)
 {
 	if (!type.array.empty())
@@ -10395,11 +10390,14 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			else
 				img_type_name += "texture2d";
 			break;
+		case Dim2D:
 		case DimSubpassData:
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
-			if (msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
+			if (img_type.dim == DimSubpassData && msl_options.is_ios() &&
+			    msl_options.ios_use_framebuffer_fetch_subpasses)
+			{
 				return type_to_glsl(get<SPIRType>(img_type.type));
-		case Dim2D:
+			}
 			if (img_type.ms && img_type.arrayed)
 			{
 				if (!msl_options.supports_msl_version(2, 1))

@@ -487,9 +487,6 @@ public:
 	// The most common use here is to check if a buffer is readonly or writeonly.
 	Bitset get_buffer_block_flags(VariableID id) const;
 
-	// Returns true if the target language supports combined texture-samplers. Returns fasle by default.
-	virtual bool supports_combined_samplers() const;
-
 protected:
 	const uint32_t *stream(const Instruction &instr) const
 	{
@@ -614,6 +611,9 @@ protected:
 
 	void register_read(uint32_t expr, uint32_t chain, bool forwarded);
 	void register_write(uint32_t chain);
+
+	// Returns true if the target language supports combined texture-samplers. Returns fasle by default.
+	virtual bool supports_combined_samplers() const;
 
 	inline bool is_continue(uint32_t next) const
 	{
