@@ -2,7 +2,12 @@
     "entryPoints" : [
         {
             "name" : "main",
-            "mode" : "comp"
+            "mode" : "comp",
+            "workgroup_size" : [
+                1,
+                1,
+                1
+            ]
         }
     ],
     "types" : {

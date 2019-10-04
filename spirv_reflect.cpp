@@ -424,6 +424,15 @@ void CompilerReflection::emit_entry_points()
 			json_stream->begin_json_object();
 			json_stream->emit_json_key_value("name", e.name);
 			json_stream->emit_json_key_value("mode", execution_model_to_str(e.execution_model));
+			if(e.execution_model == ExecutionModelGLCompute)
+			{
+				const auto &spv_entry = get_entry_point(e.name, e.execution_model);
+				json_stream->emit_json_key_array("workgroup_size");
+				json_stream->emit_json_array_value(spv_entry.workgroup_size.x);
+				json_stream->emit_json_array_value(spv_entry.workgroup_size.y);
+				json_stream->emit_json_array_value(spv_entry.workgroup_size.z);
+				json_stream->end_json_array();
+			}
 			json_stream->end_json_object();
 		}
 		json_stream->end_json_array();
