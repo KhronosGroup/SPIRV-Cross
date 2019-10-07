@@ -12782,7 +12782,7 @@ void CompilerGLSL::fixup_type_alias()
 			// This is not allowed, drop the type_alias.
 			type.type_alias = 0;
 		}
-		else if (type.type_alias && !type_is_block_like(get<SPIRType>(type.type_alias)))
+		else if (type.type_alias && !type_is_block_like(this->get<SPIRType>(type.type_alias)))
 		{
 			// If the alias master is not a block-like type, there is no reason to use type aliasing.
 			// This case can happen if two structs are declared with the same name, but they are unrelated.
