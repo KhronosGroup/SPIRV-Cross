@@ -296,6 +296,7 @@ public:
 		// Storage buffer robustness - clamps access to SSBOs to the size of the buffer
 		bool enforce_storge_buffer_bounds = false;
 
+		// Enables use of "fma" intrinsic for invariant float math
 		bool invariant_float_math = false;
 
 		// Emulate texturecube_array with texture2d_array for iOS where this type is not available

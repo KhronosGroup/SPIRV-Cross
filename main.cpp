@@ -515,6 +515,7 @@ struct CLIArguments
 	bool msl_argument_buffers = false;
 	bool msl_texture_buffer_native = false;
 	bool msl_framebuffer_fetch = false;
+	bool msl_invariant_float_math = false;
 	bool msl_emulate_cube_array = false;
 	bool msl_multiview = false;
 	bool msl_view_index_from_device_index = false;
@@ -758,6 +759,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			msl_opts.msl_version = args.msl_version;
 		msl_opts.capture_output_to_buffer = args.msl_capture_output_to_buffer;
 		msl_opts.swizzle_texture_samples = args.msl_swizzle_texture_samples;
+		msl_opts.invariant_float_math = args.msl_invariant_float_math;
 		if (args.msl_ios)
 		{
 			msl_opts.platform = CompilerMSL::Options::iOS;
@@ -1096,6 +1098,7 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &parser) { args.msl_discrete_descriptor_sets.push_back(parser.next_uint()); });
 	cbs.add("--msl-texture-buffer-native", [&args](CLIParser &) { args.msl_texture_buffer_native = true; });
 	cbs.add("--msl-framebuffer-fetch", [&args](CLIParser &) { args.msl_framebuffer_fetch = true; });
+	cbs.add("--msl-invariant-float-math", [&args](CLIParser &) { args.msl_invariant_float_math = true; });
 	cbs.add("--msl-emulate-cube-array", [&args](CLIParser &) { args.msl_emulate_cube_array = true; });
 	cbs.add("--msl-multiview", [&args](CLIParser &) { args.msl_multiview = true; });
 	cbs.add("--msl-view-index-from-device-index",

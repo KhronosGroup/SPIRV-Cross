@@ -3594,6 +3594,23 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 
 			statement("template<typename T, int Cols, int Rows>");
+			statement("vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)");
+			begin_scope();
+			statement("vec<T, Cols> res = vec<T, Cols>(0);");
+			statement("for (uint i = Rows; i > 0; --i)");
+			begin_scope();
+			statement("vec<T, Cols> tmp(0);");
+			statement("for (uint j = 0; j < Cols; ++j)");
+			begin_scope();
+			statement("tmp[j] = m[j][i - 1];");
+			end_scope();
+			statement("res = fma(tmp, vec<T, Cols>(v[i - 1]), res);");
+			end_scope();
+			statement("return res;");
+			end_scope();
+			statement("");
+
+			statement("template<typename T, int Cols, int Rows>");
 			statement("vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)");
 			begin_scope();
 			statement("vec<T, Rows> res = vec<T, Rows>(0);");
@@ -5864,30 +5881,14 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t a = ops[2];
 		uint32_t b = ops[3];
 
-		auto *type_a = maybe_get<SPIRType>(a);
-		auto *type_b = maybe_get<SPIRType>(b);
-
 		auto &type = get<SPIRType>(result_type);
 		string expr = type_to_glsl_constructor(type);
 		expr += "(";
 		for (uint32_t col = 0; col < type.columns; col++)
 		{
-			if (msl_options.invariant_float_math && type_a && type_b &&
-			    ((is_matrix(*type_a) && is_matrix(*type_b)) || (is_matrix(*type_a) && is_vector(*type_b)) ||
-			     (is_vector(*type_a) && is_matrix(*type_b))))
-			{
-				expr += "spvFMulMatrixMatrix(";
-				expr += to_enclosed_expression(a);
-				expr += ", ";
-				expr += to_extract_component_expression(b, col);
-				expr += ")";
-			}
-			else
-			{
-				expr += to_enclosed_expression(a);
-				expr += " * ";
-				expr += to_extract_component_expression(b, col);
-			}
+			expr += to_enclosed_expression(a);
+			expr += " * ";
+			expr += to_extract_component_expression(b, col);
 			if (col + 1 < type.columns)
 				expr += ", ";
 		}
@@ -5910,15 +5911,22 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 			if (opcode == OpMatrixTimesVector)
 			{
-				expr = join(to_enclosed_unpacked_expression(ops[3]), " * ",
-				            enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+				if (msl_options.invariant_float_math)
+				{
+					expr = join("spvFMulVectorMatrix(", to_enclosed_unpacked_expression(ops[3]), ", ",
+					            to_unpacked_row_major_matrix_expression(ops[2]), ")");
+				}
+				else
+				{
+					expr = join(to_enclosed_unpacked_expression(ops[3]), " * ",
+					            enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
+				}
 			}
 			else
 			{
 				if (msl_options.invariant_float_math)
 				{
-					expr = join("spvFMulMatrixVector(",
-					            enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
+					expr = join("spvFMulMatrixVector(", to_unpacked_row_major_matrix_expression(ops[3]), ", ",
 					            to_enclosed_unpacked_expression(ops[2]), ")");
 				}
 				else
@@ -5934,8 +5942,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			inherit_expression_dependencies(ops[1], ops[2]);
 			inherit_expression_dependencies(ops[1], ops[3]);
 		}
-		else if (opcode == OpMatrixTimesVector && msl_options.invariant_float_math)
-			MSL_BFOP(spvFMulMatrixVector);
+		else if (msl_options.invariant_float_math)
+		{
+			if (opcode == OpMatrixTimesVector)
+				MSL_BFOP(spvFMulMatrixVector);
+			else
+				MSL_BFOP(spvFMulVectorMatrix);
+		}
 		else
 			MSL_BOP(*);
 		break;
@@ -7258,7 +7271,8 @@ string CompilerMSL::to_function_args(VariableID img, const SPIRType &imgtype, bo
 			farg_str += ", uint(" + to_extract_component_expression(coord, 2) + ")";
 		else
 			farg_str += ", uint(spvCubemapTo2DArrayFace(" + tex_coords + ").z) + (uint(" +
-			            round_fp_tex_coords(to_extract_component_expression(coord, alt_coord_component), coord_is_fp) + ") * 6u)";
+			            round_fp_tex_coords(to_extract_component_expression(coord, alt_coord_component), coord_is_fp) +
+			            ") * 6u)";
 
 		add_spv_func_and_recompile(SPVFuncImplCubemapTo2DArrayFace);
 	}
