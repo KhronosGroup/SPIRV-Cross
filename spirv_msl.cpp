@@ -3249,7 +3249,14 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 		return unpack_expr;
 	}
 	else
-		return join(type_to_glsl(type), "(", expr_str, ")");
+	{
+		// Don't expose "spvUnsafeArray" when unpacking expressions,
+		// the input "type" will be the unpacked type and might also appear in l-value expressions
+		use_builtin_array = true;
+		string unpack_expr = join(type_to_glsl(type), "(", expr_str, ")");
+		use_builtin_array = false;
+		return unpack_expr;
+	}
 }
 
 // Emits the file header info
@@ -8068,7 +8075,10 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			add_typedef_line(td_line);
 		}
 		else
+		{
+			use_builtin_array = true;
 			pack_pfx = "packed_";
+		}
 	}
 	else if (row_major)
 	{
@@ -8092,7 +8102,8 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	{
 		// Force the use of C style array declaration.
 		BuiltIn builtin = BuiltInMax;
-		use_builtin_array = is_member_builtin(type, index, &builtin);
+		if (is_member_builtin(type, index, &builtin))
+			use_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
 	}
 
@@ -12027,15 +12038,7 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 			// Sample mask input for Metal is not an array
 			else if (ir.meta[base].decoration.builtin_type != BuiltInSampleMask)
 			{
-				if (is_packed)
-				{
-					if (!remove_duplicate_swizzle(expr))
-						remove_unity_swizzle(base, expr);
-					append_index(index);
-					expr = unpack_expression_type(expr, *type, physical_type, is_packed, true);
-				}
-				else
-					append_index(index);
+				append_index(index);
 			}
 
 			type_id = type->parent_type;
