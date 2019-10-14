@@ -4194,7 +4194,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==", false);
 		else
 			HLSL_BOP_CAST(==, int_type);
 		break;
@@ -4202,12 +4202,19 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	case OpLogicalEqual:
 	case OpFOrdEqual:
+	case OpFUnordEqual:
 	{
+		// HLSL != operator is unordered.
+		// https://docs.microsoft.com/en-us/windows/win32/direct3d10/d3d10-graphics-programming-guide-resources-float-rules.
+		// isnan() is apparently implemented as x != x as well.
+		// We cannot implement UnordEqual as !(OrdNotEqual), as HLSL cannot express OrdNotEqual.
+		// HACK: FUnordEqual will be implemented as FOrdEqual.
+
 		auto result_type = ops[0];
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "==", false);
 		else
 			HLSL_BOP(==);
 		break;
@@ -4219,7 +4226,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=", false);
 		else
 			HLSL_BOP_CAST(!=, int_type);
 		break;
@@ -4227,12 +4234,23 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 	case OpLogicalNotEqual:
 	case OpFOrdNotEqual:
+	case OpFUnordNotEqual:
 	{
+		// HLSL != operator is unordered.
+		// https://docs.microsoft.com/en-us/windows/win32/direct3d10/d3d10-graphics-programming-guide-resources-float-rules.
+		// isnan() is apparently implemented as x != x as well.
+
+		// FIXME: FOrdNotEqual cannot be implemented in a crisp and simple way here.
+		// We would need to do something like not(UnordEqual), but that cannot be expressed either.
+		// Adding a lot of NaN checks would be a breaking change from perspective of performance.
+		// SPIR-V will generally use isnan() checks when this even matters.
+		// HACK: FOrdNotEqual will be implemented as FUnordEqual.
+
 		auto result_type = ops[0];
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "!=", false);
 		else
 			HLSL_BOP(!=);
 		break;
@@ -4246,7 +4264,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto type = opcode == OpUGreaterThan ? SPIRType::UInt : SPIRType::Int;
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">", false);
 		else
 			HLSL_BOP_CAST(>, type);
 		break;
@@ -4258,9 +4276,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">", false);
 		else
 			HLSL_BOP(>);
+		break;
+	}
+
+	case OpFUnordGreaterThan:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=", true);
+		else
+			CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
 
@@ -4272,7 +4302,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		auto type = opcode == OpUGreaterThanEqual ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=", false);
 		else
 			HLSL_BOP_CAST(>=, type);
 		break;
@@ -4284,9 +4314,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=", false);
 		else
 			HLSL_BOP(>=);
+		break;
+	}
+
+	case OpFUnordGreaterThanEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<", true);
+		else
+			CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
 
@@ -4298,7 +4340,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		auto type = opcode == OpULessThan ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<", false);
 		else
 			HLSL_BOP_CAST(<, type);
 		break;
@@ -4310,9 +4352,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<", false);
 		else
 			HLSL_BOP(<);
+		break;
+	}
+
+	case OpFUnordLessThan:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">=", true);
+		else
+			CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
 
@@ -4324,7 +4378,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		auto type = opcode == OpULessThanEqual ? SPIRType::UInt : SPIRType::Int;
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=", false);
 		else
 			HLSL_BOP_CAST(<=, type);
 		break;
@@ -4336,9 +4390,21 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		auto id = ops[1];
 
 		if (expression_type(ops[2]).vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "<=", false);
 		else
 			HLSL_BOP(<=);
+		break;
+	}
+
+	case OpFUnordLessThanEqual:
+	{
+		auto result_type = ops[0];
+		auto id = ops[1];
+
+		if (expression_type(ops[2]).vecsize > 1)
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], ">", true);
+		else
+			CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
 

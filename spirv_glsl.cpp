@@ -4159,7 +4159,7 @@ void CompilerGLSL::emit_unrolled_unary_op(uint32_t result_type, uint32_t result_
 }
 
 void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
-                                           const char *op)
+                                           const char *op, bool negate)
 {
 	auto &type = get<SPIRType>(result_type);
 	auto expr = type_to_glsl_constructor(type);
@@ -4168,11 +4168,15 @@ void CompilerGLSL::emit_unrolled_binary_op(uint32_t result_type, uint32_t result
 	{
 		// Make sure to call to_expression multiple times to ensure
 		// that these expressions are properly flushed to temporaries if needed.
+		if (negate)
+			expr += "!(";
 		expr += to_extract_component_expression(op0, i);
 		expr += ' ';
 		expr += op;
 		expr += ' ';
 		expr += to_extract_component_expression(op1, i);
+		if (negate)
+			expr += ")";
 
 		if (i + 1 < type.vecsize)
 			expr += ", ";
@@ -8838,7 +8842,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto &type = get<SPIRType>(result_type);
 
 		if (type.vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "||");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "||", false);
 		else
 			GLSL_BOP(||);
 		break;
@@ -8852,7 +8856,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto &type = get<SPIRType>(result_type);
 
 		if (type.vecsize > 1)
-			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "&&");
+			emit_unrolled_binary_op(result_type, id, ops[2], ops[3], "&&", false);
 		else
 			GLSL_BOP(&&);
 		break;
