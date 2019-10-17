@@ -6873,8 +6873,16 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion)
 			{
 				auto &c = get<SPIRConstant>(index);
-				expr += ".";
-				expr += index_to_swizzle(c.scalar());
+				if (c.specialization)
+				{
+					// If the index is a spec constant, we cannot turn extract into a swizzle.
+					expr += join("[", to_expression(index), "]");
+				}
+				else
+				{
+					expr += ".";
+					expr += index_to_swizzle(c.scalar());
+				}
 			}
 			else if (index_is_literal)
 			{
