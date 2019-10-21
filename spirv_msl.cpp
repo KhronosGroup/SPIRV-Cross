@@ -3571,16 +3571,6 @@ void CompilerMSL::emit_custom_functions()
 			break;
 		}
 
-		// Storage buffer robustness
-		case SPVFuncImplStorageBufferCoords:
-		{
-			statement("// Returns buffer coords clamped to storage buffer size");
-			statement("#define spvStorageBufferCoords(idx, sizes, type, coord) metal::min((coord), (sizes[(idx)*2] / "
-			          "sizeof(type)) - 1)");
-			statement("");
-			break;
-		}
-
 		// "fadd" intrinsic support
 		case SPVFuncImplFAdd:
 			statement("template<typename T>");
@@ -5594,27 +5584,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			if (type.image.dim == Dim2D)
 			{
 				coord = join("spvImage2DAtomicCoord(", coord, ", ", to_expression(ops[2]), ")");
-			}
-
-			// Storage buffer robustness
-			if (msl_options.enforce_storge_buffer_bounds)
-			{
-				const auto *var_type = var ? maybe_get<SPIRType>(var->basetype) : nullptr;
-				uint32_t var_index = get_metal_resource_index(*var, var_type->basetype);
-				const auto &innertype =
-				    var_type->basetype == SPIRType::Image ? get<SPIRType>(var_type->image.type) : *var_type;
-				uint32_t desc_set = get_decoration(ops[2], DecorationDescriptorSet);
-				if (descriptor_set_is_argument_buffer(desc_set))
-				{
-					coord = join("spvStorageBufferCoords(", convert_to_string(var_index), ", ",
-					             to_name(argument_buffer_ids[desc_set]), ".spvBufferSizeConstants, ",
-					             type_to_glsl(innertype), ", ", coord, ")");
-				}
-				else
-				{
-					coord = join("spvStorageBufferCoords(", convert_to_string(var_index), ", spvBufferSizeConstants, ",
-					             type_to_glsl(innertype), ", ", coord, ")");
-				}
 			}
 
 			auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), "_atomic[", coord, "]"), result_type, true);
@@ -11790,11 +11759,6 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 	const auto *type = &get_pointee_type(type_id);
 
 	auto *var = maybe_get<SPIRVariable>(base);
-	const auto *var_type = var ? maybe_get<SPIRType>(var->basetype) : nullptr;
-	bool ssbo = msl_options.enforce_storge_buffer_bounds && var && var_type &&
-	            (var->storage == StorageClassStorageBuffer ||
-	             (var_type->basetype == SPIRType::Struct && var->storage == StorageClassUniform &&
-	              has_decoration(var_type->self, DecorationBufferBlock)));
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
@@ -11840,27 +11804,6 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 
 		expr += "[";
 
-		if (ssbo)
-		{
-			expr += "spvStorageBufferCoords(";
-			uint32_t var_index = get_metal_resource_index(*var, var_type->basetype);
-			expr += convert_to_string(var_index);
-			expr += ", ";
-
-			uint32_t desc_set = get_decoration(base, DecorationDescriptorSet);
-			if (descriptor_set_is_argument_buffer(desc_set))
-			{
-				expr += to_name(argument_buffer_ids[desc_set]);
-				expr += ".";
-			}
-
-			expr += "spvBufferSizeConstants";
-			expr += ", ";
-			const SPIRType &innertype = this->get<SPIRType>(type->parent_type);
-			expr += type_to_glsl(innertype);
-			expr += ", ";
-		}
-
 		// If we are indexing into an array of SSBOs or UBOs, we need to index it with a non-uniform qualifier.
 		bool nonuniform_index =
 		    has_decoration(index, DecorationNonUniformEXT) &&
@@ -11878,12 +11821,6 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 
 		if (nonuniform_index)
 			expr += ")";
-
-		if (ssbo)
-		{
-			expr += ")";
-			ssbo = false;
-		}
 
 		expr += "]";
 		if (tess_eval_input_array)
@@ -12179,29 +12116,6 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 {
 	switch (opcode)
 	{
-	// Storage buffer robustness
-	case OpInBoundsAccessChain:
-	case OpAccessChain:
-	case OpPtrAccessChain:
-	{
-		if (compiler.msl_options.enforce_storge_buffer_bounds)
-		{
-			auto *var = compiler.maybe_get<SPIRVariable>(args[2]);
-			if (var)
-			{
-				auto &type = compiler.get<SPIRType>(var->basetype);
-				bool ssbo = compiler.has_decoration(type.self, DecorationBufferBlock);
-				if ((var->storage == StorageClassStorageBuffer ||
-				     (type.basetype == SPIRType::Struct && var->storage == StorageClassUniform && ssbo)))
-				{
-					compiler.buffers_requiring_array_length.insert(var->self);
-					return SPVFuncImplStorageBufferCoords;
-				}
-			}
-		}
-		break;
-	}
-
 	case OpFMod:
 		return SPVFuncImplMod;
 
@@ -12259,17 +12173,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		if (it != image_pointers.end())
 		{
 			uint32_t tid = it->second->basetype;
-
-			// Storage buffer robustness
-			if (compiler.msl_options.enforce_storge_buffer_bounds)
-			{
-				compiler.buffers_requiring_array_length.insert(args[opcode == OpAtomicStore ? 0 : 2]);
-			}
-
 			if (tid && compiler.get<SPIRType>(tid).image.dim == Dim2D)
 				return SPVFuncImplImage2DAtomicCoords;
-
-			return SPVFuncImplStorageBufferCoords;
 		}
 		break;
 	}

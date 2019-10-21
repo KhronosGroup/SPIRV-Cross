@@ -68,9 +68,10 @@ struct main0_in
     uint in_var_TEXCOORD0 [[user(locn0)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredBuffer_v4float& CulledObjectBoxBounds [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], texture2d<uint> RWShadowTileNumCulledObjects [[texture(2)]], device atomic_uint* RWShadowTileNumCulledObjects_atomic [[buffer(2)]], float4 gl_FragCoord [[position]])
+fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvBufferSizeConstants [[buffer(25)]], const device type_StructuredBuffer_v4float& CulledObjectBoxBounds [[buffer(0)]], constant type_Globals& _Globals [[buffer(1)]], texture2d<uint> RWShadowTileNumCulledObjects [[texture(2)]], device atomic_uint* RWShadowTileNumCulledObjects_atomic [[buffer(2)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
+    constant uint& CulledObjectBoxBoundsBufferSize = spvBufferSizeConstants[0];
     uint2 _77 = uint2(gl_FragCoord.xy);
     uint _78 = _77.y;
     uint _83 = _77.x;
@@ -81,8 +82,8 @@ fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredB
     float3 _102 = float3(_100.x, _100.y, _70.z);
     _102.z = 1.0;
     uint _103 = in.in_var_TEXCOORD0 * 5u;
-    uint _107 = _103 + 1u;
-    if (all(CulledObjectBoxBounds._m0[_107].xy > _96.xy) && all(CulledObjectBoxBounds._m0[_103].xyz < _102))
+    uint _186 = clamp(_103 + 1u, 0u, ((CulledObjectBoxBoundsBufferSize - 0) / 16) - 1u);
+    if (all(CulledObjectBoxBounds._m0[_186].xy > _96.xy) && all(CulledObjectBoxBounds._m0[clamp(_103, 0u, ((CulledObjectBoxBoundsBufferSize - 0) / 16) - 1u)].xyz < _102))
     {
         float _122 = _96.x;
         float _123 = _96.y;
@@ -103,8 +104,8 @@ fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredB
         _158 = float3(500000.0);
         for (int _160 = 0; _160 < 8; )
         {
-            float3 _166 = _73[_160] - (float3(0.5) * (CulledObjectBoxBounds._m0[_103].xyz + CulledObjectBoxBounds._m0[_107].xyz));
-            float3 _170 = float3(dot(_166, CulledObjectBoxBounds._m0[_103 + 2u].xyz), dot(_166, CulledObjectBoxBounds._m0[_103 + 3u].xyz), dot(_166, CulledObjectBoxBounds._m0[_103 + 4u].xyz));
+            float3 _166 = _73[int(clamp(uint(_160), uint(0), uint(7)))] - (float3(0.5) * (CulledObjectBoxBounds._m0[clamp(_103, 0u, ((CulledObjectBoxBoundsBufferSize - 0) / 16) - 1u)].xyz + CulledObjectBoxBounds._m0[_186].xyz));
+            float3 _170 = float3(dot(_166, CulledObjectBoxBounds._m0[clamp(_103 + 2u, 0u, ((CulledObjectBoxBoundsBufferSize - 0) / 16) - 1u)].xyz), dot(_166, CulledObjectBoxBounds._m0[clamp(_103 + 3u, 0u, ((CulledObjectBoxBoundsBufferSize - 0) / 16) - 1u)].xyz), dot(_166, CulledObjectBoxBounds._m0[clamp(_103 + 4u, 0u, ((CulledObjectBoxBoundsBufferSize - 0) / 16) - 1u)].xyz));
             _155 = fast::max(_155, _170);
             _158 = fast::min(_158, _170);
             _160++;

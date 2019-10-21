@@ -387,7 +387,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Globals& _Globa
     float _1276 = _1258.y;
     float4 _1279 = Texture1.sample(Texture1Sampler, float2(_1275, _1276));
     float4 _1283 = Texture1.sample(Texture1Sampler, float2(_1275 + 0.0625, _1276));
-    float3 _1289 = fast::max(float3(6.1035199905745685100555419921875e-05), (float3(_Globals.LUTWeights[0]) * _1256) + (float3(_Globals.LUTWeights[1]) * mix(_1279, _1283, float4(_1270 - _1271)).xyz));
+    float3 _1289 = fast::max(float3(6.1035199905745685100555419921875e-05), (float3(_Globals.LUTWeights[0].x) * _1256) + (float3(_Globals.LUTWeights[1].x) * mix(_1279, _1283, float4(_1270 - _1271)).xyz));
     float3 _1295 = select(_1289 * float3(0.077399380505084991455078125), pow((_1289 * float3(0.94786727428436279296875)) + float3(0.0521326996386051177978515625), float3(2.400000095367431640625)), _1289 > float3(0.040449999272823333740234375));
     float3 _1324 = pow(fast::max(float3(0.0), mix((((float3(_Globals.MappingPolynomial.x) * (_1295 * _1295)) + (float3(_Globals.MappingPolynomial.y) * _1295)) + float3(_Globals.MappingPolynomial.z)) * _Globals.ColorScale, _Globals.OverlayColor.xyz, float3(_Globals.OverlayColor.w))), float3(_Globals.InverseGamma.y));
     float3 _3103;

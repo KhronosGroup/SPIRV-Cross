@@ -293,9 +293,6 @@ public:
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
 		bool ios_use_framebuffer_fetch_subpasses = false;
 
-		// Storage buffer robustness - clamps access to SSBOs to the size of the buffer
-		bool enforce_storge_buffer_bounds = false;
-
 		// Enables use of "fma" intrinsic for invariant float math
 		bool invariant_float_math = false;
 
@@ -506,7 +503,6 @@ protected:
 		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
-		SPVFuncImplStorageBufferCoords, // Storage buffer robustness
 		SPVFuncImplFMul,
 		SPVFuncImplFAdd,
 		SPVFuncImplCubemapTo2DArrayFace,
