@@ -127,6 +127,11 @@ bool CompilerMSL::supports_combined_samplers() const
 	return false; // Metal does not support combined texture-samplers
 }
 
+bool CompilerMSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
+{
+	return (builtin == BuiltInSampleMask);
+}
+
 void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
@@ -11730,60 +11735,12 @@ void CompilerMSL::OpCodePreprocessor::check_resource_write(uint32_t var_id)
 		uses_resource_write = true;
 }
 
-// Storage buffer robustness
-// Fix loads from tessellation control inputs not being forwarded to the gl_in structure array
-// Fix loads from tessellation evaluation inputs not being forwarded to the stage_in structure array
-std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-                                               AccessChainFlags flags, AccessChainMeta *meta)
+void CompilerMSL::access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
+                                                     AccessChainFlags flags, bool &access_chain_is_arrayed,
+                                                     uint32_t index)
 {
-	string expr;
-
 	bool index_is_literal = (flags & ACCESS_CHAIN_INDEX_IS_LITERAL_BIT) != 0;
-	bool chain_only = (flags & ACCESS_CHAIN_CHAIN_ONLY_BIT) != 0;
-	bool ptr_chain = (flags & ACCESS_CHAIN_PTR_CHAIN_BIT) != 0;
 	bool register_expression_read = (flags & ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT) == 0;
-
-	if (!chain_only)
-	{
-		// We handle transpose explicitly, so don't resolve that here.
-		auto *e = maybe_get<SPIRExpression>(base);
-		bool old_transpose = e && e->need_transpose;
-		if (e)
-			e->need_transpose = false;
-		expr = to_enclosed_expression(base, register_expression_read);
-		if (e)
-			e->need_transpose = old_transpose;
-	}
-
-	// Start traversing type hierarchy at the proper non-pointer types,
-	// but keep type_id referencing the original pointer for use below.
-	uint32_t type_id = expression_type_id(base);
-
-	if (!backend.native_pointers)
-	{
-		if (ptr_chain)
-			SPIRV_CROSS_THROW("Backend does not support native pointers and does not support OpPtrAccessChain.");
-
-		// Wrapped buffer reference pointer types will need to poke into the internal "value" member before
-		// continuing the access chain.
-		if (should_dereference(base))
-		{
-			auto &type = get<SPIRType>(type_id);
-			expr = dereference_expression(type, expr);
-		}
-	}
-
-	const auto *type = &get_pointee_type(type_id);
-
-	auto *var = maybe_get<SPIRVariable>(base);
-
-	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
-	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
-	bool is_packed = has_extended_decoration(base, SPIRVCrossDecorationPhysicalTypePacked);
-	uint32_t physical_type = get_extended_decoration(base, SPIRVCrossDecorationPhysicalTypeID);
-	bool is_invariant = has_decoration(base, DecorationInvariant);
-	bool pending_array_enclose = false;
-	bool dimension_flatten = false;
 
 	// Workaround SPIRV losing an array indirection in tessellation shaders - not the best solution but enough to keep things progressing.
 	auto *tess_var = maybe_get_backing_variable(base);
@@ -11805,327 +11762,68 @@ std::string CompilerMSL::access_chain_internal(uint32_t base, const uint32_t *in
 		expr = type_to_glsl(*type) + expr;
 	}
 
-	const auto append_index = [&](uint32_t index) {
-		std::string name;
+	std::string name;
 
-		if (tess_control_input)
+	if (tess_control_input)
+	{
+		name = expr;
+		expr = "gl_in";
+	}
+	else if (tess_eval_input && !tess_eval_input_array)
+	{
+		name = expr;
+		expr = to_expression(patch_stage_in_var_id) + ".gl_in";
+	}
+
+	expr += "[";
+
+	// If we are indexing into an array of SSBOs or UBOs, we need to index it with a non-uniform qualifier.
+	bool nonuniform_index =
+	    has_decoration(index, DecorationNonUniformEXT) &&
+	    (has_decoration(type->self, DecorationBlock) || has_decoration(type->self, DecorationBufferBlock));
+	if (nonuniform_index)
+	{
+		expr += backend.nonuniform_qualifier;
+		expr += "(";
+	}
+
+	if (index_is_literal)
+		expr += convert_to_string(index);
+	else
+		expr += to_expression(index, register_expression_read);
+
+	if (nonuniform_index)
+		expr += ")";
+
+	expr += "]";
+	if (tess_eval_input_array)
+	{
+		tess_eval_input_array = false;
+	}
+
+	if (tess_control_input || tess_eval_input)
+	{
+		expr += ".";
+		expr += name;
+		tess_control_input = false;
+		tess_eval_input = false;
+
+		if (tess_control_input_array)
 		{
 			name = expr;
-			expr = "gl_in";
+			expr = "{ ";
+			for (uint32_t i = 0; i < tess_control_input_array_num; i++)
+			{
+				if (i > 0)
+					expr += ", ";
+
+				expr += name;
+				expr += "_";
+				expr += convert_to_string(i);
+			}
+			expr += " }";
 		}
-		else if (tess_eval_input && !tess_eval_input_array)
-		{
-			name = expr;
-			expr = to_expression(patch_stage_in_var_id) + ".gl_in";
-		}
-
-		expr += "[";
-
-		// If we are indexing into an array of SSBOs or UBOs, we need to index it with a non-uniform qualifier.
-		bool nonuniform_index =
-		    has_decoration(index, DecorationNonUniformEXT) &&
-		    (has_decoration(type->self, DecorationBlock) || has_decoration(type->self, DecorationBufferBlock));
-		if (nonuniform_index)
-		{
-			expr += backend.nonuniform_qualifier;
-			expr += "(";
-		}
-
-		if (index_is_literal)
-			expr += convert_to_string(index);
-		else
-			expr += to_expression(index, register_expression_read);
-
-		if (nonuniform_index)
-			expr += ")";
-
-		expr += "]";
-		if (tess_eval_input_array)
-		{
-			tess_eval_input_array = false;
-		}
-
-		if (tess_control_input || tess_eval_input)
-		{
-			expr += ".";
-			expr += name;
-			tess_control_input = false;
-			tess_eval_input = false;
-
-			if (tess_control_input_array)
-			{
-				name = expr;
-				expr = "{ ";
-				for (uint32_t i = 0; i < tess_control_input_array_num; i++)
-				{
-					if (i > 0)
-						expr += ", ";
-
-					expr += name;
-					expr += "_";
-					expr += convert_to_string(i);
-				}
-				expr += " }";
-			}
-		}
-	};
-
-	for (uint32_t i = 0; i < count; i++)
-	{
-		uint32_t index = indices[i];
-
-		// Pointer chains
-		if (ptr_chain && i == 0)
-		{
-			// If we are flattening multidimensional arrays, only create opening bracket on first
-			// array index.
-			if (options.flatten_multidimensional_arrays)
-			{
-				dimension_flatten = type->array.size() >= 1;
-				pending_array_enclose = dimension_flatten;
-				if (pending_array_enclose)
-					expr += "[";
-			}
-
-			if (options.flatten_multidimensional_arrays && dimension_flatten)
-			{
-				// If we are flattening multidimensional arrays, do manual stride computation.
-				if (index_is_literal)
-					expr += convert_to_string(index);
-				else
-					expr += to_enclosed_expression(index, register_expression_read);
-
-				for (auto j = uint32_t(type->array.size()); j; j--)
-				{
-					expr += " * ";
-					expr += enclose_expression(to_array_size(*type, j - 1));
-				}
-
-				if (type->array.empty())
-					pending_array_enclose = false;
-				else
-					expr += " + ";
-
-				if (!pending_array_enclose)
-					expr += "]";
-			}
-			else
-			{
-				append_index(index);
-			}
-
-			if (type->basetype == SPIRType::ControlPointArray)
-			{
-				type_id = type->parent_type;
-				type = &get<SPIRType>(type_id);
-			}
-
-			access_chain_is_arrayed = true;
-		}
-		// Arrays
-		else if (!type->array.empty())
-		{
-			// If we are flattening multidimensional arrays, only create opening bracket on first
-			// array index.
-			if (options.flatten_multidimensional_arrays && !pending_array_enclose)
-			{
-				dimension_flatten = type->array.size() > 1;
-				pending_array_enclose = dimension_flatten;
-				if (pending_array_enclose)
-					expr += "[";
-			}
-
-			assert(type->parent_type);
-
-			if (backend.force_gl_in_out_block && i == 0 && var && is_builtin_variable(*var) &&
-			    !has_decoration(type->self, DecorationBlock))
-			{
-				// This deals with scenarios for tesc/geom where arrays of gl_Position[] are declared.
-				// Normally, these variables live in blocks when compiled from GLSL,
-				// but HLSL seems to just emit straight arrays here.
-				// We must pretend this access goes through gl_in/gl_out arrays
-				// to be able to access certain builtins as arrays.
-				auto builtin = ir.meta[base].decoration.builtin_type;
-				switch (builtin)
-				{
-				// case BuiltInCullDistance: // These are already arrays, need to figure out rules for these in tess/geom.
-				// case BuiltInClipDistance:
-				case BuiltInPosition:
-				case BuiltInPointSize:
-					if (var->storage == StorageClassInput)
-						expr = join("gl_in[", to_expression(index, register_expression_read), "].", expr);
-					else if (var->storage == StorageClassOutput)
-						expr = join("gl_out[", to_expression(index, register_expression_read), "].", expr);
-					else
-						append_index(index);
-					break;
-
-				default:
-					append_index(index);
-					break;
-				}
-			}
-			else if (options.flatten_multidimensional_arrays && dimension_flatten)
-			{
-				// If we are flattening multidimensional arrays, do manual stride computation.
-				auto &parent_type = get<SPIRType>(type->parent_type);
-
-				if (index_is_literal)
-					expr += convert_to_string(index);
-				else
-					expr += to_enclosed_expression(index, register_expression_read);
-
-				for (auto j = uint32_t(parent_type.array.size()); j; j--)
-				{
-					expr += " * ";
-					expr += enclose_expression(to_array_size(parent_type, j - 1));
-				}
-
-				if (parent_type.array.empty())
-					pending_array_enclose = false;
-				else
-					expr += " + ";
-
-				if (!pending_array_enclose)
-					expr += "]";
-			}
-			// Sample mask input for Metal is not an array
-			else if (ir.meta[base].decoration.builtin_type != BuiltInSampleMask)
-			{
-				append_index(index);
-			}
-
-			type_id = type->parent_type;
-			type = &get<SPIRType>(type_id);
-
-			access_chain_is_arrayed = true;
-		}
-		// For structs, the index refers to a constant, which indexes into the members.
-		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
-		else if (type->basetype == SPIRType::Struct)
-		{
-			if (!index_is_literal)
-				index = get<SPIRConstant>(index).scalar();
-
-			if (index >= type->member_types.size())
-				SPIRV_CROSS_THROW("Member index is out of bounds!");
-
-			BuiltIn builtin;
-			if (is_member_builtin(*type, index, &builtin))
-			{
-				if (access_chain_is_arrayed)
-				{
-					expr += ".";
-					expr += builtin_to_glsl(builtin, type->storage);
-				}
-				else
-					expr = builtin_to_glsl(builtin, type->storage);
-			}
-			else
-			{
-				// If the member has a qualified name, use it as the entire chain
-				string qual_mbr_name = get_member_qualified_name(type_id, index);
-				if (!qual_mbr_name.empty())
-					expr = qual_mbr_name;
-				else
-					expr += to_member_reference(base, *type, index, ptr_chain);
-			}
-
-			if (has_member_decoration(type->self, index, DecorationInvariant))
-				is_invariant = true;
-
-			is_packed = member_is_packed_physical_type(*type, index);
-			if (member_is_remapped_physical_type(*type, index))
-				physical_type = get_extended_member_decoration(type->self, index, SPIRVCrossDecorationPhysicalTypeID);
-			else
-				physical_type = 0;
-
-			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
-			type = &get<SPIRType>(type->member_types[index]);
-		}
-		// Matrix -> Vector
-		else if (type->columns > 1)
-		{
-			// If we have a row-major matrix here, we need to defer any transpose in case this access chain
-			// is used to store a column. We can resolve it right here and now if we access a scalar directly,
-			// by flipping indexing order of the matrix.
-
-			expr += "[";
-			if (index_is_literal)
-				expr += convert_to_string(index);
-			else
-				expr += to_expression(index, register_expression_read);
-			expr += "]";
-
-			type_id = type->parent_type;
-			type = &get<SPIRType>(type_id);
-		}
-		// Vector -> Scalar
-		else if (type->vecsize > 1)
-		{
-			string deferred_index;
-			if (row_major_matrix_needs_conversion)
-			{
-				// Flip indexing order.
-				auto column_index = expr.find_last_of('[');
-				if (column_index != string::npos)
-				{
-					deferred_index = expr.substr(column_index);
-					expr.resize(column_index);
-				}
-			}
-
-			if (index_is_literal && !is_packed && !row_major_matrix_needs_conversion)
-			{
-				expr += ".";
-				expr += index_to_swizzle(index);
-			}
-			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion)
-			{
-				auto &c = get<SPIRConstant>(index);
-				expr += ".";
-				expr += index_to_swizzle(c.scalar());
-			}
-			else if (index_is_literal)
-			{
-				// For packed vectors, we can only access them as an array, not by swizzle.
-				expr += join("[", index, "]");
-			}
-			else
-			{
-				expr += "[";
-				expr += to_expression(index, register_expression_read);
-				expr += "]";
-			}
-
-			expr += deferred_index;
-			row_major_matrix_needs_conversion = false;
-
-			is_packed = false;
-			physical_type = 0;
-			type_id = type->parent_type;
-			type = &get<SPIRType>(type_id);
-		}
-		else if (!backend.allow_truncated_access_chain)
-			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
 	}
-
-	if (pending_array_enclose)
-	{
-		SPIRV_CROSS_THROW("Flattening of multidimensional arrays were enabled, "
-		                  "but the access chain was terminated in the middle of a multidimensional array. "
-		                  "This is not supported.");
-	}
-
-	if (meta)
-	{
-		meta->need_transpose = row_major_matrix_needs_conversion;
-		meta->storage_is_packed = is_packed;
-		meta->storage_is_invariant = is_invariant;
-		meta->storage_physical_type = physical_type;
-	}
-
-	return expr;
 }
 
 // Returns an enumeration of a SPIR-V function that needs to be output for certain Op codes.

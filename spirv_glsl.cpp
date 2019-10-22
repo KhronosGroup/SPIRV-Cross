@@ -6605,6 +6605,36 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 	}
 }
 
+void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_t /*base*/, const SPIRType *type,
+                                                      AccessChainFlags flags, bool & /*access_chain_is_arrayed*/,
+                                                      uint32_t index)
+{
+	bool index_is_literal = (flags & ACCESS_CHAIN_INDEX_IS_LITERAL_BIT) != 0;
+	bool register_expression_read = (flags & ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT) == 0;
+
+	expr += "[";
+
+	// If we are indexing into an array of SSBOs or UBOs, we need to index it with a non-uniform qualifier.
+	bool nonuniform_index =
+	    has_decoration(index, DecorationNonUniformEXT) &&
+	    (has_decoration(type->self, DecorationBlock) || has_decoration(type->self, DecorationBufferBlock));
+	if (nonuniform_index)
+	{
+		expr += backend.nonuniform_qualifier;
+		expr += "(";
+	}
+
+	if (index_is_literal)
+		expr += convert_to_string(index);
+	else
+		expr += to_expression(index, register_expression_read);
+
+	if (nonuniform_index)
+		expr += ")";
+
+	expr += "]";
+}
+
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
                                            AccessChainFlags flags, AccessChainMeta *meta)
 {
@@ -6656,27 +6686,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool dimension_flatten = false;
 
 	const auto append_index = [&](uint32_t index) {
-		expr += "[";
-
-		// If we are indexing into an array of SSBOs or UBOs, we need to index it with a non-uniform qualifier.
-		bool nonuniform_index =
-		    has_decoration(index, DecorationNonUniformEXT) &&
-		    (has_decoration(type->self, DecorationBlock) || has_decoration(type->self, DecorationBufferBlock));
-		if (nonuniform_index)
-		{
-			expr += backend.nonuniform_qualifier;
-			expr += "(";
-		}
-
-		if (index_is_literal)
-			expr += convert_to_string(index);
-		else
-			expr += to_expression(index, register_expression_read);
-
-		if (nonuniform_index)
-			expr += ")";
-
-		expr += "]";
+		access_chain_internal_append_index(expr, base, type, flags, access_chain_is_arrayed, index);
 	};
 
 	for (uint32_t i = 0; i < count; i++)
@@ -6799,7 +6809,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!pending_array_enclose)
 					expr += "]";
 			}
-			else
+			// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal
+			else if (!builtin_translates_to_nonarray(ir.meta[base].decoration.builtin_type))
 			{
 				append_index(index);
 			}
@@ -11155,6 +11166,11 @@ void CompilerGLSL::flatten_buffer_block(VariableID id)
 bool CompilerGLSL::supports_combined_samplers() const
 {
 	return true; // GLSL always supports combined texture-samplers.
+}
+
+bool CompilerGLSL::builtin_translates_to_nonarray(spv::BuiltIn /*builtin*/) const
+{
+	return false; // GLSL itself does not need to translate array builtin types to non-array builtin types
 }
 
 bool CompilerGLSL::check_atomic_image(uint32_t id)

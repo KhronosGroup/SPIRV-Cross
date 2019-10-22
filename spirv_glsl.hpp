@@ -276,6 +276,8 @@ protected:
 	// Returns true, because GLSL always supports combined texture-samplers.
 	virtual bool supports_combined_samplers() const override;
 
+	virtual bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const;
+
 	StringStream<> buffer;
 
 	template <typename T>
@@ -492,9 +494,12 @@ protected:
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 
-	// Storage buffer robustness
-	virtual std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
-	                                          AccessChainFlags flags, AccessChainMeta *meta);
+	virtual void access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
+	                                                AccessChainFlags flags, bool &access_chain_is_arrayed,
+	                                                uint32_t index);
+
+	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
+	                                  AccessChainMeta *meta);
 
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
 	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);

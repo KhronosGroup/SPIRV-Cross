@@ -607,6 +607,9 @@ protected:
 	// Returns false, because Metal does not support combined texture-samplers.
 	bool supports_combined_samplers() const override;
 
+	// Returns true for BuiltInSampleMask because gl_SampleMask[] is an array in SPIR-V, but [[sample_mask]] is a scalar in Metal.
+	bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const override;
+
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool skip_argument(uint32_t id) const override;
 	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain) override;
@@ -624,9 +627,9 @@ protected:
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
 	                                     bool is_packed) override;
 
-	// Storage buffer robustness
-	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
-	                                  AccessChainMeta *meta) override;
+	void access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
+	                                        AccessChainFlags flags, bool &access_chain_is_arrayed,
+	                                        uint32_t index) override;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
