@@ -266,7 +266,6 @@ public:
 		uint32_t dynamic_offsets_buffer_index = 23;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
-		uint32_t argument_buffer_offset = 0; // Allow the caller to specify an offset for argument buffer binding slots
 		bool enable_point_size_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;

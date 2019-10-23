@@ -5,7 +5,7 @@
 
 using namespace metal;
 
-typedef float2x3 packed_rm_float3x2;
+typedef packed_float3 packed_rm_float3x2[2];
 
 struct SSBOCol
 {

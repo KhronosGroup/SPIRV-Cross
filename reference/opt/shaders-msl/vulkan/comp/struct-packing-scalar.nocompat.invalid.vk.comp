@@ -6,9 +6,9 @@
 
 using namespace metal;
 
-typedef float2x2 packed_float2x2;
-typedef float2x3 packed_float2x3;
-typedef float2x3 packed_rm_float3x2;
+typedef packed_float2 packed_float2x2[2];
+typedef packed_float3 packed_float2x3[2];
+typedef packed_float3 packed_rm_float3x2[2];
 
 template<typename T, size_t Num>
 struct spvUnsafeArray

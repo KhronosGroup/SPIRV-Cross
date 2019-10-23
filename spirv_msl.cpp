@@ -8029,7 +8029,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	SPIRType row_major_physical_type;
 	const SPIRType *declared_type = &physical_type;
 
-	if (member_is_packed_physical_type(type, index) && validate_member_packing_rules_msl(type, index))
+	if (member_is_packed_physical_type(type, index))
 	{
 		// If we're packing a matrix, output an appropriate typedef
 		if (physical_type.basetype == SPIRType::Struct)
@@ -8051,11 +8051,11 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			string base_type = physical_type.width == 16 ? "half" : "float";
 			string td_line = "typedef ";
 			unpacked_array_type = base_type + to_string(physical_type.columns) + "x" + to_string(physical_type.vecsize);
-			packed_array_type =
-			    pack_pfx + base_type + to_string(physical_type.columns) + "x" + to_string(physical_type.vecsize);
-			td_line += base_type + to_string(cols) + "x" + to_string(rows);
+			packed_array_type = pack_pfx + unpacked_array_type;
+			td_line += "packed_" + base_type + to_string(rows);
 			td_line += " ";
 			td_line += packed_array_type;
+			td_line += "[" + to_string(cols) + "]";
 			td_line += ";";
 			add_typedef_line(td_line);
 		}
@@ -8092,13 +8092,15 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		array_type = type_to_array_glsl(physical_type);
 	}
 
-	if (!use_builtin_array && packed_array_type.length() > 0 && unpacked_array_type.length() > 0)
+	bool replace_array_type = (!use_builtin_array && !packed_array_type.empty() && !unpacked_array_type.empty());
+	
+	if (replace_array_type)
 		pack_pfx = "";
 
 	string result = join(pack_pfx, type_to_glsl(*declared_type, orig_id), " ", qualifier, to_member_name(type, index),
 	                     member_attribute_qualifier(type, index), array_type, ";");
 
-	if (!use_builtin_array && packed_array_type.length() > 0 && unpacked_array_type.length() > 0)
+	if (replace_array_type)
 	{
 		auto it = result.find(unpacked_array_type);
 		if (it != std::string::npos)
@@ -8822,9 +8824,6 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 			else
 				buffer_binding = i;
 		}
-
-		// Allow the caller to specify an offset for argument buffer binding slots
-		buffer_binding += msl_options.argument_buffer_offset;
 
 		claimed_bindings.set(buffer_binding);
 
