@@ -5947,6 +5947,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpMatrixTimesMatrix:
 	{
+		if (!msl_options.invariant_float_math)
+		{
+			CompilerGLSL::emit_instruction(instruction);
+			break;
+		}
+
 		auto *a = maybe_get<SPIRExpression>(ops[2]);
 		auto *b = maybe_get<SPIRExpression>(ops[3]);
 
@@ -5957,17 +5963,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			a->need_transpose = false;
 			b->need_transpose = false;
 
-			std::string expr;
-			if (msl_options.invariant_float_math)
-			{
-				expr = join("spvFMulMatrixMatrix(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])),
-				            ", ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
-			}
-			else
-			{
-				expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ",
-				            enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
-			}
+			auto expr = join("spvFMulMatrixMatrix(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])),
+			                 ", ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
 
 			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
 			auto &e = emit_op(ops[0], ops[1], expr, forward);
@@ -5977,10 +5974,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			inherit_expression_dependencies(ops[1], ops[2]);
 			inherit_expression_dependencies(ops[1], ops[3]);
 		}
-		else if (msl_options.invariant_float_math)
-			MSL_BFOP(spvFMulMatrixMatrix);
 		else
-			MSL_BOP(*);
+			MSL_BFOP(spvFMulMatrixMatrix);
 
 		break;
 	}
