@@ -5905,6 +5905,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
 	{
+		if (!msl_options.invariant_float_math)
+		{
+			CompilerGLSL::emit_instruction(instruction);
+			break;
+		}
+
 		// If the matrix needs transpose, just flip the multiply order.
 		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
 		if (e && e->need_transpose)
@@ -5914,29 +5920,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 			if (opcode == OpMatrixTimesVector)
 			{
-				if (msl_options.invariant_float_math)
-				{
-					expr = join("spvFMulVectorMatrix(", to_enclosed_unpacked_expression(ops[3]), ", ",
-					            to_unpacked_row_major_matrix_expression(ops[2]), ")");
-				}
-				else
-				{
-					expr = join(to_enclosed_unpacked_expression(ops[3]), " * ",
-					            enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
-				}
+				expr = join("spvFMulVectorMatrix(", to_enclosed_unpacked_expression(ops[3]), ", ",
+				            to_unpacked_row_major_matrix_expression(ops[2]), ")");
 			}
 			else
 			{
-				if (msl_options.invariant_float_math)
-				{
-					expr = join("spvFMulMatrixVector(", to_unpacked_row_major_matrix_expression(ops[3]), ", ",
-					            to_enclosed_unpacked_expression(ops[2]), ")");
-				}
-				else
-				{
-					expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), " * ",
-					            to_enclosed_unpacked_expression(ops[2]));
-				}
+				expr = join("spvFMulMatrixVector(", to_unpacked_row_major_matrix_expression(ops[3]), ", ",
+				            to_enclosed_unpacked_expression(ops[2]), ")");
 			}
 
 			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
@@ -5945,15 +5935,13 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			inherit_expression_dependencies(ops[1], ops[2]);
 			inherit_expression_dependencies(ops[1], ops[3]);
 		}
-		else if (msl_options.invariant_float_math)
+		else
 		{
 			if (opcode == OpMatrixTimesVector)
 				MSL_BFOP(spvFMulMatrixVector);
 			else
 				MSL_BFOP(spvFMulVectorMatrix);
 		}
-		else
-			MSL_BOP(*);
 		break;
 	}
 
