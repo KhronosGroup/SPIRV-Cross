@@ -1268,7 +1268,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// When using the pointer, we need to know which variable it is actually loaded from.
 				uint32_t base_id = ops[2];
 				auto *var = maybe_get_backing_variable(base_id);
-				if (atomic_vars.find(var) != atomic_vars.end())
+				if (var && atomic_image_vars.count(var->self))
 				{
 					if (global_var_ids.find(base_id) != global_var_ids.end())
 						added_arg_ids.insert(base_id);
@@ -5599,7 +5599,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	{
 		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
-		if (atomic_vars.find(var) != atomic_vars.end())
+		if (var && atomic_image_vars.count(var->self))
 		{
 			uint32_t result_type = ops[0];
 			uint32_t id = ops[1];
@@ -5613,6 +5613,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 			auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), "_atomic[", coord, "]"), result_type, true);
 			e.loaded_from = var ? var->self : ID(0);
+			inherit_expression_dependencies(id, ops[3]);
 		}
 		else
 		{
@@ -5623,6 +5624,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 			// When using the pointer, we need to know which variable it is actually loaded from.
 			e.loaded_from = var ? var->self : ID(0);
+			inherit_expression_dependencies(id, ops[3]);
 		}
 		break;
 	}
@@ -7870,7 +7872,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 
 	// Emulate texture2D atomic operations
 	auto *backing_var = maybe_get_backing_variable(var_id);
-	if (atomic_vars.find(backing_var) != atomic_vars.end())
+	if (backing_var && atomic_image_vars.count(backing_var->self))
 	{
 		arg_str += ", " + to_expression(var_id) + "_atomic";
 	}
@@ -8922,7 +8924,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 			// Emulate texture2D atomic operations
 			uint32_t secondary_index = 0;
-			if (atomic_vars.find(&var) != atomic_vars.end())
+			if (atomic_image_vars.count(var.self))
 			{
 				secondary_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 			}
@@ -9046,7 +9048,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			}
 
 			// Emulate texture2D atomic operations
-			if (atomic_vars.find(&var) != atomic_vars.end())
+			if (atomic_image_vars.count(var.self))
 			{
 				ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(basetype.image.type), 0);
 				ep_args += "* " + r.name + "_atomic";
@@ -9698,7 +9700,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// Emulate texture2D atomic operations
 	auto *backing_var = maybe_get_backing_variable(name_id);
-	if (atomic_vars.find(backing_var) != atomic_vars.end())
+	if (backing_var && atomic_image_vars.count(backing_var->self))
 	{
 		decl += ", device atomic_" + type_to_glsl(get<SPIRType>(var_type.image.type), 0);
 		decl += "* " + to_expression(name_id) + "_atomic";
@@ -11545,7 +11547,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpImageTexelPointer:
 	{
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
-		image_pointers[args[1]] = var;
+		image_pointers[args[1]] = var ? var->self : ID(0);
 		break;
 	}
 
@@ -11577,7 +11579,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		auto it = image_pointers.find(args[2]);
 		if (it != image_pointers.end())
 		{
-			compiler.atomic_vars.insert(it->second);
+			compiler.atomic_image_vars.insert(it->second);
 		}
 		check_resource_write(args[2]);
 		break;
@@ -11589,7 +11591,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		auto it = image_pointers.find(args[0]);
 		if (it != image_pointers.end())
 		{
-			compiler.atomic_vars.insert(it->second);
+			compiler.atomic_image_vars.insert(it->second);
 		}
 		check_resource_write(args[0]);
 		break;
@@ -11601,7 +11603,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		auto it = image_pointers.find(args[2]);
 		if (it != image_pointers.end())
 		{
-			compiler.atomic_vars.insert(it->second);
+			compiler.atomic_image_vars.insert(it->second);
 		}
 		break;
 	}
@@ -11895,7 +11897,7 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		auto it = image_pointers.find(args[opcode == OpAtomicStore ? 0 : 2]);
 		if (it != image_pointers.end())
 		{
-			uint32_t tid = it->second->basetype;
+			uint32_t tid = compiler.get<SPIRVariable>(it->second).basetype;
 			if (tid && compiler.get<SPIRType>(tid).image.dim == Dim2D)
 				return SPVFuncImplImage2DAtomicCoords;
 		}

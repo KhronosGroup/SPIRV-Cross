@@ -851,7 +851,7 @@ protected:
 
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<uint32_t> buffer_arrays;
-	std::unordered_set<SPIRVariable *> atomic_vars; // Emulate texture2D atomic operations
+	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
@@ -884,7 +884,7 @@ protected:
 
 		CompilerMSL &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
-		std::unordered_map<uint32_t, SPIRVariable *> image_pointers; // Emulate texture2D atomic operations
+		std::unordered_map<uint32_t, uint32_t> image_pointers; // Emulate texture2D atomic operations
 		std::unordered_map<uint32_t, uint32_t> invocation_ids; // Fix tessellation patch function processing
 		std::unordered_set<uint32_t> variables_indexed_by_invocation; // Fix tessellation patch function processing
 		bool passed_control_barrier = false; // Fix tessellation patch function processing
