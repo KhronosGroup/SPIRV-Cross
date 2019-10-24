@@ -66,6 +66,8 @@ struct SSBO
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 1u, 1u);
 
+constant spvUnsafeArray<Data, 2> _25 = spvUnsafeArray<Data, 2>({ Data{ 1.0, 2.0 }, Data{ 3.0, 4.0 } });
+
 static inline __attribute__((always_inline))
 Data combine(thread const Data& a, thread const Data& b)
 {
@@ -74,8 +76,6 @@ Data combine(thread const Data& a, thread const Data& b)
 
 kernel void main0(device SSBO& _53 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]], uint3 gl_LocalInvocationID [[thread_position_in_threadgroup]])
 {
-    spvUnsafeArray<Data, 2> _25 = spvUnsafeArray<Data, 2>({ Data{ 1.0, 2.0 }, Data{ 3.0, 4.0 } });
-    
     spvUnsafeArray<Data, 2> data = spvUnsafeArray<Data, 2>({ Data{ 1.0, 2.0 }, Data{ 3.0, 4.0 } });
     spvUnsafeArray<Data, 2> _31 = { Data{ X, 2.0 }, Data{ 3.0, 5.0 } };
     spvUnsafeArray<Data, 2> data2;

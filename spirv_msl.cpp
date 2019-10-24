@@ -4820,9 +4820,10 @@ void CompilerMSL::declare_undefined_values()
 		statement("");
 }
 
-// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 void CompilerMSL::declare_constant_arrays()
 {
+	bool fully_inlined = ir.ids_for_type[TypeFunction].size() == 1;
+
 	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
 	// global constants directly, so we are able to use constants as variable expressions.
 	bool emitted = false;
@@ -4832,7 +4833,11 @@ void CompilerMSL::declare_constant_arrays()
 			return;
 
 		auto &type = this->get<SPIRType>(c.constant_type);
-		if (!type.array.empty() && (is_scalar(type) || is_vector(type)))
+		// Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries.
+		// FIXME: However, hoisting constants to main() means we need to pass down constant arrays to leaf functions if they are used there.
+		// If there are multiple functions in the module, drop this case to avoid breaking use cases which do not need to
+		// link into Metal libraries. This is hacky.
+		if (!type.array.empty() && (!fully_inlined || is_scalar(type) || is_vector(type)))
 		{
 			auto name = to_name(c.self);
 			statement("constant ", variable_decl(type, name), " = ", constant_expression(c), ";");
@@ -4847,6 +4852,12 @@ void CompilerMSL::declare_constant_arrays()
 // Constant arrays of non-primitive types (i.e. matrices) won't link properly into Metal libraries
 void CompilerMSL::declare_complex_constant_arrays()
 {
+	// If we do not have a fully inlined module, we did not opt in to
+	// declaring constant arrays of complex types. See CompilerMSL::declare_constant_arrays().
+	bool fully_inlined = ir.ids_for_type[TypeFunction].size() == 1;
+	if (!fully_inlined)
+		return;
+
 	// MSL cannot declare arrays inline (except when declaring a variable), so we must move them out to
 	// global constants directly, so we are able to use constants as variable expressions.
 	bool emitted = false;
