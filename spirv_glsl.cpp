@@ -6816,8 +6816,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!pending_array_enclose)
 					expr += "]";
 			}
-			// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal
-			else if (!builtin_translates_to_nonarray(ir.meta[base].decoration.builtin_type))
+			// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
+			// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
+			else if (!builtin_translates_to_nonarray(BuiltIn(get_decoration(base, DecorationBuiltIn))))
 			{
 				append_index(index);
 			}
