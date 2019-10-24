@@ -2730,10 +2730,10 @@ void Compiler::AnalyzeVariableScopeAccessHandler::notify_variable_access(uint32_
 		return;
 
 	// Access chains used in multiple blocks mean hoisting all the variables used to construct the access chain as not all backends can use pointers.
-	for (auto child_id : access_chain_children[id])
-	{
-		notify_variable_access(child_id, block);
-	}
+	auto itr = access_chain_children.find(id);
+	if (itr != end(access_chain_children))
+		for (auto child_id : itr->second)
+			notify_variable_access(child_id, block);
 
 	if (id_is_phi_variable(id))
 		accessed_variables_to_block[id].insert(block);
