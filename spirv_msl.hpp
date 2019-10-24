@@ -819,8 +819,6 @@ protected:
 	int32_t needs_base_vertex_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
 	int32_t needs_base_instance_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
 	bool has_sampled_images = false;
-	bool needs_vertex_idx_arg = false;
-	bool needs_instance_idx_arg = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
 	bool use_builtin_array = false; // Force the use of C style array declaration.
 	bool is_rasterization_disabled = false;

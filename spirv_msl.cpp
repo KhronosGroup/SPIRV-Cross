@@ -8695,13 +8695,6 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 	for (auto &var : active_builtins)
 		var.first->basetype = ensure_correct_builtin_type(var.first->basetype, var.second);
 
-	// Vertex and instance index built-ins
-	if (needs_vertex_idx_arg)
-		ep_args += built_in_func_arg(BuiltInVertexIndex, !ep_args.empty());
-
-	if (needs_instance_idx_arg)
-		ep_args += built_in_func_arg(BuiltInInstanceIndex, !ep_args.empty());
-
 	// Handle HLSL-style 0-based vertex/instance index.
 	if (needs_base_vertex_arg > 0)
 		ep_args += built_in_func_arg(BuiltInBaseVertex, !ep_args.empty());
