@@ -6136,12 +6136,10 @@ void CompilerMSL::emit_texture_op(const Instruction &i)
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
 		if (imgtype.image.dim == DimSubpassData)
 		{
-			SmallVector<uint32_t> inherited_expressions;
-			bool forward = false;
-			to_texture_op(i, &forward, inherited_expressions);
-
+			// Subpass inputs cannot be invalidated,
+			// so just forward the expression directly.
 			string expr = to_expression(img);
-			emit_op(result_type_id, id, expr, forward);
+			emit_op(result_type_id, id, expr, true);
 			return;
 		}
 	}
@@ -7159,14 +7157,12 @@ string CompilerMSL::to_function_args(VariableID img, const SPIRType &imgtype, bo
 		break;
 
 	case DimSubpassData:
-		// Use Metal's native frame-buffer fetch API for subpass inputs.
-		if (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses)
-		{
-			if (imgtype.image.ms)
-				tex_coords = "uint2(gl_FragCoord.xy)";
-			else
-				tex_coords = join("uint2(gl_FragCoord.xy), 0");
-		}
+		// If we're using Metal's native frame-buffer fetch API for subpass inputs,
+		// this path will not be hit.
+		if (imgtype.image.ms)
+			tex_coords = "uint2(gl_FragCoord.xy)";
+		else
+			tex_coords = join("uint2(gl_FragCoord.xy), 0");
 		break;
 
 	case Dim2D:
