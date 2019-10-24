@@ -3549,11 +3549,6 @@ Bitset Compiler::get_buffer_block_flags(VariableID id) const
 	return ir.get_buffer_block_flags(get<SPIRVariable>(id));
 }
 
-bool Compiler::supports_combined_samplers() const
-{
-	return false; // default implementation
-}
-
 bool Compiler::get_common_basic_type(const SPIRType &type, SPIRType::BaseType &base_type)
 {
 	if (type.basetype == SPIRType::Struct)
@@ -3791,6 +3786,13 @@ void Compiler::analyze_image_and_sampler_usage()
 
 	CombinedImageSamplerUsageHandler handler(*this, dref_handler.dref_combined_samplers);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+
+	// Need to run this traversal twice. First time, we propagate any comparison sampler usage from leaf functions
+	// down to main().
+	// In the second pass, we can propagate up forced depth state coming from main() up into leaf functions.
+	handler.dependency_hierarchy.clear();
+	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
+
 	comparison_ids = move(handler.comparison_ids);
 	need_subpass_input = handler.need_subpass_input;
 
@@ -3906,6 +3908,14 @@ bool Compiler::CFGBuilder::follow_function_call(const SPIRFunction &func)
 		return false;
 }
 
+void Compiler::CombinedImageSamplerUsageHandler::add_dependency(uint32_t dst, uint32_t src)
+{
+	dependency_hierarchy[dst].insert(src);
+	// Propagate up any comparison state if we're loading from one such variable.
+	if (comparison_ids.count(src))
+		comparison_ids.insert(dst);
+}
+
 bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint32_t *args, uint32_t length)
 {
 	if (length < 3)
@@ -3918,7 +3928,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::begin_function_scope(const uint
 	for (uint32_t i = 0; i < length; i++)
 	{
 		auto &argument = func.arguments[i];
-		dependency_hierarchy[argument.id].insert(arg[i]);
+		add_dependency(argument.id, arg[i]);
 	}
 
 	return true;
@@ -3929,37 +3939,8 @@ void Compiler::CombinedImageSamplerUsageHandler::add_hierarchy_to_comparison_ids
 	// Traverse the variable dependency hierarchy and tag everything in its path with comparison ids.
 	comparison_ids.insert(id);
 
-	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
-	if (!compiler.supports_combined_samplers())
-	{
-		for (const auto &hierarchy : dependency_hierarchy)
-		{
-			if (hierarchy.second.find(id) != hierarchy.second.end())
-				comparison_ids.insert(hierarchy.first);
-		}
-	}
-
 	for (auto &dep_id : dependency_hierarchy[id])
 		add_hierarchy_to_comparison_ids(dep_id);
-}
-
-// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
-bool Compiler::CombinedImageSamplerUsageHandler::dependent_used_for_comparison(uint32_t id) const
-{
-	if (compiler.supports_combined_samplers())
-		return false;
-
-	auto hierarchy_iter = dependency_hierarchy.find(id);
-	if (hierarchy_iter != dependency_hierarchy.end())
-	{
-		for (uint32_t dependent_id : hierarchy_iter->second)
-		{
-			if (comparison_ids.find(dependent_id) != comparison_ids.end())
-				return true;
-		}
-	}
-
-	return false;
 }
 
 bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_t *args, uint32_t length)
@@ -3973,7 +3954,8 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 	{
 		if (length < 3)
 			return false;
-		dependency_hierarchy[args[1]].insert(args[2]);
+
+		add_dependency(args[1], args[2]);
 
 		// Ideally defer this to OpImageRead, but then we'd need to track loaded IDs.
 		// If we load an image, we're going to use it and there is little harm in declaring an unused gl_FragCoord.
@@ -4001,10 +3983,7 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		uint32_t image = args[2];
 		uint32_t sampler = args[3];
 
-		bool dependent = !compiler.supports_combined_samplers() &&
-		                 (dependent_used_for_comparison(sampler) || dependent_used_for_comparison(image));
-
-		if (type.image.depth || dref_combined_samplers.count(result_id) != 0 || dependent)
+		if (type.image.depth || dref_combined_samplers.count(result_id) != 0)
 		{
 			add_hierarchy_to_comparison_ids(image);
 

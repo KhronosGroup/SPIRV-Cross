@@ -11164,11 +11164,6 @@ void CompilerGLSL::flatten_buffer_block(VariableID id)
 	flattened_buffer_blocks.insert(id);
 }
 
-bool CompilerGLSL::supports_combined_samplers() const
-{
-	return true; // GLSL always supports combined texture-samplers.
-}
-
 bool CompilerGLSL::builtin_translates_to_nonarray(spv::BuiltIn /*builtin*/) const
 {
 	return false; // GLSL itself does not need to translate array builtin types to non-array builtin types

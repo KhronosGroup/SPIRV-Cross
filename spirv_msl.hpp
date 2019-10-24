@@ -603,9 +603,6 @@ protected:
 	std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                   bool is_packed, bool row_major) override;
 
-	// Returns false, because Metal does not support combined texture-samplers.
-	bool supports_combined_samplers() const override;
-
 	// Returns true for BuiltInSampleMask because gl_SampleMask[] is an array in SPIR-V, but [[sample_mask]] is a scalar in Metal.
 	bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const override;
 

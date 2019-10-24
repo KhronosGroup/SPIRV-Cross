@@ -273,9 +273,6 @@ protected:
 	virtual std::string unpack_expression_type(std::string expr_str, const SPIRType &type, uint32_t physical_type_id,
 	                                           bool packed_type, bool row_major);
 
-	// Returns true, because GLSL always supports combined texture-samplers.
-	virtual bool supports_combined_samplers() const override;
-
 	virtual bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const;
 
 	StringStream<> buffer;

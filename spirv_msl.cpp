@@ -122,11 +122,6 @@ void CompilerMSL::set_fragment_output_components(uint32_t location, uint32_t com
 	fragment_output_components[location] = components;
 }
 
-bool CompilerMSL::supports_combined_samplers() const
-{
-	return false; // Metal does not support combined texture-samplers
-}
-
 bool CompilerMSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
 {
 	return (builtin == BuiltInSampleMask);

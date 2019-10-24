@@ -612,9 +612,6 @@ protected:
 	void register_read(uint32_t expr, uint32_t chain, bool forwarded);
 	void register_write(uint32_t chain);
 
-	// Returns true if the target language supports combined texture-samplers. Returns fasle by default.
-	virtual bool supports_combined_samplers() const;
-
 	inline bool is_continue(uint32_t next) const
 	{
 		return (ir.block_meta[next] & ParsedIR::BLOCK_META_CONTINUE_BIT) != 0;
@@ -891,10 +888,7 @@ protected:
 
 		void add_hierarchy_to_comparison_ids(uint32_t ids);
 		bool need_subpass_input = false;
-
-		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
-		// Returns true if a dependent resource in the dependency hierarchy of the specified image or sampler has been used for comparison.
-		bool dependent_used_for_comparison(uint32_t id) const;
+		void add_dependency(uint32_t dst, uint32_t src);
 	};
 
 	void build_function_control_flow_graphs_and_analyze();
