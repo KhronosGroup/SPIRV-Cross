@@ -61,7 +61,7 @@ struct type_Globals
     float FilmShoulder;
     float FilmBlackClip;
     float FilmWhiteClip;
-    spvUnsafeArray<float4, 5> LUTWeights;
+    float4 LUTWeights[5];
     float3 ColorScale;
     float4 OverlayColor;
     float WhiteTemp;

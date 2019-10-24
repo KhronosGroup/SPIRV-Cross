@@ -1,59 +1,18 @@
-#pragma clang diagnostic ignored "-Wmissing-prototypes"
-#pragma clang diagnostic ignored "-Wmissing-braces"
-
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
 
-template<typename T, size_t Num>
-struct spvUnsafeArray
-{
-    T elements[Num ? Num : 1];
-    
-    thread T& operator [] (size_t pos) thread
-    {
-        return elements[pos];
-    }
-    constexpr const thread T& operator [] (size_t pos) const thread
-    {
-        return elements[pos];
-    }
-    
-    device T& operator [] (size_t pos) device
-    {
-        return elements[pos];
-    }
-    constexpr const device T& operator [] (size_t pos) const device
-    {
-        return elements[pos];
-    }
-    
-    constexpr const constant T& operator [] (size_t pos) const constant
-    {
-        return elements[pos];
-    }
-    
-    threadgroup T& operator [] (size_t pos) threadgroup
-    {
-        return elements[pos];
-    }
-    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
-    {
-        return elements[pos];
-    }
-};
-
 struct UBO
 {
-    spvUnsafeArray<float, 1> a;
-    spvUnsafeArray<float2, 2> b;
+    float a[1];
+    float2 b[2];
 };
 
 struct UBOEnhancedLayout
 {
-    spvUnsafeArray<float, 1> c;
-    spvUnsafeArray<float2, 2> d;
+    float c[1];
+    float2 d[2];
     char _m2_pad[9976];
     float e;
 };

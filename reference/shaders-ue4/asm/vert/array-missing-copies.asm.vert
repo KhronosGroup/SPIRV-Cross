@@ -141,8 +141,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2204;
-    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeMin;
-    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeInvSize;
+    float4 View_TranslucencyLightingVolumeMin[2];
+    float4 View_TranslucencyLightingVolumeInvSize[2];
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -182,7 +182,7 @@ struct type_View
     float PrePadding_View_2488;
     float PrePadding_View_2492;
     float4 View_SkyLightColor;
-    spvUnsafeArray<float4, 7> View_SkyIrradianceEnvironmentMap;
+    float4 View_SkyIrradianceEnvironmentMap[7];
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -193,8 +193,8 @@ struct type_View
     float PrePadding_View_2652;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    spvUnsafeArray<float4, 4> View_GlobalVolumeCenterAndExtent;
-    spvUnsafeArray<float4, 4> View_GlobalVolumeWorldToUVAddAndMul;
+    float4 View_GlobalVolumeCenterAndExtent[4];
+    float4 View_GlobalVolumeWorldToUVAddAndMul[4];
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -249,8 +249,8 @@ struct type_MobileBasePass
     float2 MobileBasePass_PlanarReflection_PlanarReflectionParameters2;
     float PrePadding_MobileBasePass_PlanarReflection_296;
     float PrePadding_MobileBasePass_PlanarReflection_300;
-    spvUnsafeArray<float4x4, 2> MobileBasePass_PlanarReflection_ProjectionWithExtraFOV;
-    spvUnsafeArray<float4, 2> MobileBasePass_PlanarReflection_PlanarReflectionScreenScaleBias;
+    float4x4 MobileBasePass_PlanarReflection_ProjectionWithExtraFOV[2];
+    float4 MobileBasePass_PlanarReflection_PlanarReflectionScreenScaleBias[2];
     float2 MobileBasePass_PlanarReflection_PlanarReflectionScreenBound;
     uint MobileBasePass_PlanarReflection_bIsStereo;
 };
@@ -297,7 +297,7 @@ struct type_Globals
     float4 LodBias;
     float4 LodValues;
     float4 SectionLods;
-    spvUnsafeArray<float4, 4> NeighborSectionLod;
+    float4 NeighborSectionLod[4];
 };
 
 struct main0_out

@@ -53,7 +53,7 @@ constant int a = is_function_constant_defined(a_tmp) ? a_tmp : 1;
 
 struct SSBO
 {
-    spvUnsafeArray<int, 1> v;
+    int v[1];
 };
 
 constant uint _21 = (uint(a) + 0u);

@@ -46,12 +46,12 @@ struct spvUnsafeArray
 
 struct UBO
 {
-    spvUnsafeArray<float4, 64> v;
+    float4 v[64];
 };
 
 struct SSBO
 {
-    spvUnsafeArray<float4, 1> v;
+    float4 v[1];
 };
 
 struct main0_out

@@ -108,13 +108,13 @@ struct type_Primitive
     uint PrePadding_Primitive_420;
     uint PrePadding_Primitive_424;
     uint PrePadding_Primitive_428;
-    spvUnsafeArray<float4, 4> Primitive_CustomPrimitiveData;
+    float4 Primitive_CustomPrimitiveData[4];
 };
 
 struct type_Material
 {
-    spvUnsafeArray<float4, 3> Material_VectorExpressions;
-    spvUnsafeArray<float4, 1> Material_ScalarExpressions;
+    float4 Material_VectorExpressions[3];
+    float4 Material_ScalarExpressions[1];
 };
 
 constant float4 _179 = {};

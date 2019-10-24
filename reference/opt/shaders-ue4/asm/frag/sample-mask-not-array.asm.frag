@@ -1,48 +1,7 @@
-#pragma clang diagnostic ignored "-Wmissing-prototypes"
-#pragma clang diagnostic ignored "-Wmissing-braces"
-
 #include <metal_stdlib>
 #include <simd/simd.h>
 
 using namespace metal;
-
-template<typename T, size_t Num>
-struct spvUnsafeArray
-{
-    T elements[Num ? Num : 1];
-    
-    thread T& operator [] (size_t pos) thread
-    {
-        return elements[pos];
-    }
-    constexpr const thread T& operator [] (size_t pos) const thread
-    {
-        return elements[pos];
-    }
-    
-    device T& operator [] (size_t pos) device
-    {
-        return elements[pos];
-    }
-    constexpr const device T& operator [] (size_t pos) const device
-    {
-        return elements[pos];
-    }
-    
-    constexpr const constant T& operator [] (size_t pos) const constant
-    {
-        return elements[pos];
-    }
-    
-    threadgroup T& operator [] (size_t pos) threadgroup
-    {
-        return elements[pos];
-    }
-    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
-    {
-        return elements[pos];
-    }
-};
 
 struct type_View
 {
@@ -141,8 +100,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2204;
-    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeMin;
-    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeInvSize;
+    float4 View_TranslucencyLightingVolumeMin[2];
+    float4 View_TranslucencyLightingVolumeInvSize[2];
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -182,7 +141,7 @@ struct type_View
     float PrePadding_View_2488;
     float PrePadding_View_2492;
     float4 View_SkyLightColor;
-    spvUnsafeArray<float4, 7> View_SkyIrradianceEnvironmentMap;
+    float4 View_SkyIrradianceEnvironmentMap[7];
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -193,8 +152,8 @@ struct type_View
     float PrePadding_View_2652;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    spvUnsafeArray<float4, 4> View_GlobalVolumeCenterAndExtent;
-    spvUnsafeArray<float4, 4> View_GlobalVolumeWorldToUVAddAndMul;
+    float4 View_GlobalVolumeCenterAndExtent[4];
+    float4 View_GlobalVolumeWorldToUVAddAndMul[4];
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -220,7 +179,7 @@ struct type_View
 
 struct type_StructuredBuffer_v4float
 {
-    spvUnsafeArray<float4, 1> _m0;
+    float4 _m0[1];
 };
 
 struct type_TranslucentBasePass
@@ -249,8 +208,8 @@ struct type_TranslucentBasePass
     uint PrePadding_TranslucentBasePass_Shared_Forward_120;
     uint PrePadding_TranslucentBasePass_Shared_Forward_124;
     float4 TranslucentBasePass_Shared_Forward_CascadeEndDepths;
-    spvUnsafeArray<float4x4, 4> TranslucentBasePass_Shared_Forward_DirectionalLightWorldToShadowMatrix;
-    spvUnsafeArray<float4, 4> TranslucentBasePass_Shared_Forward_DirectionalLightShadowmapMinMax;
+    float4x4 TranslucentBasePass_Shared_Forward_DirectionalLightWorldToShadowMatrix[4];
+    float4 TranslucentBasePass_Shared_Forward_DirectionalLightShadowmapMinMax[4];
     float4 TranslucentBasePass_Shared_Forward_DirectionalLightShadowmapAtlasBufferSize;
     float TranslucentBasePass_Shared_Forward_DirectionalLightDepthBias;
     uint TranslucentBasePass_Shared_Forward_DirectionalLightUseStaticShadowing;
@@ -298,8 +257,8 @@ struct type_TranslucentBasePass
     uint PrePadding_TranslucentBasePass_Shared_ForwardISR_760;
     uint PrePadding_TranslucentBasePass_Shared_ForwardISR_764;
     float4 TranslucentBasePass_Shared_ForwardISR_CascadeEndDepths;
-    spvUnsafeArray<float4x4, 4> TranslucentBasePass_Shared_ForwardISR_DirectionalLightWorldToShadowMatrix;
-    spvUnsafeArray<float4, 4> TranslucentBasePass_Shared_ForwardISR_DirectionalLightShadowmapMinMax;
+    float4x4 TranslucentBasePass_Shared_ForwardISR_DirectionalLightWorldToShadowMatrix[4];
+    float4 TranslucentBasePass_Shared_ForwardISR_DirectionalLightShadowmapMinMax[4];
     float4 TranslucentBasePass_Shared_ForwardISR_DirectionalLightShadowmapAtlasBufferSize;
     float TranslucentBasePass_Shared_ForwardISR_DirectionalLightDepthBias;
     uint TranslucentBasePass_Shared_ForwardISR_DirectionalLightUseStaticShadowing;
@@ -350,8 +309,8 @@ struct type_TranslucentBasePass
     float2 TranslucentBasePass_Shared_PlanarReflection_PlanarReflectionParameters2;
     float PrePadding_TranslucentBasePass_Shared_PlanarReflection_1496;
     float PrePadding_TranslucentBasePass_Shared_PlanarReflection_1500;
-    spvUnsafeArray<float4x4, 2> TranslucentBasePass_Shared_PlanarReflection_ProjectionWithExtraFOV;
-    spvUnsafeArray<float4, 2> TranslucentBasePass_Shared_PlanarReflection_PlanarReflectionScreenScaleBias;
+    float4x4 TranslucentBasePass_Shared_PlanarReflection_ProjectionWithExtraFOV[2];
+    float4 TranslucentBasePass_Shared_PlanarReflection_PlanarReflectionScreenScaleBias[2];
     float2 TranslucentBasePass_Shared_PlanarReflection_PlanarReflectionScreenBound;
     uint TranslucentBasePass_Shared_PlanarReflection_bIsStereo;
     float PrePadding_TranslucentBasePass_Shared_Fog_1676;
@@ -457,8 +416,8 @@ struct type_TranslucentBasePass
 
 struct type_Material
 {
-    spvUnsafeArray<float4, 2> Material_VectorExpressions;
-    spvUnsafeArray<float4, 1> Material_ScalarExpressions;
+    float4 Material_VectorExpressions[2];
+    float4 Material_ScalarExpressions[1];
 };
 
 constant float _108 = {};

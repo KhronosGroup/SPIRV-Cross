@@ -53,7 +53,7 @@ struct type_Globals
 
 struct type_StructuredBuffer_v4float
 {
-    spvUnsafeArray<float4, 1> _m0;
+    float4 _m0[1];
 };
 
 struct main0_out

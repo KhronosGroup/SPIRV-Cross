@@ -47,23 +47,23 @@ struct spvUnsafeArray
 struct SSBO
 {
     uint size;
-    spvUnsafeArray<float4, 1> v;
+    float4 v[1];
 };
 
 struct SSBO1
 {
-    spvUnsafeArray<float, 1> bz;
+    float bz[1];
 };
 
 struct SSBO2
 {
     uint size2;
-    spvUnsafeArray<float4, 1> w;
+    float4 w[1];
 };
 
 struct SSBO3
 {
-    spvUnsafeArray<float, 1> bz;
+    float bz[1];
 };
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);

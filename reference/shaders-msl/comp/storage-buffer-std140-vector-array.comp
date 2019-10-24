@@ -54,15 +54,15 @@ struct Sub
 
 struct Sub_1
 {
-    spvUnsafeArray<float4, 2> f;
-    spvUnsafeArray<float4, 2> f2;
-    spvUnsafeArray<float3, 2> f3;
-    spvUnsafeArray<float4, 2> f4;
+    float4 f[2];
+    float4 f2[2];
+    float3 f3[2];
+    float4 f4[2];
 };
 
 struct SSBO
 {
-    spvUnsafeArray<Sub_1, 2> sub;
+    Sub_1 sub[2];
 };
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);

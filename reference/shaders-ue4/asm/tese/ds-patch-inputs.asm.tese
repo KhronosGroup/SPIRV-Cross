@@ -141,8 +141,8 @@ struct type_ShadowDepthPass
     float PrePadding_ShadowDepthPass_612;
     float PrePadding_ShadowDepthPass_616;
     float PrePadding_ShadowDepthPass_620;
-    spvUnsafeArray<float4x4, 6> ShadowDepthPass_ShadowViewProjectionMatrices;
-    spvUnsafeArray<float4x4, 6> ShadowDepthPass_ShadowViewMatrices;
+    float4x4 ShadowDepthPass_ShadowViewProjectionMatrices[6];
+    float4x4 ShadowDepthPass_ShadowViewMatrices[6];
 };
 
 constant float4 _90 = {};

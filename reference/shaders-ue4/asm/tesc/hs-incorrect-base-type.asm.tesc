@@ -183,8 +183,8 @@ struct type_View
     float4 View_DirectionalLightColor;
     packed_float3 View_DirectionalLightDirection;
     float PrePadding_View_2204;
-    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeMin;
-    spvUnsafeArray<float4, 2> View_TranslucencyLightingVolumeInvSize;
+    float4 View_TranslucencyLightingVolumeMin[2];
+    float4 View_TranslucencyLightingVolumeInvSize[2];
     float4 View_TemporalAAParams;
     float4 View_CircleDOFParams;
     float View_DepthOfFieldSensorWidth;
@@ -224,7 +224,7 @@ struct type_View
     float PrePadding_View_2488;
     float PrePadding_View_2492;
     float4 View_SkyLightColor;
-    spvUnsafeArray<float4, 7> View_SkyIrradianceEnvironmentMap;
+    float4 View_SkyIrradianceEnvironmentMap[7];
     float View_MobilePreviewMode;
     float View_HMDEyePaddingOffset;
     float View_ReflectionCubemapMaxMip;
@@ -235,8 +235,8 @@ struct type_View
     float PrePadding_View_2652;
     packed_float3 View_ReflectionEnvironmentRoughnessMixingScaleBiasAndLargestWeight;
     int View_StereoPassIndex;
-    spvUnsafeArray<float4, 4> View_GlobalVolumeCenterAndExtent;
-    spvUnsafeArray<float4, 4> View_GlobalVolumeWorldToUVAddAndMul;
+    float4 View_GlobalVolumeCenterAndExtent[4];
+    float4 View_GlobalVolumeWorldToUVAddAndMul[4];
     float View_GlobalVolumeDimension;
     float View_GlobalVolumeTexelSize;
     float View_MaxGlobalDistance;
@@ -262,7 +262,7 @@ struct type_View
 
 struct type_StructuredBuffer_v4float
 {
-    spvUnsafeArray<float4, 1> _m0;
+    float4 _m0[1];
 };
 
 constant float4 _140 = {};

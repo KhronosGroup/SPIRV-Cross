@@ -61,7 +61,7 @@ struct Data_1
 
 struct SSBO
 {
-    spvUnsafeArray<Data_1, 1> outdata;
+    Data_1 outdata[1];
 };
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 1u, 1u);

@@ -8005,9 +8005,6 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	string pack_pfx;
 
 	// Allow Metal to use the array<T> template to make arrays a value type
-	string packed_array_type;
-	string unpacked_array_type;
-
 	uint32_t orig_id = 0;
 	if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID))
 		orig_id = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationInterfaceOrigID);
@@ -8018,6 +8015,14 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 
 	SPIRType row_major_physical_type;
 	const SPIRType *declared_type = &physical_type;
+
+	// If a struct is being declared with physical layout,
+	// do not use array<T> wrappers.
+	// This avoids a lot of complicated cases with packed vectors and matrices,
+	// and generally we cannot copy full arrays in and out of buffers into Function
+	// address space.
+	if (has_member_decoration(type.self, index, DecorationOffset))
+		use_builtin_array = true;
 
 	if (member_is_packed_physical_type(type, index))
 	{
@@ -8040,20 +8045,16 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			}
 			string base_type = physical_type.width == 16 ? "half" : "float";
 			string td_line = "typedef ";
-			unpacked_array_type = base_type + to_string(physical_type.columns) + "x" + to_string(physical_type.vecsize);
-			packed_array_type = pack_pfx + unpacked_array_type;
 			td_line += "packed_" + base_type + to_string(rows);
-			td_line += " ";
-			td_line += packed_array_type;
+			td_line += " " + pack_pfx;
+			// Use the actual matrix size here.
+			td_line += base_type + to_string(physical_type.columns) + "x" + to_string(physical_type.vecsize);
 			td_line += "[" + to_string(cols) + "]";
 			td_line += ";";
 			add_typedef_line(td_line);
 		}
 		else
-		{
-			use_builtin_array = true;
 			pack_pfx = "packed_";
-		}
 	}
 	else if (row_major)
 	{
@@ -8075,29 +8076,14 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	if (physical_type.basetype != SPIRType::Image && physical_type.basetype != SPIRType::Sampler &&
 	    physical_type.basetype != SPIRType::SampledImage)
 	{
-		// Force the use of C style array declaration.
 		BuiltIn builtin = BuiltInMax;
 		if (is_member_builtin(type, index, &builtin))
 			use_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
 	}
 
-	bool replace_array_type = (!use_builtin_array && !packed_array_type.empty() && !unpacked_array_type.empty());
-	
-	if (replace_array_type)
-		pack_pfx = "";
-
-	string result = join(pack_pfx, type_to_glsl(*declared_type, orig_id), " ", qualifier, to_member_name(type, index),
-	                     member_attribute_qualifier(type, index), array_type, ";");
-
-	if (replace_array_type)
-	{
-		auto it = result.find(unpacked_array_type);
-		if (it != std::string::npos)
-		{
-			result.replace(it, unpacked_array_type.length(), packed_array_type);
-		}
-	}
+	auto result = join(pack_pfx, type_to_glsl(*declared_type, orig_id), " ", qualifier, to_member_name(type, index),
+	                   member_attribute_qualifier(type, index), array_type, ";");
 
 	use_builtin_array = false;
 	return result;
