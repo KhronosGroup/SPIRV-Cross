@@ -11343,7 +11343,6 @@ bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *ar
 
 		uint32_t id = args[1];
 		compiler.set<SPIRExpression>(id, "", result_type, true);
-		compiler.ir.ids[id].set_allow_type_rewrite();
 		break;
 	}
 	case OpImageSampleExplicitLod:
