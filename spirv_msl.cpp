@@ -5299,10 +5299,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		uint32_t ptr = ops[2];
-		if (ir.meta[ptr].decoration.builtin_type == BuiltInSampleMask)
-		{
-			ir.meta[id].decoration.builtin_type = BuiltInSampleMask;
-		}
+		if (BuiltIn(get_decoration(ptr, DecorationBuiltIn)) == BuiltInSampleMask)
+			set_decoration(id, DecorationBuiltIn, BuiltInSampleMask);
 		CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
