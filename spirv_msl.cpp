@@ -6598,8 +6598,10 @@ string CompilerMSL::to_function_args(VariableID img, const SPIRType &imgtype, bo
 
 		if (msl_options.texture_1D_as_2D)
 		{
-			string base_type = is_fetch ? "uint" : "float";
-			tex_coords = base_type + "2(" + tex_coords + ", 0)";
+			if (is_fetch)
+				tex_coords = "uint2(" + tex_coords + ", 0)";
+			else
+				tex_coords = "float2(" + tex_coords + ", 0.5)";
 		}
 
 		alt_coord_component = 1;
