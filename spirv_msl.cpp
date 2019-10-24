@@ -8696,10 +8696,10 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 		var.first->basetype = ensure_correct_builtin_type(var.first->basetype, var.second);
 
 	// Handle HLSL-style 0-based vertex/instance index.
-	if (needs_base_vertex_arg > 0)
+	if (needs_base_vertex_arg == TriState::Yes)
 		ep_args += built_in_func_arg(BuiltInBaseVertex, !ep_args.empty());
 
-	if (needs_base_instance_arg > 0)
+	if (needs_base_instance_arg == TriState::Yes)
 		ep_args += built_in_func_arg(BuiltInBaseInstance, !ep_args.empty());
 
 	if (capture_output_to_buffer)
@@ -10724,7 +10724,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		{
 			if (builtin_declaration)
 			{
-				needs_base_vertex_arg++;
+				if (needs_base_vertex_arg != TriState::No)
+					needs_base_vertex_arg = TriState::Yes;
 				return "gl_VertexID";
 			}
 			else
@@ -10744,7 +10745,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		{
 			if (builtin_declaration)
 			{
-				needs_base_instance_arg++;
+				if (needs_base_instance_arg != TriState::No)
+					needs_base_instance_arg = TriState::Yes;
 				return "gl_InstanceID";
 			}
 			else
@@ -10764,7 +10766,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		{
 			if (builtin_declaration)
 			{
-				needs_base_vertex_arg++;
+				if (needs_base_vertex_arg != TriState::No)
+					needs_base_vertex_arg = TriState::Yes;
 				return "gl_VertexIndex";
 			}
 			else
@@ -10784,7 +10787,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		{
 			if (builtin_declaration)
 			{
-				needs_base_instance_arg++;
+				if (needs_base_instance_arg != TriState::No)
+					needs_base_instance_arg = TriState::Yes;
 				return "gl_InstanceIndex";
 			}
 			else
@@ -10801,7 +10805,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (msl_options.supports_msl_version(1, 1) &&
 		    (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
-			needs_base_vertex_arg--;
+			needs_base_vertex_arg = TriState::No;
 			return "gl_BaseVertex";
 		}
 		else
@@ -10812,7 +10816,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		if (msl_options.supports_msl_version(1, 1) &&
 		    (msl_options.ios_support_base_vertex_instance || msl_options.is_macos()))
 		{
-			needs_base_instance_arg--;
+			needs_base_instance_arg = TriState::No;
 			return "gl_BaseInstance";
 		}
 		else

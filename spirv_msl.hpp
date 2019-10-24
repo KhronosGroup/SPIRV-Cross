@@ -816,8 +816,15 @@ protected:
 	VariableID patch_stage_out_var_id = 0;
 	VariableID stage_in_ptr_var_id = 0;
 	VariableID stage_out_ptr_var_id = 0;
-	int32_t needs_base_vertex_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
-	int32_t needs_base_instance_arg = 0; // Handle HLSL-style 0-based vertex/instance index.
+
+	// Handle HLSL-style 0-based vertex/instance index.
+	enum class TriState
+	{
+		Neutral, No, Yes
+	};
+	TriState needs_base_vertex_arg = TriState::Neutral;
+	TriState needs_base_instance_arg = TriState::Neutral;
+
 	bool has_sampled_images = false;
 	bool builtin_declaration = false; // Handle HLSL-style 0-based vertex/instance index.
 	bool use_builtin_array = false; // Force the use of C style array declaration.
