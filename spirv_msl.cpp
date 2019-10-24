@@ -982,7 +982,7 @@ string CompilerMSL::compile()
 	backend.native_row_major_matrix = false;
 	backend.unsized_array_supported = false;
 	backend.can_declare_arrays_inline = false;
-	backend.can_return_array = false;
+	backend.can_return_array = true; // <-- Allow Metal to use the array<T> template
 	backend.allow_truncated_access_chain = true;
 	backend.array_is_value_type = true; // <-- Allow Metal to use the array<T> template to make arrays a value type
 	backend.comparison_image_samples_scalar = true;
@@ -6765,30 +6765,10 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	auto &type = get<SPIRType>(func.return_type);
 
-	if (type.array.empty())
-	{
-		decl += func_type_decl(type);
-	}
-	else
-	{
-		// We cannot return arrays in MSL, so "return" through an out variable.
-		decl += "void";
-	}
-
+	decl += func_type_decl(type);
 	decl += " ";
 	decl += to_name(func.self);
 	decl += "(";
-
-	if (!type.array.empty())
-	{
-		// Fake arrays returns by writing to an out array instead.
-		decl += "thread ";
-		decl += type_to_glsl(type);
-		decl += " (&SPIRV_Cross_return_value)";
-		decl += type_to_array_glsl(type);
-		if (!func.arguments.empty())
-			decl += ", ";
-	}
 
 	if (processing_entry_point)
 	{
@@ -9586,34 +9566,10 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	    (storage == StorageClassFunction || storage == StorageClassGeneric))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
-		if (is_array(type))
-		{
-			// We are receiving an array by value. This is problematic.
-			// We cannot be sure of the target address space since we are supposed to receive a copy,
-			// but this is not possible with MSL without some extra work.
-			// We will have to assume we're getting a reference in thread address space.
-			// If we happen to get a reference in constant address space, the caller must emit a copy and pass that.
-			// Thread const therefore becomes the only logical choice, since we cannot "create" a constant array from
-			// non-constant arrays, but we can create thread const from constant.
-			decl = string("thread const ") + decl;
-			decl += " (&";
-			const char *restrict_kw = to_restrict(name_id);
-			if (*restrict_kw)
-			{
-				decl += " ";
-				decl += restrict_kw;
-			}
-			decl += to_expression(name_id);
-			decl += ")";
-			decl += type_to_array_glsl(type);
-		}
-		else
-		{
-			if (!address_space.empty())
-				decl = join(address_space, " ", decl);
-			decl += " ";
-			decl += to_expression(name_id);
-		}
+		if (!address_space.empty())
+			decl = join(address_space, " ", decl);
+		decl += " ";
+		decl += to_expression(name_id);
 	}
 	else if (is_array(type) && !type_is_image)
 	{

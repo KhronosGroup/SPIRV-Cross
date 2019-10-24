@@ -58,7 +58,7 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-float4 consume_constant_arrays2(thread const spvUnsafeArray<float4, 4> (&positions), thread const spvUnsafeArray<float4, 4> (&positions2), thread int& Index1, thread int& Index2)
+float4 consume_constant_arrays2(spvUnsafeArray<float4, 4> positions, spvUnsafeArray<float4, 4> positions2, thread int& Index1, thread int& Index2)
 {
     spvUnsafeArray<float4, 4> indexable;
     indexable = positions;
@@ -68,7 +68,7 @@ float4 consume_constant_arrays2(thread const spvUnsafeArray<float4, 4> (&positio
 }
 
 static inline __attribute__((always_inline))
-float4 consume_constant_arrays(thread const spvUnsafeArray<float4, 4> (&positions), thread const spvUnsafeArray<float4, 4> (&positions2), thread int& Index1, thread int& Index2)
+float4 consume_constant_arrays(spvUnsafeArray<float4, 4> positions, spvUnsafeArray<float4, 4> positions2, thread int& Index1, thread int& Index2)
 {
     return consume_constant_arrays2(positions, positions2, Index1, Index2);
 }

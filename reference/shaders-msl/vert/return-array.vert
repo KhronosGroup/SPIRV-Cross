@@ -58,28 +58,24 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-void test(thread spvUnsafeArray<float4, 2> (&SPIRV_Cross_return_value))
+spvUnsafeArray<float4, 2> test()
 {
-    SPIRV_Cross_return_value = _20;
+    return _20;
 }
 
 static inline __attribute__((always_inline))
-void test2(thread spvUnsafeArray<float4, 2> (&SPIRV_Cross_return_value), thread float4& vInput0, thread float4& vInput1)
+spvUnsafeArray<float4, 2> test2(thread float4& vInput0, thread float4& vInput1)
 {
     spvUnsafeArray<float4, 2> foobar;
     foobar[0] = vInput0;
     foobar[1] = vInput1;
-    SPIRV_Cross_return_value = foobar;
+    return foobar;
 }
 
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    spvUnsafeArray<float4, 2> _42;
-    test(_42);
-    spvUnsafeArray<float4, 2> _44;
-    test2(_44, in.vInput0, in.vInput1);
-    out.gl_Position = _42[0] + _44[1];
+    out.gl_Position = test()[0] + test2(in.vInput0, in.vInput1)[1];
     return out;
 }
 
