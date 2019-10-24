@@ -979,6 +979,7 @@ string CompilerMSL::compile()
 	backend.native_pointers = true;
 	backend.nonuniform_qualifier = "";
 	backend.support_small_type_sampling_result = true;
+	backend.supports_empty_struct = true;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;

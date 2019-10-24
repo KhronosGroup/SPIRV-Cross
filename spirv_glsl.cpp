@@ -3440,7 +3440,14 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 	else if (type.basetype == SPIRType::Struct && type.member_types.size() == 0)
 	{
 		// Metal tessellation likes empty structs which are then constant expressions.
-		return "{ }";
+		if (backend.supports_empty_struct)
+			return "{ }";
+		else if (backend.use_typed_initializer_list)
+			return join(type_to_glsl(get<SPIRType>(c.constant_type)), "{ 0 }");
+		else if (backend.use_initializer_list)
+			return "{ 0 }";
+		else
+			return join(type_to_glsl(get<SPIRType>(c.constant_type)), "(0)");
 	}
 	else if (c.columns() == 1)
 	{

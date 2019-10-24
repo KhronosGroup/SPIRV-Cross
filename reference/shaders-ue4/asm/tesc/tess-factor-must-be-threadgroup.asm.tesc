@@ -57,9 +57,7 @@ struct FVertexFactoryInterpolantsVSToDS
 
 struct FSharedBasePassInterpolants
 {
-    int empty_struct_member;
 };
-
 struct FBasePassInterpolantsVSToDS
 {
     FSharedBasePassInterpolants _m0;
