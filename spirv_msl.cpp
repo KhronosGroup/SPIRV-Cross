@@ -889,8 +889,10 @@ void CompilerMSL::emit_entry_point_declarations()
 				SPIRV_CROSS_THROW("Runtime arrays with dynamic offsets are not supported yet.");
 			else
 			{
+				use_builtin_array = true;
 				statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id), name,
 				          type_to_array_glsl(type), " =");
+
 				uint32_t dim = uint32_t(type.array.size());
 				uint32_t j = 0;
 				for (SmallVector<uint32_t> indices(type.array.size());
@@ -918,6 +920,7 @@ void CompilerMSL::emit_entry_point_declarations()
 				}
 				end_scope_decl();
 				statement_no_indent("");
+				use_builtin_array = false;
 			}
 		}
 		else
@@ -932,19 +935,11 @@ void CompilerMSL::emit_entry_point_declarations()
 	// Emit buffer arrays here.
 	for (uint32_t array_id : buffer_arrays)
 	{
-		// Allow Metal to use the array<T> template to make arrays a value type
 		const auto &var = get<SPIRVariable>(array_id);
 		const auto &type = get_variable_data_type(var);
-		auto new_type = type;
-		new_type.array.clear();
-		const auto &base_type = get<SPIRType>(var.basetype);
-		new_type.storage = base_type.storage;
+		const auto &buffer_type = get_variable_element_type(var);
 		string name = to_name(array_id);
-
-		add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
-
-		statement("spvUnsafeArray<" + get_argument_address_space(var) + " " + type_to_glsl(new_type) + "*, " +
-		          convert_to_string(type.array[0]) + "> " + name + " =");
+		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id), name, "[] =");
 		begin_scope();
 		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
 			statement(name, "_", i, ",");
@@ -8001,7 +7996,10 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	// This avoids a lot of complicated cases with packed vectors and matrices,
 	// and generally we cannot copy full arrays in and out of buffers into Function
 	// address space.
+	// Array of resources should also be declared as builtin arrays.
 	if (has_member_decoration(type.self, index, DecorationOffset))
+		use_builtin_array = true;
+	else if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary))
 		use_builtin_array = true;
 
 	if (member_is_packed_physical_type(type, index))
@@ -9516,40 +9514,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)), arg.id);
 	else if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) && is_array(type))
 	{
-		add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
-
-		auto new_type = type;
-		new_type.array.clear();
-		const auto &base_type = get<SPIRType>(var.basetype);
-		new_type.storage = base_type.storage;
-		decl += join("spvUnsafeArray<" + address_space + " " + type_to_glsl(new_type) + "*, " +
-		             convert_to_string(type.array[0]) + ">");
-
-		address_space = "thread";
-		if (msl_options.argument_buffers)
-		{
-			uint32_t desc_set = get_decoration(name_id, DecorationDescriptorSet);
-			if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) &&
-			    descriptor_set_is_argument_buffer(desc_set))
-			{
-				// An awkward case where we need to emit *more* address space declarations (yay!).
-				// An example is where we pass down an array of buffer pointers to leaf functions.
-				// It's a constant array containing pointers to constants.
-				// The pointer array is always constant however. E.g.
-				// device SSBO * constant (&array)[N].
-				// const device SSBO * constant (&array)[N].
-				// constant SSBO * constant (&array)[N].
-				// However, this only matters for argument buffers, since for MSL 1.0 style codegen,
-				// we emit the buffer array on stack instead, and that seems to work just fine apparently.
-
-				// If the argument was marked as being in device address space, any pointer to member would
-				// be const device, not constant.
-				if (argument_buffer_device_storage_mask & (1u << desc_set))
-					address_space = "const device";
-				else
-					address_space = "constant";
-			}
-		}
+		use_builtin_array = true;
+		decl += join(type_to_glsl(type, arg.id), "*");
 	}
 	else if (is_dynamic_img_sampler)
 	{
@@ -9576,6 +9542,31 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// Arrays of images and samplers are special cased.
 		if (!address_space.empty())
 			decl = join(address_space, " ", decl);
+
+		if (msl_options.argument_buffers)
+		{
+			uint32_t desc_set = get_decoration(name_id, DecorationDescriptorSet);
+			if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) &&
+			    descriptor_set_is_argument_buffer(desc_set))
+			{
+				// An awkward case where we need to emit *more* address space declarations (yay!).
+				// An example is where we pass down an array of buffer pointers to leaf functions.
+				// It's a constant array containing pointers to constants.
+				// The pointer array is always constant however. E.g.
+				// device SSBO * constant (&array)[N].
+				// const device SSBO * constant (&array)[N].
+				// constant SSBO * constant (&array)[N].
+				// However, this only matters for argument buffers, since for MSL 1.0 style codegen,
+				// we emit the buffer array on stack instead, and that seems to work just fine apparently.
+
+				// If the argument was marked as being in device address space, any pointer to member would
+				// be const device, not constant.
+				if (argument_buffer_device_storage_mask & (1u << desc_set))
+					decl += " const device";
+				else
+					decl += " constant";
+			}
+		}
 
 		decl += " (&";
 		const char *restrict_kw = to_restrict(name_id);
@@ -9991,27 +9982,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	if (type.pointer)
 	{
 		const char *restrict_kw;
-		// Allow Metal to use the array<T> template to make arrays a value type
-		if (use_builtin_array || type.array.size() == 0)
-		{
-			type_name = join(get_type_address_space(type, id), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
-		}
-		else
-		{
-			SPIRType new_type = get<SPIRType>(type.parent_type);
-			new_type.pointer = true;
-			new_type.array.clear();
-
-			add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
-
-			type_name = "spvUnsafeArray<";
-			type_name += join(get_type_address_space(type, id), " ", type_to_glsl(new_type, id));
-			for (auto i = uint32_t(type.array.size()); i > 0; i--)
-			{
-				type_name += join(", ", to_array_size(type, i - 1), ">");
-			}
-			return type_name;
-		}
+		type_name = join(get_type_address_space(type, id), " ", type_to_glsl(get<SPIRType>(type.parent_type), id));
 
 		switch (type.basetype)
 		{
@@ -10113,59 +10084,27 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	if (type.vecsize > 1)
 		type_name += to_string(type.vecsize);
 
-	// Allow Metal to use the array<T> template to make arrays a value type
-	if (type.array.empty())
+	if (type.array.empty() || use_builtin_array)
 	{
 		return type_name;
 	}
 	else
 	{
-		if (use_builtin_array)
+		// Allow Metal to use the array<T> template to make arrays a value type
+		add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
+		string res;
+		string sizes;
+
+		for (auto i = uint32_t(type.array.size()); i; i--)
 		{
-			return type_name;
+			res += "spvUnsafeArray<";
+			sizes += ", ";
+			sizes += to_array_size(type, i - 1);
+			sizes += ">";
 		}
-		else if (options.flatten_multidimensional_arrays)
-		{
-			add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
-			string res = join("spvUnsafeArray<", type_name, ", ");
 
-			for (auto i = uint32_t(type.array.size()); i; i--)
-			{
-				res += enclose_expression(to_array_size(type, i - 1));
-				if (i > 1)
-					res += " * ";
-			}
-
-			res += ">";
-			return res;
-		}
-		else
-		{
-			if (type.array.size() > 1)
-			{
-				if (!options.es && options.version < 430)
-					require_extension_internal("GL_ARB_arrays_of_arrays");
-				else if (options.es && options.version < 310)
-					SPIRV_CROSS_THROW("Arrays of arrays not supported before ESSL version 310. "
-					                  "Try using --flatten-multidimensional-arrays or set "
-					                  "options.flatten_multidimensional_arrays to true.");
-			}
-
-			add_spv_func_and_recompile(SPVFuncImplUnsafeArray);
-			string res;
-			string sizes;
-
-			for (auto i = uint32_t(type.array.size()); i; i--)
-			{
-				res += "spvUnsafeArray<";
-				sizes += ", ";
-				sizes += to_array_size(type, i - 1);
-				sizes += ">";
-			}
-
-			res += type_name + sizes;
-			return res;
-		}
+		res += type_name + sizes;
+		return res;
 	}
 }
 
