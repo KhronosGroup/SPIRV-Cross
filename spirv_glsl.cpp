@@ -7541,7 +7541,7 @@ string CompilerGLSL::variable_decl_function_local(SPIRVariable &var)
 void CompilerGLSL::emit_variable_temporary_copies(const SPIRVariable &var)
 {
 	// Ensure that we declare phi-variable copies even if the original declaration isn't deferred
-	if (var.allocate_temporary_copy && flushed_phi_variables.find(var.self) == flushed_phi_variables.end())
+	if (var.allocate_temporary_copy && !flushed_phi_variables.count(var.self))
 	{
 		auto &type = get<SPIRType>(var.basetype);
 		auto &flags = get_decoration_bitset(var.self);
