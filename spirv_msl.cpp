@@ -5042,12 +5042,26 @@ void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id,
 bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t length)
 {
 	// If this is a per-vertex output, remap it to the I/O array buffer.
+
+	// Any object which did not go through IO flattening shenanigans will go there instead.
+	// We will unflatten on-demand instead as needed, but not all possible cases can be supported, especially with arrays.
+
 	auto *var = maybe_get<SPIRVariable>(ops[2]);
+	bool patch = false;
+	bool flat_data = false;
+	if (var)
+	{
+		patch = has_decoration(ops[2], DecorationPatch) ||
+				is_patch_block(get_variable_data_type(*var));
+
+		// Should match strip_array in add_interface_block.
+		flat_data =
+				var->storage == StorageClassInput ||
+				(var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
+	}
+
 	BuiltIn bi_type = BuiltIn(get_decoration(ops[2], DecorationBuiltIn));
-	if (var &&
-	    (var->storage == StorageClassInput ||
-	     (get_execution_model() == ExecutionModelTessellationControl && var->storage == StorageClassOutput)) &&
-	    !(has_decoration(ops[2], DecorationPatch) || is_patch_block(get_variable_data_type(*var))) &&
+	if (var && flat_data && !patch &&
 	    (!is_builtin_variable(*var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
 	     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
 	     get_variable_data_type(*var).basetype == SPIRType::Struct))
@@ -5082,6 +5096,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				i++;
 				type = &get<SPIRType>(type->member_types[get_constant(ops[4]).scalar()]);
 			}
+
 			// In this case, we flattened structures and arrays, so now we have to
 			// combine the following indices. If we encounter a non-constant index,
 			// we're hosed.
@@ -5100,6 +5115,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				else if (type->basetype == SPIRType::Struct)
 					type = &get<SPIRType>(type->member_types[c->scalar()]);
 			}
+
 			// If the access chain terminates at a composite type, the composite
 			// itself might be copied. In that case, we must unflatten it.
 			if (is_matrix(*type) || is_array(*type) || type->basetype == SPIRType::Struct)
