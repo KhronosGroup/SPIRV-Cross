@@ -11714,14 +11714,6 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		}
 		break;
 
-	case OpFunctionCall:
-	case OpStore:
-	case OpCompositeConstruct:
-	{
-		// Allow Metal to use the array<T> template to make arrays a value type
-		break;
-	}
-
 	case OpTypeArray:
 	{
 		// Allow Metal to use the array<T> template to make arrays a value type
@@ -11764,26 +11756,6 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		uint32_t tid = result_types[args[opcode == OpImageWrite ? 0 : 2]];
 		if (tid && compiler.get<SPIRType>(tid).image.dim == DimBuffer && !compiler.msl_options.texture_buffer_native)
 			return SPVFuncImplTexelBufferCoords;
-
-		if (opcode == OpImageFetch && compiler.msl_options.swizzle_texture_samples)
-			return SPVFuncImplTextureSwizzle;
-
-		break;
-	}
-
-	case OpImageSampleExplicitLod:
-	case OpImageSampleProjExplicitLod:
-	case OpImageSampleDrefExplicitLod:
-	case OpImageSampleProjDrefExplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
-	case OpImageGather:
-	case OpImageDrefGather:
-	{
-		if (compiler.msl_options.swizzle_texture_samples)
-			return SPVFuncImplTextureSwizzle;
 		break;
 	}
 
