@@ -12193,9 +12193,7 @@ void CompilerMSL::analyze_argument_buffers()
 				auto &var = set<SPIRVariable>(var_id, uint_ptr_type_id, StorageClassUniformConstant);
 				set_name(var_id, "spvBufferSizeConstants");
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
-				/* UE Begin Change: Move this to the front of IABs for convenience of the runtime */
-				set_decoration(var_id, DecorationBinding, 0);
-				/* UE End Change: Move this to the front of IABs for convenience of the runtime */
+				set_decoration(var_id, DecorationBinding, kBufferSizeBufferBinding);
 				resources_in_set[desc_set].push_back(
 				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
 			}
