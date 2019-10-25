@@ -266,14 +266,21 @@ struct main0_patchIn
 {
     main0_out out = {};
     spvUnsafeArray<float4, 1> out_var_TEXCOORD0 = {};
+    spvUnsafeArray<float4, 3> _77 = { patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid };
+    spvUnsafeArray<float4, 3> _78 = { patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid };
+    spvUnsafeArray<spvUnsafeArray<float4, 3>, 1> _79 = { { patchIn.gl_in[0].in_var_TEXCOORD0_0 }, { patchIn.gl_in[1].in_var_TEXCOORD0_0 }, { patchIn.gl_in[2].in_var_TEXCOORD0_0 } };
+    spvUnsafeArray<float4, 3> _80 = { patchIn.gl_in[0].in_var_COLOR1, patchIn.gl_in[1].in_var_COLOR1, patchIn.gl_in[2].in_var_COLOR1 };
+    spvUnsafeArray<float4, 3> _81 = { patchIn.gl_in[0].in_var_COLOR2, patchIn.gl_in[1].in_var_COLOR2, patchIn.gl_in[2].in_var_COLOR2 };
+    spvUnsafeArray<float4, 3> _97 = { patchIn.gl_in[0].in_var_VS_To_DS_Position, patchIn.gl_in[1].in_var_VS_To_DS_Position, patchIn.gl_in[2].in_var_VS_To_DS_Position };
+    spvUnsafeArray<float3, 3> _98 = { patchIn.gl_in[0].in_var_TEXCOORD7, patchIn.gl_in[1].in_var_TEXCOORD7, patchIn.gl_in[2].in_var_TEXCOORD7 };
     float4 _111 = float4(gl_TessCoord.x);
     float4 _113 = float4(gl_TessCoord.y);
     float4 _116 = float4(gl_TessCoord.z);
-    float4 _118 = ((patchIn.gl_in[0].in_var_VS_To_DS_Position * _111) + (patchIn.gl_in[1].in_var_VS_To_DS_Position * _113)) + (patchIn.gl_in[2].in_var_VS_To_DS_Position * _116);
+    float4 _118 = ((_97[0] * _111) + (_97[1] * _113)) + (_97[2] * _116);
     spvUnsafeArray<float4, 1> _72;
-    _72 = { patchIn.gl_in[0].in_var_TEXCOORD0_0 };
+    _72 = _79[0];
     spvUnsafeArray<float4, 1> _71;
-    _71 = { patchIn.gl_in[1].in_var_TEXCOORD0_0 };
+    _71 = _79[1];
     float3 _120 = float3(gl_TessCoord.x);
     float3 _123 = float3(gl_TessCoord.y);
     spvUnsafeArray<float4, 1> _73;
@@ -286,9 +293,9 @@ struct main0_patchIn
     spvUnsafeArray<float4, 1> _75;
     _75 = _73;
     spvUnsafeArray<float4, 1> _74;
-    _74 = { patchIn.gl_in[2].in_var_TEXCOORD0_0 };
+    _74 = _79[2];
     float3 _155 = float3(gl_TessCoord.z);
-    float3 _157 = ((patchIn.gl_in[0].in_var_TEXCOORD10_centroid.xyz * _120) + (patchIn.gl_in[1].in_var_TEXCOORD10_centroid.xyz * _123)).xyz + (patchIn.gl_in[2].in_var_TEXCOORD10_centroid.xyz * _155);
+    float3 _157 = ((_77[0].xyz * _120) + (_77[1].xyz * _123)).xyz + (_77[2].xyz * _155);
     spvUnsafeArray<float4, 1> _76;
     for (int _164 = 0; _164 < 1; )
     {
@@ -298,12 +305,12 @@ struct main0_patchIn
     }
     float4 _181 = float4(_118.x, _118.y, _118.z, _118.w);
     out.out_var_TEXCOORD10_centroid = float4(_157.x, _157.y, _157.z, _68.w);
-    out.out_var_TEXCOORD11_centroid = ((patchIn.gl_in[0].in_var_TEXCOORD11_centroid * _111) + (patchIn.gl_in[1].in_var_TEXCOORD11_centroid * _113)) + (patchIn.gl_in[2].in_var_TEXCOORD11_centroid * _116);
+    out.out_var_TEXCOORD11_centroid = ((_78[0] * _111) + (_78[1] * _113)) + (_78[2] * _116);
     out_var_TEXCOORD0 = _76;
-    out.out_var_COLOR1 = ((patchIn.gl_in[0].in_var_COLOR1 * _111) + (patchIn.gl_in[1].in_var_COLOR1 * _113)) + (patchIn.gl_in[2].in_var_COLOR1 * _116);
-    out.out_var_COLOR2 = ((patchIn.gl_in[0].in_var_COLOR2 * _111) + (patchIn.gl_in[1].in_var_COLOR2 * _113)) + (patchIn.gl_in[2].in_var_COLOR2 * _116);
+    out.out_var_COLOR1 = ((_80[0] * _111) + (_80[1] * _113)) + (_80[2] * _116);
+    out.out_var_COLOR2 = ((_81[0] * _111) + (_81[1] * _113)) + (_81[2] * _116);
     out.out_var_TEXCOORD6 = _181;
-    out.out_var_TEXCOORD7 = ((patchIn.gl_in[0].in_var_TEXCOORD7 * _120) + (patchIn.gl_in[1].in_var_TEXCOORD7 * _123)) + (patchIn.gl_in[2].in_var_TEXCOORD7 * _155);
+    out.out_var_TEXCOORD7 = ((_98[0] * _120) + (_98[1] * _123)) + (_98[2] * _155);
     out.gl_Position = View.View_TranslatedWorldToClip * _181;
     out.out_var_TEXCOORD0_0 = out_var_TEXCOORD0[0];
     return out;

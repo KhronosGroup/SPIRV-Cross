@@ -623,10 +623,6 @@ protected:
 	std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type, uint32_t physical_type_id,
 	                                     bool is_packed) override;
 
-	void access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
-	                                        AccessChainFlags flags, bool &access_chain_is_arrayed,
-	                                        uint32_t index) override;
-
 	void preprocess_op_codes();
 	void localize_global_variables();
 	void extract_global_variables_from_functions();
@@ -759,6 +755,7 @@ protected:
 	void analyze_sampled_image_usage();
 
 	bool emit_tessellation_access_chain(const uint32_t *ops, uint32_t length);
+	bool emit_tessellation_io_load(uint32_t result_type, uint32_t id, uint32_t ptr);
 	bool is_out_of_bounds_tessellation_level(uint32_t id_lhs);
 
 	void ensure_builtin(spv::StorageClass storage, spv::BuiltIn builtin);

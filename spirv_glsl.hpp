@@ -491,9 +491,9 @@ protected:
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 
-	virtual void access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
-	                                                AccessChainFlags flags, bool &access_chain_is_arrayed,
-	                                                uint32_t index);
+	void access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
+	                                        AccessChainFlags flags, bool &access_chain_is_arrayed,
+	                                        uint32_t index);
 
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
 	                                  AccessChainMeta *meta);
