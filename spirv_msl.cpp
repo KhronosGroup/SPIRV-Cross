@@ -5086,12 +5086,15 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				if (!is_array(*type) && !is_matrix(*type) && type->basetype != SPIRType::Struct)
 					break;
 
-				auto &c = get_constant(ops[i]);
-				index += c.scalar();
+				auto *c = maybe_get<SPIRConstant>(ops[i]);
+				if (!c || c->specialization)
+					SPIRV_CROSS_THROW("Trying to dynamically index into an array interface variable in tessellation. This is currently unsupported.");
+				index += c->scalar();
+
 				if (type->parent_type)
 					type = &get<SPIRType>(type->parent_type);
 				else if (type->basetype == SPIRType::Struct)
-					type = &get<SPIRType>(type->member_types[c.scalar()]);
+					type = &get<SPIRType>(type->member_types[c->scalar()]);
 			}
 			// If the access chain terminates at a composite type, the composite
 			// itself might be copied. In that case, we must unflatten it.
