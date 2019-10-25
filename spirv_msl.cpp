@@ -1610,10 +1610,13 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 	if (is_builtin)
 		set_name(var.self, builtin_to_glsl(builtin, StorageClassFunction));
 
-	entry_func.add_local_variable(var.self);
-
-	// We need to declare the variable early and at entry-point scope.
-	vars_needing_early_declaration.push_back(var.self);
+	// Only flatten/unflatten IO composites for non-tessellation cases where arrays are not stripped.
+	if (!strip_array)
+	{
+		entry_func.add_local_variable(var.self);
+		// We need to declare the variable early and at entry-point scope.
+		vars_needing_early_declaration.push_back(var.self);
+	}
 
 	for (uint32_t i = 0; i < elem_cnt; i++)
 	{
@@ -1683,6 +1686,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
 
+		// Only flatten/unflatten IO composites for non-tessellation cases where arrays are not stripped.
 		if (!strip_array)
 		{
 			switch (storage)

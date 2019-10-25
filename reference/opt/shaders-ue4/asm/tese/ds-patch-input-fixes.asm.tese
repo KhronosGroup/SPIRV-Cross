@@ -277,7 +277,6 @@ struct main0_patchIn
 [[ patch(triangle, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant type_View& View [[buffer(0)]], constant type_Material& Material [[buffer(1)]], texture3d<float> View_GlobalDistanceFieldTexture0 [[texture(0)]], texture3d<float> View_GlobalDistanceFieldTexture1 [[texture(1)]], texture3d<float> View_GlobalDistanceFieldTexture2 [[texture(2)]], texture3d<float> View_GlobalDistanceFieldTexture3 [[texture(3)]], sampler View_GlobalDistanceFieldSampler0 [[sampler(0)]], float3 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> in_var_PN_POSITION = {};
     float _190 = gl_TessCoord.x * gl_TessCoord.x;
     float _191 = gl_TessCoord.y * gl_TessCoord.y;
     float _192 = gl_TessCoord.z * gl_TessCoord.z;

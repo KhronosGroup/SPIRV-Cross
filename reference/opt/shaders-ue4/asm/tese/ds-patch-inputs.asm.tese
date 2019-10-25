@@ -174,7 +174,6 @@ struct main0_patchIn
 [[ patch(triangle, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant type_ShadowDepthPass& ShadowDepthPass [[buffer(0)]], float3 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> in_var_PN_POSITION = {};
     float _119 = gl_TessCoord.x * gl_TessCoord.x;
     float _120 = gl_TessCoord.y * gl_TessCoord.y;
     float _121 = gl_TessCoord.z * gl_TessCoord.z;

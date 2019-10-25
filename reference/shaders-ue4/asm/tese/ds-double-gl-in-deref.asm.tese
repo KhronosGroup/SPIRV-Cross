@@ -366,8 +366,6 @@ struct main0_patchIn
 {
     main0_out out = {};
     spvUnsafeArray<float4, 1> out_var_TEXCOORD0 = {};
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 1> in_var_TEXCOORD0 = {};
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> in_var_PN_POSITION = {};
     float _157 = gl_TessCoord.x * gl_TessCoord.x;
     float _158 = gl_TessCoord.y * gl_TessCoord.y;
     float _159 = gl_TessCoord.z * gl_TessCoord.z;
