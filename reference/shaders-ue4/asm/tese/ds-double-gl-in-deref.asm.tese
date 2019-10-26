@@ -369,7 +369,7 @@ struct main0_patchIn
     spvUnsafeArray<float4, 3> _117 = { patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid };
     spvUnsafeArray<float4, 3> _118 = { patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid };
     spvUnsafeArray<float4, 3> _119 = { patchIn.gl_in[0].in_var_COLOR0, patchIn.gl_in[1].in_var_COLOR0, patchIn.gl_in[2].in_var_COLOR0 };
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 1> _120 = { { patchIn.gl_in[0].in_var_TEXCOORD0_0 }, { patchIn.gl_in[1].in_var_TEXCOORD0_0 }, { patchIn.gl_in[2].in_var_TEXCOORD0_0 } };
+    spvUnsafeArray<spvUnsafeArray<float4, 1>, 3> _120 = { { patchIn.gl_in[0].in_var_TEXCOORD0_0 }, { patchIn.gl_in[1].in_var_TEXCOORD0_0 }, { patchIn.gl_in[2].in_var_TEXCOORD0_0 } };
     spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> _135 = { { patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 }, { patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 }, { patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 } };
     spvUnsafeArray<float, 3> _136 = { patchIn.gl_in[0].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[1].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[2].in_var_PN_WorldDisplacementMultiplier };
     float _157 = gl_TessCoord.x * gl_TessCoord.x;

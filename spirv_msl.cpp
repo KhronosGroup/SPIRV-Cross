@@ -10303,11 +10303,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		string res;
 		string sizes;
 
-		for (auto i = uint32_t(type.array.size()); i; i--)
+		for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
 		{
 			res += "spvUnsafeArray<";
 			sizes += ", ";
-			sizes += to_array_size(type, i - 1);
+			sizes += to_array_size(type, i);
 			sizes += ">";
 		}
 
