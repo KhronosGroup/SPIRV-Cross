@@ -5285,9 +5285,11 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	// Any object which did not go through IO flattening shenanigans will go there instead.
 	// We will unflatten on-demand instead as needed, but not all possible cases can be supported, especially with arrays.
 
-	auto *var = maybe_get<SPIRVariable>(ops[2]);
+	auto *var = maybe_get_backing_variable(ops[2]);
 	bool patch = false;
 	bool flat_data = false;
+	bool ptr_is_chain = false;
+
 	if (var)
 	{
 		patch = has_decoration(ops[2], DecorationPatch) ||
@@ -5297,6 +5299,11 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		flat_data =
 				var->storage == StorageClassInput ||
 				(var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
+
+		// We might have a chained access chain, where
+		// we first take the access chain to the control point, and then we chain into a member or something similar.
+		// In this case, we need to skip gl_in/gl_out remapping.
+		ptr_is_chain = var->self != ID(ops[2]);
 	}
 
 	BuiltIn bi_type = BuiltIn(get_decoration(ops[2], DecorationBuiltIn));
@@ -5316,27 +5323,32 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		new_uint_type.width = 32;
 		set<SPIRType>(type_id, new_uint_type);
 
-		// Index into gl_in/gl_out with first array index.
-		uint32_t ptr = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
-		indices.push_back(ops[3]);
+		uint32_t first_non_array_index = ptr_is_chain ? 3 : 4;
+		VariableID stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
+		VariableID ptr = ptr_is_chain ? VariableID(ops[2]) : stage_var_id;
+		if (!ptr_is_chain)
+		{
+			// Index into gl_in/gl_out with first array index.
+			indices.push_back(ops[3]);
+		}
 
 		auto &result_ptr_type = get<SPIRType>(ops[0]);
 
 		uint32_t const_mbr_id = next_id++;
-		uint32_t index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
+		uint32_t index = get_extended_decoration(var->self, SPIRVCrossDecorationInterfaceMemberIndex);
 		if (var->storage == StorageClassInput || has_decoration(get_variable_element_type(*var).self, DecorationBlock))
 		{
-			uint32_t i = 4;
+			uint32_t i = first_non_array_index;
 			auto *type = &get_variable_element_type(*var);
-			if (index == uint32_t(-1) && length >= 5)
+			if (index == uint32_t(-1) && length >= (first_non_array_index + 1))
 			{
 				// Maybe this is a struct type in the input class, in which case
 				// we put it as a decoration on the corresponding member.
-				index = get_extended_member_decoration(ops[2], get_constant(ops[4]).scalar(),
+				index = get_extended_member_decoration(var->self, get_constant(ops[first_non_array_index]).scalar(),
 				                                       SPIRVCrossDecorationInterfaceMemberIndex);
 				assert(index != uint32_t(-1));
 				i++;
-				type = &get<SPIRType>(type->member_types[get_constant(ops[4]).scalar()]);
+				type = &get<SPIRType>(type->member_types[get_constant(ops[first_non_array_index]).scalar()]);
 			}
 
 			// In this case, we're poking into flattened structures and arrays, so now we have to
@@ -5390,7 +5402,38 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 		// We use the pointer to the base of the input/output array here,
 		// so this is always a pointer chain.
-		auto e = access_chain(ptr, indices.data(), uint32_t(indices.size()), result_ptr_type, &meta, true);
+		string e;
+
+		if (!ptr_is_chain)
+		{
+			// This is the start of an access chain, use ptr_chain to index into control point array.
+			e = access_chain(ptr, indices.data(), uint32_t(indices.size()), result_ptr_type, &meta, true);
+		}
+		else
+		{
+			// If we're accessing a struct, we need to use member indices which are based on the IO block,
+			// not actual struct type, so we have to use a split access chain here where
+			// first path resolves the control point index, i.e. gl_in[index], and second half deals with
+			// looking up flattened member name.
+
+			// However, it is possible that we partially accessed a struct,
+			// by taking pointer to member inside the control-point array.
+			// For this case, we fall back to a natural access chain since we have already dealt with remapping struct members.
+			// One way to check this here is if we have 2 implied read expressions.
+			// First one is the gl_in/gl_out struct itself, then an index into that array.
+			// If we have traversed further, we use a normal access chain formulation.
+			auto *ptr_expr = maybe_get<SPIRExpression>(ptr);
+			if (ptr_expr && ptr_expr->implied_read_expressions.size() == 2)
+			{
+				e = join(to_expression(ptr),
+				         access_chain_internal(stage_var_id, indices.data(), uint32_t(indices.size()),
+				                               ACCESS_CHAIN_CHAIN_ONLY_BIT, &meta));
+			}
+			else
+			{
+				e = access_chain_internal(ptr, indices.data(), uint32_t(indices.size()), 0, &meta);
+			}
+		}
 
 		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 		expr.loaded_from = var->self;
@@ -5405,11 +5448,23 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		if (meta.storage_is_invariant)
 			set_decoration(ops[1], DecorationInvariant);
 
+		// If we have some expression dependencies in our access chain, this access chain is technically a forwarded
+		// temporary which could be subject to invalidation.
+		// Need to assume we're forwarded while calling inherit_expression_depdendencies.
+		forwarded_temporaries.insert(ops[1]);
+		// The access chain itself is never forced to a temporary, but its dependencies might.
+		suppressed_usage_tracking.insert(ops[1]);
+
 		for (uint32_t i = 2; i < length; i++)
 		{
 			inherit_expression_dependencies(ops[1], ops[i]);
 			add_implied_read_expression(expr, ops[i]);
 		}
+
+		// If we have no dependencies after all, i.e., all indices in the access chain are immutable temporaries,
+		// we're not forwarded after all.
+		if (expr.expression_dependencies.empty())
+			forwarded_temporaries.erase(ops[1]);
 
 		return true;
 	}
