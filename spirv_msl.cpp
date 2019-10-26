@@ -2200,7 +2200,7 @@ void CompilerMSL::fix_up_interface_member_indices(StorageClass storage, uint32_t
 	    !(get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput))
 		return;
 
-	uint32_t mbr_cnt = ir.meta[ib_type_id].members.size();
+	auto mbr_cnt = uint32_t(ir.meta[ib_type_id].members.size());
 	for (uint32_t i = 0; i < mbr_cnt; i++)
 	{
 		uint32_t var_id = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceOrigID);
