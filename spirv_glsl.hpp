@@ -417,6 +417,7 @@ protected:
 		bool native_pointers = false;
 		bool support_small_type_sampling_result = false;
 		bool support_case_fallthrough = true;
+		bool use_array_constructor = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);

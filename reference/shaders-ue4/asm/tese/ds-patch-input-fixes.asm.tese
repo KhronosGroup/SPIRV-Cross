@@ -277,18 +277,18 @@ struct main0_patchIn
 [[ patch(triangle, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], constant type_View& View [[buffer(0)]], constant type_Material& Material [[buffer(1)]], texture3d<float> View_GlobalDistanceFieldTexture0 [[texture(0)]], texture3d<float> View_GlobalDistanceFieldTexture1 [[texture(1)]], texture3d<float> View_GlobalDistanceFieldTexture2 [[texture(2)]], texture3d<float> View_GlobalDistanceFieldTexture3 [[texture(3)]], sampler View_GlobalDistanceFieldSampler0 [[sampler(0)]], float3 gl_TessCoord [[position_in_patch]])
 {
     main0_out out = {};
-    spvUnsafeArray<float4, 3> _120 = { patchIn.gl_in[0].in_var_TEXCOORD6, patchIn.gl_in[1].in_var_TEXCOORD6, patchIn.gl_in[2].in_var_TEXCOORD6 };
-    spvUnsafeArray<float4, 3> _121 = { patchIn.gl_in[0].in_var_TEXCOORD8, patchIn.gl_in[1].in_var_TEXCOORD8, patchIn.gl_in[2].in_var_TEXCOORD8 };
-    spvUnsafeArray<float4, 3> _128 = { patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid };
-    spvUnsafeArray<float4, 3> _129 = { patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid };
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> _136 = { { patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 }, { patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 }, { patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 } };
-    spvUnsafeArray<float, 3> _137 = { patchIn.gl_in[0].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[1].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[2].in_var_PN_WorldDisplacementMultiplier };
-    spvUnsafeArray<float4, 3> _138 = { patchIn.gl_in[0].in_var_PN_DominantVertex1, patchIn.gl_in[1].in_var_PN_DominantVertex1, patchIn.gl_in[2].in_var_PN_DominantVertex1 };
-    spvUnsafeArray<float3, 3> _139 = { patchIn.gl_in[0].in_var_PN_DominantVertex2, patchIn.gl_in[1].in_var_PN_DominantVertex2, patchIn.gl_in[2].in_var_PN_DominantVertex2 };
-    spvUnsafeArray<float4, 3> _146 = { patchIn.gl_in[0].in_var_PN_DominantEdge2, patchIn.gl_in[1].in_var_PN_DominantEdge2, patchIn.gl_in[2].in_var_PN_DominantEdge2 };
-    spvUnsafeArray<float4, 3> _147 = { patchIn.gl_in[0].in_var_PN_DominantEdge3, patchIn.gl_in[1].in_var_PN_DominantEdge3, patchIn.gl_in[2].in_var_PN_DominantEdge3 };
-    spvUnsafeArray<float3, 3> _148 = { patchIn.gl_in[0].in_var_PN_DominantEdge4, patchIn.gl_in[1].in_var_PN_DominantEdge4, patchIn.gl_in[2].in_var_PN_DominantEdge4 };
-    spvUnsafeArray<float3, 3> _149 = { patchIn.gl_in[0].in_var_PN_DominantEdge5, patchIn.gl_in[1].in_var_PN_DominantEdge5, patchIn.gl_in[2].in_var_PN_DominantEdge5 };
+    spvUnsafeArray<float4, 3> _120 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD6, patchIn.gl_in[1].in_var_TEXCOORD6, patchIn.gl_in[2].in_var_TEXCOORD6 });
+    spvUnsafeArray<float4, 3> _121 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD8, patchIn.gl_in[1].in_var_TEXCOORD8, patchIn.gl_in[2].in_var_TEXCOORD8 });
+    spvUnsafeArray<float4, 3> _128 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid });
+    spvUnsafeArray<float4, 3> _129 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid });
+    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> _136 = spvUnsafeArray<spvUnsafeArray<float4, 3>, 3>({ spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 }), spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 }), spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 }) });
+    spvUnsafeArray<float, 3> _137 = spvUnsafeArray<float, 3>({ patchIn.gl_in[0].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[1].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[2].in_var_PN_WorldDisplacementMultiplier });
+    spvUnsafeArray<float4, 3> _138 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_DominantVertex1, patchIn.gl_in[1].in_var_PN_DominantVertex1, patchIn.gl_in[2].in_var_PN_DominantVertex1 });
+    spvUnsafeArray<float3, 3> _139 = spvUnsafeArray<float3, 3>({ patchIn.gl_in[0].in_var_PN_DominantVertex2, patchIn.gl_in[1].in_var_PN_DominantVertex2, patchIn.gl_in[2].in_var_PN_DominantVertex2 });
+    spvUnsafeArray<float4, 3> _146 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_DominantEdge2, patchIn.gl_in[1].in_var_PN_DominantEdge2, patchIn.gl_in[2].in_var_PN_DominantEdge2 });
+    spvUnsafeArray<float4, 3> _147 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_DominantEdge3, patchIn.gl_in[1].in_var_PN_DominantEdge3, patchIn.gl_in[2].in_var_PN_DominantEdge3 });
+    spvUnsafeArray<float3, 3> _148 = spvUnsafeArray<float3, 3>({ patchIn.gl_in[0].in_var_PN_DominantEdge4, patchIn.gl_in[1].in_var_PN_DominantEdge4, patchIn.gl_in[2].in_var_PN_DominantEdge4 });
+    spvUnsafeArray<float3, 3> _149 = spvUnsafeArray<float3, 3>({ patchIn.gl_in[0].in_var_PN_DominantEdge5, patchIn.gl_in[1].in_var_PN_DominantEdge5, patchIn.gl_in[2].in_var_PN_DominantEdge5 });
     float _190 = gl_TessCoord.x * gl_TessCoord.x;
     float _191 = gl_TessCoord.y * gl_TessCoord.y;
     float _192 = gl_TessCoord.z * gl_TessCoord.z;

@@ -505,6 +505,7 @@ string CompilerGLSL::compile()
 		backend.allow_precision_qualifiers = true;
 	backend.force_gl_in_out_block = true;
 	backend.supports_extensions = true;
+	backend.use_array_constructor = true;
 
 	// Scan the SPIR-V to find trivial uses of extensions.
 	fixup_type_alias();
@@ -3407,7 +3408,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		}
 		else if (backend.use_initializer_list && backend.use_typed_initializer_list && !type.array.empty())
 		{
-			res = type_to_glsl(type) + "({ ";
+			res = type_to_glsl_constructor(type) + "({ ";
 			needs_trailing_tracket = true;
 		}
 		else if (backend.use_initializer_list)
@@ -8337,11 +8338,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		string constructor_op;
 		if (backend.use_initializer_list && composite)
 		{
+			bool needs_trailing_tracket = false;
 			// Only use this path if we are building composites.
 			// This path cannot be used for arithmetic.
 			if (backend.use_typed_initializer_list && out_type.basetype == SPIRType::Struct && out_type.array.empty())
 				constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type));
+			else if (backend.use_typed_initializer_list && !out_type.array.empty())
+			{
+				// MSL path. Array constructor is baked into type here, do not use _constructor variant.
+				constructor_op += type_to_glsl_constructor(get<SPIRType>(result_type)) + "(";
+				needs_trailing_tracket = true;
+			}
 			constructor_op += "{ ";
+
 			if (type_is_empty(out_type) && !backend.supports_empty_struct)
 				constructor_op += "0";
 			else if (splat)
@@ -8349,6 +8358,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 				constructor_op += build_composite_combiner(result_type, elems, length);
 			constructor_op += " }";
+			if (needs_trailing_tracket)
+				constructor_op += ")";
 		}
 		else if (swizzle_splat && !composite)
 		{
@@ -10921,7 +10932,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 {
-	if (type.array.size() > 1)
+	if (backend.use_array_constructor && type.array.size() > 1)
 	{
 		if (options.flatten_multidimensional_arrays)
 			SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
@@ -10932,8 +10943,11 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 	}
 
 	auto e = type_to_glsl(type);
-	for (uint32_t i = 0; i < type.array.size(); i++)
-		e += "[]";
+	if (backend.use_array_constructor)
+	{
+		for (uint32_t i = 0; i < type.array.size(); i++)
+			e += "[]";
+	}
 	return e;
 }
 

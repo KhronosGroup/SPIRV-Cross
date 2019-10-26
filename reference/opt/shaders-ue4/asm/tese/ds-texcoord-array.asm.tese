@@ -266,13 +266,13 @@ struct main0_patchIn
 {
     main0_out out = {};
     spvUnsafeArray<float4, 1> out_var_TEXCOORD0 = {};
-    spvUnsafeArray<float4, 3> _77 = { patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid };
-    spvUnsafeArray<float4, 3> _78 = { patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid };
-    spvUnsafeArray<spvUnsafeArray<float4, 1>, 3> _79 = { { patchIn.gl_in[0].in_var_TEXCOORD0_0 }, { patchIn.gl_in[1].in_var_TEXCOORD0_0 }, { patchIn.gl_in[2].in_var_TEXCOORD0_0 } };
-    spvUnsafeArray<float4, 3> _80 = { patchIn.gl_in[0].in_var_COLOR1, patchIn.gl_in[1].in_var_COLOR1, patchIn.gl_in[2].in_var_COLOR1 };
-    spvUnsafeArray<float4, 3> _81 = { patchIn.gl_in[0].in_var_COLOR2, patchIn.gl_in[1].in_var_COLOR2, patchIn.gl_in[2].in_var_COLOR2 };
-    spvUnsafeArray<float4, 3> _97 = { patchIn.gl_in[0].in_var_VS_To_DS_Position, patchIn.gl_in[1].in_var_VS_To_DS_Position, patchIn.gl_in[2].in_var_VS_To_DS_Position };
-    spvUnsafeArray<float3, 3> _98 = { patchIn.gl_in[0].in_var_TEXCOORD7, patchIn.gl_in[1].in_var_TEXCOORD7, patchIn.gl_in[2].in_var_TEXCOORD7 };
+    spvUnsafeArray<float4, 3> _77 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid });
+    spvUnsafeArray<float4, 3> _78 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid });
+    spvUnsafeArray<spvUnsafeArray<float4, 1>, 3> _79 = spvUnsafeArray<spvUnsafeArray<float4, 1>, 3>({ spvUnsafeArray<float4, 1>({ patchIn.gl_in[0].in_var_TEXCOORD0_0 }), spvUnsafeArray<float4, 1>({ patchIn.gl_in[1].in_var_TEXCOORD0_0 }), spvUnsafeArray<float4, 1>({ patchIn.gl_in[2].in_var_TEXCOORD0_0 }) });
+    spvUnsafeArray<float4, 3> _80 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_COLOR1, patchIn.gl_in[1].in_var_COLOR1, patchIn.gl_in[2].in_var_COLOR1 });
+    spvUnsafeArray<float4, 3> _81 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_COLOR2, patchIn.gl_in[1].in_var_COLOR2, patchIn.gl_in[2].in_var_COLOR2 });
+    spvUnsafeArray<float4, 3> _97 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_VS_To_DS_Position, patchIn.gl_in[1].in_var_VS_To_DS_Position, patchIn.gl_in[2].in_var_VS_To_DS_Position });
+    spvUnsafeArray<float3, 3> _98 = spvUnsafeArray<float3, 3>({ patchIn.gl_in[0].in_var_TEXCOORD7, patchIn.gl_in[1].in_var_TEXCOORD7, patchIn.gl_in[2].in_var_TEXCOORD7 });
     float4 _111 = float4(gl_TessCoord.x);
     float4 _113 = float4(gl_TessCoord.y);
     float4 _116 = float4(gl_TessCoord.z);

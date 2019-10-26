@@ -366,12 +366,12 @@ struct main0_patchIn
 {
     main0_out out = {};
     spvUnsafeArray<float4, 1> out_var_TEXCOORD0 = {};
-    spvUnsafeArray<float4, 3> _117 = { patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid };
-    spvUnsafeArray<float4, 3> _118 = { patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid };
-    spvUnsafeArray<float4, 3> _119 = { patchIn.gl_in[0].in_var_COLOR0, patchIn.gl_in[1].in_var_COLOR0, patchIn.gl_in[2].in_var_COLOR0 };
-    spvUnsafeArray<spvUnsafeArray<float4, 1>, 3> _120 = { { patchIn.gl_in[0].in_var_TEXCOORD0_0 }, { patchIn.gl_in[1].in_var_TEXCOORD0_0 }, { patchIn.gl_in[2].in_var_TEXCOORD0_0 } };
-    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> _135 = { { patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 }, { patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 }, { patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 } };
-    spvUnsafeArray<float, 3> _136 = { patchIn.gl_in[0].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[1].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[2].in_var_PN_WorldDisplacementMultiplier };
+    spvUnsafeArray<float4, 3> _117 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD10_centroid, patchIn.gl_in[1].in_var_TEXCOORD10_centroid, patchIn.gl_in[2].in_var_TEXCOORD10_centroid });
+    spvUnsafeArray<float4, 3> _118 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_TEXCOORD11_centroid, patchIn.gl_in[1].in_var_TEXCOORD11_centroid, patchIn.gl_in[2].in_var_TEXCOORD11_centroid });
+    spvUnsafeArray<float4, 3> _119 = spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_COLOR0, patchIn.gl_in[1].in_var_COLOR0, patchIn.gl_in[2].in_var_COLOR0 });
+    spvUnsafeArray<spvUnsafeArray<float4, 1>, 3> _120 = spvUnsafeArray<spvUnsafeArray<float4, 1>, 3>({ spvUnsafeArray<float4, 1>({ patchIn.gl_in[0].in_var_TEXCOORD0_0 }), spvUnsafeArray<float4, 1>({ patchIn.gl_in[1].in_var_TEXCOORD0_0 }), spvUnsafeArray<float4, 1>({ patchIn.gl_in[2].in_var_TEXCOORD0_0 }) });
+    spvUnsafeArray<spvUnsafeArray<float4, 3>, 3> _135 = spvUnsafeArray<spvUnsafeArray<float4, 3>, 3>({ spvUnsafeArray<float4, 3>({ patchIn.gl_in[0].in_var_PN_POSITION_0, patchIn.gl_in[0].in_var_PN_POSITION_1, patchIn.gl_in[0].in_var_PN_POSITION_2 }), spvUnsafeArray<float4, 3>({ patchIn.gl_in[1].in_var_PN_POSITION_0, patchIn.gl_in[1].in_var_PN_POSITION_1, patchIn.gl_in[1].in_var_PN_POSITION_2 }), spvUnsafeArray<float4, 3>({ patchIn.gl_in[2].in_var_PN_POSITION_0, patchIn.gl_in[2].in_var_PN_POSITION_1, patchIn.gl_in[2].in_var_PN_POSITION_2 }) });
+    spvUnsafeArray<float, 3> _136 = spvUnsafeArray<float, 3>({ patchIn.gl_in[0].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[1].in_var_PN_WorldDisplacementMultiplier, patchIn.gl_in[2].in_var_PN_WorldDisplacementMultiplier });
     float _157 = gl_TessCoord.x * gl_TessCoord.x;
     float _158 = gl_TessCoord.y * gl_TessCoord.y;
     float _159 = gl_TessCoord.z * gl_TessCoord.z;
@@ -386,7 +386,7 @@ struct main0_patchIn
     float4 _229 = ((_118[0] * _165) + (_118[1] * _169)) + (_118[2] * _174);
     float4 _231 = ((_119[0] * _165) + (_119[1] * _169)) + (_119[2] * _174);
     float4 _233 = ((_120[0][0] * _165) + (_120[1][0] * _169)) + (_120[2][0] * _174);
-    spvUnsafeArray<float4, 1> _234 = { _233 };
+    spvUnsafeArray<float4, 1> _234 = spvUnsafeArray<float4, 1>({ _233 });
     float3 _236 = _229.xyz;
     float3 _264 = _202.xyz + (((float3((Material_Texture2D_3.sample(Material_Texture2D_3Sampler, (float2(View.View_GameTime * 0.20000000298023223876953125, View.View_GameTime * (-0.699999988079071044921875)) + (_233.zw * float2(1.0, 2.0))), level(-1.0)).x * 10.0) * (1.0 - _231.x)) * _236) * float3(0.5)) * float3(((_136[0] * gl_TessCoord.x) + (_136[1] * gl_TessCoord.y)) + (_136[2] * gl_TessCoord.z)));
     float4x4 _116 = ShadowDepthPass.ShadowDepthPass_ViewMatrix;

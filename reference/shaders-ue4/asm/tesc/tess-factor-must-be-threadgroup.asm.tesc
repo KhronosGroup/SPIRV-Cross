@@ -143,10 +143,10 @@ kernel void main0(main0_in in [[stage_in]], constant type_Primitive& Primitive [
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (gl_InvocationID >= 3)
         return;
-    spvUnsafeArray<float4, 3> _87 = { gl_in[0].in_var_TEXCOORD10_centroid, gl_in[1].in_var_TEXCOORD10_centroid, gl_in[2].in_var_TEXCOORD10_centroid };
-    spvUnsafeArray<float4, 3> _88 = { gl_in[0].in_var_TEXCOORD11_centroid, gl_in[1].in_var_TEXCOORD11_centroid, gl_in[2].in_var_TEXCOORD11_centroid };
-    spvUnsafeArray<float4, 3> _101 = { gl_in[0].in_var_VS_To_DS_Position, gl_in[1].in_var_VS_To_DS_Position, gl_in[2].in_var_VS_To_DS_Position };
-    spvUnsafeArray<FBasePassVSToDS, 3> _108 = { FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _87[0], _88[0] } }, FBasePassInterpolantsVSToDS{ { } }, _101[0] }, FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _87[1], _88[1] } }, FBasePassInterpolantsVSToDS{ { } }, _101[1] }, FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _87[2], _88[2] } }, FBasePassInterpolantsVSToDS{ { } }, _101[2] } };
+    spvUnsafeArray<float4, 3> _87 = spvUnsafeArray<float4, 3>({ gl_in[0].in_var_TEXCOORD10_centroid, gl_in[1].in_var_TEXCOORD10_centroid, gl_in[2].in_var_TEXCOORD10_centroid });
+    spvUnsafeArray<float4, 3> _88 = spvUnsafeArray<float4, 3>({ gl_in[0].in_var_TEXCOORD11_centroid, gl_in[1].in_var_TEXCOORD11_centroid, gl_in[2].in_var_TEXCOORD11_centroid });
+    spvUnsafeArray<float4, 3> _101 = spvUnsafeArray<float4, 3>({ gl_in[0].in_var_VS_To_DS_Position, gl_in[1].in_var_VS_To_DS_Position, gl_in[2].in_var_VS_To_DS_Position });
+    spvUnsafeArray<FBasePassVSToDS, 3> _108 = spvUnsafeArray<FBasePassVSToDS, 3>({ FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _87[0], _88[0] } }, FBasePassInterpolantsVSToDS{ { } }, _101[0] }, FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _87[1], _88[1] } }, FBasePassInterpolantsVSToDS{ { } }, _101[1] }, FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _87[2], _88[2] } }, FBasePassInterpolantsVSToDS{ { } }, _101[2] } });
     spvUnsafeArray<FBasePassVSToDS, 3> param_var_I;
     param_var_I = _108;
     float3 _125 = Primitive.Primitive_NonUniformScale.xyz * float3x3(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0.xyz, cross(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0.xyz) * float3(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.w), param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz);

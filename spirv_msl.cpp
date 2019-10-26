@@ -5057,13 +5057,15 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		if (result_type.basetype == SPIRType::Struct || is_matrix(result_type))
 			SPIRV_CROSS_THROW("Cannot load array-of-array of composite type in tessellation IO.");
 
-		expr += "{ ";
+		expr += type_to_glsl(result_type) + "({ ";
 		uint32_t num_control_points = to_array_size_literal(result_type, 1);
 		uint32_t base_interface_index = interface_index;
 
+		auto &sub_type = get<SPIRType>(result_type.parent_type);
+
 		for (uint32_t i = 0; i < num_control_points; i++)
 		{
-			expr += "{ ";
+			expr += type_to_glsl(sub_type) + "({ ";
 			interface_index = base_interface_index;
 			uint32_t array_size = to_array_size_literal(result_type, 0);
 			for (uint32_t j = 0; j < array_size; j++, interface_index++)
@@ -5077,11 +5079,11 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				if (j + 1 < array_size)
 					expr += ", ";
 			}
-			expr += " }";
+			expr += " })";
 			if (i + 1 < num_control_points)
 				expr += ", ";
 		}
-		expr += " }";
+		expr += " })";
 	}
 	else if (result_type.basetype == SPIRType::Struct)
 	{
@@ -5093,7 +5095,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		if (is_array_of_struct)
 		{
 			num_control_points = to_array_size_literal(result_type, 0);
-			expr += "{ ";
+			expr += type_to_glsl(result_type) + "({ ";
 		}
 
 		auto &struct_type = is_array_of_struct ? get<SPIRType>(result_type.parent_type) : result_type;
@@ -5101,7 +5103,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 		for (uint32_t i = 0; i < num_control_points; i++)
 		{
-			expr += type_to_glsl_constructor(struct_type) + "{ ";
+			expr += type_to_glsl(struct_type) + "{ ";
 			for (uint32_t j = 0; j < uint32_t(struct_type.member_types.size()); j++)
 			{
 				// The base interface index is stored per variable for structs.
@@ -5117,7 +5119,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				const auto &mbr_type = get<SPIRType>(struct_type.member_types[j]);
 				if (is_matrix(mbr_type))
 				{
-					expr += type_to_glsl_constructor(mbr_type) + "(";
+					expr += type_to_glsl(mbr_type) + "(";
 					for (uint32_t k = 0; k < mbr_type.columns; k++, interface_index++)
 					{
 						if (is_array_of_struct)
@@ -5137,7 +5139,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				}
 				else if (is_array(mbr_type))
 				{
-					expr += "{ ";
+					expr += type_to_glsl(mbr_type) + "({ ";
 					uint32_t array_size = to_array_size_literal(mbr_type, 0);
 					for (uint32_t k = 0; k < array_size; k++, interface_index++)
 					{
@@ -5154,7 +5156,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 						if (k + 1 < array_size)
 							expr += ", ";
 					}
-					expr += " }";
+					expr += " })";
 				}
 				else
 				{
@@ -5177,7 +5179,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				expr += ", ";
 		}
 		if (is_array_of_struct)
-			expr += " }";
+			expr += " })";
 	}
 	else if (is_matrix(result_type))
 	{
@@ -5192,14 +5194,14 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			// Loading a matrix from each control point.
 			uint32_t base_interface_index = interface_index;
 			uint32_t num_control_points = to_array_size_literal(result_type, 0);
-			expr += "{ ";
+			expr += type_to_glsl(result_type) + "({ ";
 
 			auto &matrix_type = get_variable_element_type(get<SPIRVariable>(ptr));
 
 			for (uint32_t i = 0; i < num_control_points; i++)
 			{
 				interface_index = base_interface_index;
-				expr += type_to_glsl_constructor(matrix_type) + "(";
+				expr += type_to_glsl(matrix_type) + "(";
 				for (uint32_t j = 0; j < result_type.columns; j++, interface_index++)
 				{
 					const uint32_t indices[2] = { i, interface_index };
@@ -5215,11 +5217,11 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 					expr += ", ";
 			}
 
-			expr += " }";
+			expr += " })";
 		}
 		else
 		{
-			expr += type_to_glsl_constructor(result_type) + "(";
+			expr += type_to_glsl(result_type) + "(";
 			for (uint32_t i = 0; i < result_type.columns; i++, interface_index++)
 			{
 				expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -5238,7 +5240,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 		// We're loading an array directly from a global variable.
 		// This means we're loading one member from each control point.
-		expr += "{ ";
+		expr += type_to_glsl(result_type) + "({ ";
 		uint32_t num_control_points = to_array_size_literal(result_type, 0);
 
 		for (uint32_t i = 0; i < num_control_points; i++)
@@ -5252,7 +5254,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			if (i + 1 < num_control_points)
 				expr += ", ";
 		}
-		expr += " }";
+		expr += " })";
 	}
 	else
 	{
@@ -5262,7 +5264,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		if (interface_index == uint32_t(-1))
 			SPIRV_CROSS_THROW("Interface index is unknown. Cannot continue.");
 
-		expr += "{ ";
+		expr += type_to_glsl(result_type) + "({ ";
 		uint32_t array_size = to_array_size_literal(result_type, 0);
 		for (uint32_t i = 0; i < array_size; i++, interface_index++)
 		{
@@ -5270,7 +5272,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			if (i + 1 < array_size)
 				expr += ", ";
 		}
-		expr += " }";
+		expr += " })";
 	}
 
 	emit_op(result_type_id, id, expr, false);

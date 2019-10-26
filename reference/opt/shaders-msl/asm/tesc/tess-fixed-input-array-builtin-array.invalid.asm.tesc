@@ -80,7 +80,7 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (gl_InvocationID >= 3)
         return;
-    spvUnsafeArray<VertexOutput, 3> _223 = { VertexOutput{ gl_in[0].gl_Position, gl_in[0].VertexOutput_uv }, VertexOutput{ gl_in[1].gl_Position, gl_in[1].VertexOutput_uv }, VertexOutput{ gl_in[2].gl_Position, gl_in[2].VertexOutput_uv } };
+    spvUnsafeArray<VertexOutput, 3> _223 = spvUnsafeArray<VertexOutput, 3>({ VertexOutput{ gl_in[0].gl_Position, gl_in[0].VertexOutput_uv }, VertexOutput{ gl_in[1].gl_Position, gl_in[1].VertexOutput_uv }, VertexOutput{ gl_in[2].gl_Position, gl_in[2].VertexOutput_uv } });
     spvUnsafeArray<VertexOutput, 3> param;
     param = _223;
     gl_out[gl_InvocationID].gl_Position = param[gl_InvocationID].pos;
