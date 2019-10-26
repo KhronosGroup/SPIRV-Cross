@@ -62,11 +62,11 @@ void set_from_function(thread float4& gl_Position, thread patch_control_point<ma
     Foo foo = vFoo;
     gl_Position += foo.a;
     gl_Position += foo.b;
-    Foo _106 = { gl_in[0].Foo_a, gl_in[0].Foo_b };
+    Foo _106 = Foo{ gl_in[0].Foo_a, gl_in[0].Foo_b };
     foo = _106;
     gl_Position += foo.a;
     gl_Position += foo.b;
-    Foo _120 = { gl_in[1].Foo_a, gl_in[1].Foo_b };
+    Foo _120 = Foo{ gl_in[1].Foo_a, gl_in[1].Foo_b };
     foo = _120;
     gl_Position += foo.a;
     gl_Position += foo.b;

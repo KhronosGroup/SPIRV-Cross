@@ -5101,7 +5101,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 		for (uint32_t i = 0; i < num_control_points; i++)
 		{
-			expr += "{ ";
+			expr += type_to_glsl_constructor(struct_type) + "{ ";
 			for (uint32_t j = 0; j < uint32_t(struct_type.member_types.size()); j++)
 			{
 				// The base interface index is stored per variable for structs.
