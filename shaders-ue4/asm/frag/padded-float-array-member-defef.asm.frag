@@ -142,7 +142,10 @@
      %uint_4 = OpConstant %uint 4
 %float_0_952552378 = OpConstant %float 0.952552378
     %float_0 = OpConstant %float 0
-%float_9_36786018en05 = OpConstant %float 9.36786018e-05
+
+; HACK: Needed to hack this constant since MSVC and GNU libc are off by 1 ULP when converting to string (it probably still works fine though in a roundtrip ...)
+%float_9_36786018en05 = OpConstant %float 9.25
+
 %float_0_343966454 = OpConstant %float 0.343966454
 %float_0_728166103 = OpConstant %float 0.728166103
 %float_n0_0721325427 = OpConstant %float -0.0721325427
@@ -421,7 +424,10 @@
 %float_0_00084242021 = OpConstant %float 0.00084242021
 %float_7_08145137en07 = OpConstant %float 7.08145137e-07
 %float_0_317398727 = OpConstant %float 0.317398727
-%float_4_22806261en05 = OpConstant %float 4.22806261e-05
+
+; HACK: Needed to hack this constant since MSVC and GNU libc are off by 1 ULP when converting to string (it probably still works fine though in a roundtrip ...)
+%float_4_22806261en05 = OpConstant %float 4.25
+
 %float_4_20481676en08 = OpConstant %float 4.20481676e-08
 %float_2_8974182en05 = OpConstant %float 2.8974182e-05
 %float_1_61456057en07 = OpConstant %float 1.61456057e-07
