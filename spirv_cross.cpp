@@ -3303,6 +3303,7 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 
 		DominatorBuilder builder(cfg);
 		bool force_temporary = false;
+		bool used_in_header_hoisted_continue_block = false;
 
 		// Figure out which block is dominating all accesses of those temporaries.
 		auto &blocks = var.second;
@@ -3317,10 +3318,8 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				// This is moot for complex loops however.
 				auto &loop_header_block = get<SPIRBlock>(ir.continue_block_to_loop_header[block]);
 				assert(loop_header_block.merge == SPIRBlock::MergeLoop);
-
-				// Only relevant if the loop is not marked as complex.
-				if (!loop_header_block.complex_continue)
-					builder.add_block(loop_header_block.self);
+				builder.add_block(loop_header_block.self);
+				used_in_header_hoisted_continue_block = true;
 			}
 		}
 
@@ -3345,11 +3344,22 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 				{
 					// Exceptionally rare case.
 					// We cannot declare temporaries of access chains (except on MSL perhaps with pointers).
-					// Rather than do that, we force a complex loop to make sure access chains are created and consumed
-					// in expected order.
-					auto &loop_header_block = get<SPIRBlock>(dominating_block);
-					assert(loop_header_block.merge == SPIRBlock::MergeLoop);
-					loop_header_block.complex_continue = true;
+					// Rather than do that, we force the indexing expressions to be declared in the right scope by
+					// tracking their usage to that end. There is no temporary to hoist.
+					// However, we still need to observe declaration order of the access chain.
+
+					if (used_in_header_hoisted_continue_block)
+					{
+						// For this scenario, we used an access chain inside a continue block where we also registered an access to header block.
+						// This is a problem as we need to declare an access chain properly first with full definition.
+						// We cannot use temporaries for these expressions,
+						// so we must make sure the access chain is declared ahead of time.
+						// Force a complex for loop to deal with this.
+						// TODO: Out-of-order declaring for loops where continue blocks are emitted last might be another option.
+						auto &loop_header_block = get<SPIRBlock>(dominating_block);
+						assert(loop_header_block.merge == SPIRBlock::MergeLoop);
+						loop_header_block.complex_continue = true;
+					}
 				}
 				else
 				{

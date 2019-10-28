@@ -319,6 +319,9 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     float3 _484 = float3(_276);
     float3 _488;
     _488 = ((float3(_423 * fast::max(0.0, dot(_206, MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDirectionAndShadowTransition.xyz))) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightColor.xyz) * (_270 + float3(_276 * (_439 * fast::min(_446 * _446, 65504.0))))) + (_481 * _484);
+    float3 _507;
+    float _509;
+    float _511;
     float _537;
     int _491 = 0;
     for (;;)
@@ -328,7 +331,9 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
             float3 _501 = _Globals.LightPositionAndInvRadius[_491].xyz - (in.in_var_TEXCOORD8.xyz - float3(View.View_PreViewTranslation));
             float _502 = dot(_501, _501);
             float3 _505 = _501 * float3(rsqrt(_502));
-            float3 _507 = normalize(_181 + _505);
+            _507 = normalize(_181 + _505);
+            _509 = fast::max(0.0, dot(_206, _505));
+            _511 = fast::max(0.0, dot(_206, _507));
             if (_Globals.LightColorAndFalloffExponent[_491].w == 0.0)
             {
                 float _531 = _502 * (_Globals.LightPositionAndInvRadius[_491].w * _Globals.LightPositionAndInvRadius[_491].w);
@@ -341,9 +346,9 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
                 _537 = pow(1.0 - fast::clamp(dot(_521, _521), 0.0, 1.0), _Globals.LightColorAndFalloffExponent[_491].w);
             }
             float3 _544 = cross(_206, _507);
-            float _546 = fast::max(0.0, dot(_206, _507)) * _442;
+            float _546 = _511 * _442;
             float _549 = _442 / (dot(_544, _544) + (_546 * _546));
-            _488 += fast::min(float3(65000.0), ((float3(_537 * fast::max(0.0, dot(_206, _505))) * _Globals.LightColorAndFalloffExponent[_491].xyz) * float3(0.3183098733425140380859375)) * (_270 + float3(_276 * (_439 * fast::min(_549 * _549, 65504.0)))));
+            _488 += fast::min(float3(65000.0), ((float3(_537 * _509) * _Globals.LightColorAndFalloffExponent[_491].xyz) * float3(0.3183098733425140380859375)) * (_270 + float3(_276 * (_439 * fast::min(_549 * _549, 65504.0)))));
             _491++;
             continue;
         }
