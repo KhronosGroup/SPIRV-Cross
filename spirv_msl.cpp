@@ -934,7 +934,8 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
 		string name = to_name(array_id);
-		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id), name, "[] =");
+		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id), name,
+		          "[] =");
 		begin_scope();
 		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
 			statement(name, "_", i, ",");
@@ -2211,8 +2212,7 @@ void CompilerMSL::fix_up_interface_member_indices(StorageClass storage, uint32_t
 		auto &type = get_variable_element_type(var);
 		if (storage == StorageClassInput && type.basetype == SPIRType::Struct)
 		{
-			uint32_t mbr_idx =
-					get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
+			uint32_t mbr_idx = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
 
 			// Only set the lowest InterfaceMemberIndex for each variable member.
 			// IB struct members will be emitted in-order w.r.t. interface member index.
@@ -5109,8 +5109,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				// The base interface index is stored per variable for structs.
 				if (var)
 				{
-					interface_index = get_extended_member_decoration(var->self, j,
-					                                                 SPIRVCrossDecorationInterfaceMemberIndex);
+					interface_index =
+					    get_extended_member_decoration(var->self, j, SPIRVCrossDecorationInterfaceMemberIndex);
 				}
 
 				if (interface_index == uint32_t(-1))
@@ -5126,8 +5126,9 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 						{
 							const uint32_t indices[2] = { i, interface_index };
 							AccessChainMeta meta;
-							expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-							                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+							expr += access_chain_internal(
+							    stage_in_ptr_var_id, indices, 2,
+							    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 						}
 						else
 							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -5147,8 +5148,9 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 						{
 							const uint32_t indices[2] = { i, interface_index };
 							AccessChainMeta meta;
-							expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-							                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+							expr += access_chain_internal(
+							    stage_in_ptr_var_id, indices, 2,
+							    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 						}
 						else
 							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -5165,7 +5167,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 						const uint32_t indices[2] = { i, interface_index };
 						AccessChainMeta meta;
 						expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-						                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+						                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT,
+						                              &meta);
 					}
 					else
 						expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -5207,8 +5210,9 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 					const uint32_t indices[2] = { i, interface_index };
 
 					AccessChainMeta meta;
-					expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
-					                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+					expr +=
+					    access_chain_internal(stage_in_ptr_var_id, indices, 2,
+					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 					if (j + 1 < result_type.columns)
 						expr += ", ";
 				}
@@ -5294,13 +5298,11 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 	if (var)
 	{
-		patch = has_decoration(ops[2], DecorationPatch) ||
-				is_patch_block(get_variable_data_type(*var));
+		patch = has_decoration(ops[2], DecorationPatch) || is_patch_block(get_variable_data_type(*var));
 
 		// Should match strip_array in add_interface_block.
-		flat_data =
-				var->storage == StorageClassInput ||
-				(var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
+		flat_data = var->storage == StorageClassInput ||
+		            (var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
 
 		// We might have a chained access chain, where
 		// we first take the access chain to the control point, and then we chain into a member or something similar.
@@ -5363,7 +5365,8 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 				auto *c = maybe_get<SPIRConstant>(ops[i]);
 				if (!c || c->specialization)
-					SPIRV_CROSS_THROW("Trying to dynamically index into an array interface variable in tessellation. This is currently unsupported.");
+					SPIRV_CROSS_THROW("Trying to dynamically index into an array interface variable in tessellation. "
+					                  "This is currently unsupported.");
 
 				// We're in flattened space, so just increment the member index into IO block.
 				// We can only do this once in the current implementation, so either:
@@ -6223,8 +6226,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			a->need_transpose = false;
 			b->need_transpose = false;
 
-			auto expr = join("spvFMulMatrixMatrix(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])),
-			                 ", ", enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
+			auto expr =
+			    join("spvFMulMatrixMatrix(", enclose_expression(to_unpacked_row_major_matrix_expression(ops[3])), ", ",
+			         enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
 
 			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
 			auto &e = emit_op(ops[0], ops[1], expr, forward);

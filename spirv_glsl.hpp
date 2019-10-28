@@ -493,8 +493,7 @@ protected:
 	                        bool suppress_usage_tracking = false);
 
 	void access_chain_internal_append_index(std::string &expr, uint32_t base, const SPIRType *type,
-	                                        AccessChainFlags flags, bool &access_chain_is_arrayed,
-	                                        uint32_t index);
+	                                        AccessChainFlags flags, bool &access_chain_is_arrayed, uint32_t index);
 
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
 	                                  AccessChainMeta *meta);

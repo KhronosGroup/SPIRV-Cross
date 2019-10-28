@@ -814,7 +814,9 @@ protected:
 	// Handle HLSL-style 0-based vertex/instance index.
 	enum class TriState
 	{
-		Neutral, No, Yes
+		Neutral,
+		No,
+		Yes
 	};
 	TriState needs_base_vertex_arg = TriState::Neutral;
 	TriState needs_base_instance_arg = TriState::Neutral;
