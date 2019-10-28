@@ -604,15 +604,17 @@
 %_arr_FBasePassVSToDS_uint_12 = OpTypeArray %FBasePassVSToDS %uint_12
 %_ptr_Function__arr_FBasePassVSToDS_uint_12 = OpTypePointer Function %_arr_FBasePassVSToDS_uint_12
 %_arr_FPNTessellationHSToDS_uint_3 = OpTypeArray %FPNTessellationHSToDS %uint_3
-%_ptr_Function__arr_FPNTessellationHSToDS_uint_3 = OpTypePointer Function %_arr_FPNTessellationHSToDS_uint_3
+%_ptr_Workgroup__arr_FPNTessellationHSToDS_uint_3 = OpTypePointer Workgroup %_arr_FPNTessellationHSToDS_uint_3
 %_ptr_Output__arr_v4float_uint_1 = OpTypePointer Output %_arr_v4float_uint_1
 %_ptr_Output_uint = OpTypePointer Output %uint
 %_ptr_Output_v3float = OpTypePointer Output %v3float
 %_ptr_Output_float = OpTypePointer Output %float
-%_ptr_Function_FPNTessellationHSToDS = OpTypePointer Function %FPNTessellationHSToDS
+%_ptr_Workgroup_FPNTessellationHSToDS = OpTypePointer Workgroup %FPNTessellationHSToDS
        %bool = OpTypeBool
 %_ptr_Function_v4float = OpTypePointer Function %v4float
+%_ptr_Workgroup_v4float = OpTypePointer Workgroup %v4float
 %_ptr_Function_float = OpTypePointer Function %float
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
 %mat3v3float = OpTypeMatrix %v3float 3
 %_ptr_Function_FVertexFactoryInterpolantsVSToDS = OpTypePointer Function %FVertexFactoryInterpolantsVSToDS
 %_ptr_Function_FVertexFactoryInterpolantsVSToPS = OpTypePointer Function %FVertexFactoryInterpolantsVSToPS
@@ -656,10 +658,14 @@
 %float_0_166666672 = OpConstant %float 0.166666672
         %139 = OpConstantComposite %v4float %float_0_166666672 %float_0_166666672 %float_0_166666672 %float_0_166666672
         %140 = OpUndef %v4float
+
+; XXX: Original asm used Function here, which is wrong.
+; This patches the SPIR-V to be correct.
+%temp_var_hullMainRetVal = OpVariable %_ptr_Workgroup__arr_FPNTessellationHSToDS_uint_3 Workgroup
+
    %MainHull = OpFunction %void None %111
         %141 = OpLabel
 %param_var_I = OpVariable %_ptr_Function__arr_FBasePassVSToDS_uint_12 Function
-%temp_var_hullMainRetVal = OpVariable %_ptr_Function__arr_FPNTessellationHSToDS_uint_3 Function
         %142 = OpLoad %_arr_v4float_uint_12 %in_var_TEXCOORD10_centroid
         %143 = OpLoad %_arr_v4float_uint_12 %in_var_TEXCOORD11_centroid
         %144 = OpLoad %_arr_v4float_uint_12 %in_var_COLOR0
@@ -945,7 +951,7 @@
                OpStore %412 %float_1
         %413 = OpAccessChain %_ptr_Output_float %out_var_PN_WorldDisplacementMultiplier %283
                OpStore %413 %float_1
-        %414 = OpAccessChain %_ptr_Function_FPNTessellationHSToDS %temp_var_hullMainRetVal %283
+        %414 = OpAccessChain %_ptr_Workgroup_FPNTessellationHSToDS %temp_var_hullMainRetVal %283
                OpStore %414 %391
                OpControlBarrier %uint_2 %uint_4 %uint_0
         %415 = OpIEqual %bool %283 %uint_0
@@ -960,23 +966,23 @@
         %422 = OpLoad %v3float %421
         %423 = OpAccessChain %_ptr_Uniform_float %View %int_77
         %424 = OpLoad %float %423
-        %425 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_0
+        %425 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_0
         %426 = OpLoad %v4float %425
-        %427 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_1
+        %427 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_1
         %428 = OpLoad %v4float %427
-        %429 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_2
+        %429 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_2
         %430 = OpLoad %v4float %429
-        %431 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_0
+        %431 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_0
         %432 = OpLoad %v4float %431
-        %433 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_1
+        %433 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_1
         %434 = OpLoad %v4float %433
-        %435 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_2
+        %435 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_2
         %436 = OpLoad %v4float %435
-        %437 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_0
+        %437 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_0
         %438 = OpLoad %v4float %437
-        %439 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_1
+        %439 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_1
         %440 = OpLoad %v4float %439
-        %441 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_2
+        %441 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_2
         %442 = OpLoad %v4float %441
         %443 = OpFAdd %v4float %428 %430
         %444 = OpFAdd %v4float %443 %434
@@ -990,15 +996,15 @@
         %452 = OpFSub %v4float %448 %451
         %453 = OpFMul %v4float %452 %137
         %454 = OpFAdd %v4float %448 %453
-        %455 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_1 %int_3
+        %455 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_1 %int_3
         %456 = OpLoad %float %455
-        %457 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_2 %int_3
+        %457 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_2 %int_3
         %458 = OpLoad %float %457
         %459 = OpFAdd %float %456 %458
         %460 = OpFMul %float %float_0_5 %459
         %461 = OpCompositeInsert %v4float %460 %140 0
         %462 = OpLoad %float %457
-        %463 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_0 %int_3
+        %463 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_0 %int_3
         %464 = OpLoad %float %463
         %465 = OpFAdd %float %462 %464
         %466 = OpFMul %float %float_0_5 %465

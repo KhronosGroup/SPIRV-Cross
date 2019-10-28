@@ -11724,42 +11724,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		break;
 	}
 
-	// Fix tessellation patch function processing
-	case OpLoad:
-	{
-		if (compiler.get_execution_model() == ExecutionModelTessellationControl)
-		{
-			uint32_t id = args[1];
-			uint32_t ptr = args[2];
-
-			uint32_t source_id = ptr;
-			auto *var = compiler.maybe_get_backing_variable(source_id);
-			if (var)
-				source_id = var->self;
-
-			// Only interested in standalone builtin variables.
-			if (compiler.has_decoration(source_id, DecorationBuiltIn))
-			{
-				auto builtin = static_cast<BuiltIn>(compiler.get_decoration(source_id, DecorationBuiltIn));
-				switch (builtin)
-				{
-				case BuiltInInvocationId:
-					invocation_ids[id] = ptr;
-					break;
-				default:
-					break;
-				}
-			}
-		}
-		break;
-	}
-
-	case OpControlBarrier:
-	{
-		passed_control_barrier = true;
-		break;
-	}
-
 	case OpInBoundsAccessChain:
 	case OpAccessChain:
 	case OpPtrAccessChain:
@@ -11768,54 +11732,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		uint32_t result_type = args[0];
 		uint32_t id = args[1];
 		uint32_t ptr = args[2];
-
-		// Fix tessellation patch function processing
-		if (compiler.get_execution_model() == ExecutionModelTessellationControl)
-		{
-			uint32_t source_id = args[3];
-			bool is_indexed_by_invocation =
-			    variables_indexed_by_invocation.find(ptr) != variables_indexed_by_invocation.end() ||
-			    invocation_ids.find(source_id) != invocation_ids.end();
-			if (!is_indexed_by_invocation)
-			{
-				auto *var = compiler.maybe_get_backing_variable(source_id);
-				if (var)
-					source_id = var->self;
-
-				// Only interested in standalone builtin variables.
-				if (compiler.has_decoration(source_id, DecorationBuiltIn))
-				{
-					auto builtin = static_cast<BuiltIn>(compiler.get_decoration(source_id, DecorationBuiltIn));
-					switch (builtin)
-					{
-					case BuiltInInvocationId:
-						is_indexed_by_invocation = true;
-						break;
-					default:
-						break;
-					}
-				}
-			}
-
-			if (is_indexed_by_invocation)
-			{
-				if (passed_control_barrier)
-				{
-					auto *var = compiler.maybe_get_backing_variable(ptr);
-					if (var)
-					{
-						auto *var_type = compiler.maybe_get<SPIRType>(var->basetype);
-						var_type->storage = StorageClassWorkgroup;
-						var->storage = StorageClassWorkgroup;
-						variables_indexed_by_invocation.erase(ptr);
-					}
-				}
-				else
-				{
-					variables_indexed_by_invocation.insert(ptr);
-				}
-			}
-		}
 
 		compiler.set<SPIRExpression>(id, "", result_type, true);
 		compiler.register_read(id, ptr, true);

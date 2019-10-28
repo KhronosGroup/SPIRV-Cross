@@ -884,9 +884,6 @@ protected:
 		CompilerMSL &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
 		std::unordered_map<uint32_t, uint32_t> image_pointers; // Emulate texture2D atomic operations
-		std::unordered_map<uint32_t, uint32_t> invocation_ids; // Fix tessellation patch function processing
-		std::unordered_set<uint32_t> variables_indexed_by_invocation; // Fix tessellation patch function processing
-		bool passed_control_barrier = false; // Fix tessellation patch function processing
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_resource_write = false;

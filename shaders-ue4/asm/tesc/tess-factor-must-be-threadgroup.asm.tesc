@@ -200,12 +200,15 @@
 %_ptr_Function__arr_FBasePassVSToDS_uint_3 = OpTypePointer Function %_arr_FBasePassVSToDS_uint_3
 %_arr_FFlatTessellationHSToDS_uint_3 = OpTypeArray %FFlatTessellationHSToDS %uint_3
 %_ptr_Function__arr_FFlatTessellationHSToDS_uint_3 = OpTypePointer Function %_arr_FFlatTessellationHSToDS_uint_3
+%_ptr_Workgroup__arr_FFlatTessellationHSToDS_uint_3 = OpTypePointer Workgroup %_arr_FFlatTessellationHSToDS_uint_3
 %_ptr_Output_v4float = OpTypePointer Output %v4float
 %_ptr_Output_v3float = OpTypePointer Output %v3float
 %_ptr_Output_float = OpTypePointer Output %float
 %_ptr_Function_FFlatTessellationHSToDS = OpTypePointer Function %FFlatTessellationHSToDS
+%_ptr_Workgroup_FFlatTessellationHSToDS = OpTypePointer Workgroup %FFlatTessellationHSToDS
        %bool = OpTypeBool
 %_ptr_Function_float = OpTypePointer Function %float
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
 %mat3v3float = OpTypeMatrix %v3float 3
 %_ptr_Function_FVertexFactoryInterpolantsVSToDS = OpTypePointer Function %FVertexFactoryInterpolantsVSToDS
 %_ptr_Function_FBasePassVSToDS = OpTypePointer Function %FBasePassVSToDS
@@ -228,10 +231,14 @@
          %83 = OpConstantNull %FSharedBasePassInterpolants
          %84 = OpConstantComposite %FBasePassInterpolantsVSToDS %83
          %85 = OpUndef %v4float
+
+; XXX: Original asm used Function here, which is wrong.
+; This patches the SPIR-V to be correct.
+%temp_var_hullMainRetVal = OpVariable %_ptr_Workgroup__arr_FFlatTessellationHSToDS_uint_3 Workgroup
+
    %MainHull = OpFunction %void None %67
          %86 = OpLabel
 %param_var_I = OpVariable %_ptr_Function__arr_FBasePassVSToDS_uint_3 Function
-%temp_var_hullMainRetVal = OpVariable %_ptr_Function__arr_FFlatTessellationHSToDS_uint_3 Function
          %87 = OpLoad %_arr_v4float_uint_3_0 %in_var_TEXCOORD10_centroid
          %88 = OpLoad %_arr_v4float_uint_3_0 %in_var_TEXCOORD11_centroid
          %89 = OpCompositeExtract %v4float %87 0
@@ -294,22 +301,22 @@
                OpStore %140 %129
         %141 = OpAccessChain %_ptr_Output_float %out_var_Flat_WorldDisplacementMultiplier %109
                OpStore %141 %float_1
-        %142 = OpAccessChain %_ptr_Function_FFlatTessellationHSToDS %temp_var_hullMainRetVal %109
+        %142 = OpAccessChain %_ptr_Workgroup_FFlatTessellationHSToDS %temp_var_hullMainRetVal %109
                OpStore %142 %130
                OpControlBarrier %uint_2 %uint_4 %uint_0
         %143 = OpIEqual %bool %109 %uint_0
                OpSelectionMerge %if_merge None
                OpBranchConditional %143 %144 %if_merge
         %144 = OpLabel
-        %145 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_1 %int_2
+        %145 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_1 %int_2
         %146 = OpLoad %float %145
-        %147 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_2 %int_2
+        %147 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_2 %int_2
         %148 = OpLoad %float %147
         %149 = OpFAdd %float %146 %148
         %150 = OpFMul %float %float_0_5 %149
         %151 = OpCompositeInsert %v4float %150 %85 0
         %152 = OpLoad %float %147
-        %153 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_0 %int_2
+        %153 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_0 %int_2
         %154 = OpLoad %float %153
         %155 = OpFAdd %float %152 %154
         %156 = OpFMul %float %float_0_5 %155

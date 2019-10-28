@@ -652,13 +652,17 @@
 %_ptr_Function__arr_FHitProxyVSToDS_uint_12 = OpTypePointer Function %_arr_FHitProxyVSToDS_uint_12
 %_arr_FPNTessellationHSToDS_uint_3 = OpTypeArray %FPNTessellationHSToDS %uint_3
 %_ptr_Function__arr_FPNTessellationHSToDS_uint_3 = OpTypePointer Function %_arr_FPNTessellationHSToDS_uint_3
+%_ptr_Workgroup__arr_FPNTessellationHSToDS_uint_3 = OpTypePointer Workgroup %_arr_FPNTessellationHSToDS_uint_3
 %_ptr_Output__arr_v2float_uint_2 = OpTypePointer Output %_arr_v2float_uint_2
 %_ptr_Output_v3float = OpTypePointer Output %v3float
 %_ptr_Output_float = OpTypePointer Output %float
 %_ptr_Function_FPNTessellationHSToDS = OpTypePointer Function %FPNTessellationHSToDS
+%_ptr_Workgroup_FPNTessellationHSToDS = OpTypePointer Workgroup %FPNTessellationHSToDS
        %bool = OpTypeBool
 %_ptr_Function_v4float = OpTypePointer Function %v4float
 %_ptr_Function_float = OpTypePointer Function %float
+%_ptr_Workgroup_v4float = OpTypePointer Workgroup %v4float
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
 %mat3v3float = OpTypeMatrix %v3float 3
 %_ptr_Function_FVertexFactoryInterpolantsVSToDS = OpTypePointer Function %FVertexFactoryInterpolantsVSToDS
 %_ptr_Function_FHitProxyVSToDS = OpTypePointer Function %FHitProxyVSToDS
@@ -693,10 +697,14 @@
 %float_0_166666672 = OpConstant %float 0.166666672
         %122 = OpConstantComposite %v4float %float_0_166666672 %float_0_166666672 %float_0_166666672 %float_0_166666672
         %123 = OpUndef %v4float
+
+; XXX: Original asm used Function here, which is wrong.
+; This patches the SPIR-V to be correct.
+%temp_var_hullMainRetVal = OpVariable %_ptr_Workgroup__arr_FPNTessellationHSToDS_uint_3 Workgroup
+
    %MainHull = OpFunction %void None %98
         %124 = OpLabel
 %param_var_I = OpVariable %_ptr_Function__arr_FHitProxyVSToDS_uint_12 Function
-%temp_var_hullMainRetVal = OpVariable %_ptr_Function__arr_FPNTessellationHSToDS_uint_3 Function
         %125 = OpLoad %_arr_v4float_uint_12 %in_var_TEXCOORD10_centroid
         %126 = OpLoad %_arr_v4float_uint_12 %in_var_TEXCOORD11_centroid
         %127 = OpLoad %_arr_v4float_uint_12 %in_var_COLOR0
@@ -929,7 +937,7 @@
                OpStore %345 %float_1
         %346 = OpAccessChain %_ptr_Output_float %out_var_PN_WorldDisplacementMultiplier %227
                OpStore %346 %float_1
-        %347 = OpAccessChain %_ptr_Function_FPNTessellationHSToDS %temp_var_hullMainRetVal %227
+        %347 = OpAccessChain %_ptr_Workgroup_FPNTessellationHSToDS %temp_var_hullMainRetVal %227
                OpStore %347 %330
                OpControlBarrier %uint_2 %uint_4 %uint_0
         %348 = OpIEqual %bool %227 %uint_0
@@ -944,23 +952,23 @@
         %355 = OpLoad %v3float %354
         %356 = OpAccessChain %_ptr_Uniform_float %View %int_78
         %357 = OpLoad %float %356
-        %358 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_0
+        %358 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_0
         %359 = OpLoad %v4float %358
-        %360 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_1
+        %360 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_1
         %361 = OpLoad %v4float %360
-        %362 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_2
+        %362 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_0 %int_1 %int_2
         %363 = OpLoad %v4float %362
-        %364 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_0
+        %364 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_0
         %365 = OpLoad %v4float %364
-        %366 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_1
+        %366 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_1
         %367 = OpLoad %v4float %366
-        %368 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_2
+        %368 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_1 %int_1 %int_2
         %369 = OpLoad %v4float %368
-        %370 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_0
+        %370 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_0
         %371 = OpLoad %v4float %370
-        %372 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_1
+        %372 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_1
         %373 = OpLoad %v4float %372
-        %374 = OpAccessChain %_ptr_Function_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_2
+        %374 = OpAccessChain %_ptr_Workgroup_v4float %temp_var_hullMainRetVal %uint_2 %int_1 %int_2
         %375 = OpLoad %v4float %374
         %376 = OpFAdd %v4float %361 %363
         %377 = OpFAdd %v4float %376 %367
@@ -974,15 +982,15 @@
         %385 = OpFSub %v4float %381 %384
         %386 = OpFMul %v4float %385 %120
         %387 = OpFAdd %v4float %381 %386
-        %388 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_1 %int_3
+        %388 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_1 %int_3
         %389 = OpLoad %float %388
-        %390 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_2 %int_3
+        %390 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_2 %int_3
         %391 = OpLoad %float %390
         %392 = OpFAdd %float %389 %391
         %393 = OpFMul %float %float_0_5 %392
         %394 = OpCompositeInsert %v4float %393 %123 0
         %395 = OpLoad %float %390
-        %396 = OpAccessChain %_ptr_Function_float %temp_var_hullMainRetVal %uint_0 %int_3
+        %396 = OpAccessChain %_ptr_Workgroup_float %temp_var_hullMainRetVal %uint_0 %int_3
         %397 = OpLoad %float %396
         %398 = OpFAdd %float %395 %397
         %399 = OpFMul %float %float_0_5 %398
