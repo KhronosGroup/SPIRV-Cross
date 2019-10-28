@@ -7966,29 +7966,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 	if (is_dynamic_img_sampler && !arg_is_dynamic_img_sampler)
 		arg_str = join("spvDynamicImageSampler<", type_to_glsl(get<SPIRType>(type.image.type)), ">(");
 
-	auto *c = maybe_get<SPIRConstant>(id);
-	if (c && !get<SPIRType>(c->constant_type).array.empty())
-	{
-		// If we are passing a constant array directly to a function for some reason,
-		// the callee will expect an argument in thread const address space
-		// (since we can only bind to arrays with references in MSL).
-		// To resolve this, we must emit a copy in this address space.
-		// This kind of code gen should be rare enough that performance is not a real concern.
-		// Inline the SPIR-V to avoid this kind of suboptimal codegen.
-		//
-		// We risk calling this inside a continue block (invalid code),
-		// so just create a thread local copy in the current function.
-		arg_str = join("_", id, "_array_copy");
-		auto &constants = current_function->constant_arrays_needed_on_stack;
-		auto itr = find(begin(constants), end(constants), ID(id));
-		if (itr == end(constants))
-		{
-			force_recompile();
-			constants.push_back(id);
-		}
-	}
-	else
-		arg_str += CompilerGLSL::to_func_call_arg(arg, id);
+	arg_str += CompilerGLSL::to_func_call_arg(arg, id);
 
 	// Need to check the base variable in case we need to apply a qualified alias.
 	uint32_t var_id = 0;
