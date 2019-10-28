@@ -10474,14 +10474,14 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		switch (img_type.dim)
 		{
 		case Dim1D:
-			if (!msl_options.texture_1D_as_2D)
+		case Dim2D:
+			if (img_type.dim == Dim1D && !msl_options.texture_1D_as_2D)
 			{
 				// Use a native Metal 1D texture
 				img_type_name += "depth1d_unsupported_by_metal";
 				break;
 			}
-			// else fall through and use 2D
-		case Dim2D:
+
 			if (img_type.ms && img_type.arrayed)
 			{
 				if (!msl_options.supports_msl_version(2, 1))
@@ -10527,15 +10527,15 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 				img_type_name += "texture2d";
 			break;
 		case Dim1D:
-			if (!msl_options.texture_1D_as_2D)
+		case Dim2D:
+		case DimSubpassData:
+			if (img_type.dim == Dim1D && !msl_options.texture_1D_as_2D)
 			{
 				// Use a native Metal 1D texture
 				img_type_name += (img_type.arrayed ? "texture1d_array" : "texture1d");
 				break;
 			}
-			// else fall through and use 2D
-		case Dim2D:
-		case DimSubpassData:
+
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
 			if (img_type.dim == DimSubpassData && msl_options.is_ios() &&
 			    msl_options.ios_use_framebuffer_fetch_subpasses)
