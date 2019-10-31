@@ -6888,6 +6888,17 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
+
+			// Extract into swizzle if vecsize is smaller than the vecsize of physical type
+			if (physical_type != 0)
+			{
+				const auto &m_physical_type = &get<SPIRType>(physical_type);
+				if (m_physical_type != nullptr && type->vecsize < m_physical_type->vecsize && index_is_literal &&
+				    !is_packed && !row_major_matrix_needs_conversion)
+				{
+					expr += vector_swizzle(type->vecsize, 0);
+				}
+			}
 		}
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
