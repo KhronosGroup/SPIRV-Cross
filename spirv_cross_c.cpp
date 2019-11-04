@@ -569,6 +569,30 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_DYNAMIC_OFFSETS_BUFFER_INDEX:
 		options->msl.dynamic_offsets_buffer_index = value;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_TEXTURE_1D_AS_2D:
+		options->msl.texture_1D_as_2D = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_ENABLE_BASE_INDEX_ZERO:
+		options->msl.enable_base_index_zero = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_IOS_FRAMEBUFFER_FETCH_SUBPASS:
+		options->msl.ios_use_framebuffer_fetch_subpasses = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_INVARIANT_FP_MATH:
+		options->msl.invariant_float_math = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_EMULATE_CUBEMAP_ARRAY:
+		options->msl.emulate_cube_array = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_ENABLE_DECORATION_BINDING:
+		options->msl.enable_decoration_binding = value != 0;
+		break;
 #endif
 
 	default:
