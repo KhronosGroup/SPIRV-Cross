@@ -719,6 +719,12 @@ SPVC_PUBLIC_API SpvExecutionModel spvc_compiler_get_execution_model(spvc_compile
  */
 SPVC_PUBLIC_API spvc_type spvc_compiler_get_type_handle(spvc_compiler compiler, spvc_type_id id);
 
+/* Pulls out SPIRType::self. This effectively gives the type ID without array or pointer qualifiers.
+ * This is necessary when reflecting decoration/name information on members of a struct,
+ * which are placed in the base type, not the qualified type.
+ * This is similar to spvc_reflected_resource::base_type_id. */
+SPVC_PUBLIC_API spvc_type_id spvc_type_get_base_type_id(spvc_type type);
+
 SPVC_PUBLIC_API spvc_basetype spvc_type_get_basetype(spvc_type type);
 SPVC_PUBLIC_API unsigned spvc_type_get_bit_width(spvc_type type);
 SPVC_PUBLIC_API unsigned spvc_type_get_vector_size(spvc_type type);

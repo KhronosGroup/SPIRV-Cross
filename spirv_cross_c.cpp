@@ -1663,6 +1663,11 @@ spvc_type spvc_compiler_get_type_handle(spvc_compiler compiler, spvc_type_id id)
 	SPVC_END_SAFE_SCOPE(compiler->context, nullptr)
 }
 
+spvc_type_id spvc_type_get_base_type_id(spvc_type type)
+{
+	return type->self;
+}
+
 static spvc_basetype convert_basetype(SPIRType::BaseType type)
 {
 	// For now the enums match up.
