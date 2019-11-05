@@ -21,5 +21,13 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[quadgrou
     simdgroup_barrier(mem_flags::mem_device);
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_barrier(mem_flags::mem_texture);
+    uint shuffled = quad_shuffle(10u, 8u);
+    uint shuffled_xor = quad_shuffle_xor(30u, 8u);
+    uint shuffled_up = quad_shuffle_up(20u, 4u);
+    uint shuffled_down = quad_shuffle_down(20u, 4u);
+    float4 swap_horiz = quad_shuffle_xor(float4(20.0), 1u);
+    float4 swap_vertical = quad_shuffle_xor(float4(20.0), 2u);
+    float4 swap_diagonal = quad_shuffle_xor(float4(20.0), 3u);
+    float4 quad_broadcast0 = quad_broadcast(float4(20.0), 3u);
 }
 

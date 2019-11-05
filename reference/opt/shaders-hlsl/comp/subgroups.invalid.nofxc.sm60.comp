@@ -11,18 +11,44 @@ void comp_main()
 {
     _9.Store(0, asuint(float(WaveGetLaneCount())));
     _9.Store(0, asuint(float(WaveGetLaneIndex())));
+    bool elected = WaveIsFirstLane();
     _9.Store(0, asuint(float4(gl_SubgroupEqMask).x));
     _9.Store(0, asuint(float4(gl_SubgroupGeMask).x));
     _9.Store(0, asuint(float4(gl_SubgroupGtMask).x));
     _9.Store(0, asuint(float4(gl_SubgroupLeMask).x));
     _9.Store(0, asuint(float4(gl_SubgroupLtMask).x));
-    uint4 _75 = WaveActiveBallot(true);
-    float4 _88 = WaveActiveSum(20.0f.xxxx);
-    int4 _94 = WaveActiveSum(int4(20, 20, 20, 20));
-    float4 _96 = WaveActiveProduct(20.0f.xxxx);
-    int4 _98 = WaveActiveProduct(int4(20, 20, 20, 20));
-    float4 _127 = WavePrefixProduct(_96) * _96;
-    int4 _129 = WavePrefixProduct(_98) * _98;
+    float4 broadcasted = WaveReadLaneAt(10.0f.xxxx, 8u);
+    float3 first = WaveReadLaneFirst(20.0f.xxx);
+    uint4 ballot_value = WaveActiveBallot(true);
+    uint bit_count = countbits(ballot_value.x) + countbits(ballot_value.y) + countbits(ballot_value.z) + countbits(ballot_value.w);
+    bool has_all = WaveActiveAllTrue(true);
+    bool has_any = WaveActiveAnyTrue(true);
+    bool has_equal = WaveActiveAllEqualBool(true);
+    float4 added = WaveActiveSum(20.0f.xxxx);
+    int4 iadded = WaveActiveSum(int4(20, 20, 20, 20));
+    float4 multiplied = WaveActiveProduct(20.0f.xxxx);
+    int4 imultiplied = WaveActiveProduct(int4(20, 20, 20, 20));
+    float4 lo = WaveActiveMin(20.0f.xxxx);
+    float4 hi = WaveActiveMax(20.0f.xxxx);
+    int4 slo = WaveActiveMin(int4(20, 20, 20, 20));
+    int4 shi = WaveActiveMax(int4(20, 20, 20, 20));
+    uint4 ulo = WaveActiveMin(uint4(20u, 20u, 20u, 20u));
+    uint4 uhi = WaveActiveMax(uint4(20u, 20u, 20u, 20u));
+    uint4 anded = WaveActiveBitAnd(ballot_value);
+    uint4 ored = WaveActiveBitOr(ballot_value);
+    uint4 xored = WaveActiveBitXor(ballot_value);
+    added = WavePrefixSum(added) + added;
+    iadded = WavePrefixSum(iadded) + iadded;
+    multiplied = WavePrefixProduct(multiplied) * multiplied;
+    imultiplied = WavePrefixProduct(imultiplied) * imultiplied;
+    added = WavePrefixSum(multiplied);
+    multiplied = WavePrefixProduct(multiplied);
+    iadded = WavePrefixSum(imultiplied);
+    imultiplied = WavePrefixProduct(imultiplied);
+    float4 swap_horiz = QuadReadAcrossX(20.0f.xxxx);
+    float4 swap_vertical = QuadReadAcrossY(20.0f.xxxx);
+    float4 swap_diagonal = QuadReadAcrossDiagonal(20.0f.xxxx);
+    float4 quad_broadcast = QuadReadLaneAt(20.0f.xxxx, 3u);
 }
 
 [numthreads(1, 1, 1)]
