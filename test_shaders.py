@@ -161,7 +161,6 @@ def validate_shader_msl(shader, opt):
         raise RuntimeError('Failed to compile Metal shader')
 
 def cross_compile_msl(shader, spirv, opt, iterations, paths):
-    print("Compile mMSL")
     spirv_path = create_temporary()
     msl_path = create_temporary(os.path.basename(shader))
 
