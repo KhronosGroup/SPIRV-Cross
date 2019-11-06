@@ -1887,11 +1887,13 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 			if (buffer_name.empty())
 				buffer_name = join("_", get<SPIRType>(var.basetype).self, "_", var.self);
 
-			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset))
+			uint32_t failed_index = 0;
+			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset, &failed_index))
 				set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 			else
 			{
-				SPIRV_CROSS_THROW(join("cbuffer ID ", var.self, " (name: ", buffer_name,
+				SPIRV_CROSS_THROW(join("cbuffer ID ", var.self, " (name: ", buffer_name, "), member index ",
+				                       failed_index, " (name: ", to_member_name(type, failed_index),
 				                       ") cannot be expressed with either HLSL packing layout or packoffset."));
 			}
 
@@ -1934,9 +1936,11 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 			add_resource_name(var.self);
 
 			// ConstantBuffer<T> does not support packoffset, so it is unuseable unless everything aligns as we expect.
-			if (!buffer_is_packing_standard(type, BufferPackingHLSLCbuffer))
+			uint32_t failed_index = 0;
+			if (!buffer_is_packing_standard(type, BufferPackingHLSLCbuffer, &failed_index))
 			{
 				SPIRV_CROSS_THROW(join("HLSL ConstantBuffer<T> ID ", var.self, " (name: ", to_name(type.self),
+				                       "), member index ", failed_index, " (name: ", to_member_name(type, failed_index),
 				                       ") cannot be expressed with normal HLSL packing rules."));
 			}
 
@@ -1959,11 +1963,16 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 		{
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset, layout.start, layout.end))
+			uint32_t failed_index = 0;
+			if (buffer_is_packing_standard(type, BufferPackingHLSLCbufferPackOffset, &failed_index, layout.start,
+			                               layout.end))
 				set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 			else
-				SPIRV_CROSS_THROW(
-				    "root constant cbuffer cannot be expressed with either HLSL packing layout or packoffset.");
+			{
+				SPIRV_CROSS_THROW(join("Root constant cbuffer ID ", var.self, " (name: ", to_name(type.self), ")",
+				                       ", member index ", failed_index, " (name: ", to_member_name(type, failed_index),
+				                       ") cannot be expressed with either HLSL packing layout or packoffset."));
+			}
 
 			flattened_structs.insert(var.self);
 			type.member_name_cache.clear();
