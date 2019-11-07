@@ -3193,10 +3193,17 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 		".xyz",
 	};
 
-	// std140 array cases for vectors.
 	if (physical_type && is_vector(*physical_type) && is_array(*physical_type) &&
 	    physical_type->vecsize > type.vecsize && !expression_ends_with(expr_str, swizzle_lut[type.vecsize - 1]))
 	{
+		// std140 array cases for vectors.
+		assert(type.vecsize >= 1 && type.vecsize <= 3);
+		return enclose_expression(expr_str) + swizzle_lut[type.vecsize - 1];
+	}
+	else if (physical_type && is_matrix(*physical_type) && is_vector(type) &&
+	         physical_type->vecsize > type.vecsize)
+	{
+		// Extract column from padded matrix.
 		assert(type.vecsize >= 1 && type.vecsize <= 3);
 		return enclose_expression(expr_str) + swizzle_lut[type.vecsize - 1];
 	}
