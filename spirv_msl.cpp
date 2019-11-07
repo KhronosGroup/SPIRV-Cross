@@ -3246,12 +3246,7 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 	}
 	else
 	{
-		// Don't expose "spvUnsafeArray" when unpacking expressions,
-		// the input "type" will be the unpacked type and might also appear in l-value expressions
-		use_builtin_array = true;
-		string unpack_expr = join(type_to_glsl(type), "(", expr_str, ")");
-		use_builtin_array = false;
-		return unpack_expr;
+		return join(type_to_glsl(type), "(", expr_str, ")");
 	}
 }
 
