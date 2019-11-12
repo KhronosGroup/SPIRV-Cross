@@ -783,6 +783,7 @@ spvc_result spvc_compiler_hlsl_set_resource_binding_flags(spvc_compiler compiler
 	hlsl.set_resource_binding_flags(flags);
 	return SPVC_SUCCESS;
 #else
+	(void)flags;
 	compiler->context->report_error("HLSL function used on a non-HLSL backend.");
 	return SPVC_ERROR_INVALID_ARGUMENT;
 #endif
