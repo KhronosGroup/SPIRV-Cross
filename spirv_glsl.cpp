@@ -9104,9 +9104,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto &arg_type = expression_type(ops[2]);
 		auto func = type_to_glsl_constructor(type);
 
-		// If we're sign-extending or zero-extending, we need to make sure we cast from the correct type.
-		// For truncation, it does not matter, so don't emit useless casts.
-		if (arg_type.width < type.width)
+		if (arg_type.width < type.width || type_is_floating_point(type))
 			emit_unary_func_op_cast(result_type, id, ops[2], func.c_str(), input_type, type.basetype);
 		else
 			emit_unary_func_op(result_type, id, ops[2], func.c_str());
