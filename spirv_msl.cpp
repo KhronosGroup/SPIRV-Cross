@@ -1613,7 +1613,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 
 	bool flatten_from_ib_var = false;
 
-	if (storage == StorageClassOutput && builtin == BuiltInClipDistance)
+	if (storage == StorageClassOutput && is_builtin && builtin == BuiltInClipDistance)
 	{
 		// Also declare [[clip_distance]] attribute here.
 		uint32_t clip_array_mbr_idx = uint32_t(ib_type.member_types.size());
@@ -1776,7 +1776,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 	auto &var_type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
 
-	BuiltIn builtin;
+	BuiltIn builtin = BuiltInMax;
 	bool is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 	bool is_flat =
 	    has_member_decoration(var_type.self, mbr_idx, DecorationFlat) || has_decoration(var.self, DecorationFlat);
@@ -1814,7 +1814,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 
 	bool flatten_from_ib_var = false;
 
-	if (storage == StorageClassOutput && builtin == BuiltInClipDistance)
+	if (storage == StorageClassOutput && is_builtin && builtin == BuiltInClipDistance)
 	{
 		// Also declare [[clip_distance]] attribute here.
 		uint32_t clip_array_mbr_idx = uint32_t(ib_type.member_types.size());
