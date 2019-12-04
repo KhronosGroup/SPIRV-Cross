@@ -9931,7 +9931,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		else
 		{
 			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
-			                              MemorySemanticsImageMemoryMask | MemorySemanticsAtomicCounterMemoryMask;
+			                              MemorySemanticsImageMemoryMask;
 
 			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
 			{
@@ -9953,8 +9953,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					statement("memoryBarrierBuffer();");
 				if (semantics & MemorySemanticsImageMemoryMask)
 					statement("memoryBarrierImage();");
-				if (semantics & MemorySemanticsAtomicCounterMemoryMask)
-					statement("memoryBarrierAtomicCounter();");
 			}
 		}
 
