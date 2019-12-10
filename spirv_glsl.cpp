@@ -2104,8 +2104,31 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		else
 		{
 			add_resource_name(var.self);
+
+			// Tessellation control and evaluation shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
+			// Opt for unsized as it's the more "correct" variant to use.
+			bool control_point_input_array = type.storage == StorageClassInput &&
+			                                 !type.array.empty() && !has_decoration(var.self, DecorationPatch) &&
+			                                 (get_entry_point().model == ExecutionModelTessellationControl ||
+			                                  get_entry_point().model == ExecutionModelTessellationEvaluation);
+
+			uint32_t old_array_size = 0;
+			bool old_array_size_literal = true;
+
+			if (control_point_input_array)
+			{
+				swap(type.array.back(), old_array_size);
+				swap(type.array_size_literal.back(), old_array_size_literal);
+			}
+
 			statement(layout_for_variable(var), to_qualifiers_glsl(var.self),
 			          variable_decl(type, to_name(var.self), var.self), ";");
+
+			if (control_point_input_array)
+			{
+				swap(type.array.back(), old_array_size);
+				swap(type.array_size_literal.back(), old_array_size_literal);
+			}
 
 			// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
 			if (var.storage == StorageClassOutput && var.initializer)
@@ -2478,7 +2501,6 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	if (emitted_builtins.get(BuiltInCullDistance))
 		statement("float gl_CullDistance[", cull_distance_size, "];");
 
-	bool tessellation = model == ExecutionModelTessellationEvaluation || model == ExecutionModelTessellationControl;
 	if (builtin_array)
 	{
 		// Make sure the array has a supported name in the code.
@@ -2490,7 +2512,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
 			end_scope_decl(join(to_name(block_var->self), "[", get_entry_point().output_vertices, "]"));
 		else
-			end_scope_decl(join(to_name(block_var->self), tessellation ? "[gl_MaxPatchVertices]" : "[]"));
+			end_scope_decl(join(to_name(block_var->self), "[]"));
 	}
 	else
 		end_scope_decl();
@@ -10794,14 +10816,6 @@ string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 {
 	assert(type.array.size() == type.array_size_literal.size());
 
-	// Tessellation control and evaluation shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
-	// Opt for unsized as it's the more "correct" variant to use.
-	if (type.storage == StorageClassInput &&
-	    (get_entry_point().model == ExecutionModelTessellationControl ||
-	     get_entry_point().model == ExecutionModelTessellationEvaluation) &&
-	    index == uint32_t(type.array.size() - 1))
-		return "";
-
 	auto &size = type.array[index];
 	if (!type.array_size_literal[index])
 		return to_expression(size);
@@ -12795,13 +12809,14 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 	auto builtin = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
 	bool is_builtin = is_builtin_variable(*var) && (builtin == BuiltInPointSize || builtin == BuiltInPosition);
 	bool is_tess = is_tessellation_shader();
+	bool is_patch = has_decoration(var->self, DecorationPatch);
 
 	// Tessellation input arrays are special in that they are unsized, so we cannot directly copy from it.
 	// We must unroll the array load.
 	// For builtins, we couldn't catch this case normally,
 	// because this is resolved in the OpAccessChain in most cases.
 	// If we load the entire array, we have no choice but to unroll here.
-	if (is_builtin || is_tess)
+	if (!is_patch && (is_builtin || is_tess))
 	{
 		auto new_expr = join("_", target_id, "_unrolled");
 		statement(variable_decl(type, new_expr, target_id), ";");
