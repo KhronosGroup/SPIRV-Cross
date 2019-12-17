@@ -68,6 +68,12 @@ void CompilerMSL::add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32
 	buffers_requiring_dynamic_offset[pair] = { index, 0 };
 }
 
+void CompilerMSL::add_inline_uniform_block(uint32_t desc_set, uint32_t binding)
+{
+	SetBindingPair pair = { desc_set, binding };
+	inline_uniform_blocks.insert(pair);
+}
+
 void CompilerMSL::add_discrete_descriptor_set(uint32_t desc_set)
 {
 	if (desc_set < kMaxArgumentBuffers)
@@ -9850,6 +9856,31 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	});
 }
 
+// Returns the number of IDs that Metal would assign to an inline uniform block in an argument buffer.
+uint32_t CompilerMSL::get_inline_uniform_block_binding_stride(SPIRType &type)
+{
+	// We need this information now.
+	mark_scalar_layout_structs(type);
+	unordered_set<uint32_t> aligned_structs;
+	align_struct(type, aligned_structs);
+	uint32_t binding_stride = 0;
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+	{
+		uint32_t member_type_id = type.member_types[i];
+		uint32_t member_binding_stride = 1;
+		auto &member_type = get<SPIRType>(member_type_id);
+		if (member_type.basetype == SPIRType::Struct)
+			member_binding_stride = get_inline_uniform_block_binding_stride(member_type);
+		else if (member_is_packed_physical_type(type, i) && is_matrix(member_type))
+			// Packed matrices are represented as arrays, so they get multiple IDs.
+			member_binding_stride = member_type.columns;
+		for (uint32_t j = 0; j < uint32_t(member_type.array.size()); j++)
+			member_binding_stride *= to_array_size_literal(member_type, j);
+		binding_stride += member_binding_stride;
+	}
+	return binding_stride;
+}
+
 // Returns the Metal index of the resource of the specified type as used by the specified variable.
 uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype, uint32_t plane)
 {
@@ -9912,7 +9943,14 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	// If we did not explicitly remap, allocate bindings on demand.
 	// We cannot reliably use Binding decorations since SPIR-V and MSL's binding models are very different.
 
+	bool allocate_argument_buffer_ids = false;
+
+	if (var.storage != StorageClassPushConstant)
+		allocate_argument_buffer_ids = descriptor_set_is_argument_buffer(var_desc_set);
+
 	uint32_t binding_stride = 1;
+	if (inline_uniform_blocks.count(SetBindingPair{ var_desc_set, var_binding }))
+		binding_stride = get_inline_uniform_block_binding_stride(get_variable_data_type(var));
 	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
 		binding_stride *= to_array_size_literal(type, i);
@@ -9922,20 +9960,11 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	// If a binding has not been specified, revert to incrementing resource indices.
 	uint32_t resource_index;
 
-	bool allocate_argument_buffer_ids = false;
-	uint32_t desc_set = 0;
-
-	if (var.storage != StorageClassPushConstant)
-	{
-		desc_set = get_decoration(var.self, DecorationDescriptorSet);
-		allocate_argument_buffer_ids = descriptor_set_is_argument_buffer(desc_set);
-	}
-
 	if (allocate_argument_buffer_ids)
 	{
 		// Allocate from a flat ID binding space.
-		resource_index = next_metal_resource_ids[desc_set];
-		next_metal_resource_ids[desc_set] += binding_stride;
+		resource_index = next_metal_resource_ids[var_desc_set];
+		next_metal_resource_ids[var_desc_set] += binding_stride;
 	}
 	else
 	{
@@ -12675,6 +12704,12 @@ void CompilerMSL::analyze_argument_buffers()
 					// Don't set the qualified name here; we'll define a variable holding the corrected buffer address later.
 					buffer_type.member_types.push_back(var.basetype);
 					buffers_requiring_dynamic_offset[pair].second = var.self;
+				}
+				else if (inline_uniform_blocks.count(pair))
+				{
+					// Put the buffer block itself into the argument buffer.
+					buffer_type.member_types.push_back(get_variable_data_type_id(var));
+					set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
 				}
 				else
 				{

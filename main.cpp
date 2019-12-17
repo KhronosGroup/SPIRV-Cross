@@ -529,6 +529,7 @@ struct CLIArguments
 	SmallVector<uint32_t> msl_discrete_descriptor_sets;
 	SmallVector<uint32_t> msl_device_argument_buffers;
 	SmallVector<pair<uint32_t, uint32_t>> msl_dynamic_buffers;
+	SmallVector<pair<uint32_t, uint32_t>> msl_inline_uniform_blocks;
 	SmallVector<PLSArg> pls_in;
 	SmallVector<PLSArg> pls_out;
 	SmallVector<Remap> remaps;
@@ -612,6 +613,7 @@ static void print_help()
 	                "\t[--msl-view-index-from-device-index]\n"
 	                "\t[--msl-dispatch-base]\n"
 	                "\t[--msl-dynamic-buffer <set index> <binding>]\n"
+	                "\t[--msl-inline-uniform-block <set index> <binding>]\n"
 	                "\t[--msl-decoration-binding]\n"
 	                "\t[--msl-force-active-argument-buffer-resources]\n"
 	                "\t[--hlsl]\n"
@@ -812,6 +814,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		uint32_t i = 0;
 		for (auto &v : args.msl_dynamic_buffers)
 			msl_comp->add_dynamic_buffer(v.first, v.second, i++);
+		for (auto &v : args.msl_inline_uniform_blocks)
+			msl_comp->add_inline_uniform_block(v.first, v.second);
 	}
 	else if (args.hlsl)
 		compiler.reset(new CompilerHLSL(move(spirv_parser.get_parsed_ir())));
@@ -1153,6 +1157,13 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-decoration-binding", [&args](CLIParser &) { args.msl_decoration_binding = true; });
 	cbs.add("--msl-force-active-argument-buffer-resources",
 	        [&args](CLIParser &) { args.msl_force_active_argument_buffer_resources = true; });
+	cbs.add("--msl-inline-uniform-block", [&args](CLIParser &parser) {
+		args.msl_argument_buffers = true;
+		// Make sure next_uint() is called in-order.
+		uint32_t desc_set = parser.next_uint();
+		uint32_t binding = parser.next_uint();
+		args.msl_inline_uniform_blocks.push_back(make_pair(desc_set, binding));
+	});
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
