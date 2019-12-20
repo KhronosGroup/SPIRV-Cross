@@ -1003,6 +1003,31 @@ string CompilerMSL::compile()
 	fixup_image_load_store_access();
 
 	set_enabled_interface_variables(get_active_interface_variables());
+	
+	if (msl_options.argument_buffers)
+ 	{
+ 		// If we're using argument buffers, we need to emit all bindings that 
+		// could be contained within an argument buffer.
+ 		const ShaderResources resources = get_shader_resources();
+ 		for (auto &resource : resources.uniform_buffers)
+ 			active_interface_variables.insert(resource.id);
+
+  		for (auto &resource : resources.storage_buffers)
+ 			active_interface_variables.insert(resource.id);
+
+  		for (auto &resource : resources.storage_images)
+ 			active_interface_variables.insert(resource.id);
+
+  		for (auto &resource : resources.sampled_images)
+ 			active_interface_variables.insert(resource.id);
+
+  		for (auto &resource : resources.separate_images)
+ 			active_interface_variables.insert(resource.id);
+
+  		for (auto &resource : resources.separate_samplers)
+ 			active_interface_variables.insert(resource.id);
+ 	}
+	
 	if (swizzle_buffer_id)
 		active_interface_variables.insert(swizzle_buffer_id);
 	if (buffer_size_buffer_id)
