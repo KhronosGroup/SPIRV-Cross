@@ -8564,10 +8564,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t rhs = ops[2];
 
 		emit_uninitialized_temporary_expression(result_type, id);
-
-		auto &input_type = expression_type(rhs);
-		auto &output_type = get<SPIRType>(result_type);
-		emit_copy_logical_type(to_expression(id), output_type, to_unpacked_expression(rhs), input_type);
+		emit_copy_logical_type(id, result_type, rhs, expression_type_id(rhs), {});
 		break;
 	}
 
@@ -13115,38 +13112,79 @@ void CompilerGLSL::propagate_nonuniform_qualifier(uint32_t id)
 	}
 }
 
-void CompilerGLSL::emit_copy_logical_type(const std::string &lhs, const SPIRType &lhs_type,
-                                          const std::string &rhs, const SPIRType &rhs_type)
+void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
+                                          uint32_t rhs_id, uint32_t rhs_type_id,
+                                          SmallVector<uint32_t> chain)
 {
+	// Fully unroll all member/array indices one by one.
+
+	auto &lhs_type = get<SPIRType>(lhs_type_id);
+	auto &rhs_type = get<SPIRType>(rhs_type_id);
+
 	if (!lhs_type.array.empty())
 	{
 		// Could use a loop here to support specialization constants, but it gets rather complicated with nested array types,
 		// and this is a rather obscure opcode anyways, keep it simple unless we are forced to.
 		uint32_t array_size = to_array_size_literal(lhs_type);
-		auto &lhs_parent_type = get<SPIRType>(lhs_type.parent_type);
-		auto &rhs_parent_type = get<SPIRType>(rhs_type.parent_type);
+		chain.push_back(0);
 
 		for (uint32_t i = 0; i < array_size; i++)
 		{
-			emit_copy_logical_type(join(lhs, "[", i, "]"),
-			                       lhs_parent_type,
-			                       join(rhs, "[", i, "]"),
-			                       rhs_parent_type);
+			chain.back() = i;
+			emit_copy_logical_type(lhs_id, lhs_type.parent_type, rhs_id, rhs_type.parent_type, chain);
 		}
 	}
 	else if (lhs_type.basetype == SPIRType::Struct)
 	{
+		chain.push_back(0);
 		uint32_t member_count = uint32_t(lhs_type.member_types.size());
 		for (uint32_t i = 0; i < member_count; i++)
 		{
-			emit_copy_logical_type(join(lhs, ".", to_member_name(lhs_type, i)),
-			                       get<SPIRType>(lhs_type.member_types[i]),
-			                       join(rhs, ".", to_member_name(rhs_type, i)),
-			                       get<SPIRType>(rhs_type.member_types[i]));
+			chain.back() = i;
+			emit_copy_logical_type(lhs_id, lhs_type.member_types[i], rhs_id, rhs_type.member_types[i], chain);
 		}
 	}
 	else
 	{
-		statement(lhs, " = ", rhs, ";");
+		// Need to handle unpack/packing fixups since this can differ wildly between the logical types,
+		// particularly in MSL.
+		// To deal with this, we emit access chains and go through emit_store_statement
+		// to deal with all the special cases we can encounter.
+
+		AccessChainMeta lhs_meta, rhs_meta;
+		auto lhs = access_chain_internal(lhs_id, chain.data(), chain.size(), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta);
+		auto rhs = access_chain_internal(rhs_id, chain.data(), chain.size(), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta);
+
+		uint32_t id = ir.increase_bound_by(2);
+		lhs_id = id;
+		rhs_id = id + 1;
+
+		{
+			auto &lhs_expr = set<SPIRExpression>(lhs_id, move(lhs), lhs_type_id, true);
+			lhs_expr.need_transpose = lhs_meta.need_transpose;
+
+			if (lhs_meta.storage_is_packed)
+				set_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypePacked);
+			if (lhs_meta.storage_physical_type != 0)
+				set_extended_decoration(lhs_id, SPIRVCrossDecorationPhysicalTypeID, lhs_meta.storage_physical_type);
+
+			forwarded_temporaries.insert(lhs_id);
+			suppressed_usage_tracking.insert(lhs_id);
+		}
+
+		{
+			auto &rhs_expr = set<SPIRExpression>(rhs_id, move(rhs), rhs_type_id, true);
+			rhs_expr.need_transpose = rhs_meta.need_transpose;
+
+			if (rhs_meta.storage_is_packed)
+				set_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypePacked);
+			if (rhs_meta.storage_physical_type != 0)
+				set_extended_decoration(rhs_id, SPIRVCrossDecorationPhysicalTypeID, rhs_meta.storage_physical_type);
+
+			forwarded_temporaries.insert(rhs_id);
+			suppressed_usage_tracking.insert(rhs_id);
+		}
+
+		emit_store_statement(lhs_id, rhs_id);
 	}
 }
