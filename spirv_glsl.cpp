@@ -8555,6 +8555,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCopyLogical:
+	{
+		// This is used for copying object of different types, arrays and structs.
+		// We need to unroll the copy, element-by-element.
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t rhs = ops[2];
+
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		auto &input_type = expression_type(rhs);
+		auto &output_type = get<SPIRType>(result_type);
+		emit_copy_logical_type(to_expression(id), output_type, to_unpacked_expression(rhs), input_type);
+		break;
+	}
+
 	case OpCopyObject:
 	{
 		uint32_t result_type = ops[0];
@@ -13096,5 +13112,41 @@ void CompilerGLSL::propagate_nonuniform_qualifier(uint32_t id)
 	{
 		for (auto &expr : chain->implied_read_expressions)
 			propagate_nonuniform_qualifier(expr);
+	}
+}
+
+void CompilerGLSL::emit_copy_logical_type(const std::string &lhs, const SPIRType &lhs_type,
+                                          const std::string &rhs, const SPIRType &rhs_type)
+{
+	if (!lhs_type.array.empty())
+	{
+		// Could use a loop here to support specialization constants, but it gets rather complicated with nested array types,
+		// and this is a rather obscure opcode anyways, keep it simple unless we are forced to.
+		uint32_t array_size = to_array_size_literal(lhs_type);
+		auto &lhs_parent_type = get<SPIRType>(lhs_type.parent_type);
+		auto &rhs_parent_type = get<SPIRType>(rhs_type.parent_type);
+
+		for (uint32_t i = 0; i < array_size; i++)
+		{
+			emit_copy_logical_type(join(lhs, "[", i, "]"),
+			                       lhs_parent_type,
+			                       join(rhs, "[", i, "]"),
+			                       rhs_parent_type);
+		}
+	}
+	else if (lhs_type.basetype == SPIRType::Struct)
+	{
+		uint32_t member_count = uint32_t(lhs_type.member_types.size());
+		for (uint32_t i = 0; i < member_count; i++)
+		{
+			emit_copy_logical_type(join(lhs, ".", to_member_name(lhs_type, i)),
+			                       get<SPIRType>(lhs_type.member_types[i]),
+			                       join(rhs, ".", to_member_name(rhs_type, i)),
+			                       get<SPIRType>(rhs_type.member_types[i]));
+		}
+	}
+	else
+	{
+		statement(lhs, " = ", rhs, ";");
 	}
 }

@@ -275,6 +275,9 @@ protected:
 
 	virtual bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const;
 
+	void emit_copy_logical_type(const std::string &lhs, const SPIRType &lhs_type,
+	                            const std::string &rhs, const SPIRType &rhs_type);
+
 	StringStream<> buffer;
 
 	template <typename T>
