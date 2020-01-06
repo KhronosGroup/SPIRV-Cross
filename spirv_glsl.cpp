@@ -13152,8 +13152,8 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 		// to deal with all the special cases we can encounter.
 
 		AccessChainMeta lhs_meta, rhs_meta;
-		auto lhs = access_chain_internal(lhs_id, chain.data(), chain.size(), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta);
-		auto rhs = access_chain_internal(rhs_id, chain.data(), chain.size(), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta);
+		auto lhs = access_chain_internal(lhs_id, chain.data(), uint32_t(chain.size()), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta);
+		auto rhs = access_chain_internal(rhs_id, chain.data(), uint32_t(chain.size()), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta);
 
 		uint32_t id = ir.increase_bound_by(2);
 		lhs_id = id;
