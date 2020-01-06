@@ -128,6 +128,17 @@ void ParsedIR::set_id_bounds(uint32_t bounds)
 	block_meta.resize(bounds);
 }
 
+// Roll our own versions of these functions to avoid potential locale shenanigans.
+static bool is_alpha(char c)
+{
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+static bool is_alphanumeric(char c)
+{
+	return is_alpha(c) || (c >= '0' && c <= '9');
+}
+
 static string ensure_valid_identifier(const string &name, bool member)
 {
 	// Functions in glslangValidator are mangled with name(<mangled> stuff.
@@ -143,20 +154,20 @@ static string ensure_valid_identifier(const string &name, bool member)
 			// _m<num> variables are reserved by the internal implementation,
 			// otherwise, make sure the name is a valid identifier.
 			if (i == 0)
-				c = isalpha(c) ? c : '_';
+				c = is_alpha(c) ? c : '_';
 			else if (i == 2 && str[0] == '_' && str[1] == 'm')
-				c = isalpha(c) ? c : '_';
+				c = is_alpha(c) ? c : '_';
 			else
-				c = isalnum(c) ? c : '_';
+				c = is_alphanumeric(c) ? c : '_';
 		}
 		else
 		{
 			// _<num> variables are reserved by the internal implementation,
 			// otherwise, make sure the name is a valid identifier.
 			if (i == 0 || (str[0] == '_' && i == 1))
-				c = isalpha(c) ? c : '_';
+				c = is_alpha(c) ? c : '_';
 			else
-				c = isalnum(c) ? c : '_';
+				c = is_alphanumeric(c) ? c : '_';
 		}
 	}
 	return str;
