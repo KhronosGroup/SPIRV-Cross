@@ -1652,7 +1652,10 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	if (is_sample)
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationSample);
 
-	set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
+	// If we have location meta, there is no unique OrigID. We won't need it, since we flatten/unflatten
+	// the variable to stack anyways here.
+	if (!location_meta)
+		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
 }
 
 void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
