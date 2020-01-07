@@ -8604,7 +8604,14 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			uint32_t locn = get_ordered_member_location(type.self, index, &comp);
 			if (locn != k_unknown_location)
 			{
-				if (comp != k_unknown_component)
+				// For user-defined attributes, this is fine. From Vulkan spec:
+				// A user-defined output variable is considered to match an input variable in the subsequent stage if
+				// the two variables are declared with the same Location and Component decoration and match in type
+				// and decoration, except that interpolation decorations are not required to match. For the purposes
+				// of interface matching, variables declared without a Component decoration are considered to have a
+				// Component decoration of zero.
+
+				if (comp != k_unknown_component && comp != 0)
 					quals = string("user(locn") + convert_to_string(locn) + "_" + convert_to_string(comp) + ")";
 				else
 					quals = string("user(locn") + convert_to_string(locn) + ")";
