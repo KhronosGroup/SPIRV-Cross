@@ -637,18 +637,29 @@ protected:
 	uint32_t add_interface_block(spv::StorageClass storage, bool patch = false);
 	uint32_t add_interface_block_pointer(uint32_t ib_var_id, spv::StorageClass storage);
 
+	struct InterfaceBlockMeta
+	{
+		struct LocationMeta
+		{
+			uint32_t num_components = 0;
+			uint32_t ib_index = ~0u;
+		};
+		std::unordered_map<uint32_t, LocationMeta> location_meta;
+		bool strip_array = false;
+	};
+
 	void add_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
-	                                     SPIRVariable &var, bool strip_array);
+	                                     SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_composite_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
-	                                               SPIRType &ib_type, SPIRVariable &var, bool strip_array);
+	                                               SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_plain_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
-	                                           SPIRType &ib_type, SPIRVariable &var, bool strip_array);
+	                                           SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_plain_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                                  SPIRType &ib_type, SPIRVariable &var, uint32_t index,
-	                                                  bool strip_array);
+	                                                  InterfaceBlockMeta &meta);
 	void add_composite_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                                      SPIRType &ib_type, SPIRVariable &var, uint32_t index,
-	                                                      bool strip_array);
+	                                                      InterfaceBlockMeta &meta);
 	uint32_t get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 
@@ -656,7 +667,7 @@ protected:
 
 	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
-	uint32_t ensure_correct_attribute_type(uint32_t type_id, uint32_t location);
+	uint32_t ensure_correct_attribute_type(uint32_t type_id, uint32_t location, uint32_t num_components = 0);
 
 	void emit_custom_templates();
 	void emit_custom_functions();

@@ -709,6 +709,8 @@ protected:
 
 	void propagate_nonuniform_qualifier(uint32_t id);
 
+	static const char *vector_swizzle(int vecsize, int index);
+
 private:
 	void init();
 };

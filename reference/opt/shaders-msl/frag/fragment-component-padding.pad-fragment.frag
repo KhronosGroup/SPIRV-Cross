@@ -69,8 +69,8 @@ fragment main0_out main0(main0_in in [[stage_in]])
     FragColor3 = in.vColor.zzz;
     out.FragColors_0 = float4(FragColors[0]);
     out.FragColors_1 = float4(FragColors[1]);
-    out.FragColor2 = FragColor2.xyyy;
-    out.FragColor3 = FragColor3.xyzz;
+    out.FragColor2.xy = FragColor2;
+    out.FragColor3.xyz = FragColor3;
     return out;
 }
 

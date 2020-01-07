@@ -286,7 +286,7 @@ static uint32_t pls_format_to_components(PlsFormat format)
 	}
 }
 
-static const char *vector_swizzle(int vecsize, int index)
+const char *CompilerGLSL::vector_swizzle(int vecsize, int index)
 {
 	static const char *const swizzle[4][4] = {
 		{ ".x", ".y", ".z", ".w" },
