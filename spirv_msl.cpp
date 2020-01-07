@@ -1487,25 +1487,19 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			location_meta = &location_meta_itr->second;
 	}
 
-	// Check if we need to pad fragment output to match a certain number of components.
-	if (get_decoration_bitset(var.self).get(DecorationLocation) && msl_options.pad_fragment_output_components &&
-	    get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput)
-	{
-		assert(!location_meta);
-		uint32_t locn = get_decoration(var.self, DecorationLocation);
-		target_components = get_target_components_for_fragment_location(locn);
-		if (type_components < target_components)
-		{
-			// Make a new type here.
-			type_id = build_extended_vector_type(type_id, target_components);
-			padded_output = true;
-		}
-	}
+	bool pad_fragment_output = has_decoration(var.self, DecorationLocation) && msl_options.pad_fragment_output_components &&
+	                           get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput;
 
+	// Check if we need to pad fragment output to match a certain number of components.
 	if (location_meta)
 	{
 		start_component = get_decoration(var.self, DecorationComponent);
 		uint32_t num_components = location_meta->num_components;
+		if (pad_fragment_output)
+		{
+			uint32_t locn = get_decoration(var.self, DecorationLocation);
+			num_components = std::max(num_components, get_target_components_for_fragment_location(locn));
+		}
 
 		if (location_meta->ib_index != ~0u)
 		{
@@ -1540,6 +1534,17 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 				padded_input = true;
 			else
 				padded_output = true;
+		}
+	}
+	else if (pad_fragment_output)
+	{
+		uint32_t locn = get_decoration(var.self, DecorationLocation);
+		target_components = get_target_components_for_fragment_location(locn);
+		if (type_components < target_components)
+		{
+			// Make a new type here.
+			type_id = build_extended_vector_type(type_id, target_components);
+			padded_output = true;
 		}
 	}
 
