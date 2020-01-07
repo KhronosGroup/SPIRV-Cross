@@ -2395,8 +2395,6 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	bool pack_components =
 			(storage == StorageClassInput && get_execution_model() == ExecutionModelVertex) ||
 			(storage == StorageClassOutput && get_execution_model() == ExecutionModelFragment) ||
-			(storage == StorageClassInput && is_tessellation_shader()) ||
-			(storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl) ||
 			(storage == StorageClassOutput && get_execution_model() == ExecutionModelVertex && capture_output_to_buffer);
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
@@ -2446,18 +2444,25 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		{
 			vars.push_back(&var);
 
-			if (pack_components && !is_builtin)
+			if (!is_builtin)
 			{
 				// Need to deal specially with DecorationComponent.
 				// Multiple variables can alias the same Location, and try to make sure each location is declared only once.
 				// We will swizzle data in and out to make this work.
 				// We only need to consider plain variables here, not composites.
+				// This is only relevant for vertex inputs and fragment outputs.
+				// Technically tessellation as well, but it is too complicated to support.
 				uint32_t component = get_decoration(var_id, DecorationComponent);
 				if (component != 0)
 				{
-					uint32_t location = get_decoration(var_id, DecorationLocation);
-					auto &location_meta = meta.location_meta[location];
-					location_meta.num_components = std::max(location_meta.num_components, component + type.vecsize);
+					if (is_tessellation_shader())
+						SPIRV_CROSS_THROW("Component decoration is not supported in tessellation shaders.");
+					else if (pack_components)
+					{
+						uint32_t location = get_decoration(var_id, DecorationLocation);
+						auto &location_meta = meta.location_meta[location];
+						location_meta.num_components = std::max(location_meta.num_components, component + type.vecsize);
+					}
 				}
 			}
 		}
