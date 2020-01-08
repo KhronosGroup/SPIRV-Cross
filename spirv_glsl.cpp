@@ -6684,6 +6684,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	string expr;
 
 	bool index_is_literal = (flags & ACCESS_CHAIN_INDEX_IS_LITERAL_BIT) != 0;
+	bool msb_is_id = (flags & ACCESS_CHAIN_LITERAL_MSB_FORCE_ID) != 0;
 	bool chain_only = (flags & ACCESS_CHAIN_CHAIN_ONLY_BIT) != 0;
 	bool ptr_chain = (flags & ACCESS_CHAIN_PTR_CHAIN_BIT) != 0;
 	bool register_expression_read = (flags & ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT) == 0;
@@ -6728,13 +6729,23 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
-	const auto append_index = [&](uint32_t index) {
-		access_chain_internal_append_index(expr, base, type, flags, access_chain_is_arrayed, index);
+	const auto append_index = [&](uint32_t index, bool is_literal) {
+		AccessChainFlags mod_flags = flags;
+		if (!is_literal)
+			mod_flags &= ~ACCESS_CHAIN_INDEX_IS_LITERAL_BIT;
+		access_chain_internal_append_index(expr, base, type, mod_flags, access_chain_is_arrayed, index);
 	};
 
 	for (uint32_t i = 0; i < count; i++)
 	{
 		uint32_t index = indices[i];
+
+		bool is_literal = index_is_literal;
+		if (is_literal && msb_is_id && (index >> 31u) != 0u)
+		{
+			is_literal = false;
+			index &= 0x7fffffffu;
+		}
 
 		// Pointer chains
 		if (ptr_chain && i == 0)
@@ -6752,7 +6763,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (options.flatten_multidimensional_arrays && dimension_flatten)
 			{
 				// If we are flattening multidimensional arrays, do manual stride computation.
-				if (index_is_literal)
+				if (is_literal)
 					expr += convert_to_string(index);
 				else
 					expr += to_enclosed_expression(index, register_expression_read);
@@ -6773,7 +6784,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 			else
 			{
-				append_index(index);
+				append_index(index, is_literal);
 			}
 
 			if (type->basetype == SPIRType::ControlPointArray)
@@ -6820,11 +6831,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					else if (var->storage == StorageClassOutput)
 						expr = join("gl_out[", to_expression(index, register_expression_read), "].", expr);
 					else
-						append_index(index);
+						append_index(index, is_literal);
 					break;
 
 				default:
-					append_index(index);
+					append_index(index, is_literal);
 					break;
 				}
 			}
@@ -6833,7 +6844,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				// If we are flattening multidimensional arrays, do manual stride computation.
 				auto &parent_type = get<SPIRType>(type->parent_type);
 
-				if (index_is_literal)
+				if (is_literal)
 					expr += convert_to_string(index);
 				else
 					expr += to_enclosed_expression(index, register_expression_read);
@@ -6856,7 +6867,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
 			else if (!builtin_translates_to_nonarray(BuiltIn(get_decoration(base, DecorationBuiltIn))))
 			{
-				append_index(index);
+				append_index(index, is_literal);
 			}
 
 			type_id = type->parent_type;
@@ -6868,7 +6879,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
 		else if (type->basetype == SPIRType::Struct)
 		{
-			if (!index_is_literal)
+			if (!is_literal)
 				index = get<SPIRConstant>(index).scalar();
 
 			if (index >= type->member_types.size())
@@ -6915,7 +6926,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			// by flipping indexing order of the matrix.
 
 			expr += "[";
-			if (index_is_literal)
+			if (is_literal)
 				expr += convert_to_string(index);
 			else
 				expr += to_expression(index, register_expression_read);
@@ -6939,7 +6950,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				}
 			}
 
-			if (index_is_literal && !is_packed && !row_major_matrix_needs_conversion)
+			if (is_literal && !is_packed && !row_major_matrix_needs_conversion)
 			{
 				expr += ".";
 				expr += index_to_swizzle(index);
@@ -6958,7 +6969,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					expr += index_to_swizzle(c.scalar());
 				}
 			}
-			else if (index_is_literal)
+			else if (is_literal)
 			{
 				// For packed vectors, we can only access them as an array, not by swizzle.
 				expr += join("[", index, "]");

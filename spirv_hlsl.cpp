@@ -3637,7 +3637,92 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		CompilerGLSL::emit_instruction(instruction);
 }
 
-void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t value)
+void CompilerHLSL::write_access_chain_array(const SPIRAccessChain &chain, uint32_t value,
+                                            const SmallVector<uint32_t> &composite_chain)
+{
+	auto &type = get<SPIRType>(chain.basetype);
+
+	// Need to use a reserved identifier here since it might shadow an identifier in the access chain input or other loops.
+	auto ident = get_unique_identifier();
+
+	uint32_t id = ir.increase_bound_by(2);
+	uint32_t int_type_id = id + 1;
+	SPIRType int_type;
+	int_type.basetype = SPIRType::Int;
+	int_type.width = 32;
+	set<SPIRType>(int_type_id, int_type);
+	set<SPIRExpression>(id, ident, int_type_id, true);
+	set_name(id, ident);
+	suppressed_usage_tracking.insert(id);
+
+	statement("[unroll]");
+	statement("for (int ", ident, " = 0; ", ident, " < ", to_array_size(type, uint32_t(type.array.size() - 1)), "; ", ident, "++)");
+	begin_scope();
+	auto subchain = chain;
+	subchain.dynamic_index = join(ident, " * ", chain.array_stride, " + ", chain.dynamic_index);
+	subchain.basetype = type.parent_type;
+
+	// Forcefully allow us to use an ID here by setting MSB.
+	auto subcomposite_chain = composite_chain;
+	subcomposite_chain.push_back(0x80000000u | id);
+
+	if (!get<SPIRType>(subchain.basetype).array.empty())
+		subchain.array_stride = get_decoration(subchain.basetype, DecorationArrayStride);
+
+	write_access_chain(subchain, value, subcomposite_chain);
+	end_scope();
+}
+
+void CompilerHLSL::write_access_chain_struct(const SPIRAccessChain &chain, uint32_t value,
+                                             const SmallVector<uint32_t> &composite_chain)
+{
+	auto &type = get<SPIRType>(chain.basetype);
+	uint32_t member_count = uint32_t(type.member_types.size());
+	auto subchain = chain;
+
+	auto subcomposite_chain = composite_chain;
+	subcomposite_chain.push_back(0);
+
+	for (uint32_t i = 0; i < member_count; i++)
+	{
+		uint32_t offset = type_struct_member_offset(type, i);
+		subchain.static_index = chain.static_index + offset;
+		subchain.basetype = type.member_types[i];
+
+		auto &member_type = get<SPIRType>(subchain.basetype);
+		if (member_type.columns > 1)
+		{
+			subchain.matrix_stride = type_struct_member_matrix_stride(type, i);
+			subchain.row_major_matrix = has_member_decoration(type.self, i, DecorationRowMajor);
+		}
+
+		if (!member_type.array.empty())
+			subchain.array_stride = type_struct_member_array_stride(type, i);
+
+		subcomposite_chain.back() = i;
+		write_access_chain(subchain, value, subcomposite_chain);
+	}
+}
+
+string CompilerHLSL::write_access_chain_value(uint32_t value, const SmallVector<uint32_t> &composite_chain, bool enclose)
+{
+	string ret;
+	if (composite_chain.empty())
+		ret = to_expression(value);
+	else
+	{
+		AccessChainMeta meta;
+		ret = access_chain_internal(value, composite_chain.data(), uint32_t(composite_chain.size()),
+		                            ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_LITERAL_MSB_FORCE_ID, &meta);
+	}
+
+	if (enclose)
+		ret = enclose_expression(ret);
+	return ret;
+}
+
+void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t value,
+                                      const SmallVector<uint32_t> &composite_chain)
 {
 	auto &type = get<SPIRType>(chain.basetype);
 
@@ -3652,12 +3737,20 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 	target_type.vecsize = type.vecsize;
 	target_type.columns = type.columns;
 
-	if (type.basetype == SPIRType::Struct)
-		SPIRV_CROSS_THROW("Writing structs to RWByteAddressBuffer not yet supported.");
-	if (type.width != 32)
-		SPIRV_CROSS_THROW("Writing types other than 32-bit to RWByteAddressBuffer not yet supported.");
 	if (!type.array.empty())
-		SPIRV_CROSS_THROW("Reading arrays from ByteAddressBuffer not yet supported.");
+	{
+		write_access_chain_array(chain, value, composite_chain);
+		register_write(chain.self);
+		return;
+	}
+	else if (type.basetype == SPIRType::Struct)
+	{
+		write_access_chain_struct(chain, value, composite_chain);
+		register_write(chain.self);
+		return;
+	}
+	else if (type.width != 32)
+		SPIRV_CROSS_THROW("Writing types other than 32-bit to RWByteAddressBuffer not yet supported.");
 
 	if (type.columns == 1 && !chain.row_major_matrix)
 	{
@@ -3680,7 +3773,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 			SPIRV_CROSS_THROW("Unknown vector size.");
 		}
 
-		auto store_expr = to_expression(value);
+		auto store_expr = write_access_chain_value(value, composite_chain, false);
 		auto bitcast_op = bitcast_glsl_op(target_type, type);
 		if (!bitcast_op.empty())
 			store_expr = join(bitcast_op, "(", store_expr, ")");
@@ -3691,7 +3784,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 		// Strided store.
 		for (uint32_t r = 0; r < type.vecsize; r++)
 		{
-			auto store_expr = to_enclosed_expression(value);
+			auto store_expr = write_access_chain_value(value, composite_chain, true);
 			if (type.vecsize > 1)
 			{
 				store_expr += ".";
@@ -3729,7 +3822,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 
 		for (uint32_t c = 0; c < type.columns; c++)
 		{
-			auto store_expr = join(to_enclosed_expression(value), "[", c, "]");
+			auto store_expr = join(write_access_chain_value(value, composite_chain, true), "[", c, "]");
 			auto bitcast_op = bitcast_glsl_op(target_type, type);
 			if (!bitcast_op.empty())
 				store_expr = join(bitcast_op, "(", store_expr, ")");
@@ -3743,7 +3836,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 		{
 			for (uint32_t c = 0; c < type.columns; c++)
 			{
-				auto store_expr = join(to_enclosed_expression(value), "[", c, "].", index_to_swizzle(r));
+				auto store_expr = join(write_access_chain_value(value, composite_chain, true), "[", c, "].", index_to_swizzle(r));
 				remove_duplicate_swizzle(store_expr);
 				auto bitcast_op = bitcast_glsl_op(target_type, type);
 				if (!bitcast_op.empty())
@@ -3762,7 +3855,7 @@ void CompilerHLSL::emit_store(const Instruction &instruction)
 	auto ops = stream(instruction);
 	auto *chain = maybe_get<SPIRAccessChain>(ops[0]);
 	if (chain)
-		write_access_chain(*chain, ops[1]);
+		write_access_chain(*chain, ops[1], {});
 	else
 		CompilerGLSL::emit_instruction(instruction);
 }

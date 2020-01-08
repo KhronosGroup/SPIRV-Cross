@@ -185,7 +185,10 @@ private:
 	void read_access_chain(std::string *expr, const std::string &lhs, const SPIRAccessChain &chain);
 	void read_access_chain_struct(const std::string &lhs, const SPIRAccessChain &chain);
 	void read_access_chain_array(const std::string &lhs, const SPIRAccessChain &chain);
-	void write_access_chain(const SPIRAccessChain &chain, uint32_t value);
+	void write_access_chain(const SPIRAccessChain &chain, uint32_t value, const SmallVector<uint32_t> &composite_chain);
+	void write_access_chain_struct(const SPIRAccessChain &chain, uint32_t value, const SmallVector<uint32_t> &composite_chain);
+	void write_access_chain_array(const SPIRAccessChain &chain, uint32_t value, const SmallVector<uint32_t> &composite_chain);
+	std::string write_access_chain_value(uint32_t value, const SmallVector<uint32_t> &composite_chain, bool enclose);
 	void emit_store(const Instruction &instruction);
 	void emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op);
 	void emit_subgroup_op(const Instruction &i) override;
