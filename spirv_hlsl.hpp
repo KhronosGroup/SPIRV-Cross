@@ -182,8 +182,15 @@ private:
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_access_chain(const Instruction &instruction);
 	void emit_load(const Instruction &instruction);
-	std::string read_access_chain(const SPIRAccessChain &chain);
-	void write_access_chain(const SPIRAccessChain &chain, uint32_t value);
+	void read_access_chain(std::string *expr, const std::string &lhs, const SPIRAccessChain &chain);
+	void read_access_chain_struct(const std::string &lhs, const SPIRAccessChain &chain);
+	void read_access_chain_array(const std::string &lhs, const SPIRAccessChain &chain);
+	void write_access_chain(const SPIRAccessChain &chain, uint32_t value, const SmallVector<uint32_t> &composite_chain);
+	void write_access_chain_struct(const SPIRAccessChain &chain, uint32_t value,
+	                               const SmallVector<uint32_t> &composite_chain);
+	void write_access_chain_array(const SPIRAccessChain &chain, uint32_t value,
+	                              const SmallVector<uint32_t> &composite_chain);
+	std::string write_access_chain_value(uint32_t value, const SmallVector<uint32_t> &composite_chain, bool enclose);
 	void emit_store(const Instruction &instruction);
 	void emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op);
 	void emit_subgroup_op(const Instruction &i) override;
@@ -257,6 +264,9 @@ private:
 	std::vector<RootConstants> root_constants_layout;
 
 	void validate_shader_model();
+
+	std::string get_unique_identifier();
+	uint32_t unique_identifier_count = 0;
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 

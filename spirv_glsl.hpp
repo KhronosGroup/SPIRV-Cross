@@ -56,7 +56,8 @@ enum AccessChainFlagBits
 	ACCESS_CHAIN_INDEX_IS_LITERAL_BIT = 1 << 0,
 	ACCESS_CHAIN_CHAIN_ONLY_BIT = 1 << 1,
 	ACCESS_CHAIN_PTR_CHAIN_BIT = 1 << 2,
-	ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT = 1 << 3
+	ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT = 1 << 3,
+	ACCESS_CHAIN_LITERAL_MSB_FORCE_ID = 1 << 4
 };
 typedef uint32_t AccessChainFlags;
 
@@ -506,7 +507,7 @@ protected:
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
-	                                   bool need_transpose);
+	                                   uint32_t array_stride, bool need_transpose);
 	std::string flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                          const SPIRType &target_type, uint32_t offset);
 	std::string flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
@@ -519,6 +520,7 @@ protected:
 	                                                               uint32_t count, uint32_t offset,
 	                                                               uint32_t word_stride, bool *need_transpose = nullptr,
 	                                                               uint32_t *matrix_stride = nullptr,
+	                                                               uint32_t *array_stride = nullptr,
 	                                                               bool ptr_chain = false);
 
 	const char *index_to_swizzle(uint32_t index);
