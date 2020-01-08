@@ -7034,7 +7034,8 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 			meta->storage_is_packed = false;
 		}
 
-		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, array_stride, need_transpose);
+		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, array_stride,
+		                              need_transpose);
 	}
 	else if (flattened_structs.count(base) && count > 0)
 	{

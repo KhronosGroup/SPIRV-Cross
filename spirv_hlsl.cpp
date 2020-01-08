@@ -3409,7 +3409,8 @@ void CompilerHLSL::read_access_chain_array(const string &lhs, const SPIRAccessCh
 	auto ident = get_unique_identifier();
 
 	statement("[unroll]");
-	statement("for (int ", ident, " = 0; ", ident, " < ", to_array_size(type, uint32_t(type.array.size() - 1)), "; ", ident, "++)");
+	statement("for (int ", ident, " = 0; ", ident, " < ", to_array_size(type, uint32_t(type.array.size() - 1)), "; ",
+	          ident, "++)");
 	begin_scope();
 	auto subchain = chain;
 	subchain.dynamic_index = join(ident, " * ", chain.array_stride, " + ", chain.dynamic_index);
@@ -3660,7 +3661,8 @@ void CompilerHLSL::write_access_chain_array(const SPIRAccessChain &chain, uint32
 	suppressed_usage_tracking.insert(id);
 
 	statement("[unroll]");
-	statement("for (int ", ident, " = 0; ", ident, " < ", to_array_size(type, uint32_t(type.array.size() - 1)), "; ", ident, "++)");
+	statement("for (int ", ident, " = 0; ", ident, " < ", to_array_size(type, uint32_t(type.array.size() - 1)), "; ",
+	          ident, "++)");
 	begin_scope();
 	auto subchain = chain;
 	subchain.dynamic_index = join(ident, " * ", chain.array_stride, " + ", chain.dynamic_index);
@@ -3712,7 +3714,8 @@ void CompilerHLSL::write_access_chain_struct(const SPIRAccessChain &chain, uint3
 	}
 }
 
-string CompilerHLSL::write_access_chain_value(uint32_t value, const SmallVector<uint32_t> &composite_chain, bool enclose)
+string CompilerHLSL::write_access_chain_value(uint32_t value, const SmallVector<uint32_t> &composite_chain,
+                                              bool enclose)
 {
 	string ret;
 	if (composite_chain.empty())
@@ -3844,7 +3847,8 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 		{
 			for (uint32_t c = 0; c < type.columns; c++)
 			{
-				auto store_expr = join(write_access_chain_value(value, composite_chain, true), "[", c, "].", index_to_swizzle(r));
+				auto store_expr =
+				    join(write_access_chain_value(value, composite_chain, true), "[", c, "].", index_to_swizzle(r));
 				remove_duplicate_swizzle(store_expr);
 				auto bitcast_op = bitcast_glsl_op(target_type, type);
 				if (!bitcast_op.empty())
@@ -3929,10 +3933,9 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 			array_stride = chain->array_stride;
 		}
 
-		auto offsets =
-		    flattened_access_chain_offset(*basetype, &ops[3 + to_plain_buffer_length],
-		                                  length - 3 - to_plain_buffer_length, 0, 1,
-		                                  &row_major_matrix, &matrix_stride, &array_stride);
+		auto offsets = flattened_access_chain_offset(*basetype, &ops[3 + to_plain_buffer_length],
+		                                             length - 3 - to_plain_buffer_length, 0, 1, &row_major_matrix,
+		                                             &matrix_stride, &array_stride);
 
 		auto &e = set<SPIRAccessChain>(ops[1], ops[0], type.storage, base, offsets.first, offsets.second);
 		e.row_major_matrix = row_major_matrix;
