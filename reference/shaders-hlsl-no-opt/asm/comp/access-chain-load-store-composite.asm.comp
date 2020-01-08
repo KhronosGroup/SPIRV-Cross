@@ -24,7 +24,7 @@ void comp_main()
 {
     Foo _64;
     _64.a = asfloat(uint2x2(_10.Load(0), _10.Load(8), _10.Load(4), _10.Load(12)));
-    _64.b = asfloat(uint2(_10.Load(16), _10.Load(24)));
+    _64.b = asfloat(_10.Load2(16));
     [unroll]
     for (int _0ident = 0; _0ident < 5; _0ident++)
     {
@@ -47,8 +47,7 @@ void comp_main()
     _10.Store(228, asuint(_64.a[1].x));
     _10.Store(232, asuint(_64.a[0].y));
     _10.Store(236, asuint(_64.a[1].y));
-    _10.Store(240, asuint(_64.b.x));
-    _10.Store(248, asuint(_64.b.y));
+    _10.Store2(240, asuint(_64.b));
     [unroll]
     for (int _4ident = 0; _4ident < 5; _4ident++)
     {

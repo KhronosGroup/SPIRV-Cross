@@ -3432,6 +3432,10 @@ void CompilerHLSL::read_access_chain_struct(const string &lhs, const SPIRAccessC
 		subchain.static_index = chain.static_index + offset;
 		subchain.basetype = type.member_types[i];
 
+		subchain.matrix_stride = 0;
+		subchain.array_stride = 0;
+		subchain.row_major_matrix = false;
+
 		auto &member_type = get<SPIRType>(subchain.basetype);
 		if (member_type.columns > 1)
 		{
@@ -3688,6 +3692,10 @@ void CompilerHLSL::write_access_chain_struct(const SPIRAccessChain &chain, uint3
 		uint32_t offset = type_struct_member_offset(type, i);
 		subchain.static_index = chain.static_index + offset;
 		subchain.basetype = type.member_types[i];
+
+		subchain.matrix_stride = 0;
+		subchain.array_stride = 0;
+		subchain.row_major_matrix = false;
 
 		auto &member_type = get<SPIRType>(subchain.basetype);
 		if (member_type.columns > 1)

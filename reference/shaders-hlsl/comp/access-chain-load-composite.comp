@@ -24,7 +24,7 @@ void comp_main()
 {
     Foo _36;
     _36.a = asfloat(uint2x2(_31.Load(0), _31.Load(8), _31.Load(4), _31.Load(12)));
-    _36.b = asfloat(uint2(_31.Load(16), _31.Load(24)));
+    _36.b = asfloat(_31.Load2(16));
     [unroll]
     for (int _4ident = 0; _4ident < 5; _4ident++)
     {
