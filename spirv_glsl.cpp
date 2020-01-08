@@ -7012,9 +7012,10 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 	if (flattened_buffer_blocks.count(base))
 	{
 		uint32_t matrix_stride = 0;
+		uint32_t array_stride = 0;
 		bool need_transpose = false;
 		flattened_access_chain_offset(expression_type(base), indices, count, 0, 16, &need_transpose, &matrix_stride,
-		                              ptr_chain);
+		                              &array_stride, ptr_chain);
 
 		if (meta)
 		{
@@ -7022,7 +7023,7 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 			meta->storage_is_packed = false;
 		}
 
-		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, need_transpose);
+		return flattened_access_chain(base, indices, count, target_type, 0, matrix_stride, array_stride, need_transpose);
 	}
 	else if (flattened_structs.count(base) && count > 0)
 	{
@@ -7093,7 +7094,7 @@ void CompilerGLSL::store_flattened_struct(SPIRVariable &var, uint32_t value)
 
 std::string CompilerGLSL::flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
                                                  const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
-                                                 bool need_transpose)
+                                                 uint32_t /* array_stride */, bool need_transpose)
 {
 	if (!target_type.array.empty())
 		SPIRV_CROSS_THROW("Access chains that result in an array can not be flattened");
@@ -7132,7 +7133,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 		}
 
 		auto tmp = flattened_access_chain(base, indices, count, member_type, offset + member_offset, matrix_stride,
-		                                  need_transpose);
+		                                  0 /* array_stride */, need_transpose);
 
 		// Cannot forward transpositions, so resolve them here.
 		if (need_transpose)
@@ -7239,24 +7240,17 @@ std::string CompilerGLSL::flattened_access_chain_vector(uint32_t base, const uin
 
 std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
     const SPIRType &basetype, const uint32_t *indices, uint32_t count, uint32_t offset, uint32_t word_stride,
-    bool *need_transpose, uint32_t *out_matrix_stride, bool ptr_chain)
+    bool *need_transpose, uint32_t *out_matrix_stride, uint32_t *out_array_stride, bool ptr_chain)
 {
 	// Start traversing type hierarchy at the proper non-pointer types.
 	const auto *type = &get_pointee_type(basetype);
-
-	// This holds the type of the current pointer which we are traversing through.
-	// We always start out from a struct type which is the block.
-	// This is primarily used to reflect the array strides and matrix strides later.
-	// For the first access chain index, type_id won't be needed, so just keep it as 0, it will be set
-	// accordingly as members of structs are accessed.
-	assert(type->basetype == SPIRType::Struct);
-	uint32_t type_id = 0;
 
 	std::string expr;
 
 	// Inherit matrix information in case we are access chaining a vector which might have come from a row major layout.
 	bool row_major_matrix_needs_conversion = need_transpose ? *need_transpose : false;
 	uint32_t matrix_stride = out_matrix_stride ? *out_matrix_stride : 0;
+	uint32_t array_stride = out_array_stride ? *out_array_stride : 0;
 
 	for (uint32_t i = 0; i < count; i++)
 	{
@@ -7266,7 +7260,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 		if (ptr_chain && i == 0)
 		{
 			// Here, the pointer type will be decorated with an array stride.
-			uint32_t array_stride = get_decoration(basetype.self, DecorationArrayStride);
+			array_stride = get_decoration(basetype.self, DecorationArrayStride);
 			if (!array_stride)
 				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
 
@@ -7292,16 +7286,10 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				expr += convert_to_string(array_stride / word_stride);
 				expr += " + ";
 			}
-			// Type ID is unchanged.
 		}
 		// Arrays
 		else if (!type->array.empty())
 		{
-			// Here, the type_id will be a type ID for the array type itself.
-			uint32_t array_stride = get_decoration(type_id, DecorationArrayStride);
-			if (!array_stride)
-				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
-
 			auto *constant = maybe_get<SPIRConstant>(index);
 			if (constant)
 			{
@@ -7327,9 +7315,9 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 
 			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(parent_type);
-			type_id = parent_type;
 
-			// Type ID now refers to the array type with one less dimension.
+			if (!type->array.empty())
+				array_stride = get_decoration(parent_type, DecorationArrayStride);
 		}
 		// For structs, the index refers to a constant, which indexes into the members.
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
@@ -7341,7 +7329,6 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
 			offset += type_struct_member_offset(*type, index);
-			type_id = type->member_types[index];
 
 			auto &struct_type = *type;
 			type = &get<SPIRType>(type->member_types[index]);
@@ -7354,6 +7341,9 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 			}
 			else
 				row_major_matrix_needs_conversion = false;
+
+			if (!type->array.empty())
+				array_stride = type_struct_member_array_stride(struct_type, index);
 		}
 		// Matrix -> Vector
 		else if (type->columns > 1)
@@ -7382,9 +7372,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				expr += " + ";
 			}
 
-			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
-			type_id = parent_type;
 		}
 		// Vector -> Scalar
 		else if (type->vecsize > 1)
@@ -7413,9 +7401,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				expr += " + ";
 			}
 
-			uint32_t parent_type = type->parent_type;
 			type = &get<SPIRType>(type->parent_type);
-			type_id = parent_type;
 		}
 		else
 			SPIRV_CROSS_THROW("Cannot subdivide a scalar value!");
@@ -7425,6 +7411,8 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 		*need_transpose = row_major_matrix_needs_conversion;
 	if (out_matrix_stride)
 		*out_matrix_stride = matrix_stride;
+	if (out_array_stride)
+		*out_array_stride = array_stride;
 
 	return std::make_pair(expr, offset);
 }

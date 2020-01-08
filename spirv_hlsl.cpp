@@ -3401,7 +3401,52 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	}
 }
 
-string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
+void CompilerHLSL::read_access_chain_array(const string &lhs, const SPIRAccessChain &chain)
+{
+	auto &type = get<SPIRType>(chain.basetype);
+
+	// Need to use a reserved identifier here since it might shadow an identifier in the access chain input or other loops.
+	auto ident = get_unique_identifier();
+
+	statement("[unroll]");
+	statement("for (int ", ident, " = 0; ", ident, " < ", to_array_size(type, uint32_t(type.array.size() - 1)), "; ", ident, "++)");
+	begin_scope();
+	auto subchain = chain;
+	subchain.dynamic_index = join(ident, " * ", chain.array_stride, " + ", chain.dynamic_index);
+	subchain.basetype = type.parent_type;
+	if (!get<SPIRType>(subchain.basetype).array.empty())
+		subchain.array_stride = get_decoration(subchain.basetype, DecorationArrayStride);
+	read_access_chain(nullptr, join(lhs, "[", ident, "]"), subchain);
+	end_scope();
+}
+
+void CompilerHLSL::read_access_chain_struct(const string &lhs, const SPIRAccessChain &chain)
+{
+	auto &type = get<SPIRType>(chain.basetype);
+	auto subchain = chain;
+	uint32_t member_count = uint32_t(type.member_types.size());
+
+	for (uint32_t i = 0; i < member_count; i++)
+	{
+		uint32_t offset = type_struct_member_offset(type, i);
+		subchain.static_index = chain.static_index + offset;
+		subchain.basetype = type.member_types[i];
+
+		auto &member_type = get<SPIRType>(subchain.basetype);
+		if (member_type.columns > 1)
+		{
+			subchain.matrix_stride = type_struct_member_matrix_stride(type, i);
+			subchain.row_major_matrix = has_member_decoration(type.self, i, DecorationRowMajor);
+		}
+
+		if (!member_type.array.empty())
+			subchain.array_stride = type_struct_member_array_stride(type, i);
+
+		read_access_chain(nullptr, join(lhs, ".", to_member_name(type, i)), subchain);
+	}
+}
+
+void CompilerHLSL::read_access_chain(string *expr, const string &lhs, const SPIRAccessChain &chain)
 {
 	auto &type = get<SPIRType>(chain.basetype);
 
@@ -3410,14 +3455,18 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 	target_type.vecsize = type.vecsize;
 	target_type.columns = type.columns;
 
-	if (type.basetype == SPIRType::Struct)
-		SPIRV_CROSS_THROW("Reading structs from ByteAddressBuffer not yet supported.");
-
-	if (type.width != 32)
-		SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
-
 	if (!type.array.empty())
-		SPIRV_CROSS_THROW("Reading arrays from ByteAddressBuffer not yet supported.");
+	{
+		read_access_chain_array(lhs, chain);
+		return;
+	}
+	else if (type.basetype == SPIRType::Struct)
+	{
+		read_access_chain_struct(lhs, chain);
+		return;
+	}
+	else if (type.width != 32)
+		SPIRV_CROSS_THROW("Reading types other than 32-bit from ByteAddressBuffer not yet supported.");
 
 	string load_expr;
 
@@ -3525,7 +3574,13 @@ string CompilerHLSL::read_access_chain(const SPIRAccessChain &chain)
 	if (!bitcast_op.empty())
 		load_expr = join(bitcast_op, "(", load_expr, ")");
 
-	return load_expr;
+	if (lhs.empty())
+	{
+		assert(expr);
+		*expr = move(load_expr);
+	}
+	else
+		statement(lhs, " = ", load_expr, ";");
 }
 
 void CompilerHLSL::emit_load(const Instruction &instruction)
@@ -3542,27 +3597,41 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		if (has_decoration(ptr, DecorationNonUniformEXT))
 			propagate_nonuniform_qualifier(ptr);
 
-		auto load_expr = read_access_chain(*chain);
-
-		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
-
-		// If we are forwarding this load,
-		// don't register the read to access chain here, defer that to when we actually use the expression,
-		// using the add_implied_read_expression mechanism.
-		if (!forward)
-			track_expression_read(chain->self);
-
-		// Do not forward complex load sequences like matrices, structs and arrays.
 		auto &type = get<SPIRType>(result_type);
-		if (type.columns > 1 || !type.array.empty() || type.basetype == SPIRType::Struct)
-			forward = false;
+		bool composite_load = !type.array.empty() || type.basetype == SPIRType::Struct;
 
-		auto &e = emit_op(result_type, id, load_expr, forward, true);
-		e.need_transpose = false;
-		register_read(id, ptr, forward);
-		inherit_expression_dependencies(id, ptr);
-		if (forward)
-			add_implied_read_expression(e, chain->self);
+		if (composite_load)
+		{
+			// We cannot make this work in one single expression as we might have nested structures and arrays,
+			// so unroll the load to an uninitialized temporary.
+			emit_uninitialized_temporary_expression(result_type, id);
+			read_access_chain(nullptr, to_expression(id), *chain);
+			track_expression_read(chain->self);
+		}
+		else
+		{
+			string load_expr;
+			read_access_chain(&load_expr, "", *chain);
+
+			bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
+
+			// If we are forwarding this load,
+			// don't register the read to access chain here, defer that to when we actually use the expression,
+			// using the add_implied_read_expression mechanism.
+			if (!forward)
+				track_expression_read(chain->self);
+
+			// Do not forward complex load sequences like matrices, structs and arrays.
+			if (type.columns > 1)
+				forward = false;
+
+			auto &e = emit_op(result_type, id, load_expr, forward, true);
+			e.need_transpose = false;
+			register_read(id, ptr, forward);
+			inherit_expression_dependencies(id, ptr);
+			if (forward)
+				add_implied_read_expression(e, chain->self);
+		}
 	}
 	else
 		CompilerGLSL::emit_instruction(instruction);
@@ -3723,7 +3792,10 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 
 	if (need_byte_access_chain)
 	{
-		uint32_t to_plain_buffer_length = static_cast<uint32_t>(type.array.size());
+		// If we have a chain variable, we are already inside the SSBO, and any array type will refer to arrays within a block,
+		// and not array of SSBO.
+		uint32_t to_plain_buffer_length = chain ? 0u : static_cast<uint32_t>(type.array.size());
+
 		auto *backing_variable = maybe_get_backing_variable(ops[2]);
 
 		string base;
@@ -3745,6 +3817,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		}
 
 		uint32_t matrix_stride = 0;
+		uint32_t array_stride = 0;
 		bool row_major_matrix = false;
 
 		// Inherit matrix information.
@@ -3752,15 +3825,18 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 		{
 			matrix_stride = chain->matrix_stride;
 			row_major_matrix = chain->row_major_matrix;
+			array_stride = chain->array_stride;
 		}
 
 		auto offsets =
 		    flattened_access_chain_offset(*basetype, &ops[3 + to_plain_buffer_length],
-		                                  length - 3 - to_plain_buffer_length, 0, 1, &row_major_matrix, &matrix_stride);
+		                                  length - 3 - to_plain_buffer_length, 0, 1,
+		                                  &row_major_matrix, &matrix_stride, &array_stride);
 
 		auto &e = set<SPIRAccessChain>(ops[1], ops[0], type.storage, base, offsets.first, offsets.second);
 		e.row_major_matrix = row_major_matrix;
 		e.matrix_stride = matrix_stride;
+		e.array_stride = array_stride;
 		e.immutable = should_forward(ops[2]);
 		e.loaded_from = backing_variable ? backing_variable->self : ID(0);
 
@@ -5029,4 +5105,9 @@ void CompilerHLSL::emit_block_hints(const SPIRBlock &block)
 	default:
 		break;
 	}
+}
+
+string CompilerHLSL::get_unique_identifier()
+{
+	return join("_", unique_identifier_count++, "ident");
 }

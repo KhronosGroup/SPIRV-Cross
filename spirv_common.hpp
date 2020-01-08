@@ -975,6 +975,7 @@ struct SPIRAccessChain : IVariant
 
 	VariableID loaded_from = 0;
 	uint32_t matrix_stride = 0;
+	uint32_t array_stride = 0;
 	bool row_major_matrix = false;
 	bool immutable = false;
 

@@ -506,7 +506,7 @@ protected:
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
-	                                   bool need_transpose);
+	                                   uint32_t array_stride, bool need_transpose);
 	std::string flattened_access_chain_struct(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                          const SPIRType &target_type, uint32_t offset);
 	std::string flattened_access_chain_matrix(uint32_t base, const uint32_t *indices, uint32_t count,
@@ -519,6 +519,7 @@ protected:
 	                                                               uint32_t count, uint32_t offset,
 	                                                               uint32_t word_stride, bool *need_transpose = nullptr,
 	                                                               uint32_t *matrix_stride = nullptr,
+	                                                               uint32_t *array_stride = nullptr,
 	                                                               bool ptr_chain = false);
 
 	const char *index_to_swizzle(uint32_t index);
