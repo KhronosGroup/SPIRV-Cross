@@ -2107,8 +2107,8 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 
 			// Tessellation control and evaluation shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
 			// Opt for unsized as it's the more "correct" variant to use.
-			bool control_point_input_array = type.storage == StorageClassInput &&
-			                                 !type.array.empty() && !has_decoration(var.self, DecorationPatch) &&
+			bool control_point_input_array = type.storage == StorageClassInput && !type.array.empty() &&
+			                                 !has_decoration(var.self, DecorationPatch) &&
 			                                 (get_entry_point().model == ExecutionModelTessellationControl ||
 			                                  get_entry_point().model == ExecutionModelTessellationEvaluation);
 
@@ -9985,8 +9985,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			const uint32_t all_barriers = MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
-			                              MemorySemanticsImageMemoryMask;
+			const uint32_t all_barriers =
+			    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
 
 			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
 			{
@@ -13112,8 +13112,7 @@ void CompilerGLSL::propagate_nonuniform_qualifier(uint32_t id)
 	}
 }
 
-void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
-                                          uint32_t rhs_id, uint32_t rhs_type_id,
+void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id, uint32_t rhs_id, uint32_t rhs_type_id,
                                           SmallVector<uint32_t> chain)
 {
 	// Fully unroll all member/array indices one by one.
@@ -13152,8 +13151,10 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 		// to deal with all the special cases we can encounter.
 
 		AccessChainMeta lhs_meta, rhs_meta;
-		auto lhs = access_chain_internal(lhs_id, chain.data(), uint32_t(chain.size()), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta);
-		auto rhs = access_chain_internal(rhs_id, chain.data(), uint32_t(chain.size()), ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta);
+		auto lhs = access_chain_internal(lhs_id, chain.data(), uint32_t(chain.size()),
+		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &lhs_meta);
+		auto rhs = access_chain_internal(rhs_id, chain.data(), uint32_t(chain.size()),
+		                                 ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &rhs_meta);
 
 		uint32_t id = ir.increase_bound_by(2);
 		lhs_id = id;

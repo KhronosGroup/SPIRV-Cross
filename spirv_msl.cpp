@@ -1487,7 +1487,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			location_meta = &location_meta_itr->second;
 	}
 
-	bool pad_fragment_output = has_decoration(var.self, DecorationLocation) && msl_options.pad_fragment_output_components &&
+	bool pad_fragment_output = has_decoration(var.self, DecorationLocation) &&
+	                           msl_options.pad_fragment_output_components &&
 	                           get_entry_point().model == ExecutionModelFragment && storage == StorageClassOutput;
 
 	// Check if we need to pad fragment output to match a certain number of components.
@@ -1520,8 +1521,7 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 				uint32_t ib_index = location_meta->ib_index;
 				entry_func.fixup_hooks_out.push_back([=, &var]() {
 					statement(ib_var_ref, ".", to_member_name(ib_type, ib_index),
-					          vector_swizzle(type_components, start_component), " = ",
-					          to_name(var.self), ";");
+					          vector_swizzle(type_components, start_component), " = ", to_name(var.self), ";");
 				});
 			}
 			return;
@@ -1564,17 +1564,16 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 		if (padded_output)
 		{
-			entry_func.fixup_hooks_out.push_back([=, &var]()
-			                                     {
-				                                     statement(qual_var_name,
-				                                               vector_swizzle(type_components, start_component), " = ",
-				                                               to_name(var.self), ";");
-			                                     });
+			entry_func.fixup_hooks_out.push_back([=, &var]() {
+				statement(qual_var_name, vector_swizzle(type_components, start_component), " = ", to_name(var.self),
+				          ";");
+			});
 		}
 		else
 		{
 			entry_func.fixup_hooks_in.push_back([=, &var]() {
-				statement(to_name(var.self), " = ", qual_var_name, vector_swizzle(type_components, start_component), ";");
+				statement(to_name(var.self), " = ", qual_var_name, vector_swizzle(type_components, start_component),
+				          ";");
 			});
 		}
 	}
@@ -1586,14 +1585,12 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		if (padded_output || padded_input)
 		{
 			entry_func.fixup_hooks_in.push_back(
-					[=, &var]()
-					{ statement(to_name(var.self), " = ", to_expression(var.initializer), ";"); });
+			    [=, &var]() { statement(to_name(var.self), " = ", to_expression(var.initializer), ";"); });
 		}
 		else
 		{
 			entry_func.fixup_hooks_in.push_back(
-					[=, &var]()
-					{ statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
+			    [=, &var]() { statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
 		}
 	}
 
@@ -1664,7 +1661,8 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 }
 
 void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
-                                                            SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta)
+                                                            SPIRType &ib_type, SPIRVariable &var,
+                                                            InterfaceBlockMeta &meta)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 	auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
@@ -1985,8 +1983,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
 					if (flatten_from_ib_var)
 					{
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".",
-						          to_member_name(var_type, mbr_idx), "[", i, "];");
+						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", to_member_name(var_type, mbr_idx),
+						          "[", i, "];");
 					}
 					else
 					{
@@ -2258,7 +2256,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || storage == StorageClassInput) && !meta.strip_array)
+		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || storage == StorageClassInput) &&
+		    !meta.strip_array)
 		{
 			// For I/O blocks or structs, we will need to pass the block itself around
 			// to functions if they are used globally in leaf functions.
@@ -2291,7 +2290,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type);
-					bool attribute_load_store = storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
+					bool attribute_load_store =
+					    storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 					bool storage_is_stage_io = storage == StorageClassInput || storage == StorageClassOutput;
 
 					// ClipDistance always needs to be declared as user attributes.
@@ -2305,8 +2305,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					}
 					else
 					{
-						add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type, var, mbr_idx,
-						                                             meta);
+						add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type, var, mbr_idx, meta);
 					}
 				}
 			}
@@ -2324,7 +2323,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		{
 			bool is_composite_type = is_matrix(var_type) || is_array(var_type);
 			bool storage_is_stage_io =
-					storage == StorageClassInput || (storage == StorageClassOutput && !capture_output_to_buffer);
+			    storage == StorageClassInput || (storage == StorageClassOutput && !capture_output_to_buffer);
 			bool attribute_load_store = storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 
 			// ClipDistance always needs to be declared as user attributes.
@@ -2398,9 +2397,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	// without explicit packing and unpacking of components. For any variables which link against the runtime
 	// in some way (vertex attributes, fragment output, etc), we'll need to deal with it somehow.
 	bool pack_components =
-			(storage == StorageClassInput && get_execution_model() == ExecutionModelVertex) ||
-			(storage == StorageClassOutput && get_execution_model() == ExecutionModelFragment) ||
-			(storage == StorageClassOutput && get_execution_model() == ExecutionModelVertex && capture_output_to_buffer);
+	    (storage == StorageClassInput && get_execution_model() == ExecutionModelVertex) ||
+	    (storage == StorageClassOutput && get_execution_model() == ExecutionModelFragment) ||
+	    (storage == StorageClassOutput && get_execution_model() == ExecutionModelVertex && capture_output_to_buffer);
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if (var.storage != storage)
@@ -3415,8 +3414,7 @@ string CompilerMSL::unpack_expression_type(string expr_str, const SPIRType &type
 		assert(type.vecsize >= 1 && type.vecsize <= 3);
 		return enclose_expression(expr_str) + swizzle_lut[type.vecsize - 1];
 	}
-	else if (physical_type && is_matrix(*physical_type) && is_vector(type) &&
-	         physical_type->vecsize > type.vecsize)
+	else if (physical_type && is_matrix(*physical_type) && is_vector(type) && physical_type->vecsize > type.vecsize)
 	{
 		// Extract column from padded matrix.
 		assert(type.vecsize >= 1 && type.vecsize <= 3);
@@ -9858,9 +9856,8 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	bool use_secondary_binding = (var_type.basetype == SPIRType::SampledImage && basetype == SPIRType::Sampler) ||
 	                             basetype == SPIRType::AtomicCounter;
 
-	auto resource_decoration = use_secondary_binding ?
-	                           SPIRVCrossDecorationResourceIndexSecondary :
-	                           SPIRVCrossDecorationResourceIndexPrimary;
+	auto resource_decoration =
+	    use_secondary_binding ? SPIRVCrossDecorationResourceIndexSecondary : SPIRVCrossDecorationResourceIndexPrimary;
 
 	if (plane == 1)
 		resource_decoration = SPIRVCrossDecorationResourceIndexTertiary;
