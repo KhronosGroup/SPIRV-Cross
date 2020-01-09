@@ -10860,6 +10860,11 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 	if (!msl_options.supports_msl_version(2))
 		SPIRV_CROSS_THROW("Subgroups are only supported in Metal 2.0 and up.");
 
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_instruction(i);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
+
 	if (msl_options.is_ios())
 	{
 		switch (op)
@@ -10882,7 +10887,7 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 		switch (op)
 		{
 		default:
-			SPIRV_CROSS_THROW("Subgroup ops beyond broadcast and shuffle on macOS require Metal 2.0 and up.");
+			SPIRV_CROSS_THROW("Subgroup ops beyond broadcast and shuffle on macOS require Metal 2.1 and up.");
 		case OpGroupNonUniformBroadcast:
 		case OpGroupNonUniformShuffle:
 		case OpGroupNonUniformShuffleXor:
@@ -11010,6 +11015,7 @@ case OpGroupNonUniform##op: \
 	MSL_GROUP_OP(IMul, product)
 #undef MSL_GROUP_OP
 	// The others, unfortunately, don't support InclusiveScan or ExclusiveScan.
+
 #define MSL_GROUP_OP(op, msl_op) \
 case OpGroupNonUniform##op: \
 	{ \
@@ -11032,12 +11038,36 @@ case OpGroupNonUniform##op: \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
 		break; \
 	}
+
+#define MSL_GROUP_OP_CAST(op, msl_op, type) \
+case OpGroupNonUniform##op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "simd_" #msl_op, type, type); \
+		else if (operation == GroupOperationInclusiveScan) \
+			SPIRV_CROSS_THROW("Metal doesn't support InclusiveScan for OpGroupNonUniform" #op "."); \
+		else if (operation == GroupOperationExclusiveScan) \
+			SPIRV_CROSS_THROW("Metal doesn't support ExclusiveScan for OpGroupNonUniform" #op "."); \
+		else if (operation == GroupOperationClusteredReduce) \
+		{ \
+			/* Only cluster sizes of 4 are supported. */ \
+			uint32_t cluster_size = get<SPIRConstant>(ops[5]).scalar(); \
+			if (cluster_size != 4) \
+				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
+			emit_unary_func_op_cast(result_type, id, ops[4], "quad_" #msl_op, type, type); \
+		} \
+		else \
+			SPIRV_CROSS_THROW("Invalid group operation."); \
+		break; \
+	}
+
 	MSL_GROUP_OP(FMin, min)
 	MSL_GROUP_OP(FMax, max)
-	MSL_GROUP_OP(SMin, min)
-	MSL_GROUP_OP(SMax, max)
-	MSL_GROUP_OP(UMin, min)
-	MSL_GROUP_OP(UMax, max)
+	MSL_GROUP_OP_CAST(SMin, min, int_type)
+	MSL_GROUP_OP_CAST(SMax, max, int_type)
+	MSL_GROUP_OP_CAST(UMin, min, uint_type)
+	MSL_GROUP_OP_CAST(UMax, max, uint_type)
 	MSL_GROUP_OP(BitwiseAnd, and)
 	MSL_GROUP_OP(BitwiseOr, or)
 	MSL_GROUP_OP(BitwiseXor, xor)
@@ -11045,6 +11075,8 @@ case OpGroupNonUniform##op: \
 	MSL_GROUP_OP(LogicalOr, or)
 	MSL_GROUP_OP(LogicalXor, xor)
 		// clang-format on
+#undef MSL_GROUP_OP
+#undef MSL_GROUP_OP_CAST
 
 	case OpGroupNonUniformQuadSwap:
 	{

@@ -4130,6 +4130,11 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 		return join(expr, " * ", to_expression(ops[4]));
 	};
 
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_instruction(i);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
+
 #define make_inclusive_BitAnd(expr) ""
 #define make_inclusive_BitOr(expr) ""
 #define make_inclusive_BitXor(expr) ""
@@ -4238,20 +4243,34 @@ case OpGroupNonUniform##op: \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
 		break; \
 	}
+
+#define HLSL_GROUP_OP_CAST(op, hlsl_op, type) \
+case OpGroupNonUniform##op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "WaveActive" #hlsl_op, type, type); \
+		else \
+			SPIRV_CROSS_THROW("Invalid group operation."); \
+		break; \
+	}
+
 	HLSL_GROUP_OP(FAdd, Sum, true)
 	HLSL_GROUP_OP(FMul, Product, true)
 	HLSL_GROUP_OP(FMin, Min, false)
 	HLSL_GROUP_OP(FMax, Max, false)
 	HLSL_GROUP_OP(IAdd, Sum, true)
 	HLSL_GROUP_OP(IMul, Product, true)
-	HLSL_GROUP_OP(SMin, Min, false)
-	HLSL_GROUP_OP(SMax, Max, false)
-	HLSL_GROUP_OP(UMin, Min, false)
-	HLSL_GROUP_OP(UMax, Max, false)
+	HLSL_GROUP_OP_CAST(SMin, Min, int_type)
+	HLSL_GROUP_OP_CAST(SMax, Max, int_type)
+	HLSL_GROUP_OP_CAST(UMin, Min, uint_type)
+	HLSL_GROUP_OP_CAST(UMax, Max, uint_type)
 	HLSL_GROUP_OP(BitwiseAnd, BitAnd, false)
 	HLSL_GROUP_OP(BitwiseOr, BitOr, false)
 	HLSL_GROUP_OP(BitwiseXor, BitXor, false)
+
 #undef HLSL_GROUP_OP
+#undef HLSL_GROUP_OP_CAST
 		// clang-format on
 
 	case OpGroupNonUniformQuadSwap:
