@@ -90,7 +90,7 @@ bool CompilerMSL::is_msl_vertex_attribute_used(uint32_t location)
 	return vtx_attrs_in_use.count(location) != 0;
 }
 
-bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t desc_set, uint32_t binding)
+bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t desc_set, uint32_t binding) const
 {
 	StageSetBinding tuple = { model, desc_set, binding };
 	auto itr = resource_bindings.find(tuple);
@@ -12640,36 +12640,4 @@ void CompilerMSL::analyze_argument_buffers()
 			member_index++;
 		}
 	}
-}
-
-bool CompilerMSL::SetBindingPair::operator==(const SetBindingPair &other) const
-{
-	return desc_set == other.desc_set && binding == other.binding;
-}
-
-bool CompilerMSL::SetBindingPair::operator<(const SetBindingPair &other) const
-{
-	return desc_set < other.desc_set || (desc_set == other.desc_set && binding < other.binding);
-}
-
-bool CompilerMSL::StageSetBinding::operator==(const StageSetBinding &other) const
-{
-	return model == other.model && desc_set == other.desc_set && binding == other.binding;
-}
-
-size_t CompilerMSL::InternalHasher::operator()(const SetBindingPair &value) const
-{
-	// Quality of hash doesn't really matter here.
-	auto hash_set = std::hash<uint32_t>()(value.desc_set);
-	auto hash_binding = std::hash<uint32_t>()(value.binding);
-	return (hash_set * 0x10001b31) ^ hash_binding;
-}
-
-size_t CompilerMSL::InternalHasher::operator()(const StageSetBinding &value) const
-{
-	// Quality of hash doesn't really matter here.
-	auto hash_model = std::hash<uint32_t>()(value.model);
-	auto hash_set = std::hash<uint32_t>()(value.desc_set);
-	auto tmp_hash = (hash_model * 0x10001b31) ^ hash_set;
-	return (tmp_hash * 0x10001b31) ^ value.binding;
 }

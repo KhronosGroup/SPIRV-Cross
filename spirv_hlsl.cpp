@@ -2934,16 +2934,15 @@ void CompilerHLSL::emit_texture_op(const Instruction &i)
 
 string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 {
-	// TODO: Basic implementation, might need special consideration for RW/RO structured buffers,
-	// RW/RO images, and so on.
+	const auto &type = get<SPIRType>(var.basetype);
 
-	if (!has_decoration(var.self, DecorationBinding))
+	// We can remap push constant blocks, even if they don't have any binding decoration.
+	if (type.storage != StorageClassPushConstant && !has_decoration(var.self, DecorationBinding))
 		return "";
 
-	const auto &type = get<SPIRType>(var.basetype);
 	char space = '\0';
 
-	HLSLBindingFlags resource_flags = 0;
+	HLSLBindingFlagBits resource_flags = HLSL_BINDING_AUTO_NONE_BIT;
 
 	switch (type.basetype)
 	{
@@ -3011,8 +3010,16 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 	if (!space)
 		return "";
 
-	return to_resource_register(resource_flags, space, get_decoration(var.self, DecorationBinding),
-	                            get_decoration(var.self, DecorationDescriptorSet));
+	uint32_t desc_set =
+	    resource_flags == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT ? ResourceBindingPushConstantDescriptorSet : 0u;
+	uint32_t binding = resource_flags == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT ? ResourceBindingPushConstantBinding : 0u;
+
+	if (has_decoration(var.self, DecorationBinding))
+		binding = get_decoration(var.self, DecorationBinding);
+	if (has_decoration(var.self, DecorationDescriptorSet))
+		desc_set = get_decoration(var.self, DecorationDescriptorSet);
+
+	return to_resource_register(resource_flags, space, binding, desc_set);
 }
 
 string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
@@ -3025,10 +3032,54 @@ string CompilerHLSL::to_resource_binding_sampler(const SPIRVariable &var)
 	                            get_decoration(var.self, DecorationDescriptorSet));
 }
 
-string CompilerHLSL::to_resource_register(uint32_t flags, char space, uint32_t binding, uint32_t space_set)
+void CompilerHLSL::remap_hlsl_resource_binding(HLSLBindingFlagBits type, uint32_t &desc_set, uint32_t &binding)
 {
-	if ((flags & resource_binding_flags) == 0)
+	auto itr = resource_bindings.find({ get_execution_model(), desc_set, binding });
+	if (itr != end(resource_bindings))
 	{
+		auto &remap = itr->second;
+		remap.second = true;
+
+		switch (type)
+		{
+		case HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT:
+		case HLSL_BINDING_AUTO_CBV_BIT:
+			desc_set = remap.first.cbv.register_space;
+			binding = remap.first.cbv.register_binding;
+			break;
+
+		case HLSL_BINDING_AUTO_SRV_BIT:
+			desc_set = remap.first.srv.register_space;
+			binding = remap.first.srv.register_binding;
+			break;
+
+		case HLSL_BINDING_AUTO_SAMPLER_BIT:
+			desc_set = remap.first.sampler.register_space;
+			binding = remap.first.sampler.register_binding;
+			break;
+
+		case HLSL_BINDING_AUTO_UAV_BIT:
+			desc_set = remap.first.uav.register_space;
+			binding = remap.first.uav.register_binding;
+			break;
+
+		default:
+			break;
+		}
+	}
+}
+
+string CompilerHLSL::to_resource_register(HLSLBindingFlagBits flag, char space, uint32_t binding, uint32_t space_set)
+{
+	if ((flag & resource_binding_flags) == 0)
+	{
+		remap_hlsl_resource_binding(flag, space_set, binding);
+
+		// The push constant block did not have a binding, and there were no remap for it,
+		// so, declare without register binding.
+		if (flag == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT && space_set == ResourceBindingPushConstantDescriptorSet)
+			return "";
+
 		if (hlsl_options.shader_model >= 51)
 			return join(" : register(", space, binding, ", space", space_set, ")");
 		else
@@ -5214,4 +5265,17 @@ void CompilerHLSL::emit_block_hints(const SPIRBlock &block)
 string CompilerHLSL::get_unique_identifier()
 {
 	return join("_", unique_identifier_count++, "ident");
+}
+
+void CompilerHLSL::add_hlsl_resource_binding(const HLSLResourceBinding &binding)
+{
+	StageSetBinding tuple = { binding.stage, binding.desc_set, binding.binding };
+	resource_bindings[tuple] = { binding, false };
+}
+
+bool CompilerHLSL::is_hlsl_resource_binding_used(ExecutionModel model, uint32_t desc_set, uint32_t binding) const
+{
+	StageSetBinding tuple = { model, desc_set, binding };
+	auto itr = resource_bindings.find(tuple);
+	return itr != end(resource_bindings) && itr->second.second;
 }

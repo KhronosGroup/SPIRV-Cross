@@ -218,11 +218,13 @@ struct MSLConstexprSampler
 
 // Special constant used in a MSLResourceBinding desc_set
 // element to indicate the bindings for the push constants.
-static const uint32_t kPushConstDescSet = ~(0u);
+// Kinda deprecated. Just use ResourceBindingPushConstant{DescriptorSet,Binding} directly.
+static const uint32_t kPushConstDescSet = ResourceBindingPushConstantDescriptorSet;
 
 // Special constant used in a MSLResourceBinding binding
 // element to indicate the bindings for the push constants.
-static const uint32_t kPushConstBinding = 0;
+// Kinda deprecated. Just use ResourceBindingPushConstant{DescriptorSet,Binding} directly.
+static const uint32_t kPushConstBinding = ResourceBindingPushConstantBinding;
 
 // Special constant used in a MSLResourceBinding binding
 // element to indicate the buffer binding for swizzle buffers.
@@ -440,7 +442,7 @@ public:
 	// Constexpr samplers are always assumed to be emitted.
 	// No specific MSLResourceBinding remapping is required for constexpr samplers as long as they are remapped
 	// by remap_constexpr_sampler(_by_binding).
-	bool is_msl_resource_binding_used(spv::ExecutionModel model, uint32_t set, uint32_t binding);
+	bool is_msl_resource_binding_used(spv::ExecutionModel model, uint32_t set, uint32_t binding) const;
 
 	// This must only be called after a successful call to CompilerMSL::compile().
 	// For a variable resource ID obtained through reflection API, report the automatically assigned resource index.
@@ -785,28 +787,6 @@ protected:
 	std::set<std::string> pragma_lines;
 	std::set<std::string> typedef_lines;
 	SmallVector<uint32_t> vars_needing_early_declaration;
-
-	struct SetBindingPair
-	{
-		uint32_t desc_set;
-		uint32_t binding;
-		bool operator==(const SetBindingPair &other) const;
-		bool operator<(const SetBindingPair &other) const;
-	};
-
-	struct StageSetBinding
-	{
-		spv::ExecutionModel model;
-		uint32_t desc_set;
-		uint32_t binding;
-		bool operator==(const StageSetBinding &other) const;
-	};
-
-	struct InternalHasher
-	{
-		size_t operator()(const SetBindingPair &value) const;
-		size_t operator()(const StageSetBinding &value) const;
-	};
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
 
