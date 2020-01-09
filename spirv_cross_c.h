@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 21
+#define SPVC_C_API_VERSION_MINOR 22
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -469,6 +469,7 @@ SPVC_PUBLIC_API void spvc_msl_sampler_ycbcr_conversion_init(spvc_msl_sampler_ycb
 /* Maps to C++ API. */
 typedef enum spvc_hlsl_binding_flag_bits
 {
+	SPVC_HLSL_BINDING_AUTO_NONE_BIT = 0,
 	SPVC_HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT = 1 << 0,
 	SPVC_HLSL_BINDING_AUTO_CBV_BIT = 1 << 1,
 	SPVC_HLSL_BINDING_AUTO_SRV_BIT = 1 << 2,
@@ -477,6 +478,31 @@ typedef enum spvc_hlsl_binding_flag_bits
 	SPVC_HLSL_BINDING_AUTO_ALL = 0x7fffffff
 } spvc_hlsl_binding_flag_bits;
 typedef unsigned spvc_hlsl_binding_flags;
+
+#define SPVC_HLSL_PUSH_CONSTANT_DESC_SET (~(0u))
+#define SPVC_HLSL_PUSH_CONSTANT_BINDING (0)
+
+/* Maps to C++ API. */
+typedef struct spvc_hlsl_resource_binding_mapping
+{
+	unsigned register_space;
+	unsigned register_binding;
+} spvc_hlsl_resource_binding_mapping;
+
+typedef struct spvc_hlsl_resource_binding
+{
+	SpvExecutionModel stage;
+	unsigned desc_set;
+	unsigned binding;
+
+	spvc_hlsl_resource_binding_mapping cbv, uav, srv, sampler;
+} spvc_hlsl_resource_binding;
+
+/*
+ * Initializes the resource binding struct.
+ * The defaults are non-zero.
+ */
+SPVC_PUBLIC_API void spvc_hlsl_resource_binding_init(spvc_hlsl_resource_binding *binding);
 
 /* Maps to the various spirv_cross::Compiler*::Option structures. See C++ API for defaults and details. */
 typedef enum spvc_compiler_option
@@ -620,6 +646,13 @@ SPVC_PUBLIC_API spvc_variable_id spvc_compiler_hlsl_remap_num_workgroups_builtin
 
 SPVC_PUBLIC_API spvc_result spvc_compiler_hlsl_set_resource_binding_flags(spvc_compiler compiler,
                                                                           spvc_hlsl_binding_flags flags);
+
+SPVC_PUBLIC_API spvc_result spvc_compiler_hlsl_add_resource_binding(spvc_compiler compiler,
+                                                                    const spvc_hlsl_resource_binding *binding);
+SPVC_PUBLIC_API spvc_bool spvc_compiler_hlsl_is_resource_used(spvc_compiler compiler,
+                                                              SpvExecutionModel model,
+                                                              unsigned set,
+                                                              unsigned binding);
 
 /*
  * MSL specifics.
