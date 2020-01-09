@@ -4464,6 +4464,34 @@ void CompilerGLSL::emit_trinary_func_op_cast(uint32_t result_type, uint32_t resu
 	inherit_expression_dependencies(result_id, op2);
 }
 
+void CompilerGLSL::emit_binary_func_op_cast_clustered(uint32_t result_type, uint32_t result_id, uint32_t op0,
+                                                      uint32_t op1, const char *op, SPIRType::BaseType input_type)
+{
+	// Special purpose method for implementing clustered subgroup opcodes.
+	// Main difference is that op1 does not participate in any casting, it needs to be a literal.
+	auto &out_type = get<SPIRType>(result_type);
+	auto expected_type = out_type;
+	expected_type.basetype = input_type;
+	string cast_op0 =
+	    expression_type(op0).basetype != input_type ? bitcast_glsl(expected_type, op0) : to_unpacked_expression(op0);
+
+	string expr;
+	if (out_type.basetype != input_type)
+	{
+		expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(op, "(", cast_op0, ", ", to_expression(op1), ")");
+		expr += ')';
+	}
+	else
+	{
+		expr += join(op, "(", cast_op0, ", ", to_expression(op1), ")");
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0));
+	inherit_expression_dependencies(result_id, op0);
+}
+
 void CompilerGLSL::emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                             const char *op, SPIRType::BaseType input_type, bool skip_cast_if_equal_type)
 {
@@ -6014,6 +6042,11 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	if (!options.vulkan_semantics)
 		SPIRV_CROSS_THROW("Can only use subgroup operations in Vulkan semantics.");
 
+	// If we need to do implicit bitcasts, make sure we do it with the correct type.
+	uint32_t integer_width = get_integer_width_for_instruction(i);
+	auto int_type = to_signed_basetype(integer_width);
+	auto uint_type = to_unsigned_basetype(integer_width);
+
 	switch (op)
 	{
 	case OpGroupNonUniformElect:
@@ -6185,20 +6218,39 @@ case OpGroupNonUniform##op: \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
 		break; \
 	}
+
+#define GLSL_GROUP_OP_CAST(op, glsl_op, type) \
+case OpGroupNonUniform##op: \
+	{ \
+		auto operation = static_cast<GroupOperation>(ops[3]); \
+		if (operation == GroupOperationReduce) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "subgroup" #glsl_op, type, type); \
+		else if (operation == GroupOperationInclusiveScan) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "subgroupInclusive" #glsl_op, type, type); \
+		else if (operation == GroupOperationExclusiveScan) \
+			emit_unary_func_op_cast(result_type, id, ops[4], "subgroupExclusive" #glsl_op, type, type); \
+		else if (operation == GroupOperationClusteredReduce) \
+			emit_binary_func_op_cast_clustered(result_type, id, ops[4], ops[5], "subgroupClustered" #glsl_op, type); \
+		else \
+			SPIRV_CROSS_THROW("Invalid group operation."); \
+		break; \
+	}
+
 	GLSL_GROUP_OP(FAdd, Add)
 	GLSL_GROUP_OP(FMul, Mul)
 	GLSL_GROUP_OP(FMin, Min)
 	GLSL_GROUP_OP(FMax, Max)
 	GLSL_GROUP_OP(IAdd, Add)
 	GLSL_GROUP_OP(IMul, Mul)
-	GLSL_GROUP_OP(SMin, Min)
-	GLSL_GROUP_OP(SMax, Max)
-	GLSL_GROUP_OP(UMin, Min)
-	GLSL_GROUP_OP(UMax, Max)
+	GLSL_GROUP_OP_CAST(SMin, Min, int_type)
+	GLSL_GROUP_OP_CAST(SMax, Max, int_type)
+	GLSL_GROUP_OP_CAST(UMin, Min, uint_type)
+	GLSL_GROUP_OP_CAST(UMax, Max, uint_type)
 	GLSL_GROUP_OP(BitwiseAnd, And)
 	GLSL_GROUP_OP(BitwiseOr, Or)
 	GLSL_GROUP_OP(BitwiseXor, Xor)
 #undef GLSL_GROUP_OP
+#undef GLSL_GROUP_OP_CAST
 		// clang-format on
 
 	case OpGroupNonUniformQuadSwap:

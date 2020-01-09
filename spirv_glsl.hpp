@@ -467,6 +467,8 @@ protected:
 	                             SPIRType::BaseType input_type, SPIRType::BaseType expected_result_type);
 	void emit_binary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
 	                              SPIRType::BaseType input_type, bool skip_cast_if_equal_type);
+	void emit_binary_func_op_cast_clustered(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+	                                        const char *op, SPIRType::BaseType input_type);
 	void emit_trinary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                               const char *op, SPIRType::BaseType input_type);
 	void emit_trinary_func_op_bitextract(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
