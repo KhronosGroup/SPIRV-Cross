@@ -475,11 +475,10 @@ void CompilerGLSL::find_static_extensions()
 		SPIRV_CROSS_THROW("Only Logical and PhysicalStorageBuffer64EXT addressing models are supported.");
 	}
 
-	// Check for nonuniform qualifier.
+	// Check for nonuniform qualifier and passthrough.
 	// Instead of looping over all decorations to find this, just look at capabilities.
 	for (auto &cap : ir.declared_capabilities)
 	{
-		bool nonuniform_indexing = false;
 		switch (cap)
 		{
 		case CapabilityShaderNonUniformEXT:
@@ -487,15 +486,19 @@ void CompilerGLSL::find_static_extensions()
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("GL_EXT_nonuniform_qualifier is only supported in Vulkan GLSL.");
 			require_extension_internal("GL_EXT_nonuniform_qualifier");
-			nonuniform_indexing = true;
+			break;
+
+		case CapabilityGeometryShaderPassthroughNV:
+			if (execution.model == ExecutionModelGeometry)
+			{
+				require_extension_internal("GL_NV_geometry_shader_passthrough");
+				execution.geometry_passthrough = true;
+			}
 			break;
 
 		default:
 			break;
 		}
-
-		if (nonuniform_indexing)
-			break;
 	}
 }
 
@@ -710,7 +713,6 @@ void CompilerGLSL::emit_header()
 	switch (execution.model)
 	{
 	case ExecutionModelGeometry:
-		outputs.push_back(join("max_vertices = ", execution.output_vertices));
 		if ((execution.flags.get(ExecutionModeInvocations)) && execution.invocations != 1)
 			inputs.push_back(join("invocations = ", execution.invocations));
 		if (execution.flags.get(ExecutionModeInputPoints))
@@ -723,12 +725,18 @@ void CompilerGLSL::emit_header()
 			inputs.push_back("triangles");
 		if (execution.flags.get(ExecutionModeInputTrianglesAdjacency))
 			inputs.push_back("triangles_adjacency");
-		if (execution.flags.get(ExecutionModeOutputTriangleStrip))
-			outputs.push_back("triangle_strip");
-		if (execution.flags.get(ExecutionModeOutputPoints))
-			outputs.push_back("points");
-		if (execution.flags.get(ExecutionModeOutputLineStrip))
-			outputs.push_back("line_strip");
+
+		if (!execution.geometry_passthrough)
+		{
+			// For passthrough, these are implies and cannot be declared in shader.
+			outputs.push_back(join("max_vertices = ", execution.output_vertices));
+			if (execution.flags.get(ExecutionModeOutputTriangleStrip))
+				outputs.push_back("triangle_strip");
+			if (execution.flags.get(ExecutionModeOutputPoints))
+				outputs.push_back("points");
+			if (execution.flags.get(ExecutionModeOutputLineStrip))
+				outputs.push_back("line_strip");
+		}
 		break;
 
 	case ExecutionModelTessellationControl:
@@ -946,6 +954,9 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	auto &dec = memb[index];
 
 	SmallVector<string> attr;
+
+	if (has_member_decoration(type.self, index, DecorationPassthroughNV))
+		attr.push_back("passthrough");
 
 	// We can only apply layouts on members in block interfaces.
 	// This is a bit problematic because in SPIR-V decorations are applied on the struct types directly.
@@ -1508,10 +1519,12 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	SmallVector<string> attr;
 
-	auto &dec = ir.meta[var.self].decoration;
 	auto &type = get<SPIRType>(var.basetype);
-	auto &flags = dec.decoration_flags;
-	auto typeflags = ir.meta[type.self].decoration.decoration_flags;
+	auto &flags = get_decoration_bitset(var.self);
+	auto &typeflags = get_decoration_bitset(type.self);
+
+	if (flags.get(DecorationPassthroughNV))
+		attr.push_back("passthrough");
 
 	if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
 		attr.push_back("push_constant");
@@ -1526,7 +1539,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	if (options.vulkan_semantics)
 	{
 		if (flags.get(DecorationInputAttachmentIndex))
-			attr.push_back(join("input_attachment_index = ", dec.input_attachment));
+			attr.push_back(join("input_attachment_index = ", get_decoration(var.self, DecorationInputAttachmentIndex)));
 	}
 
 	bool is_block = has_decoration(type.self, DecorationBlock);
@@ -1539,7 +1552,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		// If our members have location decorations, we don't need to
 		// emit location decorations at the top as well (looks weird).
 		if (!combined_decoration.get(DecorationLocation))
-			attr.push_back(join("location = ", dec.location));
+			attr.push_back(join("location = ", get_decoration(var.self, DecorationLocation)));
 	}
 
 	// Can only declare Component if we can declare location.
@@ -1551,21 +1564,21 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 				require_extension_internal("GL_ARB_enhanced_layouts");
 			else if (options.version < 140)
 				SPIRV_CROSS_THROW("Component decoration is not supported in targets below GLSL 1.40.");
-			attr.push_back(join("component = ", dec.component));
+			attr.push_back(join("component = ", get_decoration(var.self, DecorationComponent)));
 		}
 		else
 			SPIRV_CROSS_THROW("Component decoration is not supported in ES targets.");
 	}
 
 	if (flags.get(DecorationIndex))
-		attr.push_back(join("index = ", dec.index));
+		attr.push_back(join("index = ", get_decoration(var.self, DecorationIndex)));
 
 	// Do not emit set = decoration in regular GLSL output, but
 	// we need to preserve it in Vulkan GLSL mode.
 	if (var.storage != StorageClassPushConstant && var.storage != StorageClassShaderRecordBufferNV)
 	{
 		if (flags.get(DecorationDescriptorSet) && options.vulkan_semantics)
-			attr.push_back(join("set = ", dec.set));
+			attr.push_back(join("set = ", get_decoration(var.self, DecorationDescriptorSet)));
 	}
 
 	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
@@ -1595,10 +1608,10 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		can_use_binding = false;
 
 	if (can_use_binding && flags.get(DecorationBinding))
-		attr.push_back(join("binding = ", dec.binding));
+		attr.push_back(join("binding = ", get_decoration(var.self, DecorationBinding)));
 
 	if (flags.get(DecorationOffset))
-		attr.push_back(join("offset = ", dec.offset));
+		attr.push_back(join("offset = ", get_decoration(var.self, DecorationOffset)));
 
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
@@ -2489,7 +2502,13 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	if (storage == StorageClassOutput)
 		statement("out gl_PerVertex");
 	else
-		statement("in gl_PerVertex");
+	{
+		// If we have passthrough, there is no way PerVertex cannot be passthrough.
+		if (get_entry_point().geometry_passthrough)
+			statement("layout(passthrough) in gl_PerVertex");
+		else
+			statement("in gl_PerVertex");
+	}
 
 	begin_scope();
 	if (emitted_builtins.get(BuiltInPosition))
@@ -2579,6 +2598,11 @@ void CompilerGLSL::emit_resources()
 		default:
 			break;
 		}
+	}
+	else if (execution.geometry_passthrough)
+	{
+		// Need to declare gl_in with Passthrough.
+		emit_declared_builtin_block(StorageClassInput, execution.model);
 	}
 	else
 	{
