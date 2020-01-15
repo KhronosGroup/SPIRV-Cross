@@ -40,16 +40,19 @@
         {
             "id" : 10,
             "type" : "uint",
+            "variable_id" : 18,
             "default_value" : 1
         },
         {
             "id" : 40,
             "type" : "uint",
+            "variable_id" : 19,
             "default_value" : 1
         },
         {
             "id" : 60,
             "type" : "uint",
+            "variable_id" : 20,
             "default_value" : 1
         }
     ]

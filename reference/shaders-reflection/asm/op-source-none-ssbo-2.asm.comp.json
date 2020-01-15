@@ -25,6 +25,9 @@
                     "array" : [
                         0
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 0
                 }
             ]
@@ -37,6 +40,9 @@
                     "type" : "vec4",
                     "array" : [
                         0
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 0
                 }

@@ -25,6 +25,9 @@
                     "array" : [
                         0
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 0
                 }
             ]

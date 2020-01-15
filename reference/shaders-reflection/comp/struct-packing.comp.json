@@ -25,6 +25,9 @@
                     "array" : [
                         1
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 0
                 },
                 {
@@ -57,6 +60,9 @@
                     "type" : "vec3",
                     "array" : [
                         1
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 0
                 },
@@ -101,6 +107,9 @@
                     "array" : [
                         1
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 0
                 },
                 {
@@ -109,6 +118,9 @@
                     "array" : [
                         1
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 16
                 },
                 {
@@ -116,6 +128,9 @@
                     "type" : "_17",
                     "array" : [
                         1
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 32
                 },
@@ -150,6 +165,9 @@
                     "array" : [
                         8
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 152
                 }
             ]
@@ -167,6 +185,9 @@
                     "type" : "_23",
                     "array" : [
                         2
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 224
                 },
@@ -191,6 +212,9 @@
                     "array" : [
                         4
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 928
                 },
                 {
@@ -211,6 +235,9 @@
                     "array" : [
                         9
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 1096
                 },
                 {
@@ -220,6 +247,10 @@
                     "array" : [
                         2,
                         4
+                    ],
+                    "array_size_is_literal" : [
+                        true,
+                        true
                     ],
                     "offset" : 1240
                 },
@@ -235,6 +266,9 @@
                     "array" : [
                         0
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 1472
                 }
             ]
@@ -247,6 +281,9 @@
                     "type" : "vec2",
                     "array" : [
                         1
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 0
                 },
@@ -280,6 +317,9 @@
                     "type" : "vec3",
                     "array" : [
                         1
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 0
                 },
@@ -324,6 +364,9 @@
                     "array" : [
                         1
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 0
                 },
                 {
@@ -332,6 +375,9 @@
                     "array" : [
                         1
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 32
                 },
                 {
@@ -339,6 +385,9 @@
                     "type" : "_47",
                     "array" : [
                         1
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 48
                 },
@@ -373,6 +422,9 @@
                     "array" : [
                         8
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 192
                 }
             ]
@@ -390,6 +442,9 @@
                     "type" : "_52",
                     "array" : [
                         2
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 320
                 },
@@ -414,6 +469,9 @@
                     "array" : [
                         4
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 1344
                 },
                 {
@@ -434,6 +492,9 @@
                     "array" : [
                         9
                     ],
+                    "array_size_is_literal" : [
+                        true
+                    ],
                     "offset" : 1552
                 },
                 {
@@ -443,6 +504,10 @@
                     "array" : [
                         2,
                         4
+                    ],
+                    "array_size_is_literal" : [
+                        true,
+                        true
                     ],
                     "offset" : 1840
                 },
@@ -457,6 +522,9 @@
                     "type" : "float",
                     "array" : [
                         0
+                    ],
+                    "array_size_is_literal" : [
+                        true
                     ],
                     "offset" : 2256
                 }

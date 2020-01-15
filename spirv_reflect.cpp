@@ -358,6 +358,11 @@ void CompilerReflection::emit_type_array(const SPIRType &type)
 		for (const auto &value : type.array)
 			json_stream->emit_json_array_value(value);
 		json_stream->end_json_array();
+
+		json_stream->emit_json_key_array("array_size_is_literal");
+		for (const auto &value : type.array_size_literal)
+			json_stream->emit_json_array_value(value);
+		json_stream->end_json_array();
 	}
 }
 
@@ -592,6 +597,7 @@ void CompilerReflection::emit_specialization_constants()
 		json_stream->begin_json_object();
 		json_stream->emit_json_key_value("id", spec_const.constant_id);
 		json_stream->emit_json_key_value("type", type_to_glsl(type));
+		json_stream->emit_json_key_value("variable_id", spec_const.id);
 		switch (type.basetype)
 		{
 		case SPIRType::UInt:
