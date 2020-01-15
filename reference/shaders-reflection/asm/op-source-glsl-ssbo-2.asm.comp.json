@@ -28,7 +28,8 @@
                     "array_size_is_literal" : [
                         true
                     ],
-                    "offset" : 0
+                    "offset" : 0,
+                    "array_stride" : 16
                 }
             ]
         },
@@ -44,7 +45,8 @@
                     "array_size_is_literal" : [
                         true
                     ],
-                    "offset" : 0
+                    "offset" : 0,
+                    "array_stride" : 16
                 }
             ]
         }

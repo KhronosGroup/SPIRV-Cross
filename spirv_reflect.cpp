@@ -368,10 +368,6 @@ void CompilerReflection::emit_type_array(const SPIRType &type)
 
 void CompilerReflection::emit_type_member_qualifiers(const SPIRType &type, uint32_t index)
 {
-	auto flags = combined_decoration_for_member(type, index);
-	if (flags.get(DecorationRowMajor))
-		json_stream->emit_json_key_value("row_major", true);
-
 	auto &membertype = get<SPIRType>(type.member_types[index]);
 	emit_type_array(membertype);
 	auto &memb = ir.meta[type.self].members;
@@ -382,6 +378,15 @@ void CompilerReflection::emit_type_member_qualifiers(const SPIRType &type, uint3
 			json_stream->emit_json_key_value("location", dec.location);
 		if (dec.decoration_flags.get(DecorationOffset))
 			json_stream->emit_json_key_value("offset", dec.offset);
+
+		// Array stride is a property of the array type, not the struct.
+		if (has_decoration(type.member_types[index], DecorationArrayStride))
+			json_stream->emit_json_key_value("array_stride", get_decoration(type.member_types[index], DecorationArrayStride));
+
+		if (dec.decoration_flags.get(DecorationMatrixStride))
+			json_stream->emit_json_key_value("matrix_stride", dec.matrix_stride);
+		if (dec.decoration_flags.get(DecorationRowMajor))
+			json_stream->emit_json_key_value("row_major", true);
 	}
 }
 
