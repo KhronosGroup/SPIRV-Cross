@@ -2241,6 +2241,36 @@ void CompilerGLSL::emit_entry_point_declarations()
 {
 }
 
+void CompilerGLSL::replace_illegal_names(const unordered_set<string> &keywords)
+{
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
+		if (is_hidden_variable(var))
+			return;
+
+		auto *meta = ir.find_meta(var.self);
+		if (!meta)
+			return;
+
+		auto &m = meta->decoration;
+		if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
+			m.alias = join("_", m.alias);
+	});
+
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, const SPIRType &type) {
+		auto *meta = ir.find_meta(type.self);
+		if (!meta)
+			return;
+
+		auto &m = meta->decoration;
+		if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
+			m.alias = join("_", m.alias);
+
+		for (auto &memb : meta->members)
+			if (memb.alias.compare(0, 3, "gl_") == 0 || keywords.find(memb.alias) != end(keywords))
+				memb.alias = join("_", memb.alias);
+	});
+}
+
 void CompilerGLSL::replace_illegal_names()
 {
 	// clang-format off
@@ -2295,14 +2325,7 @@ void CompilerGLSL::replace_illegal_names()
 	};
 	// clang-format on
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (!is_hidden_variable(var))
-		{
-			auto &m = ir.meta[var.self].decoration;
-			if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
-				m.alias = join("_", m.alias);
-		}
-	});
+	replace_illegal_names(keywords);
 }
 
 void CompilerGLSL::replace_fragment_output(SPIRVariable &var)

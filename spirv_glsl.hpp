@@ -590,6 +590,7 @@ protected:
 	bool check_atomic_image(uint32_t id);
 
 	virtual void replace_illegal_names();
+	void replace_illegal_names(const std::unordered_set<std::string> &keywords);
 	virtual void emit_entry_point_declarations();
 
 	void replace_fragment_output(SPIRVariable &var);
