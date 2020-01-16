@@ -1151,9 +1151,8 @@ static int main_inner(int argc, char *argv[])
 		args.msl_dynamic_buffers.push_back(make_pair(desc_set, binding));
 	});
 	cbs.add("--msl-decoration-binding", [&args](CLIParser &) { args.msl_decoration_binding = true; });
-	cbs.add("--msl-force-active-argument-buffer-resources", [&args](CLIParser &) {
-		args.msl_force_active_argument_buffer_resources = true;
-	});
+	cbs.add("--msl-force-active-argument-buffer-resources",
+	        [&args](CLIParser &) { args.msl_force_active_argument_buffer_resources = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
