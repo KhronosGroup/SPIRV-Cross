@@ -521,6 +521,7 @@ struct CLIArguments
 	bool msl_view_index_from_device_index = false;
 	bool msl_dispatch_base = false;
 	bool msl_decoration_binding = false;
+	bool msl_force_active_argument_buffer_resources = false;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	bool vulkan_glsl_disable_ext_samplerless_texture_functions = false;
@@ -612,6 +613,7 @@ static void print_help()
 	                "\t[--msl-dispatch-base]\n"
 	                "\t[--msl-dynamic-buffer <set index> <binding>]\n"
 	                "\t[--msl-decoration-binding]\n"
+	                "\t[--msl-force-active-argument-buffer-resources]\n"
 	                "\t[--hlsl]\n"
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
@@ -801,6 +803,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.view_index_from_device_index = args.msl_view_index_from_device_index;
 		msl_opts.dispatch_base = args.msl_dispatch_base;
 		msl_opts.enable_decoration_binding = args.msl_decoration_binding;
+		msl_opts.force_active_argument_buffer_resources = args.msl_force_active_argument_buffer_resources;
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
@@ -1148,6 +1151,9 @@ static int main_inner(int argc, char *argv[])
 		args.msl_dynamic_buffers.push_back(make_pair(desc_set, binding));
 	});
 	cbs.add("--msl-decoration-binding", [&args](CLIParser &) { args.msl_decoration_binding = true; });
+	cbs.add("--msl-force-active-argument-buffer-resources", [&args](CLIParser &) {
+		args.msl_force_active_argument_buffer_resources = true;
+	});
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();

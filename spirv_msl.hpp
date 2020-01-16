@@ -307,6 +307,11 @@ public:
 		// Requires MSL 2.1, use the native support for texel buffers.
 		bool texture_buffer_native = false;
 
+		// Forces all resources which are part of an argument buffer to be considered active.
+		// This ensures ABI compatibility between shaders where some resources might be unused,
+		// and would otherwise declare a different IAB.
+		bool force_active_argument_buffer_resources = false;
+
 		bool is_ios()
 		{
 			return platform == iOS;
@@ -862,6 +867,8 @@ protected:
 	bool suppress_missing_prototypes = false;
 
 	void add_spv_func_and_recompile(SPVFuncImpl spv_func);
+
+	void activate_argument_buffer_resources();
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
