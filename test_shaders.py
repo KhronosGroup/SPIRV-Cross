@@ -226,6 +226,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('2')
         msl_args.append('--msl-discrete-descriptor-set')
         msl_args.append('3')
+    if '.force-active.' in shader:
+        msl_args.append('--msl-force-active-argument-buffer-resources')
     if '.line.' in shader:
         msl_args.append('--emit-line-directives')
     if '.multiview.' in shader:

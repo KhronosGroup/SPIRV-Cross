@@ -1003,6 +1003,9 @@ string CompilerMSL::compile()
 	fixup_image_load_store_access();
 
 	set_enabled_interface_variables(get_active_interface_variables());
+	if (msl_options.force_active_argument_buffer_resources)
+		activate_argument_buffer_resources();
+
 	if (swizzle_buffer_id)
 		active_interface_variables.insert(swizzle_buffer_id);
 	if (buffer_size_buffer_id)
@@ -12691,3 +12694,17 @@ void CompilerMSL::analyze_argument_buffers()
 		}
 	}
 }
+
+void CompilerMSL::activate_argument_buffer_resources()
+{
+	// For ABI compatibility, force-enable all resources which are part of argument buffers.
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, const SPIRVariable &) {
+		if (!has_decoration(self, DecorationDescriptorSet))
+			return;
+
+		uint32_t desc_set = get_decoration(self, DecorationDescriptorSet);
+		if (descriptor_set_is_argument_buffer(desc_set))
+			active_interface_variables.insert(self);
+	});
+}
+
