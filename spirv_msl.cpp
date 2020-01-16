@@ -1701,6 +1701,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		set_name(var.self, builtin_to_glsl(builtin, StorageClassFunction));
 
 	bool flatten_from_ib_var = false;
+	string flatten_from_ib_mbr_name;
 
 	if (storage == StorageClassOutput && is_builtin && builtin == BuiltInClipDistance)
 	{
@@ -1708,7 +1709,9 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		uint32_t clip_array_mbr_idx = uint32_t(ib_type.member_types.size());
 		ib_type.member_types.push_back(get_variable_data_type_id(var));
 		set_member_decoration(ib_type.self, clip_array_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
-		set_member_name(ib_type.self, clip_array_mbr_idx, builtin_to_glsl(BuiltInClipDistance, StorageClassOutput));
+
+		flatten_from_ib_mbr_name = builtin_to_glsl(BuiltInClipDistance, StorageClassOutput);
+		set_member_name(ib_type.self, clip_array_mbr_idx, flatten_from_ib_mbr_name);
 
 		// When we flatten, we flatten directly from the "out" struct,
 		// not from a function variable.
@@ -1817,7 +1820,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 						    ";");
 					}
 					else if (flatten_from_ib_var)
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", to_name(var.self), "[", i, "];");
+						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i, "];");
 					else
 						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
 				});
@@ -1902,6 +1905,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		usable_type = &get<SPIRType>(usable_type->parent_type);
 
 	bool flatten_from_ib_var = false;
+	string flatten_from_ib_mbr_name;
 
 	if (storage == StorageClassOutput && is_builtin && builtin == BuiltInClipDistance)
 	{
@@ -1909,7 +1913,9 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		uint32_t clip_array_mbr_idx = uint32_t(ib_type.member_types.size());
 		ib_type.member_types.push_back(mbr_type_id);
 		set_member_decoration(ib_type.self, clip_array_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
-		set_member_name(ib_type.self, clip_array_mbr_idx, builtin_to_glsl(BuiltInClipDistance, StorageClassOutput));
+
+		flatten_from_ib_mbr_name = builtin_to_glsl(BuiltInClipDistance, StorageClassOutput);
+		set_member_name(ib_type.self, clip_array_mbr_idx, flatten_from_ib_mbr_name);
 
 		// When we flatten, we flatten directly from the "out" struct,
 		// not from a function variable.
@@ -1983,7 +1989,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
 					if (flatten_from_ib_var)
 					{
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", to_member_name(var_type, mbr_idx),
+						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name,
 						          "[", i, "];");
 					}
 					else
@@ -10395,19 +10401,31 @@ void CompilerMSL::replace_illegal_names()
 	};
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &) {
-		auto &dec = ir.meta[self].decoration;
+		auto *meta = ir.find_meta(self);
+		if (!meta)
+			return;
+
+		auto &dec = meta->decoration;
 		if (keywords.find(dec.alias) != end(keywords))
 			dec.alias += "0";
 	});
 
 	ir.for_each_typed_id<SPIRFunction>([&](uint32_t self, SPIRFunction &) {
-		auto &dec = ir.meta[self].decoration;
+		auto *meta = ir.find_meta(self);
+		if (!meta)
+			return;
+
+		auto &dec = meta->decoration;
 		if (illegal_func_names.find(dec.alias) != end(illegal_func_names))
 			dec.alias += "0";
 	});
 
 	ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &) {
-		for (auto &mbr_dec : ir.meta[self].members)
+		auto *meta = ir.find_meta(self);
+		if (!meta)
+			return;
+
+		for (auto &mbr_dec : meta->members)
 			if (keywords.find(mbr_dec.alias) != end(keywords))
 				mbr_dec.alias += "0";
 	});
