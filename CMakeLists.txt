@@ -75,11 +75,14 @@ endif()
 string(TIMESTAMP spirv-cross-timestamp)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/gitversion.in.h ${CMAKE_CURRENT_BINARY_DIR}/gitversion.h @ONLY)
 
-if(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+if (SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
 	set(spirv-compiler-defines ${spirv-compiler-defines} SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS)
+	if (NOT MSVC)
+		set(spirv-compiler-options ${spirv-compiler-options} -fno-exceptions)
+	endif()
 endif()
 
-if(SPIRV_CROSS_FORCE_STL_TYPES)
+if (SPIRV_CROSS_FORCE_STL_TYPES)
 	set(spirv-compiler-defines ${spirv-compiler-defines} SPIRV_CROSS_FORCE_STL_TYPES)
 endif()
 
