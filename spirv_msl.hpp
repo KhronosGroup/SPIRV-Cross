@@ -862,7 +862,6 @@ protected:
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
 
 	std::unordered_set<SetBindingPair, InternalHasher> inline_uniform_blocks;
-	uint32_t get_inline_uniform_block_binding_stride(SPIRType &type);
 
 	uint32_t argument_buffer_ids[kMaxArgumentBuffers];
 	uint32_t argument_buffer_discrete_mask = 0;

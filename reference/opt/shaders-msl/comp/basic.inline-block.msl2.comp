@@ -36,8 +36,8 @@ constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(3u, 3u, 2u);
 
 struct spvDescriptorSetBuffer0
 {
-    Foo m_32 [[id(0)]];
-    constant Bar* m_38 [[id(12)]];
+    constant Bar* m_38 [[id(0)]];
+    Foo m_32 [[id(1)]];
 };
 
 struct spvDescriptorSetBuffer1

@@ -9856,31 +9856,6 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	});
 }
 
-// Returns the number of IDs that Metal would assign to an inline uniform block in an argument buffer.
-uint32_t CompilerMSL::get_inline_uniform_block_binding_stride(SPIRType &type)
-{
-	// We need this information now.
-	mark_scalar_layout_structs(type);
-	unordered_set<uint32_t> aligned_structs;
-	align_struct(type, aligned_structs);
-	uint32_t binding_stride = 0;
-	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
-	{
-		uint32_t member_type_id = type.member_types[i];
-		uint32_t member_binding_stride = 1;
-		auto &member_type = get<SPIRType>(member_type_id);
-		if (member_type.basetype == SPIRType::Struct)
-			member_binding_stride = get_inline_uniform_block_binding_stride(member_type);
-		else if (member_is_packed_physical_type(type, i) && is_matrix(member_type))
-			// Packed matrices are represented as arrays, so they get multiple IDs.
-			member_binding_stride = member_type.columns;
-		for (uint32_t j = 0; j < uint32_t(member_type.array.size()); j++)
-			member_binding_stride *= to_array_size_literal(member_type, j);
-		binding_stride += member_binding_stride;
-	}
-	return binding_stride;
-}
-
 // Returns the Metal index of the resource of the specified type as used by the specified variable.
 uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype, uint32_t plane)
 {
@@ -9949,8 +9924,6 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		allocate_argument_buffer_ids = descriptor_set_is_argument_buffer(var_desc_set);
 
 	uint32_t binding_stride = 1;
-	if (inline_uniform_blocks.count(SetBindingPair{ var_desc_set, var_binding }))
-		binding_stride = get_inline_uniform_block_binding_stride(get_variable_data_type(var));
 	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
 		binding_stride *= to_array_size_literal(type, i);
@@ -12477,6 +12450,7 @@ void CompilerMSL::analyze_argument_buffers()
 		uint32_t plane;
 	};
 	SmallVector<Resource> resources_in_set[kMaxArgumentBuffers];
+	SmallVector<uint32_t> inline_block_vars;
 
 	bool set_needs_swizzle_buffer[kMaxArgumentBuffers] = {};
 	bool set_needs_buffer_sizes[kMaxArgumentBuffers] = {};
@@ -12509,6 +12483,7 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 			}
 
+			uint32_t binding = get_decoration(var_id, DecorationBinding);
 			if (type.basetype == SPIRType::SampledImage)
 			{
 				add_resource_name(var_id);
@@ -12531,9 +12506,14 @@ void CompilerMSL::analyze_argument_buffers()
 					    { &var, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0 });
 				}
 			}
+			else if (inline_uniform_blocks.count(SetBindingPair{ desc_set, binding }))
+			{
+				inline_block_vars.push_back(var_id);
+			}
 			else if (!constexpr_sampler)
 			{
 				// constexpr samplers are not declared as resources.
+				// Inline uniform blocks are always emitted at the end.
 				if (!msl_options.is_ios() || type.basetype != SPIRType::Image || type.image.sampled != 2)
 				{
 					add_resource_name(var_id);
@@ -12606,6 +12586,16 @@ void CompilerMSL::analyze_argument_buffers()
 				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
 			}
 		}
+	}
+
+	// Now add inline uniform blocks.
+	for (uint32_t var_id : inline_block_vars)
+	{
+		auto &var = get<SPIRVariable>(var_id);
+		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+		add_resource_name(var_id);
+		resources_in_set[desc_set].push_back(
+		    { &var, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0 });
 	}
 
 	for (uint32_t desc_set = 0; desc_set < kMaxArgumentBuffers; desc_set++)
