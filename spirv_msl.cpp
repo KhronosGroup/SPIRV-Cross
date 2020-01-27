@@ -68,6 +68,12 @@ void CompilerMSL::add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32
 	buffers_requiring_dynamic_offset[pair] = { index, 0 };
 }
 
+void CompilerMSL::add_inline_uniform_block(uint32_t desc_set, uint32_t binding)
+{
+	SetBindingPair pair = { desc_set, binding };
+	inline_uniform_blocks.insert(pair);
+}
+
 void CompilerMSL::add_discrete_descriptor_set(uint32_t desc_set)
 {
 	if (desc_set < kMaxArgumentBuffers)
@@ -9912,6 +9918,11 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	// If we did not explicitly remap, allocate bindings on demand.
 	// We cannot reliably use Binding decorations since SPIR-V and MSL's binding models are very different.
 
+	bool allocate_argument_buffer_ids = false;
+
+	if (var.storage != StorageClassPushConstant)
+		allocate_argument_buffer_ids = descriptor_set_is_argument_buffer(var_desc_set);
+
 	uint32_t binding_stride = 1;
 	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
@@ -9922,20 +9933,11 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	// If a binding has not been specified, revert to incrementing resource indices.
 	uint32_t resource_index;
 
-	bool allocate_argument_buffer_ids = false;
-	uint32_t desc_set = 0;
-
-	if (var.storage != StorageClassPushConstant)
-	{
-		desc_set = get_decoration(var.self, DecorationDescriptorSet);
-		allocate_argument_buffer_ids = descriptor_set_is_argument_buffer(desc_set);
-	}
-
 	if (allocate_argument_buffer_ids)
 	{
 		// Allocate from a flat ID binding space.
-		resource_index = next_metal_resource_ids[desc_set];
-		next_metal_resource_ids[desc_set] += binding_stride;
+		resource_index = next_metal_resource_ids[var_desc_set];
+		next_metal_resource_ids[var_desc_set] += binding_stride;
 	}
 	else
 	{
@@ -12448,6 +12450,7 @@ void CompilerMSL::analyze_argument_buffers()
 		uint32_t plane;
 	};
 	SmallVector<Resource> resources_in_set[kMaxArgumentBuffers];
+	SmallVector<uint32_t> inline_block_vars;
 
 	bool set_needs_swizzle_buffer[kMaxArgumentBuffers] = {};
 	bool set_needs_buffer_sizes[kMaxArgumentBuffers] = {};
@@ -12480,6 +12483,7 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 			}
 
+			uint32_t binding = get_decoration(var_id, DecorationBinding);
 			if (type.basetype == SPIRType::SampledImage)
 			{
 				add_resource_name(var_id);
@@ -12502,9 +12506,14 @@ void CompilerMSL::analyze_argument_buffers()
 					    { &var, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0 });
 				}
 			}
+			else if (inline_uniform_blocks.count(SetBindingPair{ desc_set, binding }))
+			{
+				inline_block_vars.push_back(var_id);
+			}
 			else if (!constexpr_sampler)
 			{
 				// constexpr samplers are not declared as resources.
+				// Inline uniform blocks are always emitted at the end.
 				if (!msl_options.is_ios() || type.basetype != SPIRType::Image || type.image.sampled != 2)
 				{
 					add_resource_name(var_id);
@@ -12577,6 +12586,16 @@ void CompilerMSL::analyze_argument_buffers()
 				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
 			}
 		}
+	}
+
+	// Now add inline uniform blocks.
+	for (uint32_t var_id : inline_block_vars)
+	{
+		auto &var = get<SPIRVariable>(var_id);
+		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+		add_resource_name(var_id);
+		resources_in_set[desc_set].push_back(
+		    { &var, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0 });
 	}
 
 	for (uint32_t desc_set = 0; desc_set < kMaxArgumentBuffers; desc_set++)
@@ -12675,6 +12694,12 @@ void CompilerMSL::analyze_argument_buffers()
 					// Don't set the qualified name here; we'll define a variable holding the corrected buffer address later.
 					buffer_type.member_types.push_back(var.basetype);
 					buffers_requiring_dynamic_offset[pair].second = var.self;
+				}
+				else if (inline_uniform_blocks.count(pair))
+				{
+					// Put the buffer block itself into the argument buffer.
+					buffer_type.member_types.push_back(get_variable_data_type_id(var));
+					set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
 				}
 				else
 				{

@@ -432,6 +432,13 @@ public:
 	// an offset taken from the dynamic offset buffer.
 	void add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32_t index);
 
+	// desc_set and binding are the SPIR-V descriptor set and binding of a buffer resource
+	// in this shader. This function marks that resource as an inline uniform block
+	// (VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK_EXT). This function only has any effect if argument buffers
+	// are enabled. If so, the buffer block will be directly embedded into the argument
+	// buffer, instead of being referenced indirectly via pointer.
+	void add_inline_uniform_block(uint32_t desc_set, uint32_t binding);
+
 	// When using MSL argument buffers, we can force "classic" MSL 1.0 binding schemes for certain descriptor sets.
 	// This corresponds to VK_KHR_push_descriptor in Vulkan.
 	void add_discrete_descriptor_set(uint32_t desc_set);
@@ -853,6 +860,8 @@ protected:
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
+
+	std::unordered_set<SetBindingPair, InternalHasher> inline_uniform_blocks;
 
 	uint32_t argument_buffer_ids[kMaxArgumentBuffers];
 	uint32_t argument_buffer_discrete_mask = 0;

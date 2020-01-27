@@ -1029,6 +1029,26 @@ spvc_result spvc_compiler_msl_add_dynamic_buffer(spvc_compiler compiler, unsigne
 #endif
 }
 
+spvc_result spvc_compiler_msl_add_inline_uniform_block(spvc_compiler compiler, unsigned desc_set, unsigned binding)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	msl.add_inline_uniform_block(desc_set, binding);
+	return SPVC_SUCCESS;
+#else
+	(void)binding;
+	(void)desc_set;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
 spvc_result spvc_compiler_msl_add_discrete_descriptor_set(spvc_compiler compiler, unsigned desc_set)
 {
 #if SPIRV_CROSS_C_API_MSL
