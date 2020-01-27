@@ -1003,6 +1003,8 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	if (has_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset) &&
 	    dec.decoration_flags.get(DecorationOffset))
 		attr.push_back(join("offset = ", dec.offset));
+	else if (type.storage == StorageClassOutput && dec.decoration_flags.get(DecorationOffset))
+		attr.push_back(join("xfb_offset = ", dec.offset));
 
 	if (attr.empty())
 		return "";
@@ -1555,19 +1557,89 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("location = ", get_decoration(var.self, DecorationLocation)));
 	}
 
+	// Transform feedback
+	bool uses_enhanced_layouts = false;
+	if (is_block && var.storage == StorageClassOutput)
+	{
+		// For blocks, there is a restriction where xfb_stride/xfb_buffer must only be declared on the block itself,
+		// since all members must match the same xfb_buffer. The only thing we will declare for members of the block
+		// is the xfb_offset.
+		uint32_t member_count = uint32_t(type.member_types.size());
+		bool have_xfb_buffer_stride = false;
+		bool have_any_xfb_offset = false;
+		uint32_t xfb_stride = 0, xfb_buffer = 0;
+
+		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride))
+		{
+			have_xfb_buffer_stride = true;
+			xfb_buffer = get_decoration(var.self, DecorationXfbBuffer);
+			xfb_stride = get_decoration(var.self, DecorationXfbStride);
+		}
+
+		// Verify that none of the members violate our assumption.
+		for (uint32_t i = 0; i < member_count; i++)
+		{
+			// Only members with an Offset decoration participate in XFB.
+			if (!has_member_decoration(type.self, i, DecorationOffset))
+				continue;
+			have_any_xfb_offset = true;
+
+			if (has_member_decoration(type.self, i, DecorationXfbBuffer))
+			{
+				uint32_t buffer_index = get_member_decoration(type.self, i, DecorationXfbBuffer);
+				if (have_xfb_buffer_stride && buffer_index != xfb_buffer)
+					SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
+				have_xfb_buffer_stride = true;
+				xfb_buffer = buffer_index;
+			}
+
+			if (has_member_decoration(type.self, i, DecorationXfbStride))
+			{
+				uint32_t stride = get_member_decoration(type.self, i, DecorationXfbStride);
+				if (have_xfb_buffer_stride && stride != xfb_stride)
+					SPIRV_CROSS_THROW("IO block member XfbStride mismatch.");
+				have_xfb_buffer_stride = true;
+				xfb_stride = stride;
+			}
+		}
+
+		if (have_xfb_buffer_stride && have_any_xfb_offset)
+		{
+			attr.push_back(join("xfb_buffer = ", xfb_buffer));
+			attr.push_back(join("xfb_stride = ", xfb_stride));
+			uses_enhanced_layouts = true;
+		}
+	}
+	else if (var.storage == StorageClassOutput && flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride) &&
+	         flags.get(DecorationOffset))
+	{
+		// XFB for standalone variables, we can emit all decorations.
+		attr.push_back(join("xfb_buffer = ", get_decoration(var.self, DecorationXfbBuffer)));
+		attr.push_back(join("xfb_stride = ", get_decoration(var.self, DecorationXfbStride)));
+		attr.push_back(join("xfb_offset = ", get_decoration(var.self, DecorationOffset)));
+		uses_enhanced_layouts = true;
+	}
+
 	// Can only declare Component if we can declare location.
 	if (flags.get(DecorationComponent) && can_use_io_location(var.storage, is_block))
+	{
+		uses_enhanced_layouts = true;
+		attr.push_back(join("component = ", get_decoration(var.self, DecorationComponent)));
+	}
+
+	if (uses_enhanced_layouts)
 	{
 		if (!options.es)
 		{
 			if (options.version < 440 && options.version >= 140)
 				require_extension_internal("GL_ARB_enhanced_layouts");
 			else if (options.version < 140)
-				SPIRV_CROSS_THROW("Component decoration is not supported in targets below GLSL 1.40.");
-			attr.push_back(join("component = ", get_decoration(var.self, DecorationComponent)));
+				SPIRV_CROSS_THROW("GL_ARB_enhanced_layouts is not supported in targets below GLSL 1.40.");
+			if (!options.es && options.version < 440)
+				require_extension_internal("GL_ARB_enhanced_layouts");
 		}
-		else
-			SPIRV_CROSS_THROW("Component decoration is not supported in ES targets.");
+		else if (options.es)
+			SPIRV_CROSS_THROW("GL_ARB_enhanced_layouts is not supported in ESSL.");
 	}
 
 	if (flags.get(DecorationIndex))
@@ -1610,7 +1682,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	if (can_use_binding && flags.get(DecorationBinding))
 		attr.push_back(join("binding = ", get_decoration(var.self, DecorationBinding)));
 
-	if (flags.get(DecorationOffset))
+	if (var.storage != StorageClassOutput && flags.get(DecorationOffset))
 		attr.push_back(join("offset = ", get_decoration(var.self, DecorationOffset)));
 
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
@@ -2450,6 +2522,52 @@ void CompilerGLSL::fixup_image_load_store_access()
 	});
 }
 
+static bool is_block_builtin(BuiltIn builtin)
+{
+	return builtin == BuiltInPosition || builtin == BuiltInPointSize || builtin == BuiltInClipDistance ||
+	       builtin == BuiltInCullDistance;
+}
+
+bool CompilerGLSL::should_force_emit_builtin_block(StorageClass storage)
+{
+	// If the builtin block uses XFB, we need to force explicit redeclaration of the builtin block.
+
+	if (storage != StorageClassOutput)
+		return false;
+	bool should_force = false;
+
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		if (should_force)
+			return;
+
+		auto &type = this->get<SPIRType>(var.basetype);
+		bool block = has_decoration(type.self, DecorationBlock);
+		if (var.storage == storage && block && is_builtin_variable(var))
+		{
+			uint32_t member_count = uint32_t(type.member_types.size());
+			for (uint32_t i = 0; i < member_count; i++)
+			{
+				if (has_member_decoration(type.self, i, DecorationBuiltIn) &&
+				    is_block_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn))) &&
+				    has_member_decoration(type.self, i, DecorationOffset))
+				{
+					should_force = true;
+				}
+			}
+		}
+		else if (var.storage == storage && !block && is_builtin_variable(var))
+		{
+			if (is_block_builtin(BuiltIn(get_decoration(type.self, DecorationBuiltIn))) &&
+			    has_decoration(var.self, DecorationOffset))
+			{
+				should_force = true;
+			}
+		}
+	});
+
+	return should_force;
+}
+
 void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionModel model)
 {
 	Bitset emitted_builtins;
@@ -2462,6 +2580,11 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	// These variables might have been declared, but not statically used, so we haven't deduced their size yet.
 	uint32_t cull_distance_size = 0;
 	uint32_t clip_distance_size = 0;
+
+	bool have_xfb_buffer_stride = false;
+	bool have_any_xfb_offset = false;
+	uint32_t xfb_stride = 0, xfb_buffer = 0;
+	std::unordered_map<uint32_t, uint32_t> builtin_xfb_offsets;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
@@ -2480,8 +2603,28 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 						cull_distance_size = this->get<SPIRType>(type.member_types[index]).array.front();
 					else if (m.builtin_type == BuiltInClipDistance)
 						clip_distance_size = this->get<SPIRType>(type.member_types[index]).array.front();
+
+					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationOffset))
+					{
+						have_any_xfb_offset = true;
+						builtin_xfb_offsets[m.builtin_type] = m.offset;
+					}
 				}
 				index++;
+			}
+
+			if (storage == StorageClassOutput && has_decoration(var.self, DecorationXfbBuffer) &&
+			    has_decoration(var.self, DecorationXfbStride))
+			{
+				uint32_t buffer_index = get_decoration(var.self, DecorationXfbBuffer);
+				uint32_t stride = get_decoration(var.self, DecorationXfbStride);
+				if (have_xfb_buffer_stride && buffer_index != xfb_buffer)
+					SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
+				if (have_xfb_buffer_stride && stride != xfb_stride)
+					SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
+				have_xfb_buffer_stride = true;
+				xfb_buffer = buffer_index;
+				xfb_stride = stride;
 			}
 		}
 		else if (var.storage == storage && !block && is_builtin_variable(var))
@@ -2495,6 +2638,22 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 					cull_distance_size = type.array.front();
 				else if (m.builtin_type == BuiltInClipDistance)
 					clip_distance_size = type.array.front();
+
+				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationXfbStride) &&
+				    m.decoration_flags.get(DecorationXfbBuffer) && m.decoration_flags.get(DecorationOffset))
+				{
+					have_any_xfb_offset = true;
+					builtin_xfb_offsets[m.builtin_type] = m.offset;
+					uint32_t buffer_index = m.xfb_buffer;
+					uint32_t stride = m.xfb_stride;
+					if (have_xfb_buffer_stride && buffer_index != xfb_buffer)
+						SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
+					if (have_xfb_buffer_stride && stride != xfb_stride)
+						SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
+					have_xfb_buffer_stride = true;
+					xfb_buffer = buffer_index;
+					xfb_stride = stride;
+				}
 			}
 		}
 
@@ -2523,7 +2682,25 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 		return;
 
 	if (storage == StorageClassOutput)
-		statement("out gl_PerVertex");
+	{
+		if (have_xfb_buffer_stride && have_any_xfb_offset)
+		{
+			statement("layout(xfb_buffer = ", xfb_buffer, ", xfb_stride = ", xfb_stride, ") out gl_PerVertex");
+			if (!options.es)
+			{
+				if (options.version < 440 && options.version >= 140)
+					require_extension_internal("GL_ARB_enhanced_layouts");
+				else if (options.version < 140)
+					SPIRV_CROSS_THROW("Component decoration is not supported in targets below GLSL 1.40.");
+				if (!options.es && options.version < 440)
+					require_extension_internal("GL_ARB_enhanced_layouts");
+			}
+			else if (options.es)
+				SPIRV_CROSS_THROW("Need GL_ARB_enhanced_layouts for xfb_stride or xfb_buffer.");
+		}
+		else
+			statement("out gl_PerVertex");
+	}
 	else
 	{
 		// If we have passthrough, there is no way PerVertex cannot be passthrough.
@@ -2535,13 +2712,40 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 
 	begin_scope();
 	if (emitted_builtins.get(BuiltInPosition))
-		statement("vec4 gl_Position;");
+	{
+		auto itr = builtin_xfb_offsets.find(BuiltInPosition);
+		if (itr != end(builtin_xfb_offsets))
+			statement("layout(xfb_offset = ", itr->second, ") vec4 gl_Position;");
+		else
+			statement("vec4 gl_Position;");
+	}
+
 	if (emitted_builtins.get(BuiltInPointSize))
-		statement("float gl_PointSize;");
+	{
+		auto itr = builtin_xfb_offsets.find(BuiltInPointSize);
+		if (itr != end(builtin_xfb_offsets))
+			statement("layout(xfb_offset = ", itr->second, ") float gl_PointSize;");
+		else
+			statement("float gl_PointSize;");
+	}
+
 	if (emitted_builtins.get(BuiltInClipDistance))
-		statement("float gl_ClipDistance[", clip_distance_size, "];");
+	{
+		auto itr = builtin_xfb_offsets.find(BuiltInClipDistance);
+		if (itr != end(builtin_xfb_offsets))
+			statement("layout(xfb_offset = ", itr->second, ") float gl_ClipDistance[", clip_distance_size, "];");
+		else
+			statement("float gl_ClipDistance[", clip_distance_size, "];");
+	}
+
 	if (emitted_builtins.get(BuiltInCullDistance))
-		statement("float gl_CullDistance[", cull_distance_size, "];");
+	{
+		auto itr = builtin_xfb_offsets.find(BuiltInCullDistance);
+		if (itr != end(builtin_xfb_offsets))
+			statement("layout(xfb_offset = ", itr->second, ") float gl_CullDistance[", cull_distance_size, "];");
+		else
+			statement("float gl_CullDistance[", cull_distance_size, "];");
+	}
 
 	if (builtin_array)
 	{
@@ -2622,9 +2826,14 @@ void CompilerGLSL::emit_resources()
 			break;
 		}
 	}
+	else if (should_force_emit_builtin_block(StorageClassOutput))
+	{
+		emit_declared_builtin_block(StorageClassOutput, execution.model);
+	}
 	else if (execution.geometry_passthrough)
 	{
 		// Need to declare gl_in with Passthrough.
+		// If we're doing passthrough, we cannot emit an output block, so the output block test above will never pass.
 		emit_declared_builtin_block(StorageClassInput, execution.model);
 	}
 	else
