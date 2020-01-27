@@ -2584,7 +2584,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	bool have_xfb_buffer_stride = false;
 	bool have_any_xfb_offset = false;
 	uint32_t xfb_stride = 0, xfb_buffer = 0;
-	std::unordered_map<BuiltIn, uint32_t> builtin_xfb_offsets;
+	std::unordered_map<uint32_t, uint32_t> builtin_xfb_offsets;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
