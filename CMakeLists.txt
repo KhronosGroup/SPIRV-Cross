@@ -14,6 +14,12 @@
 
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_CXX_STANDARD 11)
+
+# Avoid a warning if parent project sets VERSION in project().
+if (${CMAKE_VERSION} VERSION_GREATER "3.0.1")
+	cmake_policy(SET CMP0048 NEW)
+endif()
+
 project(SPIRV-Cross LANGUAGES CXX C)
 enable_testing()
 
