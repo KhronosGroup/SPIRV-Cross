@@ -17,6 +17,8 @@ set(CMAKE_CXX_STANDARD 11)
 project(SPIRV-Cross LANGUAGES CXX C)
 enable_testing()
 
+include(GNUInstallDirs)
+
 option(SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS "Instead of throwing exceptions assert" OFF)
 option(SPIRV_CROSS_SHARED "Build the C API as a single shared library." OFF)
 option(SPIRV_CROSS_STATIC "Build the C and C++ API as static libraries." ON)
@@ -171,12 +173,12 @@ macro(spirv_cross_add_library name config_name library_type)
 	if (NOT SPIRV_CROSS_SKIP_INSTALL)
 		install(TARGETS ${name}
 			EXPORT ${config_name}Config
-			RUNTIME DESTINATION bin
-			LIBRARY DESTINATION lib
-			ARCHIVE DESTINATION lib
-			PUBLIC_HEADER DESTINATION include/spirv_cross)
-		install(FILES ${hdrs} DESTINATION include/spirv_cross)
-		install(EXPORT ${config_name}Config DESTINATION share/${config_name}/cmake)
+			RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+			LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+			ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+			PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/spirv_cross)
+		install(FILES ${hdrs} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/spirv_cross)
+		install(EXPORT ${config_name}Config DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/${config_name}/cmake)
 		export(TARGETS ${name} FILE ${config_name}Config.cmake)
 	endif()
 endmacro()
@@ -427,7 +429,7 @@ if (SPIRV_CROSS_CLI)
 	target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines} HAVE_SPIRV_CROSS_GIT_VERSION)
 	set_target_properties(spirv-cross PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 	if (NOT SPIRV_CROSS_SKIP_INSTALL)
-		install(TARGETS spirv-cross RUNTIME DESTINATION bin)
+		install(TARGETS spirv-cross RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 	endif()
 	target_link_libraries(spirv-cross PRIVATE
 			spirv-cross-glsl
