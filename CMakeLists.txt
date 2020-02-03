@@ -154,7 +154,7 @@ macro(spirv_cross_add_library name config_name library_type)
 	extract_headers(hdrs "${ARGN}")
 	target_include_directories(${name} PUBLIC
 			$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-			$<INSTALL_INTERFACE:include/spirv_cross>)
+			$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/spirv_cross>)
 	set_target_properties(${name} PROPERTIES
 			PUBLIC_HEADERS "${hdrs}")
 	if (SPIRV_CROSS_FORCE_PIC)
