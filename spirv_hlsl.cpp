@@ -1117,6 +1117,18 @@ void CompilerHLSL::replace_illegal_names()
 	CompilerGLSL::replace_illegal_names();
 }
 
+void CompilerHLSL::declare_undefined_values()
+{
+	bool emitted = false;
+	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, const SPIRUndef &undef) {
+		statement("static ", variable_decl(this->get<SPIRType>(undef.basetype), to_name(undef.self), undef.self), ";");
+		emitted = true;
+	});
+
+	if (emitted)
+		statement("");
+}
+
 void CompilerHLSL::emit_resources()
 {
 	auto &execution = get_entry_point();
