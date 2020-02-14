@@ -86,6 +86,11 @@ void Parser::parse()
 		SPIRV_CROSS_THROW("Invalid SPIRV format.");
 
 	uint32_t bound = s[3];
+
+	const uint32_t MaximumNumberOfIDs = 0x3fffff;
+	if (bound > MaximumNumberOfIDs)
+		SPIRV_CROSS_THROW("ID bound exceeds limit of 0x3fffff.\n");
+
 	ir.set_id_bounds(bound);
 
 	uint32_t offset = 5;
