@@ -437,10 +437,8 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
         _396 = _354;
     }
     float _400 = fast::max(-127.0, MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters.y * _396);
-    float _405 = log(2.0);
-    float _407 = 0.5 * (_405 * _405);
     float _417 = fast::max(-127.0, MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters2.y * _396);
-    float _428 = (_395 * ((abs(_400) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_400)) / _400) : (_405 - (_407 * _400)))) + (_394 * ((abs(_417) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_417)) / _417) : (_405 - (_407 * _417))));
+    float _428 = (_395 * ((abs(_400) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_400)) / _400) : (0.693147182464599609375 - (0.2402265071868896484375 * _400)))) + (_394 * ((abs(_417) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_417)) / _417) : (0.693147182464599609375 - (0.2402265071868896484375 * _417))));
     float3 _459;
     if (MobileBasePass.MobileBasePass_Fog_InscatteringLightDirection.w >= 0.0)
     {
