@@ -254,6 +254,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('0')
         msl_args.append('--msl-device-argument-buffer')
         msl_args.append('1')
+    if '.force-native-array.' in shader:
+        msl_args.append('--msl-force-native-arrays')
 
     subprocess.check_call(msl_args)
 
