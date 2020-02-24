@@ -6784,9 +6784,9 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 			SPIRV_CROSS_THROW("Unknown storage class used for copying arrays.");
 
 		// Pass internal array of spvUnsafeArray<> into wrapper functions
-		if (lhs_thread)
+		if (lhs_thread && !msl_options.force_native_arrays)
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".elements, ", to_expression(rhs_id), ");");
-		else if (rhs_thread)
+		else if (rhs_thread && !msl_options.force_native_arrays)
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ".elements);");
 		else
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
@@ -7236,10 +7236,30 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	auto &type = get<SPIRType>(func.return_type);
 
-	decl += func_type_decl(type);
+	if (!type.array.empty() && msl_options.force_native_arrays)
+	{
+		// We cannot return native arrays in MSL, so "return" through an out variable.
+		decl += "void";
+	}
+	else
+	{
+		decl += func_type_decl(type);
+	}
+
 	decl += " ";
 	decl += to_name(func.self);
 	decl += "(";
+
+	if (!type.array.empty() && msl_options.force_native_arrays)
+	{
+		// Fake arrays returns by writing to an out array instead.
+		decl += "thread ";
+		decl += type_to_glsl(type);
+		decl += " (&SPIRV_Cross_return_value)";
+		decl += type_to_array_glsl(type);
+		if (!func.arguments.empty())
+			decl += ", ";
+	}
 
 	if (processing_entry_point)
 	{
