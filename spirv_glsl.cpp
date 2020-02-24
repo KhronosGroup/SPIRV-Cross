@@ -11751,6 +11751,14 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 	current_function = &func;
 	auto &entry_block = get<SPIRBlock>(func.entry_block);
 
+	sort(begin(func.constant_arrays_needed_on_stack), end(func.constant_arrays_needed_on_stack));
+	for (auto &array : func.constant_arrays_needed_on_stack)
+	{
+		auto &c = get<SPIRConstant>(array);
+		auto &type = get<SPIRType>(c.constant_type);
+		statement(variable_decl(type, join("_", array, "_array_copy")), " = ", constant_expression(c), ";");
+	}
+
 	for (auto &v : func.local_variables)
 	{
 		auto &var = get<SPIRVariable>(v);
