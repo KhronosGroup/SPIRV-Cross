@@ -587,7 +587,7 @@ static void print_help()
 	                "\t[--help]\n"
 	                "\t[--revision]\n"
 	                "\t[--force-temporary]\n"
-	                "\t[--vulkan-semantics]\n"
+	                "\t[--vulkan-semantics] or [-V]\n"
 	                "\t[--flatten-ubo]\n"
 	                "\t[--fixup-clipspace]\n"
 	                "\t[--flip-vert-y]\n"
@@ -1130,6 +1130,7 @@ static int main_inner(int argc, char *argv[])
 		args.hlsl_binding_flags |= hlsl_resource_type_to_flag(parser.next_string());
 	});
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
+	cbs.add("-V", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
 	cbs.add("--no-420pack-extension", [&args](CLIParser &) { args.use_420pack_extension = false; });
 	cbs.add("--msl-capture-output", [&args](CLIParser &) { args.msl_capture_output_to_buffer = true; });
