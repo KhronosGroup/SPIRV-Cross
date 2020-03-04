@@ -1857,7 +1857,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	if (is_uav)
 	{
 		Bitset flags = ir.get_buffer_block_flags(var);
-		bool is_readonly = flags.get(DecorationNonWritable);
+		bool is_readonly = flags.get(DecorationNonWritable) && !hlsl_options.force_storage_buffer_as_uav;
 		bool is_coherent = flags.get(DecorationCoherent);
 		bool is_interlocked = interlocked_resources.count(var.self) > 0;
 		const char *type_name = "ByteAddressBuffer ";
@@ -2981,7 +2981,7 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 			if (has_decoration(type.self, DecorationBufferBlock))
 			{
 				Bitset flags = ir.get_buffer_block_flags(var);
-				bool is_readonly = flags.get(DecorationNonWritable);
+				bool is_readonly = flags.get(DecorationNonWritable) && !hlsl_options.force_storage_buffer_as_uav;
 				space = is_readonly ? 't' : 'u'; // UAV
 				resource_flags = is_readonly ? HLSL_BINDING_AUTO_SRV_BIT : HLSL_BINDING_AUTO_UAV_BIT;
 			}
@@ -3000,7 +3000,7 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		{
 			// UAV or SRV depending on readonly flag.
 			Bitset flags = ir.get_buffer_block_flags(var);
-			bool is_readonly = flags.get(DecorationNonWritable);
+			bool is_readonly = flags.get(DecorationNonWritable) && !hlsl_options.force_storage_buffer_as_uav;
 			space = is_readonly ? 't' : 'u';
 			resource_flags = is_readonly ? HLSL_BINDING_AUTO_SRV_BIT : HLSL_BINDING_AUTO_UAV_BIT;
 		}

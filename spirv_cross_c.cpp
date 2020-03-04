@@ -474,6 +474,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_HLSL_SUPPORT_NONZERO_BASE_VERTEX_BASE_INSTANCE:
 		options->hlsl.support_nonzero_base_vertex_base_instance = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_HLSL_FORCE_STORAGE_BUFFER_AS_UAV:
+		options->hlsl.force_storage_buffer_as_uav = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_MSL

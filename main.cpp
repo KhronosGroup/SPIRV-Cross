@@ -556,6 +556,7 @@ struct CLIArguments
 	bool hlsl = false;
 	bool hlsl_compat = false;
 	bool hlsl_support_nonzero_base = false;
+	bool hlsl_force_storage_buffer_as_uav = false;
 	HLSLBindingFlags hlsl_binding_flags = 0;
 	bool vulkan_semantics = false;
 	bool flatten_multidimensional_arrays = false;
@@ -624,6 +625,7 @@ static void print_help()
 	                "\t[--hlsl-enable-compat]\n"
 	                "\t[--hlsl-support-nonzero-basevertex-baseinstance]\n"
 	                "\t[--hlsl-auto-binding (push, cbv, srv, uav, sampler, all)]\n"
+	                "\t[--hlsl-force-storage-buffer-as-uav]\n"
 	                "\t[--separate-shader-objects]\n"
 	                "\t[--pls-in format input-name]\n"
 	                "\t[--pls-out format output-name]\n"
@@ -974,6 +976,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		}
 
 		hlsl_opts.support_nonzero_base_vertex_base_instance = args.hlsl_support_nonzero_base;
+		hlsl_opts.force_storage_buffer_as_uav = args.hlsl_force_storage_buffer_as_uav;
 		hlsl->set_hlsl_options(hlsl_opts);
 		hlsl->set_resource_binding_flags(args.hlsl_binding_flags);
 	}
@@ -1128,6 +1131,9 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.hlsl_support_nonzero_base = true; });
 	cbs.add("--hlsl-auto-binding", [&args](CLIParser &parser) {
 		args.hlsl_binding_flags |= hlsl_resource_type_to_flag(parser.next_string());
+	});
+	cbs.add("--hlsl-force-storage-buffer-as-uav", [&args](CLIParser &) {
+		args.hlsl_force_storage_buffer_as_uav = true;
 	});
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("-V", [&args](CLIParser &) { args.vulkan_semantics = true; });

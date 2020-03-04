@@ -109,6 +109,10 @@ public:
 		// Set to false if you know you will never use base instance or base vertex
 		// functionality as it might remove an internal cbuffer.
 		bool support_nonzero_base_vertex_base_instance = false;
+
+		// Forces a storage buffer to always be declared as UAV, even if the readonly decoration is used.
+		// By default, a readonly storage buffer will be declared as ByteAddressBuffer (SRV) instead.
+		bool force_storage_buffer_as_uav = false;
 	};
 
 	explicit CompilerHLSL(std::vector<uint32_t> spirv_)
