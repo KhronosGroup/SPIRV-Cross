@@ -708,15 +708,6 @@ void Parser::parse(const Instruction &instruction)
 		}
 
 		set<SPIRVariable>(id, type, storage, initializer);
-
-		// hlsl based shaders don't have those decorations. force them and then reset when reading/writing images
-		auto &ttype = get<SPIRType>(type);
-		if (ttype.basetype == SPIRType::BaseType::Image)
-		{
-			ir.set_decoration(id, DecorationNonWritable);
-			ir.set_decoration(id, DecorationNonReadable);
-		}
-
 		break;
 	}
 

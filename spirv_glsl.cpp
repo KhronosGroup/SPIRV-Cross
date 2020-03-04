@@ -2504,11 +2504,14 @@ void CompilerGLSL::emit_pls()
 
 void CompilerGLSL::fixup_image_load_store_access()
 {
+	if (!options.enable_storage_image_qualifier_deduction)
+		return;
+
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var, const SPIRVariable &) {
 		auto &vartype = expression_type(var);
 		if (vartype.basetype == SPIRType::Image)
 		{
-			// Older glslangValidator does not emit required qualifiers here.
+			// Very old glslangValidator and HLSL compilers do not emit required qualifiers here.
 			// Solve this by making the image access as restricted as possible and loosen up if we need to.
 			// If any no-read/no-write flags are actually set, assume that the compiler knows what it's doing.
 

@@ -358,6 +358,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     hlsl_args = [spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm, '--iterations', str(iterations)]
     if '.line.' in shader:
         hlsl_args.append('--emit-line-directives')
+    if '.force-uav.' in shader:
+        hlsl_args.append('--hlsl-force-storage-buffer-as-uav')
     subprocess.check_call(hlsl_args)
 
     if not shader_is_invalid_spirv(hlsl_path):
@@ -436,6 +438,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--emit-line-directives']
     if '.no-samplerless.' in shader:
         extra_args += ['--vulkan-glsl-disable-ext-samplerless-texture-functions']
+    if '.no-qualifier-deduction.' in shader:
+        extra_args += ['--disable-storage-image-qualifier-deduction']
 
     spirv_cross_path = paths.spirv_cross
 
