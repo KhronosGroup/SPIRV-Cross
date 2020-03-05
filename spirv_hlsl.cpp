@@ -1858,7 +1858,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 	{
 		Bitset flags = ir.get_buffer_block_flags(var);
 		bool is_readonly = flags.get(DecorationNonWritable) && !hlsl_options.force_storage_buffer_as_uav;
-		bool is_coherent = flags.get(DecorationCoherent);
+		bool is_coherent = flags.get(DecorationCoherent) && !is_readonly;
 		bool is_interlocked = interlocked_resources.count(var.self) > 0;
 		const char *type_name = "ByteAddressBuffer ";
 		if (!is_readonly)
