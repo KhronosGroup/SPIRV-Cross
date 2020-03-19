@@ -4857,8 +4857,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			convert_non_uniform_expression(expression_type(ops[2]), expr);
 		expr += join("[", to_expression(ops[3]), "]");
 
-		auto &e =
-		    set<SPIRExpression>(id, expr, result_type, true);
+		auto &e = set<SPIRExpression>(id, expr, result_type, true);
 
 		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
