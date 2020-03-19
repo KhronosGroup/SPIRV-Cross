@@ -10088,7 +10088,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		target_coord_type.basetype = SPIRType::Int;
 		coord_expr = bitcast_expression(target_coord_type, expression_type(ops[3]).basetype, coord_expr);
 
-		auto &e = set<SPIRExpression>(id, join(to_expression(ops[2]), ", ", coord_expr), result_type, true);
+		auto expr = join(to_expression(ops[2]), ", ", coord_expr);
+		if (has_decoration(id, DecorationNonUniformEXT) || has_decoration(ops[2], DecorationNonUniformEXT))
+			convert_non_uniform_expression(expression_type(ops[2]), expr);
+
+		auto &e = set<SPIRExpression>(id, expr, result_type, true);
 
 		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
