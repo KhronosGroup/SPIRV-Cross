@@ -4010,6 +4010,9 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 			inherit_expression_dependencies(ops[1], ops[i]);
 			add_implied_read_expression(e, ops[i]);
 		}
+
+		if (has_decoration(ops[1], DecorationNonUniformEXT) || has_decoration(ops[2], DecorationNonUniformEXT))
+			propagate_nonuniform_qualifier(ops[1]);
 	}
 	else
 	{

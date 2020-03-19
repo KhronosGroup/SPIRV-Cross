@@ -8474,15 +8474,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expr.expression_dependencies.empty())
 			forwarded_temporaries.erase(ops[1]);
 
+		if (has_decoration(ops[1], DecorationNonUniformEXT) || has_decoration(ops[2], DecorationNonUniformEXT))
+			propagate_nonuniform_qualifier(ops[1]);
+
 		break;
 	}
 
 	case OpStore:
 	{
 		auto *var = maybe_get<SPIRVariable>(ops[0]);
-
-		if (has_decoration(ops[0], DecorationNonUniformEXT))
-			propagate_nonuniform_qualifier(ops[0]);
 
 		if (var && var->statically_assigned)
 			var->static_expression = ops[1];
