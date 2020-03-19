@@ -1127,7 +1127,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--glsl-emit-ubo-as-plain-uniforms", [&args](CLIParser &) { args.glsl_emit_ubo_as_plain_uniforms = true; });
 	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions",
 	        [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
-	cbs.add("--disable-storage-image-qualifier-deduction", [&args](CLIParser &) { args.enable_storage_image_qualifier_deduction = false; });
+	cbs.add("--disable-storage-image-qualifier-deduction",
+	        [&args](CLIParser &) { args.enable_storage_image_qualifier_deduction = false; });
 	cbs.add("--msl", [&args](CLIParser &) { args.msl = true; });
 	cbs.add("--hlsl", [&args](CLIParser &) { args.hlsl = true; });
 	cbs.add("--hlsl-enable-compat", [&args](CLIParser &) { args.hlsl_compat = true; });
@@ -1136,9 +1137,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--hlsl-auto-binding", [&args](CLIParser &parser) {
 		args.hlsl_binding_flags |= hlsl_resource_type_to_flag(parser.next_string());
 	});
-	cbs.add("--hlsl-force-storage-buffer-as-uav", [&args](CLIParser &) {
-		args.hlsl_force_storage_buffer_as_uav = true;
-	});
+	cbs.add("--hlsl-force-storage-buffer-as-uav",
+	        [&args](CLIParser &) { args.hlsl_force_storage_buffer_as_uav = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("-V", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
@@ -1178,9 +1178,7 @@ static int main_inner(int argc, char *argv[])
 		uint32_t binding = parser.next_uint();
 		args.msl_inline_uniform_blocks.push_back(make_pair(desc_set, binding));
 	});
-	cbs.add("--msl-force-native-arrays", [&args](CLIParser &) {
-		args.msl_force_native_arrays = true;
-	});
+	cbs.add("--msl-force-native-arrays", [&args](CLIParser &) { args.msl_force_native_arrays = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
