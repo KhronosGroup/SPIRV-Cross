@@ -256,6 +256,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('1')
     if '.force-native-array.' in shader:
         msl_args.append('--msl-force-native-arrays')
+    if '.zero-initialize.' in shader:
+        msl_args.append('--force-zero-initialized-variables')
 
     subprocess.check_call(msl_args)
 
@@ -360,6 +362,9 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--emit-line-directives')
     if '.force-uav.' in shader:
         hlsl_args.append('--hlsl-force-storage-buffer-as-uav')
+    if '.zero-initialize.' in shader:
+        hlsl_args.append('--force-zero-initialized-variables')
+
     subprocess.check_call(hlsl_args)
 
     if not shader_is_invalid_spirv(hlsl_path):
@@ -445,6 +450,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '1', '1']
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '2', '2']
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '3', '3']
+    if '.zero-initialize.' in shader:
+        extra_args += ['--force-zero-initialized-variables']
 
     spirv_cross_path = paths.spirv_cross
 
