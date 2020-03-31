@@ -10505,7 +10505,12 @@ string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uin
 
 	if (var)
 	{
-		bool is_buffer_variable = var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer;
+		// Only allow -> dereference for block types. This is so we get expressions like
+		// buffer[i]->first_member.second_member, rather than buffer[i]->first->second.
+		bool is_block = has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
+
+		bool is_buffer_variable =
+		    is_block && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer);
 		declared_as_pointer = is_buffer_variable && is_array(get<SPIRType>(var->basetype));
 	}
 
