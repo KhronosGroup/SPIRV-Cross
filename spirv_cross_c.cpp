@@ -481,6 +481,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_HLSL_FORCE_STORAGE_BUFFER_AS_UAV:
 		options->hlsl.force_storage_buffer_as_uav = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_HLSL_NONWRITABLE_UAV_TEXTURE_AS_SRV:
+		options->hlsl.nonwritable_uav_texture_as_srv = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_MSL
