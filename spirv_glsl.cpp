@@ -13702,3 +13702,8 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 		});
 	}
 }
+
+bool CompilerGLSL::variable_is_depth_or_compare(VariableID id) const
+{
+	return image_is_comparison(get<SPIRType>(get<SPIRVariable>(id).basetype), id);
+}
