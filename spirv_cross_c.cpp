@@ -711,6 +711,23 @@ spvc_result spvc_compiler_flatten_buffer_block(spvc_compiler compiler, spvc_vari
 #endif
 }
 
+spvc_bool spvc_compiler_variable_is_depth_or_compare(spvc_compiler compiler, spvc_variable_id id)
+{
+#if SPIRV_CROSS_C_API_GLSL
+	if (compiler->backend == SPVC_BACKEND_NONE)
+	{
+		compiler->context->report_error("Cross-compilation related option used on NONE backend which only supports reflection.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	return static_cast<CompilerGLSL *>(compiler->compiler.get())->variable_is_depth_or_compare(id) ? SPVC_TRUE : SPVC_FALSE;
+#else
+	(void)id;
+	compiler->context->report_error("Cross-compilation related option used on NONE backend which only supports reflection.");
+	return SPVC_FALSE;
+#endif
+}
+
 spvc_result spvc_compiler_hlsl_set_root_constants_layout(spvc_compiler compiler,
                                                          const spvc_hlsl_root_constants *constant_info,
                                                          size_t count)

@@ -277,6 +277,8 @@ static void print_resources(const Compiler &compiler, const char *tag, const Sma
 			fprintf(stderr, " (Set : %u)", compiler.get_decoration(res.id, DecorationDescriptorSet));
 		if (mask.get(DecorationBinding))
 			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
+		if (static_cast<const CompilerGLSL &>(compiler).variable_is_depth_or_compare(res.id))
+			fprintf(stderr, " (comparison)");
 		if (mask.get(DecorationInputAttachmentIndex))
 			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
 		if (mask.get(DecorationNonReadable))
@@ -1056,14 +1058,6 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		}
 	}
 
-	if (args.dump_resources)
-	{
-		print_resources(*compiler, res);
-		print_push_constant_resources(*compiler, res.push_constant_buffers);
-		print_spec_constants(*compiler);
-		print_capabilities_and_extensions(*compiler);
-	}
-
 	if (combined_image_samplers)
 	{
 		compiler->build_combined_image_samplers();
@@ -1095,7 +1089,17 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			static_cast<CompilerHLSL *>(compiler.get())->add_vertex_attribute_remap(remap);
 	}
 
-	return compiler->compile();
+	auto ret = compiler->compile();
+
+	if (args.dump_resources)
+	{
+		print_resources(*compiler, res);
+		print_push_constant_resources(*compiler, res.push_constant_buffers);
+		print_spec_constants(*compiler);
+		print_capabilities_and_extensions(*compiler);
+	}
+
+	return ret;
 }
 
 static int main_inner(int argc, char *argv[])
