@@ -182,6 +182,7 @@ void CompilerMSL::build_implicit_builtins()
 			if (need_sample_pos && builtin == BuiltInSampleId)
 			{
 				builtin_sample_id_id = var.self;
+				mark_implicit_builtin(StorageClassInput, BuiltInSampleId, var.self);
 				has_sample_id = true;
 			}
 
@@ -191,18 +192,22 @@ void CompilerMSL::build_implicit_builtins()
 				{
 				case BuiltInVertexIndex:
 					builtin_vertex_idx_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInVertexIndex, var.self);
 					has_vertex_idx = true;
 					break;
 				case BuiltInBaseVertex:
 					builtin_base_vertex_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInBaseVertex, var.self);
 					has_base_vertex = true;
 					break;
 				case BuiltInInstanceIndex:
 					builtin_instance_idx_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
 					has_instance_idx = true;
 					break;
 				case BuiltInBaseInstance:
 					builtin_base_instance_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var.self);
 					has_base_instance = true;
 					break;
 				default:
@@ -216,10 +221,12 @@ void CompilerMSL::build_implicit_builtins()
 				{
 				case BuiltInInvocationId:
 					builtin_invocation_id_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInInvocationId, var.self);
 					has_invocation_id = true;
 					break;
 				case BuiltInPrimitiveId:
 					builtin_primitive_id_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInPrimitiveId, var.self);
 					has_primitive_id = true;
 					break;
 				default:
@@ -230,12 +237,14 @@ void CompilerMSL::build_implicit_builtins()
 			if ((need_subgroup_mask || needs_subgroup_invocation_id) && builtin == BuiltInSubgroupLocalInvocationId)
 			{
 				builtin_subgroup_invocation_id_id = var.self;
+				mark_implicit_builtin(StorageClassInput, BuiltInSubgroupLocalInvocationId, var.self);
 				has_subgroup_invocation_id = true;
 			}
 
 			if (need_subgroup_ge_mask && builtin == BuiltInSubgroupSize)
 			{
 				builtin_subgroup_size_id = var.self;
+				mark_implicit_builtin(StorageClassInput, BuiltInSubgroupSize, var.self);
 				has_subgroup_size = true;
 			}
 
@@ -246,10 +255,12 @@ void CompilerMSL::build_implicit_builtins()
 				case BuiltInInstanceIndex:
 					// The view index here is derived from the instance index.
 					builtin_instance_idx_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
 					has_instance_idx = true;
 					break;
 				case BuiltInViewIndex:
 					builtin_view_idx_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInViewIndex, var.self);
 					has_view_idx = true;
 					break;
 				default:
@@ -646,7 +657,10 @@ void CompilerMSL::mark_implicit_builtin(StorageClass storage, BuiltIn builtin, u
 
 	assert(active_builtins != nullptr);
 	active_builtins->set(builtin);
-	get_entry_point().interface_variables.push_back(id);
+
+	auto &var = get_entry_point().interface_variables;
+	if (find(begin(var), end(var), VariableID(id)) == end(var))
+		var.push_back(id);
 }
 
 uint32_t CompilerMSL::build_constant_uint_array_pointer()
