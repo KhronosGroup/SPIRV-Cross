@@ -174,6 +174,7 @@ void CompilerMSL::build_implicit_builtins()
 			if (need_subpass_input && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) &&
 			    builtin == BuiltInFragCoord)
 			{
+				mark_implicit_builtin(StorageClassInput, BuiltInFragCoord, var.self);
 				builtin_frag_coord_id = var.self;
 				has_frag_coord = true;
 			}
