@@ -364,6 +364,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--hlsl-force-storage-buffer-as-uav')
     if '.zero-initialize.' in shader:
         hlsl_args.append('--force-zero-initialized-variables')
+    if '.nonwritable-uav-texture.' in shader:
+        hlsl_args.append('--hlsl-nonwritable-uav-texture-as-srv')
 
     subprocess.check_call(hlsl_args)
 
