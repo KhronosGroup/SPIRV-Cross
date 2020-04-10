@@ -258,6 +258,12 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-force-native-arrays')
     if '.zero-initialize.' in shader:
         msl_args.append('--force-zero-initialized-variables')
+    if '.frag-output.' in shader:
+        # Arbitrary for testing purposes.
+        msl_args.append('--msl-disable-frag-depth-builtin')
+        msl_args.append('--msl-disable-frag-stencil-ref-builtin')
+        msl_args.append('--msl-enable-frag-output-mask')
+        msl_args.append('0x000000ca')
 
     subprocess.check_call(msl_args)
 
