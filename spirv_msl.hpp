@@ -268,7 +268,10 @@ public:
 		uint32_t dynamic_offsets_buffer_index = 23;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
+		uint32_t enable_frag_output_mask = 0xffffffff;
 		bool enable_point_size_builtin = true;
+		bool enable_frag_depth_builtin = true;
+		bool enable_frag_stencil_ref_builtin = true;
 		bool disable_rasterization = false;
 		bool capture_output_to_buffer = false;
 		bool swizzle_texture_samples = false;
@@ -869,6 +872,8 @@ protected:
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
+
+	SmallVector<uint32_t> disabled_frag_outputs;
 
 	std::unordered_set<SetBindingPair, InternalHasher> inline_uniform_blocks;
 
