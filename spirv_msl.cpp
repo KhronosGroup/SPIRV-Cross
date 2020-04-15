@@ -2481,7 +2481,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		// It's not enough to simply avoid marking fragment outputs if the pipeline won't
 		// accept them. We can't put them in the struct at all, or otherwise the compiler
 		// complains that the outputs weren't explicitly marked.
-		if (storage == StorageClassOutput && !patch &&
+		if (get_execution_model() == ExecutionModelFragment && storage == StorageClassOutput && !patch &&
 			((is_builtin && ((bi_type == BuiltInFragDepth && !msl_options.enable_frag_depth_builtin) ||
 		                    (bi_type == BuiltInFragStencilRefEXT && !msl_options.enable_frag_stencil_ref_builtin))) ||
 		     (!is_builtin && !(msl_options.enable_frag_output_mask & (1 << location)))))
