@@ -2488,6 +2488,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		{
 			hidden = true;
 			disabled_frag_outputs.push_back(var_id);
+			// If a builtin, force it to have the proper name.
+			if (is_builtin)
+				set_name(var_id, builtin_to_glsl(bi_type, StorageClassFunction));
 		}
 
 		// Barycentric inputs must be emitted in stage-in, because they can have interpolation arguments.
