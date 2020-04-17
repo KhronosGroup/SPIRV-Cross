@@ -1499,6 +1499,24 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
+	if (requires_uint2_packing)
+	{
+		statement("uint64_t SPIRV_Cross_packUint2x32(uint2 value)");
+		begin_scope();
+		statement("return uint64_t(value.y) << 32 | uint64_t(value.x);");
+		end_scope();
+		statement("");
+
+		statement("uint2 SPIRV_Cross_unpackUint2x32(uint64_t value)");
+		begin_scope();
+		statement("uint2 Unpacked;");
+		statement("Unpacked.x = uint(value & 0xffffffff);");
+		statement("Unpacked.y = uint(value >> 32);");
+		statement("return Unpacked; ");
+		end_scope();
+		statement("");
+	}
+
 	if (requires_explicit_fp16_packing)
 	{
 		// HLSL does not pack into a single word sadly :(
@@ -4372,6 +4390,27 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		emit_access_chain(instruction);
 		break;
 	}
+	case OpBitcast:
+	{
+		auto bitcast_type = get_bitcast_type(ops[0], ops[2]);
+		if (bitcast_type == CompilerHLSL::TypeNormal)
+			CompilerGLSL::emit_instruction(instruction);
+		else
+		{
+			if (!requires_uint2_packing)
+			{
+				requires_uint2_packing = true;
+				force_recompile();
+			}
+
+			if (bitcast_type == CompilerHLSL::TypePackUint2x32)
+				emit_unary_func_op(ops[0], ops[1], ops[2], "SPIRV_Cross_packUint2x32");
+			else
+				emit_unary_func_op(ops[0], ops[1], ops[2], "SPIRV_Cross_unpackUint2x32");
+		}
+
+		break;
+	}
 
 	case OpStore:
 	{
@@ -5349,4 +5388,19 @@ bool CompilerHLSL::is_hlsl_resource_binding_used(ExecutionModel model, uint32_t 
 	StageSetBinding tuple = { model, desc_set, binding };
 	auto itr = resource_bindings.find(tuple);
 	return itr != end(resource_bindings) && itr->second.second;
+}
+
+CompilerHLSL::BitcastType CompilerHLSL::get_bitcast_type(uint32_t result_type, uint32_t op0)
+{
+	auto &rslt_type = get<SPIRType>(result_type);
+	auto &expr_type = expression_type(op0);
+
+	if (rslt_type.basetype == SPIRType::BaseType::UInt64 && expr_type.basetype == SPIRType::BaseType::UInt &&
+	    expr_type.vecsize == 2)
+		return BitcastType::TypePackUint2x32;
+	else if (rslt_type.basetype == SPIRType::BaseType::UInt && rslt_type.vecsize == 2 &&
+	         expr_type.basetype == SPIRType::BaseType::UInt64)
+		return BitcastType::TypeUnpackUint64;
+
+	return BitcastType::TypeNormal;
 }

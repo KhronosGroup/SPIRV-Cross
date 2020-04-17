@@ -249,6 +249,7 @@ private:
 	// TODO: Refactor this to be more similar to MSL, maybe have some common system in place?
 	bool requires_op_fmod = false;
 	bool requires_fp16_packing = false;
+	bool requires_uint2_packing = false;
 	bool requires_explicit_fp16_packing = false;
 	bool requires_unorm8_packing = false;
 	bool requires_snorm8_packing = false;
@@ -287,6 +288,15 @@ private:
 		QueryTypeUInt = 32,
 		QueryTypeCount = 3
 	};
+
+	enum BitcastType
+	{
+		TypeNormal,
+		TypePackUint2x32,
+		TypeUnpackUint64
+	};
+
+	BitcastType get_bitcast_type(uint32_t result_type, uint32_t op0);
 
 	void emit_builtin_variables();
 	bool require_output = false;
