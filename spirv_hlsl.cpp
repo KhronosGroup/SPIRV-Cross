@@ -5390,19 +5390,16 @@ bool CompilerHLSL::is_hlsl_resource_binding_used(ExecutionModel model, uint32_t 
 	return itr != end(resource_bindings) && itr->second.second;
 }
 
-CompilerHLSL::BitcastType CompilerHLSL::get_bitcast_type(
-    uint32_t result_type, uint32_t op0)
+CompilerHLSL::BitcastType CompilerHLSL::get_bitcast_type(uint32_t result_type, uint32_t op0)
 {
 	auto &rslt_type = get<SPIRType>(result_type);
 	auto &expr_type = expression_type(op0);
 
-	if (rslt_type.basetype == SPIRType::BaseType::UInt64 && 
-		expr_type.basetype == SPIRType::BaseType::UInt &&
-		expr_type.vecsize == 2)
+	if (rslt_type.basetype == SPIRType::BaseType::UInt64 && expr_type.basetype == SPIRType::BaseType::UInt &&
+	    expr_type.vecsize == 2)
 		return BitcastType::TypePackUint2x32;
-	else if (rslt_type.basetype == SPIRType::BaseType::UInt && 
-		rslt_type.vecsize == 2 &&
-		expr_type.basetype == SPIRType::BaseType::UInt64)
+	else if (rslt_type.basetype == SPIRType::BaseType::UInt && rslt_type.vecsize == 2 &&
+	         expr_type.basetype == SPIRType::BaseType::UInt64)
 		return BitcastType::TypeUnpackUint64;
 
 	return BitcastType::TypeNormal;
