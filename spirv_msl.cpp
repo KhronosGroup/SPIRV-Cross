@@ -3086,10 +3086,20 @@ bool CompilerMSL::validate_member_packing_rules_msl(const SPIRType &type, uint32
 	if (!mbr_type.array.empty())
 	{
 		// If we have an array type, array stride must match exactly with SPIR-V.
-		uint32_t spirv_array_stride = type_struct_member_array_stride(type, index);
-		uint32_t msl_array_stride = get_declared_struct_member_array_stride_msl(type, index);
-		if (spirv_array_stride != msl_array_stride)
-			return false;
+
+		// An exception to this requirement is if we have one array element and a packed decoration.
+		// This comes from DX scalar layout workaround.
+		// If app tries to be cheeky and access the member out of bounds, this will not work, but this is the best we can do.
+		bool relax_array_stride = has_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypePacked) &&
+		                          mbr_type.array.back() == 1 && mbr_type.array_size_literal.back();
+
+		if (!relax_array_stride)
+		{
+			uint32_t spirv_array_stride = type_struct_member_array_stride(type, index);
+			uint32_t msl_array_stride = get_declared_struct_member_array_stride_msl(type, index);
+			if (spirv_array_stride != msl_array_stride)
+				return false;
+		}
 	}
 
 	if (is_matrix(mbr_type))
@@ -3200,6 +3210,77 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 			                  "scalar and std140 layout rules.");
 		else
 			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
+	}
+	else
+		SPIRV_CROSS_THROW("Found a buffer packing case which we cannot represent in MSL.");
+
+	// Try validating again, now with physical type remapping.
+	if (validate_member_packing_rules_msl(ib_type, index))
+		return;
+
+	// We might have a particular odd scalar layout case where the last element of an array
+	// does not take up as much space as the ArrayStride or MatrixStride. This can happen with DX cbuffers.
+	// The "proper" workaround for this is extremely painful and essentially impossible in the edge case of float3[],
+	// so we hack around it by declaring the offending array or matrix with one less array size/col/row,
+	// and rely on padding to get the correct value. We will technically access arrays out of bounds into the padding region,
+	// but it should spill over gracefully without too much trouble. We rely on behavior like this for unsized arrays anyways.
+
+	// E.g. we might observe a physical layout of:
+	// { float2 a[2]; float b; } in cbuffer layout where ArrayStride of a is 16, but offset of b is 24, packed right after a[1] ...
+	uint32_t type_id = get_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypeID);
+	auto &type = get<SPIRType>(type_id);
+
+	// Modify the physical type in-place. This is safe since each physical type workaround is a copy.
+	if (is_array(type))
+	{
+		if (type.array.back() > 1)
+		{
+			if (!type.array_size_literal.back())
+				SPIRV_CROSS_THROW("Cannot apply scalar layout workaround with spec constant array size.");
+			type.array.back() -= 1;
+		}
+		else
+		{
+			// We have an array of size 1, so we cannot decrement that. Our only option now is to
+			// force a packed layout instead, and drop the physical type remap since ArrayStride is meaningless now.
+			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypeID);
+			set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
+		}
+	}
+	else if (is_matrix(type))
+	{
+		bool row_major = has_member_decoration(ib_type.self, index, DecorationRowMajor);
+		if (!row_major)
+		{
+			// Slice off one column. If we only have 2 columns, this might turn the matrix into a vector with one array element instead.
+			if (type.columns > 2)
+			{
+				type.columns--;
+			}
+			else if (type.columns == 2)
+			{
+				type.columns = 1;
+				assert(type.array.empty());
+				type.array.push_back(1);
+				type.array_size_literal.push_back(true);
+			}
+		}
+		else
+		{
+			// Slice off one row. If we only have 2 rows, this might turn the matrix into a vector with one array element instead.
+			if (type.vecsize > 2)
+			{
+				type.vecsize--;
+			}
+			else if (type.vecsize == 2)
+			{
+				type.vecsize = type.columns;
+				type.columns = 1;
+				assert(type.array.empty());
+				type.array.push_back(1);
+				type.array_size_literal.push_back(true);
+			}
+		}
 	}
 
 	// This better validate now, or we must fail gracefully.
@@ -11824,7 +11905,7 @@ uint32_t CompilerMSL::get_declared_type_matrix_stride_msl(const SPIRType &type, 
 	// For packed matrices, we just use the size of the vector type.
 	// Otherwise, MatrixStride == alignment, which is the size of the underlying vector type.
 	if (packed)
-		return (type.width / 8) * (row_major ? type.columns : type.vecsize);
+		return (type.width / 8) * ((row_major && type.columns > 1) ? type.columns : type.vecsize);
 	else
 		return get_declared_type_alignment_msl(type, false, row_major);
 }
@@ -11902,7 +11983,7 @@ uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_p
 			uint32_t vecsize = type.vecsize;
 			uint32_t columns = type.columns;
 
-			if (row_major)
+			if (row_major && columns > 1)
 				swap(vecsize, columns);
 
 			if (vecsize == 3)
@@ -11963,7 +12044,7 @@ uint32_t CompilerMSL::get_declared_type_alignment_msl(const SPIRType &type, bool
 		else
 		{
 			// This is the general rule for MSL. Size == alignment.
-			uint32_t vecsize = row_major ? type.columns : type.vecsize;
+			uint32_t vecsize = (row_major && type.columns > 1) ? type.columns : type.vecsize;
 			return (type.width / 8) * (vecsize == 3 ? 4 : vecsize);
 		}
 	}
