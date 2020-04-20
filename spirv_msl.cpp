@@ -1752,6 +1752,9 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		// When we flatten, we flatten directly from the "out" struct,
 		// not from a function variable.
 		flatten_from_ib_var = true;
+
+		if (!msl_options.enable_clip_distance_user_varying)
+			return;
 	}
 	else if (!meta.strip_array)
 	{
@@ -1957,6 +1960,9 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		// When we flatten, we flatten directly from the "out" struct,
 		// not from a function variable.
 		flatten_from_ib_var = true;
+
+		if (!msl_options.enable_clip_distance_user_varying)
+			return;
 	}
 
 	for (uint32_t i = 0; i < elem_cnt; i++)

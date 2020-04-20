@@ -320,6 +320,10 @@ public:
 		// May reduce performance in scenarios where arrays are copied around as value-types.
 		bool force_native_arrays = false;
 
+		// If a shader writes clip distance, also emit user varyings which
+		// can be read in subsequent stages.
+		bool enable_clip_distance_user_varying = true;
+
 		bool is_ios()
 		{
 			return platform == iOS;
