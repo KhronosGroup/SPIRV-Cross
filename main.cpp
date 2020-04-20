@@ -557,6 +557,7 @@ struct CLIArguments
 	bool msl_enable_frag_depth_builtin = true;
 	bool msl_enable_frag_stencil_ref_builtin = true;
 	uint32_t msl_enable_frag_output_mask = 0xffffffff;
+	bool msl_enable_clip_distance_user_varying = true;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	SmallVector<pair<uint32_t, uint32_t>> glsl_ext_framebuffer_fetch;
@@ -663,6 +664,7 @@ static void print_help()
 	                "\t[--msl-disable-frag-depth-builtin]\n"
 	                "\t[--msl-disable-frag-stencil-ref-builtin]\n"
 	                "\t[--msl-enable-frag-output-mask <mask>]\n"
+	                "\t[--msl-no-clip-distance-user-varying]\n"
 	                "\t[--hlsl]\n"
 	                "\t[--reflect]\n"
 	                "\t[--shader-model]\n"
@@ -859,6 +861,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.enable_frag_depth_builtin = args.msl_enable_frag_depth_builtin;
 		msl_opts.enable_frag_stencil_ref_builtin = args.msl_enable_frag_stencil_ref_builtin;
 		msl_opts.enable_frag_output_mask = args.msl_enable_frag_output_mask;
+		msl_opts.enable_clip_distance_user_varying = args.msl_enable_clip_distance_user_varying;
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
@@ -1246,6 +1249,8 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.msl_enable_frag_stencil_ref_builtin = false; });
 	cbs.add("--msl-enable-frag-output-mask",
 	        [&args](CLIParser &parser) { args.msl_enable_frag_output_mask = parser.next_hex_uint(); });
+	cbs.add("--msl-no-clip-distance-user-varying",
+	        [&args](CLIParser &) { args.msl_enable_clip_distance_user_varying = false; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();

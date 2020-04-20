@@ -264,6 +264,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-disable-frag-stencil-ref-builtin')
         msl_args.append('--msl-enable-frag-output-mask')
         msl_args.append('0x000000ca')
+    if '.no-user-varying.' in shader:
+        msl_args.append('--msl-no-clip-distance-user-varying')
 
     subprocess.check_call(msl_args)
 

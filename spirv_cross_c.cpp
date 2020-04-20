@@ -627,6 +627,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_ENABLE_FRAG_STENCIL_REF_BUILTIN:
 		options->msl.enable_frag_stencil_ref_builtin = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_ENABLE_CLIP_DISTANCE_USER_VARYING:
+		options->msl.enable_clip_distance_user_varying = value != 0;
+		break;
 #endif
 
 	default:
