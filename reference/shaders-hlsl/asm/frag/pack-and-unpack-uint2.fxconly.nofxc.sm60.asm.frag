@@ -2,7 +2,7 @@ static float4 FragColor;
 
 struct SPIRV_Cross_Output
 {
-    float4 FragColor : COLOR0;
+    float4 FragColor : SV_Target0;
 };
 
 uint64_t SPIRV_Cross_packUint2x32(uint2 value)
@@ -29,6 +29,6 @@ SPIRV_Cross_Output main()
 {
     frag_main();
     SPIRV_Cross_Output stage_output;
-    stage_output.FragColor = float4(FragColor);
+    stage_output.FragColor = FragColor;
     return stage_output;
 }
