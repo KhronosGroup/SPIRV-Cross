@@ -8557,7 +8557,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expr.expression_dependencies.empty())
 			forwarded_temporaries.erase(ops[1]);
 
-		if (has_decoration(ops[1], DecorationNonUniformEXT) || has_decoration(ops[2], DecorationNonUniformEXT))
+		if (has_decoration(ops[1], DecorationNonUniformEXT))
 			propagate_nonuniform_qualifier(ops[1]);
 
 		break;
