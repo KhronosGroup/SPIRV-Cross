@@ -501,6 +501,11 @@ void CompilerGLSL::find_static_extensions()
 		switch (cap)
 		{
 		case CapabilityShaderNonUniformEXT:
+			if (!options.vulkan_semantics)
+				require_extension_internal("GL_NV_gpu_shader5");
+			else
+				require_extension_internal("GL_EXT_nonuniform_qualifier");
+			break;
 		case CapabilityRuntimeDescriptorArrayEXT:
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("GL_EXT_nonuniform_qualifier is only supported in Vulkan GLSL.");
@@ -525,6 +530,11 @@ string CompilerGLSL::compile()
 {
 	if (options.vulkan_semantics)
 		backend.allow_precision_qualifiers = true;
+	else
+	{
+		// only NV_gpu_shader5 supports divergent indexing on OpenGL, and it does so without extra qualifiers
+		backend.nonuniform_qualifier = "";
+	}
 	backend.force_gl_in_out_block = true;
 	backend.supports_extensions = true;
 	backend.use_array_constructor = true;
