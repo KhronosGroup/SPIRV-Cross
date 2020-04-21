@@ -33,7 +33,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 32
+#define SPVC_C_API_VERSION_MINOR 33
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -210,6 +210,7 @@ typedef enum spvc_resource_type
 	SPVC_RESOURCE_TYPE_SEPARATE_IMAGE = 10,
 	SPVC_RESOURCE_TYPE_SEPARATE_SAMPLERS = 11,
 	SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE = 12,
+	SPVC_RESOURCE_TYPE_RAY_QUERY = 13,
 	SPVC_RESOURCE_TYPE_INT_MAX = 0x7fffffff
 } spvc_resource_type;
 
