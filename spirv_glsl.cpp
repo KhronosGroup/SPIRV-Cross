@@ -11498,7 +11498,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		// this distinction into the type system.
 		return comparison_ids.count(id) ? "samplerShadow" : "sampler";
 
-	case SPIRType::AccelerationStructureNV:
+	case SPIRType::AccelerationStructure:
 		return "accelerationStructureNV";
 
 	case SPIRType::Void:
