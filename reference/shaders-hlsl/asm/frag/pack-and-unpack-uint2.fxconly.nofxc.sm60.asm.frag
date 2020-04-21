@@ -7,7 +7,7 @@ struct SPIRV_Cross_Output
 
 uint64_t SPIRV_Cross_packUint2x32(uint2 value)
 {
-    return uint64_t(value.y) << 32 | uint64_t(value.x);
+    return (uint64_t(value.y) << 32) | uint64_t(value.x);
 }
 
 uint2 SPIRV_Cross_unpackUint2x32(uint64_t value)
@@ -15,7 +15,7 @@ uint2 SPIRV_Cross_unpackUint2x32(uint64_t value)
     uint2 Unpacked;
     Unpacked.x = uint(value & 0xffffffff);
     Unpacked.y = uint(value >> 32);
-    return Unpacked; 
+    return Unpacked;
 }
 
 void frag_main()

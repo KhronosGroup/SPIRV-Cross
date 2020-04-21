@@ -1507,7 +1507,7 @@ void CompilerHLSL::emit_resources()
 	{
 		statement("uint64_t SPIRV_Cross_packUint2x32(uint2 value)");
 		begin_scope();
-		statement("return uint64_t(value.y) << 32 | uint64_t(value.x);");
+		statement("return (uint64_t(value.y) << 32) | uint64_t(value.x);");
 		end_scope();
 		statement("");
 
@@ -1516,7 +1516,7 @@ void CompilerHLSL::emit_resources()
 		statement("uint2 Unpacked;");
 		statement("Unpacked.x = uint(value & 0xffffffff);");
 		statement("Unpacked.y = uint(value >> 32);");
-		statement("return Unpacked; ");
+		statement("return Unpacked;");
 		end_scope();
 		statement("");
 	}
