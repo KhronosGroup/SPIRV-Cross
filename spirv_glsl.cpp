@@ -11908,10 +11908,19 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			// If we don't declare the variable when it is assigned we're forced to go through a helper function
 			// which copies elements one by one.
 			add_local_variable_name(var.self);
-			auto &dominated = entry_block.dominated_variables;
-			if (find(begin(dominated), end(dominated), var.self) == end(dominated))
-				entry_block.dominated_variables.push_back(var.self);
-			var.deferred_declaration = true;
+
+			if (var.initializer)
+			{
+				statement(variable_decl(var), ";");
+				var.deferred_declaration = false;
+			}
+			else
+			{
+				auto &dominated = entry_block.dominated_variables;
+				if (find(begin(dominated), end(dominated), var.self) == end(dominated))
+					entry_block.dominated_variables.push_back(var.self);
+				var.deferred_declaration = true;
+			}
 		}
 		else if (var.storage == StorageClassFunction && var.remapped_variable && var.static_expression)
 		{
