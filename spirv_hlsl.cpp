@@ -4068,7 +4068,7 @@ void CompilerHLSL::emit_access_chain(const Instruction &instruction)
 			add_implied_read_expression(e, ops[i]);
 		}
 
-		if (has_decoration(ops[1], DecorationNonUniformEXT) || has_decoration(ops[2], DecorationNonUniformEXT))
+		if (has_decoration(ops[1], DecorationNonUniformEXT))
 			propagate_nonuniform_qualifier(ops[1]);
 	}
 	else
