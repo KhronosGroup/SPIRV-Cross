@@ -4636,6 +4636,26 @@ SPIRType CompilerGLSL::binary_op_bitcast_helper(string &cast_op0, string &cast_o
 	return expected_type;
 }
 
+bool CompilerGLSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0)
+{
+	// Some bitcasts may require complex casting sequences, and are implemented here.
+	// Otherwise a simply unary function will do with bitcast_glsl_op.
+
+	auto &output_type = get<SPIRType>(result_type);
+	auto &input_type = expression_type(op0);
+	string expr;
+
+	if (output_type.basetype == SPIRType::Half && input_type.basetype == SPIRType::Float && input_type.vecsize == 1)
+		expr = join("unpackFloat2x16(floatBitsToUint(", to_unpacked_expression(op0), "))");
+	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half && input_type.vecsize == 2)
+		expr = join("uintBitsToFloat(packFloat2x16(", to_unpacked_expression(op0), "))");
+	else
+		return false;
+
+	emit_op(result_type, id, expr, should_forward(op0));
+	return true;
+}
+
 void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op, SPIRType::BaseType input_type, bool skip_cast_if_equal_type)
 {
@@ -9574,8 +9594,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		uint32_t arg = ops[2];
 
-		auto op = bitcast_glsl_op(get<SPIRType>(result_type), expression_type(arg));
-		emit_unary_func_op(result_type, id, arg, op.c_str());
+		if (!emit_complex_bitcast(result_type, id, arg))
+		{
+			auto op = bitcast_glsl_op(get<SPIRType>(result_type), expression_type(arg));
+			emit_unary_func_op(result_type, id, arg, op.c_str());
+		}
 		break;
 	}
 
