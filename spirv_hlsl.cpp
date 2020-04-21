@@ -401,8 +401,12 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		case SPIRType::Double:
 			return "double";
 		case SPIRType::Int64:
+			if (hlsl_options.shader_model < 60)
+				SPIRV_CROSS_THROW("64-bit integers only supported in SM 6.0.");
 			return "int64_t";
 		case SPIRType::UInt64:
+			if (hlsl_options.shader_model < 60)
+				SPIRV_CROSS_THROW("64-bit integers only supported in SM 6.0.");
 			return "uint64_t";
 		default:
 			return "???";
