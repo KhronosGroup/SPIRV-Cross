@@ -3216,6 +3216,11 @@ void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 		emit_legacy_uniform(var);
 }
 
+bool CompilerHLSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
+{
+	return false;
+}
+
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)

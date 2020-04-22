@@ -11346,6 +11346,11 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	}
 }
 
+bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
+{
+	return false;
+}
+
 // Returns an MSL string identifying the name of a SPIR-V builtin.
 // Output builtins are qualified with the name of the stage out structure.
 string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
