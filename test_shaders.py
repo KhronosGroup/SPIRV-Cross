@@ -721,20 +721,21 @@ def test_shaders_helper(stats, backend, args):
     # The child processes in parallel execution mode don't have the proper state for the global args variable, so
     # at this point we need to switch to explicit arguments
     if args.parallel:
-        pool = multiprocessing.Pool(multiprocessing.cpu_count())
+        with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+            results = []
+            for f in all_files:
+                results.append(pool.apply_async(test_shader_file,
+                    args = (f, stats, args, backend)))
 
-        results = []
-        for f in all_files:
-            results.append(pool.apply_async(test_shader_file,
-                args = (f, stats, args, backend)))
+            pool.close()
+            pool.join()
+            results_completed = [res.get() for res in results]
 
-        for res in results:
-            error = res.get()
-            if error is not None:
-                pool.close()
-                pool.join()
-                print('Error:', error)
-                sys.exit(1)
+            for error in results_completed:
+                if error is not None:
+                    print('Error:', error)
+                    sys.exit(1)
+
     else:
         for i in all_files:
             e = test_shader_file(i, stats, args, backend)
