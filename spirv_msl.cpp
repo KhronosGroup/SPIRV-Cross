@@ -7038,7 +7038,11 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 			exp += string(", ") + get_memory_order(mem_order_2);
 
 		exp += ")";
-		emit_op(result_type, result_id, exp, false);
+
+		if (strcmp(op, "atomic_store_explicit") != 0)
+			emit_op(result_type, result_id, exp, false);
+		else
+			statement(exp, ";");
 	}
 
 	flush_all_atomic_capable_variables();
