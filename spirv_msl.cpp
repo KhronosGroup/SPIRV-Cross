@@ -9185,7 +9185,14 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 				addr_space = "constant";
 		}
 		else if (!argument)
+		{
 			addr_space = "constant";
+		}
+		else if (type_is_msl_framebuffer_fetch(type))
+		{
+			// Subpass inputs are passed around by value.
+			addr_space = "";
+		}
 		break;
 
 	case StorageClassFunction:
@@ -9626,8 +9633,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
 			const auto &basetype = get<SPIRType>(var.basetype);
-			if (basetype.image.dim != DimSubpassData || !msl_options.is_ios() ||
-			    !msl_options.ios_use_framebuffer_fetch_subpasses)
+			if (!type_is_msl_framebuffer_fetch(basetype))
 			{
 				ep_args += image_type_glsl(type, var_id) + " " + r.name;
 				if (r.plane > 0)
@@ -9639,7 +9645,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			}
 			else
 			{
-				ep_args += image_type_glsl(type, var_id) + "4 " + r.name;
+				ep_args += image_type_glsl(type, var_id) + " " + r.name;
 				ep_args += " [[color(" + convert_to_string(r.index) + ")]]";
 			}
 
@@ -10125,6 +10131,12 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	return resource_index;
 }
 
+bool CompilerMSL::type_is_msl_framebuffer_fetch(const SPIRType &type) const
+{
+	return type.basetype == SPIRType::Image && type.image.dim == DimSubpassData &&
+	       msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses;
+}
+
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	auto &var = get<SPIRVariable>(arg.id);
@@ -10140,6 +10152,9 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		name_id = var.basevariable;
 
 	bool constref = !arg.alias_global_variable && is_pointer && arg.write_count == 0;
+	// Framebuffer fetch is plain value, const looks out of place, but it is not wrong.
+	if (type_is_msl_framebuffer_fetch(type))
+		constref = false;
 
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
@@ -10983,10 +10998,11 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			}
 
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
-			if (img_type.dim == DimSubpassData && msl_options.is_ios() &&
-			    msl_options.ios_use_framebuffer_fetch_subpasses)
+			if (type_is_msl_framebuffer_fetch(type))
 			{
-				return type_to_glsl(get<SPIRType>(img_type.type));
+				auto img_type_4 = get<SPIRType>(img_type.type);
+				img_type_4.vecsize = 4;
+				return type_to_glsl(img_type_4);
 			}
 			if (img_type.ms && img_type.arrayed)
 			{
