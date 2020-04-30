@@ -775,7 +775,7 @@ struct SPIRBlock : IVariant
 		ComplexLoop
 	};
 
-	enum
+	enum : uint32_t
 	{
 		NoDominator = 0xffffffffu
 	};
