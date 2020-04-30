@@ -10657,6 +10657,9 @@ void CompilerMSL::replace_illegal_names()
 
 string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain)
 {
+	if (index < uint32_t(type.member_type_index_redirection.size()))
+		index = type.member_type_index_redirection[index];
+
 	auto *var = maybe_get<SPIRVariable>(base);
 	// If this is a buffer array, we have to dereference the buffer pointers.
 	// Otherwise, if this is a pointer expression, dereference it.
@@ -12457,8 +12460,27 @@ void CompilerMSL::MemberSorter::sort()
 	// the members should be reordered, based on builtin and sorting aspect meta info.
 	size_t mbr_cnt = type.member_types.size();
 	SmallVector<uint32_t> mbr_idxs(mbr_cnt);
-	iota(mbr_idxs.begin(), mbr_idxs.end(), 0); // Fill with consecutive indices
+	std::iota(mbr_idxs.begin(), mbr_idxs.end(), 0); // Fill with consecutive indices
 	std::stable_sort(mbr_idxs.begin(), mbr_idxs.end(), *this); // Sort member indices based on sorting aspect
+
+	bool sort_is_identity = true;
+	for (uint32_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
+	{
+		if (mbr_idx != mbr_idxs[mbr_idx])
+		{
+			sort_is_identity = false;
+			break;
+		}
+	}
+
+	if (sort_is_identity)
+		return;
+
+	if (meta.members.size() < type.member_types.size())
+	{
+		// This should never trigger in normal circumstances, but to be safe.
+		meta.members.resize(type.member_types.size());
+	}
 
 	// Move type and meta member info to the order defined by the sorted member indices.
 	// This is done by creating temporary copies of both member types and meta, and then
@@ -12469,6 +12491,13 @@ void CompilerMSL::MemberSorter::sort()
 	{
 		type.member_types[mbr_idx] = mbr_types_cpy[mbr_idxs[mbr_idx]];
 		meta.members[mbr_idx] = mbr_meta_cpy[mbr_idxs[mbr_idx]];
+	}
+
+	if (sort_aspect == SortAspect::Offset)
+	{
+		// If we're sorting by Offset, this might affect user code which accesses a buffer block.
+		// We will need to redirect member indices from one index to sorted index.
+		type.member_type_index_redirection = std::move(mbr_idxs);
 	}
 }
 
