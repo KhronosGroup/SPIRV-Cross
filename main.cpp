@@ -345,18 +345,18 @@ static const char *execution_model_to_str(spv::ExecutionModel model)
 		return "fragment";
 	case ExecutionModelGLCompute:
 		return "compute";
-	case ExecutionModelRayGenerationNV:
-		return "raygenNV";
-	case ExecutionModelIntersectionNV:
-		return "intersectionNV";
-	case ExecutionModelCallableNV:
-		return "callableNV";
-	case ExecutionModelAnyHitNV:
-		return "anyhitNV";
-	case ExecutionModelClosestHitNV:
-		return "closesthitNV";
-	case ExecutionModelMissNV:
-		return "missNV";
+	case ExecutionModelRayGenerationKHR:
+		return "raygenKHR";
+	case ExecutionModelIntersectionKHR:
+		return "intersectionKHR";
+	case ExecutionModelCallableKHR:
+		return "callableKHR";
+	case ExecutionModelAnyHitKHR:
+		return "anyhitKHR";
+	case ExecutionModelClosestHitKHR:
+		return "closesthitKHR";
+	case ExecutionModelMissKHR:
+		return "missKHR";
 	default:
 		return "???";
 	}

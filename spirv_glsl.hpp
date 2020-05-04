@@ -690,7 +690,8 @@ protected:
 	bool subpass_input_is_framebuffer_fetch(uint32_t id) const;
 	void emit_inout_fragment_outputs_copy_to_subpass_inputs();
 	const SPIRVariable *find_subpass_input_by_attachment_index(uint32_t index) const;
-	const SPIRVariable *find_color_output_by_location(uint32_t location) const;
+	const SPIRVariable *find_storage_class_variable_by_location(spv::StorageClass storage_class,
+	                                                            uint32_t location) const;
 
 	// A variant which takes two sets of name. The secondary is only used to verify there are no collisions,
 	// but the set is not updated when we have found a new name.

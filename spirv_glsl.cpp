@@ -445,15 +445,15 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_ARB_tessellation_shader");
 		break;
 
-	case ExecutionModelRayGenerationNV:
-	case ExecutionModelIntersectionNV:
-	case ExecutionModelAnyHitNV:
-	case ExecutionModelClosestHitNV:
-	case ExecutionModelMissNV:
-	case ExecutionModelCallableNV:
+	case ExecutionModelRayGenerationKHR:
+	case ExecutionModelIntersectionKHR:
+	case ExecutionModelAnyHitKHR:
+	case ExecutionModelClosestHitKHR:
+	case ExecutionModelMissKHR:
+	case ExecutionModelCallableKHR:
 		if (options.es || options.version < 460)
 			SPIRV_CROSS_THROW("Ray tracing shaders require non-es profile with version 460 or above.");
-		require_extension_internal("GL_NV_ray_tracing");
+		require_extension_internal("GL_KHR_ray_tracing");
 		break;
 
 	default:
@@ -2089,25 +2089,25 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	{
 		return "uniform ";
 	}
-	else if (var.storage == StorageClassRayPayloadNV)
+	else if (var.storage == StorageClassRayPayloadKHR)
 	{
-		return "rayPayloadNV ";
+		return "rayPayloadEXT ";
 	}
-	else if (var.storage == StorageClassIncomingRayPayloadNV)
+	else if (var.storage == StorageClassIncomingRayPayloadKHR)
 	{
-		return "rayPayloadInNV ";
+		return "rayPayloadInEXT ";
 	}
-	else if (var.storage == StorageClassHitAttributeNV)
+	else if (var.storage == StorageClassHitAttributeKHR)
 	{
-		return "hitAttributeNV ";
+		return "hitAttributeEXT ";
 	}
-	else if (var.storage == StorageClassCallableDataNV)
+	else if (var.storage == StorageClassCallableDataKHR)
 	{
-		return "callableDataNV ";
+		return "callableDataEXT ";
 	}
-	else if (var.storage == StorageClassIncomingCallableDataNV)
+	else if (var.storage == StorageClassIncomingCallableDataKHR)
 	{
-		return "callableDataInNV ";
+		return "callableDataInEXT ";
 	}
 
 	return "";
@@ -3056,9 +3056,9 @@ void CompilerGLSL::emit_resources()
 
 		if (var.storage != StorageClassFunction && type.pointer &&
 		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassIncomingRayPayloadNV ||
-		     type.storage == StorageClassCallableDataNV || type.storage == StorageClassIncomingCallableDataNV ||
-		     type.storage == StorageClassHitAttributeNV) &&
+		     type.storage == StorageClassRayPayloadKHR || type.storage == StorageClassIncomingRayPayloadKHR ||
+		     type.storage == StorageClassCallableDataKHR || type.storage == StorageClassIncomingCallableDataKHR ||
+		     type.storage == StorageClassHitAttributeKHR) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
@@ -4647,7 +4647,8 @@ bool CompilerGLSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint3
 
 	if (output_type.basetype == SPIRType::Half && input_type.basetype == SPIRType::Float && input_type.vecsize == 1)
 		expr = join("unpackFloat2x16(floatBitsToUint(", to_unpacked_expression(op0), "))");
-	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half && input_type.vecsize == 2)
+	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half &&
+	         input_type.vecsize == 2)
 		expr = join("uintBitsToFloat(packFloat2x16(", to_unpacked_expression(op0), "))");
 	else
 		return false;
@@ -6965,34 +6966,34 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		require_extension_internal("GL_KHR_shader_subgroup_ballot");
 		return "gl_SubgroupLtMask";
 
-	case BuiltInLaunchIdNV:
-		return "gl_LaunchIDNV";
-	case BuiltInLaunchSizeNV:
-		return "gl_LaunchSizeNV";
-	case BuiltInWorldRayOriginNV:
-		return "gl_WorldRayOriginNV";
-	case BuiltInWorldRayDirectionNV:
-		return "gl_WorldRayDirectionNV";
-	case BuiltInObjectRayOriginNV:
-		return "gl_ObjectRayOriginNV";
-	case BuiltInObjectRayDirectionNV:
-		return "gl_ObjectRayDirectionNV";
-	case BuiltInRayTminNV:
-		return "gl_RayTminNV";
-	case BuiltInRayTmaxNV:
-		return "gl_RayTmaxNV";
-	case BuiltInInstanceCustomIndexNV:
-		return "gl_InstanceCustomIndexNV";
-	case BuiltInObjectToWorldNV:
-		return "gl_ObjectToWorldNV";
-	case BuiltInWorldToObjectNV:
-		return "gl_WorldToObjectNV";
-	case BuiltInHitTNV:
-		return "gl_HitTNV";
-	case BuiltInHitKindNV:
-		return "gl_HitKindNV";
-	case BuiltInIncomingRayFlagsNV:
-		return "gl_IncomingRayFlagsNV";
+	case BuiltInLaunchIdKHR:
+		return "gl_LaunchIDEXT";
+	case BuiltInLaunchSizeKHR:
+		return "gl_LaunchSizeEXT";
+	case BuiltInWorldRayOriginKHR:
+		return "gl_WorldRayOriginEXT";
+	case BuiltInWorldRayDirectionKHR:
+		return "gl_WorldRayDirectionEXT";
+	case BuiltInObjectRayOriginKHR:
+		return "gl_ObjectRayOriginEXT";
+	case BuiltInObjectRayDirectionKHR:
+		return "gl_ObjectRayDirectionEXT";
+	case BuiltInRayTminKHR:
+		return "gl_RayTminEXT";
+	case BuiltInRayTmaxKHR:
+		return "gl_RayTmaxEXT";
+	case BuiltInInstanceCustomIndexKHR:
+		return "gl_InstanceCustomIndexEXT";
+	case BuiltInObjectToWorldKHR:
+		return "gl_ObjectToWorldEXT";
+	case BuiltInWorldToObjectKHR:
+		return "gl_WorldToObjectEXT";
+	case BuiltInHitTKHR:
+		return "gl_HitTEXT";
+	case BuiltInHitKindKHR:
+		return "gl_HitKindEXT";
+	case BuiltInIncomingRayFlagsKHR:
+		return "gl_IncomingRayFlagsEXT";
 
 	case BuiltInBaryCoordNV:
 	{
@@ -10777,23 +10778,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpReportIntersectionNV:
-		statement("reportIntersectionNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+	case OpReportIntersectionKHR:
+		statement("reportIntersectionEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
-	case OpIgnoreIntersectionNV:
-		statement("ignoreIntersectionNV();");
+	case OpIgnoreIntersectionKHR:
+		statement("ignoreIntersectionEXT();");
 		break;
-	case OpTerminateRayNV:
-		statement("terminateRayNV();");
+	case OpTerminateRayKHR:
+		statement("terminateRayEXT();");
 		break;
-	case OpTraceNV:
-		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+	case OpTraceRayKHR:
+		statement("traceRayEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
 		break;
-	case OpExecuteCallableNV:
-		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+	case OpExecuteCallableKHR:
+		statement("executeCallableEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 
 	case OpConvertUToPtr:
@@ -11540,7 +11541,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return comparison_ids.count(id) ? "samplerShadow" : "sampler";
 
 	case SPIRType::AccelerationStructure:
-		return "accelerationStructureNV";
+		return "accelerationStructureKHR";
 
 	case SPIRType::Void:
 		return "void";
@@ -13726,11 +13727,12 @@ const SPIRVariable *CompilerGLSL::find_subpass_input_by_attachment_index(uint32_
 	return ret;
 }
 
-const SPIRVariable *CompilerGLSL::find_color_output_by_location(uint32_t location) const
+const SPIRVariable *CompilerGLSL::find_storage_class_variable_by_location(spv::StorageClass storage_class,
+                                                                          uint32_t location) const
 {
 	const SPIRVariable *ret = nullptr;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage == StorageClassOutput && get_decoration(var.self, DecorationLocation) == location)
+		if (var.storage == storage_class && get_decoration(var.self, DecorationLocation) == location)
 			ret = &var;
 	});
 	return ret;
@@ -13741,7 +13743,7 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 	for (auto &remap : subpass_to_framebuffer_fetch_attachment)
 	{
 		auto *subpass_var = find_subpass_input_by_attachment_index(remap.first);
-		auto *output_var = find_color_output_by_location(remap.second);
+		auto *output_var = find_storage_class_variable_by_location(StorageClassOutput, remap.second);
 		if (!subpass_var)
 			continue;
 		if (!output_var)
