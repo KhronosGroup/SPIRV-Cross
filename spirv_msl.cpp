@@ -8666,7 +8666,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			td_line += ";";
 			add_typedef_line(td_line);
 		}
-		else
+		else if (!is_scalar(physical_type)) // scalar type is already packed.
 			pack_pfx = "packed_";
 	}
 	else if (row_major)
