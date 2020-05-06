@@ -5,7 +5,7 @@ using namespace metal;
 
 struct Struct
 {
-    packed_uint2 flags[1];
+    uint2 flags[1];
 };
 
 struct defaultUniformsVS
@@ -29,7 +29,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant defaultUniformsVS& _25
 {
     main0_out out = {};
     out.gl_Position = _25.umatrix * float4(_25.uquad[int(gl_VertexIndex)].x, _25.uquad[int(gl_VertexIndex)].y, in.a_position.z, in.a_position.w);
-    if (_25.flags.flags[0][0u] != 0u)
+    if (_25.flags.flags[0].x != 0u)
     {
         out.gl_Position.z = 0.0;
     }
