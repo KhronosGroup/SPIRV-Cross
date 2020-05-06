@@ -29,7 +29,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant defaultUniformsVS& _24
 {
     main0_out out = {};
     out.gl_Position = _24.umatrix * float4(_24.uquad[int(gl_VertexIndex)].x, _24.uquad[int(gl_VertexIndex)].y, in.a_position.z, in.a_position.w);
-    if (uint(_24.flags.flags[0]) != 0u)
+    if (_24.flags.flags[0] != 0u)
     {
         out.gl_Position.z = 0.0;
     }
