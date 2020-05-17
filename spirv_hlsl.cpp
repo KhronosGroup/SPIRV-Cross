@@ -1377,7 +1377,8 @@ void CompilerHLSL::emit_resources()
 			statement("static ", type, " ", name, ";");
 		}
 		// fallback payload struct
-		else {
+		else
+		{
 			statement("struct _ShadowPayloadData_ { float4 data; };");
 		}
 	}
@@ -2563,7 +2564,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					out_argument += type_to_glsl_constructor(get_type(payload_var->basetype));
 			}
 			// no payload used, fallback to default payload
-			else {
+			else
+			{
 				out_argument += "_ShadowPayloadData_";
 			}
 			out_argument += " ";
@@ -2585,7 +2587,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					out_argument += type_to_glsl_constructor(get_type(hitattrib_var->basetype));
 			}
 			// no hit attributes used, fallback to default hit attributes
-			else {
+			else
+			{
 				out_argument += "BuiltInTriangleIntersectionAttributes";
 			}
 			out_argument += " ";

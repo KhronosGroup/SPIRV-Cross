@@ -6805,7 +6805,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 
 			default:
 				SPIRV_CROSS_THROW(
-					"Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
+				    "Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
 			}
 		}
 		return "gl_InstanceID";
