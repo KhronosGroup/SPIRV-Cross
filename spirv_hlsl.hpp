@@ -321,7 +321,7 @@ private:
 	std::string get_unique_identifier();
 	uint32_t unique_identifier_count = 0;
 
-	const SPIRVariable *get_ray_tracing_payload();
+	const SPIRVariable *get_ray_tracing_in_payload();
 	const SPIRVariable *get_ray_tracing_hit_attrib();
 
 	std::unordered_map<StageSetBinding, std::pair<HLSLResourceBinding, bool>, InternalHasher> resource_bindings;

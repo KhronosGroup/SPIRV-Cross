@@ -612,8 +612,8 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 				SPIRV_CROSS_THROW("Instance index not supported in SM 3.0 or lower.");
 			type = "uint";
 			// Ignore semantic when in RT shader
-			if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-			    execution.model == ExecutionModelClosestHitKHR)
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
 				semantic = nullptr;
 			else
 				semantic = "SV_InstanceID";
@@ -621,8 +621,8 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 		case BuiltInPrimitiveId:
 			type = "uint";
 			// Ignore semantic when in RT shader
-			if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-			    execution.model == ExecutionModelClosestHitKHR)
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
 				semantic = nullptr;
 			else
 				semantic = "SV_PrimitiveID";
@@ -632,8 +632,8 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 				SPIRV_CROSS_THROW("Instance index not supported in SM 3.0 or lower.");
 			type = "uint";
 			// Ignore semantic when in RT shader
-			if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-			    execution.model == ExecutionModelClosestHitKHR)
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
 				semantic = nullptr;
 			else
 				semantic = "SV_InstanceID";
@@ -721,59 +721,59 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			else
 				SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
 
-		case BuiltInLaunchIdKHR:
+		case BuiltInLaunchIdNV:
 			type = "uint3";
 			break;
 
-		case BuiltInLaunchSizeKHR:
+		case BuiltInLaunchSizeNV:
 			type = "uint2";
 			break;
 
-		case BuiltInWorldRayOriginKHR:
+		case BuiltInWorldRayOriginNV:
 			type = "float3";
 			break;
 
-		case BuiltInWorldRayDirectionKHR:
+		case BuiltInWorldRayDirectionNV:
 			type = "float3";
 			break;
 
-		case BuiltInObjectRayOriginKHR:
+		case BuiltInObjectRayOriginNV:
 			type = "float3";
 			break;
 
-		case BuiltInObjectRayDirectionKHR:
+		case BuiltInObjectRayDirectionNV:
 			type = "float3";
 			break;
 
-		case BuiltInRayTminKHR:
+		case BuiltInRayTminNV:
 			type = "float";
 			break;
 
-		case BuiltInRayTmaxKHR:
+		case BuiltInRayTmaxNV:
 			type = "float";
 			break;
 
-		case BuiltInInstanceCustomIndexKHR:
+		case BuiltInInstanceCustomIndexNV:
 			type = "uint";
 			break;
 
-		case BuiltInObjectToWorldKHR:
+		case BuiltInObjectToWorldNV:
 			type = "float4x3";
 			break;
 
-		case BuiltInWorldToObjectKHR:
+		case BuiltInWorldToObjectNV:
 			type = "float4x3";
 			break;
 
-		case BuiltInHitTKHR:
+		case BuiltInHitTNV:
 			type = "float";
 			break;
 
-		case BuiltInHitKindKHR:
+		case BuiltInHitKindNV:
 			type = "uint";
 			break;
 
-		case BuiltInIncomingRayFlagsKHR:
+		case BuiltInIncomingRayFlagsNV:
 			type = "uint";
 			break;
 
@@ -980,15 +980,15 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 		return "gl_VertexID";
 	case BuiltInInstanceId:
 		// In RT shaders, this builtin gets overwritten
-		if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-		    execution.model == ExecutionModelClosestHitKHR)
+		if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+		    execution.model == ExecutionModelClosestHitNV)
 			return "InstanceIndex()";
 		else
 			return "gl_InstanceID";
 	case BuiltInPrimitiveId:
 		// In RT shaders, this builtin gets overwritten
-		if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-		    execution.model == ExecutionModelClosestHitKHR)
+		if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+		    execution.model == ExecutionModelClosestHitNV)
 			return "PrimitiveIndex()";
 		else
 			return "SV_PrimitiveID";
@@ -1010,33 +1010,33 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 		return "WaveGetLaneIndex()";
 	case BuiltInSubgroupSize:
 		return "WaveGetLaneCount()";
-	case BuiltInLaunchIdKHR:
+	case BuiltInLaunchIdNV:
 		return "DispatchRaysIndex()";
-	case BuiltInLaunchSizeKHR:
+	case BuiltInLaunchSizeNV:
 		return "DispatchRaysDimensions()";
-	case BuiltInWorldRayOriginKHR:
+	case BuiltInWorldRayOriginNV:
 		return "WorldRayOrigin()";
-	case BuiltInWorldRayDirectionKHR:
+	case BuiltInWorldRayDirectionNV:
 		return "WorldRayDirection()";
-	case BuiltInObjectRayOriginKHR:
+	case BuiltInObjectRayOriginNV:
 		return "ObjectRayOrigin()";
-	case BuiltInObjectRayDirectionKHR:
+	case BuiltInObjectRayDirectionNV:
 		return "ObjectRayDirection()";
-	case BuiltInRayTminKHR:
+	case BuiltInRayTminNV:
 		return "RayTMin()";
-	case BuiltInRayTmaxKHR:
+	case BuiltInRayTmaxNV:
 		return "RayTCurrent()";
-	case BuiltInInstanceCustomIndexKHR:
+	case BuiltInInstanceCustomIndexNV:
 		return "InstanceID()";
-	case BuiltInObjectToWorldKHR:
+	case BuiltInObjectToWorldNV:
 		return "ObjectToWorld4x3()";
-	case BuiltInWorldToObjectKHR:
+	case BuiltInWorldToObjectNV:
 		return "WorldToObject4x3()";
-	case BuiltInHitTKHR:
+	case BuiltInHitTNV:
 		return "RayTCurrent()";
-	case BuiltInHitKindKHR:
+	case BuiltInHitKindNV:
 		return "HitKind()";
-	case BuiltInIncomingRayFlagsKHR:
+	case BuiltInIncomingRayFlagsNV:
 		return "RayFlags()";
 	default:
 		return CompilerGLSL::builtin_to_glsl(builtin, storage);
@@ -1079,16 +1079,16 @@ void CompilerHLSL::emit_builtin_variables()
 
 		case BuiltInInstanceId:
 			// Ignore when used in RT shaders, this is no longer a compile-time constant
-			if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-			    execution.model == ExecutionModelClosestHitKHR)
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
 				break;
 			type = "int";
 			break;
 
 		case BuiltInPrimitiveId:
 			// Ignore when used in RT shaders, this is no longer a compile-time constant
-			if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-			    execution.model == ExecutionModelClosestHitKHR)
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
 				break;
 			type = "uint";
 			break;
@@ -1152,20 +1152,20 @@ void CompilerHLSL::emit_builtin_variables()
 			type = "float";
 			break;
 
-		case BuiltInLaunchIdKHR:
-		case BuiltInLaunchSizeKHR:
-		case BuiltInWorldRayOriginKHR:
-		case BuiltInWorldRayDirectionKHR:
-		case BuiltInObjectRayOriginKHR:
-		case BuiltInObjectRayDirectionKHR:
-		case BuiltInRayTminKHR:
-		case BuiltInRayTmaxKHR:
-		case BuiltInInstanceCustomIndexKHR:
-		case BuiltInObjectToWorldKHR:
-		case BuiltInWorldToObjectKHR:
-		case BuiltInHitTKHR:
-		case BuiltInHitKindKHR:
-		case BuiltInIncomingRayFlagsKHR:
+		case BuiltInLaunchIdNV:
+		case BuiltInLaunchSizeNV:
+		case BuiltInWorldRayOriginNV:
+		case BuiltInWorldRayDirectionNV:
+		case BuiltInObjectRayOriginNV:
+		case BuiltInObjectRayDirectionNV:
+		case BuiltInRayTminNV:
+		case BuiltInRayTmaxNV:
+		case BuiltInInstanceCustomIndexNV:
+		case BuiltInObjectToWorldNV:
+		case BuiltInWorldToObjectNV:
+		case BuiltInHitTNV:
+		case BuiltInHitKindNV:
+		case BuiltInIncomingRayFlagsNV:
 			// handled specially since they aren't compile time constants
 			break;
 
@@ -1358,10 +1358,10 @@ void CompilerHLSL::emit_resources()
 	}
 
 	// HLSL requires ray payloads to be structs
-	if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR ||
-	    execution.model == ExecutionModelMissKHR)
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
 	{
-		auto *payload_var = get_ray_tracing_payload();
+		auto *payload_var = get_ray_tracing_in_payload();
 		if (payload_var)
 		{
 			std::string name = get_name(payload_var->self);
@@ -1384,8 +1384,8 @@ void CompilerHLSL::emit_resources()
 	}
 
 	// HLSL requires hit attributes to be structs
-	if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR ||
-	    ExecutionModelIntersectionKHR)
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    ExecutionModelIntersectionNV)
 	{
 		auto *hitattrib_var = get_ray_tracing_hit_attrib();
 		if (hitattrib_var)
@@ -1424,8 +1424,14 @@ void CompilerHLSL::emit_resources()
 		if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
 		    type.pointer &&
 		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadKHR))
+		     type.storage == StorageClassRayPayloadNV))
 		{
+			// make rgen payload static
+			auto &type = this->get<SPIRType>(var.basetype);
+			if (type.storage == StorageClassRayPayloadNV)
+			{
+				statement_inner("static ");
+			}
 			emit_uniform(var);
 			emitted = true;
 		}
@@ -1536,8 +1542,8 @@ void CompilerHLSL::emit_resources()
 
 	auto input_builtins = active_input_builtins;
 	// only make non-compile-time constant when used in RT shader
-	if (execution.model == ExecutionModelIntersectionKHR || execution.model == ExecutionModelAnyHitKHR ||
-	    execution.model == ExecutionModelClosestHitKHR)
+	if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelClosestHitNV)
 	{
 		input_builtins.clear(BuiltInInstanceId);
 		input_builtins.clear(BuiltInPrimitiveId);
@@ -1552,20 +1558,20 @@ void CompilerHLSL::emit_resources()
 	input_builtins.clear(BuiltInSubgroupGtMask);
 	input_builtins.clear(BuiltInSubgroupGeMask);
 	// RT builtins
-	input_builtins.clear(BuiltInLaunchIdKHR);
-	input_builtins.clear(BuiltInLaunchSizeKHR);
-	input_builtins.clear(BuiltInWorldRayOriginKHR);
-	input_builtins.clear(BuiltInWorldRayDirectionKHR);
-	input_builtins.clear(BuiltInObjectRayOriginKHR);
-	input_builtins.clear(BuiltInObjectRayDirectionKHR);
-	input_builtins.clear(BuiltInRayTminKHR);
-	input_builtins.clear(BuiltInRayTmaxKHR);
-	input_builtins.clear(BuiltInInstanceCustomIndexKHR);
-	input_builtins.clear(BuiltInObjectToWorldKHR);
-	input_builtins.clear(BuiltInWorldToObjectKHR);
-	input_builtins.clear(BuiltInHitTKHR);
-	input_builtins.clear(BuiltInHitKindKHR);
-	input_builtins.clear(BuiltInIncomingRayFlagsKHR);
+	input_builtins.clear(BuiltInLaunchIdNV);
+	input_builtins.clear(BuiltInLaunchSizeNV);
+	input_builtins.clear(BuiltInWorldRayOriginNV);
+	input_builtins.clear(BuiltInWorldRayDirectionNV);
+	input_builtins.clear(BuiltInObjectRayOriginNV);
+	input_builtins.clear(BuiltInObjectRayDirectionNV);
+	input_builtins.clear(BuiltInRayTminNV);
+	input_builtins.clear(BuiltInRayTmaxNV);
+	input_builtins.clear(BuiltInInstanceCustomIndexNV);
+	input_builtins.clear(BuiltInObjectToWorldNV);
+	input_builtins.clear(BuiltInWorldToObjectNV);
+	input_builtins.clear(BuiltInHitTNV);
+	input_builtins.clear(BuiltInHitKindNV);
+	input_builtins.clear(BuiltInIncomingRayFlagsNV);
 
 	if (!input_variables.empty() || !input_builtins.empty())
 	{
@@ -2376,17 +2382,17 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 			decl += "frag_main";
 		else if (execution.model == ExecutionModelGLCompute)
 			decl += "comp_main";
-		else if (execution.model == ExecutionModelRayGenerationKHR)
+		else if (execution.model == ExecutionModelRayGenerationNV)
 			decl += "rgen_main";
-		else if (execution.model == ExecutionModelIntersectionKHR)
+		else if (execution.model == ExecutionModelIntersectionNV)
 			decl += "rint_main";
-		else if (execution.model == ExecutionModelAnyHitKHR)
+		else if (execution.model == ExecutionModelAnyHitNV)
 			decl += "rahit_main";
-		else if (execution.model == ExecutionModelClosestHitKHR)
+		else if (execution.model == ExecutionModelClosestHitNV)
 			decl += "rchit_main";
-		else if (execution.model == ExecutionModelMissKHR)
+		else if (execution.model == ExecutionModelMissNV)
 			decl += "rmiss_main";
-		else if (execution.model == ExecutionModelCallableKHR)
+		else if (execution.model == ExecutionModelCallableNV)
 			decl += "call_main";
 		else
 			SPIRV_CROSS_THROW("Unsupported execution model.");
@@ -2510,32 +2516,32 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("[numthreads(", x_expr, ", ", y_expr, ", ", z_expr, ")]");
 		break;
 	}
-	case ExecutionModelRayGenerationKHR:
+	case ExecutionModelRayGenerationNV:
 	{
 		statement("[shader(\"raygeneration\")]");
 		break;
 	}
-	case ExecutionModelIntersectionKHR:
+	case ExecutionModelIntersectionNV:
 	{
 		statement("[shader(\"intersection\")]");
 		break;
 	}
-	case ExecutionModelAnyHitKHR:
+	case ExecutionModelAnyHitNV:
 	{
 		statement("[shader(\"anyhit\")]");
 		break;
 	}
-	case ExecutionModelClosestHitKHR:
+	case ExecutionModelClosestHitNV:
 	{
 		statement("[shader(\"closesthit\")]");
 		break;
 	}
-	case ExecutionModelMissKHR:
+	case ExecutionModelMissNV:
 	{
 		statement("[shader(\"miss\")]");
 		break;
 	}
-	case ExecutionModelCallableKHR:
+	case ExecutionModelCallableNV:
 	{
 		statement("[shader(\"callable\")]");
 		break;
@@ -2549,13 +2555,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	}
 
 	// Add incoming payload and hit attributes for Hit shaders
-	if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR ||
-	    execution.model == ExecutionModelMissKHR)
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
 	{
 		// Add incoming payload
 		{
 			string out_argument;
-			auto *payload_var = get_ray_tracing_payload();
+			auto *payload_var = get_ray_tracing_in_payload();
 			out_argument += "inout ";
 			if (payload_var)
 			{
@@ -2574,7 +2580,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			arguments.push_back(move(out_argument));
 		}
 		// Add incoming hit attribute
-		if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR)
+		if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV)
 		{
 			string out_argument;
 			const SPIRVariable *hitattrib_var = get_ray_tracing_hit_attrib();
@@ -2634,8 +2640,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		case BuiltInInstanceId:
 			// In RT shaders this is not a compile-time constant
-			if (execution.model != ExecutionModelIntersectionKHR && execution.model != ExecutionModelAnyHitKHR &&
-			    execution.model != ExecutionModelClosestHitKHR)
+			if (execution.model != ExecutionModelIntersectionNV && execution.model != ExecutionModelAnyHitNV &&
+			    execution.model != ExecutionModelClosestHitNV)
 			{
 				// D3D semantics are uint, but shader wants int.
 				statement(builtin, " = int(stage_input.", builtin, ");");
@@ -2644,8 +2650,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		case BuiltInPrimitiveId:
 			// In RT shaders this is not a compile-time constant
-			if (execution.model != ExecutionModelIntersectionKHR && execution.model != ExecutionModelAnyHitKHR &&
-			    execution.model != ExecutionModelClosestHitKHR)
+			if (execution.model != ExecutionModelIntersectionNV && execution.model != ExecutionModelAnyHitNV &&
+			    execution.model != ExecutionModelClosestHitNV)
 			{
 				statement(builtin, " = stage_input.", builtin, ";");
 			}
@@ -2731,20 +2737,20 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				          ";");
 			break;
 
-		case BuiltInLaunchIdKHR:
-		case BuiltInLaunchSizeKHR:
-		case BuiltInWorldRayOriginKHR:
-		case BuiltInWorldRayDirectionKHR:
-		case BuiltInObjectRayOriginKHR:
-		case BuiltInObjectRayDirectionKHR:
-		case BuiltInRayTminKHR:
-		case BuiltInRayTmaxKHR:
-		case BuiltInInstanceCustomIndexKHR:
-		case BuiltInObjectToWorldKHR:
-		case BuiltInWorldToObjectKHR:
-		case BuiltInHitTKHR:
-		case BuiltInHitKindKHR:
-		case BuiltInIncomingRayFlagsKHR:
+		case BuiltInLaunchIdNV:
+		case BuiltInLaunchSizeNV:
+		case BuiltInWorldRayOriginNV:
+		case BuiltInWorldRayDirectionNV:
+		case BuiltInObjectRayOriginNV:
+		case BuiltInObjectRayDirectionNV:
+		case BuiltInRayTminNV:
+		case BuiltInRayTmaxNV:
+		case BuiltInInstanceCustomIndexNV:
+		case BuiltInObjectToWorldNV:
+		case BuiltInWorldToObjectNV:
+		case BuiltInHitTNV:
+		case BuiltInHitKindNV:
+		case BuiltInIncomingRayFlagsNV:
 			// handled specially since they aren't compile time constants
 			break;
 
@@ -2790,10 +2796,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	});
 
 	// Copy the payload result in
-	if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR ||
-	    execution.model == ExecutionModelMissKHR)
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
 	{
-		auto *payload_var = get_ray_tracing_payload();
+		auto *payload_var = get_ray_tracing_in_payload();
 		if (payload_var)
 		{
 			std::string name = get_name(payload_var->self);
@@ -2806,7 +2812,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	}
 
 	// Copy the hit attribute result in
-	if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR)
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV)
 	{
 		const SPIRVariable *hitattrib_var = get_ray_tracing_hit_attrib();
 		if (hitattrib_var)
@@ -2827,26 +2833,26 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("frag_main();");
 	else if (execution.model == ExecutionModelGLCompute)
 		statement("comp_main();");
-	else if (execution.model == ExecutionModelRayGenerationKHR)
+	else if (execution.model == ExecutionModelRayGenerationNV)
 		statement("rgen_main();");
-	else if (execution.model == ExecutionModelIntersectionKHR)
+	else if (execution.model == ExecutionModelIntersectionNV)
 		statement("rint_main();");
-	else if (execution.model == ExecutionModelAnyHitKHR)
+	else if (execution.model == ExecutionModelAnyHitNV)
 		statement("rahit_main();");
-	else if (execution.model == ExecutionModelClosestHitKHR)
+	else if (execution.model == ExecutionModelClosestHitNV)
 		statement("rchit_main();");
-	else if (execution.model == ExecutionModelMissKHR)
+	else if (execution.model == ExecutionModelMissNV)
 		statement("rmiss_main();");
-	else if (execution.model == ExecutionModelCallableKHR)
+	else if (execution.model == ExecutionModelCallableNV)
 		statement("call_main();");
 	else
 		SPIRV_CROSS_THROW("Unsupported shader stage.");
 
 	// Copy the payload result back
-	if (execution.model == ExecutionModelClosestHitKHR || execution.model == ExecutionModelAnyHitKHR ||
-	    execution.model == ExecutionModelMissKHR)
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
 	{
-		auto *payload_var = get_ray_tracing_payload();
+		auto *payload_var = get_ray_tracing_in_payload();
 		if (payload_var)
 		{
 			std::string name = get_name(payload_var->self);
@@ -3634,13 +3640,6 @@ void CompilerHLSL::emit_legacy_uniform(const SPIRVariable &var)
 
 void CompilerHLSL::emit_uniform(const SPIRVariable &var)
 {
-	// make rgen payload static
-	auto &type = this->get<SPIRType>(var.basetype);
-	if (type.storage == StorageClassRayPayloadKHR)
-	{
-		statement_inner("static ");
-	}
-
 	add_resource_name(var.self);
 	if (hlsl_options.shader_model >= 40)
 		emit_modern_uniform(var);
@@ -5619,11 +5618,11 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("Rasterizer order views require Shader Model 5.1.");
 		break; // Nothing to do in the body
 
-	case OpReportIntersectionKHR:
+	case OpReportIntersectionNV:
 	{
 		auto *hitattrib_var = get_ray_tracing_hit_attrib();
 		if (!hitattrib_var)
-			SPIRV_CROSS_THROW("Failed to lookup hit attribute for OpReportIntersectionKHR");
+			SPIRV_CROSS_THROW("Failed to lookup hit attribute for OpReportIntersectionNV");
 
 		bool is_primitive_attr = get_type(hitattrib_var->basetype).basetype != SPIRType::Struct;
 
@@ -5647,14 +5646,14 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		statement("ReportHit(", to_expression(ops[2]), ",", to_expression(ops[3]), ",", target_attr_name, ");");
 		break;
 	}
-	case OpIgnoreIntersectionKHR:
+	case OpIgnoreIntersectionNV:
 		statement("IgnoreHit();");
 		break;
-	case OpTerminateRayKHR:
+	case OpTerminateRayNV:
 		statement("AcceptHitAndEndSearch();");
 		break;
 
-	case OpTraceRayKHR:
+	case OpTraceNV:
 	{
 		// In GLSL, payload is passed as a number and is a compile-time constant
 		// In HLSL, payload is passed as a variable
@@ -5662,7 +5661,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		// input location's index, which is passed in the last param of TraceRay
 		uint32_t payload_index = std::stoi(to_expression(ops[10]));
 
-		auto *payload_var = find_storage_class_variable_by_location(StorageClassRayPayloadKHR, payload_index);
+		auto *payload_var = find_storage_class_variable_by_location(StorageClassRayPayloadNV, payload_index);
 		if (!payload_var)
 			SPIRV_CROSS_THROW("Failed to lookup location of rayPayloadEXT");
 
@@ -5942,12 +5941,12 @@ string CompilerHLSL::get_unique_identifier()
 	return join("_", unique_identifier_count++, "ident");
 }
 
-const SPIRVariable *CompilerHLSL::get_ray_tracing_payload()
+const SPIRVariable *CompilerHLSL::get_ray_tracing_in_payload()
 {
 	const SPIRVariable *ret = nullptr;
 	// Find incoming payload
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage == StorageClassIncomingRayPayloadKHR)
+		if (var.storage == StorageClassIncomingRayPayloadNV)
 			ret = &var;
 	});
 	return ret;
@@ -5958,7 +5957,7 @@ const SPIRVariable *CompilerHLSL::get_ray_tracing_hit_attrib()
 	const SPIRVariable *ret = nullptr;
 	// Find incoming hit attribute
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage == StorageClassHitAttributeKHR)
+		if (var.storage == StorageClassHitAttributeNV)
 			ret = &var;
 	});
 	return ret;

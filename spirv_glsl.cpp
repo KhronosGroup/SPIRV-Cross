@@ -445,15 +445,15 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_ARB_tessellation_shader");
 		break;
 
-	case ExecutionModelRayGenerationKHR:
-	case ExecutionModelIntersectionKHR:
-	case ExecutionModelAnyHitKHR:
-	case ExecutionModelClosestHitKHR:
-	case ExecutionModelMissKHR:
-	case ExecutionModelCallableKHR:
+	case ExecutionModelRayGenerationNV:
+	case ExecutionModelIntersectionNV:
+	case ExecutionModelAnyHitNV:
+	case ExecutionModelClosestHitNV:
+	case ExecutionModelMissNV:
+	case ExecutionModelCallableNV:
 		if (options.es || options.version < 460)
 			SPIRV_CROSS_THROW("Ray tracing shaders require non-es profile with version 460 or above.");
-		require_extension_internal("GL_KHR_ray_tracing");
+		require_extension_internal("GL_NV_ray_tracing");
 		break;
 
 	default:
@@ -2089,23 +2089,23 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	{
 		return "uniform ";
 	}
-	else if (var.storage == StorageClassRayPayloadKHR)
+	else if (var.storage == StorageClassRayPayloadNV)
 	{
 		return "rayPayloadEXT ";
 	}
-	else if (var.storage == StorageClassIncomingRayPayloadKHR)
+	else if (var.storage == StorageClassIncomingRayPayloadNV)
 	{
 		return "rayPayloadInEXT ";
 	}
-	else if (var.storage == StorageClassHitAttributeKHR)
+	else if (var.storage == StorageClassHitAttributeNV)
 	{
 		return "hitAttributeEXT ";
 	}
-	else if (var.storage == StorageClassCallableDataKHR)
+	else if (var.storage == StorageClassCallableDataNV)
 	{
 		return "callableDataEXT ";
 	}
-	else if (var.storage == StorageClassIncomingCallableDataKHR)
+	else if (var.storage == StorageClassIncomingCallableDataNV)
 	{
 		return "callableDataInEXT ";
 	}
@@ -3056,9 +3056,9 @@ void CompilerGLSL::emit_resources()
 
 		if (var.storage != StorageClassFunction && type.pointer &&
 		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadKHR || type.storage == StorageClassIncomingRayPayloadKHR ||
-		     type.storage == StorageClassCallableDataKHR || type.storage == StorageClassIncomingCallableDataKHR ||
-		     type.storage == StorageClassHitAttributeKHR) &&
+		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassIncomingRayPayloadNV ||
+		     type.storage == StorageClassCallableDataNV || type.storage == StorageClassIncomingCallableDataNV ||
+		     type.storage == StorageClassHitAttributeNV) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
@@ -6797,9 +6797,9 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			auto model = get_entry_point().model;
 			switch (model)
 			{
-			case spv::ExecutionModelIntersectionKHR:
-			case spv::ExecutionModelAnyHitKHR:
-			case spv::ExecutionModelClosestHitKHR:
+			case spv::ExecutionModelIntersectionNV:
+			case spv::ExecutionModelAnyHitNV:
+			case spv::ExecutionModelClosestHitNV:
 				// gl_InstanceID is allowed in these shaders.
 				break;
 
@@ -6979,33 +6979,33 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		require_extension_internal("GL_KHR_shader_subgroup_ballot");
 		return "gl_SubgroupLtMask";
 
-	case BuiltInLaunchIdKHR:
+	case BuiltInLaunchIdNV:
 		return "gl_LaunchIDEXT";
-	case BuiltInLaunchSizeKHR:
+	case BuiltInLaunchSizeNV:
 		return "gl_LaunchSizeEXT";
-	case BuiltInWorldRayOriginKHR:
+	case BuiltInWorldRayOriginNV:
 		return "gl_WorldRayOriginEXT";
-	case BuiltInWorldRayDirectionKHR:
+	case BuiltInWorldRayDirectionNV:
 		return "gl_WorldRayDirectionEXT";
-	case BuiltInObjectRayOriginKHR:
+	case BuiltInObjectRayOriginNV:
 		return "gl_ObjectRayOriginEXT";
-	case BuiltInObjectRayDirectionKHR:
+	case BuiltInObjectRayDirectionNV:
 		return "gl_ObjectRayDirectionEXT";
-	case BuiltInRayTminKHR:
+	case BuiltInRayTminNV:
 		return "gl_RayTminEXT";
-	case BuiltInRayTmaxKHR:
+	case BuiltInRayTmaxNV:
 		return "gl_RayTmaxEXT";
-	case BuiltInInstanceCustomIndexKHR:
+	case BuiltInInstanceCustomIndexNV:
 		return "gl_InstanceCustomIndexEXT";
-	case BuiltInObjectToWorldKHR:
+	case BuiltInObjectToWorldNV:
 		return "gl_ObjectToWorldEXT";
-	case BuiltInWorldToObjectKHR:
+	case BuiltInWorldToObjectNV:
 		return "gl_WorldToObjectEXT";
-	case BuiltInHitTKHR:
+	case BuiltInHitTNV:
 		return "gl_HitTEXT";
-	case BuiltInHitKindKHR:
+	case BuiltInHitKindNV:
 		return "gl_HitKindEXT";
-	case BuiltInIncomingRayFlagsKHR:
+	case BuiltInIncomingRayFlagsNV:
 		return "gl_IncomingRayFlagsEXT";
 
 	case BuiltInBaryCoordNV:
@@ -10791,22 +10791,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpReportIntersectionKHR:
+	case OpReportIntersectionNV:
 		statement("reportIntersectionEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
-	case OpIgnoreIntersectionKHR:
+	case OpIgnoreIntersectionNV:
 		statement("ignoreIntersectionEXT();");
 		break;
-	case OpTerminateRayKHR:
+	case OpTerminateRayNV:
 		statement("terminateRayEXT();");
 		break;
-	case OpTraceRayKHR:
+	case OpTraceNV:
 		statement("traceRayEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
 		break;
-	case OpExecuteCallableKHR:
+	case OpExecuteCallableNV:
 		statement("executeCallableEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 
@@ -11554,7 +11554,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return comparison_ids.count(id) ? "samplerShadow" : "sampler";
 
 	case SPIRType::AccelerationStructure:
-		return "accelerationStructureKHR";
+		return "accelerationStructureNV";
 
 	case SPIRType::Void:
 		return "void";
