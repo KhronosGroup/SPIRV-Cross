@@ -5644,7 +5644,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			// Copy current payload value into struct wrap
 			statement(hitattrib_uid, ".data", " = ", hitattrib_name, ";");
 		}
-		statement("ReportHit(", to_expression(ops[0]), ",", to_expression(ops[1]), ",", target_attr_name, ");");
+		statement("ReportHit(", to_expression(ops[2]), ",", to_expression(ops[3]), ",", target_attr_name, ");");
 		break;
 	}
 	case OpIgnoreIntersectionKHR:
