@@ -1385,7 +1385,7 @@ void CompilerHLSL::emit_resources()
 
 	// HLSL requires hit attributes to be structs
 	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
-	    ExecutionModelIntersectionNV)
+	    execution.model == ExecutionModelIntersectionNV)
 	{
 		auto *hitattrib_var = get_ray_tracing_hit_attrib();
 		if (hitattrib_var)
