@@ -10792,21 +10792,26 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpReportIntersectionNV:
 		statement("reportIntersectionNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpIgnoreIntersectionNV:
 		statement("ignoreIntersectionNV();");
+		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTerminateRayNV:
 		statement("terminateRayNV();");
+		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTraceNV:
 		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
+		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpExecuteCallableNV:
 		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 
 	case OpConvertUToPtr:
@@ -13407,6 +13412,7 @@ void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &ex
 	case BuiltInBaseInstance:
 	case BuiltInDrawIndex:
 	case BuiltInFragStencilRefEXT:
+	case BuiltInInstanceCustomIndexNV:
 		expected_type = SPIRType::Int;
 		break;
 
@@ -13416,6 +13422,9 @@ void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &ex
 	case BuiltInLocalInvocationIndex:
 	case BuiltInWorkgroupSize:
 	case BuiltInNumWorkgroups:
+	case BuiltInIncomingRayFlagsNV:
+	case BuiltInLaunchIdNV:
+	case BuiltInLaunchSizeNV:
 		expected_type = SPIRType::UInt;
 		break;
 
