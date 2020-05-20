@@ -2943,16 +2943,28 @@ void CompilerGLSL::emit_resources()
 			}
 			else if (id.get_type() == TypeType)
 			{
-				auto &type = id.get<SPIRType>();
-				if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
-				    (!ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
-				     !ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+				auto *type = &id.get<SPIRType>();
+
+				bool is_natural_struct =
+					type->basetype == SPIRType::Struct && type->array.empty() && !type->pointer &&
+					(!has_decoration(type->self, DecorationBlock) && !has_decoration(type->self, DecorationBufferBlock));
+
+				// Special case, ray payload and hit attribute blocks are not really blocks, just regular structs.
+				if (type->basetype == SPIRType::Struct && type->pointer && has_decoration(type->self, DecorationBlock) &&
+				    (type->storage == StorageClassRayPayloadNV || type->storage == StorageClassIncomingRayPayloadNV ||
+				     type->storage == StorageClassHitAttributeNV))
+				{
+					type = &get<SPIRType>(type->parent_type);
+					is_natural_struct = true;
+				}
+
+				if (is_natural_struct)
 				{
 					if (emitted)
 						statement("");
 					emitted = false;
 
-					emit_struct(type);
+					emit_struct(*type);
 				}
 			}
 		}

@@ -14,14 +14,12 @@ layout(location = 0) rayPayloadNV float payload1;
 // Struct payload
 layout(location = 1) rayPayloadNV Payload payload2;
 
-#if 0
-// Not sure how this actually works yet. Do we get 4 different locations, or just 1 with 4 members?
+// This is syntactic sugar with the struct formulation (pretty sure), spec is kinda vague.
 layout(location = 2) rayPayloadNV Block
 {
 	float a, b;
 	Payload c, d;
 };
-#endif
 
 vec4 trace_in_function()
 {
@@ -44,8 +42,8 @@ void main()
 
 	result += trace_in_function();
 
-#if 0
     traceNV(as, 0u, 255u, 0u, 1u, 0u, origin, 0.0, direction, 1000.0, 2);
 	result += a + b + c.a + c.b + d.a + d.b;
-#endif
+
+	imageStore(image, ivec2(gl_LaunchIDNV.xy), result);
 }
