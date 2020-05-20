@@ -410,6 +410,9 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	case SPIRType::Sampler:
 		return comparison_ids.count(id) ? "SamplerComparisonState" : "SamplerState";
 
+	case SPIRType::AccelerationStructure:
+		return "RaytracingAccelerationStructure";
+
 	case SPIRType::Void:
 		return "void";
 
@@ -617,6 +620,8 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 void CompilerHLSL::emit_builtin_inputs_in_struct()
 {
+	auto &execution = get_entry_point();
+
 	bool legacy = hlsl_options.shader_model <= 30;
 	active_input_builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
@@ -638,11 +643,35 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			break;
 
 		case BuiltInInstanceId:
+			if (legacy)
+				SPIRV_CROSS_THROW("Instance index not supported in SM 3.0 or lower.");
+			type = "uint";
+			// Ignore semantic when in RT shader
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
+				semantic = nullptr;
+			else
+				semantic = "SV_InstanceID";
+			break;
+		case BuiltInPrimitiveId:
+			type = "uint";
+			// Ignore semantic when in RT shader
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
+				semantic = nullptr;
+			else
+				semantic = "SV_PrimitiveID";
+			break;
 		case BuiltInInstanceIndex:
 			if (legacy)
 				SPIRV_CROSS_THROW("Instance index not supported in SM 3.0 or lower.");
 			type = "uint";
-			semantic = "SV_InstanceID";
+			// Ignore semantic when in RT shader
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
+				semantic = nullptr;
+			else
+				semantic = "SV_InstanceID";
 			break;
 
 		case BuiltInSampleId:
@@ -726,6 +755,62 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 				break;
 			else
 				SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
+
+		case BuiltInLaunchIdNV:
+			type = "uint3";
+			break;
+
+		case BuiltInLaunchSizeNV:
+			type = "uint2";
+			break;
+
+		case BuiltInWorldRayOriginNV:
+			type = "float3";
+			break;
+
+		case BuiltInWorldRayDirectionNV:
+			type = "float3";
+			break;
+
+		case BuiltInObjectRayOriginNV:
+			type = "float3";
+			break;
+
+		case BuiltInObjectRayDirectionNV:
+			type = "float3";
+			break;
+
+		case BuiltInRayTminNV:
+			type = "float";
+			break;
+
+		case BuiltInRayTmaxNV:
+			type = "float";
+			break;
+
+		case BuiltInInstanceCustomIndexNV:
+			type = "uint";
+			break;
+
+		case BuiltInObjectToWorldNV:
+			type = "float4x3";
+			break;
+
+		case BuiltInWorldToObjectNV:
+			type = "float4x3";
+			break;
+
+		case BuiltInHitTNV:
+			type = "float";
+			break;
+
+		case BuiltInHitKindNV:
+			type = "uint";
+			break;
+
+		case BuiltInIncomingRayFlagsNV:
+			type = "uint";
+			break;
 
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
@@ -922,12 +1007,27 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 
 std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage)
 {
+	auto &execution = get_entry_point();
+
 	switch (builtin)
 	{
 	case BuiltInVertexId:
 		return "gl_VertexID";
 	case BuiltInInstanceId:
-		return "gl_InstanceID";
+		// In RT shaders, this builtin gets overwritten
+		if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+		    execution.model == ExecutionModelClosestHitNV)
+			return "InstanceIndex()";
+		else
+			return "gl_InstanceID";
+	case BuiltInPrimitiveId:
+		// In RT shaders, this builtin gets overwritten
+		if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+		    execution.model == ExecutionModelClosestHitNV)
+			return "PrimitiveIndex()";
+		else
+			return "SV_PrimitiveID";
+		break;
 	case BuiltInNumWorkgroups:
 	{
 		if (!num_workgroups_builtin)
@@ -945,7 +1045,34 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 		return "WaveGetLaneIndex()";
 	case BuiltInSubgroupSize:
 		return "WaveGetLaneCount()";
-
+	case BuiltInLaunchIdNV:
+		return "DispatchRaysIndex()";
+	case BuiltInLaunchSizeNV:
+		return "DispatchRaysDimensions()";
+	case BuiltInWorldRayOriginNV:
+		return "WorldRayOrigin()";
+	case BuiltInWorldRayDirectionNV:
+		return "WorldRayDirection()";
+	case BuiltInObjectRayOriginNV:
+		return "ObjectRayOrigin()";
+	case BuiltInObjectRayDirectionNV:
+		return "ObjectRayDirection()";
+	case BuiltInRayTminNV:
+		return "RayTMin()";
+	case BuiltInRayTmaxNV:
+		return "RayTCurrent()";
+	case BuiltInInstanceCustomIndexNV:
+		return "InstanceID()";
+	case BuiltInObjectToWorldNV:
+		return "ObjectToWorld4x3()";
+	case BuiltInWorldToObjectNV:
+		return "WorldToObject4x3()";
+	case BuiltInHitTNV:
+		return "RayTCurrent()";
+	case BuiltInHitKindNV:
+		return "HitKind()";
+	case BuiltInIncomingRayFlagsNV:
+		return "RayFlags()";
 	default:
 		return CompilerGLSL::builtin_to_glsl(builtin, storage);
 	}
@@ -953,6 +1080,8 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 
 void CompilerHLSL::emit_builtin_variables()
 {
+	auto &execution = get_entry_point();
+
 	Bitset builtins = active_input_builtins;
 	builtins.merge_or(active_output_builtins);
 
@@ -984,6 +1113,21 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 
 		case BuiltInInstanceId:
+			// Ignore when used in RT shaders, this is no longer a compile-time constant
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
+				break;
+			type = "int";
+			break;
+
+		case BuiltInPrimitiveId:
+			// Ignore when used in RT shaders, this is no longer a compile-time constant
+			if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+			    execution.model == ExecutionModelClosestHitNV)
+				break;
+			type = "uint";
+			break;
+
 		case BuiltInSampleId:
 			type = "int";
 			break;
@@ -1041,6 +1185,23 @@ void CompilerHLSL::emit_builtin_variables()
 		case BuiltInCullDistance:
 			array_size = cull_distance_count;
 			type = "float";
+			break;
+
+		case BuiltInLaunchIdNV:
+		case BuiltInLaunchSizeNV:
+		case BuiltInWorldRayOriginNV:
+		case BuiltInWorldRayDirectionNV:
+		case BuiltInObjectRayOriginNV:
+		case BuiltInObjectRayDirectionNV:
+		case BuiltInRayTminNV:
+		case BuiltInRayTmaxNV:
+		case BuiltInInstanceCustomIndexNV:
+		case BuiltInObjectToWorldNV:
+		case BuiltInWorldToObjectNV:
+		case BuiltInHitTNV:
+		case BuiltInHitKindNV:
+		case BuiltInIncomingRayFlagsNV:
+			// handled specially since they aren't compile time constants
 			break;
 
 		default:
@@ -1231,6 +1392,53 @@ void CompilerHLSL::emit_resources()
 		emitted = true;
 	}
 
+	// HLSL requires ray payloads to be structs
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
+	{
+		auto *payload_var = get_ray_tracing_in_payload();
+		if (payload_var)
+		{
+			std::string name = get_name(payload_var->self);
+			std::string type = type_to_glsl_constructor(get_type(payload_var->basetype));
+			// Payload type is a primitive, create a shadow struct to wrap it
+			if (get_type(payload_var->basetype).basetype != SPIRType::Struct)
+			{
+				statement("struct _ShadowPayloadData_");
+				statement("{");
+				statement("  ", type_to_glsl(get_type(payload_var->basetype)), " data;");
+				statement("};");
+			}
+			statement("static ", type, " ", name, ";");
+		}
+		// fallback payload struct
+		else
+		{
+			statement("struct _ShadowPayloadData_ { float4 data; };");
+		}
+	}
+
+	// HLSL requires hit attributes to be structs
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelIntersectionNV)
+	{
+		auto *hitattrib_var = get_ray_tracing_hit_attrib();
+		if (hitattrib_var)
+		{
+			std::string name = get_name(hitattrib_var->self);
+			std::string type = type_to_glsl_constructor(get_type(hitattrib_var->basetype));
+			// Hit attribute type is a primitive, create a shadow struct to wrap it
+			if (get_type(hitattrib_var->basetype).basetype != SPIRType::Struct)
+			{
+				statement("struct _ShadowHitAttributeData_");
+				statement("{");
+				statement("  ", type_to_glsl(get_type(hitattrib_var->basetype)), " attribs;");
+				statement("};");
+			}
+			statement("static ", type, " ", name, ";");
+		}
+	}
+
 	bool skip_separate_image_sampler = !combined_image_samplers.empty() || hlsl_options.shader_model <= 30;
 
 	// Output Uniform Constants (values, samplers, images, etc).
@@ -1249,8 +1457,16 @@ void CompilerHLSL::emit_resources()
 		}
 
 		if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-		    type.pointer && (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
+		    type.pointer &&
+		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
+		     type.storage == StorageClassRayPayloadNV))
 		{
+			// make rgen payload static
+			auto &type = this->get<SPIRType>(var.basetype);
+			if (type.storage == StorageClassRayPayloadNV)
+			{
+				statement_inner("static ");
+			}
 			emit_uniform(var);
 			emitted = true;
 		}
@@ -1360,6 +1576,13 @@ void CompilerHLSL::emit_resources()
 	};
 
 	auto input_builtins = active_input_builtins;
+	// only make non-compile-time constant when used in RT shader
+	if (execution.model == ExecutionModelIntersectionNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelClosestHitNV)
+	{
+		input_builtins.clear(BuiltInInstanceId);
+		input_builtins.clear(BuiltInPrimitiveId);
+	}
 	input_builtins.clear(BuiltInNumWorkgroups);
 	input_builtins.clear(BuiltInPointCoord);
 	input_builtins.clear(BuiltInSubgroupSize);
@@ -1369,6 +1592,21 @@ void CompilerHLSL::emit_resources()
 	input_builtins.clear(BuiltInSubgroupLeMask);
 	input_builtins.clear(BuiltInSubgroupGtMask);
 	input_builtins.clear(BuiltInSubgroupGeMask);
+	// RT builtins
+	input_builtins.clear(BuiltInLaunchIdNV);
+	input_builtins.clear(BuiltInLaunchSizeNV);
+	input_builtins.clear(BuiltInWorldRayOriginNV);
+	input_builtins.clear(BuiltInWorldRayDirectionNV);
+	input_builtins.clear(BuiltInObjectRayOriginNV);
+	input_builtins.clear(BuiltInObjectRayDirectionNV);
+	input_builtins.clear(BuiltInRayTminNV);
+	input_builtins.clear(BuiltInRayTmaxNV);
+	input_builtins.clear(BuiltInInstanceCustomIndexNV);
+	input_builtins.clear(BuiltInObjectToWorldNV);
+	input_builtins.clear(BuiltInWorldToObjectNV);
+	input_builtins.clear(BuiltInHitTNV);
+	input_builtins.clear(BuiltInHitKindNV);
+	input_builtins.clear(BuiltInIncomingRayFlagsNV);
 
 	if (!input_variables.empty() || !input_builtins.empty())
 	{
@@ -2204,6 +2442,18 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 			decl += "frag_main";
 		else if (execution.model == ExecutionModelGLCompute)
 			decl += "comp_main";
+		else if (execution.model == ExecutionModelRayGenerationNV)
+			decl += "rgen_main";
+		else if (execution.model == ExecutionModelIntersectionNV)
+			decl += "rint_main";
+		else if (execution.model == ExecutionModelAnyHitNV)
+			decl += "rahit_main";
+		else if (execution.model == ExecutionModelClosestHitNV)
+			decl += "rchit_main";
+		else if (execution.model == ExecutionModelMissNV)
+			decl += "rmiss_main";
+		else if (execution.model == ExecutionModelCallableNV)
+			decl += "call_main";
 		else
 			SPIRV_CROSS_THROW("Unsupported execution model.");
 		processing_entry_point = true;
@@ -2326,12 +2576,92 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("[numthreads(", x_expr, ", ", y_expr, ", ", z_expr, ")]");
 		break;
 	}
+	case ExecutionModelRayGenerationNV:
+	{
+		statement("[shader(\"raygeneration\")]");
+		break;
+	}
+	case ExecutionModelIntersectionNV:
+	{
+		statement("[shader(\"intersection\")]");
+		break;
+	}
+	case ExecutionModelAnyHitNV:
+	{
+		statement("[shader(\"anyhit\")]");
+		break;
+	}
+	case ExecutionModelClosestHitNV:
+	{
+		statement("[shader(\"closesthit\")]");
+		break;
+	}
+	case ExecutionModelMissNV:
+	{
+		statement("[shader(\"miss\")]");
+		break;
+	}
+	case ExecutionModelCallableNV:
+	{
+		statement("[shader(\"callable\")]");
+		break;
+	}
 	case ExecutionModelFragment:
 		if (execution.flags.get(ExecutionModeEarlyFragmentTests))
 			statement("[earlydepthstencil]");
 		break;
 	default:
 		break;
+	}
+
+	// Add incoming payload and hit attributes for Hit shaders
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
+	{
+		// Add incoming payload
+		{
+			string out_argument;
+			auto *payload_var = get_ray_tracing_in_payload();
+			out_argument += "inout ";
+			if (payload_var)
+			{
+				if (get_type(payload_var->basetype).basetype != SPIRType::Struct)
+					out_argument += "_ShadowPayloadData_";
+				else
+					out_argument += type_to_glsl_constructor(get_type(payload_var->basetype));
+			}
+			// no payload used, fallback to default payload
+			else
+			{
+				out_argument += "_ShadowPayloadData_";
+			}
+			out_argument += " ";
+			out_argument += "_payloadOut_";
+			arguments.push_back(move(out_argument));
+		}
+		// Add incoming hit attribute
+		if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV)
+		{
+			string out_argument;
+			const SPIRVariable *hitattrib_var = get_ray_tracing_hit_attrib();
+			out_argument += "in ";
+			// in case a primitive attribute is used, fallback to the shadow struct
+			if (hitattrib_var)
+			{
+				if (get_type(hitattrib_var->basetype).basetype != SPIRType::Struct)
+					out_argument += "_ShadowHitAttributeData_";
+				else
+					out_argument += type_to_glsl_constructor(get_type(hitattrib_var->basetype));
+			}
+			// no hit attributes used, fallback to default hit attributes
+			else
+			{
+				out_argument += "BuiltInTriangleIntersectionAttributes";
+			}
+			out_argument += " ";
+			out_argument += "_hitAttribsOut_";
+			arguments.push_back(move(out_argument));
+		}
 	}
 
 	statement(require_output ? "SPIRV_Cross_Output " : "void ", "main(", merge(arguments), ")");
@@ -2369,8 +2699,22 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			break;
 
 		case BuiltInInstanceId:
-			// D3D semantics are uint, but shader wants int.
-			statement(builtin, " = int(stage_input.", builtin, ");");
+			// In RT shaders this is not a compile-time constant
+			if (execution.model != ExecutionModelIntersectionNV && execution.model != ExecutionModelAnyHitNV &&
+			    execution.model != ExecutionModelClosestHitNV)
+			{
+				// D3D semantics are uint, but shader wants int.
+				statement(builtin, " = int(stage_input.", builtin, ");");
+			}
+			break;
+
+		case BuiltInPrimitiveId:
+			// In RT shaders this is not a compile-time constant
+			if (execution.model != ExecutionModelIntersectionNV && execution.model != ExecutionModelAnyHitNV &&
+			    execution.model != ExecutionModelClosestHitNV)
+			{
+				statement(builtin, " = stage_input.", builtin, ";");
+			}
 			break;
 
 		case BuiltInNumWorkgroups:
@@ -2453,6 +2797,23 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				          ";");
 			break;
 
+		case BuiltInLaunchIdNV:
+		case BuiltInLaunchSizeNV:
+		case BuiltInWorldRayOriginNV:
+		case BuiltInWorldRayDirectionNV:
+		case BuiltInObjectRayOriginNV:
+		case BuiltInObjectRayDirectionNV:
+		case BuiltInRayTminNV:
+		case BuiltInRayTmaxNV:
+		case BuiltInInstanceCustomIndexNV:
+		case BuiltInObjectToWorldNV:
+		case BuiltInWorldToObjectNV:
+		case BuiltInHitTNV:
+		case BuiltInHitKindNV:
+		case BuiltInIncomingRayFlagsNV:
+			// handled specially since they aren't compile time constants
+			break;
+
 		default:
 			statement(builtin, " = stage_input.", builtin, ";");
 			break;
@@ -2494,6 +2855,37 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		}
 	});
 
+	// Copy the payload result in
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
+	{
+		auto *payload_var = get_ray_tracing_in_payload();
+		if (payload_var)
+		{
+			std::string name = get_name(payload_var->self);
+			if (get_type(payload_var->basetype).basetype != SPIRType::Struct)
+				// copy input data to shadow data
+				statement(name, " = _payloadOut_.data", ";");
+			else
+				statement(name, " = _payloadOut_", ";");
+		}
+	}
+
+	// Copy the hit attribute result in
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV)
+	{
+		const SPIRVariable *hitattrib_var = get_ray_tracing_hit_attrib();
+		if (hitattrib_var)
+		{
+			std::string name = get_name(hitattrib_var->self);
+			if (get_type(hitattrib_var->basetype).basetype != SPIRType::Struct)
+				// copy input data to shadow data
+				statement(name, " = _hitAttribsOut_.attribs", ";");
+			else
+				statement(name, " = _hitAttribsOut_", ";");
+		}
+	}
+
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex)
 		statement("vert_main();");
@@ -2501,8 +2893,36 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("frag_main();");
 	else if (execution.model == ExecutionModelGLCompute)
 		statement("comp_main();");
+	else if (execution.model == ExecutionModelRayGenerationNV)
+		statement("rgen_main();");
+	else if (execution.model == ExecutionModelIntersectionNV)
+		statement("rint_main();");
+	else if (execution.model == ExecutionModelAnyHitNV)
+		statement("rahit_main();");
+	else if (execution.model == ExecutionModelClosestHitNV)
+		statement("rchit_main();");
+	else if (execution.model == ExecutionModelMissNV)
+		statement("rmiss_main();");
+	else if (execution.model == ExecutionModelCallableNV)
+		statement("call_main();");
 	else
 		SPIRV_CROSS_THROW("Unsupported shader stage.");
+
+	// Copy the payload result back
+	if (execution.model == ExecutionModelClosestHitNV || execution.model == ExecutionModelAnyHitNV ||
+	    execution.model == ExecutionModelMissNV)
+	{
+		auto *payload_var = get_ray_tracing_in_payload();
+		if (payload_var)
+		{
+			std::string name = get_name(payload_var->self);
+			if (get_type(payload_var->basetype).basetype != SPIRType::Struct)
+				// copy input data to shadow data
+				statement("_payloadOut_.data = ", name, ";");
+			else
+				statement("_payloadOut_ = ", name, ";");
+		}
+	}
 
 	// Copy block outputs.
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
@@ -3090,6 +3510,11 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		resource_flags = HLSL_BINDING_AUTO_SAMPLER_BIT;
 		break;
 
+	case SPIRType::AccelerationStructure:
+		space = 't'; // SRV
+		resource_flags = HLSL_BINDING_AUTO_SRV_BIT;
+		break;
+
 	case SPIRType::Struct:
 	{
 		auto storage = type.storage;
@@ -3213,6 +3638,7 @@ string CompilerHLSL::to_resource_register(HLSLBindingFlagBits flag, char space, 
 void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
+
 	switch (type.basetype)
 	{
 	case SPIRType::SampledImage:
@@ -3244,6 +3670,11 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 			          ";");
 		else
 			statement("SamplerState ", to_name(var.self), type_to_array_glsl(type), to_resource_binding(var), ";");
+		break;
+
+	case SPIRType::AccelerationStructure:
+		statement("RaytracingAccelerationStructure ", to_name(var.self), type_to_array_glsl(type),
+		          to_resource_binding(var), ";");
 		break;
 
 	default:
@@ -4234,13 +4665,14 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 
 		if (data_type.storage == StorageClassImage || !chain)
 		{
-			statement(atomic_op, "(", to_expression(ops[0]), ", ", to_expression(ops[3]), ", ", to_expression(tmp_id), ");");
+			statement(atomic_op, "(", to_expression(ops[0]), ", ", to_expression(ops[3]), ", ", to_expression(tmp_id),
+			          ");");
 		}
 		else
 		{
 			// RWByteAddress buffer is always uint in its underlying type.
-			statement(chain->base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ", to_expression(ops[3]),
-			          ", ", to_expression(tmp_id), ");");
+			statement(chain->base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ",
+			          to_expression(ops[3]), ", ", to_expression(tmp_id), ");");
 		}
 	}
 	else
@@ -5266,6 +5698,89 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("Rasterizer order views require Shader Model 5.1.");
 		break; // Nothing to do in the body
 
+	case OpReportIntersectionNV:
+	{
+		auto *hitattrib_var = get_ray_tracing_hit_attrib();
+		if (!hitattrib_var)
+			SPIRV_CROSS_THROW("Failed to lookup hit attribute for OpReportIntersectionNV");
+
+		bool is_primitive_attr = get_type(hitattrib_var->basetype).basetype != SPIRType::Struct;
+
+		std::string hitattrib_name = get_name(hitattrib_var->self);
+		std::string hitattrib_type = type_to_glsl_constructor(get_type(hitattrib_var->basetype));
+
+		std::string hitattrib_uid = get_unique_identifier();
+
+		// Target attribute is either the user attribute struct, or our struct wrapped attribute
+		std::string target_attr_name = is_primitive_attr ? hitattrib_uid : hitattrib_name;
+
+		if (is_primitive_attr)
+		{
+			// Attribute is a primitive and needs to be struct wrapped
+			statement("struct PrimitiveWrap", hitattrib_uid, " {");
+			statement("  ", hitattrib_type, " data", ";");
+			statement("} ", hitattrib_uid, ";");
+			// Copy current payload value into struct wrap
+			statement(hitattrib_uid, ".data", " = ", hitattrib_name, ";");
+		}
+		statement("ReportHit(", to_expression(ops[2]), ",", to_expression(ops[3]), ",", target_attr_name, ");");
+		break;
+	}
+	case OpIgnoreIntersectionNV:
+		statement("IgnoreHit();");
+		break;
+	case OpTerminateRayNV:
+		statement("AcceptHitAndEndSearch();");
+		break;
+
+	case OpTraceNV:
+	{
+		// In GLSL, payload is passed as a number and is a compile-time constant
+		// In HLSL, payload is passed as a variable
+		// To simulate GLSL behavior, we lookup the payload name based on the
+		// input location's index, which is passed in the last param of TraceRay
+		uint32_t payload_index = std::stoi(to_expression(ops[10]));
+
+		auto *payload_var = find_storage_class_variable_by_location(StorageClassRayPayloadNV, payload_index);
+		if (!payload_var)
+			SPIRV_CROSS_THROW("Failed to lookup location of rayPayloadEXT");
+
+		std::string payload_name = get_name(payload_var->self);
+		std::string payload_type = type_to_glsl_constructor(get_type(payload_var->basetype));
+
+		bool is_primitive_payload = get_type(payload_var->basetype).basetype != SPIRType::Struct;
+
+		std::string ray_uid = get_unique_identifier();
+		std::string primitive_uid = get_unique_identifier();
+
+		// Target payload is either the user payload struct, or our struct wrapped payload
+		std::string target_payload_name = is_primitive_payload ? primitive_uid : payload_name;
+
+		statement("RayDesc ", ray_uid, ";");
+		statement(ray_uid, ".Origin = ", to_expression(ops[6]), ";");
+		statement(ray_uid, ".Direction = ", to_expression(ops[8]), ";");
+		statement(ray_uid, ".TMin = ", to_expression(ops[7]), ";");
+		statement(ray_uid, ".TMax = ", to_expression(ops[9]), ";");
+		if (is_primitive_payload)
+		{
+			// Payload is a primitive and needs to be struct wrapped
+			statement("struct PrimitiveWrap", primitive_uid, " {");
+			statement("  ", payload_type, " data", ";");
+			statement("} ", primitive_uid, ";");
+			// Copy current payload value into struct wrap
+			statement(primitive_uid, ".data", " = ", payload_name, ";");
+		}
+		statement("TraceRay(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ", ray_uid, ", ",
+		          target_payload_name, ");");
+		if (is_primitive_payload)
+		{
+			// Copy payload result back from struct wrap to the payload primitive
+			statement(payload_name, " = ", primitive_uid, ".data", ";");
+		}
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
@@ -5516,6 +6031,28 @@ void CompilerHLSL::emit_block_hints(const SPIRBlock &block)
 string CompilerHLSL::get_unique_identifier()
 {
 	return join("_", unique_identifier_count++, "ident");
+}
+
+const SPIRVariable *CompilerHLSL::get_ray_tracing_in_payload()
+{
+	const SPIRVariable *ret = nullptr;
+	// Find incoming payload
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
+		if (var.storage == StorageClassIncomingRayPayloadNV)
+			ret = &var;
+	});
+	return ret;
+}
+
+const SPIRVariable *CompilerHLSL::get_ray_tracing_hit_attrib()
+{
+	const SPIRVariable *ret = nullptr;
+	// Find incoming hit attribute
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
+		if (var.storage == StorageClassHitAttributeNV)
+			ret = &var;
+	});
+	return ret;
 }
 
 void CompilerHLSL::add_hlsl_resource_binding(const HLSLResourceBinding &binding)

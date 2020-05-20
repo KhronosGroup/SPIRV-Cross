@@ -2091,23 +2091,23 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	}
 	else if (var.storage == StorageClassRayPayloadNV)
 	{
-		return "rayPayloadNV ";
+		return "rayPayloadEXT ";
 	}
 	else if (var.storage == StorageClassIncomingRayPayloadNV)
 	{
-		return "rayPayloadInNV ";
+		return "rayPayloadInEXT ";
 	}
 	else if (var.storage == StorageClassHitAttributeNV)
 	{
-		return "hitAttributeNV ";
+		return "hitAttributeEXT ";
 	}
 	else if (var.storage == StorageClassCallableDataNV)
 	{
-		return "callableDataNV ";
+		return "callableDataEXT ";
 	}
 	else if (var.storage == StorageClassIncomingCallableDataNV)
 	{
-		return "callableDataInNV ";
+		return "callableDataInEXT ";
 	}
 
 	return "";
@@ -4647,7 +4647,8 @@ bool CompilerGLSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint3
 
 	if (output_type.basetype == SPIRType::Half && input_type.basetype == SPIRType::Float && input_type.vecsize == 1)
 		expr = join("unpackFloat2x16(floatBitsToUint(", to_unpacked_expression(op0), "))");
-	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half && input_type.vecsize == 2)
+	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half &&
+	         input_type.vecsize == 2)
 		expr = join("uintBitsToFloat(packFloat2x16(", to_unpacked_expression(op0), "))");
 	else
 		return false;
@@ -6796,15 +6797,15 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			auto model = get_entry_point().model;
 			switch (model)
 			{
-			case spv::ExecutionModelIntersectionKHR:
-			case spv::ExecutionModelAnyHitKHR:
-			case spv::ExecutionModelClosestHitKHR:
+			case spv::ExecutionModelIntersectionNV:
+			case spv::ExecutionModelAnyHitNV:
+			case spv::ExecutionModelClosestHitNV:
 				// gl_InstanceID is allowed in these shaders.
 				break;
 
 			default:
 				SPIRV_CROSS_THROW(
-					"Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
+				    "Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
 			}
 		}
 		return "gl_InstanceID";
@@ -6979,33 +6980,33 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_SubgroupLtMask";
 
 	case BuiltInLaunchIdNV:
-		return "gl_LaunchIDNV";
+		return "gl_LaunchIDEXT";
 	case BuiltInLaunchSizeNV:
-		return "gl_LaunchSizeNV";
+		return "gl_LaunchSizeEXT";
 	case BuiltInWorldRayOriginNV:
-		return "gl_WorldRayOriginNV";
+		return "gl_WorldRayOriginEXT";
 	case BuiltInWorldRayDirectionNV:
-		return "gl_WorldRayDirectionNV";
+		return "gl_WorldRayDirectionEXT";
 	case BuiltInObjectRayOriginNV:
-		return "gl_ObjectRayOriginNV";
+		return "gl_ObjectRayOriginEXT";
 	case BuiltInObjectRayDirectionNV:
-		return "gl_ObjectRayDirectionNV";
+		return "gl_ObjectRayDirectionEXT";
 	case BuiltInRayTminNV:
-		return "gl_RayTminNV";
+		return "gl_RayTminEXT";
 	case BuiltInRayTmaxNV:
-		return "gl_RayTmaxNV";
+		return "gl_RayTmaxEXT";
 	case BuiltInInstanceCustomIndexNV:
-		return "gl_InstanceCustomIndexNV";
+		return "gl_InstanceCustomIndexEXT";
 	case BuiltInObjectToWorldNV:
-		return "gl_ObjectToWorldNV";
+		return "gl_ObjectToWorldEXT";
 	case BuiltInWorldToObjectNV:
-		return "gl_WorldToObjectNV";
+		return "gl_WorldToObjectEXT";
 	case BuiltInHitTNV:
-		return "gl_HitTNV";
+		return "gl_HitTEXT";
 	case BuiltInHitKindNV:
-		return "gl_HitKindNV";
+		return "gl_HitKindEXT";
 	case BuiltInIncomingRayFlagsNV:
-		return "gl_IncomingRayFlagsNV";
+		return "gl_IncomingRayFlagsEXT";
 
 	case BuiltInBaryCoordNV:
 	{
@@ -10791,22 +10792,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpReportIntersectionNV:
-		statement("reportIntersectionNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+		statement("reportIntersectionEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 	case OpIgnoreIntersectionNV:
-		statement("ignoreIntersectionNV();");
+		statement("ignoreIntersectionEXT();");
 		break;
 	case OpTerminateRayNV:
-		statement("terminateRayNV();");
+		statement("terminateRayEXT();");
 		break;
 	case OpTraceNV:
-		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+		statement("traceRayEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
 		break;
 	case OpExecuteCallableNV:
-		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+		statement("executeCallableEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 
 	case OpConvertUToPtr:
@@ -13739,11 +13740,12 @@ const SPIRVariable *CompilerGLSL::find_subpass_input_by_attachment_index(uint32_
 	return ret;
 }
 
-const SPIRVariable *CompilerGLSL::find_color_output_by_location(uint32_t location) const
+const SPIRVariable *CompilerGLSL::find_storage_class_variable_by_location(spv::StorageClass storage_class,
+                                                                          uint32_t location) const
 {
 	const SPIRVariable *ret = nullptr;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage == StorageClassOutput && get_decoration(var.self, DecorationLocation) == location)
+		if (var.storage == storage_class && get_decoration(var.self, DecorationLocation) == location)
 			ret = &var;
 	});
 	return ret;
@@ -13754,7 +13756,7 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 	for (auto &remap : subpass_to_framebuffer_fetch_attachment)
 	{
 		auto *subpass_var = find_subpass_input_by_attachment_index(remap.first);
-		auto *output_var = find_color_output_by_location(remap.second);
+		auto *output_var = find_storage_class_variable_by_location(StorageClassOutput, remap.second);
 		if (!subpass_var)
 			continue;
 		if (!output_var)
