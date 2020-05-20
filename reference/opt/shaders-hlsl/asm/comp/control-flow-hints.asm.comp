@@ -4,17 +4,17 @@ RWByteAddressBuffer foo : register(u1);
 void comp_main()
 {
     [unroll]
-    for (int _135 = 0; _135 < 16; )
+    for (int _136 = 0; _136 < 16; )
     {
-        bar.Store4(_135 * 16 + 0, asuint(asfloat(foo.Load4(_135 * 16 + 0))));
-        _135++;
+        bar.Store4(_136 * 16 + 0, asuint(asfloat(foo.Load4(_136 * 16 + 0))));
+        _136++;
         continue;
     }
     [loop]
-    for (int _136 = 0; _136 < 16; )
+    for (int _137 = 0; _137 < 16; )
     {
-        bar.Store4((15 - _136) * 16 + 0, asuint(asfloat(foo.Load4(_136 * 16 + 0))));
-        _136++;
+        bar.Store4((15 - _137) * 16 + 0, asuint(asfloat(foo.Load4(_137 * 16 + 0))));
+        _137++;
         continue;
     }
     [branch]
