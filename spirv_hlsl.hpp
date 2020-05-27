@@ -114,6 +114,10 @@ public:
 		// By default, a readonly storage buffer will be declared as ByteAddressBuffer (SRV) instead.
 		bool force_storage_buffer_as_uav = false;
 
+		// Similar to force_storage_buffer_as_uav but only forces set bindings.
+		// Use set_hlsl_force_storage_buffer_as_uav to specify the binding by ID.
+		bool force_storage_buffer_as_uav_by_id = false;
+
 		// Forces any storage image type marked as NonWritable to be considered an SRV instead.
 		// For this to work with function call parameters, NonWritable must be considered to be part of the type system
 		// so that NonWritable image arguments are also translated to Texture rather than RWTexture.
@@ -186,6 +190,9 @@ public:
 	void add_hlsl_resource_binding(const HLSLResourceBinding &resource);
 	bool is_hlsl_resource_binding_used(spv::ExecutionModel model, uint32_t set, uint32_t binding) const;
 
+	// Controls which storage buffer bindings will be forced to be declared as UAVs.
+	void set_hlsl_force_storage_buffer_as_uav(ID binding);
+
 private:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string image_type_hlsl(const SPIRType &type, uint32_t id);
@@ -244,6 +251,8 @@ private:
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 	void replace_illegal_names() override;
+
+	bool is_hlsl_force_storage_buffer_as_uav(ID binding) const;
 
 	Options hlsl_options;
 
@@ -338,6 +347,8 @@ private:
 
 	std::unordered_map<StageSetBinding, std::pair<HLSLResourceBinding, bool>, InternalHasher> resource_bindings;
 	void remap_hlsl_resource_binding(HLSLBindingFlagBits type, uint32_t &desc_set, uint32_t &binding);
+
+	std::unordered_set<ID> force_uav_buffer_bindings;
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 
