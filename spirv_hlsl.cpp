@@ -5546,18 +5546,21 @@ CompilerHLSL::BitcastType CompilerHLSL::get_bitcast_type(uint32_t result_type, u
 	return BitcastType::TypeNormal;
 }
 
-bool CompilerHLSL::is_hlsl_force_storage_buffer_as_uav(ID binding) const
+bool CompilerHLSL::is_hlsl_force_storage_buffer_as_uav(ID id) const
 {
 	if (hlsl_options.force_storage_buffer_as_uav)
 	{
 		return true;
-	};
-	return (hlsl_options.force_storage_buffer_as_uav_by_id &&
-	        force_uav_buffer_bindings.find(binding) != force_uav_buffer_bindings.end());
+	}
+
+	const uint32_t desc_set = get_decoration(id, spv::DecorationDescriptorSet);
+	const uint32_t binding = get_decoration(id, spv::DecorationBinding);
+	
+	return (force_uav_buffer_bindings.find({desc_set, binding}) != force_uav_buffer_bindings.end());
 }
 
-void CompilerHLSL::set_hlsl_force_storage_buffer_as_uav(ID binding)
+void CompilerHLSL::set_hlsl_force_storage_buffer_as_uav(uint32_t desc_set, uint32_t binding)
 {
-	assert(hlsl_options.force_storage_buffer_as_uav_by_id);
-	force_uav_buffer_bindings.insert(binding);
+	SetBindingPair pair = { desc_set, binding };
+	force_uav_buffer_bindings.insert(pair);
 }
