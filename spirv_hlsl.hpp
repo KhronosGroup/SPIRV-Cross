@@ -119,6 +119,11 @@ public:
 		// For this to work with function call parameters, NonWritable must be considered to be part of the type system
 		// so that NonWritable image arguments are also translated to Texture rather than RWTexture.
 		bool nonwritable_uav_texture_as_srv = false;
+
+		// Enables native 16-bit types. Needs SM 6.2.
+		// Uses half/int16_t/uint16_t instead of min16* types.
+		// Also adds support for 16-bit load-store from (RW)ByteAddressBuffer.
+		bool enable_16bit_types = false;
 	};
 
 	explicit CompilerHLSL(std::vector<uint32_t> spirv_)

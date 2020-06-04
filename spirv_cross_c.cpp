@@ -485,6 +485,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_HLSL_NONWRITABLE_UAV_TEXTURE_AS_SRV:
 		options->hlsl.nonwritable_uav_texture_as_srv = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_HLSL_ENABLE_16BIT_TYPES:
+		options->hlsl.enable_16bit_types = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_MSL

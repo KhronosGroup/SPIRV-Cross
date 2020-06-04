@@ -336,7 +336,9 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
             raise RuntimeError('Failed compiling HLSL shader')
 
 def shader_to_sm(shader):
-    if '.sm60.' in shader:
+    if '.sm62.' in shader:
+        return '62'
+    elif '.sm60.' in shader:
         return '60'
     elif '.sm51.' in shader:
         return '51'
@@ -374,6 +376,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--force-zero-initialized-variables')
     if '.nonwritable-uav-texture.' in shader:
         hlsl_args.append('--hlsl-nonwritable-uav-texture-as-srv')
+    if '.native-16bit.' in shader:
+        hlsl_args.append('--hlsl-enable-16bit-types')
 
     subprocess.check_call(hlsl_args)
 
