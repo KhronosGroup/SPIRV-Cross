@@ -43,10 +43,6 @@ enum MSLVertexFormat
 struct MSLVertexAttr
 {
 	uint32_t location = 0;
-	uint32_t msl_buffer = 0;
-	uint32_t msl_offset = 0;
-	uint32_t msl_stride = 0;
-	bool per_instance = false;
 	MSLVertexFormat format = MSL_VERTEX_FORMAT_OTHER;
 	spv::BuiltIn builtin = spv::BuiltInMax;
 };
