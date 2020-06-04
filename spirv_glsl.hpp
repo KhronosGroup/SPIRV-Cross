@@ -268,8 +268,8 @@ protected:
 	                          const SpecializationConstant &y, const SpecializationConstant &z);
 
 	virtual void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id);
-	virtual void emit_texture_op(const Instruction &i);
-	virtual std::string to_texture_op(const Instruction &i, bool *forward,
+	virtual void emit_texture_op(const Instruction &i, bool sparse);
+	virtual std::string to_texture_op(const Instruction &i, bool sparse, bool *forward,
 	                                  SmallVector<uint32_t> &inherited_expressions);
 	virtual void emit_subgroup_op(const Instruction &i);
 	virtual std::string type_to_glsl(const SPIRType &type, uint32_t id = 0);
@@ -286,12 +286,13 @@ protected:
 	virtual std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id);
 	virtual std::string to_function_name(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
 	                                     bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad,
-	                                     bool has_dref, uint32_t lod, uint32_t minlod);
+	                                     bool has_dref, bool is_sparse_feedback, uint32_t lod, uint32_t minlod);
 	virtual std::string to_function_args(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
 	                                     bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
 	                                     uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset,
 	                                     uint32_t offset, uint32_t bias, uint32_t comp, uint32_t sample,
-	                                     uint32_t minlod, bool *p_forward);
+	                                     uint32_t sparse_texel, uint32_t minlod, bool *p_forward);
+	void emit_sparse_feedback_temporaries(uint32_t result_type_id, uint32_t id, uint32_t &feedback_id, uint32_t &texel_id);
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);
 	virtual void emit_uniform(const SPIRVariable &var);

@@ -2607,8 +2607,11 @@ void CompilerHLSL::emit_fixup()
 	}
 }
 
-void CompilerHLSL::emit_texture_op(const Instruction &i)
+void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 {
+	if (sparse)
+		SPIRV_CROSS_THROW("Sparse feedback not yet supported in HLSL.");
+
 	auto *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
 	uint32_t length = i.length;
@@ -4886,7 +4889,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpImageQueryLod:
-		emit_texture_op(instruction);
+		emit_texture_op(instruction, false);
 		break;
 
 	case OpImageQuerySizeLod:
