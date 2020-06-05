@@ -618,13 +618,8 @@ protected:
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
-	std::string to_function_name(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-	                             bool has_array_offsets, bool has_offset, bool has_grad, bool has_dref, bool is_sparse_feedback,
-	                             uint32_t lod, uint32_t minlod) override;
-	std::string to_function_args(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather, bool is_proj,
-	                             uint32_t coord, uint32_t coord_components, uint32_t dref, uint32_t grad_x,
-	                             uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset, uint32_t bias,
-	                             uint32_t comp, uint32_t sample, uint32_t sparse_texel_id, uint32_t minlod, bool *p_forward) override;
+	std::string to_function_name(const TextureFunctionNameArguments &args) override;
+	std::string to_function_args(const TextureFunctionArguments &args, bool *p_forward) override;
 	std::string to_initializer_expression(const SPIRVariable &var) override;
 	std::string to_zero_initialized_expression(uint32_t type_id) override;
 

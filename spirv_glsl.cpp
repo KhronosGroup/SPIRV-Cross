@@ -5385,6 +5385,15 @@ void CompilerGLSL::emit_sparse_feedback_temporaries(uint32_t result_type_id, uin
 	emit_uninitialized_temporary(return_type.member_types[1], texel_id);
 }
 
+uint32_t CompilerGLSL::get_sparse_feedback_texel_id(uint32_t id) const
+{
+	auto itr = extra_sub_expressions.find(id);
+	if (itr == extra_sub_expressions.end())
+		return 0;
+	else
+		return itr->second + 1;
+}
+
 void CompilerGLSL::emit_texture_op(const Instruction &i, bool sparse)
 {
 	auto *ops = stream(i);
@@ -5587,16 +5596,47 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	test(sample, ImageOperandsSampleMask);
 	test(minlod, ImageOperandsMinLodMask);
 
+	TextureFunctionBaseArguments base_args = {};
+	base_args.img = img;
+	base_args.imgtype = &imgtype;
+	base_args.is_fetch = fetch != 0;
+	base_args.is_gather = gather != 0;
+	base_args.is_proj = proj != 0;
+
 	string expr;
-	expr += to_function_name(img, imgtype, !!fetch, !!gather, !!proj, !!coffsets, (!!coffset || !!offset),
-	                         (!!grad_x || !!grad_y), !!dref, sparse, lod, minlod);
+	TextureFunctionNameArguments name_args = {};
+
+	name_args.base = base_args;
+	name_args.has_array_offsets = coffsets != 0;
+	name_args.has_offset = coffset != 0 || offset != 0;
+	name_args.has_grad = grad_x != 0 || grad_y != 0;
+	name_args.has_dref = dref != 0;
+	name_args.is_sparse_feedback = sparse;
+	name_args.has_min_lod = minlod != 0;
+	name_args.lod = lod;
+	expr += to_function_name(name_args);
 	expr += "(";
 
 	uint32_t sparse_texel_id = 0;
 	if (sparse)
-		sparse_texel_id = extra_sub_expressions[ops[1]] + 1;
-	expr += to_function_args(img, imgtype, fetch, gather, proj, coord, coord_components, dref, grad_x, grad_y, lod,
-	                         coffset, offset, bias, comp, sample, sparse_texel_id, minlod, forward);
+		sparse_texel_id = get_sparse_feedback_texel_id(ops[1]);
+
+	TextureFunctionArguments args = {};
+	args.base = base_args;
+	args.coord = coord;
+	args.coord_components = coord_components;
+	args.dref = dref;
+	args.grad_x = grad_x;
+	args.grad_y = grad_y;
+	args.lod = lod;
+	args.coffset = coffset;
+	args.offset = offset;
+	args.bias = bias;
+	args.component = comp;
+	args.sample = sample;
+	args.sparse_texel = sparse_texel_id;
+	args.min_lod = minlod;
+	expr += to_function_args(args, forward);
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
@@ -5651,11 +5691,9 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
-string CompilerGLSL::to_function_name(VariableID tex, const SPIRType &imgtype, bool is_fetch, bool is_gather,
-                                      bool is_proj, bool has_array_offsets, bool has_offset, bool has_grad, bool,
-                                      bool is_sparse_feedback, uint32_t lod, uint32_t minlod)
+string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 {
-	if (minlod != 0)
+	if (args.has_min_lod)
 	{
 		if (options.es)
 			SPIRV_CROSS_THROW("Sparse residency is not supported in ESSL.");
@@ -5664,6 +5702,8 @@ string CompilerGLSL::to_function_name(VariableID tex, const SPIRType &imgtype, b
 	}
 
 	string fname;
+	auto &imgtype = *args.base.imgtype;
+	VariableID tex = args.base.img;
 
 	// textureLod on sampler2DArrayShadow and samplerCubeShadow does not exist in GLSL for some reason.
 	// To emulate this, we will have to use textureGrad with a constant gradient of 0.
@@ -5671,9 +5711,9 @@ string CompilerGLSL::to_function_name(VariableID tex, const SPIRType &imgtype, b
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    image_is_comparison(imgtype, tex) && lod)
+	    image_is_comparison(imgtype, tex) && args.lod)
 	{
-		if (!expression_is_constant_null(lod))
+		if (!expression_is_constant_null(args.lod))
 		{
 			SPIRV_CROSS_THROW(
 			    "textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
@@ -5681,34 +5721,34 @@ string CompilerGLSL::to_function_name(VariableID tex, const SPIRType &imgtype, b
 		workaround_lod_array_shadow_as_grad = true;
 	}
 
-	if (is_sparse_feedback)
+	if (args.is_sparse_feedback)
 		fname += "sparse";
 
-	if (is_fetch)
-		fname += is_sparse_feedback ? "TexelFetch" : "texelFetch";
+	if (args.base.is_fetch)
+		fname += args.is_sparse_feedback ? "TexelFetch" : "texelFetch";
 	else
 	{
-		fname += is_sparse_feedback ? "Texture" : "texture";
+		fname += args.is_sparse_feedback ? "Texture" : "texture";
 
-		if (is_gather)
+		if (args.base.is_gather)
 			fname += "Gather";
-		if (has_array_offsets)
+		if (args.has_array_offsets)
 			fname += "Offsets";
-		if (is_proj)
+		if (args.base.is_proj)
 			fname += "Proj";
-		if (has_grad || workaround_lod_array_shadow_as_grad)
+		if (args.has_grad || workaround_lod_array_shadow_as_grad)
 			fname += "Grad";
-		if (!!lod && !workaround_lod_array_shadow_as_grad)
+		if (args.lod != 0 && !workaround_lod_array_shadow_as_grad)
 			fname += "Lod";
 	}
 
-	if (has_offset)
+	if (args.has_offset)
 		fname += "Offset";
 
-	if (is_sparse_feedback)
+	if (args.is_sparse_feedback)
 		fname += "ARB";
 
-	return is_legacy() ? legacy_tex_op(fname, imgtype, lod, tex) : fname;
+	return is_legacy() ? legacy_tex_op(fname, imgtype, args.lod, tex) : fname;
 }
 
 std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
@@ -5753,14 +5793,13 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
-string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, bool is_fetch, bool is_gather,
-                                      bool is_proj, uint32_t coord, uint32_t coord_components, uint32_t dref,
-                                      uint32_t grad_x, uint32_t grad_y, uint32_t lod, uint32_t coffset, uint32_t offset,
-                                      uint32_t bias, uint32_t comp, uint32_t sample, uint32_t sparse_texel_id, uint32_t minlod,
-                                      bool *p_forward)
+string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool *p_forward)
 {
+	VariableID img = args.base.img;
+	auto &imgtype = *args.base.imgtype;
+
 	string farg_str;
-	if (is_fetch)
+	if (args.base.is_fetch)
 		farg_str = convert_separate_image_to_expression(img);
 	else
 		farg_str = to_expression(img);
@@ -5783,19 +5822,19 @@ string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, b
 		}
 	};
 
-	bool forward = should_forward(coord);
+	bool forward = should_forward(args.coord);
 
 	// The IR can give us more components than we need, so chop them off as needed.
-	auto swizzle_expr = swizzle(coord_components, expression_type(coord).vecsize);
+	auto swizzle_expr = swizzle(args.coord_components, expression_type(args.coord).vecsize);
 	// Only enclose the UV expression if needed.
-	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(coord) : (to_enclosed_expression(coord) + swizzle_expr);
+	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(args.coord) : (to_enclosed_expression(args.coord) + swizzle_expr);
 
 	// texelFetch only takes int, not uint.
-	auto &coord_type = expression_type(coord);
+	auto &coord_type = expression_type(args.coord);
 	if (coord_type.basetype == SPIRType::UInt)
 	{
 		auto expected_type = coord_type;
-		expected_type.vecsize = coord_components;
+		expected_type.vecsize = args.coord_components;
 		expected_type.basetype = SPIRType::Int;
 		coord_expr = bitcast_expression(expected_type, coord_type.basetype, coord_expr);
 	}
@@ -5806,21 +5845,21 @@ string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, b
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad =
 	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    image_is_comparison(imgtype, img) && lod;
+	    image_is_comparison(imgtype, img) && args.lod != 0;
 
-	if (dref)
+	if (args.dref)
 	{
-		forward = forward && should_forward(dref);
+		forward = forward && should_forward(args.dref);
 
 		// SPIR-V splits dref and coordinate.
-		if (is_gather || coord_components == 4) // GLSL also splits the arguments in two. Same for textureGather.
+		if (args.base.is_gather || args.coord_components == 4) // GLSL also splits the arguments in two. Same for textureGather.
 		{
 			farg_str += ", ";
-			farg_str += to_expression(coord);
+			farg_str += to_expression(args.coord);
 			farg_str += ", ";
-			farg_str += to_expression(dref);
+			farg_str += to_expression(args.dref);
 		}
-		else if (is_proj)
+		else if (args.base.is_proj)
 		{
 			// Have to reshuffle so we get vec4(coord, dref, proj), special case.
 			// Other shading languages splits up the arguments for coord and compare value like SPIR-V.
@@ -5830,21 +5869,21 @@ string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, b
 			if (imgtype.image.dim == Dim1D)
 			{
 				// Could reuse coord_expr, but we will mess up the temporary usage checking.
-				farg_str += to_enclosed_expression(coord) + ".x";
+				farg_str += to_enclosed_expression(args.coord) + ".x";
 				farg_str += ", ";
 				farg_str += "0.0, ";
-				farg_str += to_expression(dref);
+				farg_str += to_expression(args.dref);
 				farg_str += ", ";
-				farg_str += to_enclosed_expression(coord) + ".y)";
+				farg_str += to_enclosed_expression(args.coord) + ".y)";
 			}
 			else if (imgtype.image.dim == Dim2D)
 			{
 				// Could reuse coord_expr, but we will mess up the temporary usage checking.
-				farg_str += to_enclosed_expression(coord) + (swizz_func ? ".xy()" : ".xy");
+				farg_str += to_enclosed_expression(args.coord) + (swizz_func ? ".xy()" : ".xy");
 				farg_str += ", ";
-				farg_str += to_expression(dref);
+				farg_str += to_expression(args.dref);
 				farg_str += ", ";
-				farg_str += to_enclosed_expression(coord) + ".z)";
+				farg_str += to_enclosed_expression(args.coord) + ".z)";
 			}
 			else
 				SPIRV_CROSS_THROW("Invalid type for textureProj with shadow.");
@@ -5852,14 +5891,14 @@ string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, b
 		else
 		{
 			// Create a composite which merges coord/dref into a single vector.
-			auto type = expression_type(coord);
-			type.vecsize = coord_components + 1;
+			auto type = expression_type(args.coord);
+			type.vecsize = args.coord_components + 1;
 			farg_str += ", ";
 			farg_str += type_to_glsl_constructor(type);
 			farg_str += "(";
 			farg_str += coord_expr;
 			farg_str += ", ";
-			farg_str += to_expression(dref);
+			farg_str += to_expression(args.dref);
 			farg_str += ")";
 		}
 	}
@@ -5869,17 +5908,17 @@ string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, b
 		farg_str += coord_expr;
 	}
 
-	if (grad_x || grad_y)
+	if (args.grad_x || args.grad_y)
 	{
-		forward = forward && should_forward(grad_x);
-		forward = forward && should_forward(grad_y);
+		forward = forward && should_forward(args.grad_x);
+		forward = forward && should_forward(args.grad_y);
 		farg_str += ", ";
-		farg_str += to_expression(grad_x);
+		farg_str += to_expression(args.grad_x);
 		farg_str += ", ";
-		farg_str += to_expression(grad_y);
+		farg_str += to_expression(args.grad_y);
 	}
 
-	if (lod)
+	if (args.lod)
 	{
 		if (workaround_lod_array_shadow_as_grad)
 		{
@@ -5892,76 +5931,76 @@ string CompilerGLSL::to_function_args(VariableID img, const SPIRType &imgtype, b
 		}
 		else
 		{
-			if (check_explicit_lod_allowed(lod))
+			if (check_explicit_lod_allowed(args.lod))
 			{
-				forward = forward && should_forward(lod);
+				forward = forward && should_forward(args.lod);
 				farg_str += ", ";
 
-				auto &lod_expr_type = expression_type(lod);
+				auto &lod_expr_type = expression_type(args.lod);
 
 				// Lod expression for TexelFetch in GLSL must be int, and only int.
-				if (is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
+				if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
 				    lod_expr_type.basetype != SPIRType::Int)
 				{
-					farg_str += join("int(", to_expression(lod), ")");
+					farg_str += join("int(", to_expression(args.lod), ")");
 				}
 				else
 				{
-					farg_str += to_expression(lod);
+					farg_str += to_expression(args.lod);
 				}
 			}
 		}
 	}
-	else if (is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+	else if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
 	{
 		// Lod argument is optional in OpImageFetch, but we require a LOD value, pick 0 as the default.
 		farg_str += ", 0";
 	}
 
-	if (coffset)
+	if (args.coffset)
 	{
-		forward = forward && should_forward(coffset);
+		forward = forward && should_forward(args.coffset);
 		farg_str += ", ";
-		farg_str += to_expression(coffset);
+		farg_str += to_expression(args.coffset);
 	}
-	else if (offset)
+	else if (args.offset)
 	{
-		forward = forward && should_forward(offset);
+		forward = forward && should_forward(args.offset);
 		farg_str += ", ";
-		farg_str += to_expression(offset);
-	}
-
-	if (sample)
-	{
-		farg_str += ", ";
-		farg_str += to_expression(sample);
+		farg_str += to_expression(args.offset);
 	}
 
-	if (minlod)
+	if (args.sample)
 	{
 		farg_str += ", ";
-		farg_str += to_expression(minlod);
+		farg_str += to_expression(args.sample);
 	}
 
-	if (sparse_texel_id)
+	if (args.min_lod)
+	{
+		farg_str += ", ";
+		farg_str += to_expression(args.min_lod);
+	}
+
+	if (args.sparse_texel)
 	{
 		// Sparse texel output parameter comes after everything else, except it's before the optional, component/bias arguments.
 		farg_str += ", ";
-		farg_str += to_expression(sparse_texel_id);
+		farg_str += to_expression(args.sparse_texel);
 	}
 
-	if (bias)
+	if (args.bias)
 	{
-		forward = forward && should_forward(bias);
+		forward = forward && should_forward(args.bias);
 		farg_str += ", ";
-		farg_str += to_expression(bias);
+		farg_str += to_expression(args.bias);
 	}
 
-	if (comp)
+	if (args.component)
 	{
-		forward = forward && should_forward(comp);
+		forward = forward && should_forward(args.component);
 		farg_str += ", ";
-		farg_str += to_expression(comp);
+		farg_str += to_expression(args.component);
 	}
 
 	*p_forward = forward;
