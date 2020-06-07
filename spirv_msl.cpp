@@ -8156,6 +8156,10 @@ string CompilerMSL::to_texture_op(const Instruction &i, bool *forward, SmallVect
 		// processing.
 		switch (constexpr_sampler->ycbcr_model)
 		{
+		case MSL_SAMPLER_YCBCR_MODEL_CONVERSION_RGB_IDENTITY:
+		case MSL_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_IDENTITY:
+			// Default
+			break;
 		case MSL_SAMPLER_YCBCR_MODEL_CONVERSION_YCBCR_BT_709:
 			add_spv_func_and_recompile(SPVFuncImplConvertYCbCrBT709);
 			expr += "spvConvertYCbCrBT709(";
