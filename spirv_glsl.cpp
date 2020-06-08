@@ -5698,7 +5698,6 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 		if (options.es)
 			SPIRV_CROSS_THROW("Sparse residency is not supported in ESSL.");
 		require_extension_internal("GL_ARB_sparse_texture_clamp");
-		return "sparseTextureClampARB";
 	}
 
 	string fname;
@@ -5745,7 +5744,10 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	if (args.has_offset)
 		fname += "Offset";
 
-	if (args.is_sparse_feedback)
+	if (args.has_min_lod)
+		fname += "Clamp";
+
+	if (args.is_sparse_feedback || args.has_min_lod)
 		fname += "ARB";
 
 	return is_legacy() ? legacy_tex_op(fname, imgtype, args.lod, tex) : fname;
