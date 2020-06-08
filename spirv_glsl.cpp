@@ -10217,7 +10217,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (options.es)
 			SPIRV_CROSS_THROW("Sparse feedback is not supported in GLSL.");
 		require_extension_internal("GL_ARB_sparse_texture2");
-		GLSL_UFOP(sparseTexelsResidentARB);
+		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "sparseTexelsResidentARB", int_type, SPIRType::Boolean);
 		break;
 
 	case OpImage:
