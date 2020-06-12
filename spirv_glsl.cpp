@@ -6973,6 +6973,10 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 					"Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
 			}
 		}
+		if (!options.es && options.version < 140)
+		{
+			require_extension_internal("GL_ARB_draw_instanced");
+		}
 		return "gl_InstanceID";
 	case BuiltInVertexIndex:
 		if (options.vulkan_semantics)
@@ -6982,7 +6986,13 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInInstanceIndex:
 		if (options.vulkan_semantics)
 			return "gl_InstanceIndex";
-		else if (options.vertex.support_nonzero_base_instance)
+
+		if (!options.es && options.version < 140)
+		{
+			require_extension_internal("GL_ARB_draw_instanced");
+		}
+
+		if (options.vertex.support_nonzero_base_instance)
 		{
 			if (!options.vulkan_semantics)
 			{
