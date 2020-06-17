@@ -266,6 +266,20 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('0x000000ca')
     if '.no-user-varying.' in shader:
         msl_args.append('--msl-no-clip-distance-user-varying')
+    if '.shader-inputs.' in shader:
+        # Arbitrary for testing purposes.
+        msl_args.append('--msl-shader-input')
+        msl_args.append('0')
+        msl_args.append('u8')
+        msl_args.append('2')
+        msl_args.append('--msl-shader-input')
+        msl_args.append('1')
+        msl_args.append('u16')
+        msl_args.append('3')
+        msl_args.append('--msl-shader-input')
+        msl_args.append('6')
+        msl_args.append('other')
+        msl_args.append('4')
 
     subprocess.check_call(msl_args)
 

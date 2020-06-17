@@ -8697,15 +8697,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			expr = to_unpacked_expression(ptr);
 		}
 
+		auto &type = get<SPIRType>(result_type);
+		auto &expr_type = expression_type(ptr);
+
+		// If the expression has more vector components than the result type, insert
+		// a swizzle. This shouldn't happen normally on valid SPIR-V, but it might
+		// happen with e.g. the MSL backend replacing the type of an input variable.
+		if (expr_type.vecsize > type.vecsize)
+			expr = enclose_expression(expr + vector_swizzle(type.vecsize, 0));
+
 		// We might need to bitcast in order to load from a builtin.
-		bitcast_from_builtin_load(ptr, expr, get<SPIRType>(result_type));
+		bitcast_from_builtin_load(ptr, expr, type);
 
 		// We might be trying to load a gl_Position[N], where we should be
 		// doing float4[](gl_in[i].gl_Position, ...) instead.
 		// Similar workarounds are required for input arrays in tessellation.
 		unroll_array_from_complex_load(id, ptr, expr);
 
-		auto &type = get<SPIRType>(result_type);
 		// Shouldn't need to check for ID, but current glslang codegen requires it in some cases
 		// when loading Image/Sampler descriptors. It does not hurt to check ID as well.
 		if (has_decoration(id, DecorationNonUniformEXT) || has_decoration(ptr, DecorationNonUniformEXT))
