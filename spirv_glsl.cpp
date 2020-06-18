@@ -5694,6 +5694,25 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 	return c->constant_is_null();
 }
 
+bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
+{
+	auto &type = expression_type(ptr);
+	if (type.array.empty())
+		return false;
+
+	if (!backend.array_is_value_type)
+		return true;
+
+	auto *var = maybe_get_backing_variable(ptr);
+	if (!var)
+		return false;
+
+	auto &backed_type = get<SPIRType>(var->basetype);
+	return !backend.buffer_offset_array_is_value_type &&
+	       backed_type.basetype == SPIRType::Struct &&
+	       has_member_decoration(backed_type.self, 0, DecorationOffset);
+}
+
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
 // For some subclasses, the function is a method on the specified image.
 string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
@@ -8740,13 +8759,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		                      (type.basetype == SPIRType::Struct || (type.columns > 1));
 
 		SPIRExpression *e = nullptr;
-		if (!backend.array_is_value_type && !type.array.empty() && !forward)
+		if (!forward && expression_is_non_value_type_array(ptr))
 		{
 			// Complicated load case where we need to make a copy of ptr, but we cannot, because
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_backing_variable_storage(ptr));
+			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -13411,7 +13430,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
 					emit_array_copy("SPIRV_Cross_return_value", block.return_value, StorageClassFunction,
-					                get_backing_variable_storage(block.return_value));
+					                get_expression_effective_storage_class(block.return_value));
 				}
 
 				if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||

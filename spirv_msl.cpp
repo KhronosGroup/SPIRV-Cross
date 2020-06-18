@@ -6965,8 +6965,8 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	emit_array_copy(to_expression(id_lhs), id_rhs, get_backing_variable_storage(id_lhs),
-	                get_backing_variable_storage(id_rhs));
+	emit_array_copy(to_expression(id_lhs), id_rhs, get_expression_effective_storage_class(id_lhs),
+	                get_expression_effective_storage_class(id_rhs));
 	register_write(id_lhs);
 
 	return true;
