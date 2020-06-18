@@ -3428,10 +3428,15 @@ string CompilerGLSL::to_rerolled_array_expression(const string &base_expr, const
 	return expr;
 }
 
-string CompilerGLSL::to_composite_constructor_expression(uint32_t id)
+string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool uses_buffer_offset)
 {
 	auto &type = expression_type(id);
-	if (!backend.array_is_value_type && !type.array.empty())
+
+	bool reroll_array = !type.array.empty() &&
+	                    (!backend.array_is_value_type ||
+	                     (uses_buffer_offset && !backend.buffer_offset_array_is_value_type));
+
+	if (reroll_array)
 	{
 		// For this case, we need to "re-roll" an array initializer from a temporary.
 		// We cannot simply pass the array directly, since it decays to a pointer and it cannot
@@ -8410,7 +8415,10 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 
 			if (i)
 				op += ", ";
-			subop = to_composite_constructor_expression(elems[i]);
+
+			bool uses_buffer_offset = type.basetype == SPIRType::Struct &&
+			                          has_member_decoration(type.self, i, DecorationOffset);
+			subop = to_composite_constructor_expression(elems[i], uses_buffer_offset);
 		}
 
 		base = e ? e->base_expression : ID(0);

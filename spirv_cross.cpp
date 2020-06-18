@@ -277,7 +277,12 @@ StorageClass Compiler::get_backing_variable_storage(uint32_t ptr)
 {
 	auto *var = maybe_get_backing_variable(ptr);
 	if (var)
-		return var->storage;
+	{
+		if (var->storage == StorageClassUniform && has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			return StorageClassStorageBuffer;
+		else
+			return var->storage;
+	}
 	else
 		return expression_type(ptr).storage;
 }
