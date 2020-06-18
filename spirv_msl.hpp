@@ -50,7 +50,7 @@ typedef SPIRV_CROSS_DEPRECATED("Use MSLShaderInputFormat.") MSLShaderInputFormat
 struct SPIRV_CROSS_DEPRECATED("Use MSLShaderInput.") MSLVertexAttr
 {
 	uint32_t location = 0;
-	MSLVertexFormat format = MSL_VERTEX_FORMAT_OTHER;
+	MSLShaderInputFormat format = MSL_SHADER_INPUT_FORMAT_OTHER;
 	spv::BuiltIn builtin = spv::BuiltInMax;
 };
 
