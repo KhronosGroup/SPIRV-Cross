@@ -1028,6 +1028,8 @@ string CompilerMSL::compile()
 	// Allow Metal to use the array<T> template unless we force it off.
 	backend.can_return_array = !msl_options.force_native_arrays;
 	backend.array_is_value_type = !msl_options.force_native_arrays;
+	// Arrays which are part of buffer objects are never considered to be native arrays.
+	backend.buffer_offset_array_is_value_type = false;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
@@ -3820,17 +3822,21 @@ void CompilerMSL::emit_custom_functions()
 			static const char *function_name_tags[] = {
 				"FromConstantToStack",    "FromConstantToThreadGroup", "FromStackToStack",
 				"FromStackToThreadGroup", "FromThreadGroupToStack",    "FromThreadGroupToThreadGroup",
+				"FromDeviceToDevice", "FromConstantToDevice", "FromStackToDevice",
+				"FromThreadGroupToDevice", "FromDeviceToStack", "FromDeviceToThreadGroup",
 			};
 
 			static const char *src_address_space[] = {
 				"constant", "constant", "thread const", "thread const", "threadgroup const", "threadgroup const",
+				"device const", "constant", "thread const", "threadgroup const", "device const", "device const",
 			};
 
 			static const char *dst_address_space[] = {
 				"thread", "threadgroup", "thread", "threadgroup", "thread", "threadgroup",
+				"device", "device", "device", "device", "thread", "threadgroup",
 			};
 
-			for (uint32_t variant = 0; variant < 6; variant++)
+			for (uint32_t variant = 0; variant < 12; variant++)
 			{
 				uint32_t dimensions = spv_func - SPVFuncImplArrayCopyMultidimBase;
 				string tmp = "template<typename T";
@@ -6869,6 +6875,10 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 		{
 			is_constant = true;
 		}
+		else if (rhs_storage == StorageClassUniform)
+		{
+			is_constant = true;
+		}
 
 		// For the case where we have OpLoad triggering an array copy,
 		// we cannot easily detect this case ahead of time since it's
@@ -6897,6 +6907,18 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 			tag = "FromThreadGroupToStack";
 		else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToThreadGroup";
+		else if (lhs_storage == StorageClassStorageBuffer && rhs_storage == StorageClassStorageBuffer)
+			tag = "FromDeviceToDevice";
+		else if (lhs_storage == StorageClassStorageBuffer && is_constant)
+			tag = "FromConstantToDevice";
+		else if (lhs_storage == StorageClassStorageBuffer && rhs_storage == StorageClassWorkgroup)
+			tag = "FromThreadGroupToDevice";
+		else if (lhs_storage == StorageClassStorageBuffer && rhs_thread)
+			tag = "FromStackToDevice";
+		else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassStorageBuffer)
+			tag = "FromDeviceToThreadGroup";
+		else if (lhs_thread && rhs_storage == StorageClassStorageBuffer)
+			tag = "FromDeviceToStack";
 		else
 			SPIRV_CROSS_THROW("Unknown storage class used for copying arrays.");
 
@@ -6943,8 +6965,8 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	emit_array_copy(to_expression(id_lhs), id_rhs, get_backing_variable_storage(id_lhs),
-	                get_backing_variable_storage(id_rhs));
+	emit_array_copy(to_expression(id_lhs), id_rhs, get_expression_effective_storage_class(id_lhs),
+	                get_expression_effective_storage_class(id_rhs));
 	register_write(id_lhs);
 
 	return true;

@@ -3428,10 +3428,15 @@ string CompilerGLSL::to_rerolled_array_expression(const string &base_expr, const
 	return expr;
 }
 
-string CompilerGLSL::to_composite_constructor_expression(uint32_t id)
+string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool uses_buffer_offset)
 {
 	auto &type = expression_type(id);
-	if (!backend.array_is_value_type && !type.array.empty())
+
+	bool reroll_array = !type.array.empty() &&
+	                    (!backend.array_is_value_type ||
+	                     (uses_buffer_offset && !backend.buffer_offset_array_is_value_type));
+
+	if (reroll_array)
 	{
 		// For this case, we need to "re-roll" an array initializer from a temporary.
 		// We cannot simply pass the array directly, since it decays to a pointer and it cannot
@@ -5687,6 +5692,25 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 	if (!c)
 		return false;
 	return c->constant_is_null();
+}
+
+bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
+{
+	auto &type = expression_type(ptr);
+	if (type.array.empty())
+		return false;
+
+	if (!backend.array_is_value_type)
+		return true;
+
+	auto *var = maybe_get_backing_variable(ptr);
+	if (!var)
+		return false;
+
+	auto &backed_type = get<SPIRType>(var->basetype);
+	return !backend.buffer_offset_array_is_value_type &&
+	       backed_type.basetype == SPIRType::Struct &&
+	       has_member_decoration(backed_type.self, 0, DecorationOffset);
 }
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
@@ -8410,7 +8434,10 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 
 			if (i)
 				op += ", ";
-			subop = to_composite_constructor_expression(elems[i]);
+
+			bool uses_buffer_offset = type.basetype == SPIRType::Struct &&
+			                          has_member_decoration(type.self, i, DecorationOffset);
+			subop = to_composite_constructor_expression(elems[i], uses_buffer_offset);
 		}
 
 		base = e ? e->base_expression : ID(0);
@@ -8732,13 +8759,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		                      (type.basetype == SPIRType::Struct || (type.columns > 1));
 
 		SPIRExpression *e = nullptr;
-		if (!backend.array_is_value_type && !type.array.empty() && !forward)
+		if (!forward && expression_is_non_value_type_array(ptr))
 		{
 			// Complicated load case where we need to make a copy of ptr, but we cannot, because
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_backing_variable_storage(ptr));
+			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -13403,7 +13430,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
 					emit_array_copy("SPIRV_Cross_return_value", block.return_value, StorageClassFunction,
-					                get_backing_variable_storage(block.return_value));
+					                get_expression_effective_storage_class(block.return_value));
 				}
 
 				if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||

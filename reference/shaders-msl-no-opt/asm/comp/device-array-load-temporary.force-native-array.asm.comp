@@ -5,29 +5,16 @@
 
 using namespace metal;
 
-struct Data
+struct Block
 {
-    float a;
-    float b;
-};
-
-constant float X_tmp [[function_constant(0)]];
-constant float X = is_function_constant_defined(X_tmp) ? X_tmp : 4.0;
-
-struct Data_1
-{
-    float a;
-    float b;
+    uint2 _m0[2];
+    uint2 _m1[2];
 };
 
 struct SSBO
 {
-    Data_1 outdata[1];
+    Block _m0[3];
 };
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 1u, 1u);
-
-constant Data _25[2] = { Data{ 1.0, 2.0 }, Data{ 3.0, 4.0 } };
 
 template<typename T, uint A>
 inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
@@ -137,22 +124,12 @@ inline void spvArrayCopyFromDeviceToThreadGroup1(threadgroup T (&dst)[A], device
     }
 }
 
-static inline __attribute__((always_inline))
-Data combine(thread const Data& a, thread const Data& b)
+kernel void main0(device SSBO& ssbo [[buffer(0)]])
 {
-    return Data{ a.a + b.a, a.b + b.b };
-}
-
-kernel void main0(device SSBO& _53 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]], uint3 gl_LocalInvocationID [[thread_position_in_threadgroup]])
-{
-    Data data[2] = { Data{ 1.0, 2.0 }, Data{ 3.0, 4.0 } };
-    Data _31[2] = { Data{ X, 2.0 }, Data{ 3.0, 5.0 } };
-    Data data2[2];
-    spvArrayCopyFromStackToStack1(data2, _31);
-    Data param = data[gl_LocalInvocationID.x];
-    Data param_1 = data2[gl_LocalInvocationID.x];
-    Data _73 = combine(param, param_1);
-    _53.outdata[gl_WorkGroupID.x].a = _73.a;
-    _53.outdata[gl_WorkGroupID.x].b = _73.b;
+    threadgroup uint2 _18[2];
+    uint2 _27[2];
+    spvArrayCopyFromDeviceToStack1(_27, ssbo._m0[0u]._m1);
+    spvArrayCopyFromStackToDevice1(ssbo._m0[0u]._m0, _27);
+    spvArrayCopyFromStackToDevice1(ssbo._m0[0u]._m0, _27);
 }
 
