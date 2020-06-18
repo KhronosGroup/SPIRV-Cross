@@ -61,7 +61,6 @@ struct SPIRV_CROSS_DEPRECATED("Use MSLShaderInput.") MSLVertexAttr
 struct MSLShaderInput
 {
 	uint32_t location = 0;
-	bool per_instance = false;
 	MSLShaderInputFormat format = MSL_SHADER_INPUT_FORMAT_OTHER;
 	spv::BuiltIn builtin = spv::BuiltInMax;
 	uint32_t vecsize = 0;
