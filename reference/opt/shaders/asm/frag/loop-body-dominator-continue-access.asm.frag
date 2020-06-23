@@ -15,55 +15,49 @@ int _231;
 void main()
 {
     int _228;
-    switch (0u)
+    do
     {
-        default:
+        bool _225;
+        int _229;
+        uint _222 = 0u;
+        for (;;)
         {
-            bool _225;
-            int _229;
-            uint _222 = 0u;
-            for (;;)
+            if (_222 < _11.shadowCascadesNum)
             {
-                if (_222 < _11.shadowCascadesNum)
+                mat4 _223;
+                do
                 {
-                    mat4 _223;
-                    switch (0u)
+                    if (_11.test == 0)
                     {
-                        default:
-                        {
-                            if (_11.test == 0)
-                            {
-                                _223 = mat4(vec4(0.5, 0.0, 0.0, 0.0), vec4(0.0, 0.5, 0.0, 0.0), vec4(0.0, 0.0, 0.5, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
-                                break;
-                            }
-                            _223 = mat4(vec4(1.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
-                            break;
-                        }
-                    }
-                    vec4 _170 = (_223 * _11.lightVP[_222]) * vec4(fragWorld, 1.0);
-                    float _172 = _170.z;
-                    float _179 = _170.x;
-                    float _181 = _170.y;
-                    if ((((_172 >= 0.0) && (_172 <= 1.0)) && (max(_179, _181) <= 1.0)) && (min(_179, _181) >= 0.0))
-                    {
-                        _229 = int(_222);
-                        _225 = true;
+                        _223 = mat4(vec4(0.5, 0.0, 0.0, 0.0), vec4(0.0, 0.5, 0.0, 0.0), vec4(0.0, 0.0, 0.5, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
                         break;
                     }
-                    _222++;
-                    continue;
-                }
-                else
+                    _223 = mat4(vec4(1.0, 0.0, 0.0, 0.0), vec4(0.0, 1.0, 0.0, 0.0), vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0));
+                    break;
+                } while(false);
+                vec4 _170 = (_223 * _11.lightVP[_222]) * vec4(fragWorld, 1.0);
+                float _172 = _170.z;
+                float _179 = _170.x;
+                float _181 = _170.y;
+                if ((((_172 >= 0.0) && (_172 <= 1.0)) && (max(_179, _181) <= 1.0)) && (min(_179, _181) >= 0.0))
                 {
-                    _229 = _231;
-                    _225 = false;
+                    _229 = int(_222);
+                    _225 = true;
                     break;
                 }
+                _222++;
+                continue;
             }
-            _228 = -1;
-            break;
+            else
+            {
+                _229 = _231;
+                _225 = false;
+                break;
+            }
         }
-    }
+        _228 = -1;
+        break;
+    } while(false);
     _entryPointOutput = _228;
 }
 
