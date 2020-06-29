@@ -4674,3 +4674,8 @@ bool Compiler::flush_phi_required(BlockID from, BlockID to) const
 			return true;
 	return false;
 }
+
+void Compiler::add_loop_level()
+{
+	current_loop_level++;
+}

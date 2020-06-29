@@ -549,6 +549,7 @@ protected:
 	void emit_unary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op);
 	bool expression_is_forwarded(uint32_t id) const;
 	bool expression_suppresses_usage_tracking(uint32_t id) const;
+	bool expression_read_implies_multiple_reads(uint32_t id) const;
 	SPIRExpression &emit_op(uint32_t result_type, uint32_t result_id, const std::string &rhs, bool forward_rhs,
 	                        bool suppress_usage_tracking = false);
 

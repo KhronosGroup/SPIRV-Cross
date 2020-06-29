@@ -341,6 +341,7 @@ void CompilerGLSL::reset()
 
 	statement_count = 0;
 	indent = 0;
+	current_loop_level = 0;
 }
 
 void CompilerGLSL::remap_pls_variables()
@@ -4547,6 +4548,17 @@ bool CompilerGLSL::expression_suppresses_usage_tracking(uint32_t id) const
 	return suppressed_usage_tracking.count(id) != 0;
 }
 
+bool CompilerGLSL::expression_read_implies_multiple_reads(uint32_t id) const
+{
+	auto *expr = maybe_get<SPIRExpression>(id);
+	if (!expr)
+		return false;
+
+	// If we're emitting code at a deeper loop level than when we emitted the expression,
+	// we're probably reading the same expression over and over.
+	return current_loop_level > expr->emitted_loop_level;
+}
+
 SPIRExpression &CompilerGLSL::emit_op(uint32_t result_type, uint32_t result_id, const string &rhs, bool forwarding,
                                       bool suppress_usage_tracking)
 {
@@ -8168,6 +8180,13 @@ void CompilerGLSL::track_expression_read(uint32_t id)
 	{
 		auto &v = expression_usage_counts[id];
 		v++;
+
+		// If we create an expression outside a loop,
+		// but access it inside a loop, we're implicitly reading it multiple times.
+		// If the expression in question is expensive, we should hoist it out to avoid relying on loop-invariant code motion
+		// working inside the backend compiler.
+		if (expression_read_implies_multiple_reads(id))
+			v++;
 
 		if (v >= 2)
 		{
@@ -13000,6 +13019,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	bool skip_direct_branch = false;
 	bool emitted_loop_header_variables = false;
 	bool force_complex_continue_block = false;
+	ValueSaver<uint32_t> loop_level_saver(current_loop_level);
+
+	if (block.merge == SPIRBlock::MergeLoop)
+		add_loop_level();
 
 	emit_hoisted_temporaries(block.declare_temporary);
 
@@ -13492,7 +13515,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// If we hit this case, we're dealing with an unconditional branch, which means we will output
 		// that block after this. If we had selection merge, we already flushed phi variables.
 		if (block.merge != SPIRBlock::MergeSelection)
+		{
 			flush_phi(block.self, block.next_block);
+			// For a direct branch, need to remember to invalidate expressions in the next linear block instead.
+			get<SPIRBlock>(block.next_block).invalidate_expressions = block.invalidate_expressions;
+		}
 
 		// For switch fallthrough cases, we terminate the chain here, but we still need to handle Phi.
 		if (!current_emitting_switch_fallthrough)
@@ -13545,6 +13572,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		}
 		else
 			end_scope();
+
+		loop_level_saver.release();
 
 		// We cannot break out of two loops at once, so don't check for break; here.
 		// Using block.self as the "from" block isn't quite right, but it has the same scope
