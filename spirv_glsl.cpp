@@ -13342,7 +13342,13 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		bool degenerate_switch = block.default_block != block.merge_block && block.cases.empty();
 
 		if (degenerate_switch)
-			statement("do");
+		{
+			// ESSL 1.0 is not guaranteed to support do/while.
+			if (is_legacy_es())
+				statement("for (int SPIRV_Cross_Dummy = 0; SPIRV_Cross_Dummy < 1; SPIRV_Cross_Dummy++)");
+			else
+				statement("do");
+		}
 		else
 		{
 			emit_block_hints(block);
@@ -13410,7 +13416,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			}
 		}
 
-		if (degenerate_switch)
+		if (degenerate_switch && !is_legacy_es())
 			end_scope_decl("while(false)");
 		else
 			end_scope();
