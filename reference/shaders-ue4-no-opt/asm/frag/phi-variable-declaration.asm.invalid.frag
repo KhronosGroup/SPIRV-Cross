@@ -276,6 +276,8 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     float _170 = mix(Material.Material_ScalarExpressions[0].y, Material.Material_ScalarExpressions[0].z, fast::min(fast::max(abs(dot(_151, in.in_var_TEXCOORD11_centroid.xyz)), 0.0), 1.0));
     float _172 = 1.0 / _170;
     float2 _174 = (float2(Material.Material_ScalarExpressions[0].x) * ((_152.xy * float2(-1.0)) / float2(_152.z))) * float2(_172);
+    float2 _175 = dfdx(float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y));
+    float2 _176 = dfdy(float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y));
     float _180_copy;
     float2 _183;
     _183 = float2(0.0);
@@ -290,7 +292,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     {
         if (float(_185) < (floor(_170) + 2.0))
         {
-            _188 = Material_Texture2D_0.sample(Material_Texture2D_0Sampler, (float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y) + _183), gradient2d(dfdx(float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y)), dfdy(float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y)))).y;
+            _188 = Material_Texture2D_0.sample(Material_Texture2D_0Sampler, (float2(in_var_TEXCOORD0[0].x, in_var_TEXCOORD0[0].y) + _183), gradient2d(_175, _176)).y;
             if (_180 < _188)
             {
                 float _201 = _188 - _180;
