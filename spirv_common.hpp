@@ -262,6 +262,29 @@ inline std::string convert_to_string(double t, char locale_radix_point)
 	return buf;
 }
 
+template <typename T>
+struct ValueSaver
+{
+	explicit ValueSaver(T &current_)
+		: current(current_)
+		, saved(current_)
+	{
+	}
+
+	void release()
+	{
+		current = saved;
+	}
+
+	~ValueSaver()
+	{
+		release();
+	}
+
+	T &current;
+	T saved;
+};
+
 #if defined(__clang__) || defined(__GNUC__)
 #pragma GCC diagnostic pop
 #elif defined(_MSC_VER)
@@ -698,6 +721,9 @@ struct SPIRExpression : IVariant
 	// By reading this expression, we implicitly read these expressions as well.
 	// Used by access chain Store and Load since we read multiple expressions in this case.
 	SmallVector<ID> implied_read_expressions;
+
+	// The expression was emitted at a certain scope. Lets us track when an expression read means multiple reads.
+	uint32_t emitted_loop_level = 0;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRExpression)
 };

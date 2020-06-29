@@ -125,6 +125,7 @@ void main()
     _151.UvStuds = IN_UvStuds_EdgeDistance2.xy;
     SurfaceInput _156 = _151;
     _156.UvStuds.y = (fract(_151.UvStuds.y) + IN_studIndex) * 0.25;
+    float _160 = clamp(1.0 - (_146.View_Depth.w * 0.00333332992158830165863037109375), 0.0, 1.0);
     float _163 = _146.View_Depth.w * _19.CB0.RefractionBias_FadeDistance_GlowFactor.y;
     float _165 = clamp(1.0 - _163, 0.0, 1.0);
     vec2 _166 = IN_Uv_EdgeDistance1.xy * 1.0;
@@ -141,7 +142,7 @@ void main()
         else
         {
             float _180 = 1.0 / (1.0 - 0.0);
-            _193 = mix(texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166), vec4(clamp((clamp(1.0 - (_146.View_Depth.w * 0.00333332992158830165863037109375), 0.0, 1.0) * _180) - (0.0 * _180), 0.0, 1.0)));
+            _193 = mix(texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166 * 0.25), texture(SPIRV_Cross_CombinedDiffuseMapTextureDiffuseMapSampler, _166), vec4(clamp((_160 * _180) - (0.0 * _180), 0.0, 1.0)));
             break;
         }
         _193 = _192;

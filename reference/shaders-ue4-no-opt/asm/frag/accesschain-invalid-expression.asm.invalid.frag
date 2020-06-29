@@ -216,6 +216,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
 {
     main0_out out = {};
     float4 _177 = float4((((gl_FragCoord.xy - View.View_ViewRectMin.xy) * View.View_ViewSizeAndInvSize.zw) - float2(0.5)) * float2(2.0, -2.0), _138, 1.0) * float4(gl_FragCoord.w);
+    float3 _179 = in.in_var_TEXCOORD8.xyz - float3(View.View_PreViewTranslation);
     float3 _181 = normalize(-in.in_var_TEXCOORD8.xyz);
     float4 _187 = Material_Texture2D_0.sample(Material_Texture2D_0Sampler, (in.in_var_TEXCOORD0 * float2(10.0)));
     float2 _190 = (_187.xy * float2(2.0)) - float2(1.0);
@@ -330,7 +331,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     {
         if (_491 < _Globals.NumDynamicPointLights)
         {
-            float3 _501 = _Globals.LightPositionAndInvRadius[_491].xyz - (in.in_var_TEXCOORD8.xyz - float3(View.View_PreViewTranslation));
+            float3 _501 = _Globals.LightPositionAndInvRadius[_491].xyz - _179;
             float _502 = dot(_501, _501);
             float3 _505 = _501 * float3(rsqrt(_502));
             _507 = normalize(_181 + _505);
