@@ -539,6 +539,9 @@ string CompilerGLSL::compile()
 	backend.supports_extensions = true;
 	backend.use_array_constructor = true;
 
+	if (is_legacy_es())
+		backend.support_case_fallthrough = false;
+
 	// Scan the SPIR-V to find trivial uses of extensions.
 	fixup_type_alias();
 	reorder_type_alias();
@@ -13272,6 +13275,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			// Order does not matter.
 			if (!injected_block)
 				block_declaration_order.push_back(block.default_block);
+			else if (is_legacy_es())
+				SPIRV_CROSS_THROW("Default case label fallthrough to other case label is not supported in ESSL 1.0.");
 
 			case_constructs[block.default_block] = {};
 		}
@@ -13282,12 +13287,25 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			return is_unsigned_case ? convert_to_string(literal) : convert_to_string(int32_t(literal));
 		};
 
+		const auto to_legacy_case_label = [&](uint32_t condition, const SmallVector<uint32_t> &labels, const char *suffix) -> string {
+			string ret;
+			size_t count = labels.size();
+			for (size_t i = 0; i < count; i++)
+			{
+				if (i)
+					ret += " || ";
+				ret += join(count > 1 ? "(" : "", to_enclosed_expression(condition), " == ", labels[i], suffix,
+				            count > 1 ? ")" : "");
+			}
+			return ret;
+		};
+
 		// We need to deal with a complex scenario for OpPhi. If we have case-fallthrough and Phi in the picture,
 		// we need to flush phi nodes outside the switch block in a branch,
 		// and skip any Phi handling inside the case label to make fall-through work as expected.
 		// This kind of code-gen is super awkward and it's a last resort. Normally we would want to handle this
 		// inside the case label if at all possible.
-		for (size_t i = 1; i < num_blocks; i++)
+		for (size_t i = 1; backend.support_case_fallthrough && i < num_blocks; i++)
 		{
 			if (flush_phi_required(block.self, block_declaration_order[i]) &&
 			    flush_phi_required(block_declaration_order[i - 1], block_declaration_order[i]))
@@ -13341,7 +13359,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// This is buggy on FXC, so just emit the logical equivalent of a do { } while(false), which is more idiomatic.
 		bool degenerate_switch = block.default_block != block.merge_block && block.cases.empty();
 
-		if (degenerate_switch)
+		if (degenerate_switch || is_legacy_es())
 		{
 			// ESSL 1.0 is not guaranteed to support do/while.
 			if (is_legacy_es())
@@ -13365,14 +13383,28 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			{
 				// Default case.
 				if (!degenerate_switch)
-					statement("default:");
+				{
+					if (is_legacy_es())
+						statement("else");
+					else
+						statement("default:");
+				}
 			}
 			else
 			{
-				for (auto &case_literal : literals)
+				if (is_legacy_es())
 				{
-					// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
-					statement("case ", to_case_label(case_literal, unsigned_case), label_suffix, ":");
+					statement((i ? "else " : ""), "if (",
+					          to_legacy_case_label(block.condition, literals, label_suffix),
+					          ")");
+				}
+				else
+				{
+					for (auto &case_literal : literals)
+					{
+						// The case label value must be sign-extended properly in SPIR-V, so we can assume 32-bit values here.
+						statement("case ", to_case_label(case_literal, unsigned_case), label_suffix, ":");
+					}
 				}
 			}
 
@@ -13407,7 +13439,12 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 					statement("case ", to_case_label(case_literal, unsigned_case), label_suffix, ":");
 
 				if (block.default_block == block.next_block)
-					statement("default:");
+				{
+					if (is_legacy_es())
+						statement("else");
+					else
+						statement("default:");
+				}
 
 				begin_scope();
 				flush_phi(block.self, block.next_block);
