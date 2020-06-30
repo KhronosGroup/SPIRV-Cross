@@ -13386,7 +13386,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		{
 			// ESSL 1.0 is not guaranteed to support do/while.
 			if (is_legacy_es())
-				statement("for (int SPIRV_Cross_Dummy = 0; SPIRV_Cross_Dummy < 1; SPIRV_Cross_Dummy++)");
+			{
+				uint32_t counter = statement_count;
+				statement("for (int SPIRV_Cross_Dummy", counter,
+				          " = 0; SPIRV_Cross_Dummy", counter, " < 1; SPIRV_Cross_Dummy", counter, "++)");
+			}
 			else
 				statement("do");
 		}
