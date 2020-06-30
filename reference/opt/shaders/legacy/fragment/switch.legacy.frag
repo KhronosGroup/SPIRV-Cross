@@ -10,7 +10,7 @@ void main()
     highp vec4 _65;
     highp vec4 _66;
     highp vec4 _68;
-    for (int SPIRV_Cross_Dummy = 0; SPIRV_Cross_Dummy < 1; SPIRV_Cross_Dummy++)
+    for (int SPIRV_Cross_Dummy25 = 0; SPIRV_Cross_Dummy25 < 1; SPIRV_Cross_Dummy25++)
     {
         if (_13 == 2)
         {
@@ -59,7 +59,7 @@ void main()
         }
     }
     highp vec4 _70;
-    for (int SPIRV_Cross_Dummy = 0; SPIRV_Cross_Dummy < 1; SPIRV_Cross_Dummy++)
+    for (int SPIRV_Cross_Dummy146 = 0; SPIRV_Cross_Dummy146 < 1; SPIRV_Cross_Dummy146++)
     {
         if ((_13 == 10) || (_13 == 20))
         {
