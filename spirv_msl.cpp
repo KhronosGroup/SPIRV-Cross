@@ -5859,6 +5859,23 @@ bool CompilerMSL::is_out_of_bounds_tessellation_level(uint32_t id_lhs)
 	       (builtin == BuiltInTessLevelOuter && c->scalar() == 3);
 }
 
+void CompilerMSL::prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
+                                                         spv::StorageClass storage, bool &is_packed)
+{
+	// If there is any risk of writes happening with the access chain in question,
+	// and there is a risk of concurrent write access to other components,
+	// we must cast the access chain to a plain pointer to ensure we only access the exact scalars we expect.
+	// The MSL compiler refuses to allow component-level access for any non-packed vector types.
+	if (!is_packed && (storage == StorageClassStorageBuffer || storage == StorageClassWorkgroup))
+	{
+		const char *addr_space = storage == StorageClassWorkgroup ? "threadgroup" : "device";
+		expr = join("((", addr_space, " ", type_to_glsl(type), "*)&", enclose_expression(expr), ")");
+
+		// Further indexing should happen with packed rules (array index, not swizzle).
+		is_packed = true;
+	}
+}
+
 // Override for MSL-specific syntax instructions
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
