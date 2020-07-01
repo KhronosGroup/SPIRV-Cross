@@ -316,7 +316,8 @@ protected:
 	};
 	virtual std::string to_function_args(const TextureFunctionArguments &args, bool *p_forward);
 
-	void emit_sparse_feedback_temporaries(uint32_t result_type_id, uint32_t id, uint32_t &feedback_id, uint32_t &texel_id);
+	void emit_sparse_feedback_temporaries(uint32_t result_type_id, uint32_t id, uint32_t &feedback_id,
+	                                      uint32_t &texel_id);
 	uint32_t get_sparse_feedback_texel_id(uint32_t id) const;
 	virtual void emit_buffer_block(const SPIRVariable &type);
 	virtual void emit_push_constant_block(const SPIRVariable &var);

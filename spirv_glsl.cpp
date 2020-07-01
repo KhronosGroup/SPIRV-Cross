@@ -2956,12 +2956,13 @@ void CompilerGLSL::emit_resources()
 			{
 				auto *type = &id.get<SPIRType>();
 
-				bool is_natural_struct =
-					type->basetype == SPIRType::Struct && type->array.empty() && !type->pointer &&
-					(!has_decoration(type->self, DecorationBlock) && !has_decoration(type->self, DecorationBufferBlock));
+				bool is_natural_struct = type->basetype == SPIRType::Struct && type->array.empty() && !type->pointer &&
+				                         (!has_decoration(type->self, DecorationBlock) &&
+				                          !has_decoration(type->self, DecorationBufferBlock));
 
 				// Special case, ray payload and hit attribute blocks are not really blocks, just regular structs.
-				if (type->basetype == SPIRType::Struct && type->pointer && has_decoration(type->self, DecorationBlock) &&
+				if (type->basetype == SPIRType::Struct && type->pointer &&
+				    has_decoration(type->self, DecorationBlock) &&
 				    (type->storage == StorageClassRayPayloadNV || type->storage == StorageClassIncomingRayPayloadNV ||
 				     type->storage == StorageClassHitAttributeNV))
 				{
@@ -3436,9 +3437,8 @@ string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool uses_
 {
 	auto &type = expression_type(id);
 
-	bool reroll_array = !type.array.empty() &&
-	                    (!backend.array_is_value_type ||
-	                     (uses_buffer_offset && !backend.buffer_offset_array_is_value_type));
+	bool reroll_array = !type.array.empty() && (!backend.array_is_value_type ||
+	                                            (uses_buffer_offset && !backend.buffer_offset_array_is_value_type));
 
 	if (reroll_array)
 	{
@@ -4717,7 +4717,8 @@ bool CompilerGLSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint3
 
 	if (output_type.basetype == SPIRType::Half && input_type.basetype == SPIRType::Float && input_type.vecsize == 1)
 		expr = join("unpackFloat2x16(floatBitsToUint(", to_unpacked_expression(op0), "))");
-	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half && input_type.vecsize == 2)
+	else if (output_type.basetype == SPIRType::Float && input_type.basetype == SPIRType::Half &&
+	         input_type.vecsize == 2)
 		expr = join("uintBitsToFloat(packFloat2x16(", to_unpacked_expression(op0), "))");
 	else
 		return false;
@@ -5383,8 +5384,8 @@ static inline bool image_opcode_is_sample_no_dref(Op op)
 	}
 }
 
-void CompilerGLSL::emit_sparse_feedback_temporaries(uint32_t result_type_id, uint32_t id,
-                                                    uint32_t &feedback_id, uint32_t &texel_id)
+void CompilerGLSL::emit_sparse_feedback_temporaries(uint32_t result_type_id, uint32_t id, uint32_t &feedback_id,
+                                                    uint32_t &texel_id)
 {
 	// Need to allocate two temporaries.
 	if (options.es)
@@ -5436,7 +5437,8 @@ void CompilerGLSL::emit_texture_op(const Instruction &i, bool sparse)
 	if (sparse)
 	{
 		statement(to_expression(sparse_code_id), " = ", expr, ";");
-		expr = join(type_to_glsl(return_type), "(", to_expression(sparse_code_id), ", ", to_expression(sparse_texel_id), ")");
+		expr = join(type_to_glsl(return_type), "(", to_expression(sparse_code_id), ", ", to_expression(sparse_texel_id),
+		            ")");
 		forward = true;
 		inherited_expressions.clear();
 	}
@@ -5723,8 +5725,7 @@ bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
 		return false;
 
 	auto &backed_type = get<SPIRType>(var->basetype);
-	return !backend.buffer_offset_array_is_value_type &&
-	       backed_type.basetype == SPIRType::Struct &&
+	return !backend.buffer_offset_array_is_value_type && backed_type.basetype == SPIRType::Struct &&
 	       has_member_decoration(backed_type.self, 0, DecorationOffset);
 }
 
@@ -5868,7 +5869,8 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	// The IR can give us more components than we need, so chop them off as needed.
 	auto swizzle_expr = swizzle(args.coord_components, expression_type(args.coord).vecsize);
 	// Only enclose the UV expression if needed.
-	auto coord_expr = (*swizzle_expr == '\0') ? to_expression(args.coord) : (to_enclosed_expression(args.coord) + swizzle_expr);
+	auto coord_expr =
+	    (*swizzle_expr == '\0') ? to_expression(args.coord) : (to_enclosed_expression(args.coord) + swizzle_expr);
 
 	// texelFetch only takes int, not uint.
 	auto &coord_type = expression_type(args.coord);
@@ -5893,7 +5895,8 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 		forward = forward && should_forward(args.dref);
 
 		// SPIR-V splits dref and coordinate.
-		if (args.base.is_gather || args.coord_components == 4) // GLSL also splits the arguments in two. Same for textureGather.
+		if (args.base.is_gather ||
+		    args.coord_components == 4) // GLSL also splits the arguments in two. Same for textureGather.
 		{
 			farg_str += ", ";
 			farg_str += to_expression(args.coord);
@@ -7009,7 +7012,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 
 			default:
 				SPIRV_CROSS_THROW(
-					"Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
+				    "Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
 			}
 		}
 		if (!options.es && options.version < 140)
@@ -8457,8 +8460,8 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 			if (i)
 				op += ", ";
 
-			bool uses_buffer_offset = type.basetype == SPIRType::Struct &&
-			                          has_member_decoration(type.self, i, DecorationOffset);
+			bool uses_buffer_offset =
+			    type.basetype == SPIRType::Struct && has_member_decoration(type.self, i, DecorationOffset);
 			subop = to_composite_constructor_expression(elems[i], uses_buffer_offset);
 		}
 
@@ -9705,7 +9708,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto &type = get<SPIRType>(ops[0]);
 		if (type.vecsize > 1)
-			GLSL_UFOP(not);
+			GLSL_UFOP(not );
 		else
 			GLSL_UOP(!);
 		break;
@@ -10493,7 +10496,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					uint32_t operands = ops[4];
 					if (operands != ImageOperandsSampleMask || length != 6)
 						SPIRV_CROSS_THROW(
-							"Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
 
 					uint32_t samples = ops[5];
 					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_expression(ops[2]), ", ",
@@ -10504,8 +10507,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_expression(ops[2]), ", ",
 					          coord_expr, ", ", to_expression(sparse_texel_id), ");");
 				}
-				imgexpr = join(type_to_glsl(get<SPIRType>(result_type)), "(",
-				               to_expression(sparse_code_id), ", ", to_expression(sparse_texel_id), ")");
+				imgexpr = join(type_to_glsl(get<SPIRType>(result_type)), "(", to_expression(sparse_code_id), ", ",
+				               to_expression(sparse_texel_id), ")");
 			}
 			else
 			{
@@ -13310,7 +13313,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			return is_unsigned_case ? convert_to_string(literal) : convert_to_string(int32_t(literal));
 		};
 
-		const auto to_legacy_case_label = [&](uint32_t condition, const SmallVector<uint32_t> &labels, const char *suffix) -> string {
+		const auto to_legacy_case_label = [&](uint32_t condition, const SmallVector<uint32_t> &labels,
+		                                      const char *suffix) -> string {
 			string ret;
 			size_t count = labels.size();
 			for (size_t i = 0; i < count; i++)
@@ -13388,8 +13392,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			if (is_legacy_es())
 			{
 				uint32_t counter = statement_count;
-				statement("for (int SPIRV_Cross_Dummy", counter,
-				          " = 0; SPIRV_Cross_Dummy", counter, " < 1; SPIRV_Cross_Dummy", counter, "++)");
+				statement("for (int SPIRV_Cross_Dummy", counter, " = 0; SPIRV_Cross_Dummy", counter,
+				          " < 1; SPIRV_Cross_Dummy", counter, "++)");
 			}
 			else
 				statement("do");
@@ -13421,8 +13425,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			{
 				if (is_legacy_es())
 				{
-					statement((i ? "else " : ""), "if (",
-					          to_legacy_case_label(block.condition, literals, label_suffix),
+					statement((i ? "else " : ""), "if (", to_legacy_case_label(block.condition, literals, label_suffix),
 					          ")");
 				}
 				else
