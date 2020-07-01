@@ -326,8 +326,13 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
     if '.fxconly.' in shader:
         test_glslang = False
 
+    hlsl_args = [paths.glslang, '--amb', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader]
+    if '.sm30.' in shader:
+        hlsl_args.append('--hlsl-dx9-compatible')
+
     if test_glslang:
-        subprocess.check_call([paths.glslang, '--amb', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader])
+        subprocess.check_call(hlsl_args)
+
     is_no_fxc = '.nofxc.' in shader
     global ignore_fxc
     if (not ignore_fxc) and (not force_no_external_validation) and (not is_no_fxc):
