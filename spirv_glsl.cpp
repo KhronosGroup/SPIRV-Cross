@@ -7691,6 +7691,23 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				}
 			}
 
+			// Internally, access chain implementation can also be used on composites,
+			// ignore scalar access workarounds in this case.
+			StorageClass effective_storage;
+			if (expression_type(base).pointer)
+				effective_storage = get_expression_effective_storage_class(base);
+			else
+				effective_storage = StorageClassGeneric;
+
+			if (!row_major_matrix_needs_conversion)
+			{
+				// On some backends, we might not be able to safely access individual scalars in a vector.
+				// To work around this, we might have to cast the access chain reference to something which can,
+				// like a pointer to scalar, which we can then index into.
+				prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
+				                                       is_packed);
+			}
+
 			if (is_literal && !is_packed && !row_major_matrix_needs_conversion)
 			{
 				expr += ".";
@@ -7722,6 +7739,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
+			if (row_major_matrix_needs_conversion)
+			{
+				prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
+				                                       is_packed);
+			}
+
 			expr += deferred_index;
 			row_major_matrix_needs_conversion = false;
 
@@ -7750,6 +7773,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	}
 
 	return expr;
+}
+
+void CompilerGLSL::prepare_access_chain_for_scalar_access(std::string &, const SPIRType &, spv::StorageClass, bool &)
+{
 }
 
 string CompilerGLSL::to_flattened_struct_member(const string &basename, const SPIRType &type, uint32_t index)
