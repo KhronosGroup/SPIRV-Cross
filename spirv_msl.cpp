@@ -9660,8 +9660,9 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			}
 			else
 			{
+                		uint32_t index = get_decoration(var.self, DecorationInputAttachmentIndex);
 				ep_args += image_type_glsl(type, var_id) + " " + r.name;
-				ep_args += " [[color(" + convert_to_string(r.index) + ")]]";
+				ep_args += " [[color(" + convert_to_string(index) + ")]]";
 			}
 
 			// Emulate texture2D atomic operations
