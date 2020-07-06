@@ -2127,6 +2127,7 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 void CompilerGLSL::emit_flattened_io_block_member(const std::string &basename, const SPIRType &type, const char *qual,
                                                   const SmallVector<uint32_t> &indices)
 {
+	uint32_t member_type_id = type.self;
 	const SPIRType *member_type = &type;
 	const SPIRType *parent_type = nullptr;
 	auto flattened_name = basename;
@@ -2135,7 +2136,8 @@ void CompilerGLSL::emit_flattened_io_block_member(const std::string &basename, c
 		flattened_name += "_";
 		flattened_name += to_member_name(*member_type, index);
 		parent_type = member_type;
-		member_type = &get<SPIRType>(member_type->member_types[index]);
+		member_type_id = member_type->member_types[index];
+		member_type = &get<SPIRType>(member_type_id);
 	}
 
 	assert(member_type->basetype != SPIRType::Struct);
@@ -2151,7 +2153,7 @@ void CompilerGLSL::emit_flattened_io_block_member(const std::string &basename, c
 	auto backup_name = get_member_name(parent_type->self, last_index);
 	auto member_name = to_member_name(*parent_type, last_index);
 	set_member_name(parent_type->self, last_index, flattened_name);
-	emit_struct_member(*parent_type, member_type->self, last_index, qual);
+	emit_struct_member(*parent_type, member_type_id, last_index, qual);
 	// Restore member name.
 	set_member_name(parent_type->self, last_index, member_name);
 }
@@ -2167,6 +2169,9 @@ void CompilerGLSL::emit_flattened_io_block_struct(const std::string &basename, c
 		member_type = &get<SPIRType>(member_type->member_types[index]);
 
 	assert(member_type->basetype == SPIRType::Struct);
+
+	if (!member_type->array.empty())
+		SPIRV_CROSS_THROW("Cannot flatten array of structs in I/O blocks.");
 
 	for (uint32_t i = 0; i < uint32_t(member_type->member_types.size()); i++)
 	{
