@@ -10116,7 +10116,13 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	// If a binding has not been specified, revert to incrementing resource indices.
 	uint32_t resource_index;
 
-	if (allocate_argument_buffer_ids)
+	if (type_is_msl_framebuffer_fetch(type))
+	{
+		// Frame-buffer fetch gets its fallback resource index from the input attachment index,
+		// which is then treated as color index.
+		resource_index = get_decoration(var.self, DecorationInputAttachmentIndex);
+	}
+	else if (allocate_argument_buffer_ids)
 	{
 		// Allocate from a flat ID binding space.
 		resource_index = next_metal_resource_ids[var_desc_set];
