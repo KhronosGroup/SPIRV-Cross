@@ -1278,6 +1278,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t base_id = ops[0];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
 					added_arg_ids.insert(base_id);
+				
+                		uint32_t rvalue_id = ops[1];
+                		if (global_var_ids.find(rvalue_id) != global_var_ids.end())
+                    			added_arg_ids.insert(rvalue_id);
+				
 				break;
 			}
 
