@@ -293,6 +293,9 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('2')
     if '.for-tess.' in shader:
         msl_args.append('--msl-vertex-for-tessellation')
+    if '.fixed-sample-mask.' in shader:
+        msl_args.append('--msl-additional-fixed-sample-mask')
+        msl_args.append('0x00000022')
 
     subprocess.check_call(msl_args)
 

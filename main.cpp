@@ -560,6 +560,7 @@ struct CLIArguments
 	bool msl_enable_clip_distance_user_varying = true;
 	bool msl_multi_patch_workgroup = false;
 	bool msl_vertex_for_tessellation = false;
+	uint32_t msl_additional_fixed_sample_mask = 0xffffffff;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	SmallVector<pair<uint32_t, uint32_t>> glsl_ext_framebuffer_fetch;
@@ -757,7 +758,9 @@ static void print_help_msl()
 					"\t\tIn addition, this style also passes input variables in buffers directly instead of using vertex attribute processing.\n"
 					"\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
 	                "\t[--msl-vertex-for-tessellation]:\n\t\tWhen handling a vertex shader, marks it as one that will be used with a new-style tessellation control shader.\n"
-					"\t\tThe vertex shader is output to MSL as a compute kernel which outputs vertices to the buffer in the order they are received, rather than in index order as with --msl-capture-output normally.\n");
+					"\t\tThe vertex shader is output to MSL as a compute kernel which outputs vertices to the buffer in the order they are received, rather than in index order as with --msl-capture-output normally.\n"
+	                "\t[--msl-additional-fixed-sample-mask <mask>]:\n"
+	                "\t\tSet an additional fixed sample mask. If the shader outputs a sample mask, then the final sample mask will be a bitwise AND of the two.\n");
 	// clang-format on
 }
 
@@ -993,6 +996,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.enable_clip_distance_user_varying = args.msl_enable_clip_distance_user_varying;
 		msl_opts.multi_patch_workgroup = args.msl_multi_patch_workgroup;
 		msl_opts.vertex_for_tessellation = args.msl_vertex_for_tessellation;
+		msl_opts.additional_fixed_sample_mask = args.msl_additional_fixed_sample_mask;
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
@@ -1406,6 +1410,8 @@ static int main_inner(int argc, char *argv[])
 	});
 	cbs.add("--msl-multi-patch-workgroup", [&args](CLIParser &) { args.msl_multi_patch_workgroup = true; });
 	cbs.add("--msl-vertex-for-tessellation", [&args](CLIParser &) { args.msl_vertex_for_tessellation = true; });
+	cbs.add("--msl-additional-fixed-sample-mask",
+	        [&args](CLIParser &parser) { args.msl_additional_fixed_sample_mask = parser.next_hex_uint(); });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
