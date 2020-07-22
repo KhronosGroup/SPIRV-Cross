@@ -9305,6 +9305,48 @@ string CompilerMSL::entry_point_arg_stage_in()
 	return decl;
 }
 
+// Returns true if this input builtin should be a direct parameter on a shader function parameter list,
+// and false for builtins that should be passed or calculated some other way.
+bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
+{
+	switch (bi_type)
+	{
+	// Tess. control function in
+	case BuiltInPosition:
+	case BuiltInPointSize:
+	case BuiltInClipDistance:
+	case BuiltInCullDistance:
+	case BuiltInPatchVertices:
+		return false;
+	// Tess. evaluation function in
+	case BuiltInTessLevelInner:
+	case BuiltInTessLevelOuter:
+		return false;
+	// Fragment function in
+	case BuiltInSamplePosition:
+	case BuiltInHelperInvocation:
+	case BuiltInBaryCoordNV:
+	case BuiltInBaryCoordNoPerspNV:
+		return false;
+	case BuiltInViewIndex:
+		return get_execution_model() == ExecutionModelFragment && msl_options.multiview;
+	// Any stage function in
+	case BuiltInDeviceIndex:
+	case BuiltInSubgroupEqMask:
+	case BuiltInSubgroupGeMask:
+	case BuiltInSubgroupGtMask:
+	case BuiltInSubgroupLeMask:
+	case BuiltInSubgroupLtMask:
+		return false;
+	case BuiltInSubgroupLocalInvocationId:
+	case BuiltInSubgroupSize:
+		return get_execution_model() == ExecutionModelGLCompute ||
+		       (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2));
+	default:
+		return true;
+	}
+}
+
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
@@ -9326,20 +9368,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			// Remember this variable. We may need to correct its type.
 			active_builtins.push_back(make_pair(&var, bi_type));
 
-			// These builtins are emitted specially. If we pass this branch, the builtin directly matches
-			// a MSL builtin.
-			if (bi_type != BuiltInSamplePosition && bi_type != BuiltInHelperInvocation &&
-			    bi_type != BuiltInPatchVertices && bi_type != BuiltInTessLevelInner &&
-			    bi_type != BuiltInTessLevelOuter && bi_type != BuiltInPosition && bi_type != BuiltInPointSize &&
-			    bi_type != BuiltInClipDistance && bi_type != BuiltInCullDistance && bi_type != BuiltInSubgroupEqMask &&
-			    bi_type != BuiltInBaryCoordNV && bi_type != BuiltInBaryCoordNoPerspNV &&
-			    bi_type != BuiltInSubgroupGeMask && bi_type != BuiltInSubgroupGtMask &&
-			    bi_type != BuiltInSubgroupLeMask && bi_type != BuiltInSubgroupLtMask && bi_type != BuiltInDeviceIndex &&
-			    ((get_execution_model() == ExecutionModelFragment && msl_options.multiview) ||
-			     bi_type != BuiltInViewIndex) &&
-			    (get_execution_model() == ExecutionModelGLCompute ||
-			     (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2)) ||
-			     (bi_type != BuiltInSubgroupLocalInvocationId && bi_type != BuiltInSubgroupSize)))
+			if (is_direct_input_builtin(bi_type))
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";

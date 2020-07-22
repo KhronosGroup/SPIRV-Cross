@@ -716,6 +716,7 @@ protected:
 	std::string to_sampler_expression(uint32_t id);
 	std::string to_swizzle_expression(uint32_t id);
 	std::string to_buffer_size_expression(uint32_t id);
+	bool is_direct_input_builtin(spv::BuiltIn builtin);
 	std::string builtin_qualifier(spv::BuiltIn builtin);
 	std::string builtin_type_decl(spv::BuiltIn builtin, uint32_t id = 0);
 	std::string built_in_func_arg(spv::BuiltIn builtin, bool prefix_comma);
