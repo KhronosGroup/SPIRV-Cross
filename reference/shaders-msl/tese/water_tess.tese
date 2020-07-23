@@ -41,8 +41,7 @@ float2 lod_factor(thread const float2& tess_coord, thread float4& vPatchLods)
     float level = mix(x.x, x.y, tess_coord.y);
     float floor_level = floor(level);
     float fract_level = level - floor_level;
-    float2 _74 = float2(floor_level, fract_level);
-    return _74;
+    return float2(floor_level, fract_level);
 }
 
 static inline __attribute__((always_inline))
