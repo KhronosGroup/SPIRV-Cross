@@ -308,24 +308,18 @@ void CompilerMSL::build_implicit_builtins()
 
 		if (!has_sample_id && need_sample_pos)
 		{
-			uint32_t offset = ir.increase_bound_by(3);
-			uint32_t type_id = offset;
-			uint32_t type_ptr_id = offset + 1;
-			uint32_t var_id = offset + 2;
+			uint32_t offset = ir.increase_bound_by(2);
+			uint32_t type_ptr_id = offset;
+			uint32_t var_id = offset + 1;
 
 			// Create gl_SampleID.
-			SPIRType uint_type;
-			uint_type.basetype = SPIRType::UInt;
-			uint_type.width = 32;
-			set<SPIRType>(type_id, uint_type);
-
 			SPIRType uint_type_ptr;
-			uint_type_ptr = uint_type;
+			uint_type_ptr = get_uint_type();
 			uint_type_ptr.pointer = true;
-			uint_type_ptr.parent_type = type_id;
+			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
+			ptr_type.self = get_uint_type_id();
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleId);
@@ -336,22 +330,15 @@ void CompilerMSL::build_implicit_builtins()
 		if ((need_vertex_params && (!has_vertex_idx || !has_base_vertex || !has_instance_idx || !has_base_instance)) ||
 		    (need_multiview && (!has_instance_idx || !has_view_idx)))
 		{
-			uint32_t offset = ir.increase_bound_by(2);
-			uint32_t type_id = offset;
-			uint32_t type_ptr_id = offset + 1;
-
-			SPIRType uint_type;
-			uint_type.basetype = SPIRType::UInt;
-			uint_type.width = 32;
-			set<SPIRType>(type_id, uint_type);
+			uint32_t type_ptr_id = ir.increase_bound_by(1);
 
 			SPIRType uint_type_ptr;
-			uint_type_ptr = uint_type;
+			uint_type_ptr = get_uint_type();
 			uint_type_ptr.pointer = true;
-			uint_type_ptr.parent_type = type_id;
+			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
+			ptr_type.self = get_uint_type_id();
 
 			if (need_vertex_params && !has_vertex_idx)
 			{
@@ -405,12 +392,12 @@ void CompilerMSL::build_implicit_builtins()
 				// gl_Layer is an output in vertex-pipeline shaders.
 				uint32_t type_ptr_out_id = ir.increase_bound_by(2);
 				SPIRType uint_type_ptr_out;
-				uint_type_ptr_out = uint_type;
+				uint_type_ptr_out = get_uint_type();
 				uint_type_ptr_out.pointer = true;
-				uint_type_ptr_out.parent_type = type_id;
+				uint_type_ptr_out.parent_type = get_uint_type_id();
 				uint_type_ptr_out.storage = StorageClassOutput;
 				auto &ptr_out_type = set<SPIRType>(type_ptr_out_id, uint_type_ptr_out);
-				ptr_out_type.self = type_id;
+				ptr_out_type.self = get_uint_type_id();
 				uint32_t var_id = type_ptr_out_id + 1;
 				set<SPIRVariable>(var_id, type_ptr_out_id, StorageClassOutput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInLayer);
@@ -432,22 +419,15 @@ void CompilerMSL::build_implicit_builtins()
 
 		if (need_tesc_params && (!has_invocation_id || !has_primitive_id))
 		{
-			uint32_t offset = ir.increase_bound_by(2);
-			uint32_t type_id = offset;
-			uint32_t type_ptr_id = offset + 1;
-
-			SPIRType uint_type;
-			uint_type.basetype = SPIRType::UInt;
-			uint_type.width = 32;
-			set<SPIRType>(type_id, uint_type);
+			uint32_t type_ptr_id = ir.increase_bound_by(1);
 
 			SPIRType uint_type_ptr;
-			uint_type_ptr = uint_type;
+			uint_type_ptr = get_uint_type();
 			uint_type_ptr.pointer = true;
-			uint_type_ptr.parent_type = type_id;
+			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
+			ptr_type.self = get_uint_type_id();
 
 			if (!has_invocation_id)
 			{
@@ -474,24 +454,18 @@ void CompilerMSL::build_implicit_builtins()
 
 		if (!has_subgroup_invocation_id && (need_subgroup_mask || needs_subgroup_invocation_id))
 		{
-			uint32_t offset = ir.increase_bound_by(3);
-			uint32_t type_id = offset;
-			uint32_t type_ptr_id = offset + 1;
-			uint32_t var_id = offset + 2;
+			uint32_t offset = ir.increase_bound_by(2);
+			uint32_t type_ptr_id = offset;
+			uint32_t var_id = offset + 1;
 
 			// Create gl_SubgroupInvocationID.
-			SPIRType uint_type;
-			uint_type.basetype = SPIRType::UInt;
-			uint_type.width = 32;
-			set<SPIRType>(type_id, uint_type);
-
 			SPIRType uint_type_ptr;
-			uint_type_ptr = uint_type;
+			uint_type_ptr = get_uint_type();
 			uint_type_ptr.pointer = true;
-			uint_type_ptr.parent_type = type_id;
+			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
+			ptr_type.self = get_uint_type_id();
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupLocalInvocationId);
@@ -501,24 +475,18 @@ void CompilerMSL::build_implicit_builtins()
 
 		if (!has_subgroup_size && need_subgroup_ge_mask)
 		{
-			uint32_t offset = ir.increase_bound_by(3);
-			uint32_t type_id = offset;
-			uint32_t type_ptr_id = offset + 1;
-			uint32_t var_id = offset + 2;
+			uint32_t offset = ir.increase_bound_by(2);
+			uint32_t type_ptr_id = offset;
+			uint32_t var_id = offset + 1;
 
 			// Create gl_SubgroupSize.
-			SPIRType uint_type;
-			uint_type.basetype = SPIRType::UInt;
-			uint_type.width = 32;
-			set<SPIRType>(type_id, uint_type);
-
 			SPIRType uint_type_ptr;
-			uint_type_ptr = uint_type;
+			uint_type_ptr = get_uint_type();
 			uint_type_ptr.pointer = true;
-			uint_type_ptr.parent_type = type_id;
+			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
+			ptr_type.self = get_uint_type_id();
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupSize);
@@ -665,22 +633,16 @@ void CompilerMSL::mark_implicit_builtin(StorageClass storage, BuiltIn builtin, u
 
 uint32_t CompilerMSL::build_constant_uint_array_pointer()
 {
-	uint32_t offset = ir.increase_bound_by(4);
-	uint32_t type_id = offset;
-	uint32_t type_ptr_id = offset + 1;
-	uint32_t type_ptr_ptr_id = offset + 2;
-	uint32_t var_id = offset + 3;
+	uint32_t offset = ir.increase_bound_by(3);
+	uint32_t type_ptr_id = offset;
+	uint32_t type_ptr_ptr_id = offset + 1;
+	uint32_t var_id = offset + 2;
 
 	// Create a buffer to hold extra data, including the swizzle constants.
-	SPIRType uint_type;
-	uint_type.basetype = SPIRType::UInt;
-	uint_type.width = 32;
-	set<SPIRType>(type_id, uint_type);
-
-	SPIRType uint_type_pointer = uint_type;
+	SPIRType uint_type_pointer = get_uint_type();
 	uint_type_pointer.pointer = true;
 	uint_type_pointer.pointer_depth = 1;
-	uint_type_pointer.parent_type = type_id;
+	uint_type_pointer.parent_type = get_uint_type_id();
 	uint_type_pointer.storage = StorageClassUniform;
 	set<SPIRType>(type_ptr_id, uint_type_pointer);
 	set_decoration(type_ptr_id, DecorationArrayStride, 4);
@@ -742,6 +704,25 @@ std::string CompilerMSL::get_tess_factor_struct_name()
 	if (get_entry_point().flags.get(ExecutionModeTriangles))
 		return "MTLTriangleTessellationFactorsHalf";
 	return "MTLQuadTessellationFactorsHalf";
+}
+
+SPIRType &CompilerMSL::get_uint_type()
+{
+	return get<SPIRType>(get_uint_type_id());
+}
+
+uint32_t CompilerMSL::get_uint_type_id()
+{
+	if (uint_type_id != 0)
+		return uint_type_id;
+
+	uint_type_id = ir.increase_bound_by(1);
+
+	SPIRType type;
+	type.basetype = SPIRType::UInt;
+	type.width = 32;
+	set<SPIRType>(uint_type_id, type);
+	return uint_type_id;
 }
 
 void CompilerMSL::emit_entry_point_declarations()
@@ -5662,14 +5643,9 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	{
 		AccessChainMeta meta;
 		SmallVector<uint32_t> indices;
-		uint32_t next_id = ir.increase_bound_by(2);
+		uint32_t next_id = ir.increase_bound_by(1);
 
 		indices.reserve(length - 3 + 1);
-		uint32_t type_id = next_id++;
-		SPIRType new_uint_type;
-		new_uint_type.basetype = SPIRType::UInt;
-		new_uint_type.width = 32;
-		set<SPIRType>(type_id, new_uint_type);
 
 		uint32_t first_non_array_index = ptr_is_chain ? 3 : 4;
 		VariableID stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
@@ -5732,7 +5708,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			else
 			{
 				// Access the appropriate member of gl_in/gl_out.
-				set<SPIRConstant>(const_mbr_id, type_id, index, false);
+				set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
 				indices.push_back(const_mbr_id);
 
 				// Append any straggling access chain indices.
@@ -5743,7 +5719,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		else
 		{
 			assert(index != uint32_t(-1));
-			set<SPIRConstant>(const_mbr_id, type_id, index, false);
+			set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
 			indices.push_back(const_mbr_id);
 
 			indices.insert(indices.end(), ops + 4, ops + length);
@@ -9305,6 +9281,48 @@ string CompilerMSL::entry_point_arg_stage_in()
 	return decl;
 }
 
+// Returns true if this input builtin should be a direct parameter on a shader function parameter list,
+// and false for builtins that should be passed or calculated some other way.
+bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
+{
+	switch (bi_type)
+	{
+	// Tess. control function in
+	case BuiltInPosition:
+	case BuiltInPointSize:
+	case BuiltInClipDistance:
+	case BuiltInCullDistance:
+	case BuiltInPatchVertices:
+		return false;
+	// Tess. evaluation function in
+	case BuiltInTessLevelInner:
+	case BuiltInTessLevelOuter:
+		return false;
+	// Fragment function in
+	case BuiltInSamplePosition:
+	case BuiltInHelperInvocation:
+	case BuiltInBaryCoordNV:
+	case BuiltInBaryCoordNoPerspNV:
+		return false;
+	case BuiltInViewIndex:
+		return get_execution_model() == ExecutionModelFragment && msl_options.multiview;
+	// Any stage function in
+	case BuiltInDeviceIndex:
+	case BuiltInSubgroupEqMask:
+	case BuiltInSubgroupGeMask:
+	case BuiltInSubgroupGtMask:
+	case BuiltInSubgroupLeMask:
+	case BuiltInSubgroupLtMask:
+		return false;
+	case BuiltInSubgroupLocalInvocationId:
+	case BuiltInSubgroupSize:
+		return get_execution_model() == ExecutionModelGLCompute ||
+		       (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2));
+	default:
+		return true;
+	}
+}
+
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
@@ -9326,20 +9344,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			// Remember this variable. We may need to correct its type.
 			active_builtins.push_back(make_pair(&var, bi_type));
 
-			// These builtins are emitted specially. If we pass this branch, the builtin directly matches
-			// a MSL builtin.
-			if (bi_type != BuiltInSamplePosition && bi_type != BuiltInHelperInvocation &&
-			    bi_type != BuiltInPatchVertices && bi_type != BuiltInTessLevelInner &&
-			    bi_type != BuiltInTessLevelOuter && bi_type != BuiltInPosition && bi_type != BuiltInPointSize &&
-			    bi_type != BuiltInClipDistance && bi_type != BuiltInCullDistance && bi_type != BuiltInSubgroupEqMask &&
-			    bi_type != BuiltInBaryCoordNV && bi_type != BuiltInBaryCoordNoPerspNV &&
-			    bi_type != BuiltInSubgroupGeMask && bi_type != BuiltInSubgroupGtMask &&
-			    bi_type != BuiltInSubgroupLeMask && bi_type != BuiltInSubgroupLtMask && bi_type != BuiltInDeviceIndex &&
-			    ((get_execution_model() == ExecutionModelFragment && msl_options.multiview) ||
-			     bi_type != BuiltInViewIndex) &&
-			    (get_execution_model() == ExecutionModelGLCompute ||
-			     (get_execution_model() == ExecutionModelFragment && msl_options.supports_msl_version(2, 2)) ||
-			     (bi_type != BuiltInSubgroupLocalInvocationId && bi_type != BuiltInSubgroupSize)))
+			if (is_direct_input_builtin(bi_type))
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
@@ -12842,20 +12847,13 @@ void CompilerMSL::analyze_argument_buffers()
 
 			if (uint_ptr_type_id == 0)
 			{
-				uint32_t offset = ir.increase_bound_by(2);
-				uint32_t type_id = offset;
-				uint_ptr_type_id = offset + 1;
+				uint_ptr_type_id = ir.increase_bound_by(1);
 
 				// Create a buffer to hold extra data, including the swizzle constants.
-				SPIRType uint_type;
-				uint_type.basetype = SPIRType::UInt;
-				uint_type.width = 32;
-				set<SPIRType>(type_id, uint_type);
-
-				SPIRType uint_type_pointer = uint_type;
+				SPIRType uint_type_pointer = get_uint_type();
 				uint_type_pointer.pointer = true;
 				uint_type_pointer.pointer_depth = 1;
-				uint_type_pointer.parent_type = type_id;
+				uint_type_pointer.parent_type = get_uint_type_id();
 				uint_type_pointer.storage = StorageClassUniform;
 				set<SPIRType>(uint_ptr_type_id, uint_type_pointer);
 				set_decoration(uint_ptr_type_id, DecorationArrayStride, 4);
