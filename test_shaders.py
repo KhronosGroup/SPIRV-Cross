@@ -280,6 +280,19 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('6')
         msl_args.append('other')
         msl_args.append('4')
+    if '.multi-patch.' in shader:
+        msl_args.append('--msl-multi-patch-workgroup')
+        # Arbitrary for testing purposes.
+        msl_args.append('--msl-shader-input')
+        msl_args.append('0')
+        msl_args.append('any32')
+        msl_args.append('3')
+        msl_args.append('--msl-shader-input')
+        msl_args.append('1')
+        msl_args.append('any16')
+        msl_args.append('2')
+    if '.for-tess.' in shader:
+        msl_args.append('--msl-vertex-for-tessellation')
 
     subprocess.check_call(msl_args)
 

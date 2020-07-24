@@ -35,6 +35,8 @@ enum MSLShaderInputFormat
 	MSL_SHADER_INPUT_FORMAT_OTHER = 0,
 	MSL_SHADER_INPUT_FORMAT_UINT8 = 1,
 	MSL_SHADER_INPUT_FORMAT_UINT16 = 2,
+	MSL_SHADER_INPUT_FORMAT_ANY16 = 3,
+	MSL_SHADER_INPUT_FORMAT_ANY32 = 4,
 
 	// Deprecated aliases.
 	MSL_VERTEX_FORMAT_OTHER = MSL_SHADER_INPUT_FORMAT_OTHER,
@@ -271,6 +273,8 @@ public:
 		uint32_t buffer_size_buffer_index = 25;
 		uint32_t view_mask_buffer_index = 24;
 		uint32_t dynamic_offsets_buffer_index = 23;
+		uint32_t shader_input_buffer_index = 22;
+		uint32_t shader_index_buffer_index = 21;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
@@ -328,6 +332,31 @@ public:
 		// If a shader writes clip distance, also emit user varyings which
 		// can be read in subsequent stages.
 		bool enable_clip_distance_user_varying = true;
+
+		// In a tessellation control shader, assume that more than one patch can be processed in a
+		// single workgroup. This requires changes to the way the InvocationId and PrimitiveId
+		// builtins are processed, but should result in more efficient usage of the GPU.
+		bool multi_patch_workgroup = false;
+
+		// If set, a vertex shader will be compiled as part of a tessellation pipeline.
+		// It will be translated as a compute kernel, so it can use the global invocation ID
+		// to index the output buffer.
+		bool vertex_for_tessellation = false;
+
+		enum class IndexType
+		{
+			None = 0,
+			UInt16 = 1,
+			UInt32 = 2
+		};
+
+		// The type of index in the index buffer, if present. For a compute shader, Metal
+		// requires specifying the indexing at pipeline creation, rather than at draw time
+		// as with graphics pipelines. This means we must create three different pipelines,
+		// for no indexing, 16-bit indices, and 32-bit indices. Each requires different
+		// handling for the gl_VertexIndex builtin. We may as well, then, create three
+		// different shaders for these three scenarios.
+		IndexType vertex_index_type = IndexType::None;
 
 		bool is_ios() const
 		{
@@ -431,7 +460,7 @@ public:
 	// input is a shader input description used to fix up shader input variables.
 	// If shader inputs are provided, is_msl_shader_input_used() will return true after
 	// calling ::compile() if the location was used by the MSL code.
-	void add_msl_shader_input(const MSLShaderInput &attr);
+	void add_msl_shader_input(const MSLShaderInput &input);
 
 	// resource is a resource binding to indicate the MSL buffer,
 	// texture or sampler index to use for a particular SPIR-V description set
@@ -692,7 +721,7 @@ protected:
 
 	void fix_up_interface_member_indices(spv::StorageClass storage, uint32_t ib_type_id);
 
-	void mark_location_as_used_by_shader(uint32_t location, spv::StorageClass storage);
+	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, spv::StorageClass storage);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
 	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components = 0);
 
@@ -739,7 +768,13 @@ protected:
 	uint32_t get_declared_struct_member_matrix_stride_msl(const SPIRType &struct_type, uint32_t index) const;
 	uint32_t get_declared_struct_member_alignment_msl(const SPIRType &struct_type, uint32_t index) const;
 
+	uint32_t get_declared_input_size_msl(const SPIRType &struct_type, uint32_t index) const;
+	uint32_t get_declared_input_array_stride_msl(const SPIRType &struct_type, uint32_t index) const;
+	uint32_t get_declared_input_matrix_stride_msl(const SPIRType &struct_type, uint32_t index) const;
+	uint32_t get_declared_input_alignment_msl(const SPIRType &struct_type, uint32_t index) const;
+
 	const SPIRType &get_physical_member_type(const SPIRType &struct_type, uint32_t index) const;
+	SPIRType get_presumed_input_type(const SPIRType &struct_type, uint32_t index) const;
 
 	uint32_t get_declared_struct_size_msl(const SPIRType &struct_type, bool ignore_alignment = false,
 	                                      bool ignore_padding = false) const;
@@ -785,6 +820,7 @@ protected:
 	uint32_t builtin_subgroup_invocation_id_id = 0;
 	uint32_t builtin_subgroup_size_id = 0;
 	uint32_t builtin_dispatch_base_id = 0;
+	uint32_t builtin_stage_input_size_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;
@@ -811,7 +847,8 @@ protected:
 
 	Options msl_options;
 	std::set<SPVFuncImpl> spv_function_implementations;
-	std::unordered_map<uint32_t, MSLShaderInput> inputs_by_location;
+	// Must be ordered to ensure declarations are in a specific order.
+	std::map<uint32_t, MSLShaderInput> inputs_by_location;
 	std::unordered_map<uint32_t, MSLShaderInput> inputs_by_builtin;
 	std::unordered_set<uint32_t> inputs_in_use;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
@@ -866,9 +903,11 @@ protected:
 	std::string buffer_size_name_suffix = "BufferSize";
 	std::string plane_name_suffix = "Plane";
 	std::string input_wg_var_name = "gl_in";
+	std::string input_buffer_var_name = "spvIn";
 	std::string output_buffer_var_name = "spvOut";
 	std::string patch_output_buffer_var_name = "spvPatchOut";
 	std::string tess_factor_buffer_var_name = "spvTessLevel";
+	std::string index_buffer_var_name = "spvIndices";
 	spv::Op previous_instruction_opcode = spv::OpNop;
 
 	// Must be ordered since declaration is in a specific order.
