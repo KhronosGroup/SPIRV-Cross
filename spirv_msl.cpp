@@ -156,9 +156,10 @@ void CompilerMSL::build_implicit_builtins()
 	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
 	     active_input_builtins.get(BuiltInBaseVertex) || active_input_builtins.get(BuiltInInstanceId) ||
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
+	bool need_sample_mask = msl_options.additional_fixed_sample_mask != 0xffffffff;
 	if (need_subpass_input || need_sample_pos || need_subgroup_mask || need_vertex_params || need_tesc_params ||
 	    need_multiview || need_dispatch_base || need_vertex_base_params || need_grid_params ||
-	    needs_subgroup_invocation_id)
+	    needs_subgroup_invocation_id || need_sample_mask)
 	{
 		bool has_frag_coord = false;
 		bool has_sample_id = false;
@@ -173,12 +174,27 @@ void CompilerMSL::build_implicit_builtins()
 		bool has_view_idx = false;
 		uint32_t workgroup_id_type = 0;
 
+		// FIXME: Investigate the fact that there are no checks for the entry point interface variables.
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-			if (var.storage != StorageClassInput || !ir.meta[var.self].decoration.builtin)
+			if (!ir.meta[var.self].decoration.builtin)
 				return;
 
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
 			BuiltIn builtin = ir.meta[var.self].decoration.builtin_type;
+
+			if (var.storage == StorageClassOutput)
+			{
+				if (need_sample_mask && builtin == BuiltInSampleMask)
+				{
+					builtin_sample_mask_id = var.self;
+					mark_implicit_builtin(StorageClassOutput, BuiltInSampleMask, var.self);
+					does_shader_write_sample_mask = true;
+				}
+			}
+
+			if (var.storage != StorageClassInput)
+				return;
+
 			if (need_subpass_input && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) &&
 			    builtin == BuiltInFragCoord)
 			{
@@ -560,6 +576,26 @@ void CompilerMSL::build_implicit_builtins()
 			}
 			set_name(var_id, "spvDispatchBase");
 			builtin_dispatch_base_id = var_id;
+		}
+
+		if (need_sample_mask && !does_shader_write_sample_mask)
+		{
+			uint32_t offset = ir.increase_bound_by(2);
+			uint32_t var_id = offset + 1;
+
+			// Create gl_SampleMask.
+			SPIRType uint_type_ptr_out;
+			uint_type_ptr_out = get_uint_type();
+			uint_type_ptr_out.pointer = true;
+			uint_type_ptr_out.parent_type = get_uint_type_id();
+			uint_type_ptr_out.storage = StorageClassOutput;
+			
+			auto &ptr_out_type = set<SPIRType>(offset, uint_type_ptr_out);
+			ptr_out_type.self = get_uint_type_id();
+			set<SPIRVariable>(var_id, offset, StorageClassOutput);
+			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleMask);
+			builtin_sample_mask_id = var_id;
+			mark_implicit_builtin(StorageClassOutput, BuiltInSampleMask, var_id);
 		}
 	}
 
@@ -1066,6 +1102,8 @@ string CompilerMSL::compile()
 		active_interface_variables.insert(builtin_layer_id);
 	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
 		active_interface_variables.insert(builtin_dispatch_base_id);
+	if (builtin_sample_mask_id)
+		active_interface_variables.insert(builtin_sample_mask_id);
 
 	// Create structs to hold input, output and uniform variables.
 	// Do output first to ensure out. is declared at top of entry function.
@@ -10510,6 +10548,30 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			default:
 				break;
+			}
+		}
+		else if (var.storage == StorageClassOutput && is_builtin_variable(var))
+		{
+			if (bi_type == BuiltInSampleMask && get_execution_model() == ExecutionModelFragment &&
+				msl_options.additional_fixed_sample_mask != 0xffffffff)
+			{
+				// If the additional fixed sample mask was set, we need to adjust the sample_mask
+				// output to reflect that. If the shader outputs the sample_mask itself too, we need
+				// to AND the two masks to get the final one.
+				if (does_shader_write_sample_mask)
+				{
+					entry_func.fixup_hooks_out.push_back([=]() {
+						statement(to_expression(builtin_sample_mask_id), " &= ",
+							      msl_options.additional_fixed_sample_mask, ";");
+					});
+				}
+				else
+				{
+					entry_func.fixup_hooks_out.push_back([=]() {
+						statement(to_expression(builtin_sample_mask_id), " = ",
+							      msl_options.additional_fixed_sample_mask, ";");
+					});
+				}
 			}
 		}
 	});

@@ -278,6 +278,10 @@ public:
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
+		// Metal doesn't allow setting a fixed sample mask directly in the pipeline.
+		// We can evade this restriction by ANDing the internal sample_mask output
+		// of the shader with the additional fixed sample mask.
+		uint32_t additional_fixed_sample_mask = 0xffffffff;
 		bool enable_point_size_builtin = true;
 		bool enable_frag_depth_builtin = true;
 		bool enable_frag_stencil_ref_builtin = true;
@@ -809,6 +813,7 @@ protected:
 	void emit_entry_point_declarations() override;
 	uint32_t builtin_frag_coord_id = 0;
 	uint32_t builtin_sample_id_id = 0;
+	uint32_t builtin_sample_mask_id = 0;
 	uint32_t builtin_vertex_idx_id = 0;
 	uint32_t builtin_base_vertex_id = 0;
 	uint32_t builtin_instance_idx_id = 0;
@@ -826,6 +831,8 @@ protected:
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
 	uint32_t uint_type_id = 0;
+
+	bool does_shader_write_sample_mask = false;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
