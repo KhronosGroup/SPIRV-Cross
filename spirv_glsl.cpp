@@ -2232,7 +2232,8 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		// ESSL earlier than 310 and GLSL earlier than 150 did not support
 		// I/O variables which are struct types.
 		// To support this, flatten the struct into separate varyings instead.
-		if ((options.es && options.version < 310) || (!options.es && options.version < 150))
+		if (options.force_flattened_io_blocks || (options.es && options.version < 310) ||
+		    (!options.es && options.version < 150))
 		{
 			// I/O blocks on ES require version 310 with Android Extension Pack extensions, or core version 320.
 			// On desktop, I/O blocks were introduced with geometry shaders in GL 3.2 (GLSL 150).
@@ -2292,7 +2293,8 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		// I/O variables which are struct types.
 		// To support this, flatten the struct into separate varyings instead.
 		if (type.basetype == SPIRType::Struct &&
-		    ((options.es && options.version < 310) || (!options.es && options.version < 150)))
+		    (options.force_flattened_io_blocks || (options.es && options.version < 310) ||
+		     (!options.es && options.version < 150)))
 		{
 			emit_flattened_io_block(var, qual);
 		}

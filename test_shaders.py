@@ -501,6 +501,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '3', '3']
     if '.zero-initialize.' in shader:
         extra_args += ['--force-zero-initialized-variables']
+    if '.force-flattened-io.' in shader:
+        extra_args += ['--glsl-force-flattened-io-blocks']
 
     spirv_cross_path = paths.spirv_cross
 
