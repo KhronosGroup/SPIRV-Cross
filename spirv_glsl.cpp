@@ -14071,15 +14071,15 @@ void CompilerGLSL::fixup_type_alias()
 	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
 	// alias if the slave type is a block type.
 	ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
-		if (type.type_alias && type_is_block_like(type))
+		if (type.type_alias && type_is_block_like(type) && type.self == ID(self))
 		{
 			// Become the master.
 			ir.for_each_typed_id<SPIRType>([&](uint32_t other_id, SPIRType &other_type) {
-				if (other_id == type.self)
+				if (other_id == self)
 					return;
 
 				if (other_type.type_alias == type.type_alias)
-					other_type.type_alias = type.self;
+					other_type.type_alias = self;
 			});
 
 			this->get<SPIRType>(type.type_alias).type_alias = self;
