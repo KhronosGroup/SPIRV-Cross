@@ -14068,11 +14068,19 @@ void CompilerGLSL::reset_name_caches()
 void CompilerGLSL::fixup_type_alias()
 {
 	// Due to how some backends work, the "master" type of type_alias must be a block-like type if it exists.
-	// FIXME: Multiple alias types which are both block-like will be awkward, for now, it's best to just drop the type
-	// alias if the slave type is a block type.
 	ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
-		if (type.type_alias && type_is_block_like(type) && type.self == ID(self))
+		if (!type.type_alias)
+			return;
+
+		if (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock))
 		{
+			// Top-level block types should never alias anything else.
+			type.type_alias = 0;
+		}
+		else if (type_is_block_like(type) && type.self == ID(self))
+		{
+			// A block-like type is any type which contains Offset decoration, but not top-level blocks,
+			// i.e. blocks which are placed inside buffers.
 			// Become the master.
 			ir.for_each_typed_id<SPIRType>([&](uint32_t other_id, SPIRType &other_type) {
 				if (other_id == self)
@@ -14083,22 +14091,6 @@ void CompilerGLSL::fixup_type_alias()
 			});
 
 			this->get<SPIRType>(type.type_alias).type_alias = self;
-			type.type_alias = 0;
-		}
-	});
-
-	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
-		if (type.type_alias && type_is_block_like(type))
-		{
-			// This is not allowed, drop the type_alias.
-			type.type_alias = 0;
-		}
-		else if (type.type_alias && !type_is_block_like(this->get<SPIRType>(type.type_alias)))
-		{
-			// If the alias master is not a block-like type, there is no reason to use type aliasing.
-			// This case can happen if two structs are declared with the same name, but they are unrelated.
-			// Aliases are only used to deal with aliased types for structs which are used in different buffer types
-			// which all create a variant of the same struct with different DecorationOffset values.
 			type.type_alias = 0;
 		}
 	});
