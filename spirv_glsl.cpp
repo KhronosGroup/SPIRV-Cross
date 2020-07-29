@@ -2142,6 +2142,10 @@ void CompilerGLSL::emit_flattened_io_block_member(const std::string &basename, c
 
 	assert(member_type->basetype != SPIRType::Struct);
 
+	// We're overriding struct member names, so ensure we do so on the primary type.
+	if (parent_type->type_alias)
+		parent_type = &get<SPIRType>(parent_type->type_alias);
+
 	// Sanitize underscores because joining the two identifiers might create more than 1 underscore in a row,
 	// which is not allowed.
 	flattened_name = sanitize_underscores(flattened_name);
@@ -2185,9 +2189,13 @@ void CompilerGLSL::emit_flattened_io_block_struct(const std::string &basename, c
 
 void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *qual)
 {
-	auto &type = get<SPIRType>(var.basetype);
-	if (!type.array.empty())
+	auto &var_type = get<SPIRType>(var.basetype);
+	if (!var_type.array.empty())
 		SPIRV_CROSS_THROW("Array of varying structs cannot be flattened to legacy-compatible varyings.");
+
+	// Emit flattened types based on the type alias. Normally, we are never supposed to emit
+	// struct declarations for aliased types.
+	auto &type = var_type.type_alias ? get<SPIRType>(var_type.type_alias) : var_type;
 
 	auto old_flags = ir.meta[type.self].decoration.decoration_flags;
 	// Emit the members as if they are part of a block to get all qualifiers.
