@@ -7541,7 +7541,8 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		{
 			// Equivalent to length(a - b) -> abs(a - b).
 			emit_op(result_type, id,
-			        join("abs(", to_unpacked_expression(args[0]), " - ", to_unpacked_expression(args[1]), ")"),
+			        join("abs(", to_enclosed_unpacked_expression(args[0]), " - ",
+			             to_enclosed_unpacked_expression(args[1]), ")"),
 			        should_forward(args[0]) && should_forward(args[1]));
 			inherit_expression_dependencies(id, args[0]);
 			inherit_expression_dependencies(id, args[1]);
