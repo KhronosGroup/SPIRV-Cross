@@ -1449,12 +1449,13 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 				packed_alignment = max(packed_alignment, 16u);
 		}
 
+		uint32_t actual_offset = type_struct_member_offset(type, i);
+		// Field is not in the specified range anymore and we can ignore any further fields.
+		if (actual_offset >= end_offset)
+			break;
+
 		uint32_t alignment = max(packed_alignment, pad_alignment);
 		offset = (offset + alignment - 1) & ~(alignment - 1);
-
-		// Field is not in the specified range anymore and we can ignore any further fields.
-		if (offset >= end_offset)
-			break;
 
 		// The next member following a struct member is aligned to the base alignment of the struct that came before.
 		// GL 4.5 spec, 7.6.2.2.
@@ -1464,10 +1465,8 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 			pad_alignment = 1;
 
 		// Only care about packing if we are in the given range
-		if (offset >= start_offset)
+		if (actual_offset >= start_offset)
 		{
-			uint32_t actual_offset = type_struct_member_offset(type, i);
-
 			// We only care about offsets in std140, std430, etc ...
 			// For EnhancedLayout variants, we have the flexibility to choose our own offsets.
 			if (!packing_has_flexible_offset(packing))
@@ -1510,7 +1509,7 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 		}
 
 		// Bump size.
-		offset += packed_size;
+		offset = actual_offset + packed_size;
 	}
 
 	return true;
