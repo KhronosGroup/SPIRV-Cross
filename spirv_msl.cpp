@@ -146,6 +146,7 @@ void CompilerMSL::build_implicit_builtins()
 	bool need_subgroup_ge_mask = !msl_options.is_ios() && (active_input_builtins.get(BuiltInSubgroupGeMask) ||
 	                                                       active_input_builtins.get(BuiltInSubgroupGtMask));
 	bool need_multiview = get_execution_model() == ExecutionModelVertex && !msl_options.view_index_from_device_index &&
+	                      msl_options.multiview_layered_rendering &&
 	                      (msl_options.multiview || active_input_builtins.get(BuiltInViewIndex));
 	bool need_dispatch_base =
 	    msl_options.dispatch_base && get_execution_model() == ExecutionModelGLCompute &&
@@ -9242,7 +9243,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			switch (builtin)
 			{
 			case BuiltInViewIndex:
-				if (!msl_options.multiview)
+				if (!msl_options.multiview || !msl_options.multiview_layered_rendering)
 					break;
 				/* fallthrough */
 			case BuiltInFrontFacing:
@@ -9660,7 +9661,8 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 	case BuiltInBaryCoordNoPerspNV:
 		return false;
 	case BuiltInViewIndex:
-		return get_execution_model() == ExecutionModelFragment && msl_options.multiview;
+		return get_execution_model() == ExecutionModelFragment && msl_options.multiview &&
+		       msl_options.multiview_layered_rendering;
 	// Any stage function in
 	case BuiltInDeviceIndex:
 	case BuiltInSubgroupEqMask:
@@ -10429,6 +10431,15 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// We actually don't want to set the render_target_array_index here.
 					// Since every physical device is rendering a different view,
 					// there's no need for layered rendering here.
+				}
+				else if (!msl_options.multiview_layered_rendering)
+				{
+					// In this case, the views are rendered one at a time. The view index, then,
+					// is just the first part of the "view mask".
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement("const ", builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+						          to_expression(view_mask_buffer_id), "[0];");
+					});
 				}
 				else if (get_execution_model() == ExecutionModelFragment)
 				{
