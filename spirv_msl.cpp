@@ -282,6 +282,12 @@ void CompilerMSL::build_implicit_builtins()
 					mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var.self);
 					has_instance_idx = true;
 					break;
+				case BuiltInBaseInstance:
+					// If a non-zero base instance is used, we need to adjust for it when calculating the view index.
+					builtin_base_instance_id = var.self;
+					mark_implicit_builtin(StorageClassInput, BuiltInBaseInstance, var.self);
+					has_base_instance = true;
+					break;
 				case BuiltInViewIndex:
 					builtin_view_idx_id = var.self;
 					mark_implicit_builtin(StorageClassInput, BuiltInViewIndex, var.self);
@@ -352,7 +358,7 @@ void CompilerMSL::build_implicit_builtins()
 		}
 
 		if ((need_vertex_params && (!has_vertex_idx || !has_base_vertex || !has_instance_idx || !has_base_instance)) ||
-		    (need_multiview && (!has_instance_idx || !has_view_idx)))
+		    (need_multiview && (!has_instance_idx || !has_base_instance || !has_view_idx)))
 		{
 			uint32_t type_ptr_id = ir.increase_bound_by(1);
 
@@ -397,7 +403,7 @@ void CompilerMSL::build_implicit_builtins()
 				mark_implicit_builtin(StorageClassInput, BuiltInInstanceIndex, var_id);
 			}
 
-			if (need_vertex_params && !has_base_instance)
+			if (!has_base_instance) // Needed by both multiview and tessellation
 			{
 				uint32_t var_id = ir.increase_bound_by(1);
 
@@ -10438,10 +10444,13 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// the view index in the instance index.
 					entry_func.fixup_hooks_in.push_back([=]() {
 						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-						          to_expression(view_mask_buffer_id), "[0] + ", to_expression(builtin_instance_idx_id),
-						          " % ", to_expression(view_mask_buffer_id), "[1];");
-						statement(to_expression(builtin_instance_idx_id), " /= ", to_expression(view_mask_buffer_id),
-						          "[1];");
+						          to_expression(view_mask_buffer_id), "[0] + (", to_expression(builtin_instance_idx_id),
+						          " - ", to_expression(builtin_base_instance_id), ") % ",
+						          to_expression(view_mask_buffer_id), "[1];");
+						statement(to_expression(builtin_instance_idx_id), " = (",
+						          to_expression(builtin_instance_idx_id), " - ",
+						          to_expression(builtin_base_instance_id), ") / ", to_expression(view_mask_buffer_id),
+						          "[1] + ", to_expression(builtin_base_instance_id), ";");
 					});
 					// In addition to setting the variable itself, we also need to
 					// set the render_target_array_index with it on output. We have to
