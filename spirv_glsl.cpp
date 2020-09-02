@@ -9280,7 +9280,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement(declare_temporary(result_type, id), to_expression(vec), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
 		auto chain = access_chain_internal(id, &index, 1, 0, nullptr);
-		statement(chain, " = ", to_expression(comp), ";");
+		statement(chain, " = ", to_unpacked_expression(comp), ";");
 		break;
 	}
 
@@ -9382,7 +9382,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement(declare_temporary(result_type, id), to_expression(composite), ";");
 		set<SPIRExpression>(id, to_name(id), result_type, true);
 		auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
-		statement(chain, " = ", to_expression(obj), ";");
+		statement(chain, " = ", to_unpacked_expression(obj), ";");
 
 		break;
 	}
@@ -9395,7 +9395,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			flush_variable_declaration(lhs);
 			flush_variable_declaration(rhs);
-			statement(to_expression(lhs), " = ", to_expression(rhs), ";");
+			statement(to_expression(lhs), " = ", to_unpacked_expression(rhs), ";");
 			register_write(lhs);
 		}
 		break;
