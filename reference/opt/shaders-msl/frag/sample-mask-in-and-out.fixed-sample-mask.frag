@@ -12,6 +12,7 @@ struct main0_out
 fragment main0_out main0(uint gl_SampleMaskIn [[sample_mask]])
 {
     main0_out out = {};
+    gl_SampleMaskIn &= 34;
     out.FragColor = float4(1.0);
     out.gl_SampleMask = gl_SampleMaskIn;
     out.gl_SampleMask &= 34;

@@ -10570,6 +10570,14 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					          to_expression(builtin_dispatch_base_id), ".y;");
 				});
 				break;
+			case BuiltInSampleMask:
+				// We also need to adjust the sample_mask input for any additional fixed sample mask.
+				if (msl_options.additional_fixed_sample_mask != 0xffffffff)
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(to_expression(var_id), " &= ", msl_options.additional_fixed_sample_mask, ";");
+					});
+				}
 			default:
 				break;
 			}
