@@ -549,6 +549,7 @@ struct CLIArguments
 	bool msl_invariant_float_math = false;
 	bool msl_emulate_cube_array = false;
 	bool msl_multiview = false;
+	bool msl_multiview_layered_rendering = true;
 	bool msl_view_index_from_device_index = false;
 	bool msl_dispatch_base = false;
 	bool msl_decoration_binding = false;
@@ -732,6 +733,8 @@ static void print_help_msl()
 	                "\t[--msl-device-argument-buffer <descriptor set index>]:\n\t\tUse device address space to hold indirect argument buffers instead of constant.\n"
 	                "\t\tComes up when trying to support argument buffers which are larger than 64 KiB.\n"
 	                "\t[--msl-multiview]:\n\t\tEnable SPV_KHR_multiview emulation.\n"
+	                "\t[--msl-multiview-no-layered-rendering]:\n\t\tDon't set [[render_target_array_index]] in multiview shaders.\n"
+	                "\t\tUseful for devices which don't support layered rendering. Only effective when --msl-multiview is enabled.\n"
 	                "\t[--msl-view-index-from-device-index]:\n\t\tTreat the view index as the device index instead.\n"
 	                "\t\tFor multi-GPU rendering.\n"
 	                "\t[--msl-dispatch-base]:\n\t\tAdd support for vkCmdDispatchBase() or similar APIs.\n"
@@ -987,6 +990,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.argument_buffers = args.msl_argument_buffers;
 		msl_opts.texture_buffer_native = args.msl_texture_buffer_native;
 		msl_opts.multiview = args.msl_multiview;
+		msl_opts.multiview_layered_rendering = args.msl_multiview_layered_rendering;
 		msl_opts.view_index_from_device_index = args.msl_view_index_from_device_index;
 		msl_opts.dispatch_base = args.msl_dispatch_base;
 		msl_opts.enable_decoration_binding = args.msl_decoration_binding;
@@ -1366,6 +1370,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-invariant-float-math", [&args](CLIParser &) { args.msl_invariant_float_math = true; });
 	cbs.add("--msl-emulate-cube-array", [&args](CLIParser &) { args.msl_emulate_cube_array = true; });
 	cbs.add("--msl-multiview", [&args](CLIParser &) { args.msl_multiview = true; });
+	cbs.add("--msl-multiview-no-layered-rendering",
+	        [&args](CLIParser &) { args.msl_multiview_layered_rendering = false; });
 	cbs.add("--msl-view-index-from-device-index",
 	        [&args](CLIParser &) { args.msl_view_index_from_device_index = true; });
 	cbs.add("--msl-dispatch-base", [&args](CLIParser &) { args.msl_dispatch_base = true; });
