@@ -348,6 +348,12 @@ public:
 		// to index the output buffer.
 		bool vertex_for_tessellation = false;
 
+		// Assume that SubpassData images have multiple layers. Layered input attachments
+		// are addressed relative to the Layer output from the vertex pipeline. This option
+		// has no effect with multiview, since all input attachments are assumed to be layered
+		// and will be addressed using the current ViewIndex.
+		bool arrayed_subpass_input = false;
+
 		enum class IndexType
 		{
 			None = 0,
