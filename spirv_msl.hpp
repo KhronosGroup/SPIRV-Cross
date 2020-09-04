@@ -249,6 +249,9 @@ static const uint32_t kArgumentBufferBinding = ~(3u);
 
 static const uint32_t kMaxArgumentBuffers = 8;
 
+// The arbitrary maximum for the nesting of array of array copies.
+static const uint32_t kArrayCopyMultidimMax = 6;
+
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
 {
@@ -621,8 +624,6 @@ protected:
 		SPVFuncImplConvertYCbCrBT601,
 		SPVFuncImplConvertYCbCrBT2020,
 		SPVFuncImplDynamicImageSampler,
-
-		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too

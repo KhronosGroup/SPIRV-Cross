@@ -3990,7 +3990,7 @@ void CompilerMSL::emit_custom_templates()
 // otherwise they will cause problems when linked together in a single Metallib.
 void CompilerMSL::emit_custom_functions()
 {
-	for (uint32_t i = SPVFuncImplArrayCopyMultidimMax; i >= 2; i--)
+	for (uint32_t i = kArrayCopyMultidimMax; i >= 2; i--)
 		if (spv_function_implementations.count(static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + i)))
 			spv_function_implementations.insert(static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + i - 1));
 
@@ -7288,7 +7288,7 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 		// if this is the only use of array copies in our shader.
 		if (type.array.size() > 1)
 		{
-			if (type.array.size() > SPVFuncImplArrayCopyMultidimMax)
+			if (type.array.size() > kArrayCopyMultidimMax)
 				SPIRV_CROSS_THROW("Cannot support this many dimensions for arrays of arrays.");
 			auto func = static_cast<SPVFuncImpl>(SPVFuncImplArrayCopyMultidimBase + type.array.size());
 			add_spv_func_and_recompile(func);
