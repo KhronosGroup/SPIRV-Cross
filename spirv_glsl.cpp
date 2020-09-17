@@ -12732,87 +12732,37 @@ void CompilerGLSL::branch(BlockID from, uint32_t cond, BlockID true_block, Block
 	auto &from_block = get<SPIRBlock>(from);
 	BlockID merge_block = from_block.merge == SPIRBlock::MergeSelection ? from_block.next_block : BlockID(0);
 
-	// If we branch directly to a selection merge target, we don't need a code path.
-	// This covers both merge out of if () / else () as well as a break for switch blocks.
-	bool true_sub = !is_conditional(true_block);
-	bool false_sub = !is_conditional(false_block);
+	// If we branch directly to our selection merge target, we don't need a code path.
+	bool true_block_needs_code = true_block != merge_block || flush_phi_required(from, true_block);
+	bool false_block_needs_code = false_block != merge_block || flush_phi_required(from, false_block);
 
-	bool true_block_is_selection_merge = true_block == merge_block;
-	bool false_block_is_selection_merge = false_block == merge_block;
+	if (!true_block_needs_code && !false_block_needs_code)
+		return;
 
-	// Can happen if one branch merges to selection branch merge target,
-	// and then the other branches to outer switch merge target.
-	if (!true_sub && !false_sub)
+	emit_block_hints(get<SPIRBlock>(from));
+
+	if (true_block_needs_code)
 	{
-		if (true_block_is_selection_merge && false_block_is_selection_merge)
-		{
-			// Useless case (should just be OpBranch), just flush PHI once if needed and execution will continue
-			// at the merge target.
-			if (flush_phi_required(from, merge_block))
-				flush_phi(from, merge_block);
-			return;
-		}
-		else if (true_block_is_selection_merge)
-			false_sub = true;
-		else if (false_block_is_selection_merge)
-			true_sub = true;
-		else
-		{
-			false_sub = true;
-			true_sub = true;
-		}
-	}
-
-	if (true_sub)
-	{
-		emit_block_hints(get<SPIRBlock>(from));
 		statement("if (", to_expression(cond), ")");
 		begin_scope();
 		branch(from, true_block);
 		end_scope();
 
-		// If we merge to continue, we handle that explicitly in emit_block_chain(),
-		// so there is no need to branch to it directly here.
-		// break; is required to handle ladder fallthrough cases, so keep that in for now, even
-		// if we could potentially handle it in emit_block_chain().
-		if (false_sub || (!false_block_is_selection_merge && is_continue(false_block)) || is_break(false_block))
+		if (false_block_needs_code)
 		{
 			statement("else");
 			begin_scope();
 			branch(from, false_block);
 			end_scope();
 		}
-		else if (flush_phi_required(from, false_block))
-		{
-			statement("else");
-			begin_scope();
-			flush_phi(from, false_block);
-			end_scope();
-		}
 	}
-	else if (false_sub)
+	else if (false_block_needs_code)
 	{
 		// Only need false path, use negative conditional.
-		emit_block_hints(get<SPIRBlock>(from));
 		statement("if (!", to_enclosed_expression(cond), ")");
 		begin_scope();
 		branch(from, false_block);
 		end_scope();
-
-		if ((!true_block_is_selection_merge && is_continue(true_block)) || is_break(true_block))
-		{
-			statement("else");
-			begin_scope();
-			branch(from, true_block);
-			end_scope();
-		}
-		else if (flush_phi_required(from, true_block))
-		{
-			statement("else");
-			begin_scope();
-			flush_phi(from, true_block);
-			end_scope();
-		}
 	}
 }
 
