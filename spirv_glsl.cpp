@@ -12740,6 +12740,29 @@ void CompilerGLSL::branch(BlockID from, uint32_t cond, BlockID true_block, Block
 	bool true_block_is_selection_merge = true_block == merge_block;
 	bool false_block_is_selection_merge = false_block == merge_block;
 
+	// Can happen if one branch merges to selection branch merge target,
+	// and then the other branches to outer switch merge target.
+	if (!true_sub && !false_sub)
+	{
+		if (true_block_is_selection_merge && false_block_is_selection_merge)
+		{
+			// Useless case (should just be OpBranch), just flush PHI once if needed and execution will continue
+			// at the merge target.
+			if (flush_phi_required(from, merge_block))
+				flush_phi(from, merge_block);
+			return;
+		}
+		else if (true_block_is_selection_merge)
+			false_sub = true;
+		else if (false_block_is_selection_merge)
+			true_sub = true;
+		else
+		{
+			false_sub = true;
+			true_sub = true;
+		}
+	}
+
 	if (true_sub)
 	{
 		emit_block_hints(get<SPIRBlock>(from));

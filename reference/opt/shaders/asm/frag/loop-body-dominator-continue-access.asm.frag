@@ -55,6 +55,11 @@ void main()
                 break;
             }
         }
+        if (_225)
+        {
+            _228 = _229;
+            break;
+        }
         _228 = -1;
         break;
     } while(false);
