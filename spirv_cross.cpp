@@ -2062,6 +2062,13 @@ bool Compiler::is_tessellation_shader(ExecutionModel model)
 	return model == ExecutionModelTessellationControl || model == ExecutionModelTessellationEvaluation;
 }
 
+bool Compiler::is_vertex_like_shader() const
+{
+	auto model = get_execution_model();
+	return model == ExecutionModelVertex || model == ExecutionModelGeometry ||
+	       model == ExecutionModelTessellationControl || model == ExecutionModelTessellationEvaluation;
+}
+
 bool Compiler::is_tessellation_shader() const
 {
 	return is_tessellation_shader(get_execution_model());

@@ -12530,8 +12530,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 
 void CompilerGLSL::emit_fixup()
 {
-	auto &execution = get_entry_point();
-	if (execution.model == ExecutionModelVertex)
+	if (is_vertex_like_shader())
 	{
 		if (options.vertex.fixup_clipspace)
 		{
