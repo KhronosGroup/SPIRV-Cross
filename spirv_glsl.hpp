@@ -135,12 +135,14 @@ public:
 
 		struct VertexOptions
 		{
-			// GLSL: In vertex shaders, rewrite [0, w] depth (Vulkan/D3D style) to [-w, w] depth (GL style).
-			// MSL: In vertex shaders, rewrite [-w, w] depth (GL style) to [0, w] depth.
-			// HLSL: In vertex shaders, rewrite [-w, w] depth (GL style) to [0, w] depth.
+			// "Vertex-like shader" here is any shader stage that can write BuiltInPosition.
+
+			// GLSL: In vertex-like shaders, rewrite [0, w] depth (Vulkan/D3D style) to [-w, w] depth (GL style).
+			// MSL: In vertex-like shaders, rewrite [-w, w] depth (GL style) to [0, w] depth.
+			// HLSL: In vertex-like shaders, rewrite [-w, w] depth (GL style) to [0, w] depth.
 			bool fixup_clipspace = false;
 
-			// Inverts gl_Position.y or equivalent.
+			// In vertex-like shaders, inverts gl_Position.y or equivalent.
 			bool flip_vert_y = false;
 
 			// GLSL only, for HLSL version of this option, see CompilerHLSL.
