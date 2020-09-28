@@ -1717,7 +1717,7 @@ uint32_t Compiler::evaluate_spec_constant_u32(const SPIRConstantOp &spec) const
 		break;
 
 	case OpSNegate:
-		value = -eval_u32(spec.arguments[0]);
+		value = uint32_t(-int32_t(eval_u32(spec.arguments[0])));
 		break;
 
 	case OpSelect:
