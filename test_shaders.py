@@ -107,17 +107,17 @@ def print_msl_compiler_version():
     except subprocess.CalledProcessError:
         pass
 
-def msl_compiler_supports_22():
+def msl_compiler_supports_version(version):
     try:
-        subprocess.check_call(['xcrun', '--sdk', 'macosx', 'metal', '-x', 'metal', '-std=macos-metal2.2', '-'],
+        subprocess.check_call(['xcrun', '--sdk', 'macosx', 'metal', '-x', 'metal', '-std=macos-metal' + version, '-'],
                 stdin = subprocess.DEVNULL, stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-        print('Current SDK supports MSL 2.2. Enabling validation for MSL 2.2 shaders.')
+        print('Current SDK supports MSL {0}. Enabling validation for MSL {0} shaders.'.format(version))
         return True
     except OSError as e:
-        print('Failed to check if MSL 2.2 is not supported. It probably is not.')
+        print('Failed to check if MSL {} is not supported. It probably is not.'.format(version))
         return False
     except subprocess.CalledProcessError:
-        print('Current SDK does NOT support MSL 2.2. Disabling validation for MSL 2.2 shaders.')
+        print('Current SDK does NOT support MSL {0}. Disabling validation for MSL {0} shaders.'.format(version))
         return False
 
 def path_to_msl_standard(shader):
@@ -128,6 +128,8 @@ def path_to_msl_standard(shader):
             return '-std=ios-metal2.1'
         elif '.msl22.' in shader:
             return '-std=ios-metal2.2'
+        elif '.msl23.' in shader:
+            return '-std=ios-metal2.3'
         elif '.msl11.' in shader:
             return '-std=ios-metal1.1'
         elif '.msl10.' in shader:
@@ -141,6 +143,8 @@ def path_to_msl_standard(shader):
             return '-std=macos-metal2.1'
         elif '.msl22.' in shader:
             return '-std=macos-metal2.2'
+        elif '.msl23.' in shader:
+            return '-std=macos-metal2.3'
         elif '.msl11.' in shader:
             return '-std=macos-metal1.1'
         else:
@@ -153,6 +157,8 @@ def path_to_msl_standard_cli(shader):
         return '20100'
     elif '.msl22.' in shader:
         return '20200'
+    elif '.msl23.' in shader:
+        return '20300'
     elif '.msl11.' in shader:
         return '10100'
     else:
@@ -712,7 +718,8 @@ def test_shader_msl(stats, shader, args, paths):
 #    print('SPRIV shader: ' + spirv)
 
     shader_is_msl22 = 'msl22' in joined_path
-    skip_validation = shader_is_msl22 and (not args.msl22)
+    shader_is_msl23 = 'msl23' in joined_path
+    skip_validation = (shader_is_msl22 and (not args.msl22)) or (shader_is_msl23 and (not args.msl23))
     if '.invalid.' in joined_path:
         skip_validation = True
 
@@ -860,9 +867,11 @@ def main():
         args.parallel = False
 
     args.msl22 = False
+    args.msl23 = False
     if args.msl:
         print_msl_compiler_version()
-        args.msl22 = msl_compiler_supports_22()
+        args.msl22 = msl_compiler_supports_version('2.2')
+        args.msl23 = msl_compiler_supports_version('2.3')
 
     backend = 'glsl'
     if (args.msl or args.metal):
