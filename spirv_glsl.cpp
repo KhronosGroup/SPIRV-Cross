@@ -1590,7 +1590,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		uint32_t member_count = uint32_t(type.member_types.size());
 		bool have_xfb_buffer_stride = false;
 		bool have_any_xfb_offset = false;
-		uint32_t xfb_stride = 0, xfb_buffer = 0;
+		bool have_geom_stream = false;
+		uint32_t xfb_stride = 0, xfb_buffer = 0, geom_stream = 0;
 
 		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride))
 		{
@@ -1599,9 +1600,24 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			xfb_stride = get_decoration(var.self, DecorationXfbStride);
 		}
 
+		if (flags.get(DecorationStream))
+		{
+			have_geom_stream = true;
+			geom_stream = get_decoration(var.self, DecorationStream);
+		}
+
 		// Verify that none of the members violate our assumption.
 		for (uint32_t i = 0; i < member_count; i++)
 		{
+			if (has_member_decoration(type.self, i, DecorationStream))
+			{
+				uint32_t member_geom_stream = get_member_decoration(type.self, i, DecorationStream);
+				if (have_geom_stream && member_geom_stream != geom_stream)
+					SPIRV_CROSS_THROW("IO block member Stream mismatch.");
+				have_geom_stream = true;
+				geom_stream = member_geom_stream;
+			}
+
 			// Only members with an Offset decoration participate in XFB.
 			if (!has_member_decoration(type.self, i, DecorationOffset))
 				continue;
@@ -1632,15 +1648,40 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			attr.push_back(join("xfb_stride = ", xfb_stride));
 			uses_enhanced_layouts = true;
 		}
+
+		if (have_geom_stream)
+		{
+			if (get_execution_model() != ExecutionModelGeometry)
+				SPIRV_CROSS_THROW("Geometry streams can only be used in geometry shaders.");
+			if (options.es)
+				SPIRV_CROSS_THROW("Multiple geometry streams not supported in ESSL.");
+			if (options.version < 400)
+				require_extension_internal("GL_ARB_transform_feedback3");
+			attr.push_back(join("stream = ", get_decoration(var.self, DecorationStream)));
+		}
 	}
-	else if (var.storage == StorageClassOutput && flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride) &&
-	         flags.get(DecorationOffset))
+	else if (var.storage == StorageClassOutput)
 	{
-		// XFB for standalone variables, we can emit all decorations.
-		attr.push_back(join("xfb_buffer = ", get_decoration(var.self, DecorationXfbBuffer)));
-		attr.push_back(join("xfb_stride = ", get_decoration(var.self, DecorationXfbStride)));
-		attr.push_back(join("xfb_offset = ", get_decoration(var.self, DecorationOffset)));
-		uses_enhanced_layouts = true;
+		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride) &&
+		    flags.get(DecorationOffset))
+		{
+			// XFB for standalone variables, we can emit all decorations.
+			attr.push_back(join("xfb_buffer = ", get_decoration(var.self, DecorationXfbBuffer)));
+			attr.push_back(join("xfb_stride = ", get_decoration(var.self, DecorationXfbStride)));
+			attr.push_back(join("xfb_offset = ", get_decoration(var.self, DecorationOffset)));
+			uses_enhanced_layouts = true;
+		}
+
+		if (flags.get(DecorationStream))
+		{
+			if (get_execution_model() != ExecutionModelGeometry)
+				SPIRV_CROSS_THROW("Geometry streams can only be used in geometry shaders.");
+			if (options.es)
+				SPIRV_CROSS_THROW("Multiple geometry streams not supported in ESSL.");
+			if (options.version < 400)
+				require_extension_internal("GL_ARB_transform_feedback3");
+			attr.push_back(join("stream = ", get_decoration(var.self, DecorationStream)));
+		}
 	}
 
 	// Can only declare Component if we can declare location.
@@ -2700,8 +2741,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	uint32_t clip_distance_size = 0;
 
 	bool have_xfb_buffer_stride = false;
+	bool have_geom_stream = false;
 	bool have_any_xfb_offset = false;
-	uint32_t xfb_stride = 0, xfb_buffer = 0;
+	uint32_t xfb_stride = 0, xfb_buffer = 0, geom_stream = 0;
 	std::unordered_map<uint32_t, uint32_t> builtin_xfb_offsets;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
@@ -2727,6 +2769,15 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 						have_any_xfb_offset = true;
 						builtin_xfb_offsets[m.builtin_type] = m.offset;
 					}
+
+					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationStream))
+					{
+						uint32_t stream = m.stream;
+						if (have_geom_stream && geom_stream != stream)
+							SPIRV_CROSS_THROW("IO block member Stream mismatch.");
+						have_geom_stream = true;
+						geom_stream = stream;
+					}
 				}
 				index++;
 			}
@@ -2743,6 +2794,15 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 				have_xfb_buffer_stride = true;
 				xfb_buffer = buffer_index;
 				xfb_stride = stride;
+			}
+
+			if (storage == StorageClassOutput && has_decoration(var.self, DecorationStream))
+			{
+				uint32_t stream = get_decoration(var.self, DecorationStream);
+				if (have_geom_stream && geom_stream != stream)
+					SPIRV_CROSS_THROW("IO block member Stream mismatch.");
+				have_geom_stream = true;
+				geom_stream = stream;
 			}
 		}
 		else if (var.storage == storage && !block && is_builtin_variable(var))
@@ -2771,6 +2831,15 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 					have_xfb_buffer_stride = true;
 					xfb_buffer = buffer_index;
 					xfb_stride = stride;
+				}
+
+				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationStream))
+				{
+					uint32_t stream = get_decoration(var.self, DecorationStream);
+					if (have_geom_stream && geom_stream != stream)
+						SPIRV_CROSS_THROW("IO block member Stream mismatch.");
+					have_geom_stream = true;
+					geom_stream = stream;
 				}
 			}
 		}
@@ -2801,9 +2870,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 
 	if (storage == StorageClassOutput)
 	{
+		SmallVector<string> attr;
 		if (have_xfb_buffer_stride && have_any_xfb_offset)
 		{
-			statement("layout(xfb_buffer = ", xfb_buffer, ", xfb_stride = ", xfb_stride, ") out gl_PerVertex");
 			if (!options.es)
 			{
 				if (options.version < 440 && options.version >= 140)
@@ -2815,7 +2884,22 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			}
 			else if (options.es)
 				SPIRV_CROSS_THROW("Need GL_ARB_enhanced_layouts for xfb_stride or xfb_buffer.");
+			attr.push_back(join("xfb_buffer = ", xfb_buffer, ", xfb_stride = ", xfb_stride));
 		}
+
+		if (have_geom_stream)
+		{
+			if (get_execution_model() != ExecutionModelGeometry)
+				SPIRV_CROSS_THROW("Geometry streams can only be used in geometry shaders.");
+			if (options.es)
+				SPIRV_CROSS_THROW("Multiple geometry streams not supported in ESSL.");
+			if (options.version < 400)
+				require_extension_internal("GL_ARB_transform_feedback3");
+			attr.push_back(join("stream = ", geom_stream));
+		}
+
+		if (!attr.empty())
+			statement("layout(", merge(attr), ") out gl_PerVertex");
 		else
 			statement("out gl_PerVertex");
 	}
