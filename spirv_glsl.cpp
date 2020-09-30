@@ -2718,9 +2718,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 				{
 					builtins.set(m.builtin_type);
 					if (m.builtin_type == BuiltInCullDistance)
-						cull_distance_size = this->get<SPIRType>(type.member_types[index]).array.front();
+						cull_distance_size = to_array_size_literal(this->get<SPIRType>(type.member_types[index]));
 					else if (m.builtin_type == BuiltInClipDistance)
-						clip_distance_size = this->get<SPIRType>(type.member_types[index]).array.front();
+						clip_distance_size = to_array_size_literal(this->get<SPIRType>(type.member_types[index]));
 
 					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationOffset))
 					{
@@ -2753,9 +2753,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			{
 				global_builtins.set(m.builtin_type);
 				if (m.builtin_type == BuiltInCullDistance)
-					cull_distance_size = type.array.front();
+					cull_distance_size = to_array_size_literal(type);
 				else if (m.builtin_type == BuiltInClipDistance)
-					clip_distance_size = type.array.front();
+					clip_distance_size = to_array_size_literal(type);
 
 				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationXfbStride) &&
 				    m.decoration_flags.get(DecorationXfbBuffer) && m.decoration_flags.get(DecorationOffset))
