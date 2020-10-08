@@ -548,6 +548,7 @@ string CompilerGLSL::compile()
 
 		emit_header();
 		emit_resources();
+		emit_extension_workarounds(ir.entry_points[ir.default_entry_point].model);
 
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 
@@ -618,6 +619,22 @@ void CompilerGLSL::build_workgroup_size(SmallVector<string> &arguments, const Sp
 	}
 	else
 		arguments.push_back(join("local_size_z = ", execution.workgroup_size.z));
+}
+
+void CompilerGLSL::request_subgroup_feature(ShaderSubgroupSupportHelper::Feature feature)
+{
+	if (options.vulkan_semantics)
+	{
+		const ShaderSubgroupSupportHelper::Candidate khrExt =
+		    shader_subgroup_supporter.get_KHR_extension_for_feature(feature);
+		require_extension_internal(shader_subgroup_supporter.get_extension_name(khrExt));
+	}
+	else
+	{
+		if (!shader_subgroup_supporter.is_feature_requested(feature))
+			force_recompile();
+		shader_subgroup_supporter.request_feature(feature);
+	}
 }
 
 void CompilerGLSL::emit_header()
@@ -720,6 +737,45 @@ void CompilerGLSL::emit_header()
 		}
 		else
 			statement("#extension ", ext, " : require");
+	}
+
+	if (!options.vulkan_semantics)
+	{
+		using Supp = ShaderSubgroupSupportHelper;
+
+		Supp::Result result = shader_subgroup_supporter.resolve();
+		for (uint32_t ft = 0u; ft < Supp::FeatureCount; ++ft)
+		{
+			Supp::Feature feature = static_cast<Supp::Feature>(ft);
+			if (!shader_subgroup_supporter.is_feature_requested(feature))
+				continue;
+
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(feature, result);
+			if (exts.empty())
+				continue;
+
+			for (auto it = exts.begin(); it != exts.end(); ++it)
+			{
+				const Supp::Candidate ext = *it;
+
+				std::string name = Supp::get_extension_name(ext);
+				std::string extraPredicate = Supp::get_extra_required_extension_predicate(ext);
+				auto extraNames = Supp::get_extra_required_extension_names(ext);
+				statement(it != exts.begin() ? "#elif" : "#if", " defined(", name, ")",
+				          extraPredicate.empty() ? "" : (" && " + extraPredicate));
+				for (const auto &e : extraNames)
+					statement("#extension ", e, " : enable");
+				statement("#extension ", name, " : require");
+			}
+
+			if (!Supp::can_feature_be_implemented_wo_extensions(feature))
+			{
+				statement("#else");
+				statement("#error No extensions available to emulate requested subgroup feature.");
+			}
+
+			statement("#endif");
+		}
 	}
 
 	for (auto &header : header_lines)
@@ -2974,8 +3030,7 @@ void CompilerGLSL::declare_undefined_values()
 		if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			initializer = join(" = ", to_zero_initialized_expression(undef.basetype));
 
-		statement(variable_decl(type, to_name(undef.self), undef.self), initializer,
-		          ";");
+		statement(variable_decl(type, to_name(undef.self), undef.self), initializer, ";");
 		emitted = true;
 	});
 
@@ -3340,6 +3395,379 @@ void CompilerGLSL::emit_resources()
 		statement("");
 
 	declare_undefined_values();
+}
+
+void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
+{
+	static const char *TYPES[] = { "int",   "ivec2", "ivec3", "ivec4", "uint",   "uvec2", "uvec3", "uvec4",
+		                           "float", "vec2",  "vec3",  "vec4",  "double", "dvec2", "dvec3", "dvec4" };
+
+	if (!options.vulkan_semantics)
+	{
+		using Supp = ShaderSubgroupSupportHelper;
+
+		Supp::Result result = shader_subgroup_supporter.resolve();
+
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupMask))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupMask, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("#define gl_SubgroupEqMask uvec4(gl_ThreadEqMaskNV, 0u, 0u, 0u)");
+					statement("#define gl_SubgroupGeMask uvec4(gl_ThreadGeMaskNV, 0u, 0u, 0u)");
+					statement("#define gl_SubgroupGtMask uvec4(gl_ThreadGtMaskNV, 0u, 0u, 0u)");
+					statement("#define gl_SubgroupLeMask uvec4(gl_ThreadLeMaskNV, 0u, 0u, 0u)");
+					statement("#define gl_SubgroupLtMask uvec4(gl_ThreadLtMaskNV, 0u, 0u, 0u)");
+					break;
+				case Supp::ARB_shader_ballot:
+					statement("#define gl_SubgroupEqMask uvec4(unpackUint2x32(gl_SubGroupEqMaskARB), 0u, 0u)");
+					statement("#define gl_SubgroupGeMask uvec4(unpackUint2x32(gl_SubGroupGeMaskARB), 0u, 0u)");
+					statement("#define gl_SubgroupGtMask uvec4(unpackUint2x32(gl_SubGroupGtMaskARB), 0u, 0u)");
+					statement("#define gl_SubgroupLeMask uvec4(unpackUint2x32(gl_SubGroupLeMaskARB), 0u, 0u)");
+					statement("#define gl_SubgroupLtMask uvec4(unpackUint2x32(gl_SubGroupLtMaskARB), 0u, 0u)");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupSize))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupSize, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("#define gl_SubgroupSize gl_WarpSizeNV");
+					break;
+				case Supp::ARB_shader_ballot:
+					statement("#define gl_SubgroupSize gl_SubGroupSizeARB");
+					break;
+				case Supp::AMD_gcn_shader:
+					statement("#define gl_SubgroupSize uint(gl_SIMDGroupSizeAMD)");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupInvocationID))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupInvocationID, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("#define gl_SubgroupInvocationID gl_ThreadInWarpNV");
+					break;
+				case Supp::ARB_shader_ballot:
+					statement("#define gl_SubgroupInvocationID gl_SubGroupInvocationARB");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupID))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupID, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("#define gl_SubgroupID gl_WarpIDNV");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::NumSubgroups))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::NumSubgroups, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("#define gl_NumSubgroups gl_WarpsPerSMNV");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBrodcast_First))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupBrodcast_First, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_shuffle:
+					for (const char *t : TYPES)
+						statement(string(t) + " subgroupBroadcastFirst(" + t +
+						          " value) { return shuffleNV(value, findLSB(ballotThreadNV(true)), gl_WarpSizeNV); }");
+					for (const char *t : TYPES)
+						statement(string(t) + " subgroupBroadcast(" + t +
+						          " value, uint id) { return shuffleNV(value, id, gl_WarpSizeNV); }");
+					break;
+				case Supp::ARB_shader_ballot:
+					for (const char *t : TYPES)
+						statement(string(t) + " subgroupBroadcastFirst(" + t +
+						          " value) { return readFirstInvocationARB(value); }");
+					for (const char *t : TYPES)
+						statement(string(t) + " subgroupBroadcast(" + t +
+						          " value, uint id) { return readInvocationARB(value, id); }");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBallotFindLSB_MSB))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupBallotFindLSB_MSB, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("uint subgroupBallotFindLSB(uvec4 value) { return findLSB(value.x); }");
+					statement("uint subgroupBallotFindMSB(uvec4 value) { return findMSB(value.x); }");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#else");
+			statement("uint subgroupBallotFindLSB(uvec4 value) {");
+			statement("int firstLive = findLSB(value.x);");
+			statement("return uint(firstLive != -1 ? firstLive : (findLSB(value.y) + 32));");
+			statement("}");
+			statement("uint subgroupBallotFindMSB(uvec4 value) {");
+			statement("int firstLive = findMSB(value.y);");
+			statement("return uint(firstLive != -1 ? (firstLive + 32) : findMSB(value.x));");
+			statement("}");
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupAll_Any_AllEqualBool))
+		{
+			auto exts =
+			    shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupAll_Any_AllEqualBool, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_gpu_shader_5:
+					statement("bool subgroupAll(bool value) { return allThreadsNV(value); }");
+					statement("bool subgroupAny(bool value) { return anyThreadNV(value); }");
+					statement("bool subgroupAllEqual(bool value) { return allThreadsEqualNV(value); }");
+					break;
+				case Supp::ARB_shader_group_vote:
+					statement("bool subgroupAll(bool v) { return allInvocationsARB(v); }");
+					statement("bool subgroupAny(bool v) { return anyInvocationARB(v); }");
+					statement("bool subgroupAllEqual(bool v) { return allInvocationsEqualARB(v); }");
+					break;
+				case Supp::AMD_gcn_shader:
+					statement("bool subgroupAll(bool value) { return ballotAMD(value)==ballotAMD(true); }");
+					statement("bool subgroupAny(bool value) { return ballotAMD(value)!=0ull; }");
+					statement("bool subgroupAllEqual(bool value) { uint64_t b=ballotAMD(value); return b==0uLL || "
+					          "b==ballotAMD(true); }");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupAllEqualT))
+		{
+			statement("#ifndef GL_KHR_shader_subgroup_vote");
+			statement(
+			    "#define _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(type) bool subgroupAllEqual(type value) { return "
+			    "subgroupAllEqual(subgroupBroadcastFirst(value)==value); }");
+			for (const char *t : TYPES)
+			{
+				statement(std::string("_SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(") + t + ")");
+			}
+			statement("#undef _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND");
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBallot))
+		{
+			auto exts = shader_subgroup_supporter.get_candidates_for_feature(Supp::SubgroupBallot, result);
+
+			for (uint32_t i = 0u; i < exts.size(); ++i)
+			{
+				const Supp::Candidate e = exts[i];
+				const std::string name = Supp::get_extension_name(e);
+
+				statement(i == 0u ? "#if" : "#elif", " defined(", name, ")");
+				switch (e)
+				{
+				case Supp::NV_shader_thread_group:
+					statement("uvec4 subgroupBallot(bool v) { return uvec4(ballotThreadNV(v), 0u, 0u, 0u); }");
+					break;
+				case Supp::ARB_shader_ballot:
+					statement("uvec4 subgroupBallot(bool v) { return uvec4(unpackUint2x32(ballotARB(v)), 0u, 0u); }");
+					break;
+				default:
+					break;
+				}
+			}
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupElect))
+		{
+			statement("#ifndef GL_KHR_shader_subgroup_basic");
+			statement("bool subgroupElect() {");
+			statement("uvec4 activeMask = subgroupBallot(true);");
+			statement("uint firstLive = subgroupBallotFindLSB(activeMask);");
+			statement("return gl_SubgroupInvocationID == firstLive;");
+			statement("}");
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBarrier))
+		{
+			// Extensions we're using in place of GL_KHR_shader_subgroup_basic state
+			// that subgroup execute in lockstep so this barrier is implicit.
+			statement("#ifndef GL_KHR_shader_subgroup_basic");
+			statement("void subgroupBarrier() { /*NOOP*/ }");
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupMemBarrier))
+		{
+			if (model == spv::ExecutionModelGLCompute)
+			{
+				statement("#ifndef GL_KHR_shader_subgroup_basic");
+				statement("void subgroupMemoryBarrier() { groupMemoryBarrier(); }");
+				statement("void subgroupMemoryBarrierBuffer() { groupMemoryBarrier(); }");
+				statement("void subgroupMemoryBarrierShared() { groupMemoryBarrier(); }");
+				statement("void subgroupMemoryBarrierImage() { groupMemoryBarrier(); }");
+				statement("#endif");
+			}
+			else
+			{
+				statement("#ifndef GL_KHR_shader_subgroup_basic");
+				statement("void subgroupMemoryBarrier() { memoryBarrier(); }");
+				statement("void subgroupMemoryBarrierBuffer() { memoryBarrierBuffer(); }");
+				statement("void subgroupMemoryBarrierImage() { memoryBarrierImage(); }");
+				statement("#endif");
+			}
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupInverseBallot_InclBitCount_ExclBitCout))
+		{
+			statement("#ifndef GL_KHR_shader_subgroup_ballot");
+			statement("bool subgroupInverseBallot(uvec4 value)");
+			statement("{");
+			statement("return any(notEqual(value.xy & gl_SubgroupEqMask.xy, uvec2(0u)));");
+			statement("}");
+
+			statement("uint subgroupBallotInclusiveBitCount(uvec4 value)");
+			statement("{");
+			statement("uvec2 v = value.xy & gl_SubgroupLeMask.xy;");
+			statement("ivec2 c = bitCount(v);");
+			statement("#ifdef GL_NV_shader_thread_group");
+			statement("return uint(c.x);");
+			statement("#else");
+			statement("return uint(c.x + c.y);");
+			statement("#endif");
+			statement("}");
+
+			statement("uint subgroupBallotExclusiveBitCount(uvec4 value)");
+			statement("{");
+			statement("uvec2 v = value.xy & gl_SubgroupLtMask.xy;");
+			statement("ivec2 c = bitCount(v);");
+			statement("#ifdef GL_NV_shader_thread_group");
+			statement("return uint(c.x);");
+			statement("#else");
+			statement("return uint(c.x + c.y);");
+			statement("#endif");
+			statement("}");
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBallotBitCount))
+		{
+			statement("#ifndef GL_KHR_shader_subgroup_ballot");
+			statement("uint subgroupBallotBitCount(uvec4 value)");
+			statement("{");
+			statement("ivec2 c = bitCount(value.xy);");
+			statement("#ifdef GL_NV_shader_thread_group");
+			statement("return uint(c.x);");
+			statement("#else");
+			statement("return uint(c.x + c.y);");
+			statement("#endif");
+			statement("}");
+			statement("#endif");
+		}
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBallotBitExtract))
+		{
+			statement("#ifndef GL_KHR_shader_subgroup_ballot");
+			statement("bool subgroupBallotBitExtract(uvec4 value, uint index)");
+			statement("{");
+			statement("#ifdef GL_NV_shader_thread_group");
+			statement("uint shifted = value.x >> index;");
+			statement("#else");
+			statement("uint shifted = value[index >> 5u] >> (index & 0x1fu);");
+			statement("#endif");
+			statement("return (shifted & 1u) != 0u;");
+			statement("}");
+			statement("#endif");
+		}
+	}
 }
 
 // Returns a string representation of the ID, usable as a function arg.
@@ -4449,8 +4877,8 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 						// Fake unsigned constant literals with signed ones if possible.
 						// Things like array sizes, etc, tend to be unsigned even though they could just as easily be signed.
 						if (c.scalar_i32(vector, i) < 0)
-							SPIRV_CROSS_THROW(
-							    "Tried to convert uint literal into int, but this made the literal negative.");
+							SPIRV_CROSS_THROW("Tried to convert uint literal into int, but this made "
+							                  "the literal negative.");
 					}
 					else if (backend.uint32_t_literal_suffix)
 						res += "u";
@@ -5479,9 +5907,9 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 			return to_expression(itr->id) + array_expr;
 		else
 		{
-			SPIRV_CROSS_THROW(
-			    "Cannot find mapping for combined sampler parameter, was build_combined_image_samplers() used "
-			    "before compile() was called?");
+			SPIRV_CROSS_THROW("Cannot find mapping for combined sampler parameter, was "
+			                  "build_combined_image_samplers() used "
+			                  "before compile() was called?");
 		}
 	}
 	else
@@ -5499,6 +5927,30 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 			SPIRV_CROSS_THROW("Cannot find mapping for combined sampler, was build_combined_image_samplers() used "
 			                  "before compile() was called?");
 		}
+	}
+}
+
+bool CompilerGLSL::is_supported_subgroup_op(spv::Op op)
+{
+	switch (op)
+	{
+	case OpGroupNonUniformElect:
+	case OpGroupNonUniformBallot:
+	case OpGroupNonUniformBallotFindLSB:
+	case OpGroupNonUniformBallotFindMSB:
+	case OpGroupNonUniformBroadcast:
+	case OpGroupNonUniformBroadcastFirst:
+	case OpGroupNonUniformAll:
+	case OpGroupNonUniformAny:
+	case OpGroupNonUniformAllEqual:
+	case OpControlBarrier:
+	case OpMemoryBarrier:
+	case OpGroupNonUniformBallotBitCount:
+	case OpGroupNonUniformBallotBitExtract:
+	case OpGroupNonUniformInverseBallot:
+		return true;
+	default:
+		return false;
 	}
 }
 
@@ -5913,8 +6365,8 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	{
 		if (!expression_is_constant_null(args.lod))
 		{
-			SPIRV_CROSS_THROW(
-			    "textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be expressed in GLSL.");
+			SPIRV_CROSS_THROW("textureLod on sampler2DArrayShadow is not constant 0.0. This cannot be "
+			                  "expressed in GLSL.");
 		}
 		workaround_lod_array_shadow_as_grad = true;
 	}
@@ -5982,8 +6434,8 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 			else
 			{
 				if (!dummy_sampler_id)
-					SPIRV_CROSS_THROW(
-					    "Cannot find dummy sampler ID. Was build_dummy_sampler_for_combined_images() called?");
+					SPIRV_CROSS_THROW("Cannot find dummy sampler ID. Was "
+					                  "build_dummy_sampler_for_combined_images() called?");
 
 				return to_combined_image_sampler(id, dummy_sampler_id);
 			}
@@ -6757,8 +7209,8 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	const uint32_t *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
 
-	if (!options.vulkan_semantics)
-		SPIRV_CROSS_THROW("Can only use subgroup operations in Vulkan semantics.");
+	if (!options.vulkan_semantics && !is_supported_subgroup_op(op))
+		SPIRV_CROSS_THROW("This subgroup operation is only supported in Vulkan semantics.");
 
 	// If we need to do implicit bitcasts, make sure we do it with the correct type.
 	uint32_t integer_width = get_integer_width_for_instruction(i);
@@ -6768,18 +7220,39 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	switch (op)
 	{
 	case OpGroupNonUniformElect:
-		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupElect);
+		break;
+
+	case OpGroupNonUniformBallotBitCount:
+	{
+		const GroupOperation operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallotBitCount);
+		else if (operation == GroupOperationInclusiveScan || operation == GroupOperationExclusiveScan)
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupInverseBallot_InclBitCount_ExclBitCout);
+	}
+	break;
+
+	case OpGroupNonUniformBallotBitExtract:
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallotBitExtract);
+		break;
+
+	case OpGroupNonUniformInverseBallot:
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupInverseBallot_InclBitCount_ExclBitCout);
+		break;
+
+	case OpGroupNonUniformBallot:
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallot);
+		break;
+
+	case OpGroupNonUniformBallotFindLSB:
+	case OpGroupNonUniformBallotFindMSB:
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallotFindLSB_MSB);
 		break;
 
 	case OpGroupNonUniformBroadcast:
 	case OpGroupNonUniformBroadcastFirst:
-	case OpGroupNonUniformBallot:
-	case OpGroupNonUniformInverseBallot:
-	case OpGroupNonUniformBallotBitExtract:
-	case OpGroupNonUniformBallotBitCount:
-	case OpGroupNonUniformBallotFindLSB:
-	case OpGroupNonUniformBallotFindMSB:
-		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBrodcast_First);
 		break;
 
 	case OpGroupNonUniformShuffle:
@@ -6795,8 +7268,14 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	case OpGroupNonUniformAll:
 	case OpGroupNonUniformAny:
 	case OpGroupNonUniformAllEqual:
-		require_extension_internal("GL_KHR_shader_subgroup_vote");
-		break;
+	{
+		const SPIRType &type = expression_type(ops[3]);
+		if (type.basetype == SPIRType::BaseType::Boolean && type.vecsize == 1u)
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupAll_Any_AllEqualBool);
+		else
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupAllEqualT);
+	}
+	break;
 
 	case OpGroupNonUniformFAdd:
 	case OpGroupNonUniformFMul:
@@ -7154,8 +7633,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_CullDistance";
 	case BuiltInVertexId:
 		if (options.vulkan_semantics)
-			SPIRV_CROSS_THROW(
-			    "Cannot implement gl_VertexID in Vulkan GLSL. This shader was created with GL semantics.");
+			SPIRV_CROSS_THROW("Cannot implement gl_VertexID in Vulkan GLSL. This shader was created "
+			                  "with GL semantics.");
 		return "gl_VertexID";
 	case BuiltInInstanceId:
 		if (options.vulkan_semantics)
@@ -7170,8 +7649,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 				break;
 
 			default:
-				SPIRV_CROSS_THROW(
-				    "Cannot implement gl_InstanceID in Vulkan GLSL. This shader was created with GL semantics.");
+				SPIRV_CROSS_THROW("Cannot implement gl_InstanceID in Vulkan GLSL. This shader was "
+				                  "created with GL semantics.");
 			}
 		}
 		if (!options.es && options.version < 140)
@@ -7345,57 +7824,39 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 
 	case BuiltInNumSubgroups:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::NumSubgroups);
 		return "gl_NumSubgroups";
 
 	case BuiltInSubgroupId:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupID);
 		return "gl_SubgroupID";
 
 	case BuiltInSubgroupSize:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupSize);
 		return "gl_SubgroupSize";
 
 	case BuiltInSubgroupLocalInvocationId:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_basic");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupInvocationID);
 		return "gl_SubgroupInvocationID";
 
 	case BuiltInSubgroupEqMask:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupEqMask";
 
 	case BuiltInSubgroupGeMask:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupGeMask";
 
 	case BuiltInSubgroupGtMask:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupGtMask";
 
 	case BuiltInSubgroupLeMask:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupLeMask";
 
 	case BuiltInSubgroupLtMask:
-		if (!options.vulkan_semantics)
-			SPIRV_CROSS_THROW("Need Vulkan semantics for subgroup.");
-		require_extension_internal("GL_KHR_shader_subgroup_ballot");
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupLtMask";
 
 	case BuiltInLaunchIdNV:
@@ -8192,10 +8653,11 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				// Dynamic array access.
 				if (array_stride % word_stride)
 				{
-					SPIRV_CROSS_THROW(
-					    "Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
-					    "Likely culprit here is a float or vec2 array inside a push constant block which is std430. "
-					    "This cannot be flattened. Try using std140 layout instead.");
+					SPIRV_CROSS_THROW("Array stride for dynamic indexing must be divisible by the size "
+					                  "of a 4-component vector. "
+					                  "Likely culprit here is a float or vec2 array inside a push "
+					                  "constant block which is std430. "
+					                  "This cannot be flattened. Try using std140 layout instead.");
 				}
 
 				expr += to_enclosed_expression(index);
@@ -8218,10 +8680,11 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				// Dynamic array access.
 				if (array_stride % word_stride)
 				{
-					SPIRV_CROSS_THROW(
-					    "Array stride for dynamic indexing must be divisible by the size of a 4-component vector. "
-					    "Likely culprit here is a float or vec2 array inside a push constant block which is std430. "
-					    "This cannot be flattened. Try using std140 layout instead.");
+					SPIRV_CROSS_THROW("Array stride for dynamic indexing must be divisible by the size "
+					                  "of a 4-component vector. "
+					                  "Likely culprit here is a float or vec2 array inside a push "
+					                  "constant block which is std430. "
+					                  "This cannot be flattened. Try using std140 layout instead.");
 				}
 
 				expr += to_enclosed_expression(index, false);
@@ -8277,10 +8740,10 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				// Dynamic array access.
 				if (indexing_stride % word_stride)
 				{
-					SPIRV_CROSS_THROW(
-					    "Matrix stride for dynamic indexing must be divisible by the size of a 4-component vector. "
-					    "Likely culprit here is a row-major matrix being accessed dynamically. "
-					    "This cannot be flattened. Try using std140 layout instead.");
+					SPIRV_CROSS_THROW("Matrix stride for dynamic indexing must be divisible by the size of a "
+					                  "4-component vector. "
+					                  "Likely culprit here is a row-major matrix being accessed dynamically. "
+					                  "This cannot be flattened. Try using std140 layout instead.");
 				}
 
 				expr += to_enclosed_expression(index, false);
@@ -8307,9 +8770,9 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 				// Dynamic array access.
 				if (indexing_stride % word_stride)
 				{
-					SPIRV_CROSS_THROW(
-					    "Stride for dynamic vector indexing must be divisible by the size of a 4-component vector. "
-					    "This cannot be flattened in legacy targets.");
+					SPIRV_CROSS_THROW("Stride for dynamic vector indexing must be divisible by the "
+					                  "size of a 4-component vector. "
+					                  "This cannot be flattened in legacy targets.");
 				}
 
 				expr += to_enclosed_expression(index, false);
@@ -9936,7 +10399,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto &type = get<SPIRType>(ops[0]);
 		if (type.vecsize > 1)
-			GLSL_UFOP(not );
+			GLSL_UFOP(not);
 		else
 			GLSL_UOP(!);
 		break;
@@ -10671,8 +11134,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				{
 					uint32_t operands = ops[4];
 					if (operands != ImageOperandsSampleMask || length != 6)
-						SPIRV_CROSS_THROW(
-						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
+						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
 					imgexpr = join("subpassLoad(", to_expression(ops[2]), ", ", to_expression(samples), ")");
@@ -10686,8 +11149,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				{
 					uint32_t operands = ops[4];
 					if (operands != ImageOperandsSampleMask || length != 6)
-						SPIRV_CROSS_THROW(
-						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
+						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
 					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), ",
@@ -10723,8 +11186,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				{
 					uint32_t operands = ops[4];
 					if (operands != ImageOperandsSampleMask || length != 6)
-						SPIRV_CROSS_THROW(
-						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
+						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
 					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_expression(ops[2]), ", ",
@@ -10744,8 +11207,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				{
 					uint32_t operands = ops[4];
 					if (operands != ImageOperandsSampleMask || length != 6)
-						SPIRV_CROSS_THROW(
-						    "Multisampled image used in OpImageRead, but unexpected operand mask was used.");
+						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
+						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
 					imgexpr =
@@ -10901,9 +11364,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (execution_scope == ScopeSubgroup || memory == ScopeSubgroup)
 		{
-			if (!options.vulkan_semantics)
-				SPIRV_CROSS_THROW("Can only use subgroup operations in Vulkan semantics.");
-			require_extension_internal("GL_KHR_shader_subgroup_basic");
+			// OpControlBarrier with ScopeSubgroup is subgroupBarrier()
+			if (opcode != OpControlBarrier)
+			{
+				request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMemBarrier);
+			}
+			else
+			{
+				request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBarrier);
+			}
 		}
 
 		if (execution_scope != ScopeSubgroup && get_entry_point().model == ExecutionModelTessellationControl)
@@ -12063,7 +12532,8 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 	if (backend.use_array_constructor && type.array.size() > 1)
 	{
 		if (options.flatten_multidimensional_arrays)
-			SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, e.g. float[][]().");
+			SPIRV_CROSS_THROW("Cannot flatten constructors of multidimensional array constructors, "
+			                  "e.g. float[][]().");
 		else if (!options.es && options.version < 430)
 			require_extension_internal("GL_ARB_arrays_of_arrays");
 		else if (options.es && options.version < 310)
@@ -14359,7 +14829,8 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 		if (!subpass_var)
 			continue;
 		if (!output_var)
-			SPIRV_CROSS_THROW("Need to declare the corresponding fragment output variable to be able to read from it.");
+			SPIRV_CROSS_THROW("Need to declare the corresponding fragment output variable to be able "
+			                  "to read from it.");
 		if (is_array(get<SPIRType>(output_var->basetype)))
 			SPIRV_CROSS_THROW("Cannot use GL_EXT_shader_framebuffer_fetch with arrays of color outputs.");
 
@@ -14383,4 +14854,210 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 bool CompilerGLSL::variable_is_depth_or_compare(VariableID id) const
 {
 	return image_is_comparison(get<SPIRType>(get<SPIRVariable>(id).basetype), id);
+}
+
+std::string CompilerGLSL::ShaderSubgroupSupportHelper::get_extension_name(Candidate c)
+{
+	const char *const retval[CandidateCount]{ "GL_KHR_shader_subgroup_ballot",
+		                                      "GL_KHR_shader_subgroup_basic",
+		                                      "GL_KHR_shader_subgroup_vote",
+		                                      "GL_NV_gpu_shader_5",
+		                                      "GL_NV_shader_thread_group",
+		                                      "GL_NV_shader_thread_shuffle",
+		                                      "GL_ARB_shader_ballot",
+		                                      "GL_ARB_shader_group_vote",
+		                                      "GL_AMD_gcn_shader" };
+	return retval[c];
+}
+
+SmallVector<std::string> CompilerGLSL::ShaderSubgroupSupportHelper::
+    get_extra_required_extension_names(Candidate c)
+{
+	switch (c)
+	{
+	case ARB_shader_ballot:
+		return { "GL_ARB_shader_int64" };
+	case AMD_gcn_shader:
+		return { "GL_AMD_gpu_shader_int64", "GL_NV_gpu_shader5" };
+	default:
+		return {};
+	}
+}
+
+std::string CompilerGLSL::ShaderSubgroupSupportHelper::get_extra_required_extension_predicate(
+    Candidate c)
+{
+	switch (c)
+	{
+	case ARB_shader_ballot:
+		return "defined(GL_ARB_shader_int64)";
+	case AMD_gcn_shader:
+		return "(defined(GL_AMD_gpu_shader_int64) || defined(GL_NV_gpu_shader5))";
+	default:
+		return "";
+	}
+}
+
+auto CompilerGLSL::ShaderSubgroupSupportHelper::get_feature_dependencies(Feature feature)
+    -> SmallVector<Feature>
+{
+	switch (feature)
+	{
+	case SubgroupAllEqualT:
+		return { SubgroupBrodcast_First, SubgroupAll_Any_AllEqualBool };
+	case SubgroupElect:
+		return { SubgroupBallotFindLSB_MSB, SubgroupBallot, SubgroupInvocationID };
+	case SubgroupInverseBallot_InclBitCount_ExclBitCout:
+		return { SubgroupMask };
+	case SubgroupBallotBitCount:
+		return { SubgroupBallot };
+	default:
+		return {};
+	}
+}
+
+auto CompilerGLSL::ShaderSubgroupSupportHelper::get_feature_dependency_mask(
+    Feature feature) -> FeatureMask
+{
+	return build_mask(get_feature_dependencies(feature));
+}
+
+bool CompilerGLSL::ShaderSubgroupSupportHelper::can_feature_be_implemented_wo_extensions(
+    Feature feature)
+{
+	const static bool retval[FeatureCount]{ false, false, false, false, false, false,
+		                                    true, // SubgroupBalloFindLSB_MSB
+		                                    false, false, false, false,
+		                                    true, // SubgroupMemBarrier - replaced with workgroup memory barriers
+		                                    false, false, true,  false };
+
+	return retval[feature];
+}
+
+auto SPIRV_CROSS_NAMESPACE::CompilerGLSL::ShaderSubgroupSupportHelper::get_KHR_extension_for_feature(
+    Feature feature) -> Candidate
+{
+	static const Candidate extensions[FeatureCount]{
+		KHR_shader_subgroup_ballot, KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,
+		KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_vote,
+		KHR_shader_subgroup_vote,   KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_basic,
+		KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot
+	};
+
+	return extensions[feature];
+}
+
+void CompilerGLSL::ShaderSubgroupSupportHelper::request_feature(Feature ft)
+{
+	featureMask |= ((FeatureMask{ 1 } << ft) | get_feature_dependency_mask(ft));
+}
+
+bool CompilerGLSL::ShaderSubgroupSupportHelper::is_feature_requested(Feature ft) const
+{
+	return static_cast<bool>(featureMask & (1u << ft));
+}
+
+auto CompilerGLSL::ShaderSubgroupSupportHelper::resolve() const -> Result
+{
+	Result res;
+
+	for (uint32_t i = 0u; i < FeatureCount; ++i)
+	{
+		if (featureMask & (1u << i))
+		{
+			const Feature feature = static_cast<Feature>(i);
+			std::unordered_set<uint32_t> uniqueCandidates;
+
+			auto candidates = get_candidates_for_feature(feature);
+			uniqueCandidates.insert(candidates.begin(), candidates.end());
+
+			auto deps = get_feature_dependencies(feature);
+			for (Feature d : deps)
+				if ((candidates = get_candidates_for_feature(d)).size() > 0ull)
+					uniqueCandidates.insert(candidates.begin(), candidates.end());
+
+			for (uint32_t c : uniqueCandidates)
+				++res[static_cast<Candidate>(c)];
+		}
+	}
+
+	return res;
+}
+
+auto CompilerGLSL::ShaderSubgroupSupportHelper::get_candidates_for_feature(Feature ft, const Result &r)
+    -> SmallVector<Candidate, CandidateCount>
+{
+	auto c = get_candidates_for_feature(ft);
+	auto cmp = [&r](Candidate a, Candidate b) {
+		if (r[a] == r[b])
+			return a < b; // prefer candidates with lower enum value
+		return r[a] > r[b];
+	};
+	std::sort(c.begin(), c.end(), cmp);
+
+	return c;
+}
+
+auto SPIRV_CROSS_NAMESPACE::CompilerGLSL::ShaderSubgroupSupportHelper::get_candidates_for_feature(Feature ft)
+    -> SmallVector<Candidate, CandidateCount>
+{
+	switch (ft)
+	{
+	case SubgroupMask:
+		return { KHR_shader_subgroup_ballot, NV_shader_thread_group, ARB_shader_ballot };
+	case SubgroupSize:
+		return { KHR_shader_subgroup_basic, NV_shader_thread_group, AMD_gcn_shader, ARB_shader_ballot };
+	case SubgroupInvocationID:
+		return { KHR_shader_subgroup_basic, NV_shader_thread_group, ARB_shader_ballot };
+	case SubgroupID:
+		return { KHR_shader_subgroup_basic, NV_shader_thread_group };
+	case NumSubgroups:
+		return { KHR_shader_subgroup_basic, NV_shader_thread_group };
+	case SubgroupBrodcast_First:
+		return { KHR_shader_subgroup_ballot, NV_shader_thread_shuffle, ARB_shader_ballot };
+	case SubgroupBallotFindLSB_MSB:
+		return { KHR_shader_subgroup_ballot, NV_shader_thread_group };
+	case SubgroupAll_Any_AllEqualBool:
+		return { KHR_shader_subgroup_vote, NV_gpu_shader_5, ARB_shader_group_vote, AMD_gcn_shader };
+	case SubgroupAllEqualT:
+		return {}; // depends on other features only
+	case SubgroupElect:
+		return {}; // depends on other features only
+	case SubgroupBallot:
+		return { KHR_shader_subgroup_ballot, NV_shader_thread_group, ARB_shader_ballot };
+	case SubgroupBarrier:
+		return { KHR_shader_subgroup_basic, NV_shader_thread_group, ARB_shader_ballot, AMD_gcn_shader };
+	case SubgroupMemBarrier:
+		return { KHR_shader_subgroup_basic };
+	case SubgroupInverseBallot_InclBitCount_ExclBitCout:
+		return {};
+	case SubgroupBallotBitExtract:
+		return { NV_shader_thread_group };
+	case SubgroupBallotBitCount:
+		return {};
+	default:
+		return {};
+	}
+}
+
+auto CompilerGLSL::ShaderSubgroupSupportHelper::build_mask(
+    SmallVector<Feature> features) -> FeatureMask
+{
+	FeatureMask mask = 0;
+
+	for (Feature f : features)
+		mask |= (FeatureMask{ 1 } << f);
+
+	return mask;
+}
+
+CompilerGLSL::ShaderSubgroupSupportHelper::Result::Result()
+{
+	std::fill(weights.begin(), weights.end(), 0u);
+
+	// make sure KHR_shader_subgroup extensions are always prefered
+	const uint32_t bigNum = static_cast<uint32_t>(FeatureCount);
+	weights[KHR_shader_subgroup_ballot] = bigNum;
+	weights[KHR_shader_subgroup_basic] = bigNum;
+	weights[KHR_shader_subgroup_vote] = bigNum;
 }

@@ -19,6 +19,7 @@
 
 #include "GLSL.std.450.h"
 #include "spirv_cross.hpp"
+#include <array>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -243,7 +244,99 @@ public:
 	// - Images which are statically used at least once with Dref opcodes.
 	bool variable_is_depth_or_compare(VariableID id) const;
 
+
 protected:
+	struct ShaderSubgroupSupportHelper
+	{
+		// lower enum value = greater priority
+		enum Candidate
+		{
+			KHR_shader_subgroup_ballot,
+			KHR_shader_subgroup_basic,
+			KHR_shader_subgroup_vote,
+			NV_gpu_shader_5,
+			NV_shader_thread_group,
+			NV_shader_thread_shuffle,
+			ARB_shader_ballot,
+			ARB_shader_group_vote,
+			AMD_gcn_shader,
+
+			CandidateCount
+		};
+		static std::string get_extension_name(Candidate c);
+
+		static SmallVector<std::string> get_extra_required_extension_names(Candidate c);
+
+		static std::string get_extra_required_extension_predicate(Candidate c);
+
+		enum Feature
+		{
+			SubgroupMask,
+			SubgroupSize,
+			SubgroupInvocationID,
+			SubgroupID,
+			NumSubgroups,
+			SubgroupBrodcast_First,
+			SubgroupBallotFindLSB_MSB,
+			SubgroupAll_Any_AllEqualBool,
+			SubgroupAllEqualT,
+			SubgroupElect,
+			SubgroupBarrier,
+			SubgroupMemBarrier,
+			SubgroupBallot,
+			SubgroupInverseBallot_InclBitCount_ExclBitCout,
+			SubgroupBallotBitExtract,
+			SubgroupBallotBitCount,
+
+			FeatureCount
+		};
+
+		using FeatureMask = uint32_t;
+		static_assert(sizeof(FeatureMask) * 8u >= FeatureCount, "Mask type needs more bits.");
+
+		static SmallVector<Feature> get_feature_dependencies(Feature feature);
+
+		static FeatureMask get_feature_dependency_mask(Feature feature);
+
+		static bool can_feature_be_implemented_wo_extensions(Feature feature);
+
+		static Candidate get_KHR_extension_for_feature(Feature feature);
+
+		struct Result
+		{
+			Result();
+
+			inline uint32_t operator[](Candidate c) const
+			{
+				return weights[c];
+			}
+			inline uint32_t &operator[](Candidate c)
+			{
+				return weights[c];
+			}
+
+			std::array<uint32_t, CandidateCount> weights;
+		};
+
+		void request_feature(Feature ft);
+
+		bool is_feature_requested(Feature ft) const;
+
+		Result resolve() const;
+
+		static SmallVector<Candidate, CandidateCount> get_candidates_for_feature(Feature ft, const Result &r);
+
+	private:
+		static SmallVector<Candidate, CandidateCount> get_candidates_for_feature(Feature ft);
+
+		static FeatureMask build_mask(SmallVector<Feature> features);
+
+		FeatureMask featureMask = 0;
+	};
+
+	// TODO remove this function when all subgroup ops are supported (or make it always return true)
+	static bool is_supported_subgroup_op(spv::Op op);
+
 	void reset();
 	void emit_function(SPIRFunction &func, const Bitset &return_flags);
 
@@ -273,6 +366,8 @@ protected:
 	void emit_line_directive(uint32_t file_id, uint32_t line_literal);
 	void build_workgroup_size(SmallVector<std::string> &arguments, const SpecializationConstant &x,
 	                          const SpecializationConstant &y, const SpecializationConstant &z);
+
+	void request_subgroup_feature(ShaderSubgroupSupportHelper::Feature feature);
 
 	virtual void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id);
 	virtual void emit_texture_op(const Instruction &i, bool sparse);
@@ -485,6 +580,7 @@ protected:
 
 	void emit_struct(SPIRType &type);
 	void emit_resources();
+	void emit_extension_workarounds(spv::ExecutionModel model);
 	void emit_buffer_block_native(const SPIRVariable &var);
 	void emit_buffer_reference_block(SPIRType &type, bool forward_declaration);
 	void emit_buffer_block_legacy(const SPIRVariable &var);
@@ -681,6 +777,8 @@ protected:
 
 	std::unordered_set<uint32_t> flattened_buffer_blocks;
 	std::unordered_map<uint32_t, bool> flattened_structs;
+
+	ShaderSubgroupSupportHelper shader_subgroup_supporter;
 
 	std::string load_flattened_struct(const std::string &basename, const SPIRType &type);
 	std::string to_flattened_struct_member(const std::string &basename, const SPIRType &type, uint32_t index);
