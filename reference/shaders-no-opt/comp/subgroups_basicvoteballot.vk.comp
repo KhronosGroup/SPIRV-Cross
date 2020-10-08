@@ -267,7 +267,6 @@ _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(dvec4)
 #if defined(GL_KHR_shader_subgroup_ballot)
 #elif defined(GL_NV_shader_thread_group)
 uvec4 subgroupBallot(bool v) { return uvec4(ballotThreadNV(v), 0u, 0u, 0u); }
-uvec4 subgroupBallot(bool v) { return uvec4(unpackUint2x32(ballotARB(v)), 0u, 0u); }
 #elif defined(GL_ARB_shader_ballot)
 uvec4 subgroupBallot(bool v) { return uvec4(unpackUint2x32(ballotARB(v)), 0u, 0u); }
 #endif
@@ -288,7 +287,7 @@ void subgroupMemoryBarrierShared() { groupMemoryBarrier(); }
 void subgroupMemoryBarrierImage() { groupMemoryBarrier(); }
 #endif
 #ifndef GL_KHR_shader_subgroup_ballot
-bool subgroupInverseBallot(uvec4 value, uint index)
+bool subgroupInverseBallot(uvec4 value)
 {
 return any(notEqual(value.xy & gl_SubgroupEqMask.xy, uvec2(0u)));
 }
