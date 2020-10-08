@@ -19,7 +19,6 @@
 
 #include "GLSL.std.450.h"
 #include "spirv_cross.hpp"
-#include <array>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -263,11 +262,10 @@ protected:
 
 			CandidateCount
 		};
-		static std::string get_extension_name(Candidate c);
 
+		static const char *get_extension_name(Candidate c);
 		static SmallVector<std::string> get_extra_required_extension_names(Candidate c);
-
-		static std::string get_extra_required_extension_predicate(Candidate c);
+		static const char *get_extra_required_extension_predicate(Candidate c);
 
 		enum Feature
 		{
@@ -294,48 +292,34 @@ protected:
 		using FeatureMask = uint32_t;
 		static_assert(sizeof(FeatureMask) * 8u >= FeatureCount, "Mask type needs more bits.");
 
-		static SmallVector<Feature> get_feature_dependencies(Feature feature);
+		using CandidateVector = SmallVector<Candidate, CandidateCount>;
+		using FeatureVector = SmallVector<Feature>;
 
+		static FeatureVector get_feature_dependencies(Feature feature);
 		static FeatureMask get_feature_dependency_mask(Feature feature);
-
-		static bool can_feature_be_implemented_wo_extensions(Feature feature);
-
+		static bool can_feature_be_implemented_without_extensions(Feature feature);
 		static Candidate get_KHR_extension_for_feature(Feature feature);
 
 		struct Result
 		{
 			Result();
-
-			inline uint32_t operator[](Candidate c) const
-			{
-				return weights[c];
-			}
-			inline uint32_t &operator[](Candidate c)
-			{
-				return weights[c];
-			}
-
-			std::array<uint32_t, CandidateCount> weights;
+			uint32_t weights[CandidateCount];
 		};
 
-		void request_feature(Feature ft);
-
-		bool is_feature_requested(Feature ft) const;
-
+		void request_feature(Feature feature);
+		bool is_feature_requested(Feature feature) const;
 		Result resolve() const;
 
-		static SmallVector<Candidate, CandidateCount> get_candidates_for_feature(Feature ft, const Result &r);
+		static CandidateVector get_candidates_for_feature(Feature ft, const Result &r);
 
 	private:
-		static SmallVector<Candidate, CandidateCount> get_candidates_for_feature(Feature ft);
-
-		static FeatureMask build_mask(SmallVector<Feature> features);
-
-		FeatureMask featureMask = 0;
+		static CandidateVector get_candidates_for_feature(Feature ft);
+		static FeatureMask build_mask(const SmallVector<Feature> &features);
+		FeatureMask feature_mask = 0;
 	};
 
 	// TODO remove this function when all subgroup ops are supported (or make it always return true)
-	static bool is_supported_subgroup_op(spv::Op op);
+	static bool is_supported_subgroup_op_in_opengl(spv::Op op);
 
 	void reset();
 	void emit_function(SPIRFunction &func, const Bitset &return_flags);

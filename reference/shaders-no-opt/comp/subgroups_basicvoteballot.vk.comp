@@ -1,4 +1,5 @@
 #version 450
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #extension GL_KHR_shader_subgroup_ballot : require
 #elif defined(GL_NV_shader_thread_group)
@@ -9,6 +10,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #extension GL_KHR_shader_subgroup_basic : require
 #elif defined(GL_NV_shader_thread_group)
@@ -23,6 +25,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #extension GL_KHR_shader_subgroup_basic : require
 #elif defined(GL_NV_shader_thread_group)
@@ -33,6 +36,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #extension GL_KHR_shader_subgroup_basic : require
 #elif defined(GL_NV_shader_thread_group)
@@ -40,6 +44,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #extension GL_KHR_shader_subgroup_basic : require
 #elif defined(GL_NV_shader_thread_group)
@@ -47,6 +52,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #extension GL_KHR_shader_subgroup_ballot : require
 #elif defined(GL_ARB_shader_ballot) && defined(GL_ARB_shader_int64)
@@ -57,11 +63,13 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #extension GL_KHR_shader_subgroup_ballot : require
 #elif defined(GL_NV_shader_thread_group)
 #extension GL_NV_shader_thread_group : require
 #endif
+
 #if defined(GL_KHR_shader_subgroup_vote)
 #extension GL_KHR_shader_subgroup_vote : require
 #elif defined(GL_AMD_gcn_shader) && (defined(GL_AMD_gpu_shader_int64) || defined(GL_NV_gpu_shader5))
@@ -75,6 +83,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #extension GL_KHR_shader_subgroup_basic : require
 #elif defined(GL_NV_shader_thread_group)
@@ -89,9 +98,11 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #extension GL_KHR_shader_subgroup_basic : require
 #endif
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #extension GL_KHR_shader_subgroup_ballot : require
 #elif defined(GL_NV_shader_thread_group)
@@ -102,6 +113,7 @@
 #else
 #error No extensions available to emulate requested subgroup feature.
 #endif
+
 #if defined(GL_NV_shader_thread_group)
 #extension GL_NV_shader_thread_group : require
 #endif
@@ -126,6 +138,7 @@ layout(binding = 0, std430) buffer SSBO
 #define gl_SubgroupLeMask uvec4(unpackUint2x32(gl_SubGroupLeMaskARB), 0u, 0u)
 #define gl_SubgroupLtMask uvec4(unpackUint2x32(gl_SubGroupLtMaskARB), 0u, 0u)
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #elif defined(GL_NV_shader_thread_group)
 #define gl_SubgroupSize gl_WarpSizeNV
@@ -134,20 +147,24 @@ layout(binding = 0, std430) buffer SSBO
 #elif defined(GL_AMD_gcn_shader)
 #define gl_SubgroupSize uint(gl_SIMDGroupSizeAMD)
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #elif defined(GL_NV_shader_thread_group)
 #define gl_SubgroupInvocationID gl_ThreadInWarpNV
 #elif defined(GL_ARB_shader_ballot)
 #define gl_SubgroupInvocationID gl_SubGroupInvocationARB
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #elif defined(GL_NV_shader_thread_group)
 #define gl_SubgroupID gl_WarpIDNV
 #endif
+
 #if defined(GL_KHR_shader_subgroup_basic)
 #elif defined(GL_NV_shader_thread_group)
 #define gl_NumSubgroups gl_WarpsPerSMNV
 #endif
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #elif defined(GL_ARB_shader_ballot)
 int subgroupBroadcastFirst(int value) { return readFirstInvocationARB(value); }
@@ -216,25 +233,29 @@ dvec2 subgroupBroadcast(dvec2 value, uint id) { return shuffleNV(value, id, gl_W
 dvec3 subgroupBroadcast(dvec3 value, uint id) { return shuffleNV(value, id, gl_WarpSizeNV); }
 dvec4 subgroupBroadcast(dvec4 value, uint id) { return shuffleNV(value, id, gl_WarpSizeNV); }
 #endif
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #elif defined(GL_NV_shader_thread_group)
 uint subgroupBallotFindLSB(uvec4 value) { return findLSB(value.x); }
 uint subgroupBallotFindMSB(uvec4 value) { return findMSB(value.x); }
 #else
-uint subgroupBallotFindLSB(uvec4 value) {
-int firstLive = findLSB(value.x);
-return uint(firstLive != -1 ? firstLive : (findLSB(value.y) + 32));
+uint subgroupBallotFindLSB(uvec4 value)
+{
+    int firstLive = findLSB(value.x);
+    return uint(firstLive != -1 ? firstLive : (findLSB(value.y) + 32));
 }
-uint subgroupBallotFindMSB(uvec4 value) {
-int firstLive = findMSB(value.y);
-return uint(firstLive != -1 ? (firstLive + 32) : findMSB(value.x));
+uint subgroupBallotFindMSB(uvec4 value)
+{
+    int firstLive = findMSB(value.y);
+    return uint(firstLive != -1 ? (firstLive + 32) : findMSB(value.x));
 }
 #endif
+
 #if defined(GL_KHR_shader_subgroup_vote)
 #elif defined(GL_AMD_gcn_shader)
-bool subgroupAll(bool value) { return ballotAMD(value)==ballotAMD(true); }
-bool subgroupAny(bool value) { return ballotAMD(value)!=0ull; }
-bool subgroupAllEqual(bool value) { uint64_t b=ballotAMD(value); return b==0uLL || b==ballotAMD(true); }
+bool subgroupAll(bool value) { return ballotAMD(value) == ballotAMD(true); }
+bool subgroupAny(bool value) { return ballotAMD(value) != 0ull; }
+bool subgroupAllEqual(bool value) { uint64_t b = ballotAMD(value); return b == 0ull || b == ballotAMD(true); }
 #elif defined(GL_NV_gpu_shader_5)
 bool subgroupAll(bool value) { return allThreadsNV(value); }
 bool subgroupAny(bool value) { return anyThreadNV(value); }
@@ -244,8 +265,9 @@ bool subgroupAll(bool v) { return allInvocationsARB(v); }
 bool subgroupAny(bool v) { return anyInvocationARB(v); }
 bool subgroupAllEqual(bool v) { return allInvocationsEqualARB(v); }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_vote
-#define _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(type) bool subgroupAllEqual(type value) { return subgroupAllEqual(subgroupBroadcastFirst(value)==value); }
+#define _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(type) bool subgroupAllEqual(type value) { return subgroupAllEqual(subgroupBroadcastFirst(value) == value); }
 _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(int)
 _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(ivec2)
 _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(ivec3)
@@ -264,76 +286,85 @@ _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(dvec3)
 _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND(dvec4)
 #undef _SPIRV_CROSS_SUBGROUP_ALL_EQUAL_WORKAROUND
 #endif
+
 #if defined(GL_KHR_shader_subgroup_ballot)
 #elif defined(GL_NV_shader_thread_group)
 uvec4 subgroupBallot(bool v) { return uvec4(ballotThreadNV(v), 0u, 0u, 0u); }
 #elif defined(GL_ARB_shader_ballot)
 uvec4 subgroupBallot(bool v) { return uvec4(unpackUint2x32(ballotARB(v)), 0u, 0u); }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_basic
-bool subgroupElect() {
-uvec4 activeMask = subgroupBallot(true);
-uint firstLive = subgroupBallotFindLSB(activeMask);
-return gl_SubgroupInvocationID == firstLive;
+bool subgroupElect()
+{
+    uvec4 activeMask = subgroupBallot(true);
+    uint firstLive = subgroupBallotFindLSB(activeMask);
+    return gl_SubgroupInvocationID == firstLive;
 }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_basic
 void subgroupBarrier() { /*NOOP*/ }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_basic
 void subgroupMemoryBarrier() { groupMemoryBarrier(); }
 void subgroupMemoryBarrierBuffer() { groupMemoryBarrier(); }
 void subgroupMemoryBarrierShared() { groupMemoryBarrier(); }
 void subgroupMemoryBarrierImage() { groupMemoryBarrier(); }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_ballot
 bool subgroupInverseBallot(uvec4 value)
 {
-return any(notEqual(value.xy & gl_SubgroupEqMask.xy, uvec2(0u)));
+    return any(notEqual(value.xy & gl_SubgroupEqMask.xy, uvec2(0u)));
 }
 uint subgroupBallotInclusiveBitCount(uvec4 value)
 {
-uvec2 v = value.xy & gl_SubgroupLeMask.xy;
-ivec2 c = bitCount(v);
+    uvec2 v = value.xy & gl_SubgroupLeMask.xy;
+    ivec2 c = bitCount(v);
 #ifdef GL_NV_shader_thread_group
-return uint(c.x);
+    return uint(c.x);
 #else
-return uint(c.x + c.y);
+    return uint(c.x + c.y);
 #endif
 }
 uint subgroupBallotExclusiveBitCount(uvec4 value)
 {
-uvec2 v = value.xy & gl_SubgroupLtMask.xy;
-ivec2 c = bitCount(v);
+    uvec2 v = value.xy & gl_SubgroupLtMask.xy;
+    ivec2 c = bitCount(v);
 #ifdef GL_NV_shader_thread_group
-return uint(c.x);
+    return uint(c.x);
 #else
-return uint(c.x + c.y);
+    return uint(c.x + c.y);
 #endif
 }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_ballot
 uint subgroupBallotBitCount(uvec4 value)
 {
-ivec2 c = bitCount(value.xy);
+    ivec2 c = bitCount(value.xy);
 #ifdef GL_NV_shader_thread_group
-return uint(c.x);
+    return uint(c.x);
 #else
-return uint(c.x + c.y);
+    return uint(c.x + c.y);
 #endif
 }
 #endif
+
 #ifndef GL_KHR_shader_subgroup_ballot
 bool subgroupBallotBitExtract(uvec4 value, uint index)
 {
 #ifdef GL_NV_shader_thread_group
-uint shifted = value.x >> index;
+    uint shifted = value.x >> index;
 #else
-uint shifted = value[index >> 5u] >> (index & 0x1fu);
+    uint shifted = value[index >> 5u] >> (index & 0x1fu);
 #endif
-return (shifted & 1u) != 0u;
+    return (shifted & 1u) != 0u;
 }
 #endif
+
 void main()
 {
     _9.FragColor = float(gl_NumSubgroups);
