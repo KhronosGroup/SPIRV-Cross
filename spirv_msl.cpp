@@ -13507,6 +13507,14 @@ void CompilerMSL::analyze_argument_buffers()
 					add_resource_name(var_id);
 					resources_in_set[desc_set].push_back(
 					    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+
+					// Emulate texture2D atomic operations
+					if (atomic_image_vars.count(var.self))
+					{
+						uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
+						resources_in_set[desc_set].push_back(
+							{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
+					}
 				}
 			}
 
@@ -13681,6 +13689,30 @@ void CompilerMSL::analyze_argument_buffers()
 					// Put the buffer block itself into the argument buffer.
 					buffer_type.member_types.push_back(get_variable_data_type_id(var));
 					set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
+				}
+				else if (atomic_image_vars.count(var.self))
+				{
+					// Emulate texture2D atomic operations.
+					// Don't set the qualified name: it's already set for this variable,
+					// and the code that references the buffer manually appends "_atomic"
+					// to the name.
+					uint32_t offset = ir.increase_bound_by(2);
+					uint32_t atomic_type_id = offset;
+					uint32_t type_ptr_id = offset + 1;
+
+					SPIRType atomic_type;
+					atomic_type.basetype = SPIRType::AtomicCounter;
+					atomic_type.width = 32;
+					atomic_type.vecsize = 1;
+					set<SPIRType>(atomic_type_id, atomic_type);
+
+					atomic_type.pointer = true;
+					atomic_type.parent_type = atomic_type_id;
+					atomic_type.storage = StorageClassStorageBuffer;
+					auto &atomic_ptr_type = set<SPIRType>(type_ptr_id, atomic_type);
+					atomic_ptr_type.self = atomic_type_id;
+
+					buffer_type.member_types.push_back(type_ptr_id);
 				}
 				else
 				{
