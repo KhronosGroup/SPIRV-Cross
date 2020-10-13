@@ -666,6 +666,14 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_ARRAYED_SUBPASS_INPUT:
 		options->msl.arrayed_subpass_input = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_R32UI_LINEAR_TEXTURE_ALIGNMENT:
+		options->msl.r32ui_linear_texture_alignment = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_R32UI_ALIGNMENT_CONSTANT_ID:
+		options->msl.r32ui_alignment_constant_id = value;
+		break;
 #endif
 
 	default:

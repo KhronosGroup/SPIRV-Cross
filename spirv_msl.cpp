@@ -4194,8 +4194,25 @@ void CompilerMSL::emit_custom_functions()
 		// Emulate texture2D atomic operations
 		case SPVFuncImplImage2DAtomicCoords:
 		{
+			if (msl_options.supports_msl_version(1, 2))
+			{
+				statement("// The required alignment of a linear texture of R32Uint format.");
+				statement("constant uint spvLinearTextureAlignmentOverride [[function_constant(",
+				          msl_options.r32ui_alignment_constant_id, ")]];");
+				statement("constant uint spvLinearTextureAlignment = ",
+				          "is_function_constant_defined(spvLinearTextureAlignmentOverride) ? ",
+				          "spvLinearTextureAlignmentOverride : ", msl_options.r32ui_linear_texture_alignment, ";");
+			}
+			else
+			{
+				statement("// The required alignment of a linear texture of R32Uint format.");
+				statement("constant uint spvLinearTextureAlignment = ", msl_options.r32ui_linear_texture_alignment,
+				          ";");
+			}
 			statement("// Returns buffer coords corresponding to 2D texture coords for emulating 2D texture atomics");
-			statement("#define spvImage2DAtomicCoord(tc, tex) (((tex).get_width() * (tc).x) + (tc).y)");
+			statement("#define spvImage2DAtomicCoord(tc, tex) (((((tex).get_width() + ",
+			          " spvLinearTextureAlignment / 4 - 1) & ~(",
+			          " spvLinearTextureAlignment / 4 - 1)) * (tc).y) + (tc).x)");
 			statement("");
 			break;
 		}
@@ -13516,7 +13533,7 @@ void CompilerMSL::analyze_argument_buffers()
 					{
 						uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 						resources_in_set[desc_set].push_back(
-							{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
+						    { &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
 					}
 				}
 			}
