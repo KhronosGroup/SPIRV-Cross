@@ -10199,7 +10199,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			{
 				ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(basetype.image.type), 0);
 				ep_args += "* " + r.name + "_atomic";
-				ep_args += " [[buffer(" + convert_to_string(r.secondary_index) + ")]]";
+				ep_args += " [[buffer(" + convert_to_string(r.secondary_index) + ")";
+				if (interlocked_resources.count(var_id))
+					ep_args += ", raster_order_group(0)";
+				ep_args += "]]";
 			}
 			break;
 		}
