@@ -11,8 +11,10 @@ uniform Buffer _13;
 
 attribute vec4 Position;
 
+mat4 SPIRV_Cross_workaround_load_row_major(mat4 wrap) { return wrap; }
+
 void main()
 {
-    gl_Position = (((_13.M * (Position * _13.MVPRowMajor)) + (_13.M * (_13.MVPColMajor * Position))) + (_13.M * (_13.MVPRowMajor * Position))) + (_13.M * (Position * _13.MVPColMajor));
+    gl_Position = (((SPIRV_Cross_workaround_load_row_major(_13.M) * (Position * _13.MVPRowMajor)) + (SPIRV_Cross_workaround_load_row_major(_13.M) * (SPIRV_Cross_workaround_load_row_major(_13.MVPColMajor) * Position))) + (SPIRV_Cross_workaround_load_row_major(_13.M) * (_13.MVPRowMajor * Position))) + (SPIRV_Cross_workaround_load_row_major(_13.M) * (Position * SPIRV_Cross_workaround_load_row_major(_13.MVPColMajor)));
 }
 
