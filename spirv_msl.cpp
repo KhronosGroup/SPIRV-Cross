@@ -13771,3 +13771,13 @@ bool CompilerMSL::using_builtin_array() const
 {
 	return msl_options.force_native_arrays || is_using_builtin_array;
 }
+
+void CompilerMSL::set_combined_sampler_suffix(const char *suffix)
+{
+	sampler_name_suffix = suffix;
+}
+
+const char *CompilerMSL::get_combined_sampler_suffix() const
+{
+	return sampler_name_suffix.c_str();
+}

@@ -1247,6 +1247,42 @@ spvc_bool spvc_compiler_msl_is_resource_used(spvc_compiler compiler, SpvExecutio
 #endif
 }
 
+spvc_result spvc_compiler_msl_set_combined_sampler_suffix(spvc_compiler compiler, const char *suffix)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	msl.set_combined_sampler_suffix(suffix);
+	return SPVC_SUCCESS;
+#else
+	(void)suffix;
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
+const char *spvc_compiler_msl_get_combined_sampler_suffix(spvc_compiler compiler)
+{
+#if SPIRV_CROSS_C_API_MSL
+	if (compiler->backend != SPVC_BACKEND_MSL)
+	{
+		compiler->context->report_error("MSL function used on a non-MSL backend.");
+		return "";
+	}
+
+	auto &msl = *static_cast<CompilerMSL *>(compiler->compiler.get());
+	return msl.get_combined_sampler_suffix();
+#else
+	compiler->context->report_error("MSL function used on a non-MSL backend.");
+	return "";
+#endif
+}
+
 #if SPIRV_CROSS_C_API_MSL
 static void spvc_convert_msl_sampler(MSLConstexprSampler &samp, const spvc_msl_constexpr_sampler *sampler)
 {
