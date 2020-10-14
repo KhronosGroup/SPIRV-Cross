@@ -12040,18 +12040,11 @@ bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 	if (backend.native_row_major_matrix && !is_legacy())
 		return false;
 
-	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!has_decoration(id, DecorationRowMajor))
-		return false;
-
-	// Only square row-major matrices can be converted at this time.
-	// Converting non-square matrices will require defining custom GLSL function that
-	// swaps matrix elements while retaining the original dimensional form of the matrix.
-	const auto type = expression_type(id);
-	if (type.columns != type.vecsize)
-		SPIRV_CROSS_THROW("Row-major matrices must be square on this platform.");
-
-	return true;
+	auto *e = maybe_get<SPIRExpression>(id);
+	if (e)
+		return e->need_transpose;
+	else
+		return has_decoration(id, DecorationRowMajor);
 }
 
 // Checks whether the member is a row_major matrix that requires conversion before use
