@@ -323,7 +323,7 @@ if (SPIRV_CROSS_STATIC)
 endif()
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 39)
+set(spirv-cross-abi-minor 40)
 set(spirv-cross-abi-patch 0)
 
 if (SPIRV_CROSS_SHARED)
