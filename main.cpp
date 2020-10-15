@@ -565,6 +565,7 @@ struct CLIArguments
 	bool msl_arrayed_subpass_input = false;
 	uint32_t msl_r32ui_linear_texture_alignment = 4;
 	uint32_t msl_r32ui_alignment_constant_id = 65535;
+	bool msl_texture_1d_as_2d = false;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	bool glsl_force_flattened_io_blocks = false;
@@ -774,7 +775,9 @@ static void print_help_msl()
 	                "\t[--msl-r32ui-linear-texture-align <alignment>]:\n\t\tThe required alignment of linear textures of format MTLPixelFormatR32Uint.\n"
 	                "\t\tThis is used to align the row stride for atomic accesses to such images.\n"
 	                "\t[--msl-r32ui-linear-texture-align-constant-id <id>]:\n\t\tThe function constant ID to use for the linear texture alignment.\n"
-	                "\t\tOn MSL 1.2 or later, you can override the alignment by setting this function constant.\n");
+	                "\t\tOn MSL 1.2 or later, you can override the alignment by setting this function constant.\n"
+	                "\t[--msl-texture-1d-as-2d]:\n\t\tEmit Image variables of dimension Dim1D as texture2d.\n"
+	                "\t\tIn Metal, 1D textures do not support all features that 2D textures do. Use this option if your code relies on these features.\n");
 	// clang-format on
 }
 
@@ -1015,6 +1018,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.arrayed_subpass_input = args.msl_arrayed_subpass_input;
 		msl_opts.r32ui_linear_texture_alignment = args.msl_r32ui_linear_texture_alignment;
 		msl_opts.r32ui_alignment_constant_id = args.msl_r32ui_alignment_constant_id;
+		msl_opts.texture_1D_as_2D = args.msl_texture_1d_as_2d;
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
@@ -1439,6 +1443,7 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &parser) { args.msl_r32ui_linear_texture_alignment = parser.next_uint(); });
 	cbs.add("--msl-r32ui-linear-texture-align-constant-id",
 	        [&args](CLIParser &parser) { args.msl_r32ui_alignment_constant_id = parser.next_uint(); });
+	cbs.add("--msl-texture-1d-as-2d", [&args](CLIParser &) { args.msl_texture_1d_as_2d = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();

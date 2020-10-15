@@ -306,6 +306,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('0x00000022')
     if '.arrayed-subpass.' in shader:
         msl_args.append('--msl-arrayed-subpass-input')
+    if '.1d-as-2d.' in shader:
+        msl_args.append('--msl-texture-1d-as-2d')
 
     subprocess.check_call(msl_args)
 
