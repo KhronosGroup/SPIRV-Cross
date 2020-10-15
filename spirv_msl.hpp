@@ -558,6 +558,9 @@ public:
 	// to use for a particular location. The default is 4 if number of components is not overridden.
 	void set_fragment_output_components(uint32_t location, uint32_t components);
 
+	void set_combined_sampler_suffix(const char *suffix);
+	const char *get_combined_sampler_suffix() const;
+
 protected:
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
