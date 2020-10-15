@@ -13299,7 +13299,7 @@ void CompilerMSL::remap_constexpr_sampler_by_binding(uint32_t desc_set, uint32_t
 	constexpr_samplers_by_binding[{ desc_set, binding }] = sampler;
 }
 
-void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
+void CompilerMSL::cast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
 {
 	auto *var = maybe_get_backing_variable(source_id);
 	if (var)
@@ -13311,6 +13311,7 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 
 	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, DecorationBuiltIn));
 	auto expected_type = expr_type.basetype;
+	auto expected_width = expr_type.width;
 	switch (builtin)
 	{
 	case BuiltInGlobalInvocationId:
@@ -13331,12 +13332,16 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	case BuiltInBaseInstance:
 	case BuiltInBaseVertex:
 		expected_type = SPIRType::UInt;
+		expected_width = 32;
 		break;
 
 	case BuiltInTessLevelInner:
 	case BuiltInTessLevelOuter:
 		if (get_execution_model() == ExecutionModelTessellationControl)
+		{
 			expected_type = SPIRType::Half;
+			expected_width = 16;
+		}
 		break;
 
 	default:
@@ -13344,7 +13349,17 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	}
 
 	if (expected_type != expr_type.basetype)
-		expr = bitcast_expression(expr_type, expected_type, expr);
+	{
+		if (expected_width != expr_type.width)
+		{
+			// These are of different widths, so we cannot do a straight bitcast.
+			expr = join(type_to_glsl(expr_type), "(", expr, ")");
+		}
+		else
+		{
+			expr = bitcast_expression(expr_type, expected_type, expr);
+		}
+	}
 
 	if (builtin == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads) && expr_type.vecsize == 3)
 	{
@@ -13354,7 +13369,7 @@ void CompilerMSL::bitcast_from_builtin_load(uint32_t source_id, std::string &exp
 	}
 }
 
-void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
+void CompilerMSL::cast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
 	auto *var = maybe_get_backing_variable(target_id);
 	if (var)
@@ -13366,6 +13381,7 @@ void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr
 
 	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
 	auto expected_type = expr_type.basetype;
+	auto expected_width = expr_type.width;
 	switch (builtin)
 	{
 	case BuiltInLayer:
@@ -13374,11 +13390,13 @@ void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr
 	case BuiltInPrimitiveId:
 	case BuiltInViewIndex:
 		expected_type = SPIRType::UInt;
+		expected_width = 32;
 		break;
 
 	case BuiltInTessLevelInner:
 	case BuiltInTessLevelOuter:
 		expected_type = SPIRType::Half;
+		expected_width = 16;
 		break;
 
 	default:
@@ -13387,10 +13405,13 @@ void CompilerMSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr
 
 	if (expected_type != expr_type.basetype)
 	{
-		if (expected_type == SPIRType::Half && expr_type.basetype == SPIRType::Float)
+		if (expected_width != expr_type.width)
 		{
 			// These are of different widths, so we cannot do a straight bitcast.
-			expr = join("half(", expr, ")");
+			auto type = expr_type;
+			type.basetype = expected_type;
+			type.width = expected_width;
+			expr = join(type_to_glsl(type), "(", expr, ")");
 		}
 		else
 		{

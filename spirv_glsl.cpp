@@ -9313,8 +9313,8 @@ void CompilerGLSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_ex
 
 		auto lhs = to_dereferenced_expression(lhs_expression);
 
-		// We might need to bitcast in order to store to a builtin.
-		bitcast_to_builtin_store(lhs_expression, rhs, expression_type(rhs_expression));
+		// We might need to cast in order to store to a builtin.
+		cast_to_builtin_store(lhs_expression, rhs, expression_type(rhs_expression));
 
 		// Tries to optimize assignments like "<lhs> = <lhs> op expr".
 		// While this is purely cosmetic, this is important for legacy ESSL where loop
@@ -9477,8 +9477,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expr_type.vecsize > type.vecsize)
 			expr = enclose_expression(expr + vector_swizzle(type.vecsize, 0));
 
-		// We might need to bitcast in order to load from a builtin.
-		bitcast_from_builtin_load(ptr, expr, type);
+		// We might need to cast in order to load from a builtin.
+		cast_from_builtin_load(ptr, expr, type);
 
 		// We might be trying to load a gl_Position[N], where we should be
 		// doing float4[](gl_in[i].gl_Position, ...) instead.
@@ -14484,7 +14484,7 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 	}
 }
 
-void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
+void CompilerGLSL::cast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
 {
 	auto *var = maybe_get_backing_variable(source_id);
 	if (var)
@@ -14536,7 +14536,7 @@ void CompilerGLSL::bitcast_from_builtin_load(uint32_t source_id, std::string &ex
 		expr = bitcast_expression(expr_type, expected_type, expr);
 }
 
-void CompilerGLSL::bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
+void CompilerGLSL::cast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
 	// Only interested in standalone builtin variables.
 	if (!has_decoration(target_id, DecorationBuiltIn))
