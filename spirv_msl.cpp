@@ -11062,6 +11062,7 @@ void CompilerMSL::replace_illegal_names()
 		"fragment",
 		"compute",
 		"bias",
+		"level",
 		"assert",
 		"VARIABLE_TRACEPOINT",
 		"STATIC_DATA_TRACEPOINT",
