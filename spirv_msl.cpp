@@ -8976,9 +8976,9 @@ string CompilerMSL::to_swizzle_expression(uint32_t id)
 	auto index = expr.find_first_of('[');
 
 	// If an image is part of an argument buffer translate this to a legal identifier.
-	for (auto &c : expr)
-		if (c == '.')
-			c = '_';
+	string::size_type period = 0;
+	while ((period = expr.find_first_of('.', period)) != string::npos && period < index)
+		expr[period] = '_';
 
 	if (index == string::npos)
 		return expr + swizzle_name_suffix;
