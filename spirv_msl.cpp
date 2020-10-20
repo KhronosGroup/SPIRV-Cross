@@ -8265,25 +8265,26 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		break;
 	}
 
-	if (args.base.is_fetch && args.offset)
+	if (args.base.is_fetch && (args.offset || args.coffset))
 	{
+		uint32_t offset_expr = args.offset ? args.offset : args.coffset;
 		// Fetch offsets must be applied directly to the coordinate.
-		forward = forward && should_forward(args.offset);
-		auto &type = expression_type(args.offset);
-		if (type.basetype != SPIRType::UInt)
-			tex_coords += " + " + bitcast_expression(SPIRType::UInt, args.offset);
+		forward = forward && should_forward(offset_expr);
+		auto &type = expression_type(offset_expr);
+		if (imgtype.image.dim == Dim1D && msl_options.texture_1D_as_2D)
+		{
+			if (type.basetype != SPIRType::UInt)
+				tex_coords += join(" + uint2(", bitcast_expression(SPIRType::UInt, offset_expr), ", 0)");
+			else
+				tex_coords += join(" + uint2(", to_enclosed_expression(offset_expr), ", 0)");
+		}
 		else
-			tex_coords += " + " + to_enclosed_expression(args.offset);
-	}
-	else if (args.base.is_fetch && args.coffset)
-	{
-		// Fetch offsets must be applied directly to the coordinate.
-		forward = forward && should_forward(args.coffset);
-		auto &type = expression_type(args.coffset);
-		if (type.basetype != SPIRType::UInt)
-			tex_coords += " + " + bitcast_expression(SPIRType::UInt, args.coffset);
-		else
-			tex_coords += " + " + to_enclosed_expression(args.coffset);
+		{
+			if (type.basetype != SPIRType::UInt)
+				tex_coords += " + " + bitcast_expression(SPIRType::UInt, offset_expr);
+			else
+				tex_coords += " + " + to_enclosed_expression(offset_expr);
+		}
 	}
 
 	// If projection, use alt coord as divisor
@@ -8454,6 +8455,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		string grad_opt;
 		switch (imgtype.image.dim)
 		{
+		case Dim1D:
 		case Dim2D:
 			grad_opt = "2d";
 			break;
@@ -8489,30 +8491,42 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 
 	// Add offsets
 	string offset_expr;
+	const SPIRType *offset_type = nullptr;
 	if (args.coffset && !args.base.is_fetch)
 	{
 		forward = forward && should_forward(args.coffset);
 		offset_expr = to_expression(args.coffset);
+		offset_type = &expression_type(args.coffset);
 	}
 	else if (args.offset && !args.base.is_fetch)
 	{
 		forward = forward && should_forward(args.offset);
 		offset_expr = to_expression(args.offset);
+		offset_type = &expression_type(args.offset);
 	}
 
 	if (!offset_expr.empty())
 	{
 		switch (imgtype.image.dim)
 		{
+		case Dim1D:
+			if (!msl_options.texture_1D_as_2D)
+				break;
+			if (offset_type->vecsize > 1)
+				offset_expr = enclose_expression(offset_expr) + ".x";
+
+			farg_str += join(", int2(", offset_expr, ", 0)");
+			break;
+
 		case Dim2D:
-			if (coord_type.vecsize > 2)
+			if (offset_type->vecsize > 2)
 				offset_expr = enclose_expression(offset_expr) + ".xy";
 
 			farg_str += ", " + offset_expr;
 			break;
 
 		case Dim3D:
-			if (coord_type.vecsize > 3)
+			if (offset_type->vecsize > 3)
 				offset_expr = enclose_expression(offset_expr) + ".xyz";
 
 			farg_str += ", " + offset_expr;
