@@ -4610,6 +4610,59 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplSubgroupBroadcast:
+			// Metal doesn't allow broadcasting boolean values directly, but we can work around that by broadcasting
+			// them as integers.
+			statement("template<typename T>");
+			statement("inline T spvSubgroupBroadcast(T value, ushort lane)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return quad_broadcast(value, lane);");
+			else
+				statement("return simd_broadcast(value, lane);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupBroadcast(bool value, ushort lane)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return !!quad_broadcast((ushort)value, lane);");
+			else
+				statement("return !!simd_broadcast((ushort)value, lane);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupBroadcast(vec<bool, N> value, ushort lane)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return (vec<bool, N>)quad_broadcast((vec<ushort, N>)value, lane);");
+			else
+				statement("return (vec<bool, N>)simd_broadcast((vec<ushort, N>)value, lane);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplSubgroupBroadcastFirst:
+			statement("template<typename T>");
+			statement("inline T spvSubgroupBroadcastFirst(T value)");
+			begin_scope();
+			statement("return simd_broadcast_first(value);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupBroadcastFirst(bool value)");
+			begin_scope();
+			statement("return !!simd_broadcast_first((ushort)value);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupBroadcastFirst(vec<bool, N> value)");
+			begin_scope();
+			statement("return (vec<bool, N>)simd_broadcast_first((vec<ushort, N>)value);");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplSubgroupBallot:
 			statement("inline uint4 spvSubgroupBallot(bool value)");
 			begin_scope();
@@ -4708,6 +4761,178 @@ void CompilerMSL::emit_custom_functions()
 			statement("inline bool spvSubgroupAllEqual(vec<bool, N> value)");
 			begin_scope();
 			statement("return simd_all(all(value == (vec<bool, N>)simd_broadcast_first((vec<ushort, N>)value)));");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplSubgroupShuffle:
+			statement("template<typename T>");
+			statement("inline T spvSubgroupShuffle(T value, ushort lane)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return quad_shuffle(value, lane);");
+			else
+				statement("return simd_shuffle(value, lane);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupShuffle(bool value, ushort lane)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return !!quad_shuffle((ushort)value, lane);");
+			else
+				statement("return !!simd_shuffle((ushort)value, lane);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupShuffle(vec<bool, N> value, ushort lane)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return (vec<bool, N>)quad_shuffle((vec<ushort, N>)value, lane);");
+			else
+				statement("return (vec<bool, N>)simd_shuffle((vec<ushort, N>)value, lane);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplSubgroupShuffleXor:
+			statement("template<typename T>");
+			statement("inline T spvSubgroupShuffleXor(T value, ushort mask)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return quad_shuffle_xor(value, mask);");
+			else
+				statement("return simd_shuffle_xor(value, mask);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupShuffleXor(bool value, ushort mask)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return !!quad_shuffle_xor((ushort)value, mask);");
+			else
+				statement("return !!simd_shuffle_xor((ushort)value, mask);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupShuffleXor(vec<bool, N> value, ushort mask)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return (vec<bool, N>)quad_shuffle_xor((vec<ushort, N>)value, mask);");
+			else
+				statement("return (vec<bool, N>)simd_shuffle_xor((vec<ushort, N>)value, mask);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplSubgroupShuffleUp:
+			statement("template<typename T>");
+			statement("inline T spvSubgroupShuffleUp(T value, ushort delta)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return quad_shuffle_up(value, delta);");
+			else
+				statement("return simd_shuffle_up(value, delta);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupShuffleUp(bool value, ushort delta)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return !!quad_shuffle_up((ushort)value, delta);");
+			else
+				statement("return !!simd_shuffle_up((ushort)value, delta);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupShuffleUp(vec<bool, N> value, ushort delta)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return (vec<bool, N>)quad_shuffle_up((vec<ushort, N>)value, delta);");
+			else
+				statement("return (vec<bool, N>)simd_shuffle_up((vec<ushort, N>)value, delta);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplSubgroupShuffleDown:
+			statement("template<typename T>");
+			statement("inline T spvSubgroupShuffleDown(T value, ushort delta)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return quad_shuffle_down(value, delta);");
+			else
+				statement("return simd_shuffle_down(value, delta);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupShuffleDown(bool value, ushort delta)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return !!quad_shuffle_down((ushort)value, delta);");
+			else
+				statement("return !!simd_shuffle_down((ushort)value, delta);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupShuffleDown(vec<bool, N> value, ushort delta)");
+			begin_scope();
+			if (msl_options.is_ios())
+				statement("return (vec<bool, N>)quad_shuffle_down((vec<ushort, N>)value, delta);");
+			else
+				statement("return (vec<bool, N>)simd_shuffle_down((vec<ushort, N>)value, delta);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplQuadBroadcast:
+			statement("template<typename T>");
+			statement("inline T spvQuadBroadcast(T value, uint lane)");
+			begin_scope();
+			statement("return quad_broadcast(value, lane);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvQuadBroadcast(bool value, uint lane)");
+			begin_scope();
+			statement("return !!quad_broadcast((ushort)value, lane);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvQuadBroadcast(vec<bool, N> value, uint lane)");
+			begin_scope();
+			statement("return (vec<bool, N>)quad_broadcast((vec<ushort, N>)value, lane);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplQuadSwap:
+			// We can implement this easily based on the following table giving
+			// the target lane ID from the direction and current lane ID:
+			//        Direction
+			//      | 0 | 1 | 2 |
+			//   ---+---+---+---+
+			// L 0  | 1   2   3
+			// a 1  | 0   3   2
+			// n 2  | 3   0   1
+			// e 3  | 2   1   0
+			// Notice that target = source ^ (direction + 1).
+			statement("template<typename T>");
+			statement("inline T spvQuadSwap(T value, uint dir)");
+			begin_scope();
+			statement("return quad_shuffle_xor(value, dir + 1);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvQuadSwap(bool value, uint dir)");
+			begin_scope();
+			statement("return !!quad_shuffle_xor((ushort)value, dir + 1);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvQuadSwap(vec<bool, N> value, uint dir)");
+			begin_scope();
+			statement("return (vec<bool, N>)quad_shuffle_xor((vec<ushort, N>)value, dir + 1);");
 			end_scope();
 			statement("");
 			break;
@@ -11885,12 +12110,11 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 		break;
 
 	case OpGroupNonUniformBroadcast:
-		emit_binary_func_op(result_type, id, ops[3], ops[4],
-		                    msl_options.is_ios() ? "quad_broadcast" : "simd_broadcast");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvSubgroupBroadcast");
 		break;
 
 	case OpGroupNonUniformBroadcastFirst:
-		emit_unary_func_op(result_type, id, ops[3], "simd_broadcast_first");
+		emit_unary_func_op(result_type, id, ops[3], "spvSubgroupBroadcastFirst");
 		break;
 
 	case OpGroupNonUniformBallot:
@@ -11937,22 +12161,19 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 	}
 
 	case OpGroupNonUniformShuffle:
-		emit_binary_func_op(result_type, id, ops[3], ops[4], msl_options.is_ios() ? "quad_shuffle" : "simd_shuffle");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvSubgroupShuffle");
 		break;
 
 	case OpGroupNonUniformShuffleXor:
-		emit_binary_func_op(result_type, id, ops[3], ops[4],
-		                    msl_options.is_ios() ? "quad_shuffle_xor" : "simd_shuffle_xor");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvSubgroupShuffleXor");
 		break;
 
 	case OpGroupNonUniformShuffleUp:
-		emit_binary_func_op(result_type, id, ops[3], ops[4],
-		                    msl_options.is_ios() ? "quad_shuffle_up" : "simd_shuffle_up");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvSubgroupShuffleUp");
 		break;
 
 	case OpGroupNonUniformShuffleDown:
-		emit_binary_func_op(result_type, id, ops[3], ops[4],
-		                    msl_options.is_ios() ? "quad_shuffle_down" : "simd_shuffle_down");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvSubgroupShuffleDown");
 		break;
 
 	case OpGroupNonUniformAll:
@@ -12060,26 +12281,11 @@ case OpGroupNonUniform##op: \
 #undef MSL_GROUP_OP_CAST
 
 	case OpGroupNonUniformQuadSwap:
-	{
-		// We can implement this easily based on the following table giving
-		// the target lane ID from the direction and current lane ID:
-		//        Direction
-		//      | 0 | 1 | 2 |
-		//   ---+---+---+---+
-		// L 0  | 1   2   3
-		// a 1  | 0   3   2
-		// n 2  | 3   0   1
-		// e 3  | 2   1   0
-		// Notice that target = source ^ (direction + 1).
-		uint32_t mask = evaluate_constant_u32(ops[4]) + 1;
-		uint32_t mask_id = ir.increase_bound_by(1);
-		set<SPIRConstant>(mask_id, expression_type_id(ops[4]), mask, false);
-		emit_binary_func_op(result_type, id, ops[3], mask_id, "quad_shuffle_xor");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvQuadSwap");
 		break;
-	}
 
 	case OpGroupNonUniformQuadBroadcast:
-		emit_binary_func_op(result_type, id, ops[3], ops[4], "quad_broadcast");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "spvQuadBroadcast");
 		break;
 
 	default:
@@ -13223,6 +13429,12 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		break;
 	}
 
+	case OpGroupNonUniformBroadcast:
+		return SPVFuncImplSubgroupBroadcast;
+
+	case OpGroupNonUniformBroadcastFirst:
+		return SPVFuncImplSubgroupBroadcastFirst;
+
 	case OpGroupNonUniformBallot:
 		return SPVFuncImplSubgroupBallot;
 
@@ -13241,6 +13453,24 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 
 	case OpGroupNonUniformAllEqual:
 		return SPVFuncImplSubgroupAllEqual;
+
+	case OpGroupNonUniformShuffle:
+		return SPVFuncImplSubgroupShuffle;
+
+	case OpGroupNonUniformShuffleXor:
+		return SPVFuncImplSubgroupShuffleXor;
+
+	case OpGroupNonUniformShuffleUp:
+		return SPVFuncImplSubgroupShuffleUp;
+
+	case OpGroupNonUniformShuffleDown:
+		return SPVFuncImplSubgroupShuffleDown;
+
+	case OpGroupNonUniformQuadBroadcast:
+		return SPVFuncImplQuadBroadcast;
+
+	case OpGroupNonUniformQuadSwap:
+		return SPVFuncImplQuadSwap;
 
 	default:
 		break;
