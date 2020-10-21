@@ -58,6 +58,8 @@ void main()
 	bool has_any = subgroupAny(true);
 	bool has_equal = subgroupAllEqual(0);
 	has_equal = subgroupAllEqual(true);
+	has_equal = subgroupAllEqual(vec3(0.0, 1.0, 2.0));
+	has_equal = subgroupAllEqual(bvec4(true, true, false, true));
 
 	// arithmetic
 	vec4 added = subgroupAdd(vec4(20.0));

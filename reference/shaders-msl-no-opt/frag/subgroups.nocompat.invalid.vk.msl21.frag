@@ -55,13 +55,19 @@ inline uint spvSubgroupBallotExclusiveBitCount(uint4 ballot, uint gl_SubgroupInv
 template<typename T>
 inline bool spvSubgroupAllEqual(T value)
 {
-    return simd_all(value == simd_broadcast_first(value));
+    return simd_all(all(value == simd_broadcast_first(value)));
 }
 
 template<>
 inline bool spvSubgroupAllEqual(bool value)
 {
     return simd_all(value) || !simd_any(value);
+}
+
+template<uint N>
+inline bool spvSubgroupAllEqual(vec<bool, N> value)
+{
+    return simd_all(all(value == (vec<bool, N>)simd_broadcast_first((vec<ushort, N>)value)));
 }
 
 fragment main0_out main0()
@@ -100,6 +106,8 @@ fragment main0_out main0()
     bool has_any = simd_any(true);
     bool has_equal = spvSubgroupAllEqual(0);
     has_equal = spvSubgroupAllEqual(true);
+    has_equal = spvSubgroupAllEqual(float3(0.0, 1.0, 2.0));
+    has_equal = spvSubgroupAllEqual(bool4(true, true, false, true));
     float4 added = simd_sum(float4(20.0));
     int4 iadded = simd_sum(int4(20));
     float4 multiplied = simd_product(float4(20.0));
