@@ -27,31 +27,41 @@ inline bool spvSubgroupBallotBitExtract(uint4 ballot, uint bit)
     return !!extract_bits(ballot[bit / 32], bit % 32, 1);
 }
 
-inline uint spvSubgroupBallotFindLSB(uint4 ballot)
+inline uint spvSubgroupBallotFindLSB(uint4 ballot, uint gl_SubgroupSize)
 {
+    uint4 mask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupSize, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupSize - 32, 0)), uint2(0));
+    ballot &= mask;
     return select(ctz(ballot.x), select(32 + ctz(ballot.y), select(64 + ctz(ballot.z), select(96 + ctz(ballot.w), uint(-1), ballot.w == 0), ballot.z == 0), ballot.y == 0), ballot.x == 0);
 }
 
-inline uint spvSubgroupBallotFindMSB(uint4 ballot)
+inline uint spvSubgroupBallotFindMSB(uint4 ballot, uint gl_SubgroupSize)
 {
+    uint4 mask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupSize, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupSize - 32, 0)), uint2(0));
+    ballot &= mask;
     return select(128 - (clz(ballot.w) + 1), select(96 - (clz(ballot.z) + 1), select(64 - (clz(ballot.y) + 1), select(32 - (clz(ballot.x) + 1), uint(-1), ballot.x == 0), ballot.y == 0), ballot.z == 0), ballot.w == 0);
 }
 
-inline uint spvSubgroupBallotBitCount(uint4 ballot)
+inline uint spvPopCount4(uint4 ballot)
 {
     return popcount(ballot.x) + popcount(ballot.y) + popcount(ballot.z) + popcount(ballot.w);
+}
+
+inline uint spvSubgroupBallotBitCount(uint4 ballot, uint gl_SubgroupSize)
+{
+    uint4 mask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupSize, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupSize - 32, 0)), uint2(0));
+    return spvPopCount4(ballot & mask);
 }
 
 inline uint spvSubgroupBallotInclusiveBitCount(uint4 ballot, uint gl_SubgroupInvocationID)
 {
     uint4 mask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID + 1, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID + 1 - 32, 0)), uint2(0));
-    return spvSubgroupBallotBitCount(ballot & mask);
+    return spvPopCount4(ballot & mask);
 }
 
 inline uint spvSubgroupBallotExclusiveBitCount(uint4 ballot, uint gl_SubgroupInvocationID)
 {
     uint4 mask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID - 32, 0)), uint2(0));
-    return spvSubgroupBallotBitCount(ballot & mask);
+    return spvPopCount4(ballot & mask);
 }
 
 template<typename T>
@@ -99,11 +109,11 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     uint4 ballot_value = spvSubgroupBallot(true);
     bool inverse_ballot_value = spvSubgroupBallotBitExtract(ballot_value, gl_SubgroupInvocationID);
     bool bit_extracted = spvSubgroupBallotBitExtract(uint4(10u), 8u);
-    uint bit_count = spvSubgroupBallotBitCount(ballot_value);
+    uint bit_count = spvSubgroupBallotBitCount(ballot_value, gl_SubgroupSize);
     uint inclusive_bit_count = spvSubgroupBallotInclusiveBitCount(ballot_value, gl_SubgroupInvocationID);
     uint exclusive_bit_count = spvSubgroupBallotExclusiveBitCount(ballot_value, gl_SubgroupInvocationID);
-    uint lsb = spvSubgroupBallotFindLSB(ballot_value);
-    uint msb = spvSubgroupBallotFindMSB(ballot_value);
+    uint lsb = spvSubgroupBallotFindLSB(ballot_value, gl_SubgroupSize);
+    uint msb = spvSubgroupBallotFindMSB(ballot_value, gl_SubgroupSize);
     uint shuffled = simd_shuffle(10u, 8u);
     uint shuffled_xor = simd_shuffle_xor(30u, 8u);
     uint shuffled_up = simd_shuffle_up(20u, 4u);
