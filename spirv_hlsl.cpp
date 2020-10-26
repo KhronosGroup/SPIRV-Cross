@@ -3269,7 +3269,7 @@ void CompilerHLSL::remap_hlsl_resource_binding(HLSLBindingFlagBits type, uint32_
 
 string CompilerHLSL::to_resource_register(HLSLBindingFlagBits flag, char space, uint32_t binding, uint32_t space_set)
 {
-	if ((flag & resource_binding_flags) == 0)
+	if ((flag & resource_binding_flags) == flag)
 	{
 		remap_hlsl_resource_binding(flag, space_set, binding);
 
