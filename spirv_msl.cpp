@@ -8792,7 +8792,10 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		if (!msl_options.swizzle_texture_samples || is_dynamic_img_sampler)
 		{
 			forward = forward && should_forward(args.component);
-			farg_str += ", " + to_component_argument(args.component);
+
+			if (const auto *var = maybe_get_backing_variable(img))
+				if (!image_is_comparison(get<SPIRType>(var->basetype), var->self))
+					farg_str += ", " + to_component_argument(args.component);
 		}
 	}
 
