@@ -1265,7 +1265,8 @@ void CompilerMSL::preprocess_op_codes()
 		add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"");
 	}
 
-	// Metal vertex functions that write to resources must disable rasterization and return void.
+	// Before MSL 2.1 (2.2 for textures), Metal vertex functions that write to
+	// resources must disable rasterization and return void.
 	if (preproc.uses_resource_write)
 		is_rasterization_disabled = true;
 
@@ -13181,7 +13182,8 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	}
 
 	case OpImageWrite:
-		uses_resource_write = true;
+		if (!compiler.msl_options.supports_msl_version(2, 2))
+			uses_resource_write = true;
 		break;
 
 	case OpStore:
@@ -13293,7 +13295,8 @@ void CompilerMSL::OpCodePreprocessor::check_resource_write(uint32_t var_id)
 {
 	auto *p_var = compiler.maybe_get_backing_variable(var_id);
 	StorageClass sc = p_var ? p_var->storage : StorageClassMax;
-	if (sc == StorageClassUniform || sc == StorageClassStorageBuffer)
+	if (!compiler.msl_options.supports_msl_version(2, 1) &&
+	    (sc == StorageClassUniform || sc == StorageClassStorageBuffer))
 		uses_resource_write = true;
 }
 
