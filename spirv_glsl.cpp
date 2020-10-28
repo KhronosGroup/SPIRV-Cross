@@ -13269,8 +13269,14 @@ void CompilerGLSL::branch(BlockID from, BlockID to)
 		// and end the chain here.
 		statement("continue;");
 	}
-	else if (is_break(to))
+	else if (from != to && is_break(to))
 	{
+		// We cannot break to ourselves, so check explicitly for from != to.
+		// This case can trigger if a loop header is all three of these things:
+		// - Continue block
+		// - Loop header
+		// - Break merge target all at once ...
+
 		// Very dirty workaround.
 		// Switch constructs are able to break, but they cannot break out of a loop at the same time.
 		// Only sensible solution is to make a ladder variable, which we declare at the top of the switch block,
