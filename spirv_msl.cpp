@@ -8642,10 +8642,10 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 				grad_y = 0;
 				farg_str += ", level(0)";
 			}
-			else
+			else if (!msl_options.supports_msl_version(2, 3))
 			{
 				SPIRV_CROSS_THROW("Using non-constant 0.0 gradient() qualifier for sample_compare. This is not "
-				                  "supported in MSL macOS.");
+				                  "supported on macOS prior to MSL 2.3.");
 			}
 		}
 
@@ -8657,10 +8657,10 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			{
 				bias = 0;
 			}
-			else
+			else if (!msl_options.supports_msl_version(2, 3))
 			{
 				SPIRV_CROSS_THROW(
-				    "Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported in MSL macOS.");
+				    "Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported on macOS prior to MSL 2.3.");
 			}
 		}
 	}
