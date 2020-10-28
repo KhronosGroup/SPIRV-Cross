@@ -729,7 +729,7 @@ static void print_help_msl()
 	                "\t[--msl-texture-buffer-native]:\n\t\tEnable native support for texel buffers. Otherwise, it is emulated as a normal texture.\n"
 	                "\t[--msl-framebuffer-fetch]:\n\t\tImplement subpass inputs with frame buffer fetch.\n"
 	                "\t\tEmits [[color(N)]] inputs in fragment stage.\n"
-	                "\t\tRequires iOS Metal.\n"
+	                "\t\tRequires an Apple GPU.\n"
 	                "\t[--msl-emulate-cube-array]:\n\t\tEmulate cube arrays with 2D array and manual math.\n"
 	                "\t[--msl-discrete-descriptor-set <index>]:\n\t\tWhen using argument buffers, forces a specific descriptor set to be implemented without argument buffers.\n"
 	                "\t\tUseful for implementing push descriptors in emulation layers.\n"
@@ -994,9 +994,9 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		if (args.msl_ios)
 		{
 			msl_opts.platform = CompilerMSL::Options::iOS;
-			msl_opts.ios_use_framebuffer_fetch_subpasses = args.msl_framebuffer_fetch;
 			msl_opts.emulate_cube_array = args.msl_emulate_cube_array;
 		}
+		msl_opts.use_framebuffer_fetch_subpasses = args.msl_framebuffer_fetch;
 		msl_opts.pad_fragment_output_components = args.msl_pad_fragment_output;
 		msl_opts.tess_domain_origin_lower_left = args.msl_domain_lower_left;
 		msl_opts.argument_buffers = args.msl_argument_buffers;
