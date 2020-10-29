@@ -1491,6 +1491,37 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				}
 			}
 
+			case OpGroupNonUniformInverseBallot:
+			{
+				added_arg_ids.insert(builtin_subgroup_invocation_id_id);
+				break;
+			}
+
+			case OpGroupNonUniformBallotFindLSB:
+			case OpGroupNonUniformBallotFindMSB:
+			{
+				added_arg_ids.insert(builtin_subgroup_size_id);
+				break;
+			}
+
+			case OpGroupNonUniformBallotBitCount:
+			{
+				auto operation = static_cast<GroupOperation>(ops[3]);
+				switch (operation)
+				{
+				case GroupOperationReduce:
+					added_arg_ids.insert(builtin_subgroup_size_id);
+					break;
+				case GroupOperationInclusiveScan:
+				case GroupOperationExclusiveScan:
+					added_arg_ids.insert(builtin_subgroup_invocation_id_id);
+					break;
+				default:
+					break;
+				}
+				break;
+			}
+
 			default:
 				break;
 			}
