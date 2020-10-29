@@ -10092,9 +10092,9 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
 				{
 					if (!msl_options.supports_msl_version(2))
-						SPIRV_CROSS_THROW("Post-depth coverage requires Metal 2.0.");
-					if (!msl_options.is_ios())
-						SPIRV_CROSS_THROW("Post-depth coverage is only supported on iOS.");
+						SPIRV_CROSS_THROW("Post-depth coverage requires MSL 2.0.");
+					if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
+						SPIRV_CROSS_THROW("Post-depth coverage on Mac requires MSL 2.3.");
 					ep_args += ", post_depth_coverage";
 				}
 				ep_args += "]]";
