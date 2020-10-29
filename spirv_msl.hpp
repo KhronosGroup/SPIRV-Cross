@@ -60,7 +60,10 @@ struct MSLShaderInput
 
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
 // Taken together, the stage, desc_set and binding combine to form a reference to a resource
-// descriptor used in a particular shading stage.
+// descriptor used in a particular shading stage. The size element indicates the number of
+// resources consumed by this binding, if the binding represents an array of resources.
+// If the resource array is a run-time-sized array, which are legal in GLSL or SPIR-V, this value
+// will be used to declare the array size in MSL, which does not support run-time-sized arrays.
 // If using MSL 2.0 argument buffers, the descriptor set is not marked as a discrete descriptor set,
 // and (for iOS only) the resource is not a storage image (sampled != 2), the binding reference we
 // remap to will become an [[id(N)]] attribute within the "descriptor set" argument buffer structure.
@@ -71,6 +74,7 @@ struct MSLResourceBinding
 	spv::ExecutionModel stage = spv::ExecutionModelMax;
 	uint32_t desc_set = 0;
 	uint32_t binding = 0;
+	uint32_t size = 0;
 	uint32_t msl_buffer = 0;
 	uint32_t msl_texture = 0;
 	uint32_t msl_sampler = 0;
@@ -517,6 +521,10 @@ public:
 	// by remap_constexpr_sampler(_by_binding).
 	bool is_msl_resource_binding_used(spv::ExecutionModel model, uint32_t set, uint32_t binding) const;
 
+	// Returns the size of the array of resources used by the variable with the specified id.
+	// The returned value is retrieved from the resource binding added using add_msl_resource_binding().
+	uint32_t get_resource_array_size(uint32_t id) const;
+
 	// This must only be called after a successful call to CompilerMSL::compile().
 	// For a variable resource ID obtained through reflection API, report the automatically assigned resource index.
 	// If the descriptor set was part of an argument buffer, report the [[id(N)]],
@@ -672,7 +680,7 @@ protected:
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
 
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
-	std::string sampler_type(const SPIRType &type);
+	std::string sampler_type(const SPIRType &type, uint32_t id);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;

@@ -10020,10 +10020,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		bool pointer = get<SPIRType>(result_type).pointer;
 
 		auto *chain = maybe_get<SPIRAccessChain>(rhs);
+		auto *imgsamp = maybe_get<SPIRCombinedImageSampler>(rhs);
 		if (chain)
 		{
 			// Cannot lower to a SPIRExpression, just copy the object.
 			auto &e = set<SPIRAccessChain>(id, *chain);
+			e.self = id;
+		}
+		else if (imgsamp)
+		{
+			// Cannot lower to a SPIRExpression, just copy the object.
+			// GLSL does not currently use this type and will never get here, but MSL does.
+			// Handled here instead of CopilerMSL for better integration and general handling,
+			// and in case GLSL or other subclasses require it in the future.
+			auto &e = set<SPIRCombinedImageSampler>(id, *imgsamp);
 			e.self = id;
 		}
 		else if (expression_is_lvalue(rhs) && !pointer)
