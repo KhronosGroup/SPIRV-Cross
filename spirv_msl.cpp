@@ -105,9 +105,8 @@ bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t de
 
 uint32_t CompilerMSL::get_resource_array_size(uint32_t id) const
 {
-	StageSetBinding tuple = { get_entry_point().model,
-							  get_decoration(id, DecorationDescriptorSet),
-							  get_decoration(id, DecorationBinding) };
+	StageSetBinding tuple = { get_entry_point().model, get_decoration(id, DecorationDescriptorSet),
+		                      get_decoration(id, DecorationBinding) };
 	auto itr = resource_bindings.find(tuple);
 	return itr != end(resource_bindings) ? itr->second.first.size : 0;
 }
