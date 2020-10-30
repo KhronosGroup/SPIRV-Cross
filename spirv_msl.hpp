@@ -315,7 +315,7 @@ public:
 		bool ios_support_base_vertex_instance = false;
 
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
-		bool ios_use_framebuffer_fetch_subpasses = false;
+		bool use_framebuffer_fetch_subpasses = false;
 
 		// Enables use of "fma" intrinsic for invariant float math
 		bool invariant_float_math = false;

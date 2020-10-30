@@ -197,7 +197,7 @@ void CompilerMSL::build_implicit_builtins()
 			if (var.storage != StorageClassInput)
 				return;
 
-			if (need_subpass_input && (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses))
+			if (need_subpass_input && (!msl_options.use_framebuffer_fetch_subpasses))
 			{
 				switch (builtin)
 				{
@@ -331,7 +331,7 @@ void CompilerMSL::build_implicit_builtins()
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
 		if ((!has_frag_coord || (msl_options.multiview && !has_view_idx) ||
 		     (msl_options.arrayed_subpass_input && !msl_options.multiview && !has_layer)) &&
-		    (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses) && need_subpass_input)
+		    (!msl_options.use_framebuffer_fetch_subpasses) && need_subpass_input)
 		{
 			if (!has_frag_coord)
 			{
@@ -1375,7 +1375,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// Use Metal's native frame-buffer fetch API for subpass inputs.
 				auto &type = get<SPIRType>(ops[0]);
 				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData &&
-				    (!msl_options.is_ios() || !msl_options.ios_use_framebuffer_fetch_subpasses))
+				    (!msl_options.use_framebuffer_fetch_subpasses))
 				{
 					// Implicitly reads gl_FragCoord.
 					assert(builtin_frag_coord_id != 0);
@@ -7415,7 +7415,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i, bool sparse)
 	if (sparse)
 		SPIRV_CROSS_THROW("Sparse feedback not yet supported in MSL.");
 
-	if (msl_options.is_ios() && msl_options.ios_use_framebuffer_fetch_subpasses)
+	if (msl_options.use_framebuffer_fetch_subpasses)
 	{
 		auto *ops = stream(i);
 
@@ -10471,6 +10471,8 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			}
 			else
 			{
+				if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
+					SPIRV_CROSS_THROW("Framebuffer fetch on Mac is not supported before MSL 2.3.");
 				ep_args += image_type_glsl(type, var_id) + " " + r.name;
 				ep_args += " [[color(" + convert_to_string(r.index) + ")]]";
 			}
@@ -11098,8 +11100,8 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 
 bool CompilerMSL::type_is_msl_framebuffer_fetch(const SPIRType &type) const
 {
-	return type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && msl_options.is_ios() &&
-	       msl_options.ios_use_framebuffer_fetch_subpasses;
+	return type.basetype == SPIRType::Image && type.image.dim == DimSubpassData &&
+	       msl_options.use_framebuffer_fetch_subpasses;
 }
 
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
