@@ -14600,7 +14600,35 @@ void CompilerGLSL::convert_non_uniform_expression(const SPIRType &type, std::str
 		// so we might have to fixup the OpLoad-ed expression late.
 
 		auto start_array_index = expr.find_first_of('[');
-		auto end_array_index = expr.find_last_of(']');
+
+		if (start_array_index == string::npos)
+			return;
+
+		// Check for the edge case that a non-arrayed resource was marked to be nonuniform,
+		// and the bracket we found is actually part of non-resource related data.
+		if (expr.find_first_of(',') < start_array_index)
+			return;
+
+		// We've opened a bracket, track expressions until we can close the bracket.
+		// This must be our image index.
+		size_t end_array_index = string::npos;
+		unsigned bracket_count = 1;
+		for (size_t index = start_array_index + 1; index < expr.size(); index++)
+		{
+			if (expr[index] == ']')
+			{
+				if (--bracket_count == 0)
+				{
+					end_array_index = index;
+					break;
+				}
+			}
+			else if (expr[index] == '[')
+				bracket_count++;
+		}
+
+		assert(bracket_count == 0);
+
 		// Doesn't really make sense to declare a non-arrayed image with nonuniformEXT, but there's
 		// nothing we can do here to express that.
 		if (start_array_index == string::npos || end_array_index == string::npos || end_array_index < start_array_index)
