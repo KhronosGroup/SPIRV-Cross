@@ -560,6 +560,7 @@ protected:
 		bool support_small_type_sampling_result = false;
 		bool support_case_fallthrough = true;
 		bool use_array_constructor = false;
+		bool needs_row_major_load_workaround = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -784,6 +785,10 @@ protected:
 	// Currently used by NMin/Max/Clamp implementations.
 	std::unordered_map<uint32_t, uint32_t> extra_sub_expressions;
 
+	SmallVector<TypeID> workaround_ubo_load_overload_types;
+	void request_workaround_wrapper_overload(TypeID id);
+	void rewrite_load_for_wrapped_row_major(std::string &expr, TypeID loaded_type, ID ptr);
+
 	uint32_t statement_count = 0;
 
 	inline bool is_legacy() const
@@ -854,9 +859,9 @@ protected:
 
 	// Builtins in GLSL are always specific signedness, but the SPIR-V can declare them
 	// as either unsigned or signed.
-	// Sometimes we will need to automatically perform bitcasts on load and store to make this work.
-	virtual void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type);
-	virtual void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type);
+	// Sometimes we will need to automatically perform casts on load and store to make this work.
+	virtual void cast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type);
+	virtual void cast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type);
 	void unroll_array_from_complex_load(uint32_t target_id, uint32_t source_id, std::string &expr);
 	void convert_non_uniform_expression(const SPIRType &type, std::string &expr);
 
