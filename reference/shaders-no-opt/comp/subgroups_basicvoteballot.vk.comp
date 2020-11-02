@@ -304,13 +304,13 @@ bool subgroupElect()
 #endif
 
 #ifndef GL_KHR_shader_subgroup_basic
-void subgroupBarrier() { /*NOOP*/ }
+void subgroupBarrier() { memoryBarrierShared(); }
 #endif
 
 #ifndef GL_KHR_shader_subgroup_basic
 void subgroupMemoryBarrier() { groupMemoryBarrier(); }
 void subgroupMemoryBarrierBuffer() { groupMemoryBarrier(); }
-void subgroupMemoryBarrierShared() { groupMemoryBarrier(); }
+void subgroupMemoryBarrierShared() { memoryBarrierShared(); }
 void subgroupMemoryBarrierImage() { groupMemoryBarrier(); }
 #endif
 
