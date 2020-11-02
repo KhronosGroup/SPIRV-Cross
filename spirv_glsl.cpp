@@ -3706,8 +3706,12 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		{
 			// Extensions we're using in place of GL_KHR_shader_subgroup_basic state
 			// that subgroup execute in lockstep so this barrier is implicit.
+			// However the GL 4.6 spec also states that `barrier` implies a shared memory barrier,
+			// and a specific test of optimizing scans by leveraging lock-step invocation execution,
+			// has shown that a `memoryBarrierShared` is needed in place of a `subgroupBarrier`.
+			// https://github.com/buildaworldnet/IrrlichtBAW/commit/d8536857991b89a30a6b65d29441e51b64c2c7ad#diff-9f898d27be1ea6fc79b03d9b361e299334c1a347b6e4dc344ee66110c6aa596aR19
 			statement("#ifndef GL_KHR_shader_subgroup_basic");
-			statement("void subgroupBarrier() { /*NOOP*/ }");
+			statement("void subgroupBarrier() { memoryBarrierShared(); }");
 			statement("#endif");
 			statement("");
 		}
@@ -3719,7 +3723,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 				statement("#ifndef GL_KHR_shader_subgroup_basic");
 				statement("void subgroupMemoryBarrier() { groupMemoryBarrier(); }");
 				statement("void subgroupMemoryBarrierBuffer() { groupMemoryBarrier(); }");
-				statement("void subgroupMemoryBarrierShared() { groupMemoryBarrier(); }");
+				statement("void subgroupMemoryBarrierShared() { memoryBarrierShared(); }");
 				statement("void subgroupMemoryBarrierImage() { groupMemoryBarrier(); }");
 				statement("#endif");
 			}
