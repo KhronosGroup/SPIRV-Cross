@@ -103,12 +103,14 @@ bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t de
 	return itr != end(resource_bindings) && itr->second.second;
 }
 
+// Returns the size of the array of resources used by the variable with the specified id.
+// The returned value is retrieved from the resource binding added using add_msl_resource_binding().
 uint32_t CompilerMSL::get_resource_array_size(uint32_t id) const
 {
 	StageSetBinding tuple = { get_entry_point().model, get_decoration(id, DecorationDescriptorSet),
 		                      get_decoration(id, DecorationBinding) };
 	auto itr = resource_bindings.find(tuple);
-	return itr != end(resource_bindings) ? itr->second.first.size : 0;
+	return itr != end(resource_bindings) ? itr->second.first.count : 0;
 }
 
 uint32_t CompilerMSL::get_automatic_msl_resource_binding(uint32_t id) const
