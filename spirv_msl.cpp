@@ -103,6 +103,16 @@ bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t de
 	return itr != end(resource_bindings) && itr->second.second;
 }
 
+// Returns the size of the array of resources used by the variable with the specified id.
+// The returned value is retrieved from the resource binding added using add_msl_resource_binding().
+uint32_t CompilerMSL::get_resource_array_size(uint32_t id) const
+{
+	StageSetBinding tuple = { get_entry_point().model, get_decoration(id, DecorationDescriptorSet),
+		                      get_decoration(id, DecorationBinding) };
+	auto itr = resource_bindings.find(tuple);
+	return itr != end(resource_bindings) ? itr->second.first.count : 0;
+}
+
 uint32_t CompilerMSL::get_automatic_msl_resource_binding(uint32_t id) const
 {
 	return get_extended_decoration(id, SPIRVCrossDecorationResourceIndexPrimary);
@@ -8136,7 +8146,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 			// Manufacture automatic sampler arg for SampledImage texture
 			if (arg_type.image.dim != DimBuffer)
-				decl += join(", thread const ", sampler_type(arg_type), " ", to_sampler_expression(arg.id));
+				decl += join(", thread const ", sampler_type(arg_type, arg.id), " ", to_sampler_expression(arg.id));
 		}
 
 		// Manufacture automatic swizzle arg.
@@ -10449,7 +10459,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		case SPIRType::Sampler:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += sampler_type(type) + " " + r.name;
+			ep_args += sampler_type(type, var_id) + " " + r.name;
 			ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
 			break;
 		case SPIRType::Image:
@@ -11709,7 +11719,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return image_type_glsl(type, id);
 
 	case SPIRType::Sampler:
-		return sampler_type(type);
+		return sampler_type(type, id);
 
 	case SPIRType::Void:
 		return "void";
@@ -11840,8 +11850,15 @@ std::string CompilerMSL::variable_decl(const SPIRType &type, const std::string &
 	return CompilerGLSL::variable_decl(type, name, id);
 }
 
-std::string CompilerMSL::sampler_type(const SPIRType &type)
+std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
 {
+	auto *var = maybe_get<SPIRVariable>(id);
+	if (var && var->basevariable)
+	{
+		// Check against the base variable, and not a fake ID which might have been generated for this variable.
+		id = var->basevariable;
+	}
+
 	if (!type.array.empty())
 	{
 		if (!msl_options.supports_msl_version(2))
@@ -11851,12 +11868,16 @@ std::string CompilerMSL::sampler_type(const SPIRType &type)
 			SPIRV_CROSS_THROW("Arrays of arrays of samplers are not supported in MSL.");
 
 		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
+		// If we have a runtime array, it could be a variable-count descriptor set binding.
 		uint32_t array_size = to_array_size_literal(type);
+		if (array_size == 0)
+			array_size = get_resource_array_size(id);
+
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
 
 		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
-		return join("array<", sampler_type(parent), ", ", array_size, ">");
+		return join("array<", sampler_type(parent, id), ", ", array_size, ">");
 	}
 	else
 		return "sampler";
@@ -11893,7 +11914,11 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("Arrays of arrays of textures are not supported in MSL.");
 
 		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
+		// If we have a runtime array, it could be a variable-count descriptor set binding.
 		uint32_t array_size = to_array_size_literal(type);
+		if (array_size == 0)
+			array_size = get_resource_array_size(id);
+
 		if (array_size == 0)
 			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
 
