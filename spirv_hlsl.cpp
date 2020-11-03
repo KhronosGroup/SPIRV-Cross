@@ -3444,7 +3444,10 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		break;
 
 	case GLSLstd450RoundEven:
-		SPIRV_CROSS_THROW("roundEven is not supported on HLSL.");
+		if (hlsl_options.shader_model < 40)
+			SPIRV_CROSS_THROW("roundEven is not supported in HLSL shader model 2/3.");
+		emit_unary_func_op(result_type, id, args[0], "round");
+		break;
 
 	case GLSLstd450Acosh:
 	case GLSLstd450Asinh:
