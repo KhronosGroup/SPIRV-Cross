@@ -869,6 +869,7 @@ protected:
 
 	void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type, spv::StorageClass storage,
 	                                            bool &is_packed) override;
+	void fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t length);
 	bool emit_tessellation_access_chain(const uint32_t *ops, uint32_t length);
 	bool emit_tessellation_io_load(uint32_t result_type, uint32_t id, uint32_t ptr);
 	bool is_out_of_bounds_tessellation_level(uint32_t id_lhs);
@@ -928,6 +929,7 @@ protected:
 	bool added_builtin_tess_level = false;
 	bool needs_subgroup_invocation_id = false;
 	bool needs_subgroup_size = false;
+	bool needs_sample_id = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
@@ -953,6 +955,7 @@ protected:
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<uint32_t> buffer_arrays;
 	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
+	std::unordered_set<uint32_t> pull_model_inputs;
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
@@ -971,6 +974,7 @@ protected:
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
 	                                    SPIRType::BaseType basetype = SPIRType::Unknown);
+	uint32_t build_msl_interpolant_type(uint32_t type_id, bool is_noperspective);
 
 	bool suppress_missing_prototypes = false;
 
@@ -1000,6 +1004,7 @@ protected:
 		bool uses_resource_write = false;
 		bool needs_subgroup_invocation_id = false;
 		bool needs_subgroup_size = false;
+		bool needs_sample_id = false;
 	};
 
 	// OpcodeHandler that scans for uses of sampled images
