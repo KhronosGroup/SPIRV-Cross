@@ -935,8 +935,15 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			{
 				SPIRType newtype = type;
 				newtype.columns = 1;
+
+				string effective_semantic;
+				if (hlsl_options.flatten_matrix_vertex_input_semantics)
+					effective_semantic = to_semantic(location_number, execution.model, var.storage);
+				else
+					effective_semantic = join(semantic, "_", i);
+
 				statement(to_interpolation_qualifiers(get_decoration_bitset(var.self)),
-				          variable_decl(newtype, join(name, "_", i)), " : ", semantic, "_", i, ";");
+				          variable_decl(newtype, join(name, "_", i)), " : ", effective_semantic, ";");
 				active_locations.insert(location_number++);
 			}
 		}

@@ -425,6 +425,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--hlsl-nonwritable-uav-texture-as-srv')
     if '.native-16bit.' in shader:
         hlsl_args.append('--hlsl-enable-16bit-types')
+    if '.flatten-matrix-vertex-input.' in shader:
+        hlsl_args.append('--hlsl-flatten-matrix-vertex-input-semantics')
 
     subprocess.check_call(hlsl_args)
 
