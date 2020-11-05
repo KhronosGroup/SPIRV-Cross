@@ -8804,9 +8804,8 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		{
 			forward = forward && should_forward(args.component);
 
-			if (const auto *var = maybe_get_backing_variable(img))
-				if (!image_is_comparison(get<SPIRType>(var->basetype), var->self))
-					farg_str += ", " + to_component_argument(args.component);
+			if (evaluate_constant_u32(args.component))
+				farg_str += ", " + to_component_argument(args.component);
 		}
 	}
 
