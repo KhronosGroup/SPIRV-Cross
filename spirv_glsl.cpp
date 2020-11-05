@@ -5641,25 +5641,6 @@ void CompilerGLSL::emit_bitfield_insert_op(uint32_t result_type, uint32_t result
 	inherit_expression_dependencies(result_id, op3);
 }
 
-// EXT_shader_texture_lod only concerns fragment shaders so lod tex functions
-// are not allowed in ES 2 vertex shaders. But SPIR-V only supports lod tex
-// functions in vertex shaders so we revert those back to plain calls when
-// the lod is a constant value of zero.
-bool CompilerGLSL::check_explicit_lod_allowed(uint32_t lod)
-{
-	auto &execution = get_entry_point();
-	bool allowed = !is_legacy_es() || execution.model == ExecutionModelFragment;
-	if (!allowed && lod != 0)
-	{
-		auto *lod_constant = maybe_get<SPIRConstant>(lod);
-		if (!lod_constant || lod_constant->scalar_f32() != 0.0f)
-		{
-			SPIRV_CROSS_THROW("Explicit lod not allowed in legacy ES non-fragment shaders.");
-		}
-	}
-	return allowed;
-}
-
 string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod, uint32_t tex)
 {
 	const char *type;
@@ -5691,16 +5672,19 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		break;
 	}
 
-	bool use_explicit_lod = check_explicit_lod_allowed(lod);
-
-	if (op == "textureLod" || op == "textureProjLod" || op == "textureGrad" || op == "textureProjGrad")
+	// In legacy GLSL, an extension is required for textureLod in the fragment
+	// shader or textureGrad anywhere.
+	bool legacy_lod_ext = false;
+	auto &execution = get_entry_point();
+	if (op == "textureGrad" || op == "textureProjGrad" ||
+	    ((op == "textureLod" || op == "textureProjLod") && execution.model != ExecutionModelVertex))
 	{
 		if (is_legacy_es())
 		{
-			if (use_explicit_lod)
-				require_extension_internal("GL_EXT_shader_texture_lod");
+			legacy_lod_ext = true;
+			require_extension_internal("GL_EXT_shader_texture_lod");
 		}
-		else if (is_legacy())
+		else if (is_legacy_desktop())
 			require_extension_internal("GL_ARB_shader_texture_lod");
 	}
 
@@ -5729,40 +5713,20 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	if (op == "texture")
 		return is_es_and_depth ? join(type_prefix, type, "EXT") : join(type_prefix, type);
 	else if (op == "textureLod")
-	{
-		if (use_explicit_lod)
-			return join(type_prefix, type, is_legacy_es() ? "LodEXT" : "Lod");
-		else
-			return join(type_prefix, type);
-	}
+		return join(type_prefix, type, legacy_lod_ext ? "LodEXT" : "Lod");
 	else if (op == "textureProj")
 		return join(type_prefix, type, is_es_and_depth ? "ProjEXT" : "Proj");
 	else if (op == "textureGrad")
 		return join(type_prefix, type, is_legacy_es() ? "GradEXT" : is_legacy_desktop() ? "GradARB" : "Grad");
 	else if (op == "textureProjLod")
-	{
-		if (use_explicit_lod)
-			return join(type_prefix, type, is_legacy_es() ? "ProjLodEXT" : "ProjLod");
-		else
-			return join(type_prefix, type, "Proj");
-	}
+		return join(type_prefix, type, legacy_lod_ext ? "ProjLodEXT" : "ProjLod");
 	else if (op == "textureLodOffset")
-	{
-		if (use_explicit_lod)
-			return join(type_prefix, type, "LodOffset");
-		else
-			return join(type_prefix, type);
-	}
+		return join(type_prefix, type, "LodOffset");
 	else if (op == "textureProjGrad")
 		return join(type_prefix, type,
 		            is_legacy_es() ? "ProjGradEXT" : is_legacy_desktop() ? "ProjGradARB" : "ProjGrad");
 	else if (op == "textureProjLodOffset")
-	{
-		if (use_explicit_lod)
-			return join(type_prefix, type, "ProjLodOffset");
-		else
-			return join(type_prefix, type, "ProjOffset");
-	}
+		return join(type_prefix, type, "ProjLodOffset");
 	else
 	{
 		SPIRV_CROSS_THROW(join("Unsupported legacy texture op: ", op));
@@ -6632,23 +6596,20 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 		}
 		else
 		{
-			if (check_explicit_lod_allowed(args.lod))
+			forward = forward && should_forward(args.lod);
+			farg_str += ", ";
+
+			auto &lod_expr_type = expression_type(args.lod);
+
+			// Lod expression for TexelFetch in GLSL must be int, and only int.
+			if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
+			    lod_expr_type.basetype != SPIRType::Int)
 			{
-				forward = forward && should_forward(args.lod);
-				farg_str += ", ";
-
-				auto &lod_expr_type = expression_type(args.lod);
-
-				// Lod expression for TexelFetch in GLSL must be int, and only int.
-				if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
-				    lod_expr_type.basetype != SPIRType::Int)
-				{
-					farg_str += join("int(", to_expression(args.lod), ")");
-				}
-				else
-				{
-					farg_str += to_expression(args.lod);
-				}
+				farg_str += join("int(", to_expression(args.lod), ")");
+			}
+			else
+			{
+				farg_str += to_expression(args.lod);
 			}
 		}
 	}
