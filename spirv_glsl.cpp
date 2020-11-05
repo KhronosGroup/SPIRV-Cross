@@ -3814,6 +3814,33 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		}
 		statement("");
 	}
+
+	if (requires_transpose_2x2)
+	{
+		statement("mat2 SPIRV_Cross_Transpose(mat2 m)");
+		begin_scope();
+		statement("return mat2(m[0][0], m[1][0], m[0][1], m[1][1]);");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_transpose_3x3)
+	{
+		statement("mat3 SPIRV_Cross_Transpose(mat3 m)");
+		begin_scope();
+		statement("return mat3(m[0][0], m[1][0], m[2][0], m[0][1], m[1][1], m[2][1], m[0][2], m[1][2], m[2][2]);");
+		end_scope();
+		statement("");
+	}
+
+	if (requires_transpose_4x4)
+	{
+		statement("mat4 SPIRV_Cross_Transpose(mat4 m)");
+		begin_scope();
+		statement("return mat4(m[0][0], m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1], m[0][2], m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3], m[3][3]);");
+		end_scope();
+		statement("");
+	}
 }
 
 // Returns a string representation of the ID, usable as a function arg.
@@ -10265,7 +10292,32 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpTranspose:
-		GLSL_UFOP(transpose);
+		if (options.version < 120) // Matches GLSL 1.10 / ESSL 1.00
+		{
+			// transpose() is not available, so instead, flip need_transpose,
+			// which can later be turned into an emulated transpose op by
+			// convert_row_major_matrix(), if necessary.
+			uint32_t result_type = ops[0];
+			uint32_t result_id = ops[1];
+			uint32_t input = ops[2];
+
+			// Force need_transpose to false temporarily to prevent
+			// to_expression() from doing the transpose.
+			bool need_transpose = false;
+			auto *input_e = maybe_get<SPIRExpression>(input);
+			if (input_e)
+				swap(need_transpose, input_e->need_transpose);
+
+			bool forward = should_forward(input);
+			auto &e = emit_op(result_type, result_id, to_expression(input), forward);
+			e.need_transpose = !need_transpose;
+
+			// Restore the old need_transpose flag.
+			if (input_e)
+				input_e->need_transpose = need_transpose;
+		}
+		else
+			GLSL_UFOP(transpose);
 		break;
 
 	case OpSRem:
@@ -12139,6 +12191,38 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 
 		transposed_expr += ")";
 		return transposed_expr;
+	}
+	else if (options.version < 120)
+	{
+		// GLSL 110, ES 100 do not have transpose(), so emulate it.  Note that
+		// these GLSL versions do not support non-square matrices.
+		if (exp_type.vecsize == 2 && exp_type.columns == 2)
+		{
+			if (!requires_transpose_2x2)
+			{
+				requires_transpose_2x2 = true;
+				force_recompile();
+			}
+		}
+		else if (exp_type.vecsize == 3 && exp_type.columns == 3)
+		{
+			if (!requires_transpose_3x3)
+			{
+				requires_transpose_3x3 = true;
+				force_recompile();
+			}
+		}
+		else if (exp_type.vecsize == 4 && exp_type.columns == 4)
+		{
+			if (!requires_transpose_4x4)
+			{
+				requires_transpose_4x4 = true;
+				force_recompile();
+			}
+		}
+		else
+			SPIRV_CROSS_THROW("Non-square matrices are not supported in legacy GLSL, cannot transpose.");
+		return join("SPIRV_Cross_Transpose(", exp_str, ")");
 	}
 	else
 		return join("transpose(", exp_str, ")");
