@@ -805,6 +805,10 @@ protected:
 		return !options.es && options.version < 130;
 	}
 
+	bool requires_transpose_2x2 = false;
+	bool requires_transpose_3x3 = false;
+	bool requires_transpose_4x4 = false;
+
 	bool args_will_forward(uint32_t id, const uint32_t *args, uint32_t num_args, bool pure);
 	void register_call_out_argument(uint32_t id);
 	void register_impure_function_call();
