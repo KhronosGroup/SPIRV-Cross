@@ -6713,14 +6713,30 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 	// FP fiddling
 	case GLSLstd450Round:
-		emit_unary_func_op(result_type, id, args[0], "round");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "round");
+		else
+		{
+			auto op0 = to_enclosed_expression(args[0]);
+			auto &op0_type = expression_type(args[0]);
+			auto expr = join("floor(", op0, " + ", type_to_glsl_constructor(op0_type), "(0.5))");
+			bool forward = should_forward(args[0]);
+			emit_op(result_type, id, expr, forward);
+			inherit_expression_dependencies(id, args[0]);
+		}
 		break;
 
 	case GLSLstd450RoundEven:
-		if ((options.es && options.version >= 300) || (!options.es && options.version >= 130))
+		if (!is_legacy())
 			emit_unary_func_op(result_type, id, args[0], "roundEven");
+		else if (!options.es)
+		{
+			// This extension provides round() with round-to-even semantics.
+			require_extension_internal("GL_EXT_gpu_shader4");
+			emit_unary_func_op(result_type, id, args[0], "round");
+		}
 		else
-			SPIRV_CROSS_THROW("roundEven supported only in ESSL 300 and GLSL 130 and up.");
+			SPIRV_CROSS_THROW("roundEven supported only in ESSL 300.");
 		break;
 
 	case GLSLstd450Trunc:
