@@ -750,7 +750,7 @@ protected:
 
 	void replace_fragment_output(SPIRVariable &var);
 	void replace_fragment_outputs();
-	std::string legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t lod, uint32_t id);
+	std::string legacy_tex_op(const std::string &op, const SPIRType &imgtype, uint32_t id);
 
 	uint32_t indent = 0;
 
