@@ -1370,7 +1370,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--hlsl-nonwritable-uav-texture-as-srv",
 	        [&args](CLIParser &) { args.hlsl_nonwritable_uav_texture_as_srv = true; });
 	cbs.add("--hlsl-enable-16bit-types", [&args](CLIParser &) { args.hlsl_enable_16bit_types = true; });
-	cbs.add("--hlsl-flatten-matrix-vertex-input-semantics", [&args](CLIParser &) { args.hlsl_flatten_matrix_vertex_input_semantics = true; });
+	cbs.add("--hlsl-flatten-matrix-vertex-input-semantics",
+	        [&args](CLIParser &) { args.hlsl_flatten_matrix_vertex_input_semantics = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("-V", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });

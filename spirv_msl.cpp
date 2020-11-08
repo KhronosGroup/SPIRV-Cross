@@ -6697,8 +6697,8 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 		// Assume an access chain into a struct variable.
 		assert(var_type.basetype == SPIRType::Struct);
 		auto &c = get<SPIRConstant>(ops[3 + var_type.array.size()]);
-		interface_index = get_extended_member_decoration(var->self, c.scalar(),
-		                                                 SPIRVCrossDecorationInterfaceMemberIndex);
+		interface_index =
+		    get_extended_member_decoration(var->self, c.scalar(), SPIRVCrossDecorationInterfaceMemberIndex);
 	}
 	// Accumulate indices. We'll have to skip over the one for the struct, if present, because we already accounted
 	// for that getting the base index.
@@ -8105,7 +8105,8 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		}
 		emit_op(result_type, id,
 		        join(to_name(stage_in_var_id), ".", to_member_name(get_stage_in_struct_type(), interface_index),
-		             ".interpolate_at_centroid()", component), should_forward(args[0]));
+		             ".interpolate_at_centroid()", component),
+		        should_forward(args[0]));
 		break;
 	}
 
@@ -8913,8 +8914,8 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			}
 			else if (!msl_options.supports_msl_version(2, 3))
 			{
-				SPIRV_CROSS_THROW(
-				    "Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported on macOS prior to MSL 2.3.");
+				SPIRV_CROSS_THROW("Using non-constant 0.0 bias() qualifier for sample_compare. This is not supported "
+				                  "on macOS prior to MSL 2.3.");
 			}
 		}
 	}
@@ -11985,7 +11986,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 
 	case SPIRType::ControlPointArray:
 		return join("patch_control_point<", type_to_glsl(get<SPIRType>(type.parent_type), id), ">");
-	
+
 	case SPIRType::Interpolant:
 		return join("interpolant<", type_to_glsl(get<SPIRType>(type.parent_type), id), ", interpolation::",
 		            has_decoration(type.self, DecorationNoPerspective) ? "no_perspective" : "perspective", ">");

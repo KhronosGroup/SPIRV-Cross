@@ -1234,8 +1234,7 @@ void CompilerHLSL::declare_undefined_values()
 		if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			initializer = join(" = ", to_zero_initialized_expression(undef.basetype));
 
-		statement("static ", variable_decl(type, to_name(undef.self), undef.self),
-		          initializer, ";");
+		statement("static ", variable_decl(type, to_name(undef.self), undef.self), initializer, ";");
 		emitted = true;
 	});
 
@@ -2996,7 +2995,10 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 		if (dref)
 		{
 			if (imgtype.image.dim != spv::Dim1D && imgtype.image.dim != spv::Dim2D)
-				SPIRV_CROSS_THROW("Depth comparison is only supported for 1D and 2D textures in HLSL shader model 2/3.");
+			{
+				SPIRV_CROSS_THROW(
+				    "Depth comparison is only supported for 1D and 2D textures in HLSL shader model 2/3.");
+			}
 
 			if (grad_x || grad_y)
 				SPIRV_CROSS_THROW("Depth comparison is not supported for grad sampling in HLSL shader model 2/3.");
@@ -3023,8 +3025,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 		}
 		else if (proj)
 		{
-			coord_expr = "float4(" + coord_expr + ", " +
-			             to_extract_component_expression(coord, coord_components) + ")";
+			coord_expr = "float4(" + coord_expr + ", " + to_extract_component_expression(coord, coord_components) + ")";
 		}
 		else if (dref)
 		{

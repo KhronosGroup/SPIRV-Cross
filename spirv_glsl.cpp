@@ -1718,8 +1718,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	}
 	else if (var.storage == StorageClassOutput)
 	{
-		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride) &&
-		    flags.get(DecorationOffset))
+		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride) && flags.get(DecorationOffset))
 		{
 			// XFB for standalone variables, we can emit all decorations.
 			attr.push_back(join("xfb_buffer = ", get_decoration(var.self, DecorationXfbBuffer)));
@@ -3399,10 +3398,8 @@ void CompilerGLSL::emit_resources()
 
 void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 {
-	static const char *workaround_types[] = {
-		"int", "ivec2", "ivec3", "ivec4", "uint", "uvec2", "uvec3", "uvec4",
-		"float", "vec2",  "vec3",  "vec4",  "double", "dvec2", "dvec3", "dvec4"
-	};
+	static const char *workaround_types[] = { "int",   "ivec2", "ivec3", "ivec4", "uint",   "uvec2", "uvec3", "uvec4",
+		                                      "float", "vec2",  "vec3",  "vec4",  "double", "dvec2", "dvec3", "dvec4" };
 
 	if (!options.vulkan_semantics)
 	{
@@ -3837,7 +3834,8 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 	{
 		statement("mat4 SPIRV_Cross_Transpose(mat4 m)");
 		begin_scope();
-		statement("return mat4(m[0][0], m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1], m[0][2], m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3], m[3][3]);");
+		statement("return mat4(m[0][0], m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1], m[0][2], "
+		          "m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3], m[3][3]);");
 		end_scope();
 		statement("");
 	}
@@ -10500,7 +10498,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		auto &type = get<SPIRType>(ops[0]);
 		if (type.vecsize > 1)
-			GLSL_UFOP(not);
+			GLSL_UFOP(not );
 		else
 			GLSL_UOP(!);
 		break;
@@ -15018,17 +15016,15 @@ bool CompilerGLSL::variable_is_depth_or_compare(VariableID id) const
 
 const char *CompilerGLSL::ShaderSubgroupSupportHelper::get_extension_name(Candidate c)
 {
-	static const char * const retval[CandidateCount] = {
-		"GL_KHR_shader_subgroup_ballot",
-		"GL_KHR_shader_subgroup_basic",
-		"GL_KHR_shader_subgroup_vote",
-		"GL_NV_gpu_shader_5",
-		"GL_NV_shader_thread_group",
-		"GL_NV_shader_thread_shuffle",
-		"GL_ARB_shader_ballot",
-		"GL_ARB_shader_group_vote",
-		"GL_AMD_gcn_shader"
-	};
+	static const char *const retval[CandidateCount] = { "GL_KHR_shader_subgroup_ballot",
+		                                                "GL_KHR_shader_subgroup_basic",
+		                                                "GL_KHR_shader_subgroup_vote",
+		                                                "GL_NV_gpu_shader_5",
+		                                                "GL_NV_shader_thread_group",
+		                                                "GL_NV_shader_thread_shuffle",
+		                                                "GL_ARB_shader_ballot",
+		                                                "GL_ARB_shader_group_vote",
+		                                                "GL_AMD_gcn_shader" };
 	return retval[c];
 }
 
@@ -15058,8 +15054,8 @@ const char *CompilerGLSL::ShaderSubgroupSupportHelper::get_extra_required_extens
 	}
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::FeatureVector
-CompilerGLSL::ShaderSubgroupSupportHelper::get_feature_dependencies(Feature feature)
+CompilerGLSL::ShaderSubgroupSupportHelper::FeatureVector CompilerGLSL::ShaderSubgroupSupportHelper::
+    get_feature_dependencies(Feature feature)
 {
 	switch (feature)
 	{
@@ -15076,27 +15072,25 @@ CompilerGLSL::ShaderSubgroupSupportHelper::get_feature_dependencies(Feature feat
 	}
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::FeatureMask
-CompilerGLSL::ShaderSubgroupSupportHelper::get_feature_dependency_mask(Feature feature)
+CompilerGLSL::ShaderSubgroupSupportHelper::FeatureMask CompilerGLSL::ShaderSubgroupSupportHelper::
+    get_feature_dependency_mask(Feature feature)
 {
 	return build_mask(get_feature_dependencies(feature));
 }
 
 bool CompilerGLSL::ShaderSubgroupSupportHelper::can_feature_be_implemented_without_extensions(Feature feature)
 {
-	static const bool retval[FeatureCount] = {
-		false, false, false, false, false, false,
-		true, // SubgroupBalloFindLSB_MSB
-		false, false, false, false,
-		true, // SubgroupMemBarrier - replaced with workgroup memory barriers
-		false, false, true,  false
-	};
+	static const bool retval[FeatureCount] = { false, false, false, false, false, false,
+		                                       true, // SubgroupBalloFindLSB_MSB
+		                                       false, false, false, false,
+		                                       true, // SubgroupMemBarrier - replaced with workgroup memory barriers
+		                                       false, false, true,  false };
 
 	return retval[feature];
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::Candidate
-CompilerGLSL::ShaderSubgroupSupportHelper::get_KHR_extension_for_feature(Feature feature)
+CompilerGLSL::ShaderSubgroupSupportHelper::Candidate CompilerGLSL::ShaderSubgroupSupportHelper::
+    get_KHR_extension_for_feature(Feature feature)
 {
 	static const Candidate extensions[FeatureCount] = {
 		KHR_shader_subgroup_ballot, KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,
@@ -15118,8 +15112,7 @@ bool CompilerGLSL::ShaderSubgroupSupportHelper::is_feature_requested(Feature fea
 	return (feature_mask & (1u << feature)) != 0;
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::Result
-CompilerGLSL::ShaderSubgroupSupportHelper::resolve() const
+CompilerGLSL::ShaderSubgroupSupportHelper::Result CompilerGLSL::ShaderSubgroupSupportHelper::resolve() const
 {
 	Result res;
 
@@ -15149,8 +15142,8 @@ CompilerGLSL::ShaderSubgroupSupportHelper::resolve() const
 	return res;
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector
-CompilerGLSL::ShaderSubgroupSupportHelper::get_candidates_for_feature(Feature ft, const Result &r)
+CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector CompilerGLSL::ShaderSubgroupSupportHelper::
+    get_candidates_for_feature(Feature ft, const Result &r)
 {
 	auto c = get_candidates_for_feature(ft);
 	auto cmp = [&r](Candidate a, Candidate b) {
@@ -15162,8 +15155,8 @@ CompilerGLSL::ShaderSubgroupSupportHelper::get_candidates_for_feature(Feature ft
 	return c;
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector
-CompilerGLSL::ShaderSubgroupSupportHelper::get_candidates_for_feature(Feature feature)
+CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector CompilerGLSL::ShaderSubgroupSupportHelper::
+    get_candidates_for_feature(Feature feature)
 {
 	switch (feature)
 	{
@@ -15204,8 +15197,8 @@ CompilerGLSL::ShaderSubgroupSupportHelper::get_candidates_for_feature(Feature fe
 	}
 }
 
-CompilerGLSL::ShaderSubgroupSupportHelper::FeatureMask
-CompilerGLSL::ShaderSubgroupSupportHelper::build_mask(const SmallVector<Feature> &features)
+CompilerGLSL::ShaderSubgroupSupportHelper::FeatureMask CompilerGLSL::ShaderSubgroupSupportHelper::build_mask(
+    const SmallVector<Feature> &features)
 {
 	FeatureMask mask = 0;
 	for (Feature f : features)
@@ -15246,8 +15239,7 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		return;
 
 	auto &backing_type = get<SPIRType>(var->basetype);
-	bool is_ubo = backing_type.basetype == SPIRType::Struct &&
-	              backing_type.storage == StorageClassUniform &&
+	bool is_ubo = backing_type.basetype == SPIRType::Struct && backing_type.storage == StorageClassUniform &&
 	              has_decoration(backing_type.self, DecorationBlock);
 	if (!is_ubo)
 		return;
