@@ -6162,6 +6162,10 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 		opt = &ops[5];
 		length -= 5;
 		gather = true;
+		if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("textureGather requires ESSL 310.");
+		else if (!options.es && options.version < 400)
+			SPIRV_CROSS_THROW("textureGather with depth compare requires GLSL 400.");
 		break;
 
 	case OpImageGather:
@@ -6170,6 +6174,14 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 		opt = &ops[5];
 		length -= 5;
 		gather = true;
+		if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("textureGather requires ESSL 310.");
+		else if (!options.es && options.version < 400)
+		{
+			if (!expression_is_constant_null(comp))
+				SPIRV_CROSS_THROW("textureGather with component requires GLSL 400.");
+			require_extension_internal("GL_ARB_texture_gather");
+		}
 		break;
 
 	case OpImageFetch:
@@ -6438,7 +6450,7 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	if (args.is_sparse_feedback || args.has_min_lod)
 		fname += "ARB";
 
-	return is_legacy() ? legacy_tex_op(fname, imgtype, tex) : fname;
+	return (is_legacy() && !args.base.is_gather) ? legacy_tex_op(fname, imgtype, tex) : fname;
 }
 
 std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
@@ -6685,7 +6697,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 		farg_str += to_expression(args.bias);
 	}
 
-	if (args.component)
+	if (args.component && !expression_is_constant_null(args.component))
 	{
 		forward = forward && should_forward(args.component);
 		farg_str += ", ";
