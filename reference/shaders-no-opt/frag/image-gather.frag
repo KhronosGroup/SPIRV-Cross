@@ -8,7 +8,7 @@ layout(location = 0) in vec3 vUV;
 
 void main()
 {
-    FragColor = textureGather(uSamp, vUV.xy, 0);
+    FragColor = textureGather(uSamp, vUV.xy);
     FragColor += textureGather(uSamp, vUV.xy, 1);
     FragColor += textureGather(uSampShadow, vUV.xy, vUV.z);
 }
