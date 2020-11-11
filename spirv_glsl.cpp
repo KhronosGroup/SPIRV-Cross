@@ -5724,7 +5724,8 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	// GLES has very limited support for shadow samplers.
 	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
 	// everything else can just throw
-	if (image_is_comparison(imgtype, tex) && is_legacy_es())
+	bool is_comparison = image_is_comparison(imgtype, tex);
+	if (is_comparison && is_legacy_es())
 	{
 		if (op == "texture" || op == "textureProj")
 			require_extension_internal("GL_EXT_shadow_samplers");
@@ -5732,8 +5733,20 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
 	}
 
-	bool is_es_and_depth = is_legacy_es() && image_is_comparison(imgtype, tex);
-	std::string type_prefix = image_is_comparison(imgtype, tex) ? "shadow" : "texture";
+	if (op == "textureSize")
+	{
+		if (is_legacy_es())
+			SPIRV_CROSS_THROW("textureSize not supported in legacy ES");
+		if (is_comparison)
+			SPIRV_CROSS_THROW("textureSize not supported on shadow sampler in legacy GLSL");
+		require_extension_internal("GL_EXT_gpu_shader4");
+	}
+
+	if (op == "texelFetch" && is_legacy_es())
+		SPIRV_CROSS_THROW("texelFetch not supported in legacy ES");
+
+	bool is_es_and_depth = is_legacy_es() && is_comparison;
+	std::string type_prefix = is_comparison ? "shadow" : "texture";
 
 	if (op == "texture")
 		return is_es_and_depth ? join(type_prefix, type, "EXT") : join(type_prefix, type);
@@ -5752,6 +5765,10 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		            is_legacy_es() ? "ProjGradEXT" : is_legacy_desktop() ? "ProjGradARB" : "ProjGrad");
 	else if (op == "textureProjLodOffset")
 		return join(type_prefix, type, "ProjLodOffset");
+	else if (op == "textureSize")
+		return join("textureSize", type);
+	else if (op == "texelFetch")
+		return join("texelFetch", type);
 	else
 	{
 		SPIRV_CROSS_THROW(join("Unsupported legacy texture op: ", op));
@@ -11161,8 +11178,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
+		uint32_t img = ops[2];
 
-		auto expr = join("textureSize(", convert_separate_image_to_expression(ops[2]), ", ",
+		std::string fname = "textureSize";
+		if (is_legacy_desktop())
+		{
+			auto &type = expression_type(img);
+			auto &imgtype = get<SPIRType>(type.self);
+			fname = legacy_tex_op(fname, imgtype, img);
+		}
+		else if (is_legacy_es())
+			SPIRV_CROSS_THROW("textureSize is not supported in ESSL 100.");
+
+		auto expr = join(fname, "(", convert_separate_image_to_expression(img), ", ",
 		                 bitcast_expression(SPIRType::Int, ops[3]), ")");
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
@@ -11423,13 +11451,24 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			string expr;
 			if (type.image.sampled == 2)
 			{
+				if (!options.es && options.version < 430)
+					require_extension_internal("GL_ARB_shader_image_size");
+				else if (options.es && options.version < 310)
+					SPIRV_CROSS_THROW("At least ESSL 3.10 required for imageSize.");
+
 				// The size of an image is always constant.
 				expr = join("imageSize(", to_expression(ops[2]), ")");
 			}
 			else
 			{
 				// This path is hit for samplerBuffers and multisampled images which do not have LOD.
-				expr = join("textureSize(", convert_separate_image_to_expression(ops[2]), ")");
+				std::string fname = "textureSize";
+				if (is_legacy())
+				{
+					auto &imgtype = get<SPIRType>(type.self);
+					fname = legacy_tex_op(fname, imgtype, ops[2]);
+				}
+				expr = join(fname, "(", convert_separate_image_to_expression(ops[2]), ")");
 			}
 
 			auto &restype = get<SPIRType>(ops[0]);
