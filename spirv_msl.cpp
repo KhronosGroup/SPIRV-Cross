@@ -1489,6 +1489,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 						break;
 					}
 				}
+				break;
 			}
 
 			case OpGroupNonUniformInverseBallot:
