@@ -2305,6 +2305,12 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
+	if (var.storage == StorageClassInput && type.basetype == SPIRType::Double &&
+	    !options.es && options.version < 410)
+	{
+		require_extension_internal("GL_ARB_vertex_attrib_64bit");
+	}
+
 	// Either make it plain in/out or in/out blocks depending on what shader is doing ...
 	bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
 	const char *qual = to_storage_qualifiers_glsl(var);
