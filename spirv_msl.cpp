@@ -9011,13 +9011,8 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 
 	if (args.min_lod)
 	{
-		if (msl_options.is_macos())
-		{
-			if (!msl_options.supports_msl_version(2, 2))
-				SPIRV_CROSS_THROW("min_lod_clamp() is only supported in MSL 2.2+ and up on macOS.");
-		}
-		else if (msl_options.is_ios())
-			SPIRV_CROSS_THROW("min_lod_clamp() is not supported on iOS.");
+		if (!msl_options.supports_msl_version(2, 2))
+			SPIRV_CROSS_THROW("min_lod_clamp() is only supported in MSL 2.2+ and up.");
 
 		forward = forward && should_forward(args.min_lod);
 		farg_str += ", min_lod_clamp(" + to_expression(args.min_lod) + ")";
@@ -10911,8 +10906,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				});
 				break;
 			case BuiltInHelperInvocation:
-				if (msl_options.is_ios())
-					SPIRV_CROSS_THROW("simd_is_helper_thread() is only supported on macOS.");
+				if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+					SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.3 on iOS.");
 				else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
 					SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
 
@@ -12905,8 +12900,8 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		case ExecutionModelTessellationEvaluation:
 			return "patch_id";
 		case ExecutionModelFragment:
-			if (msl_options.is_ios())
-				SPIRV_CROSS_THROW("PrimitiveId is not supported in fragment on iOS.");
+			if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+				SPIRV_CROSS_THROW("PrimitiveId on iOS requires MSL 2.3.");
 			else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 2))
 				SPIRV_CROSS_THROW("PrimitiveId on macOS requires MSL 2.2.");
 			return "primitive_id";
@@ -13021,16 +13016,16 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 
 	case BuiltInBaryCoordNV:
 		// TODO: AMD barycentrics as well? Seem to have different swizzle and 2 components rather than 3.
-		if (msl_options.is_ios())
-			SPIRV_CROSS_THROW("Barycentrics not supported on iOS.");
+		if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.3 and above on iOS.");
 		else if (!msl_options.supports_msl_version(2, 2))
 			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.2 and above on macOS.");
 		return "barycentric_coord, center_perspective";
 
 	case BuiltInBaryCoordNoPerspNV:
 		// TODO: AMD barycentrics as well? Seem to have different swizzle and 2 components rather than 3.
-		if (msl_options.is_ios())
-			SPIRV_CROSS_THROW("Barycentrics not supported on iOS.");
+		if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.3 and above on iOS.");
 		else if (!msl_options.supports_msl_version(2, 2))
 			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.2 and above on macOS.");
 		return "barycentric_coord, center_no_perspective";
