@@ -308,6 +308,14 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-arrayed-subpass-input')
     if '.1d-as-2d.' in shader:
         msl_args.append('--msl-texture-1d-as-2d')
+    if '.simd.' in shader:
+        msl_args.append('--msl-ios-use-simdgroup-functions')
+    if '.emulate-subgroup.' in shader:
+        msl_args.append('--msl-emulate-subgroups')
+    if '.fixed-subgroup.' in shader:
+        # Arbitrary for testing purposes.
+        msl_args.append('--msl-fixed-subgroup-size')
+        msl_args.append('32')
 
     subprocess.check_call(msl_args)
 

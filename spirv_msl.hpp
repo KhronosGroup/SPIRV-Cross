@@ -364,6 +364,28 @@ public:
 		// and will be addressed using the current ViewIndex.
 		bool arrayed_subpass_input = false;
 
+		// Whether to use SIMD-group or quadgroup functions to implement group nnon-uniform
+		// operations. Some GPUs on iOS do not support the SIMD-group functions, only the
+		// quadgroup functions.
+		bool ios_use_simdgroup_functions = false;
+
+		// If set, the subgroup size will be assumed to be one, and subgroup-related
+		// builtins and operations will be emitted accordingly. This mode is intended to
+		// be used by MoltenVK on hardware/software configurations which do not provide
+		// sufficient support for subgroups.
+		bool emulate_subgroups = false;
+
+		// If nonzero, a fixed subgroup size to assume. Metal, similarly to VK_EXT_subgroup_size_control,
+		// allows the SIMD-group size (aka thread execution width) to vary depending on
+		// register usage and requirements. In certain circumstances--for example, a pipeline
+		// in MoltenVK without VK_PIPELINE_SHADER_STAGE_CREATE_ALLOW_VARYING_SUBGROUP_SIZE_BIT_EXT--
+		// this is undesirable. This fixes the value of the SubgroupSize builtin, instead of
+		// mapping it to the Metal builtin [[thread_execution_width]]. If the thread
+		// execution width is reduced, the extra invocations will appear to be inactive.
+		// If zero, the SubgroupSize will be allowed to vary, and the builtin will be mapped
+		// to the Metal [[thread_execution_width]] builtin.
+		uint32_t fixed_subgroup_size = 0;
+
 		enum class IndexType
 		{
 			None = 0,
@@ -853,6 +875,8 @@ protected:
 	uint32_t builtin_subgroup_size_id = 0;
 	uint32_t builtin_dispatch_base_id = 0;
 	uint32_t builtin_stage_input_size_id = 0;
+	uint32_t builtin_local_invocation_index_id = 0;
+	uint32_t builtin_workgroup_size_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;

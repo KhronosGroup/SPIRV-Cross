@@ -224,11 +224,9 @@ inline vec<bool, N> spvQuadSwap(vec<bool, N> value, uint dir)
     return (vec<bool, N>)quad_shuffle_xor((vec<ushort, N>)value, dir + 1);
 }
 
-fragment main0_out main0()
+fragment main0_out main0(uint gl_SubgroupSize [[threads_per_simdgroup]], uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]])
 {
     main0_out out = {};
-    uint gl_SubgroupSize = simd_sum(1);
-    uint gl_SubgroupInvocationID = simd_prefix_exclusive_sum(1);
     uint4 gl_SubgroupEqMask = gl_SubgroupInvocationID >= 32 ? uint4(0, (1 << (gl_SubgroupInvocationID - 32)), uint2(0)) : uint4(1 << gl_SubgroupInvocationID, uint3(0));
     uint4 gl_SubgroupGeMask = uint4(insert_bits(0u, 0xFFFFFFFF, min(gl_SubgroupInvocationID, 32u), (uint)max(min((int)gl_SubgroupSize, 32) - (int)gl_SubgroupInvocationID, 0)), insert_bits(0u, 0xFFFFFFFF, (uint)max((int)gl_SubgroupInvocationID - 32, 0), (uint)max((int)gl_SubgroupSize - (int)max(gl_SubgroupInvocationID, 32u), 0)), uint2(0));
     uint4 gl_SubgroupGtMask = uint4(insert_bits(0u, 0xFFFFFFFF, min(gl_SubgroupInvocationID + 1, 32u), (uint)max(min((int)gl_SubgroupSize, 32) - (int)gl_SubgroupInvocationID - 1, 0)), insert_bits(0u, 0xFFFFFFFF, (uint)max((int)gl_SubgroupInvocationID + 1 - 32, 0), (uint)max((int)gl_SubgroupSize - (int)max(gl_SubgroupInvocationID + 1, 32u), 0)), uint2(0));
@@ -236,7 +234,8 @@ fragment main0_out main0()
     uint4 gl_SubgroupLtMask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID - 32, 0)), uint2(0));
     out.FragColor = float(gl_SubgroupSize);
     out.FragColor = float(gl_SubgroupInvocationID);
-    bool elected = simd_is_first();
+    bool _24 = simd_is_first();
+    bool elected = _24;
     out.FragColor = float4(gl_SubgroupEqMask).x;
     out.FragColor = float4(gl_SubgroupGeMask).x;
     out.FragColor = float4(gl_SubgroupGtMask).x;
