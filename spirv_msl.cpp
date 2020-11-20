@@ -1354,7 +1354,12 @@ void CompilerMSL::preprocess_op_codes()
 		needs_subgroup_invocation_id = true;
 	if (preproc.needs_subgroup_size)
 		needs_subgroup_size = true;
-	if (preproc.needs_sample_id)
+	// build_implicit_builtins() hasn't run yet, and in fact, this needs to execute
+	// before then so that gl_SampleID will get added; so we also need to check if
+	// that function would add gl_FragCoord.
+	if (preproc.needs_sample_id || msl_options.force_sample_rate_shading ||
+	    (is_sample_rate() && (active_input_builtins.get(BuiltInFragCoord) ||
+	                          (need_subpass_input && !msl_options.use_framebuffer_fetch_subpasses))))
 		needs_sample_id = true;
 }
 
@@ -10495,6 +10500,16 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 	}
 }
 
+// Returns true if this is a fragment shader that runs per sample, and false otherwise.
+bool CompilerMSL::is_sample_rate() const
+{
+	auto &caps = get_declared_capabilities();
+	return get_execution_model() == ExecutionModelFragment &&
+	       (msl_options.force_sample_rate_shading ||
+	        std::find(caps.begin(), caps.end(), CapabilitySampleRateShading) != caps.end() ||
+	        (msl_options.use_framebuffer_fetch_subpasses && need_subpass_input));
+}
+
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
@@ -11046,6 +11061,15 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = get_sample_position(",
 					          to_expression(builtin_sample_id_id), ");");
 				});
+				break;
+			case BuiltInFragCoord:
+				if (is_sample_rate())
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(to_expression(var_id), ".xy += get_sample_position(",
+						          to_expression(builtin_sample_id_id), ") - 0.5;");
+					});
+				}
 				break;
 			case BuiltInHelperInvocation:
 				if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
