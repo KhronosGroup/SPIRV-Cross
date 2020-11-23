@@ -2021,7 +2021,20 @@ void CompilerGLSL::emit_buffer_reference_block(SPIRType &type, bool forward_decl
 	if (!forward_declaration)
 	{
 		if (type.basetype == SPIRType::Struct)
-			statement("layout(buffer_reference, ", buffer_to_packing_standard(type, true), ") buffer ", buffer_name);
+		{
+			auto flags = ir.get_buffer_block_type_flags(type);
+			string decorations;
+			if (flags.get(DecorationRestrict))
+				decorations += " restrict";
+			if (flags.get(DecorationCoherent))
+				decorations += " coherent";
+			if (flags.get(DecorationNonReadable))
+				decorations += " writeonly";
+			if (flags.get(DecorationNonWritable))
+				decorations += " readonly";
+			statement("layout(buffer_reference, ", buffer_to_packing_standard(type, true),
+			          ")", decorations, " buffer ", buffer_name);
+		}
 		else
 			statement("layout(buffer_reference) buffer ", buffer_name);
 
