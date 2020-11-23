@@ -11224,7 +11224,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						          to_expression(builtin_subgroup_invocation_id_id), " - 32, 0), ",
 						          msl_options.fixed_subgroup_size, " - max(",
 						          to_expression(builtin_subgroup_invocation_id_id),
-						          ", 32u)), uint2(0)) & spvSubgroupBallot(true);");
+						          ", 32u)), uint2(0));");
 					}
 					else if (msl_options.fixed_subgroup_size != 0)
 					{
@@ -11233,7 +11233,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						          to_expression(builtin_subgroup_invocation_id_id), ", ",
 						          msl_options.fixed_subgroup_size, " - ",
 						          to_expression(builtin_subgroup_invocation_id_id),
-						          "), uint3(0)) & spvSubgroupBallot(true);");
+						          "), uint3(0));");
 					}
 					else if (msl_options.is_ios())
 					{
@@ -11277,8 +11277,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						          to_expression(builtin_subgroup_invocation_id_id), " + 1 - 32, 0), ",
 						          msl_options.fixed_subgroup_size, " - max(",
 						          to_expression(builtin_subgroup_invocation_id_id),
-						          " + 1, 32u)), uint2(0)) & "
-						          "spvSubgroupBallot(true);");
+						          " + 1, 32u)), uint2(0));");
 					}
 					else if (msl_options.fixed_subgroup_size != 0)
 					{
@@ -11287,7 +11286,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						          to_expression(builtin_subgroup_invocation_id_id), " + 1, ",
 						          msl_options.fixed_subgroup_size, " - ",
 						          to_expression(builtin_subgroup_invocation_id_id),
-						          " - 1), uint3(0)) & spvSubgroupBallot(true);");
+						          " - 1), uint3(0));");
 					}
 					else if (msl_options.is_ios())
 					{
