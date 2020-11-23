@@ -8490,7 +8490,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		// Fake arrays returns by writing to an out array instead.
 		decl += "thread ";
 		decl += type_to_glsl(type);
-		decl += " (&SPIRV_Cross_return_value)";
+		decl += " (&spvReturnValue)";
 		decl += type_to_array_glsl(type);
 		if (!func.arguments.empty())
 			decl += ", ";
