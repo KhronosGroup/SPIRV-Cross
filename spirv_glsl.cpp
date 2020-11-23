@@ -2012,6 +2012,9 @@ void CompilerGLSL::emit_buffer_reference_block(SPIRType &type, bool forward_decl
 
 		block_names.insert(buffer_name);
 		block_ssbo_names.insert(buffer_name);
+
+		// Ensure we emit the correct name when emitting non-forward pointer type.
+		ir.meta[type.self].decoration.alias = buffer_name;
 	}
 	else if (type.basetype != SPIRType::Struct)
 		buffer_name = type_to_glsl(type);
@@ -2021,7 +2024,20 @@ void CompilerGLSL::emit_buffer_reference_block(SPIRType &type, bool forward_decl
 	if (!forward_declaration)
 	{
 		if (type.basetype == SPIRType::Struct)
-			statement("layout(buffer_reference, ", buffer_to_packing_standard(type, true), ") buffer ", buffer_name);
+		{
+			auto flags = ir.get_buffer_block_type_flags(type);
+			string decorations;
+			if (flags.get(DecorationRestrict))
+				decorations += " restrict";
+			if (flags.get(DecorationCoherent))
+				decorations += " coherent";
+			if (flags.get(DecorationNonReadable))
+				decorations += " writeonly";
+			if (flags.get(DecorationNonWritable))
+				decorations += " readonly";
+			statement("layout(buffer_reference, ", buffer_to_packing_standard(type, true),
+			          ")", decorations, " buffer ", buffer_name);
+		}
 		else
 			statement("layout(buffer_reference) buffer ", buffer_name);
 
@@ -3812,7 +3828,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		for (auto &type_id : workaround_ubo_load_overload_types)
 		{
 			auto &type = get<SPIRType>(type_id);
-			statement(type_to_glsl(type), " SPIRV_Cross_workaround_load_row_major(", type_to_glsl(type),
+			statement(type_to_glsl(type), " spvWorkaroundRowMajor(", type_to_glsl(type),
 			          " wrap) { return wrap; }");
 		}
 		statement("");
@@ -3820,7 +3836,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 
 	if (requires_transpose_2x2)
 	{
-		statement("mat2 SPIRV_Cross_Transpose(mat2 m)");
+		statement("mat2 spvTranspose(mat2 m)");
 		begin_scope();
 		statement("return mat2(m[0][0], m[1][0], m[0][1], m[1][1]);");
 		end_scope();
@@ -3829,7 +3845,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 
 	if (requires_transpose_3x3)
 	{
-		statement("mat3 SPIRV_Cross_Transpose(mat3 m)");
+		statement("mat3 spvTranspose(mat3 m)");
 		begin_scope();
 		statement("return mat3(m[0][0], m[1][0], m[2][0], m[0][1], m[1][1], m[2][1], m[0][2], m[1][2], m[2][2]);");
 		end_scope();
@@ -3838,7 +3854,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 
 	if (requires_transpose_4x4)
 	{
-		statement("mat4 SPIRV_Cross_Transpose(mat4 m)");
+		statement("mat4 spvTranspose(mat4 m)");
 		begin_scope();
 		statement("return mat4(m[0][0], m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1], m[0][2], "
 		          "m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3], m[3][3]);");
@@ -12254,7 +12270,7 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 		}
 		else
 			SPIRV_CROSS_THROW("Non-square matrices are not supported in legacy GLSL, cannot transpose.");
-		return join("SPIRV_Cross_Transpose(", exp_str, ")");
+		return join("spvTranspose(", exp_str, ")");
 	}
 	else
 		return join("transpose(", exp_str, ")");
@@ -14232,8 +14248,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			if (is_legacy_es())
 			{
 				uint32_t counter = statement_count;
-				statement("for (int SPIRV_Cross_Dummy", counter, " = 0; SPIRV_Cross_Dummy", counter,
-				          " < 1; SPIRV_Cross_Dummy", counter, "++)");
+				statement("for (int spvDummy", counter, " = 0; spvDummy", counter,
+				          " < 1; spvDummy", counter, "++)");
 			}
 			else
 				statement("do");
@@ -14359,7 +14375,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				// The backend is responsible for setting this up, and redirection the return values as appropriate.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
-					emit_array_copy("SPIRV_Cross_return_value", block.return_value, StorageClassFunction,
+					emit_array_copy("spvReturnValue", block.return_value, StorageClassFunction,
 					                get_expression_effective_storage_class(block.return_value));
 				}
 
@@ -15318,6 +15334,6 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 	if (rewrite)
 	{
 		request_workaround_wrapper_overload(loaded_type);
-		expr = join("SPIRV_Cross_workaround_load_row_major(", expr, ")");
+		expr = join("spvWorkaroundRowMajor(", expr, ")");
 	}
 }
