@@ -316,6 +316,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         # Arbitrary for testing purposes.
         msl_args.append('--msl-fixed-subgroup-size')
         msl_args.append('32')
+    if '.force-sample.' in shader:
+        msl_args.append('--msl-force-sample-rate-shading')
 
     subprocess.check_call(msl_args)
 

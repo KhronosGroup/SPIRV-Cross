@@ -401,6 +401,11 @@ public:
 		// different shaders for these three scenarios.
 		IndexType vertex_index_type = IndexType::None;
 
+		// If set, a dummy [[sample_id]] input is added to a fragment shader if none is present.
+		// This will force the shader to run at sample rate, assuming Metal does not optimize
+		// the extra threads away.
+		bool force_sample_rate_shading = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -798,6 +803,7 @@ protected:
 	std::string to_sampler_expression(uint32_t id);
 	std::string to_swizzle_expression(uint32_t id);
 	std::string to_buffer_size_expression(uint32_t id);
+	bool is_sample_rate() const;
 	bool is_direct_input_builtin(spv::BuiltIn builtin);
 	std::string builtin_qualifier(spv::BuiltIn builtin);
 	std::string builtin_type_decl(spv::BuiltIn builtin, uint32_t id = 0);

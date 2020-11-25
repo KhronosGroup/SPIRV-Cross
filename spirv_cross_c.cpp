@@ -690,6 +690,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_FIXED_SUBGROUP_SIZE:
 		options->msl.fixed_subgroup_size = value;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_FORCE_SAMPLE_RATE_SHADING:
+		options->msl.force_sample_rate_shading = value != 0;
+		break;
 #endif
 
 	default:
