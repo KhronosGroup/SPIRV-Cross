@@ -11052,7 +11052,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		uint32_t var_id = var.self;
 		BuiltIn bi_type = ir.meta[var_id].decoration.builtin_type;
 
-		if (var.storage == StorageClassInput && is_builtin_variable(var))
+		if (var.storage == StorageClassInput && is_builtin_variable(var) && active_input_builtins.get(bi_type))
 		{
 			switch (bi_type)
 			{
@@ -11518,7 +11518,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			}
 		}
-		else if (var.storage == StorageClassOutput && is_builtin_variable(var))
+		else if (var.storage == StorageClassOutput && is_builtin_variable(var) && active_output_builtins.get(bi_type))
 		{
 			if (bi_type == BuiltInSampleMask && get_execution_model() == ExecutionModelFragment &&
 			    msl_options.additional_fixed_sample_mask != 0xffffffff)
