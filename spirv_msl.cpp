@@ -13319,12 +13319,17 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 				SPIRV_CROSS_THROW("thread_index_in_simdgroup requires Metal 2.2 in fragment shaders.");
 			return "thread_index_in_simdgroup";
 		}
-		else
+		else if (execution.model == ExecutionModelKernel || execution.model == ExecutionModelGLCompute ||
+		         execution.model == ExecutionModelTessellationControl ||
+		         (execution.model == ExecutionModelVertex && msl_options.vertex_for_tessellation))
 		{
+			// We are generating a Metal kernel function.
 			if (!msl_options.supports_msl_version(2))
-				SPIRV_CROSS_THROW("Subgroup builtins require Metal 2.0.");
+				SPIRV_CROSS_THROW("Subgroup builtins in kernel functions require Metal 2.0.");
 			return msl_options.is_ios() ? "thread_index_in_quadgroup" : "thread_index_in_simdgroup";
 		}
+		else
+			SPIRV_CROSS_THROW("Subgroup builtins are not available in this type of function.");
 
 	case BuiltInSubgroupEqMask:
 	case BuiltInSubgroupGeMask:
