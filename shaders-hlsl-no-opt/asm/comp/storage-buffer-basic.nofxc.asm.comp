@@ -4,9 +4,9 @@
 ; Bound: 31
 ; Schema: 0
                OpCapability Shader
-               OpCapability VariablePointers
+               ;OpCapability VariablePointers
                OpExtension "SPV_KHR_storage_buffer_storage_class"
-               OpExtension "SPV_KHR_variable_pointers"
+               ;OpExtension "SPV_KHR_variable_pointers"
                OpMemoryModel Logical GLSL450
                OpEntryPoint GLCompute %22 "main" %gl_WorkGroupID
                OpSource OpenCL_C 120
