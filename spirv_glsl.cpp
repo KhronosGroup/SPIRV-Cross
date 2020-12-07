@@ -6173,6 +6173,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	bool gather = false;
 	bool proj = false;
 	bool fetch = false;
+	bool nonuniform_expression = false;
 	const uint32_t *opt = nullptr;
 
 	auto &result_type = get<SPIRType>(result_type_id);
@@ -6181,7 +6182,17 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 
 	// Make sure non-uniform decoration is back-propagated to where it needs to be.
 	if (has_decoration(img, DecorationNonUniformEXT))
-		propagate_nonuniform_qualifier(img);
+	{
+		// In Vulkan GLSL, we cannot back-propgate nonuniform qualifiers if we
+		// use a combined image sampler constructor.
+		// We're only interested in back-propagating if we can trace back through access chains.
+		// If not, we will apply nonuniform to the sampled image expression itself.
+		auto *backing = maybe_get_backing_variable(img);
+		if (backing)
+			propagate_nonuniform_qualifier(img);
+		else
+			nonuniform_expression = true;
+	}
 
 	switch (op)
 	{
@@ -6366,6 +6377,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	args.sample = sample;
 	args.sparse_texel = sparse_texel_id;
 	args.min_lod = minlod;
+	args.nonuniform_expression = nonuniform_expression;
 	expr += to_function_args(args, forward);
 	expr += ")";
 
@@ -6553,6 +6565,12 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 		farg_str = convert_separate_image_to_expression(img);
 	else
 		farg_str = to_expression(img);
+
+	if (args.nonuniform_expression && farg_str.find_first_of('[') != string::npos)
+	{
+		// Only emit nonuniformEXT() wrapper if the underlying expression is arrayed in some way.
+		farg_str = join(backend.nonuniform_qualifier, "(", farg_str, ")");
+	}
 
 	bool swizz_func = backend.swizzle_is_function;
 	auto swizzle = [swizz_func](uint32_t comps, uint32_t in_comps) -> const char * {
