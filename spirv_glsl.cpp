@@ -502,6 +502,10 @@ void CompilerGLSL::find_static_extensions()
 			}
 			break;
 
+		case CapabilityVariablePointers:
+		case CapabilityVariablePointersStorageBuffer:
+			SPIRV_CROSS_THROW("VariablePointers capability is not supported in GLSL.");
+
 		default:
 			break;
 		}
