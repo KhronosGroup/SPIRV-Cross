@@ -3569,9 +3569,9 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 			statement("");
 		}
 
-		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBrodcast_First))
+		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupBroadcast_First))
 		{
-			auto exts = Supp::get_candidates_for_feature(Supp::SubgroupBrodcast_First, result);
+			auto exts = Supp::get_candidates_for_feature(Supp::SubgroupBroadcast_First, result);
 
 			for (auto &e : exts)
 			{
@@ -7380,7 +7380,7 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 
 	case OpGroupNonUniformBroadcast:
 	case OpGroupNonUniformBroadcastFirst:
-		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBrodcast_First);
+		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBroadcast_First);
 		break;
 
 	case OpGroupNonUniformShuffle:
@@ -15150,7 +15150,7 @@ CompilerGLSL::ShaderSubgroupSupportHelper::FeatureVector CompilerGLSL::ShaderSub
 	switch (feature)
 	{
 	case SubgroupAllEqualT:
-		return { SubgroupBrodcast_First, SubgroupAll_Any_AllEqualBool };
+		return { SubgroupBroadcast_First, SubgroupAll_Any_AllEqualBool };
 	case SubgroupElect:
 		return { SubgroupBallotFindLSB_MSB, SubgroupBallot, SubgroupInvocationID };
 	case SubgroupInverseBallot_InclBitCount_ExclBitCout:
@@ -15185,8 +15185,8 @@ CompilerGLSL::ShaderSubgroupSupportHelper::Candidate CompilerGLSL::ShaderSubgrou
 	static const Candidate extensions[FeatureCount] = {
 		KHR_shader_subgroup_ballot, KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,
 		KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_vote,
-		KHR_shader_subgroup_vote,   KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_basic,
-		KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot
+		KHR_shader_subgroup_vote,   KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic, KHR_shader_subgroup_basic,
+		KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot
 	};
 
 	return extensions[feature];
@@ -15260,7 +15260,7 @@ CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector CompilerGLSL::ShaderS
 		return { KHR_shader_subgroup_basic, NV_shader_thread_group };
 	case NumSubgroups:
 		return { KHR_shader_subgroup_basic, NV_shader_thread_group };
-	case SubgroupBrodcast_First:
+	case SubgroupBroadcast_First:
 		return { KHR_shader_subgroup_ballot, NV_shader_thread_shuffle, ARB_shader_ballot };
 	case SubgroupBallotFindLSB_MSB:
 		return { KHR_shader_subgroup_ballot, NV_shader_thread_group };
