@@ -3435,6 +3435,18 @@ void CompilerGLSL::emit_resources()
 				uint32_t member_count = uint32_t(type.member_types.size());
 				for (uint32_t i = 0; i < member_count; i++)
 				{
+					// These outputs might not have been properly declared, so don't initialize them in that case.
+					if (has_member_decoration(type.self, i, DecorationBuiltIn))
+					{
+						if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInCullDistance &&
+						    !cull_distance_count)
+							continue;
+
+						if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInClipDistance &&
+						    !clip_distance_count)
+							continue;
+					}
+
 					entry_func.fixup_hooks_in.push_back([&var, this, i]() {
 						AccessChainMeta meta;
 						auto &c = this->get<SPIRConstant>(var.initializer);

@@ -2596,6 +2596,17 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
 		if (builtin == BuiltInPosition && storage == StorageClassOutput)
 			qual_pos_var_name = qual_var_name;
+
+		if (var.storage == StorageClassOutput && var.initializer != ID(0))
+		{
+			auto *c = maybe_get<SPIRConstant>(var.initializer);
+			if (c)
+			{
+				entry_func.fixup_hooks_in.push_back([=]() {
+					statement(qual_var_name, " = ", constant_expression(this->get<SPIRConstant>(c->subconstants[mbr_idx])), ";");
+				});
+			}
+		}
 	}
 
 	if (storage != StorageClassInput || !pull_model_inputs.count(var.self))
