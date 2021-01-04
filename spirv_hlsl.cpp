@@ -839,6 +839,21 @@ std::string CompilerHLSL::to_semantic(uint32_t location, ExecutionModel em, Stor
 	return join("TEXCOORD", location);
 }
 
+std::string CompilerHLSL::to_initializer_expression(const SPIRVariable &var)
+{
+	// We cannot emit static const initializer for block constants for practical reasons,
+	// so just inline the initializer.
+	// FIXME: There is a theoretical problem here if someone tries to composite extract
+	// into this initializer since we don't declare it properly, but that is somewhat non-sensical.
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	auto *c = maybe_get<SPIRConstant>(var.initializer);
+	if (is_block && c)
+		return constant_expression(*c);
+	else
+		return CompilerGLSL::to_initializer_expression(var);
+}
+
 void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 {
 	auto &execution = get_entry_point();
@@ -1141,7 +1156,11 @@ void CompilerHLSL::emit_composite_constants()
 			return;
 
 		auto &type = this->get<SPIRType>(c.constant_type);
-		if (type.basetype == SPIRType::Struct || !type.array.empty())
+
+		// Cannot declare block type constants here.
+		// We do not have the struct type yet.
+		bool is_block = has_decoration(type.self, DecorationBlock);
+		if (!is_block && (type.basetype == SPIRType::Struct || !type.array.empty()))
 		{
 			auto name = to_name(c.self);
 			statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");

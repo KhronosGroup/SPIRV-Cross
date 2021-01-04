@@ -2441,14 +2441,6 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 				swap(type.array.back(), old_array_size);
 				swap(type.array_size_literal.back(), old_array_size_literal);
 			}
-
-			// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
-			if (var.storage == StorageClassOutput && var.initializer)
-			{
-				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
-				entry_func.fixup_hooks_in.push_back(
-				    [&]() { statement(to_name(var.self), " = ", to_expression(var.initializer), ";"); });
-			}
 		}
 	}
 }
@@ -3429,6 +3421,32 @@ void CompilerGLSL::emit_resources()
 
 				statement(variable_decl(var), initializer, ";");
 				emitted = true;
+			}
+		}
+		else if (var.initializer && maybe_get<SPIRConstant>(var.initializer) != nullptr)
+		{
+			// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
+			auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
+			auto &type = get<SPIRType>(var.basetype);
+			bool is_block = has_decoration(type.self, DecorationBlock);
+			if (is_block)
+			{
+				// If the initializer is a block, we must initialize each block member one at a time.
+				uint32_t member_count = uint32_t(type.member_types.size());
+				for (uint32_t i = 0; i < member_count; i++)
+				{
+					entry_func.fixup_hooks_in.push_back([&var, this, i]() {
+						AccessChainMeta meta;
+						auto &c = this->get<SPIRConstant>(var.initializer);
+						auto chain = access_chain_internal(var.self, &i, 1, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+						statement(chain, " = ", to_expression(c.subconstants[i]), ";");
+					});
+				}
+			}
+			else
+			{
+				entry_func.fixup_hooks_in.push_back(
+				    [&]() { statement(to_name(var.self), " = ", to_expression(var.initializer), ";"); });
 			}
 		}
 	}
