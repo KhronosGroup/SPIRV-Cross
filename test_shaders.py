@@ -203,9 +203,12 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
 
     spirv_cross_path = paths.spirv_cross
 
-    msl_args = [spirv_cross_path, '--entry', 'main', '--output', msl_path, spirv_path, '--msl', '--iterations', str(iterations)]
+    msl_args = [spirv_cross_path, '--output', msl_path, spirv_path, '--msl', '--iterations', str(iterations)]
     msl_args.append('--msl-version')
     msl_args.append(path_to_msl_standard_cli(shader))
+    if not '.nomain.' in shader:
+        msl_args.append('--entry')
+        msl_args.append('main')
     if '.swizzle.' in shader:
         msl_args.append('--msl-swizzle-texture-samples')
     if '.ios.' in shader:

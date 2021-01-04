@@ -1180,6 +1180,7 @@ void CompilerMSL::emit_entry_point_declarations()
 
 string CompilerMSL::compile()
 {
+	replace_illegal_entry_point_names();
 	ir.fixup_reserved_names();
 
 	// Do not deal with GLES-isms like precision, older extensions and such.
@@ -1229,6 +1230,7 @@ string CompilerMSL::compile()
 
 	fixup_type_alias();
 	replace_illegal_names();
+	sync_entry_point_aliases_and_names();
 
 	build_function_control_flow_graphs_and_analyze();
 	update_active_builtins();
@@ -11884,11 +11886,8 @@ string CompilerMSL::ensure_valid_name(string name, string pfx)
 	return (name.size() >= 2 && name[0] == '_' && isdigit(name[1])) ? (pfx + name) : name;
 }
 
-// Replace all names that match MSL keywords or Metal Standard Library functions.
-void CompilerMSL::replace_illegal_names()
+const std::unordered_set<std::string> &CompilerMSL::get_reserved_keyword_set()
 {
-	// FIXME: MSL and GLSL are doing two different things here.
-	// Agree on convention and remove this override.
 	static const unordered_set<string> keywords = {
 		"kernel",
 		"vertex",
@@ -12022,6 +12021,11 @@ void CompilerMSL::replace_illegal_names()
 		"quad_broadcast",
 	};
 
+	return keywords;
+}
+
+const std::unordered_set<std::string> &CompilerMSL::get_illegal_func_names()
+{
 	static const unordered_set<string> illegal_func_names = {
 		"main",
 		"saturate",
@@ -12148,6 +12152,17 @@ void CompilerMSL::replace_illegal_names()
 		"M_SQRT1_2",
 	};
 
+	return illegal_func_names;
+}
+
+// Replace all names that match MSL keywords or Metal Standard Library functions.
+void CompilerMSL::replace_illegal_names()
+{
+	// FIXME: MSL and GLSL are doing two different things here.
+	// Agree on convention and remove this override.
+	auto &keywords = get_reserved_keyword_set();
+	auto &illegal_func_names = get_illegal_func_names();
+
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &) {
 		auto *meta = ir.find_meta(self);
 		if (!meta)
@@ -12178,6 +12193,16 @@ void CompilerMSL::replace_illegal_names()
 				mbr_dec.alias += "0";
 	});
 
+	CompilerGLSL::replace_illegal_names();
+}
+
+void CompilerMSL::replace_illegal_entry_point_names()
+{
+	auto &illegal_func_names = get_illegal_func_names();
+
+	// It is important to this before we fixup identifiers,
+	// since if ep_name is reserved, we will need to fix that up,
+	// and then copy alias back into entry.name after the fixup.
 	for (auto &entry : ir.entry_points)
 	{
 		// Change both the entry point name and the alias, to keep them synced.
@@ -12185,11 +12210,14 @@ void CompilerMSL::replace_illegal_names()
 		if (illegal_func_names.find(ep_name) != end(illegal_func_names))
 			ep_name += "0";
 
-		// Always write this because entry point might have been renamed earlier.
 		ir.meta[entry.first].decoration.alias = ep_name;
 	}
+}
 
-	CompilerGLSL::replace_illegal_names();
+void CompilerMSL::sync_entry_point_aliases_and_names()
+{
+	for (auto &entry : ir.entry_points)
+		entry.second.name = ir.meta[entry.first].decoration.alias;
 }
 
 string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain)
