@@ -2551,7 +2551,17 @@ void CompilerGLSL::replace_illegal_names(const unordered_set<string> &keywords)
 			return;
 
 		auto &m = meta->decoration;
-		if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
+		if (keywords.find(m.alias) != end(keywords))
+			m.alias = join("_", m.alias);
+	});
+
+	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, const SPIRFunction &func) {
+		auto *meta = ir.find_meta(func.self);
+		if (!meta)
+			return;
+
+		auto &m = meta->decoration;
+		if (keywords.find(m.alias) != end(keywords))
 			m.alias = join("_", m.alias);
 	});
 
@@ -2561,11 +2571,11 @@ void CompilerGLSL::replace_illegal_names(const unordered_set<string> &keywords)
 			return;
 
 		auto &m = meta->decoration;
-		if (m.alias.compare(0, 3, "gl_") == 0 || keywords.find(m.alias) != end(keywords))
+		if (keywords.find(m.alias) != end(keywords))
 			m.alias = join("_", m.alias);
 
 		for (auto &memb : meta->members)
-			if (memb.alias.compare(0, 3, "gl_") == 0 || keywords.find(memb.alias) != end(keywords))
+			if (keywords.find(memb.alias) != end(keywords))
 				memb.alias = join("_", memb.alias);
 	});
 }
