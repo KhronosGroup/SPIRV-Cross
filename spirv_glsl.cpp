@@ -3429,136 +3429,7 @@ void CompilerGLSL::emit_resources()
 		}
 		else if (var.initializer && maybe_get<SPIRConstant>(var.initializer) != nullptr)
 		{
-			// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
-			auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
-			auto &type = get<SPIRType>(var.basetype);
-			bool is_patch = has_decoration(var.self, DecorationPatch);
-			bool is_block = has_decoration(type.self, DecorationBlock);
-			bool is_control_point = get_execution_model() == ExecutionModelTessellationControl && !is_patch;
-
-			if (is_block)
-			{
-				uint32_t member_count = uint32_t(type.member_types.size());
-				bool is_array = type.array.size() == 1;
-				uint32_t array_size = 1;
-				if (is_array)
-					array_size = to_array_size_literal(type);
-				uint32_t iteration_count = is_control_point ? 1 : array_size;
-
-				// If the initializer is a block, we must initialize each block member one at a time.
-				for (uint32_t i = 0; i < member_count; i++)
-				{
-					// These outputs might not have been properly declared, so don't initialize them in that case.
-					if (has_member_decoration(type.self, i, DecorationBuiltIn))
-					{
-						if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInCullDistance &&
-						    !cull_distance_count)
-							continue;
-
-						if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInClipDistance &&
-						    !clip_distance_count)
-							continue;
-					}
-
-					// We need to build a per-member array first, essentially transposing from AoS to SoA.
-					// This code path hits when we have an array of blocks.
-					string lut_name;
-					if (is_array)
-					{
-						lut_name = join("_", var.self, "_", i, "_init");
-						uint32_t member_type_id = get<SPIRType>(var.basetype).member_types[i];
-						auto &member_type = get<SPIRType>(member_type_id);
-						auto array_type = member_type;
-						array_type.parent_type = member_type_id;
-						array_type.array.push_back(array_size);
-						array_type.array_size_literal.push_back(true);
-
-						SmallVector<string> exprs;
-						exprs.reserve(array_size);
-						auto &c = get<SPIRConstant>(var.initializer);
-						for (uint32_t j = 0; j < array_size; j++)
-							exprs.push_back(to_expression(get<SPIRConstant>(c.subconstants[j]).subconstants[i]));
-						statement("const ", type_to_glsl(array_type), " ", lut_name, type_to_array_glsl(array_type), " = ",
-						          type_to_glsl_constructor(array_type), "(", merge(exprs, ", "), ");");
-					}
-
-					for (uint32_t j = 0; j < iteration_count; j++)
-					{
-						entry_func.fixup_hooks_in.push_back([=, &var]() {
-							AccessChainMeta meta;
-							auto &c = this->get<SPIRConstant>(var.initializer);
-
-							uint32_t invocation_id = 0;
-							uint32_t member_index_id = 0;
-							if (is_control_point)
-							{
-								uint32_t ids = ir.increase_bound_by(3);
-								SPIRType uint_type;
-								uint_type.basetype = SPIRType::UInt;
-								uint_type.width = 32;
-								set<SPIRType>(ids, uint_type);
-								set<SPIRExpression>(ids + 1, builtin_to_glsl(BuiltInInvocationId, StorageClassInput), ids, true);
-								set<SPIRConstant>(ids + 2, ids, i, false);
-								invocation_id = ids + 1;
-								member_index_id = ids + 2;
-							}
-
-							if (is_patch)
-							{
-								statement("if (gl_InvocationID == 0)");
-								begin_scope();
-							}
-
-							if (is_array && !is_control_point)
-							{
-								uint32_t indices[2] = { j, i };
-								auto chain = access_chain_internal(var.self, indices, 2, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
-								statement(chain, " = ", lut_name, "[", j, "];");
-							}
-							else if (is_control_point)
-							{
-								uint32_t indices[2] = { invocation_id, member_index_id };
-								auto chain = access_chain_internal(var.self, indices, 2, 0, &meta);
-								statement(chain, " = ", lut_name, "[", builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
-							}
-							else
-							{
-								auto chain =
-								    access_chain_internal(var.self, &i, 1, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
-								statement(chain, " = ", to_expression(c.subconstants[i]), ";");
-							}
-
-							if (is_patch)
-								end_scope();
-						});
-					}
-				}
-			}
-			else if (is_control_point)
-			{
-				auto lut_name = join("_", var.self, "_init");
-				statement("const ", type_to_glsl(type), " ", lut_name, type_to_array_glsl(type),
-				          " = ", to_expression(var.initializer), ";");
-				entry_func.fixup_hooks_in.push_back([&, lut_name]() {
-					statement(to_expression(var.self), "[gl_InvocationID] = ", lut_name, "[gl_InvocationID];");
-				});
-			}
-			else
-			{
-				auto lut_name = join("_", var.self, "_init");
-				statement("const ", type_to_glsl(type), " ", lut_name,
-				          type_to_array_glsl(type), " = ", to_expression(var.initializer), ";");
-				entry_func.fixup_hooks_in.push_back([&, lut_name, is_patch]() {
-					if (is_patch)
-					{
-						statement("if (gl_InvocationID == 0)");
-						begin_scope();
-					}
-					statement(to_expression(var.self), " = ", lut_name, ";");
-					if (is_patch)
-						end_scope();
-				});
-			}
+			emit_output_variable_initializer(var);
 		}
 	}
 
@@ -3566,6 +3437,140 @@ void CompilerGLSL::emit_resources()
 		statement("");
 
 	declare_undefined_values();
+}
+
+void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
+{
+	// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
+	auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_patch = has_decoration(var.self, DecorationPatch);
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	bool is_control_point = get_execution_model() == ExecutionModelTessellationControl && !is_patch;
+
+	if (is_block)
+	{
+		uint32_t member_count = uint32_t(type.member_types.size());
+		bool is_array = type.array.size() == 1;
+		uint32_t array_size = 1;
+		if (is_array)
+			array_size = to_array_size_literal(type);
+		uint32_t iteration_count = is_control_point ? 1 : array_size;
+
+		// If the initializer is a block, we must initialize each block member one at a time.
+		for (uint32_t i = 0; i < member_count; i++)
+		{
+			// These outputs might not have been properly declared, so don't initialize them in that case.
+			if (has_member_decoration(type.self, i, DecorationBuiltIn))
+			{
+				if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInCullDistance &&
+				    !cull_distance_count)
+					continue;
+
+				if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInClipDistance &&
+				    !clip_distance_count)
+					continue;
+			}
+
+			// We need to build a per-member array first, essentially transposing from AoS to SoA.
+			// This code path hits when we have an array of blocks.
+			string lut_name;
+			if (is_array)
+			{
+				lut_name = join("_", var.self, "_", i, "_init");
+				uint32_t member_type_id = get<SPIRType>(var.basetype).member_types[i];
+				auto &member_type = get<SPIRType>(member_type_id);
+				auto array_type = member_type;
+				array_type.parent_type = member_type_id;
+				array_type.array.push_back(array_size);
+				array_type.array_size_literal.push_back(true);
+
+				SmallVector<string> exprs;
+				exprs.reserve(array_size);
+				auto &c = get<SPIRConstant>(var.initializer);
+				for (uint32_t j = 0; j < array_size; j++)
+					exprs.push_back(to_expression(get<SPIRConstant>(c.subconstants[j]).subconstants[i]));
+				statement("const ", type_to_glsl(array_type), " ", lut_name, type_to_array_glsl(array_type), " = ",
+				          type_to_glsl_constructor(array_type), "(", merge(exprs, ", "), ");");
+			}
+
+			for (uint32_t j = 0; j < iteration_count; j++)
+			{
+				entry_func.fixup_hooks_in.push_back([=, &var]() {
+					AccessChainMeta meta;
+					auto &c = this->get<SPIRConstant>(var.initializer);
+
+					uint32_t invocation_id = 0;
+					uint32_t member_index_id = 0;
+					if (is_control_point)
+					{
+						uint32_t ids = ir.increase_bound_by(3);
+						SPIRType uint_type;
+						uint_type.basetype = SPIRType::UInt;
+						uint_type.width = 32;
+						set<SPIRType>(ids, uint_type);
+						set<SPIRExpression>(ids + 1, builtin_to_glsl(BuiltInInvocationId, StorageClassInput), ids, true);
+						set<SPIRConstant>(ids + 2, ids, i, false);
+						invocation_id = ids + 1;
+						member_index_id = ids + 2;
+					}
+
+					if (is_patch)
+					{
+						statement("if (gl_InvocationID == 0)");
+						begin_scope();
+					}
+
+					if (is_array && !is_control_point)
+					{
+						uint32_t indices[2] = { j, i };
+						auto chain = access_chain_internal(var.self, indices, 2, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+						statement(chain, " = ", lut_name, "[", j, "];");
+					}
+					else if (is_control_point)
+					{
+						uint32_t indices[2] = { invocation_id, member_index_id };
+						auto chain = access_chain_internal(var.self, indices, 2, 0, &meta);
+						statement(chain, " = ", lut_name, "[", builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+					}
+					else
+					{
+						auto chain =
+								access_chain_internal(var.self, &i, 1, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+						statement(chain, " = ", to_expression(c.subconstants[i]), ";");
+					}
+
+					if (is_patch)
+						end_scope();
+				});
+			}
+		}
+	}
+	else if (is_control_point)
+	{
+		auto lut_name = join("_", var.self, "_init");
+		statement("const ", type_to_glsl(type), " ", lut_name, type_to_array_glsl(type),
+		          " = ", to_expression(var.initializer), ";");
+		entry_func.fixup_hooks_in.push_back([&, lut_name]() {
+			statement(to_expression(var.self), "[gl_InvocationID] = ", lut_name, "[gl_InvocationID];");
+		});
+	}
+	else
+	{
+		auto lut_name = join("_", var.self, "_init");
+		statement("const ", type_to_glsl(type), " ", lut_name,
+		          type_to_array_glsl(type), " = ", to_expression(var.initializer), ";");
+		entry_func.fixup_hooks_in.push_back([&, lut_name, is_patch]() {
+			if (is_patch)
+			{
+				statement("if (gl_InvocationID == 0)");
+				begin_scope();
+			}
+			statement(to_expression(var.self), " = ", lut_name, ";");
+			if (is_patch)
+				end_scope();
+		});
+	}
 }
 
 void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
