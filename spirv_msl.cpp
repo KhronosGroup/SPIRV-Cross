@@ -2596,6 +2596,17 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
 		if (builtin == BuiltInPosition && storage == StorageClassOutput)
 			qual_pos_var_name = qual_var_name;
+
+		if (var.storage == StorageClassOutput && var.initializer != ID(0))
+		{
+			auto *c = maybe_get<SPIRConstant>(var.initializer);
+			if (c)
+			{
+				entry_func.fixup_hooks_in.push_back([=]() {
+					statement(qual_var_name, " = ", constant_expression(this->get<SPIRConstant>(c->subconstants[mbr_idx])), ";");
+				});
+			}
+		}
 	}
 
 	if (storage != StorageClassInput || !pull_model_inputs.count(var.self))
@@ -2808,7 +2819,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		add_tess_level_input_to_interface_block(ib_var_ref, ib_type, var);
 	}
 	else if (var_type.basetype == SPIRType::Boolean || var_type.basetype == SPIRType::Char ||
-	         type_is_integral(var_type) || type_is_floating_point(var_type) || var_type.basetype == SPIRType::Boolean)
+	         type_is_integral(var_type) || type_is_floating_point(var_type))
 	{
 		if (!is_builtin || has_active_builtin(builtin, storage))
 		{
