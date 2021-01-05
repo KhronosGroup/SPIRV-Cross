@@ -10681,6 +10681,67 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				ep_args += ", ";
 			ep_args += join("device ", get_tess_factor_struct_name(), "* ", tess_factor_buffer_var_name, " [[buffer(",
 			                convert_to_string(msl_options.shader_tess_factor_buffer_index), ")]]");
+
+			// Initializer for tess factors must be handled specially since it's never declared as a normal variable.
+			uint32_t outer_factor_initializer_id = 0;
+			uint32_t inner_factor_initializer_id = 0;
+			ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+				if (!has_decoration(var.self, DecorationBuiltIn) || var.storage != StorageClassOutput || !var.initializer)
+					return;
+
+				BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+				if (builtin == BuiltInTessLevelInner)
+					inner_factor_initializer_id = var.initializer;
+				else if (builtin == BuiltInTessLevelOuter)
+					outer_factor_initializer_id = var.initializer;
+			});
+
+			const SPIRConstant *c = nullptr;
+
+			if (outer_factor_initializer_id && (c = maybe_get<SPIRConstant>(outer_factor_initializer_id)))
+			{
+				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				if (get_execution_mode_bitset().get(ExecutionModeTriangles))
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), " = ", "half3(",
+						          to_expression(c->subconstants[0]), ", ",
+						          to_expression(c->subconstants[1]), ", ",
+						          to_expression(c->subconstants[2]), ");");
+					});
+				}
+				else
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), " = ", "half4(",
+						          to_expression(c->subconstants[0]), ", ",
+						          to_expression(c->subconstants[1]), ", ",
+						          to_expression(c->subconstants[2]), ", ",
+						          to_expression(c->subconstants[3]), ");");
+					});
+				}
+			}
+
+			if (inner_factor_initializer_id && (c = maybe_get<SPIRConstant>(inner_factor_initializer_id)))
+			{
+				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				if (get_execution_mode_bitset().get(ExecutionModeTriangles))
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), " = ", "half(",
+						          to_expression(c->subconstants[0]), ");");
+					});
+				}
+				else
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), " = ", "half2(",
+						          to_expression(c->subconstants[0]), ", ",
+						          to_expression(c->subconstants[1]), ");");
+					});
+				}
+			}
+
 			if (stage_in_var_id)
 			{
 				if (!ep_args.empty())
