@@ -9906,7 +9906,14 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	    physical_type.basetype != SPIRType::SampledImage)
 	{
 		BuiltIn builtin = BuiltInMax;
-		if (is_member_builtin(type, index, &builtin))
+
+		// Special handling. In [[stage_out]] or [[stage_in]] blocks,
+		// we need flat arrays, but if we're somehow declaring gl_PerVertex for constant array reasons, we want
+		// template array types to be declared.
+		bool is_ib_in_out =
+				((stage_out_var_id && get_stage_out_struct_type().self == type.self) ||
+				 (stage_in_var_id && get_stage_in_struct_type().self == type.self));
+		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
 	}

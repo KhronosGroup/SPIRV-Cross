@@ -48,8 +48,8 @@ struct _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex
 {
     float4 _RESERVED_IDENTIFIER_FIXUP_gl_Position;
     float _RESERVED_IDENTIFIER_FIXUP_gl_PointSize;
-    float _RESERVED_IDENTIFIER_FIXUP_gl_ClipDistance[1];
-    float _RESERVED_IDENTIFIER_FIXUP_gl_CullDistance[1];
+    spvUnsafeArray<float, 1> _RESERVED_IDENTIFIER_FIXUP_gl_ClipDistance;
+    spvUnsafeArray<float, 1> _RESERVED_IDENTIFIER_FIXUP_gl_CullDistance;
 };
 
 struct Verts
