@@ -10752,25 +10752,14 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			if (outer_factor_initializer_id && (c = maybe_get<SPIRConstant>(outer_factor_initializer_id)))
 			{
 				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
-				if (get_execution_mode_bitset().get(ExecutionModeTriangles))
-				{
-					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), " = ", "half3(",
-						          to_expression(c->subconstants[0]), ", ",
-						          to_expression(c->subconstants[1]), ", ",
-						          to_expression(c->subconstants[2]), ");");
-					});
-				}
-				else
-				{
-					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), " = ", "half4(",
-						          to_expression(c->subconstants[0]), ", ",
-						          to_expression(c->subconstants[1]), ", ",
-						          to_expression(c->subconstants[2]), ", ",
-						          to_expression(c->subconstants[3]), ");");
-					});
-				}
+				entry_func.fixup_hooks_in.push_back([=]() {
+					uint32_t components = get_execution_mode_bitset().get(ExecutionModeTriangles) ? 3 : 4;
+					for (uint32_t i = 0; i < components; i++)
+					{
+						statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), "[", i, "] = ",
+						          "half(", to_expression(c->subconstants[i]), ");");
+					}
+				});
 			}
 
 			if (inner_factor_initializer_id && (c = maybe_get<SPIRConstant>(inner_factor_initializer_id)))
@@ -10786,9 +10775,11 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				else
 				{
 					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), " = ", "half2(",
-						          to_expression(c->subconstants[0]), ", ",
-						          to_expression(c->subconstants[1]), ");");
+						for (uint32_t i = 0; i < 2; i++)
+						{
+							statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), "[", i, "] = ",
+							          "half(", to_expression(c->subconstants[i]), ");");
+						}
 					});
 				}
 			}

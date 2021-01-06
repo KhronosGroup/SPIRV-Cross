@@ -55,9 +55,13 @@ struct main0_out
 kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_PrimitiveID [[threadgroup_position_in_grid]], device main0_out* spvOut [[buffer(28)]], constant uint* spvIndirectParams [[buffer(29)]], device MTLTriangleTessellationFactorsHalf* spvTessLevel [[buffer(26)]])
 {
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
-    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor = half3(0.0, 0.0, 0.0);
+    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(0.0);
+    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(0.0);
+    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(0.0);
     spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(0.0);
-    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor = half3(0.0, 0.0, 0.0);
+    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(0.0);
+    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(0.0);
+    spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(0.0);
     spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(0.0);
     gl_out[gl_InvocationID].gl_Position = float4(1.0);
     spvTessLevel[gl_PrimitiveID].insideTessellationFactor = half(1.0);
