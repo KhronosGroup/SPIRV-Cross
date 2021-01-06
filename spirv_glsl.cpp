@@ -3451,9 +3451,9 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 	if (is_block)
 	{
 		uint32_t member_count = uint32_t(type.member_types.size());
-		bool is_array = type.array.size() == 1;
+		bool type_is_array = type.array.size() == 1;
 		uint32_t array_size = 1;
-		if (is_array)
+		if (type_is_array)
 			array_size = to_array_size_literal(type);
 		uint32_t iteration_count = is_control_point ? 1 : array_size;
 
@@ -3475,7 +3475,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 			// We need to build a per-member array first, essentially transposing from AoS to SoA.
 			// This code path hits when we have an array of blocks.
 			string lut_name;
-			if (is_array)
+			if (type_is_array)
 			{
 				lut_name = join("_", var.self, "_", i, "_init");
 				uint32_t member_type_id = get<SPIRType>(var.basetype).member_types[i];
@@ -3521,7 +3521,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 						begin_scope();
 					}
 
-					if (is_array && !is_control_point)
+					if (type_is_array && !is_control_point)
 					{
 						uint32_t indices[2] = { j, i };
 						auto chain = access_chain_internal(var.self, indices, 2, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
