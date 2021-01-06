@@ -727,7 +727,7 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
-	case OpTypeRayQueryProvisionalKHR:
+	case OpTypeRayQueryKHR:
 	{
 		uint32_t id = ops[0];
 		auto &type = set<SPIRType>(id);
