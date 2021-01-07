@@ -1994,8 +1994,22 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		}
 		else
 		{
-			entry_func.fixup_hooks_in.push_back(
-			    [=, &var]() { statement(qual_var_name, " = ", to_expression(var.initializer), ";"); });
+			if (meta.strip_array)
+			{
+				entry_func.fixup_hooks_in.push_back([=, &var]() {
+					uint32_t index = get_extended_decoration(var.self, SPIRVCrossDecorationInterfaceMemberIndex);
+					statement(to_expression(stage_out_ptr_var_id), "[",
+					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+					          to_member_name(ib_type, index), " = ", to_expression(var.initializer), "[",
+					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+				});
+			}
+			else
+			{
+				entry_func.fixup_hooks_in.push_back([=, &var]() {
+					statement(qual_var_name, " = ", to_expression(var.initializer), ";");
+				});
+			}
 		}
 	}
 
@@ -2512,6 +2526,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			qual_var_name += ".interpolate_at_center()";
 	}
 
+	bool flatten_stage_out = false;
+
 	if (is_builtin && !meta.strip_array)
 	{
 		// For the builtin gl_PerVertex, we cannot treat it as a block anyways,
@@ -2530,6 +2546,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			break;
 
 		case StorageClassOutput:
+			flatten_stage_out = true;
 			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
 				statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(var_type, mbr_idx), ";");
 			});
@@ -2596,16 +2613,34 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
 		if (builtin == BuiltInPosition && storage == StorageClassOutput)
 			qual_pos_var_name = qual_var_name;
+	}
 
-		if (var.storage == StorageClassOutput && var.initializer != ID(0))
+	const SPIRConstant *c = nullptr;
+	if (!flatten_stage_out && var.storage == StorageClassOutput &&
+	    var.initializer != ID(0) && (c = maybe_get<SPIRConstant>(var.initializer)))
+	{
+		if (meta.strip_array)
 		{
-			auto *c = maybe_get<SPIRConstant>(var.initializer);
-			if (c)
-			{
-				entry_func.fixup_hooks_in.push_back([=]() {
-					statement(qual_var_name, " = ", constant_expression(this->get<SPIRConstant>(c->subconstants[mbr_idx])), ";");
-				});
-			}
+			entry_func.fixup_hooks_in.push_back([=, &var]() {
+				auto &type = this->get<SPIRType>(var.basetype);
+				uint32_t index = get_extended_decoration(var.self, SPIRVCrossDecorationInterfaceMemberIndex);
+				index += mbr_idx;
+
+				AccessChainMeta chain_meta;
+				auto constant_chain = access_chain_internal(var.initializer, &builtin_invocation_id_id, 1, 0, &chain_meta);
+
+				statement(to_expression(stage_out_ptr_var_id), "[",
+				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+				          to_member_name(ib_type, index), " = ",
+				          constant_chain, ".", to_member_name(type, mbr_idx), ";");
+			});
+		}
+		else
+		{
+			entry_func.fixup_hooks_in.push_back([=]() {
+				statement(qual_var_name, " = ", constant_expression(
+						this->get<SPIRConstant>(c->subconstants[mbr_idx])), ";");
+			});
 		}
 	}
 
@@ -6115,6 +6150,15 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			mark_scalar_layout_structs(type);
 	});
 
+	bool builtin_block_type_is_required = false;
+	// Very special case. If gl_PerVertex is initialized as an array (tessellation)
+	// we have to potentially emit the gl_PerVertex struct type so that we can emit a constant LUT.
+	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, SPIRConstant &c) {
+		auto &type = this->get<SPIRType>(c.constant_type);
+		if (is_array(type) && has_decoration(type.self, DecorationBlock) && is_builtin_type(type))
+			builtin_block_type_is_required = true;
+	});
+
 	// Very particular use of the soft loop lock.
 	// align_struct may need to create custom types on the fly, but we don't care about
 	// these types for purpose of iterating over them in ir.ids_for_type and friends.
@@ -6199,7 +6243,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			    has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
 
 			bool is_builtin_block = is_block && is_builtin_type(type);
-			bool is_declarable_struct = is_struct && !is_builtin_block;
+			bool is_declarable_struct = is_struct && (!is_builtin_block || builtin_block_type_is_required);
 
 			// We'll declare this later.
 			if (stage_out_var_id && get_stage_out_struct_type().self == type_id)
@@ -9862,7 +9906,14 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	    physical_type.basetype != SPIRType::SampledImage)
 	{
 		BuiltIn builtin = BuiltInMax;
-		if (is_member_builtin(type, index, &builtin))
+
+		// Special handling. In [[stage_out]] or [[stage_in]] blocks,
+		// we need flat arrays, but if we're somehow declaring gl_PerVertex for constant array reasons, we want
+		// template array types to be declared.
+		bool is_ib_in_out =
+				((stage_out_var_id && get_stage_out_struct_type().self == type.self) ||
+				 (stage_in_var_id && get_stage_in_struct_type().self == type.self));
+		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
 	}
@@ -10681,6 +10732,58 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				ep_args += ", ";
 			ep_args += join("device ", get_tess_factor_struct_name(), "* ", tess_factor_buffer_var_name, " [[buffer(",
 			                convert_to_string(msl_options.shader_tess_factor_buffer_index), ")]]");
+
+			// Initializer for tess factors must be handled specially since it's never declared as a normal variable.
+			uint32_t outer_factor_initializer_id = 0;
+			uint32_t inner_factor_initializer_id = 0;
+			ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+				if (!has_decoration(var.self, DecorationBuiltIn) || var.storage != StorageClassOutput || !var.initializer)
+					return;
+
+				BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+				if (builtin == BuiltInTessLevelInner)
+					inner_factor_initializer_id = var.initializer;
+				else if (builtin == BuiltInTessLevelOuter)
+					outer_factor_initializer_id = var.initializer;
+			});
+
+			const SPIRConstant *c = nullptr;
+
+			if (outer_factor_initializer_id && (c = maybe_get<SPIRConstant>(outer_factor_initializer_id)))
+			{
+				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				entry_func.fixup_hooks_in.push_back([=]() {
+					uint32_t components = get_execution_mode_bitset().get(ExecutionModeTriangles) ? 3 : 4;
+					for (uint32_t i = 0; i < components; i++)
+					{
+						statement(builtin_to_glsl(BuiltInTessLevelOuter, StorageClassOutput), "[", i, "] = ",
+						          "half(", to_expression(c->subconstants[i]), ");");
+					}
+				});
+			}
+
+			if (inner_factor_initializer_id && (c = maybe_get<SPIRConstant>(inner_factor_initializer_id)))
+			{
+				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				if (get_execution_mode_bitset().get(ExecutionModeTriangles))
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), " = ", "half(",
+						          to_expression(c->subconstants[0]), ");");
+					});
+				}
+				else
+				{
+					entry_func.fixup_hooks_in.push_back([=]() {
+						for (uint32_t i = 0; i < 2; i++)
+						{
+							statement(builtin_to_glsl(BuiltInTessLevelInner, StorageClassOutput), "[", i, "] = ",
+							          "half(", to_expression(c->subconstants[i]), ");");
+						}
+					});
+				}
+			}
+
 			if (stage_in_var_id)
 			{
 				if (!ep_args.empty())
