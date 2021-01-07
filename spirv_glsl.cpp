@@ -12155,18 +12155,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpReportIntersectionNV:
+		// KHR is same opcode.
 		statement("reportIntersectionNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpIgnoreIntersectionNV:
+	case OpIgnoreIntersectionKHR:
 		statement("ignoreIntersectionNV();");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTerminateRayNV:
+	case OpTerminateRayKHR:
 		statement("terminateRayNV();");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTraceNV:
+	case OpTraceRayKHR:
 		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
@@ -12174,6 +12178,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpExecuteCallableNV:
+	case OpExecuteCallableKHR:
 		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
