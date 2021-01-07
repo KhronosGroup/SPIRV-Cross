@@ -198,9 +198,12 @@ void CompilerMSL::build_implicit_builtins()
 		bool has_workgroup_size = false;
 		uint32_t workgroup_id_type = 0;
 
-		// FIXME: Investigate the fact that there are no checks for the entry point interface variables.
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-			if (!ir.meta[var.self].decoration.builtin)
+			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+				return;
+			if (!interface_variable_exists_in_entry_point(var.self))
+				return;
+			if (!has_decoration(var.self, DecorationBuiltIn))
 				return;
 
 			BuiltIn builtin = ir.meta[var.self].decoration.builtin_type;
@@ -11175,6 +11178,11 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	ir.for_each_typed_id<SPIRVariable>([this, &entry_func](uint32_t, SPIRVariable &var) {
 		uint32_t var_id = var.self;
 		BuiltIn bi_type = ir.meta[var_id].decoration.builtin_type;
+
+		if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+			return;
+		if (!interface_variable_exists_in_entry_point(var.self))
+			return;
 
 		if (var.storage == StorageClassInput && is_builtin_variable(var) && active_input_builtins.get(bi_type))
 		{
