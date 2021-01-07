@@ -10586,11 +10586,14 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 	// Builtin variables
 	SmallVector<pair<SPIRVariable *, BuiltIn>, 8> active_builtins;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
+		if (var.storage != StorageClassInput)
+			return;
+
 		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
 
 		// Don't emit SamplePosition as a separate parameter. In the entry
 		// point, we get that by calling get_sample_position() on the sample ID.
-		if (var.storage == StorageClassInput && is_builtin_variable(var) &&
+		if (is_builtin_variable(var) &&
 		    get_variable_data_type(var).basetype != SPIRType::Struct &&
 		    get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
 		{
@@ -10624,8 +10627,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			}
 		}
 
-		if (var.storage == StorageClassInput &&
-		    has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
+		if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInDispatchBase))
 		{
 			// This is a special implicit builtin, not corresponding to any SPIR-V builtin,
 			// which holds the base that was passed to vkCmdDispatchBase() or vkCmdDrawIndexed(). If it's present,
@@ -10637,8 +10639,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args += type_to_glsl(get_variable_data_type(var)) + " " + to_expression(var_id) + " [[grid_origin]]";
 		}
 
-		if (var.storage == StorageClassInput &&
-		    has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInStageInputSize))
+		if (has_extended_decoration(var_id, SPIRVCrossDecorationBuiltInStageInputSize))
 		{
 			// This is another special implicit builtin, not corresponding to any SPIR-V builtin,
 			// which holds the number of vertices and instances to draw. If it's present,
