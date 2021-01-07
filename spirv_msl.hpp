@@ -1026,6 +1026,7 @@ protected:
 	void activate_argument_buffer_resources();
 
 	bool type_is_msl_framebuffer_fetch(const SPIRType &type) const;
+	bool is_supported_argument_buffer_type(const SPIRType &type) const;
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler

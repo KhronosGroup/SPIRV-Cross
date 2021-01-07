@@ -10906,12 +10906,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		{
 			auto &type = get_variable_data_type(var);
 
-			// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
-			// But we won't know when the argument buffer is encoded whether this image will have
-			// a NonWritable decoration. So just use discrete arguments for all storage images
-			// on iOS.
-			if (!(msl_options.is_ios() && type.basetype == SPIRType::Image && type.image.sampled == 2) &&
-			    var.storage != StorageClassPushConstant)
+			if (is_supported_argument_buffer_type(type) && var.storage != StorageClassPushConstant)
 			{
 				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 				if (descriptor_set_is_argument_buffer(desc_set))
@@ -14597,6 +14592,17 @@ bool CompilerMSL::descriptor_set_is_argument_buffer(uint32_t desc_set) const
 	return (argument_buffer_discrete_mask & (1u << desc_set)) == 0;
 }
 
+bool CompilerMSL::is_supported_argument_buffer_type(const SPIRType &type) const
+{
+	// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
+	// But we won't know when the argument buffer is encoded whether this image will have
+	// a NonWritable decoration. So just use discrete arguments for all storage images
+	// on iOS.
+	bool is_storage_image = type.basetype == SPIRType::Image && type.image.sampled == 2;
+	bool is_supported_type = !msl_options.is_ios() || !is_storage_image;
+	return !type_is_msl_framebuffer_fetch(type) && is_supported_type;
+}
+
 void CompilerMSL::analyze_argument_buffers()
 {
 	// Gather all used resources and sort them out into argument buffers.
@@ -14679,23 +14685,20 @@ void CompilerMSL::analyze_argument_buffers()
 			{
 				inline_block_vars.push_back(var_id);
 			}
-			else if (!constexpr_sampler)
+			else if (!constexpr_sampler && is_supported_argument_buffer_type(type))
 			{
 				// constexpr samplers are not declared as resources.
 				// Inline uniform blocks are always emitted at the end.
-				if (!msl_options.is_ios() || type.basetype != SPIRType::Image || type.image.sampled != 2)
-				{
-					add_resource_name(var_id);
-					resources_in_set[desc_set].push_back(
-					    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+				add_resource_name(var_id);
+				resources_in_set[desc_set].push_back(
+					{ &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
 
-					// Emulate texture2D atomic operations
-					if (atomic_image_vars.count(var.self))
-					{
-						uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
-						resources_in_set[desc_set].push_back(
-						    { &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
-					}
+				// Emulate texture2D atomic operations
+				if (atomic_image_vars.count(var.self))
+				{
+					uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
+					resources_in_set[desc_set].push_back(
+						{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
 				}
 			}
 
