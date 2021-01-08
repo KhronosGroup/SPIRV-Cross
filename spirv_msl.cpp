@@ -14804,10 +14804,50 @@ void CompilerMSL::analyze_argument_buffers()
 		});
 
 		uint32_t member_index = 0;
+		uint32_t consumed_arg_slots = 0;
 		for (auto &resource : resources)
 		{
 			auto &var = *resource.var;
 			auto &type = get_variable_data_type(var);
+
+			// If needed, synthesize and add a padding member
+			if (msl_options.pad_argument_buffer_resources)
+			{
+				uint32_t pad_cnt = resource.index - consumed_arg_slots;
+				if (pad_cnt)
+				{
+					string mbr_name = join("_m", member_index, "_pad");
+					set_member_name(buffer_type.self, member_index, mbr_name);
+
+					bool use_array = pad_cnt > 1;
+					uint32_t pad_type_id = ir.increase_bound_by(use_array ? 2 : 1);
+					auto &pad_type = set<SPIRType>(pad_type_id);
+					pad_type.basetype = SPIRType::UInt64;
+					pad_type.storage = StorageClassUniformConstant;
+
+					if (use_array)
+					{
+						uint32_t pad_type_array_id = pad_type_id + 1;
+						auto &pad_type_array = set<SPIRType>(pad_type_array_id);
+						pad_type_array = pad_type;
+						pad_type_array.array.push_back(pad_cnt);
+						pad_type_array.array_size_literal.push_back(true);
+						pad_type_array.parent_type = pad_type_id;
+						buffer_type.member_types.push_back(pad_type_array_id);
+					}
+					else
+						buffer_type.member_types.push_back(pad_type_id);
+
+					member_index++;
+				}
+
+				uint32_t elem_cnt = 1;
+				for (uint32_t i = 0; i < type.array.size(); i++)
+				elem_cnt *= to_array_size_literal(type, i);
+
+				consumed_arg_slots += pad_cnt + elem_cnt;
+			}
+
 			string mbr_name = ensure_valid_name(resource.name, "m");
 			if (resource.plane > 0)
 				mbr_name += join(plane_name_suffix, resource.plane);

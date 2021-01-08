@@ -346,6 +346,15 @@ public:
 		// and would otherwise declare a different IAB.
 		bool force_active_argument_buffer_resources = false;
 
+		// Aligns each resource in an argument buffer to its assigned index value, id(N),
+		// by adding synthetic padding members in the argument buffer struct. This allows
+		// the shader to index into the correct argument in a descriptor set argument buffer
+		// that is shared across shaders, where not all resources in the argument buffer are
+		// defined in each shader. The implementation here assumes all resources are pointers,
+		// and doesn't take into consideration inline blocks that are optionally embedded
+		// directly into the argument buffer via add_inline_uniform_block().
+		bool pad_argument_buffer_resources = false;
+
 		// Forces the use of plain arrays, which works around certain driver bugs on certain versions
 		// of Intel Macbooks. See https://github.com/KhronosGroup/SPIRV-Cross/issues/1210.
 		// May reduce performance in scenarios where arrays are copied around as value-types.
