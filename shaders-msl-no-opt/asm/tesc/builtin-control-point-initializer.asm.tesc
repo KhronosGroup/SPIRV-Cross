@@ -13,8 +13,6 @@
                OpName %gl_PerVertex "gl_PerVertex"
                OpMemberName %gl_PerVertex 0 "gl_Position"
                OpMemberName %gl_PerVertex 1 "gl_PointSize"
-               OpMemberName %gl_PerVertex 2 "gl_ClipDistance"
-               OpMemberName %gl_PerVertex 3 "gl_CullDistance"
                OpName %gl_out "gl_out"
                OpName %gl_InvocationID "gl_InvocationID"
                OpName %Verts "Verts"
@@ -23,8 +21,6 @@
                OpName %verts "verts"
                OpMemberDecorate %gl_PerVertex 0 BuiltIn Position
                OpMemberDecorate %gl_PerVertex 1 BuiltIn PointSize
-               OpMemberDecorate %gl_PerVertex 2 BuiltIn ClipDistance
-               OpMemberDecorate %gl_PerVertex 3 BuiltIn CullDistance
                OpDecorate %gl_PerVertex Block
                OpDecorate %gl_InvocationID BuiltIn InvocationId
                OpDecorate %Verts Block
@@ -35,8 +31,7 @@
     %v4float = OpTypeVector %float 4
        %uint = OpTypeInt 32 0
      %uint_1 = OpConstant %uint 1
-%_arr_float_uint_1 = OpTypeArray %float %uint_1
-%gl_PerVertex = OpTypeStruct %v4float %float %_arr_float_uint_1 %_arr_float_uint_1
+%gl_PerVertex = OpTypeStruct %v4float %float
      %uint_4 = OpConstant %uint 4
 %_arr_gl_PerVertex_uint_4 = OpTypeArray %gl_PerVertex %uint_4
 %_ptr_Output__arr_gl_PerVertex_uint_4 = OpTypePointer Output %_arr_gl_PerVertex_uint_4

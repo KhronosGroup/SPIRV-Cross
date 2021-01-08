@@ -2801,6 +2801,13 @@ bool CompilerGLSL::should_force_emit_builtin_block(StorageClass storage)
 		}
 	});
 
+	// If we're declaring clip/cull planes with control points we need to force block declaration.
+	if (get_execution_model() == ExecutionModelTessellationControl &&
+	    (clip_distance_count || cull_distance_count))
+	{
+		should_force = true;
+	}
+
 	return should_force;
 }
 
