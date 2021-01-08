@@ -14841,9 +14841,11 @@ void CompilerMSL::analyze_argument_buffers()
 					member_index++;
 				}
 
-				uint32_t elem_cnt = 1;
-				for (uint32_t i = 0; i < type.array.size(); i++)
-				elem_cnt *= to_array_size_literal(type, i);
+				// Adjust the number of slots consumed by member and possible padding member.
+				// If actual member is an array, allow runtime array resolution as well.
+				uint32_t elem_cnt = type.array.empty() ? 1 : to_array_size_literal(type);
+				if (elem_cnt == 0)
+					elem_cnt = get_resource_array_size(var.self);
 
 				consumed_arg_slots += pad_cnt + elem_cnt;
 			}
