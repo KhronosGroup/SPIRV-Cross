@@ -10906,12 +10906,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		{
 			auto &type = get_variable_data_type(var);
 
-			// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
-			// But we won't know when the argument buffer is encoded whether this image will have
-			// a NonWritable decoration. So just use discrete arguments for all storage images
-			// on iOS.
-			if (!(msl_options.is_ios() && type.basetype == SPIRType::Image && type.image.sampled == 2) &&
-			    var.storage != StorageClassPushConstant)
+			if (is_supported_argument_buffer_type(type) && var.storage != StorageClassPushConstant)
 			{
 				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 				if (descriptor_set_is_argument_buffer(desc_set))
@@ -11723,10 +11718,18 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	if (has_extended_decoration(var.self, resource_decoration))
 		return get_extended_decoration(var.self, resource_decoration);
 
-	// Allow user to enable decoration binding
-	if (msl_options.enable_decoration_binding)
+	auto &type = get<SPIRType>(var.basetype);
+
+	if (type_is_msl_framebuffer_fetch(type))
 	{
-		// If there is no explicit mapping of bindings to MSL, use the declared binding.
+		// Frame-buffer fetch gets its fallback resource index from the input attachment index,
+		// which is then treated as color index.
+		return get_decoration(var.self, DecorationInputAttachmentIndex);
+	}
+	else if (msl_options.enable_decoration_binding)
+	{
+		// Allow user to enable decoration binding.
+		// If there is no explicit mapping of bindings to MSL, use the declared binding as a fallback.
 		if (has_decoration(var.self, DecorationBinding))
 		{
 			var_binding = get_decoration(var.self, DecorationBinding);
@@ -11745,7 +11748,6 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 		allocate_argument_buffer_ids = descriptor_set_is_argument_buffer(var_desc_set);
 
 	uint32_t binding_stride = 1;
-	auto &type = get<SPIRType>(var.basetype);
 	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
 		binding_stride *= to_array_size_literal(type, i);
 
@@ -11754,13 +11756,7 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	// If a binding has not been specified, revert to incrementing resource indices.
 	uint32_t resource_index;
 
-	if (type_is_msl_framebuffer_fetch(type))
-	{
-		// Frame-buffer fetch gets its fallback resource index from the input attachment index,
-		// which is then treated as color index.
-		resource_index = get_decoration(var.self, DecorationInputAttachmentIndex);
-	}
-	else if (allocate_argument_buffer_ids)
+	if (allocate_argument_buffer_ids)
 	{
 		// Allocate from a flat ID binding space.
 		resource_index = next_metal_resource_ids[var_desc_set];
@@ -14596,6 +14592,17 @@ bool CompilerMSL::descriptor_set_is_argument_buffer(uint32_t desc_set) const
 	return (argument_buffer_discrete_mask & (1u << desc_set)) == 0;
 }
 
+bool CompilerMSL::is_supported_argument_buffer_type(const SPIRType &type) const
+{
+	// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
+	// But we won't know when the argument buffer is encoded whether this image will have
+	// a NonWritable decoration. So just use discrete arguments for all storage images
+	// on iOS.
+	bool is_storage_image = type.basetype == SPIRType::Image && type.image.sampled == 2;
+	bool is_supported_type = !msl_options.is_ios() || !is_storage_image;
+	return !type_is_msl_framebuffer_fetch(type) && is_supported_type;
+}
+
 void CompilerMSL::analyze_argument_buffers()
 {
 	// Gather all used resources and sort them out into argument buffers.
@@ -14678,23 +14685,20 @@ void CompilerMSL::analyze_argument_buffers()
 			{
 				inline_block_vars.push_back(var_id);
 			}
-			else if (!constexpr_sampler)
+			else if (!constexpr_sampler && is_supported_argument_buffer_type(type))
 			{
 				// constexpr samplers are not declared as resources.
 				// Inline uniform blocks are always emitted at the end.
-				if (!msl_options.is_ios() || type.basetype != SPIRType::Image || type.image.sampled != 2)
-				{
-					add_resource_name(var_id);
-					resources_in_set[desc_set].push_back(
-					    { &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+				add_resource_name(var_id);
+				resources_in_set[desc_set].push_back(
+					{ &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
 
-					// Emulate texture2D atomic operations
-					if (atomic_image_vars.count(var.self))
-					{
-						uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
-						resources_in_set[desc_set].push_back(
-						    { &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
-					}
+				// Emulate texture2D atomic operations
+				if (atomic_image_vars.count(var.self))
+				{
+					uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
+					resources_in_set[desc_set].push_back(
+						{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
 				}
 			}
 

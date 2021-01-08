@@ -321,6 +321,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('32')
     if '.force-sample.' in shader:
         msl_args.append('--msl-force-sample-rate-shading')
+    if '.decoration-binding.' in shader:
+        msl_args.append('--msl-decoration-binding')
 
     subprocess.check_call(msl_args)
 
