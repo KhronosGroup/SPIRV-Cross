@@ -545,7 +545,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         glsl_path = None
 
     if (vulkan or spirv) and (not is_legacy):
-        subprocess.check_call([spirv_cross_path, '--entry', 'main', '--vulkan-semantics', '--output', vulkan_glsl_path, spirv_path] + extra_args)
+        subprocess.check_call([spirv_cross_path, '--entry', 'main', '-V', '--output', vulkan_glsl_path, spirv_path] + extra_args)
         validate_shader(vulkan_glsl_path, True, paths)
         # SPIR-V shaders might just want to validate Vulkan GLSL output, we don't always care about the output.
         if not vulkan:

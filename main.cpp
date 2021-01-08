@@ -94,7 +94,7 @@ struct CLIParser
 				const char *next = *argv++;
 				argc--;
 
-				if ((next[0] != '-' || next[1] != '-') && cbs.default_handler)
+				if (*next != '-' && cbs.default_handler)
 				{
 					cbs.default_handler(next);
 				}
@@ -1572,6 +1572,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--emit-line-directives", [&args](CLIParser &) { args.emit_line_directives = true; });
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
+	cbs.add("-", [&args](CLIParser &) { args.input = "-"; });
 	cbs.error_handler = [] { print_help(); };
 
 	CLIParser parser{ move(cbs), argc - 1, argv + 1 };
