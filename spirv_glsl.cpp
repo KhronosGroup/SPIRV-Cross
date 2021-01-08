@@ -427,15 +427,37 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_ARB_tessellation_shader");
 		break;
 
-	case ExecutionModelRayGenerationNV:
-	case ExecutionModelIntersectionNV:
-	case ExecutionModelAnyHitNV:
-	case ExecutionModelClosestHitNV:
-	case ExecutionModelMissNV:
-	case ExecutionModelCallableNV:
+	case ExecutionModelRayGenerationKHR:
+	case ExecutionModelIntersectionKHR:
+	case ExecutionModelAnyHitKHR:
+	case ExecutionModelClosestHitKHR:
+	case ExecutionModelMissKHR:
+	case ExecutionModelCallableKHR:
+		// NV enums are aliases.
 		if (options.es || options.version < 460)
 			SPIRV_CROSS_THROW("Ray tracing shaders require non-es profile with version 460 or above.");
-		require_extension_internal("GL_NV_ray_tracing");
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Ray tracing requires Vulkan semantics.");
+
+		// Need to figure out if we should target KHR or NV extension based on capabilities.
+		for (auto &cap : ir.declared_capabilities)
+		{
+			if (cap == CapabilityRayTracingKHR || cap == CapabilityRayQueryKHR)
+			{
+				ray_tracing_is_khr = true;
+				break;
+			}
+		}
+
+		if (ray_tracing_is_khr)
+		{
+			// In KHR ray tracing we pass payloads by pointer instead of location,
+			// so make sure we assign locations properly.
+			ray_tracing_khr_fixup_locations();
+			require_extension_internal("GL_EXT_ray_tracing");
+		}
+		else
+			require_extension_internal("GL_NV_ray_tracing");
 		break;
 
 	default:
@@ -510,6 +532,18 @@ void CompilerGLSL::find_static_extensions()
 			break;
 		}
 	}
+}
+
+void CompilerGLSL::ray_tracing_khr_fixup_locations()
+{
+	uint32_t location = 0;
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		if (var.storage != StorageClassRayPayloadKHR && var.storage != StorageClassCallableDataKHR)
+			return;
+		if (!interface_variable_exists_in_entry_point(var.self))
+			return;
+		set_decoration(var.self, DecorationLocation, location++);
+	});
 }
 
 string CompilerGLSL::compile()
@@ -1620,8 +1654,8 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
 		attr.push_back("push_constant");
-	else if (var.storage == StorageClassShaderRecordBufferNV)
-		attr.push_back("shaderRecordNV");
+	else if (var.storage == StorageClassShaderRecordBufferKHR)
+		attr.push_back(ray_tracing_is_khr ? "shaderRecordEXT" : "shaderRecordNV");
 
 	if (flags.get(DecorationRowMajor))
 		attr.push_back("row_major");
@@ -1777,14 +1811,14 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 	// Do not emit set = decoration in regular GLSL output, but
 	// we need to preserve it in Vulkan GLSL mode.
-	if (var.storage != StorageClassPushConstant && var.storage != StorageClassShaderRecordBufferNV)
+	if (var.storage != StorageClassPushConstant && var.storage != StorageClassShaderRecordBufferKHR)
 	{
 		if (flags.get(DecorationDescriptorSet) && options.vulkan_semantics)
 			attr.push_back(join("set = ", get_decoration(var.self, DecorationDescriptorSet)));
 	}
 
 	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
-	bool ssbo_block = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferNV ||
+	bool ssbo_block = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferKHR ||
 	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
 	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
 	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
@@ -1806,7 +1840,7 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	if (!can_use_buffer_blocks && var.storage == StorageClassUniform)
 		can_use_binding = false;
 
-	if (var.storage == StorageClassShaderRecordBufferNV)
+	if (var.storage == StorageClassShaderRecordBufferKHR)
 		can_use_binding = false;
 
 	if (can_use_binding && flags.get(DecorationBinding))
@@ -2086,7 +2120,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 
 	Bitset flags = ir.get_buffer_block_flags(var);
-	bool ssbo = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferNV ||
+	bool ssbo = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferKHR ||
 	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 	bool is_restrict = ssbo && flags.get(DecorationRestrict);
 	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
@@ -2201,25 +2235,25 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	{
 		return "uniform ";
 	}
-	else if (var.storage == StorageClassRayPayloadNV)
+	else if (var.storage == StorageClassRayPayloadKHR)
 	{
-		return "rayPayloadNV ";
+		return ray_tracing_is_khr ? "rayPayloadEXT " : "rayPayloadNV ";
 	}
-	else if (var.storage == StorageClassIncomingRayPayloadNV)
+	else if (var.storage == StorageClassIncomingRayPayloadKHR)
 	{
-		return "rayPayloadInNV ";
+		return ray_tracing_is_khr ? "rayPayloadInEXT " : "rayPayloadInNV ";
 	}
-	else if (var.storage == StorageClassHitAttributeNV)
+	else if (var.storage == StorageClassHitAttributeKHR)
 	{
-		return "hitAttributeNV ";
+		return ray_tracing_is_khr ? "hitAttributeEXT " : "hitAttributeNV ";
 	}
-	else if (var.storage == StorageClassCallableDataNV)
+	else if (var.storage == StorageClassCallableDataKHR)
 	{
-		return "callableDataNV ";
+		return ray_tracing_is_khr ? "callableDataEXT " : "callableDataNV ";
 	}
-	else if (var.storage == StorageClassIncomingCallableDataNV)
+	else if (var.storage == StorageClassIncomingCallableDataKHR)
 	{
-		return "callableDataInNV ";
+		return ray_tracing_is_khr ? "callableDataInEXT " : "callableDataInNV ";
 	}
 
 	return "";
@@ -3218,8 +3252,8 @@ void CompilerGLSL::emit_resources()
 				// Special case, ray payload and hit attribute blocks are not really blocks, just regular structs.
 				if (type->basetype == SPIRType::Struct && type->pointer &&
 				    has_decoration(type->self, DecorationBlock) &&
-				    (type->storage == StorageClassRayPayloadNV || type->storage == StorageClassIncomingRayPayloadNV ||
-				     type->storage == StorageClassHitAttributeNV))
+				    (type->storage == StorageClassRayPayloadKHR || type->storage == StorageClassIncomingRayPayloadKHR ||
+				     type->storage == StorageClassHitAttributeKHR))
 				{
 					type = &get<SPIRType>(type->parent_type);
 					is_natural_struct = true;
@@ -3295,7 +3329,7 @@ void CompilerGLSL::emit_resources()
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
-		                        type.storage == StorageClassShaderRecordBufferNV;
+		                        type.storage == StorageClassShaderRecordBufferKHR;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
 		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
@@ -3335,9 +3369,9 @@ void CompilerGLSL::emit_resources()
 
 		if (var.storage != StorageClassFunction && type.pointer &&
 		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadNV || type.storage == StorageClassIncomingRayPayloadNV ||
-		     type.storage == StorageClassCallableDataNV || type.storage == StorageClassIncomingCallableDataNV ||
-		     type.storage == StorageClassHitAttributeNV) &&
+		     type.storage == StorageClassRayPayloadKHR || type.storage == StorageClassIncomingRayPayloadKHR ||
+		     type.storage == StorageClassCallableDataKHR || type.storage == StorageClassIncomingCallableDataKHR ||
+		     type.storage == StorageClassHitAttributeKHR) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
@@ -8138,34 +8172,35 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupLtMask";
 
-	case BuiltInLaunchIdNV:
-		return "gl_LaunchIDNV";
-	case BuiltInLaunchSizeNV:
-		return "gl_LaunchSizeNV";
-	case BuiltInWorldRayOriginNV:
-		return "gl_WorldRayOriginNV";
-	case BuiltInWorldRayDirectionNV:
-		return "gl_WorldRayDirectionNV";
-	case BuiltInObjectRayOriginNV:
-		return "gl_ObjectRayOriginNV";
-	case BuiltInObjectRayDirectionNV:
-		return "gl_ObjectRayDirectionNV";
-	case BuiltInRayTminNV:
-		return "gl_RayTminNV";
-	case BuiltInRayTmaxNV:
-		return "gl_RayTmaxNV";
-	case BuiltInInstanceCustomIndexNV:
-		return "gl_InstanceCustomIndexNV";
-	case BuiltInObjectToWorldNV:
-		return "gl_ObjectToWorldNV";
-	case BuiltInWorldToObjectNV:
-		return "gl_WorldToObjectNV";
+	case BuiltInLaunchIdKHR:
+		return ray_tracing_is_khr ? "gl_LaunchIDEXT" : "gl_LaunchIDNV";
+	case BuiltInLaunchSizeKHR:
+		return ray_tracing_is_khr ? "gl_LaunchSizeEXT" : "gl_LaunchSizeNV";
+	case BuiltInWorldRayOriginKHR:
+		return ray_tracing_is_khr ? "gl_WorldRayOriginEXT" : "gl_WorldRayOriginNV";
+	case BuiltInWorldRayDirectionKHR:
+		return ray_tracing_is_khr ? "gl_WorldRayDirectionEXT" : "gl_WorldRayDirectionNV";
+	case BuiltInObjectRayOriginKHR:
+		return ray_tracing_is_khr ? "gl_ObjectRayOriginEXT" : "gl_ObjectRayOriginNV";
+	case BuiltInObjectRayDirectionKHR:
+		return ray_tracing_is_khr ? "gl_ObjectRayDirectionEXT" : "gl_ObjectRayDirectionNV";
+	case BuiltInRayTminKHR:
+		return ray_tracing_is_khr ? "gl_RayTminEXT" : "gl_RayTminNV";
+	case BuiltInRayTmaxKHR:
+		return ray_tracing_is_khr ? "gl_RayTmaxEXT" : "gl_RayTmaxNV";
+	case BuiltInInstanceCustomIndexKHR:
+		return ray_tracing_is_khr ? "gl_InstanceCustomIndexEXT" : "gl_InstanceCustomIndexNV";
+	case BuiltInObjectToWorldKHR:
+		return ray_tracing_is_khr ? "gl_ObjectToWorldEXT" : "gl_ObjectToWorldNV";
+	case BuiltInWorldToObjectKHR:
+		return ray_tracing_is_khr ? "gl_WorldToObjectEXT" : "gl_WorldToObjectNV";
 	case BuiltInHitTNV:
+		// gl_HitTEXT is an alias of RayTMax in KHR.
 		return "gl_HitTNV";
-	case BuiltInHitKindNV:
-		return "gl_HitKindNV";
-	case BuiltInIncomingRayFlagsNV:
-		return "gl_IncomingRayFlagsNV";
+	case BuiltInHitKindKHR:
+		return ray_tracing_is_khr ? "gl_HitKindEXT" : "gl_HitKindNV";
+	case BuiltInIncomingRayFlagsKHR:
+		return ray_tracing_is_khr ? "gl_IncomingRayFlagsEXT" : "gl_IncomingRayFlagsNV";
 
 	case BuiltInBaryCoordNV:
 	{
@@ -12161,33 +12196,54 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpReportIntersectionNV:
-		// KHR is same opcode.
-		statement("reportIntersectionNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
+	case OpReportIntersectionKHR:
+		// NV is same opcode.
+		forced_temporaries.insert(ops[1]);
+		if (ray_tracing_is_khr)
+			GLSL_BFOP(reportIntersectionEXT);
+		else
+			GLSL_BFOP(reportIntersectionNV);
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpIgnoreIntersectionNV:
-	case OpIgnoreIntersectionKHR:
+		// KHR variant is a terminator.
 		statement("ignoreIntersectionNV();");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTerminateRayNV:
-	case OpTerminateRayKHR:
+		// KHR variant is a terminator.
 		statement("terminateRayNV();");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTraceNV:
-	case OpTraceRayKHR:
 		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
+	case OpTraceRayKHR:
+		if (!has_decoration(ops[10], DecorationLocation))
+			SPIRV_CROSS_THROW("A memory declaration object must be used in TraceRayKHR.");
+		statement("traceRayEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
+		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
+		          to_expression(ops[9]), ", ", get_decoration(ops[10], DecorationLocation), ");");
+		flush_control_dependent_expressions(current_emitting_block->self);
+		break;
 	case OpExecuteCallableNV:
-	case OpExecuteCallableKHR:
 		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
+		break;
+	case OpExecuteCallableKHR:
+		if (!has_decoration(ops[1], DecorationLocation))
+			SPIRV_CROSS_THROW("A memory declaration object must be used in ExecuteCallableKHR.");
+		statement("executeCallableEXT(", to_expression(ops[0]), ", ", get_decoration(ops[1], DecorationLocation), ");");
+		flush_control_dependent_expressions(current_emitting_block->self);
+		break;
+
+	case OpConvertUToAccelerationStructureKHR:
+		GLSL_UFOP(accelerationStructureEXT);
 		break;
 
 	case OpConvertUToPtr:
@@ -12983,7 +13039,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return comparison_ids.count(id) ? "samplerShadow" : "sampler";
 
 	case SPIRType::AccelerationStructure:
-		return "accelerationStructureNV";
+		return ray_tracing_is_khr ? "accelerationStructureEXT" : "accelerationStructureNV";
 
 	case SPIRType::Void:
 		return "void";
@@ -14620,6 +14676,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	case SPIRBlock::Unreachable:
 		emit_next_block = false;
+		break;
+
+	case SPIRBlock::IgnoreIntersection:
+		statement("ignoreIntersectionEXT;");
+		break;
+
+	case SPIRBlock::TerminateRay:
+		statement("terminateRayEXT;");
 		break;
 
 	default:

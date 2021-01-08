@@ -476,7 +476,9 @@ def cross_compile_reflect(shader, spirv, opt, iterations, paths):
 
 def validate_shader(shader, vulkan, paths):
     if vulkan:
-        subprocess.check_call([paths.glslang, '--amb', '--target-env', 'vulkan1.1', '-V', shader])
+        spirv_14 = '.spv14.' in shader
+        glslang_env = 'spirv1.4' if spirv_14 else 'vulkan1.1'
+        subprocess.check_call([paths.glslang, '--amb', '--target-env', glslang_env, '-V', shader])
     else:
         subprocess.check_call([paths.glslang, shader])
 
@@ -484,7 +486,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     spirv_path = create_temporary()
     glsl_path = create_temporary(os.path.basename(shader))
 
-    spirv_env = 'vulkan1.1spv1.4' if ('.spv14.' in shader) else 'vulkan1.1'
+    spirv_14 = '.spv14.' in shader
+    spirv_env = 'vulkan1.1spv1.4' if spirv_14 else 'vulkan1.1'
 
     if vulkan or spirv:
         vulkan_glsl_path = create_temporary('vk' + os.path.basename(shader))
@@ -496,7 +499,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     if spirv:
         subprocess.check_call(spirv_cmd)
     else:
-        subprocess.check_call([paths.glslang, '--amb', '--target-env', 'vulkan1.1', '-V', '-o', spirv_path, shader])
+        glslang_env = 'spirv1.4' if spirv_14 else 'vulkan1.1'
+        subprocess.check_call([paths.glslang, '--amb', '--target-env', glslang_env, '-V', '-o', spirv_path, shader])
 
     if opt and (not invalid_spirv):
         subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])
