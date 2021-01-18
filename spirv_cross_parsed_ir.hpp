@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 Arm Limited
+ * Copyright 2018-2021 Arm Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -221,6 +221,8 @@ public:
 	static void sanitize_underscores(std::string &str);
 	static void sanitize_identifier(std::string &str, bool member, bool allow_reserved_prefixes);
 	static bool is_globally_reserved_identifier(std::string &str, bool allow_reserved_prefixes);
+
+	uint32_t get_spirv_version() const;
 
 private:
 	template <typename T>

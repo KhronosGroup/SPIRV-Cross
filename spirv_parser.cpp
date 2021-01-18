@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2020 Arm Limited
+ * Copyright 2018-2021 Arm Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -991,6 +991,22 @@ void Parser::parse(const Instruction &instruction)
 		current_block = nullptr;
 		break;
 	}
+
+	case OpTerminateRayKHR:
+		// NV variant is not a terminator.
+		if (!current_block)
+			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
+		current_block->terminator = SPIRBlock::TerminateRay;
+		current_block = nullptr;
+		break;
+
+	case OpIgnoreIntersectionKHR:
+		// NV variant is not a terminator.
+		if (!current_block)
+			SPIRV_CROSS_THROW("Trying to end a non-existing block.");
+		current_block->terminator = SPIRBlock::IgnoreIntersection;
+		current_block = nullptr;
+		break;
 
 	case OpReturn:
 	{
