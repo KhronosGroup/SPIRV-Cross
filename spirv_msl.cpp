@@ -12593,55 +12593,6 @@ std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
 		return "sampler";
 }
 
-MSLTextureType CompilerMSL::get_msl_texture_type(uint32_t desc_set, uint32_t binding)
-{
-	MSLTextureType msl_tex_type = MSL_TEXTURE_TYPE_2D;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &var) {
-		if (has_decoration(self, DecorationDescriptorSet) && (get_decoration(self, DecorationDescriptorSet) == desc_set) &&
-			has_decoration(self, DecorationBinding) && (get_decoration(self, DecorationBinding) == binding))
-			msl_tex_type = get_msl_texture_type(get_variable_data_type(var));
-	});
-   return msl_tex_type;
-}
-
-MSLTextureType CompilerMSL::get_msl_texture_type(const SPIRType &type)
-{
-	if (!(type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image))
-		return MSL_TEXTURE_TYPE_2D;
-
-	auto &img_type = get<SPIRType>(type.self).image;
-	switch (img_type.dim)
-	{
-	case DimBuffer:
-		return (msl_options.texture_buffer_native ? MSL_TEXTURE_TYPE_TEXTURE_BUFFER : MSL_TEXTURE_TYPE_2D);
-
-	case Dim1D:
-		if (msl_options.texture_1D_as_2D)
-			return (img_type.arrayed ? MSL_TEXTURE_TYPE_2D_ARRAY : MSL_TEXTURE_TYPE_2D);
-		else
-			return (img_type.arrayed ? MSL_TEXTURE_TYPE_1D_ARRAY : MSL_TEXTURE_TYPE_1D);
-
-	case Dim2D:
-	case DimSubpassData:
-		if (img_type.ms)
-			return (img_type.arrayed ? MSL_TEXTURE_TYPE_2D_MULTISAMPLE_ARRAY : MSL_TEXTURE_TYPE_2D_MULTISAMPLE);
-		else
-			return (img_type.arrayed ? MSL_TEXTURE_TYPE_2D_ARRAY : MSL_TEXTURE_TYPE_2D);
-
-	case Dim3D:
-		return MSL_TEXTURE_TYPE_3D;
-
-	case DimCube:
-		if (msl_options.emulate_cube_array)
-			return (img_type.arrayed ? MSL_TEXTURE_TYPE_2D_ARRAY : MSL_TEXTURE_TYPE_2D);
-		else
-			return (img_type.arrayed ? MSL_TEXTURE_TYPE_CUBE_ARRAY : MSL_TEXTURE_TYPE_CUBE);
-
-	default:
-		return MSL_TEXTURE_TYPE_2D;
-	}
-}
-
 // Returns an MSL string describing the SPIR-V image type
 string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 {

@@ -95,21 +95,6 @@ enum MSLSamplerCoord
 	MSL_SAMPLER_INT_MAX = 0x7fffffff
 };
 
-enum MSLTextureType
-{
-	MSL_TEXTURE_TYPE_1D = 0,
-	MSL_TEXTURE_TYPE_1D_ARRAY = 1,
-	MSL_TEXTURE_TYPE_2D = 2,
-	MSL_TEXTURE_TYPE_2D_ARRAY = 3,
-	MSL_TEXTURE_TYPE_2D_MULTISAMPLE = 4,
-	MSL_TEXTURE_TYPE_2D_MULTISAMPLE_ARRAY = 5,
-	MSL_TEXTURE_TYPE_3D = 6,
-	MSL_TEXTURE_TYPE_CUBE = 7,
-	MSL_TEXTURE_TYPE_CUBE_ARRAY = 8,
-	MSL_TEXTURE_TYPE_TEXTURE_BUFFER = 9,
-	MSL_TEXTURE_TYPE_INT_MAX = 0x7fffffff
-};
-
 enum MSLSamplerFilter
 {
 	MSL_SAMPLER_FILTER_NEAREST = 0,
@@ -580,9 +565,6 @@ public:
 	// by remap_constexpr_sampler(_by_binding).
 	bool is_msl_resource_binding_used(spv::ExecutionModel model, uint32_t set, uint32_t binding) const;
 
-	// Returns the MSL texture type of the variable at the desc_set and binding
-	MSLTextureType get_msl_texture_type(uint32_t desc_set, uint32_t binding);
-
 	// This must only be called after a successful call to CompilerMSL::compile().
 	// For a variable resource ID obtained through reflection API, report the automatically assigned resource index.
 	// If the descriptor set was part of an argument buffer, report the [[id(N)]],
@@ -737,7 +719,6 @@ protected:
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
 
-	MSLTextureType get_msl_texture_type(const SPIRType &type);
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type, uint32_t id);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
