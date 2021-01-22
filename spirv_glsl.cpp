@@ -538,7 +538,9 @@ void CompilerGLSL::ray_tracing_khr_fixup_locations()
 {
 	uint32_t location = 0;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		if (var.storage != StorageClassRayPayloadKHR && var.storage != StorageClassCallableDataKHR)
+		// Incoming payload storage can also be used for tracing.
+		if (var.storage != StorageClassRayPayloadKHR && var.storage != StorageClassCallableDataKHR &&
+		    var.storage != StorageClassIncomingRayPayloadKHR && var.storage != StorageClassIncomingCallableDataKHR)
 			return;
 		if (!interface_variable_exists_in_entry_point(var.self))
 			return;
