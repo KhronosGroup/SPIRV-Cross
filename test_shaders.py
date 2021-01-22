@@ -413,7 +413,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     spirv_path = create_temporary()
     hlsl_path = create_temporary(os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
+    spirv_env = 'vulkan1.1spv1.4' if '.spv14.' in shader else 'vulkan1.1'
+    spirv_cmd = [paths.spirv_as, '--target-env', spirv_env, '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -446,7 +447,7 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     subprocess.check_call(hlsl_args)
 
     if not shader_is_invalid_spirv(hlsl_path):
-        subprocess.check_call([paths.spirv_val, '--scalar-block-layout', '--target-env', 'vulkan1.1', spirv_path])
+        subprocess.check_call([paths.spirv_val, '--scalar-block-layout', '--target-env', spirv_env, spirv_path])
 
     validate_shader_hlsl(hlsl_path, force_no_external_validation, paths)
 
