@@ -12264,6 +12264,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTraceNV:
+		if (has_decoration(ops[0], DecorationNonUniformEXT))
+			propagate_nonuniform_qualifier(ops[0]);
 		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
@@ -12273,6 +12275,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpTraceRayKHR:
 		if (!has_decoration(ops[10], DecorationLocation))
 			SPIRV_CROSS_THROW("A memory declaration object must be used in TraceRayKHR.");
+		if (has_decoration(ops[0], DecorationNonUniformEXT))
+			propagate_nonuniform_qualifier(ops[0]);
 		statement("traceRayEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
@@ -15057,7 +15061,7 @@ void CompilerGLSL::convert_non_uniform_expression(const SPIRType &type, std::str
 
 	// Handle SPV_EXT_descriptor_indexing.
 	if (type.basetype == SPIRType::Sampler || type.basetype == SPIRType::SampledImage ||
-	    type.basetype == SPIRType::Image)
+	    type.basetype == SPIRType::Image || type.basetype == SPIRType::AccelerationStructure)
 	{
 		// The image/sampler ID must be declared as non-uniform.
 		// However, it is not legal GLSL to have
