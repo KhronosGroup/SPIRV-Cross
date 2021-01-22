@@ -542,7 +542,7 @@ void CompilerGLSL::ray_tracing_khr_fixup_locations()
 		if (var.storage != StorageClassRayPayloadKHR && var.storage != StorageClassCallableDataKHR &&
 		    var.storage != StorageClassIncomingRayPayloadKHR && var.storage != StorageClassIncomingCallableDataKHR)
 			return;
-		if (!interface_variable_exists_in_entry_point(var.self))
+		if (is_hidden_variable(var))
 			return;
 		set_decoration(var.self, DecorationLocation, location++);
 	});
@@ -3453,6 +3453,9 @@ void CompilerGLSL::emit_resources()
 	for (auto global : global_variables)
 	{
 		auto &var = get<SPIRVariable>(global);
+		if (is_hidden_variable(var, true))
+			continue;
+
 		if (var.storage != StorageClassOutput)
 		{
 			if (!variable_is_lut(var))
