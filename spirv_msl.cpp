@@ -11880,6 +11880,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	// Allow Metal to use the array<T> template to make arrays a value type
 	string address_space = get_argument_address_space(var);
 	bool builtin = is_builtin_variable(var);
+	auto builtin_type = BuiltIn(get_decoration(arg.id, DecorationBuiltIn));
 	is_using_builtin_array = builtin;
 	if (address_space == "threadgroup")
 		is_using_builtin_array = true;
@@ -11887,7 +11888,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (var.basevariable && (var.basevariable == stage_in_ptr_var_id || var.basevariable == stage_out_ptr_var_id))
 		decl += type_to_glsl(type, arg.id);
 	else if (builtin)
-		decl += builtin_type_decl(static_cast<BuiltIn>(get_decoration(arg.id, DecorationBuiltIn)), arg.id);
+		decl += builtin_type_decl(builtin_type, arg.id);
 	else if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) && is_array(type))
 	{
 		is_using_builtin_array = true;
@@ -11968,16 +11969,44 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			}
 		}
 
-		decl += " (&";
-		const char *restrict_kw = to_restrict(name_id);
-		if (*restrict_kw)
+		// Special case, need to override the array size here if we're using tess level as an argument.
+		if (get_execution_model() == ExecutionModelTessellationControl && builtin &&
+		    (builtin_type == BuiltInTessLevelInner || builtin_type == BuiltInTessLevelOuter))
 		{
-			decl += " ";
-			decl += restrict_kw;
+			if (get_entry_point().flags.get(ExecutionModeTriangles) && builtin_type == BuiltInTessLevelInner)
+			{
+				decl += " &";
+				decl += to_expression(name_id);
+			}
+			else
+			{
+				uint32_t array_size;
+				if (get_entry_point().flags.get(ExecutionModeTriangles))
+					array_size = 3;
+				else if (builtin_type == BuiltInTessLevelInner)
+					array_size = 2;
+				else
+					array_size = 4;
+
+				decl += " (&";
+				decl += to_expression(name_id);
+				decl += ")";
+				decl += join("[", array_size, "]");
+			}
 		}
-		decl += to_expression(name_id);
-		decl += ")";
-		decl += type_to_array_glsl(type);
+		else
+		{
+			decl += " (&";
+			const char *restrict_kw = to_restrict(name_id);
+			if (*restrict_kw)
+			{
+				decl += " ";
+				decl += restrict_kw;
+			}
+			decl += to_expression(name_id);
+			decl += ")";
+			decl += type_to_array_glsl(type);
+		}
 	}
 	else if (!opaque_handle && (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
 	{
