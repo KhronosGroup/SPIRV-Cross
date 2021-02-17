@@ -550,6 +550,13 @@ public:
 	// Query after compilation is done. This allows you to check if an input location was used by the shader.
 	bool is_msl_shader_input_used(uint32_t location);
 
+	// If not using add_msl_shader_input, it's possible
+	// that certain builtin attributes need to be automatically assigned locations.
+	// This is typical for tessellation builtin inputs such as tess levels, gl_Position, etc.
+	// This returns k_unknown_location if the location was explicitly assigned with
+	// add_msl_shader_input or the builtin is not used, otherwise returns N in [[attribute(N)]].
+	uint32_t get_automatic_builtin_input_location(spv::BuiltIn builtin) const;
+
 	// NOTE: Only resources which are remapped using add_msl_resource_binding will be reported here.
 	// Constexpr samplers are always assumed to be emitted.
 	// No specific MSLResourceBinding remapping is required for constexpr samplers as long as they are remapped
@@ -826,7 +833,9 @@ protected:
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	std::string round_fp_tex_coords(std::string tex_coords, bool coord_is_fp);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype, uint32_t plane = 0);
-	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index, uint32_t *comp = nullptr);
+	uint32_t get_member_location(uint32_t type_id, uint32_t index, uint32_t *comp = nullptr) const;
+	uint32_t get_or_allocate_builtin_input_member_location(spv::BuiltIn builtin,
+	                                                       uint32_t type_id, uint32_t index, uint32_t *comp = nullptr);
 
 	// MSL packing rules. These compute the effective packing rules as observed by the MSL compiler in the MSL output.
 	// These values can change depending on various extended decorations which control packing rules.
@@ -929,13 +938,15 @@ protected:
 	// Must be ordered to ensure declarations are in a specific order.
 	std::map<uint32_t, MSLShaderInput> inputs_by_location;
 	std::unordered_map<uint32_t, MSLShaderInput> inputs_by_builtin;
-	std::unordered_set<uint32_t> inputs_in_use;
+	std::unordered_set<uint32_t> location_inputs_in_use;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
+	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_input_location;
 	std::set<std::string> pragma_lines;
 	std::set<std::string> typedef_lines;
 	SmallVector<uint32_t> vars_needing_early_declaration;
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
+	uint32_t type_to_location_count(const SPIRType &type) const;
 
 	uint32_t next_metal_resource_index_buffer = 0;
 	uint32_t next_metal_resource_index_texture = 0;
