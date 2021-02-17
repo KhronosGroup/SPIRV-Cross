@@ -837,6 +837,8 @@ protected:
 	uint32_t get_or_allocate_builtin_input_member_location(spv::BuiltIn builtin,
 	                                                       uint32_t type_id, uint32_t index, uint32_t *comp = nullptr);
 
+	uint32_t get_physical_tess_level_array_size(spv::BuiltIn builtin) const;
+
 	// MSL packing rules. These compute the effective packing rules as observed by the MSL compiler in the MSL output.
 	// These values can change depending on various extended decorations which control packing rules.
 	// We need to make these rules match up with SPIR-V declared rules.
