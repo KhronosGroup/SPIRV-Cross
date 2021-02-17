@@ -7997,6 +7997,7 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 	bool lhs_thread = (lhs_storage == StorageClassOutput || lhs_storage == StorageClassFunction ||
 	                   lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate);
 	bool rhs_thread = (rhs_storage == StorageClassInput || rhs_storage == StorageClassFunction ||
+	                   rhs_storage == StorageClassOutput ||
 	                   rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate);
 
 	// If threadgroup storage qualifiers are *not* used:
@@ -8080,6 +8081,14 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 	}
 }
 
+uint32_t CompilerMSL::get_physical_tess_level_array_size(spv::BuiltIn builtin) const
+{
+	if (get_execution_mode_bitset().get(ExecutionModeTriangles))
+		return builtin == BuiltInTessLevelInner ? 1 : 3;
+	else
+		return builtin == BuiltInTessLevelInner ? 2 : 4;
+}
+
 // Since MSL does not allow arrays to be copied via simple variable assignment,
 // if the LHS and RHS represent an assignment of an entire array, it must be
 // implemented by calling an array copy function.
@@ -8106,6 +8115,25 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 		// After a variable has been declared, we can no longer assign constant arrays in MSL unfortunately.
 		statement(to_expression(id_lhs), " = ", constant_expression(get<SPIRConstant>(id_rhs)), ";");
 		return true;
+	}
+
+	if (get_execution_model() == ExecutionModelTessellationControl &&
+	    has_decoration(id_lhs, DecorationBuiltIn))
+	{
+		auto builtin = BuiltIn(get_decoration(id_lhs, DecorationBuiltIn));
+		// Need to manually unroll the array store.
+		if (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter)
+		{
+			uint32_t array_size = get_physical_tess_level_array_size(builtin);
+			if (array_size == 1)
+				statement(to_expression(id_lhs), " = half(", to_expression(id_rhs), "[0]);");
+			else
+			{
+				for (uint32_t i = 0; i < array_size; i++)
+					statement(to_expression(id_lhs), "[", i, "] = half(", to_expression(id_rhs), "[", i, "]);");
+			}
+			return true;
+		}
 	}
 
 	// Ensure the LHS variable has been declared
@@ -11973,21 +12001,14 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		if (get_execution_model() == ExecutionModelTessellationControl && builtin &&
 		    (builtin_type == BuiltInTessLevelInner || builtin_type == BuiltInTessLevelOuter))
 		{
-			if (get_entry_point().flags.get(ExecutionModeTriangles) && builtin_type == BuiltInTessLevelInner)
+			uint32_t array_size = get_physical_tess_level_array_size(builtin_type);
+			if (array_size == 1)
 			{
 				decl += " &";
 				decl += to_expression(name_id);
 			}
 			else
 			{
-				uint32_t array_size;
-				if (get_entry_point().flags.get(ExecutionModeTriangles))
-					array_size = 3;
-				else if (builtin_type == BuiltInTessLevelInner)
-					array_size = 2;
-				else
-					array_size = 4;
-
 				decl += " (&";
 				decl += to_expression(name_id);
 				decl += ")";
@@ -14560,14 +14581,36 @@ void CompilerMSL::cast_from_builtin_load(uint32_t source_id, std::string &expr, 
 
 	if (expected_type != expr_type.basetype)
 	{
-		if (expected_width != expr_type.width)
+		if (!expr_type.array.empty() && (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter))
 		{
-			// These are of different widths, so we cannot do a straight bitcast.
-			expr = join(type_to_glsl(expr_type), "(", expr, ")");
+			// Triggers when loading TessLevel directly as an array.
+			// Need explicit padding + cast.
+			auto wrap_expr = join(type_to_glsl(expr_type), "({ ");
+
+			uint32_t array_size = get_physical_tess_level_array_size(builtin);
+			for (uint32_t i = 0; i < array_size; i++)
+			{
+				if (array_size > 1)
+					wrap_expr += join("float(", expr, "[", i, "])");
+				else
+					wrap_expr += join("float(", expr, ")");
+				if (i + 1 < array_size)
+					wrap_expr += ", ";
+			}
+
+			if (get_execution_mode_bitset().get(ExecutionModeTriangles))
+				wrap_expr += ", 0.0";
+
+			wrap_expr += " })";
+			expr = std::move(wrap_expr);
 		}
 		else
 		{
-			expr = bitcast_expression(expr_type, expected_type, expr);
+			// These are of different widths, so we cannot do a straight bitcast.
+			if (expected_width != expr_type.width)
+				expr = join(type_to_glsl(expr_type), "(", expr, ")");
+			else
+				expr = bitcast_expression(expr_type, expected_type, expr);
 		}
 	}
 
