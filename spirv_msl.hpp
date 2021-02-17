@@ -929,13 +929,14 @@ protected:
 	// Must be ordered to ensure declarations are in a specific order.
 	std::map<uint32_t, MSLShaderInput> inputs_by_location;
 	std::unordered_map<uint32_t, MSLShaderInput> inputs_by_builtin;
-	std::unordered_set<uint32_t> inputs_in_use;
+	std::unordered_set<uint32_t> location_inputs_in_use;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::set<std::string> pragma_lines;
 	std::set<std::string> typedef_lines;
 	SmallVector<uint32_t> vars_needing_early_declaration;
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
+	uint32_t type_to_location_count(const SPIRType &type) const;
 
 	uint32_t next_metal_resource_index_buffer = 0;
 	uint32_t next_metal_resource_index_texture = 0;

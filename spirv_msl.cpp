@@ -100,7 +100,7 @@ void CompilerMSL::set_argument_buffer_device_address_space(uint32_t desc_set, bo
 
 bool CompilerMSL::is_msl_shader_input_used(uint32_t location)
 {
-	return inputs_in_use.count(location) != 0;
+	return location_inputs_in_use.count(location) != 0;
 }
 
 bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t desc_set, uint32_t binding) const
@@ -1801,34 +1801,28 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 	}
 }
 
+uint32_t CompilerMSL::type_to_location_count(const SPIRType &type) const
+{
+	// In MSL, we cannot place structs in any context where we need locations.
+	assert(type.basetype != SPIRType::Struct);
+
+	uint32_t dim = 1;
+	for (uint32_t i = 0; i < type.array.size(); i++)
+		dim *= to_array_size_literal(type, i);
+
+	uint32_t count = dim * type.columns;
+	return count;
+}
+
 // If a shader input exists at the location, it is marked as being used by this shader
 void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, StorageClass storage)
 {
 	if (storage != StorageClassInput)
 		return;
-	if (is_array(type))
-	{
-		uint32_t dim = 1;
-		for (uint32_t i = 0; i < type.array.size(); i++)
-			dim *= to_array_size_literal(type, i);
-		for (uint32_t i = 0; i < dim; i++)
-		{
-			if (is_matrix(type))
-			{
-				for (uint32_t j = 0; j < type.columns; j++)
-					inputs_in_use.insert(location++);
-			}
-			else
-				inputs_in_use.insert(location++);
-		}
-	}
-	else if (is_matrix(type))
-	{
-		for (uint32_t i = 0; i < type.columns; i++)
-			inputs_in_use.insert(location + i);
-	}
-	else
-		inputs_in_use.insert(location);
+
+	uint32_t count = type_to_location_count(type);
+	for (uint32_t i = 0; i < count; i++)
+		location_inputs_in_use.insert(location + i);
 }
 
 uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t location) const
