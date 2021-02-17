@@ -567,6 +567,7 @@ public:
 
 	// Same as get_automatic_msl_resource_binding, but should only be used for combined image samplers, in which case the
 	// sampler's binding is returned instead. For any other resource type, -1 is returned.
+	// Secondary bindings are also used for the auxillary image atomic buffer.
 	uint32_t get_automatic_msl_resource_binding_secondary(uint32_t id) const;
 
 	// Same as get_automatic_msl_resource_binding, but should only be used for combined image samplers for multiplanar images,
