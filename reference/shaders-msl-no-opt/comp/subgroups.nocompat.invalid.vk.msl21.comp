@@ -242,7 +242,8 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     simdgroup_barrier(mem_flags::mem_device);
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_barrier(mem_flags::mem_texture);
-    bool elected = simd_is_first();
+    bool _39 = simd_is_first();
+    bool elected = _39;
     _9.FragColor = float4(gl_SubgroupEqMask).x;
     _9.FragColor = float4(gl_SubgroupGeMask).x;
     _9.FragColor = float4(gl_SubgroupGtMask).x;

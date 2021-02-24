@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2020 Arm Limited
+ * Copyright 2015-2021 Arm Limited
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,6 +12,13 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ */
+
+/*
+ * At your option, you may choose to accept this material under either:
+ *  1. The Apache License, Version 2.0, found at <http://www.apache.org/licenses/LICENSE-2.0>, or
+ *  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
+ * SPDX-License-Identifier: Apache-2.0 OR MIT.
  */
 
 #ifndef SPIRV_CROSS_COMMON_HPP
@@ -516,6 +523,7 @@ struct SPIRType : IVariant
 
 		// Keep internal types at the end.
 		ControlPointArray,
+		Interpolant,
 		Char
 	};
 
@@ -721,7 +729,9 @@ struct SPIRBlock : IVariant
 
 		Return, // Block ends with return.
 		Unreachable, // Noop
-		Kill // Discard
+		Kill, // Discard
+		IgnoreIntersection, // Ray Tracing
+		TerminateRay // Ray Tracing
 	};
 
 	enum Merge
@@ -1572,6 +1582,13 @@ enum ExtendedDecorations
 	// SPIR-V, but the MSL backend can change the type of input variables, necessitating the
 	// addition of swizzles to keep the generated code compiling.
 	SPIRVCrossDecorationTessIOOriginalInputTypeID,
+
+	// Apply to any access chain of an interface variable used with pull-model interpolation, where the variable is a
+	// vector but the resulting pointer is a scalar; stores the component index that is to be accessed by the chain.
+	// This is used when emitting calls to interpolation functions on the chain in MSL: in this case, the component
+	// must be applied to the result, since pull-model interpolants in MSL cannot be swizzled directly, but the
+	// results of interpolation can.
+	SPIRVCrossDecorationInterpolantComponentExpr,
 
 	SPIRVCrossDecorationCount
 };
