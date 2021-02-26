@@ -12791,7 +12791,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get_variable_data_type(variable);
 
-	if (type.pointer_depth > 1)
+	if (type.pointer_depth > 1 && !backend.support_pointer_to_pointer)
 		SPIRV_CROSS_THROW("Cannot declare pointer-to-pointer types.");
 
 	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self), variable.self));

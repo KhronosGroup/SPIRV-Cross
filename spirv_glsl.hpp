@@ -568,6 +568,7 @@ protected:
 		bool support_case_fallthrough = true;
 		bool use_array_constructor = false;
 		bool needs_row_major_load_workaround = false;
+		bool support_pointer_to_pointer = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
