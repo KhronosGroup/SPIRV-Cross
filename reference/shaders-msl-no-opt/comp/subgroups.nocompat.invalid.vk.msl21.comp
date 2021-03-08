@@ -288,6 +288,9 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     uint4 anded = simd_and(ballot_value);
     uint4 ored = simd_or(ballot_value);
     uint4 xored = simd_xor(ballot_value);
+    bool4 anded_b = simd_and(ballot_value == uint4(42u));
+    bool4 ored_b = simd_or(ballot_value == uint4(42u));
+    bool4 xored_b = simd_xor(ballot_value == uint4(42u));
     added = simd_prefix_inclusive_sum(added);
     iadded = simd_prefix_inclusive_sum(iadded);
     multiplied = simd_prefix_inclusive_product(multiplied);
@@ -309,6 +312,9 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     anded = quad_and(anded);
     ored = quad_or(ored);
     xored = quad_xor(xored);
+    anded_b = quad_and(anded == uint4(2u));
+    ored_b = quad_or(ored == uint4(3u));
+    xored_b = quad_xor(xored == uint4(4u));
     float4 swap_horiz = spvQuadSwap(float4(20.0), 0u);
     bool4 swap_horiz_bool = spvQuadSwap(bool4(true), 0u);
     float4 swap_vertical = spvQuadSwap(float4(20.0), 1u);
