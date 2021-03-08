@@ -7646,6 +7646,9 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	case OpGroupNonUniformBitwiseAnd:
 	case OpGroupNonUniformBitwiseOr:
 	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
 	{
 		auto operation = static_cast<GroupOperation>(ops[3]);
 		if (operation == GroupOperationClusteredReduce)
@@ -7802,6 +7805,9 @@ case OpGroupNonUniform##op: \
 	GLSL_GROUP_OP(BitwiseAnd, And)
 	GLSL_GROUP_OP(BitwiseOr, Or)
 	GLSL_GROUP_OP(BitwiseXor, Xor)
+	GLSL_GROUP_OP(LogicalAnd, And)
+	GLSL_GROUP_OP(LogicalOr, Or)
+	GLSL_GROUP_OP(LogicalXor, Xor)
 #undef GLSL_GROUP_OP
 #undef GLSL_GROUP_OP_CAST
 		// clang-format on
@@ -12148,6 +12154,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupNonUniformBitwiseAnd:
 	case OpGroupNonUniformBitwiseOr:
 	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
 	case OpGroupNonUniformQuadSwap:
 	case OpGroupNonUniformQuadBroadcast:
 		emit_subgroup_op(instruction);
