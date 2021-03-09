@@ -40,6 +40,13 @@ using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
+enum ExtraSubExpressionType
+{
+	// Create masks above any legal ID range to allow multiple address spaces into the extra_sub_expressions map.
+	EXTRA_SUB_EXPRESSION_TYPE_STREAM_OFFSET = 0x10000000,
+	EXTRA_SUB_EXPRESSION_TYPE_AUX = 0x20000000
+};
+
 static bool is_unsigned_opcode(Op op)
 {
 	// Don't have to be exhaustive, only relevant for legacy target checking ...
@@ -7377,7 +7384,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 		// Make sure we have a unique ID here to avoid aliasing the extra sub-expressions between clamp and NMin sub-op.
 		// IDs cannot exceed 24 bits, so we can make use of the higher bits for some unique flags.
-		uint32_t &max_id = extra_sub_expressions[id | 0x80000000u];
+		uint32_t &max_id = extra_sub_expressions[id | EXTRA_SUB_EXPRESSION_TYPE_AUX];
 		if (!max_id)
 			max_id = ir.increase_bound_by(1);
 
@@ -10333,10 +10340,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t rhs = ops[1];
 		if (lhs != rhs)
 		{
-			flush_variable_declaration(lhs);
-			flush_variable_declaration(rhs);
-			statement(to_expression(lhs), " = ", to_unpacked_expression(rhs), ";");
-			register_write(lhs);
+			uint32_t &tmp_id = extra_sub_expressions[instruction.offset | EXTRA_SUB_EXPRESSION_TYPE_STREAM_OFFSET];
+			if (!tmp_id)
+				tmp_id = ir.increase_bound_by(1);
+			uint32_t tmp_type_id = expression_type(rhs).parent_type;
+
+			EmbeddedInstruction fake_load, fake_store;
+			fake_load.op = OpLoad;
+			fake_load.length = 3;
+			fake_load.ops.push_back(tmp_type_id);
+			fake_load.ops.push_back(tmp_id);
+			fake_load.ops.push_back(rhs);
+
+			fake_store.op = OpStore;
+			fake_store.length = 2;
+			fake_store.ops.push_back(lhs);
+			fake_store.ops.push_back(tmp_id);
+
+			// Load and Store do a *lot* of workarounds, and we'd like to reuse them as much as possible.
+			// Synthesize a fake Load and Store pair for CopyMemory.
+			emit_instruction(fake_load);
+			emit_instruction(fake_store);
 		}
 		break;
 	}
