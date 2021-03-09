@@ -23,7 +23,7 @@ void comp_main()
     uint bit_count = countbits(ballot_value.x) + countbits(ballot_value.y) + countbits(ballot_value.z) + countbits(ballot_value.w);
     bool has_all = WaveActiveAllTrue(true);
     bool has_any = WaveActiveAnyTrue(true);
-    bool has_equal = WaveActiveAllEqualBool(true);
+    bool has_equal = WaveActiveAllEqual(true);
     float4 added = WaveActiveSum(20.0f.xxxx);
     int4 iadded = WaveActiveSum(int4(20, 20, 20, 20));
     float4 multiplied = WaveActiveProduct(20.0f.xxxx);
@@ -37,6 +37,9 @@ void comp_main()
     uint4 anded = WaveActiveBitAnd(ballot_value);
     uint4 ored = WaveActiveBitOr(ballot_value);
     uint4 xored = WaveActiveBitXor(ballot_value);
+    bool4 anded_b = bool4(WaveActiveBitAnd(uint4(bool4(ballot_value.x == uint4(42u, 42u, 42u, 42u).x, ballot_value.y == uint4(42u, 42u, 42u, 42u).y, ballot_value.z == uint4(42u, 42u, 42u, 42u).z, ballot_value.w == uint4(42u, 42u, 42u, 42u).w))));
+    bool4 ored_b = bool4(WaveActiveBitOr(uint4(bool4(ballot_value.x == uint4(42u, 42u, 42u, 42u).x, ballot_value.y == uint4(42u, 42u, 42u, 42u).y, ballot_value.z == uint4(42u, 42u, 42u, 42u).z, ballot_value.w == uint4(42u, 42u, 42u, 42u).w))));
+    bool4 xored_b = bool4(WaveActiveBitXor(uint4(bool4(ballot_value.x == uint4(42u, 42u, 42u, 42u).x, ballot_value.y == uint4(42u, 42u, 42u, 42u).y, ballot_value.z == uint4(42u, 42u, 42u, 42u).z, ballot_value.w == uint4(42u, 42u, 42u, 42u).w))));
     added = WavePrefixSum(added) + added;
     iadded = WavePrefixSum(iadded) + iadded;
     multiplied = WavePrefixProduct(multiplied) * multiplied;
