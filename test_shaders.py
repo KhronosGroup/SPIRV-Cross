@@ -100,10 +100,11 @@ def get_shader_stats(shader):
 def print_msl_compiler_version():
     try:
         subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '--version'])
-        print('...are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
+        print('... are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
     except OSError as e:
         if (e.errno != errno.ENOENT):    # Ignore xcrun not found error
             raise
+        print('Metal SDK is not present.\n')
     except subprocess.CalledProcessError:
         pass
 
