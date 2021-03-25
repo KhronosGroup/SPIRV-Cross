@@ -250,6 +250,16 @@ public:
 	// - Images which are statically used at least once with Dref opcodes.
 	bool variable_is_depth_or_compare(VariableID id) const;
 
+	// If a shader output is active in this stage, but inactive in a subsequent stage,
+	// this can be signalled here. This can be used to work around certain cross-stage matching problems
+	// which plagues MSL and HLSL in certain scenarios.
+	// An output which matches one of these will not be emitted in stage output interfaces, but rather treated as a private
+	// variable.
+	// This option is only meaningful for MSL and HLSL, since GLSL matches by location directly.
+	// Masking builtins only takes effect if the builtin in question is part of the stage output interface.
+	void mask_stage_output_by_location(uint32_t location, uint32_t component);
+	void mask_stage_output_by_builtin(spv::BuiltIn builtin);
+
 protected:
 	struct ShaderSubgroupSupportHelper
 	{
@@ -903,6 +913,11 @@ protected:
 	void propagate_nonuniform_qualifier(uint32_t id);
 
 	static const char *vector_swizzle(int vecsize, int index);
+
+	bool is_stage_output_location_masked(uint32_t location, uint32_t component) const;
+	bool is_stage_output_builtin_masked(spv::BuiltIn builtin) const;
+	std::unordered_set<LocationComponentPair, InternalHasher> masked_output_locations;
+	std::unordered_set<uint32_t> masked_output_builtins;
 
 private:
 	void init();

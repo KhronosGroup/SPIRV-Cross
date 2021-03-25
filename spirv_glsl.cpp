@@ -15788,3 +15788,23 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		expr = join("spvWorkaroundRowMajor(", expr, ")");
 	}
 }
+
+void CompilerGLSL::mask_stage_output_by_location(uint32_t location, uint32_t component)
+{
+	masked_output_locations.insert({ location, component });
+}
+
+void CompilerGLSL::mask_stage_output_by_builtin(BuiltIn builtin)
+{
+	masked_output_builtins.insert(builtin);
+}
+
+bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t component) const
+{
+	return masked_output_locations.count({ location, component }) != 0;
+}
+
+bool CompilerGLSL::is_stage_output_builtin_masked(spv::BuiltIn builtin) const
+{
+	return masked_output_builtins.count(builtin) != 0;
+}

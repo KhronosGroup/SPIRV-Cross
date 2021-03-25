@@ -2908,6 +2908,29 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
 	bool is_builtin = is_builtin_variable(var);
 	auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+	bool is_block = has_decoration(var_type.self, DecorationBlock);
+
+	// If stage variables are masked out, emit them as plain variables instead.
+	// For builtins, we query them one by one later.
+	if (storage == StorageClassOutput)
+	{
+		bool has_location = has_decoration(var.self, DecorationLocation);
+		bool is_masked_by_location =
+				has_location &&
+				is_stage_output_location_masked(get_decoration(var.self, DecorationLocation),
+				                                get_decoration(var.self, DecorationComponent));
+		bool is_masked_by_builtin =
+				!is_block && is_builtin && is_stage_output_builtin_masked(builtin);
+
+		if (is_masked_by_location || is_masked_by_builtin)
+		{
+			// If we ignore an output, we must still emit it, since it might be used by app.
+			// Instead, just emit it as early declaration.
+			entry_func.add_local_variable(var.self);
+			vars_needing_early_declaration.push_back(var.self);
+			return;
+		}
+	}
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
@@ -2924,7 +2947,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			vars_needing_early_declaration.push_back(var.self);
 		}
 
-		if (capture_output_to_buffer && storage != StorageClassInput && !has_decoration(var_type.self, DecorationBlock))
+		if (capture_output_to_buffer && storage != StorageClassInput && !is_block)
 		{
 			// In Metal tessellation shaders, the interface block itself is arrayed. This makes things
 			// very complicated, since stage-in structures in MSL don't support nested structures.
@@ -2942,7 +2965,32 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 				auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
 
-				if (!is_builtin || has_active_builtin(builtin, storage))
+				if (storage == StorageClassOutput && is_builtin && is_stage_output_builtin_masked(builtin))
+				{
+					// Emit a fake variable instead.
+					uint32_t ids = ir.increase_bound_by(2);
+					uint32_t ptr_type_id = ids + 0;
+					uint32_t var_id = ids + 1;
+
+					auto ptr_type = mbr_type;
+					ptr_type.pointer = true;
+					ptr_type.pointer_depth++;
+					ptr_type.parent_type = mbr_type.self;
+					ptr_type.storage = StorageClassOutput;
+
+					uint32_t initializer = 0;
+					if (var.initializer)
+						if (auto *c = maybe_get<SPIRConstant>(var.initializer))
+							initializer = c->subconstants[mbr_idx];
+
+					set<SPIRType>(ptr_type_id, ptr_type);
+					set<SPIRVariable>(var_id, ptr_type_id, StorageClassOutput, initializer);
+					entry_func.add_local_variable(var_id);
+					vars_needing_early_declaration.push_back(var_id);
+					set_name(var_id, builtin_to_glsl(builtin, StorageClassOutput));
+					set_decoration(var_id, DecorationBuiltIn, builtin);
+				}
+				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type);
 					bool attribute_load_store =
@@ -13418,7 +13466,6 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
 	switch (builtin)
 	{
-
 	// Handle HLSL-style 0-based vertex/instance index.
 	// Override GLSL compiler strictness
 	case BuiltInVertexId:
@@ -13551,9 +13598,9 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInSampleMask:
 		if (get_execution_model() == ExecutionModelTessellationControl)
 			break;
-		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
+		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
+		    !is_stage_output_builtin_masked(builtin))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
-
 		break;
 
 	case BuiltInBaryCoordNV:
