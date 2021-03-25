@@ -12,8 +12,8 @@ struct main0_out
 
 struct main0_patchIn
 {
-    float2 gl_TessLevelInner [[attribute(0)]];
-    float4 gl_TessLevelOuter [[attribute(1)]];
+    float4 gl_TessLevelOuter [[attribute(0)]];
+    float2 gl_TessLevelInner [[attribute(1)]];
 };
 
 static inline __attribute__((always_inline))

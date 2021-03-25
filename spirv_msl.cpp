@@ -14691,7 +14691,10 @@ bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 	auto &mbr_meta2 = meta.members[mbr_idx2];
 	if (mbr_meta1.builtin != mbr_meta2.builtin)
 		return mbr_meta2.builtin;
+	else if (mbr_meta1.builtin)
+		return mbr_meta1.builtin_type < mbr_meta2.builtin_type;
 	else
+	{
 		switch (sort_aspect)
 		{
 		case Location:
@@ -14708,6 +14711,7 @@ bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 		default:
 			return false;
 		}
+	}
 }
 
 CompilerMSL::MemberSorter::MemberSorter(SPIRType &t, Meta &m, SortAspect sa)
