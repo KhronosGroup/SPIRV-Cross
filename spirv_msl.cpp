@@ -14093,9 +14093,11 @@ uint32_t CompilerMSL::get_declared_type_alignment_msl(const SPIRType &type, bool
 		SPIRV_CROSS_THROW("Querying alignment of opaque object.");
 
 	case SPIRType::Int64:
-		SPIRV_CROSS_THROW("long types are not supported in buffers in MSL.");
+		if (!msl_options.supports_msl_version(2, 3))
+			SPIRV_CROSS_THROW("long types in buffers are only supported in MSL 2.3 and above.");
 	case SPIRType::UInt64:
-		SPIRV_CROSS_THROW("ulong types are not supported in buffers in MSL.");
+		if (!msl_options.supports_msl_version(2, 3))
+			SPIRV_CROSS_THROW("ulong types in buffers are only supported in MSL 2.3 and above.");
 	case SPIRType::Double:
 		SPIRV_CROSS_THROW("double types are not supported in buffers in MSL.");
 
