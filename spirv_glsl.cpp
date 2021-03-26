@@ -8653,7 +8653,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			// Internally, access chain implementation can also be used on composites,
 			// ignore scalar access workarounds in this case.
 			StorageClass effective_storage;
-			if (expression_type(base).pointer)
+			auto *var = maybe_get_backing_variable(base);
+			if (var && variable_decl_is_threadgroup_like(*var))
+				effective_storage = StorageClassWorkgroup;
+			else if (expression_type(base).pointer)
 				effective_storage = get_expression_effective_storage_class(base);
 			else
 				effective_storage = StorageClassGeneric;
