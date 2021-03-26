@@ -621,6 +621,8 @@ struct CLIArguments
 	SmallVector<VariableTypeRemap> variable_type_remaps;
 	SmallVector<InterfaceVariableRename> interface_variable_renames;
 	SmallVector<HLSLVertexAttributeRemap> hlsl_attr_remap;
+	SmallVector<std::pair<uint32_t, uint32_t>> masked_stage_outputs;
+	SmallVector<BuiltIn> masked_stage_builtins;
 	string entry;
 	string entry_stage;
 
@@ -845,6 +847,11 @@ static void print_help_common()
 	                "\t\tGLSL: Rewrites [0, w] Z range (D3D/Metal/Vulkan) to GL-style [-w, w].\n"
 	                "\t\tHLSL/MSL: Rewrites [-w, w] Z range (GL) to D3D/Metal/Vulkan-style [0, w].\n"
 	                "\t[--flip-vert-y]:\n\t\tInverts gl_Position.y (or equivalent) at the end of a vertex shader. This is equivalent to using negative viewport height.\n"
+	                "\t[--mask-stage-output-location <location> <component>]:\n"
+	                "\t\tIf a stage output variable with matching location and component is active, optimize away the variable if applicable.\n"
+	                "\t[--mask-stage-builtin <Position|PointSize|ClipDistance|CullDistance>]:\n"
+	                "\t\tIf a stage output variable with matching builtin is active, "
+	                "optimize away the variable if it can affect cross-stage linking correctness.\n"
 	);
 	// clang-format on
 }
@@ -1102,6 +1109,11 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 		compiler->set_variable_type_remap_callback(move(remap_cb));
 	}
+
+	for (auto &masked : args.masked_stage_outputs)
+		compiler->mask_stage_output_by_location(masked.first, masked.second);
+	for (auto &masked : args.masked_stage_builtins)
+		compiler->mask_stage_output_by_builtin(masked);
 
 	for (auto &rename : args.entry_point_rename)
 		compiler->rename_entry_point(rename.old_name, rename.new_name, rename.execution_model);
@@ -1570,6 +1582,31 @@ static int main_inner(int argc, char *argv[])
 
 	cbs.add("--no-support-nonzero-baseinstance", [&](CLIParser &) { args.support_nonzero_baseinstance = false; });
 	cbs.add("--emit-line-directives", [&args](CLIParser &) { args.emit_line_directives = true; });
+
+	cbs.add("--mask-stage-output-location", [&](CLIParser &parser) {
+		uint32_t location = parser.next_uint();
+		uint32_t component = parser.next_uint();
+		args.masked_stage_outputs.push_back({ location, component });
+	});
+
+	cbs.add("--mask-stage-output-builtin", [&](CLIParser &parser) {
+		BuiltIn masked_builtin = BuiltInMax;
+		std::string builtin = parser.next_string();
+		if (builtin == "Position")
+			masked_builtin = BuiltInPosition;
+		else if (builtin == "PointSize")
+			masked_builtin = BuiltInPointSize;
+		else if (builtin == "CullDistance")
+			masked_builtin = BuiltInCullDistance;
+		else if (builtin == "ClipDistance")
+			masked_builtin = BuiltInClipDistance;
+		else
+		{
+			print_help();
+			exit(EXIT_FAILURE);
+		}
+		args.masked_stage_builtins.push_back(masked_builtin);
+	});
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.add("-", [&args](CLIParser &) { args.input = "-"; });
