@@ -736,6 +736,8 @@ protected:
 	// Threadgroup arrays can't have a wrapper type
 	std::string variable_decl(const SPIRVariable &variable) override;
 
+	bool variable_decl_is_threadgroup_like(const SPIRVariable &variable) const override;
+
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
 

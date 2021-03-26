@@ -12644,6 +12644,11 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uin
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
+bool CompilerGLSL::variable_decl_is_threadgroup_like(const SPIRVariable &var) const
+{
+	return var.storage == StorageClassWorkgroup;
+}
+
 // Emit a structure member. Subclasses may override to modify output,
 // or to dynamically add a padding member if needed.
 void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
@@ -13559,7 +13564,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		auto &var = get<SPIRVariable>(v);
 		var.deferred_declaration = false;
 
-		if (var.storage == StorageClassWorkgroup)
+		if (variable_decl_is_threadgroup_like(var))
 		{
 			// Special variable type which cannot have initializer,
 			// need to be declared as standalone variables.

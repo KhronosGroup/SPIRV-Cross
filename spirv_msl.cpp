@@ -2927,7 +2927,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			// If we ignore an output, we must still emit it, since it might be used by app.
 			// Instead, just emit it as early declaration.
 			entry_func.add_local_variable(var.self);
-			vars_needing_early_declaration.push_back(var.self);
+			if (!variable_decl_is_threadgroup_like(var))
+				vars_needing_early_declaration.push_back(var.self);
 			return;
 		}
 	}
@@ -12756,8 +12757,10 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 {
 	string quals;
 
+	auto *var = maybe_get<SPIRVariable>(id);
 	auto &type = expression_type(id);
-	if (type.storage == StorageClassWorkgroup)
+
+	if (type.storage == StorageClassWorkgroup || (var && variable_decl_is_threadgroup_like(*var)))
 		quals += "threadgroup ";
 
 	return quals;
@@ -12938,18 +12941,24 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
+bool CompilerMSL::variable_decl_is_threadgroup_like(const SPIRVariable &variable) const
+{
+	bool is_patch = has_decoration(variable.self, DecorationPatch);
+	auto model = get_execution_model();
+	return variable.storage == StorageClassWorkgroup ||
+	       (variable.storage == StorageClassOutput &&
+	        model == ExecutionModelTessellationControl &&
+	        !is_patch);
+}
+
 // Threadgroup arrays can't have a wrapper type
 std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 {
-	if (variable.storage == StorageClassWorkgroup)
-	{
+	bool old_is_using_builtin_array = is_using_builtin_array;
+	if (variable_decl_is_threadgroup_like(variable))
 		is_using_builtin_array = true;
-	}
 	std::string expr = CompilerGLSL::variable_decl(variable);
-	if (variable.storage == StorageClassWorkgroup)
-	{
-		is_using_builtin_array = false;
-	}
+	is_using_builtin_array = old_is_using_builtin_array;
 	return expr;
 }
 

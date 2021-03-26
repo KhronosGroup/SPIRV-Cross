@@ -385,6 +385,7 @@ protected:
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
 	virtual std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0);
+	virtual bool variable_decl_is_threadgroup_like(const SPIRVariable &var) const;
 	virtual std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id);
 
 	struct TextureFunctionBaseArguments
