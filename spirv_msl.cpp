@@ -3387,7 +3387,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	}
 
 	// Sort the members of the structure by their locations.
-	MemberSorter member_sorter(ib_type, ir.meta[ib_type_id], MemberSorter::Location);
+	MemberSorter member_sorter(ib_type, ir.meta[ib_type_id], MemberSorter::LocationThenBuiltInType);
 	member_sorter.sort();
 
 	// The member indices were saved to the original variables, but after the members
@@ -14684,34 +14684,23 @@ void CompilerMSL::MemberSorter::sort()
 	}
 }
 
-// Sort first by builtin status (put builtins at end), then by the sorting aspect.
 bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 {
 	auto &mbr_meta1 = meta.members[mbr_idx1];
 	auto &mbr_meta2 = meta.members[mbr_idx2];
-	if (mbr_meta1.builtin != mbr_meta2.builtin)
-		return mbr_meta2.builtin;
-	else if (mbr_meta1.builtin)
-		return mbr_meta1.builtin_type < mbr_meta2.builtin_type;
-	else
+
+	if (sort_aspect == LocationThenBuiltInType)
 	{
-		switch (sort_aspect)
-		{
-		case Location:
+		// Sort first by builtin status (put builtins at end), then by the sorting aspect.
+		if (mbr_meta1.builtin != mbr_meta2.builtin)
+			return mbr_meta2.builtin;
+		else if (mbr_meta1.builtin)
+			return mbr_meta1.builtin_type < mbr_meta2.builtin_type;
+		else
 			return mbr_meta1.location < mbr_meta2.location;
-		case LocationReverse:
-			return mbr_meta1.location > mbr_meta2.location;
-		case Offset:
-			return mbr_meta1.offset < mbr_meta2.offset;
-		case OffsetThenLocationReverse:
-			return (mbr_meta1.offset < mbr_meta2.offset) ||
-			       ((mbr_meta1.offset == mbr_meta2.offset) && (mbr_meta1.location > mbr_meta2.location));
-		case Alphabetical:
-			return mbr_meta1.alias < mbr_meta2.alias;
-		default:
-			return false;
-		}
 	}
+	else
+		return mbr_meta1.offset < mbr_meta2.offset;
 }
 
 CompilerMSL::MemberSorter::MemberSorter(SPIRType &t, Meta &m, SortAspect sa)

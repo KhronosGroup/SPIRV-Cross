@@ -1117,11 +1117,8 @@ protected:
 	{
 		enum SortAspect
 		{
-			Location,
-			LocationReverse,
-			Offset,
-			OffsetThenLocationReverse,
-			Alphabetical
+			LocationThenBuiltInType,
+			Offset
 		};
 
 		void sort();
