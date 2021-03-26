@@ -2975,7 +2975,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					auto ptr_type = mbr_type;
 					ptr_type.pointer = true;
 					ptr_type.pointer_depth++;
-					ptr_type.parent_type = mbr_type.self;
+					ptr_type.parent_type = var_type.member_types[mbr_idx];
 					ptr_type.storage = StorageClassOutput;
 
 					uint32_t initializer = 0;
