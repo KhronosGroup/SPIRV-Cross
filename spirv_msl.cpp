@@ -6858,12 +6858,62 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		ptr_is_chain = var->self != ID(ops[2]);
 	}
 
-	BuiltIn bi_type = BuiltIn(get_decoration(ops[2], DecorationBuiltIn));
-	if (var && flat_data && !patch &&
-	    (!is_builtin_variable(*var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
-	     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
-	     get_variable_data_type(*var).basetype == SPIRType::Struct))
+	bool builtin_variable = false;
+	bool builtin_block = false;
+	bool variable_is_flat = false;
+
+	if (var && flat_data && !patch)
 	{
+		builtin_variable = is_builtin_variable(*var);
+		builtin_block = builtin_variable && has_decoration(get_variable_data_type(*var).self, DecorationBlock);
+
+		BuiltIn bi_type = BuiltInMax;
+		if (builtin_variable && !builtin_block)
+			bi_type = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
+
+		variable_is_flat = !builtin_variable || builtin_block ||
+		                   bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
+		                   bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance;
+	}
+
+	if (variable_is_flat)
+	{
+		// If output is masked, it is emitted as a "normal" variable, just go through normal code paths.
+		// Only check this for the first level of access chain.
+		// Dealing with this for partial access chains should be possible, but awkward.
+		if (var->storage == StorageClassOutput && !ptr_is_chain)
+		{
+			bool masked = false;
+			if (builtin_variable)
+			{
+				if (builtin_block)
+				{
+					// FIXME: This won't work properly if the application first access chains into gl_out element,
+					// then access chains into the member. Super weird, but theoretically possible ...
+					if (length >= 5)
+					{
+						uint32_t mbr_idx = get<SPIRConstant>(ops[4]).scalar();
+						BuiltIn bi_type = BuiltIn(get_member_decoration(get_variable_data_type(*var).self,
+						                                                mbr_idx, DecorationBuiltIn));
+						masked = is_stage_output_builtin_masked(bi_type);
+					}
+				}
+				else
+				{
+					BuiltIn bi_type = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
+					masked = is_stage_output_builtin_masked(bi_type);
+				}
+			}
+			else
+			{
+				masked = is_stage_output_location_masked(get_decoration(ops[2], DecorationLocation),
+				                                         get_decoration(ops[2], DecorationComponent));
+			}
+
+			if (masked)
+				return false;
+		}
+
 		AccessChainMeta meta;
 		SmallVector<uint32_t> indices;
 		uint32_t next_id = ir.increase_bound_by(1);
