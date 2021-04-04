@@ -887,8 +887,8 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 			if (membertype.array.size() > 0)
 			{
 				uint32_t semantic_offset = 1;
-				for (uint32_t i = 0; i < membertype.array.size(); i++)
-					semantic_offset *= membertype.array[i];
+				for (uint32_t r = 0; r < membertype.array.size(); r++)
+					semantic_offset *= membertype.array[r];
 				semantic_location += semantic_offset;
 			}
 			else
