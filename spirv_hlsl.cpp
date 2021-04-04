@@ -866,9 +866,11 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 	type.member_name_cache.clear();
 
 	uint32_t base_location = get_decoration(var.self, DecorationLocation);
+	uint32_t semantic_location = 0;
 
 	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
 	{
+		auto &membertype = get<SPIRType>(type.member_types[i]);
 		string semantic;
 		if (has_member_decoration(type.self, i, DecorationLocation))
 		{
@@ -880,13 +882,23 @@ void CompilerHLSL::emit_io_block(const SPIRVariable &var)
 			// If the block itself has a location, but not its members, use the implicit location.
 			// There could be a conflict if the block members partially specialize the locations.
 			// It is unclear how SPIR-V deals with this. Assume this does not happen for now.
-			uint32_t location = base_location + i;
+			uint32_t location = base_location + semantic_location;
 			semantic = join(" : ", to_semantic(location, execution.model, var.storage));
+			if (membertype.array.size() > 0)
+			{
+				uint32_t semantic_offset = 1;
+				for (uint32_t i = 0; i < membertype.array.size(); i++)
+					semantic_offset *= membertype.array[i];
+				semantic_location += semantic_offset;
+			}
+			else
+			{
+				semantic_location++;
+			}
 		}
 
 		add_member_name(type, i);
 
-		auto &membertype = get<SPIRType>(type.member_types[i]);
 		statement(to_interpolation_qualifiers(get_member_decoration_bitset(type.self, i)),
 		          variable_decl(membertype, to_member_name(type, i)), semantic, ";");
 	}

@@ -23,13 +23,13 @@ layout(location = 1) out float vLocation1;
 layout(location = 2) out float vLocation2[2];
 // Picks first available location, 4.
 layout(location = 4) out Foo vLocation4;
-// Picks first available location 9.
-layout(location = 9) out float vLocation9;
+// Picks first available location 10.
+layout(location = 10) out float vLocation10;
 
 // Locks location 7 and 8.
 layout(location = 7) out VertexOut
 {
-	vec3 color;
+	vec3 color[2];
 	vec3 foo;
 } vout;
 
@@ -45,7 +45,8 @@ void main()
 	foo.b = vec3(1.0);
 	foo.c = vec3(1.0);
 	vLocation4 = foo;
-	vLocation9 = 9.0;
-	vout.color = vec3(2.0);
+	vLocation10 = 10.0;
+	vout.color[0] = vec3(2.0);
+	vout.color[1] = vec3(3.0);
 	vout.foo = vec3(4.0);
 }

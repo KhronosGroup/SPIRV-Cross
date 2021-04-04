@@ -13,12 +13,12 @@ static float vLocation0;
 static float vLocation1;
 static float vLocation2[2];
 static Foo vLocation4;
-static float vLocation9;
+static float vLocation10;
 
 struct VertexOut
 {
-    float3 color : TEXCOORD7;
-    float3 foo : TEXCOORD8;
+    float3 color[2] : TEXCOORD7;
+    float3 foo : TEXCOORD9;
 };
 
 static VertexOut vout;
@@ -36,7 +36,7 @@ struct SPIRV_Cross_Output
     float vLocation1 : TEXCOORD1;
     float vLocation2[2] : TEXCOORD2;
     Foo vLocation4 : TEXCOORD4;
-    float vLocation9 : TEXCOORD9;
+    float vLocation10 : TEXCOORD10;
     float4 gl_Position : SV_Position;
 };
 
@@ -52,8 +52,9 @@ void vert_main()
     foo.b = 1.0f.xxx;
     foo.c = 1.0f.xxx;
     vLocation4 = foo;
-    vLocation9 = 9.0f;
-    vout.color = 2.0f.xxx;
+    vLocation10 = 10.0f;
+    vout.color[0] = 2.0f.xxx;
+    vout.color[1] = 3.0f.xxx;
     vout.foo = 4.0f.xxx;
 }
 
@@ -70,6 +71,6 @@ SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input, out VertexOut stage_outpu
     stage_output.vLocation1 = vLocation1;
     stage_output.vLocation2 = vLocation2;
     stage_output.vLocation4 = vLocation4;
-    stage_output.vLocation9 = vLocation9;
+    stage_output.vLocation10 = vLocation10;
     return stage_output;
 }
