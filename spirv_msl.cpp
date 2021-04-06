@@ -10807,7 +10807,36 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 
 	case StorageClassOutput:
 		if (capture_output_to_buffer)
-			addr_space = "device";
+		{
+			if (var && type.storage == StorageClassOutput)
+			{
+				bool is_builtin = is_builtin_variable(*var);
+				bool is_masked;
+
+				if (is_builtin)
+				{
+					is_masked = is_stage_output_builtin_masked(
+							BuiltIn(get_decoration(var->self, DecorationBuiltIn)));
+				}
+				else
+				{
+					is_masked = is_stage_output_location_masked(
+							get_decoration(var->self, DecorationLocation),
+							get_decoration(var->self, DecorationComponent));
+				}
+
+				if (is_masked)
+				{
+					if (is_tessellation_shader())
+						addr_space = "threadgroup";
+					else
+						addr_space = "thread";
+				}
+			}
+
+			if (!addr_space)
+				addr_space = "device";
+		}
 		break;
 
 	default:
