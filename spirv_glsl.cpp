@@ -8656,8 +8656,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
 			{
 				auto *var = maybe_get_backing_variable(base);
-				if (var && variable_decl_is_threadgroup_like(*var))
+				if (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
 					effective_storage = StorageClassWorkgroup;
+				else if (var && variable_decl_is_remapped_storage(*var, StorageClassStorageBuffer))
+					effective_storage = StorageClassStorageBuffer;
 				else if (expression_type(base).pointer)
 					effective_storage = get_expression_effective_storage_class(base);
 			}
@@ -12650,9 +12652,9 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uin
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
-bool CompilerGLSL::variable_decl_is_threadgroup_like(const SPIRVariable &var) const
+bool CompilerGLSL::variable_decl_is_remapped_storage(const SPIRVariable &var, StorageClass storage) const
 {
-	return var.storage == StorageClassWorkgroup;
+	return var.storage == storage;
 }
 
 // Emit a structure member. Subclasses may override to modify output,
@@ -13570,7 +13572,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		auto &var = get<SPIRVariable>(v);
 		var.deferred_declaration = false;
 
-		if (variable_decl_is_threadgroup_like(var))
+		if (variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
 		{
 			// Special variable type which cannot have initializer,
 			// need to be declared as standalone variables.

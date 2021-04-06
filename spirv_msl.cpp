@@ -2900,7 +2900,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		// If we ignore an output, we must still emit it, since it might be used by app.
 		// Instead, just emit it as early declaration.
 		entry_func.add_local_variable(var.self);
-		if (!variable_decl_is_threadgroup_like(var))
+		if (!variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
 			vars_needing_early_declaration.push_back(var.self);
 		return;
 	}
@@ -12750,7 +12750,7 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 	auto *var = maybe_get<SPIRVariable>(id);
 	auto &type = expression_type(id);
 
-	if (type.storage == StorageClassWorkgroup || (var && variable_decl_is_threadgroup_like(*var)))
+	if (type.storage == StorageClassWorkgroup || (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup)))
 		quals += "threadgroup ";
 
 	return quals;
@@ -12931,13 +12931,33 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
-bool CompilerMSL::variable_decl_is_threadgroup_like(const SPIRVariable &variable) const
+bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const
 {
-	auto model = get_execution_model();
-	return variable.storage == StorageClassWorkgroup ||
-	       (variable.storage == StorageClassOutput &&
-	        model == ExecutionModelTessellationControl &&
-	        is_stage_output_variable_masked(variable));
+	if (variable.storage == storage)
+		return true;
+
+	if (storage == StorageClassWorkgroup)
+	{
+		auto model = get_execution_model();
+		return variable.storage == StorageClassOutput &&
+		       model == ExecutionModelTessellationControl &&
+		       is_stage_output_variable_masked(variable);
+	}
+	else if (storage == StorageClassStorageBuffer)
+	{
+		// We won't be able to catch writes to control point outputs here since variable
+		// refers to a function local pointer.
+		// This is fine, as there cannot be concurrent writers to that memory anyways,
+		// so we just ignore that case.
+
+		return capture_output_to_buffer &&
+		       variable.storage == StorageClassOutput &&
+		       !is_stage_output_variable_masked(variable);
+	}
+	else
+	{
+		return false;
+	}
 }
 
 std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
@@ -12948,7 +12968,8 @@ std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 	// More special cases. ClipDistance and CullDistance are emitted as plain arrays in stage out,
 	// so preserve that property when emitting them as masked variables. Avoids lots of extra special casing
 	// in argument_decl(). Similar argument for TessLevels.
-	if (variable_decl_is_threadgroup_like(variable) || has_decoration(variable.self, DecorationBuiltIn))
+	if (variable_decl_is_remapped_storage(variable, StorageClassWorkgroup) ||
+	    has_decoration(variable.self, DecorationBuiltIn))
 		is_using_builtin_array = true;
 
 	std::string expr = CompilerGLSL::variable_decl(variable);
