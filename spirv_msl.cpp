@@ -1740,12 +1740,34 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			auto *p_type = &get<SPIRType>(type_id);
 			BuiltIn bi_type = BuiltIn(get_decoration(arg_id, DecorationBuiltIn));
 
-			if (((is_tessellation_shader() && var.storage == StorageClassInput) ||
-			     (get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassOutput)) &&
-			    !(has_decoration(arg_id, DecorationPatch) || is_patch_block(*p_type)) &&
-			    (!is_builtin_variable(var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
-			     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
-			     p_type->basetype == SPIRType::Struct))
+			bool is_patch = has_decoration(arg_id, DecorationPatch) || is_patch_block(*p_type);
+			bool is_control_point_storage =
+					!is_patch &&
+					((is_tessellation_shader() && var.storage == StorageClassInput) ||
+					 (get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassOutput));
+			bool is_builtin = is_builtin_variable(var);
+			bool variable_is_stage_io =
+					!is_builtin || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
+					bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
+					p_type->basetype == SPIRType::Struct;
+			bool is_redirected_to_global_stage_io = is_control_point_storage && variable_is_stage_io;
+
+			// If output is masked it is not considered part of the global stage IO interface.
+			if (is_redirected_to_global_stage_io && var.storage == StorageClassOutput)
+			{
+				if (is_builtin)
+				{
+					is_redirected_to_global_stage_io = !is_stage_output_builtin_masked(bi_type);
+				}
+				else if (has_decoration(var.self, DecorationLocation))
+				{
+					is_redirected_to_global_stage_io = !is_stage_output_location_masked(
+							get_decoration(var.self, DecorationLocation),
+							get_decoration(var.self, DecorationComponent));
+				}
+			}
+
+			if (is_redirected_to_global_stage_io)
 			{
 				// Tessellation control shaders see inputs and per-vertex outputs as arrays.
 				// Similarly, tessellation evaluation shaders see per-vertex inputs as arrays.
@@ -1785,7 +1807,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				for (auto &mbr_type_id : p_type->member_types)
 				{
 					BuiltIn builtin = BuiltInMax;
-					bool is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
+					is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
 					if (is_builtin && has_active_builtin(builtin, var.storage))
 					{
 						// Add a arg variable with the same type and decorations as the member
