@@ -12933,12 +12933,11 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 
 bool CompilerMSL::variable_decl_is_threadgroup_like(const SPIRVariable &variable) const
 {
-	bool is_patch = has_decoration(variable.self, DecorationPatch);
 	auto model = get_execution_model();
 	return variable.storage == StorageClassWorkgroup ||
 	       (variable.storage == StorageClassOutput &&
 	        model == ExecutionModelTessellationControl &&
-	        !is_patch);
+	        is_stage_output_variable_masked(variable));
 }
 
 std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
