@@ -8652,14 +8652,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			// Internally, access chain implementation can also be used on composites,
 			// ignore scalar access workarounds in this case.
-			StorageClass effective_storage;
-			auto *var = maybe_get_backing_variable(base);
-			if (var && variable_decl_is_threadgroup_like(*var))
-				effective_storage = StorageClassWorkgroup;
-			else if (expression_type(base).pointer)
-				effective_storage = get_expression_effective_storage_class(base);
-			else
-				effective_storage = StorageClassGeneric;
+			StorageClass effective_storage = StorageClassGeneric;
+			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
+			{
+				auto *var = maybe_get_backing_variable(base);
+				if (var && variable_decl_is_threadgroup_like(*var))
+					effective_storage = StorageClassWorkgroup;
+				else if (expression_type(base).pointer)
+					effective_storage = get_expression_effective_storage_class(base);
+			}
 
 			if (!row_major_matrix_needs_conversion)
 			{
@@ -10310,14 +10311,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// Including the base will prevent this and would trigger multiple reads
 			// from expression causing it to be forced to an actual temporary in GLSL.
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
-			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT, &meta);
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT |
+			                                  ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
 			e = &emit_op(result_type, id, expr, true, should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 			e->base_expression = ops[2];
 		}
 		else
 		{
-			auto expr = access_chain_internal(ops[2], &ops[3], length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+			auto expr = access_chain_internal(ops[2], &ops[3], length,
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
