@@ -15812,7 +15812,8 @@ void CompilerGLSL::mask_stage_output_by_builtin(BuiltIn builtin)
 
 bool CompilerGLSL::is_stage_output_variable_masked(const SPIRVariable &var) const
 {
-	bool is_block = has_decoration(get<SPIRType>(var.basetype).self, DecorationBlock);
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_block = has_decoration(type.self, DecorationBlock);
 	// Blocks by themselves are never masked. Must be masked per-member.
 	if (is_block)
 		return false;
@@ -15834,8 +15835,9 @@ bool CompilerGLSL::is_stage_output_variable_masked(const SPIRVariable &var) cons
 	}
 }
 
-bool CompilerGLSL::is_stage_output_type_member_masked(const SPIRType &type, uint32_t index) const
+bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, uint32_t index, bool strip_array) const
 {
+	auto &type = get<SPIRType>(var.basetype);
 	bool is_block = has_decoration(type.self, DecorationBlock);
 	if (!is_block)
 		return false;
@@ -15847,12 +15849,9 @@ bool CompilerGLSL::is_stage_output_type_member_masked(const SPIRType &type, uint
 	}
 	else
 	{
-		if (!has_member_decoration(type.self, index, DecorationLocation))
-			return false;
-
-		return is_stage_output_location_masked(
-				get_member_decoration(type.self, index, DecorationLocation),
-				get_member_decoration(type.self, index, DecorationComponent));
+		uint32_t location = get_declared_member_location(var, index, strip_array);
+		uint32_t component = get_member_decoration(type.self, index, DecorationComponent);
+		return is_stage_output_location_masked(location, component);
 	}
 }
 
@@ -15864,4 +15863,41 @@ bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t c
 bool CompilerGLSL::is_stage_output_builtin_masked(spv::BuiltIn builtin) const
 {
 	return masked_output_builtins.count(builtin) != 0;
+}
+
+uint32_t CompilerGLSL::get_declared_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
+{
+	auto &block_type = get<SPIRType>(var.basetype);
+	if (has_member_decoration(block_type.self, mbr_idx, DecorationLocation))
+		return get_member_decoration(block_type.self, mbr_idx, DecorationLocation);
+	else
+		return get_accumulated_member_location(var, mbr_idx, strip_array);
+}
+
+uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
+{
+	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
+	uint32_t location = get_decoration(var.self, DecorationLocation);
+
+	for (uint32_t i = 0; i < mbr_idx; i++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[i]);
+
+		// Start counting from any place we have a new location decoration.
+		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
+			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
+
+		uint32_t location_count = 1;
+
+		if (mbr_type.columns > 1)
+			location_count = mbr_type.columns;
+
+		if (!mbr_type.array.empty())
+			for (uint32_t j = 0; j < uint32_t(mbr_type.array.size()); j++)
+				location_count *= to_array_size_literal(mbr_type, j);
+
+		location += location_count;
+	}
+
+	return location;
 }

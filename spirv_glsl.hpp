@@ -919,7 +919,9 @@ protected:
 	bool is_stage_output_location_masked(uint32_t location, uint32_t component) const;
 	bool is_stage_output_builtin_masked(spv::BuiltIn builtin) const;
 	bool is_stage_output_variable_masked(const SPIRVariable &var) const;
-	bool is_stage_output_type_member_masked(const SPIRType &type, uint32_t index) const;
+	bool is_stage_output_block_member_masked(const SPIRVariable &var, uint32_t index, bool strip_array) const;
+	uint32_t get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const;
+	uint32_t get_declared_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const;
 	std::unordered_set<LocationComponentPair, InternalHasher> masked_output_locations;
 	std::unordered_set<uint32_t> masked_output_builtins;
 

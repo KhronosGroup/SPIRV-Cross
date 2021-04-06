@@ -2408,34 +2408,6 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 	}
 }
 
-uint32_t CompilerMSL::get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array)
-{
-	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
-	uint32_t location = get_decoration(var.self, DecorationLocation);
-
-	for (uint32_t i = 0; i < mbr_idx; i++)
-	{
-		auto &mbr_type = get<SPIRType>(type.member_types[i]);
-
-		// Start counting from any place we have a new location decoration.
-		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
-			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
-
-		uint32_t location_count = 1;
-
-		if (mbr_type.columns > 1)
-			location_count = mbr_type.columns;
-
-		if (!mbr_type.array.empty())
-			for (uint32_t j = 0; j < uint32_t(mbr_type.array.size()); j++)
-				location_count *= to_array_size_literal(mbr_type, j);
-
-		location += location_count;
-	}
-
-	return location;
-}
-
 void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
                                                                    SPIRType &ib_type, SPIRVariable &var,
                                                                    uint32_t mbr_idx, InterfaceBlockMeta &meta)
@@ -2966,30 +2938,35 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 				auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
 
-				if (storage == StorageClassOutput && is_stage_output_type_member_masked(var_type, mbr_idx))
+				if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 				{
-					// Emit a fake variable instead.
-					uint32_t ids = ir.increase_bound_by(2);
-					uint32_t ptr_type_id = ids + 0;
-					uint32_t var_id = ids + 1;
+					// Non-builtin block output variables are just ignored, since they will still access
+					// the block variable as-is. They're just not flattened.
+					if (is_builtin)
+					{
+						// Emit a fake variable instead.
+						uint32_t ids = ir.increase_bound_by(2);
+						uint32_t ptr_type_id = ids + 0;
+						uint32_t var_id = ids + 1;
 
-					auto ptr_type = mbr_type;
-					ptr_type.pointer = true;
-					ptr_type.pointer_depth++;
-					ptr_type.parent_type = var_type.member_types[mbr_idx];
-					ptr_type.storage = StorageClassOutput;
+						auto ptr_type = mbr_type;
+						ptr_type.pointer = true;
+						ptr_type.pointer_depth++;
+						ptr_type.parent_type = var_type.member_types[mbr_idx];
+						ptr_type.storage = StorageClassOutput;
 
-					uint32_t initializer = 0;
-					if (var.initializer)
-						if (auto *c = maybe_get<SPIRConstant>(var.initializer))
-							initializer = c->subconstants[mbr_idx];
+						uint32_t initializer = 0;
+						if (var.initializer)
+							if (auto *c = maybe_get<SPIRConstant>(var.initializer))
+								initializer = c->subconstants[mbr_idx];
 
-					set<SPIRType>(ptr_type_id, ptr_type);
-					set<SPIRVariable>(var_id, ptr_type_id, StorageClassOutput, initializer);
-					entry_func.add_local_variable(var_id);
-					vars_needing_early_declaration.push_back(var_id);
-					set_name(var_id, builtin_to_glsl(builtin, StorageClassOutput));
-					set_decoration(var_id, DecorationBuiltIn, builtin);
+						set<SPIRType>(ptr_type_id, ptr_type);
+						set<SPIRVariable>(var_id, ptr_type_id, StorageClassOutput, initializer);
+						entry_func.add_local_variable(var_id);
+						vars_needing_early_declaration.push_back(var_id);
+						set_name(var_id, builtin_to_glsl(builtin, StorageClassOutput));
+						set_decoration(var_id, DecorationBuiltIn, builtin);
+					}
 				}
 				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
@@ -6894,7 +6871,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				if (length >= 5)
 				{
 					uint32_t mbr_idx = get<SPIRConstant>(ops[4]).scalar();
-					masked = is_stage_output_type_member_masked(get_variable_data_type(*var), mbr_idx);
+					masked = is_stage_output_block_member_masked(*var, mbr_idx, true);
 				}
 			}
 			else if (var)

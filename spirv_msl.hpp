@@ -817,7 +817,6 @@ protected:
 	void add_composite_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                                      SPIRType &ib_type, SPIRVariable &var, uint32_t index,
 	                                                      InterfaceBlockMeta &meta);
-	uint32_t get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 
 	void fix_up_interface_member_indices(spv::StorageClass storage, uint32_t ib_type_id);
