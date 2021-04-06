@@ -1754,18 +1754,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 			// If output is masked it is not considered part of the global stage IO interface.
 			if (is_redirected_to_global_stage_io && var.storage == StorageClassOutput)
-			{
-				if (is_builtin)
-				{
-					is_redirected_to_global_stage_io = !is_stage_output_builtin_masked(bi_type);
-				}
-				else if (has_decoration(var.self, DecorationLocation))
-				{
-					is_redirected_to_global_stage_io = !is_stage_output_location_masked(
-							get_decoration(var.self, DecorationLocation),
-							get_decoration(var.self, DecorationComponent));
-				}
-			}
+				is_redirected_to_global_stage_io = !is_stage_output_variable_masked(var);
 
 			if (is_redirected_to_global_stage_io)
 			{
@@ -2934,25 +2923,14 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	// If stage variables are masked out, emit them as plain variables instead.
 	// For builtins, we query them one by one later.
-	if (storage == StorageClassOutput)
+	if (storage == StorageClassOutput && is_stage_output_variable_masked(var))
 	{
-		bool has_location = has_decoration(var.self, DecorationLocation);
-		bool is_masked_by_location =
-				has_location &&
-				is_stage_output_location_masked(get_decoration(var.self, DecorationLocation),
-				                                get_decoration(var.self, DecorationComponent));
-		bool is_masked_by_builtin =
-				!is_block && is_builtin && is_stage_output_builtin_masked(builtin);
-
-		if (is_masked_by_location || is_masked_by_builtin)
-		{
-			// If we ignore an output, we must still emit it, since it might be used by app.
-			// Instead, just emit it as early declaration.
-			entry_func.add_local_variable(var.self);
-			if (!variable_decl_is_threadgroup_like(var))
-				vars_needing_early_declaration.push_back(var.self);
-			return;
-		}
+		// If we ignore an output, we must still emit it, since it might be used by app.
+		// Instead, just emit it as early declaration.
+		entry_func.add_local_variable(var.self);
+		if (!variable_decl_is_threadgroup_like(var))
+			vars_needing_early_declaration.push_back(var.self);
+		return;
 	}
 
 	if (var_type.basetype == SPIRType::Struct)
@@ -2988,7 +2966,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 				auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
 
-				if (storage == StorageClassOutput && is_builtin && is_stage_output_builtin_masked(builtin))
+				if (storage == StorageClassOutput && is_stage_output_type_member_masked(var_type, mbr_idx))
 				{
 					// Emit a fake variable instead.
 					uint32_t ids = ir.increase_bound_by(2);
@@ -6882,19 +6860,21 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	}
 
 	bool builtin_variable = false;
-	bool builtin_block = false;
+	bool is_block = false;
 	bool variable_is_flat = false;
+
+	if (var)
+		is_block = has_decoration(get_variable_data_type(*var).self, DecorationBlock);
 
 	if (var && flat_data && !patch)
 	{
 		builtin_variable = is_builtin_variable(*var);
-		builtin_block = builtin_variable && has_decoration(get_variable_data_type(*var).self, DecorationBlock);
 
 		BuiltIn bi_type = BuiltInMax;
-		if (builtin_variable && !builtin_block)
+		if (builtin_variable && !is_block)
 			bi_type = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
 
-		variable_is_flat = !builtin_variable || builtin_block ||
+		variable_is_flat = !builtin_variable || is_block ||
 		                   bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
 		                   bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance;
 	}
@@ -6907,31 +6887,18 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		if (var->storage == StorageClassOutput && !ptr_is_chain)
 		{
 			bool masked = false;
-			if (builtin_variable)
+			if (is_block)
 			{
-				if (builtin_block)
+				// FIXME: This won't work properly if the application first access chains into gl_out element,
+				// then access chains into the member. Super weird, but theoretically possible ...
+				if (length >= 5)
 				{
-					// FIXME: This won't work properly if the application first access chains into gl_out element,
-					// then access chains into the member. Super weird, but theoretically possible ...
-					if (length >= 5)
-					{
-						uint32_t mbr_idx = get<SPIRConstant>(ops[4]).scalar();
-						BuiltIn bi_type = BuiltIn(get_member_decoration(get_variable_data_type(*var).self,
-						                                                mbr_idx, DecorationBuiltIn));
-						masked = is_stage_output_builtin_masked(bi_type);
-					}
-				}
-				else
-				{
-					BuiltIn bi_type = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
-					masked = is_stage_output_builtin_masked(bi_type);
+					uint32_t mbr_idx = get<SPIRConstant>(ops[4]).scalar();
+					masked = is_stage_output_type_member_masked(get_variable_data_type(*var), mbr_idx);
 				}
 			}
-			else
-			{
-				masked = is_stage_output_location_masked(get_decoration(ops[2], DecorationLocation),
-				                                         get_decoration(ops[2], DecorationComponent));
-			}
+			else if (var)
+				masked = is_stage_output_variable_masked(*var);
 
 			if (masked)
 				return false;
@@ -10810,21 +10777,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		{
 			if (var && type.storage == StorageClassOutput)
 			{
-				bool is_builtin = is_builtin_variable(*var);
-				bool is_masked;
-
-				if (is_builtin)
-				{
-					is_masked = is_stage_output_builtin_masked(
-							BuiltIn(get_decoration(var->self, DecorationBuiltIn)));
-				}
-				else
-				{
-					is_masked = is_stage_output_location_masked(
-							get_decoration(var->self, DecorationLocation),
-							get_decoration(var->self, DecorationComponent));
-				}
-
+				bool is_masked = is_stage_output_variable_masked(*var);
 				if (is_masked)
 				{
 					if (is_tessellation_shader())

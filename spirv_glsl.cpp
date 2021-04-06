@@ -15810,6 +15810,52 @@ void CompilerGLSL::mask_stage_output_by_builtin(BuiltIn builtin)
 	masked_output_builtins.insert(builtin);
 }
 
+bool CompilerGLSL::is_stage_output_variable_masked(const SPIRVariable &var) const
+{
+	bool is_block = has_decoration(get<SPIRType>(var.basetype).self, DecorationBlock);
+	// Blocks by themselves are never masked. Must be masked per-member.
+	if (is_block)
+		return false;
+
+	bool is_builtin = has_decoration(var.self, DecorationBuiltIn);
+
+	if (is_builtin)
+	{
+		return is_stage_output_builtin_masked(BuiltIn(get_decoration(var.self, DecorationBuiltIn)));
+	}
+	else
+	{
+		if (!has_decoration(var.self, DecorationLocation))
+			return false;
+
+		return is_stage_output_location_masked(
+				get_decoration(var.self, DecorationLocation),
+				get_decoration(var.self, DecorationComponent));
+	}
+}
+
+bool CompilerGLSL::is_stage_output_type_member_masked(const SPIRType &type, uint32_t index) const
+{
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	if (!is_block)
+		return false;
+
+	BuiltIn builtin = BuiltInMax;
+	if (is_member_builtin(type, index, &builtin))
+	{
+		return is_stage_output_builtin_masked(builtin);
+	}
+	else
+	{
+		if (!has_member_decoration(type.self, index, DecorationLocation))
+			return false;
+
+		return is_stage_output_location_masked(
+				get_member_decoration(type.self, index, DecorationLocation),
+				get_member_decoration(type.self, index, DecorationComponent));
+	}
+}
+
 bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t component) const
 {
 	return masked_output_locations.count({ location, component }) != 0;
