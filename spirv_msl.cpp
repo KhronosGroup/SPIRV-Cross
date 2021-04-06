@@ -12325,7 +12325,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		else
 		{
-			decl += " (&";
+			auto array_size_decl = type_to_array_glsl(type);
+			if (array_size_decl.empty())
+				decl += "& ";
+			else
+				decl += " (&";
+
 			const char *restrict_kw = to_restrict(name_id);
 			if (*restrict_kw)
 			{
@@ -12333,8 +12338,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += restrict_kw;
 			}
 			decl += to_expression(name_id);
-			decl += ")";
-			decl += type_to_array_glsl(type);
+
+			if (!array_size_decl.empty())
+			{
+				decl += ")";
+				decl += array_size_decl;
+			}
 		}
 	}
 	else if (!opaque_handle && (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
