@@ -12951,12 +12951,17 @@ bool CompilerMSL::variable_decl_is_threadgroup_like(const SPIRVariable &variable
 	        !is_patch);
 }
 
-// Threadgroup arrays can't have a wrapper type
 std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 {
 	bool old_is_using_builtin_array = is_using_builtin_array;
-	if (variable_decl_is_threadgroup_like(variable))
+
+	// Threadgroup arrays can't have a wrapper type.
+	// More special cases. ClipDistance and CullDistance are emitted as plain arrays in stage out,
+	// so preserve that property when emitting them as masked variables. Avoids lots of extra special casing
+	// in argument_decl(). Similar argument for TessLevels.
+	if (variable_decl_is_threadgroup_like(variable) || has_decoration(variable.self, DecorationBuiltIn))
 		is_using_builtin_array = true;
+
 	std::string expr = CompilerGLSL::variable_decl(variable);
 	is_using_builtin_array = old_is_using_builtin_array;
 	return expr;
