@@ -12179,7 +12179,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	string address_space = get_argument_address_space(var);
-	bool builtin = is_builtin_variable(var);
+	bool builtin = has_decoration(var.self, DecorationBuiltIn);
 	auto builtin_type = BuiltIn(get_decoration(arg.id, DecorationBuiltIn));
 	is_using_builtin_array = builtin;
 	if (address_space == "threadgroup")
