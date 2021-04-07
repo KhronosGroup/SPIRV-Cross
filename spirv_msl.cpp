@@ -1762,12 +1762,43 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// Similarly, tessellation evaluation shaders see per-vertex inputs as arrays.
 				// We collected them into a structure; we must pass the array of this
 				// structure to the function.
-				std::string name;
+				std::string name = var.storage == StorageClassInput ? "gl_in" : "gl_out";
+
+				if (var.storage == StorageClassOutput &&
+				    has_decoration(p_type->self, DecorationBlock) &&
+				    is_builtin)
+				{
+					// If we're redirecting a block, we might still need to access the original block
+					// variable if we're masking some members.
+					bool needs_local_declaration = false;
+					for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
+						if (is_stage_output_block_member_masked(var, mbr_idx, true))
+							needs_local_declaration = true;
+
+					if (needs_local_declaration)
+					{
+						if (!stage_out_var_id_masked)
+						{
+							stage_out_var_id_masked = ir.increase_bound_by(1);
+							set<SPIRVariable>(stage_out_var_id_masked, var.basetype, StorageClassOutput);
+							set_name(stage_out_var_id_masked, name + "_masked");
+							set_name(var.self, name + "_masked");
+
+							auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+							entry_func.add_local_variable(stage_out_var_id_masked);
+						}
+						func.add_parameter(var.basetype, stage_out_var_id_masked, true);
+					}
+				}
+
+				// Tessellation control shaders see inputs and per-vertex outputs as arrays.
+				// Similarly, tessellation evaluation shaders see per-vertex inputs as arrays.
+				// We collected them into a structure; we must pass the array of this
+				// structure to the function.
 				if (var.storage == StorageClassInput)
 				{
 					if (added_in)
 						continue;
-					name = "gl_in";
 					arg_id = stage_in_ptr_var_id;
 					added_in = true;
 				}
@@ -1775,10 +1806,10 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				{
 					if (added_out)
 						continue;
-					name = "gl_out";
 					arg_id = stage_out_ptr_var_id;
 					added_out = true;
 				}
+
 				type_id = get<SPIRVariable>(arg_id).basetype;
 				uint32_t next_id = ir.increase_bound_by(1);
 				func.add_parameter(type_id, next_id, true);
@@ -10770,6 +10801,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 			if (var && type.storage == StorageClassOutput)
 			{
 				bool is_masked = is_stage_output_variable_masked(*var);
+
 				if (is_masked)
 				{
 					if (is_tessellation_shader())
@@ -10777,6 +10809,8 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 					else
 						addr_space = "thread";
 				}
+				else if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
+					addr_space = "threadgroup";
 			}
 
 			if (!addr_space)
@@ -12954,6 +12988,11 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 	if (storage == StorageClassWorkgroup)
 	{
 		auto model = get_execution_model();
+
+		// Specially masked IO block variable.
+		if (variable.self == stage_out_var_id_masked)
+			return true;
+
 		return variable.storage == StorageClassOutput &&
 		       model == ExecutionModelTessellationControl &&
 		       is_stage_output_variable_masked(variable);

@@ -988,6 +988,7 @@ protected:
 	VariableID patch_stage_out_var_id = 0;
 	VariableID stage_in_ptr_var_id = 0;
 	VariableID stage_out_ptr_var_id = 0;
+	VariableID stage_out_var_id_masked = 0;
 
 	// Handle HLSL-style 0-based vertex/instance index.
 	enum class TriState
