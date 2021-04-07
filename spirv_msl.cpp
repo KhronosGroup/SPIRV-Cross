@@ -2924,6 +2924,12 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 	bool is_block = has_decoration(var_type.self, DecorationBlock);
 
+	const auto emit_local_masked_variable = [this, &entry_func](const SPIRVariable &masked_var) {
+		entry_func.add_local_variable(masked_var.self);
+		if (!variable_decl_is_remapped_storage(masked_var, StorageClassWorkgroup))
+			vars_needing_early_declaration.push_back(masked_var.self);
+	};
+
 	// If stage variables are masked out, emit them as plain variables instead.
 	// For builtins, we query them one by one later.
 	// IO blocks are not masked here, we need to mask them per-member instead.
@@ -2931,18 +2937,21 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	{
 		// If we ignore an output, we must still emit it, since it might be used by app.
 		// Instead, just emit it as early declaration.
-		entry_func.add_local_variable(var.self);
-		if (!variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
-			vars_needing_early_declaration.push_back(var.self);
+		emit_local_masked_variable(var);
 		return;
 	}
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		bool block_requires_fixup_load_stores = !capture_output_to_buffer || is_block || storage == StorageClassInput;
+		bool block_requires_split_members = !capture_output_to_buffer || is_block || storage == StorageClassInput;
 
 		bool needs_local_declaration =
-				!is_builtin_type(var_type) && block_requires_fixup_load_stores && !meta.strip_array;
+				!is_builtin_type(var_type) && block_requires_split_members && !meta.strip_array;
+
+		// Fixing up loads and stores in TESC is impossible since the memory is group shared either via
+		// device (not masked) or threadgroup (masked) storage classes.
+		if (get_execution_model() == ExecutionModelTessellationControl && storage == StorageClassOutput)
+			needs_local_declaration = false;
 
 		if (needs_local_declaration)
 		{
@@ -2952,11 +2961,10 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			// we unflatten I/O blocks while running the shader,
 			// and pass the actual struct type down to leaf functions.
 			// We then unflatten inputs, and flatten outputs in the "fixup" stages.
-			entry_func.add_local_variable(var.self);
-			vars_needing_early_declaration.push_back(var.self);
+			emit_local_masked_variable(var);
 		}
 
-		if (!block_requires_fixup_load_stores)
+		if (!block_requires_split_members)
 		{
 			// In Metal tessellation shaders, the interface block itself is arrayed. This makes things
 			// very complicated, since stage-in structures in MSL don't support nested structures.
