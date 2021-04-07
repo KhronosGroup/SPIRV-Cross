@@ -2907,7 +2907,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || storage == StorageClassInput) &&
+		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || is_block || storage == StorageClassInput) &&
 		    !meta.strip_array)
 		{
 			// For I/O blocks or structs, we will need to pass the block itself around
