@@ -2561,7 +2561,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, mbr_idx);
 
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
-		if (!meta.strip_array)
+		if (!meta.strip_array && meta.allow_local_declaration)
 		{
 			switch (storage)
 			{
@@ -2662,7 +2662,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		// so redirect to qualified name.
 		set_member_qualified_name(var_type.self, mbr_idx, qual_var_name);
 	}
-	else if (!meta.strip_array)
+	else if (!meta.strip_array && meta.allow_local_declaration)
 	{
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
 		switch (storage)
@@ -2751,8 +2751,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		{
 			entry_func.fixup_hooks_in.push_back([=, &var]() {
 				auto &type = this->get<SPIRType>(var.basetype);
-				uint32_t index = get_extended_decoration(var.self, SPIRVCrossDecorationInterfaceMemberIndex);
-				index += mbr_idx;
+				uint32_t index = get_extended_member_decoration(var.self, mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex);
 
 				AccessChainMeta chain_meta;
 				auto constant_chain = access_chain_internal(var.initializer, &builtin_invocation_id_id, 1, 0, &chain_meta);
@@ -2943,15 +2942,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		bool block_requires_split_members = !capture_output_to_buffer || is_block || storage == StorageClassInput;
-
-		bool needs_local_declaration =
-				!is_builtin_type(var_type) && block_requires_split_members && !meta.strip_array;
-
-		// Fixing up loads and stores in TESC is impossible since the memory is group shared either via
-		// device (not masked) or threadgroup (masked) storage classes.
-		if (get_execution_model() == ExecutionModelTessellationControl && storage == StorageClassOutput)
-			needs_local_declaration = false;
+		bool block_requires_flattening = is_block || !capture_output_to_buffer || storage == StorageClassInput;
+		bool needs_local_declaration = !is_builtin && block_requires_flattening && meta.allow_local_declaration;
 
 		if (needs_local_declaration)
 		{
@@ -2964,7 +2956,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			emit_local_masked_variable(var);
 		}
 
-		if (!block_requires_split_members)
+		if (!block_requires_flattening)
 		{
 			// In Metal tessellation shaders, the interface block itself is arrayed. This makes things
 			// very complicated, since stage-in structures in MSL don't support nested structures.
@@ -3095,10 +3087,13 @@ void CompilerMSL::fix_up_interface_member_indices(StorageClass storage, uint32_t
 		auto &var = get<SPIRVariable>(var_id);
 
 		auto &type = get_variable_element_type(var);
-		if (storage == StorageClassInput && type.basetype == SPIRType::Struct)
-		{
-			uint32_t mbr_idx = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
 
+		uint32_t mbr_idx = uint32_t(-1);
+		if (type.basetype == SPIRType::Struct)
+			mbr_idx = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
+
+		if (mbr_idx != uint32_t(-1))
+		{
 			// Only set the lowest InterfaceMemberIndex for each variable member.
 			// IB struct members will be emitted in-order w.r.t. interface member index.
 			if (!has_extended_member_decoration(var_id, mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex))
@@ -3399,7 +3394,11 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		     (get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput)) &&
 		    !patch;
 
+		// Fixing up flattened stores in TESC is impossible since the memory is group shared either via
+		// device (not masked) or threadgroup (masked) storage classes and it's race condition city.
 		meta.strip_array = strip_array;
+		meta.allow_local_declaration = !strip_array && !(get_execution_model() == ExecutionModelTessellationControl &&
+		                                                 storage == StorageClassOutput);
 		add_variable_to_interface_block(storage, ib_var_ref, ib_type, *p_var, meta);
 	}
 
@@ -3452,6 +3451,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			auto &fake_var = set<SPIRVariable>(var_id, ptr_type_id, storage);
 			set_decoration(var_id, DecorationLocation, input.first);
 			meta.strip_array = true;
+			meta.allow_local_declaration = false;
 			add_variable_to_interface_block(storage, ib_var_ref, ib_type, fake_var, meta);
 		}
 	}
@@ -3462,8 +3462,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 
 	// The member indices were saved to the original variables, but after the members
 	// were sorted, those indices are now likely incorrect. Fix those up now.
-	if (!patch)
-		fix_up_interface_member_indices(storage, ib_type_id);
+	fix_up_interface_member_indices(storage, ib_type_id);
 
 	// For patch inputs, add one more member, holding the array of control point data.
 	if (get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput && patch &&
@@ -6869,6 +6868,10 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	bool flat_data = false;
 	bool ptr_is_chain = false;
 	bool multi_patch = get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup;
+	bool is_block = false;
+
+	if (var)
+		is_block = has_decoration(get_variable_data_type(*var).self, DecorationBlock);
 
 	if (var)
 	{
@@ -6878,20 +6881,20 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		flat_data = var->storage == StorageClassInput ||
 		            (var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
 
+		if (patch && (!is_block || var->storage != StorageClassOutput))
+			flat_data = false;
+
 		// We might have a chained access chain, where
 		// we first take the access chain to the control point, and then we chain into a member or something similar.
 		// In this case, we need to skip gl_in/gl_out remapping.
+		// Also, skip ptr chain for patches.
 		ptr_is_chain = var->self != ID(ops[2]);
 	}
 
 	bool builtin_variable = false;
-	bool is_block = false;
 	bool variable_is_flat = false;
 
-	if (var)
-		is_block = has_decoration(get_variable_data_type(*var).self, DecorationBlock);
-
-	if (var && flat_data && !patch)
+	if (var && flat_data)
 	{
 		builtin_variable = is_builtin_variable(*var);
 
@@ -6914,11 +6917,12 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			bool masked = false;
 			if (is_block)
 			{
+				uint32_t relevant_member_index = patch ? 3 : 4;
 				// FIXME: This won't work properly if the application first access chains into gl_out element,
 				// then access chains into the member. Super weird, but theoretically possible ...
-				if (length >= 5)
+				if (length > relevant_member_index)
 				{
-					uint32_t mbr_idx = get<SPIRConstant>(ops[4]).scalar();
+					uint32_t mbr_idx = get<SPIRConstant>(ops[relevant_member_index]).scalar();
 					masked = is_stage_output_block_member_masked(*var, mbr_idx, true);
 				}
 			}
@@ -6935,13 +6939,19 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 		indices.reserve(length - 3 + 1);
 
-		uint32_t first_non_array_index = ptr_is_chain ? 3 : 4;
-		VariableID stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
+		uint32_t first_non_array_index = (ptr_is_chain ? 3 : 4) - (patch ? 1 : 0);
+
+		VariableID stage_var_id;
+		if (patch)
+			stage_var_id = patch_stage_out_var_id;
+		else
+			stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
+
 		VariableID ptr = ptr_is_chain ? VariableID(ops[2]) : stage_var_id;
-		if (!ptr_is_chain)
+		if (!ptr_is_chain && !patch)
 		{
 			// Index into gl_in/gl_out with first array index.
-			indices.push_back(ops[3]);
+			indices.push_back(ops[first_non_array_index - 1]);
 		}
 
 		auto &result_ptr_type = get<SPIRType>(ops[0]);
@@ -6956,11 +6966,12 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			{
 				// Maybe this is a struct type in the input class, in which case
 				// we put it as a decoration on the corresponding member.
-				index = get_extended_member_decoration(var->self, get_constant(ops[first_non_array_index]).scalar(),
+				uint32_t mbr_idx = get_constant(ops[first_non_array_index]).scalar();
+				index = get_extended_member_decoration(var->self, mbr_idx,
 				                                       SPIRVCrossDecorationInterfaceMemberIndex);
 				assert(index != uint32_t(-1));
 				i++;
-				type = &get<SPIRType>(type->member_types[get_constant(ops[first_non_array_index]).scalar()]);
+				type = &get<SPIRType>(type->member_types[mbr_idx]);
 			}
 
 			// In this case, we're poking into flattened structures and arrays, so now we have to
@@ -7030,7 +7041,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		if (!ptr_is_chain)
 		{
 			// This is the start of an access chain, use ptr_chain to index into control point array.
-			e = access_chain(ptr, indices.data(), uint32_t(indices.size()), result_ptr_type, &meta, true);
+			e = access_chain(ptr, indices.data(), uint32_t(indices.size()), result_ptr_type, &meta, !patch);
 		}
 		else
 		{

@@ -803,6 +803,7 @@ protected:
 		};
 		std::unordered_map<uint32_t, LocationMeta> location_meta;
 		bool strip_array = false;
+		bool allow_local_declaration = false;
 	};
 
 	void add_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
