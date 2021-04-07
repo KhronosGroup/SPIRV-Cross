@@ -8776,7 +8776,8 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 	{
 		auto &ib_var = get<SPIRVariable>(ib_var_id);
 		auto &ib_type = get_variable_data_type(ib_var);
-		assert(ib_type.basetype == SPIRType::Struct && !ib_type.member_types.empty());
+		//assert(ib_type.basetype == SPIRType::Struct && !ib_type.member_types.empty());
+		assert(ib_type.basetype == SPIRType::Struct);
 		emit_struct(ib_type);
 	}
 }
