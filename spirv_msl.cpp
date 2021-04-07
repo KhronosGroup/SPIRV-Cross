@@ -1786,7 +1786,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 				set_name(next_id, name);
 			}
-			else if (is_builtin_variable(var) && p_type->basetype == SPIRType::Struct)
+			else if (is_builtin && has_decoration(p_type->self, DecorationBlock))
 			{
 				// Get the pointee type
 				type_id = get_pointee_type_id(type_id);
@@ -2895,6 +2895,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	// If stage variables are masked out, emit them as plain variables instead.
 	// For builtins, we query them one by one later.
+	// IO blocks are not masked here, we need to mask them per-member instead.
 	if (storage == StorageClassOutput && is_stage_output_variable_masked(var))
 	{
 		// If we ignore an output, we must still emit it, since it might be used by app.
@@ -2907,8 +2908,12 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || is_block || storage == StorageClassInput) &&
-		    !meta.strip_array)
+		bool block_requires_fixup_load_stores = !capture_output_to_buffer || is_block || storage == StorageClassInput;
+
+		bool needs_local_declaration =
+				!is_builtin_type(var_type) && block_requires_fixup_load_stores && !meta.strip_array;
+
+		if (needs_local_declaration)
 		{
 			// For I/O blocks or structs, we will need to pass the block itself around
 			// to functions if they are used globally in leaf functions.
@@ -2920,7 +2925,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			vars_needing_early_declaration.push_back(var.self);
 		}
 
-		if (capture_output_to_buffer && storage != StorageClassInput && !is_block)
+		if (!block_requires_fixup_load_stores)
 		{
 			// In Metal tessellation shaders, the interface block itself is arrayed. This makes things
 			// very complicated, since stage-in structures in MSL don't support nested structures.
@@ -2942,7 +2947,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				{
 					// Non-builtin block output variables are just ignored, since they will still access
 					// the block variable as-is. They're just not flattened.
-					if (is_builtin)
+					if (is_builtin && !meta.strip_array)
 					{
 						// Emit a fake variable instead.
 						uint32_t ids = ir.increase_bound_by(2);
@@ -6900,7 +6905,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 		uint32_t const_mbr_id = next_id++;
 		uint32_t index = get_extended_decoration(var->self, SPIRVCrossDecorationInterfaceMemberIndex);
-		if (var->storage == StorageClassInput || has_decoration(get_variable_element_type(*var).self, DecorationBlock))
+		if (var->storage == StorageClassInput || is_block)
 		{
 			uint32_t i = first_non_array_index;
 			auto *type = &get_variable_element_type(*var);
@@ -6931,7 +6936,16 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				// We're in flattened space, so just increment the member index into IO block.
 				// We can only do this once in the current implementation, so either:
 				// Struct, Matrix or 1-dimensional array for a control point.
-				index += c->scalar();
+				if (type->basetype == SPIRType::Struct && var->storage == StorageClassOutput)
+				{
+					// Need to consider holes, since individual block members might be masked away.
+					uint32_t mbr_idx = c->scalar();
+					for (uint32_t j = 0; j < mbr_idx; j++)
+						if (!is_stage_output_block_member_masked(*var, j, true))
+							index++;
+				}
+				else
+					index += c->scalar();
 
 				if (type->parent_type)
 					type = &get<SPIRType>(type->parent_type);
