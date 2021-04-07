@@ -6469,6 +6469,10 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			if (patch_stage_in_var_id && get_patch_stage_in_struct_type().self == type_id)
 				is_declarable_struct = false;
 
+			// Special case. Declare builtin struct anyways if we need to emit a threadgroup version of it.
+			if (stage_out_var_id_masked && get<SPIRType>(get<SPIRVariable>(stage_out_var_id_masked).basetype).self == type_id)
+				is_declarable_struct = true;
+
 			// Align and emit declarable structs...but avoid declaring each more than once.
 			if (is_declarable_struct && declared_structs.count(type_id) == 0)
 			{
@@ -10229,8 +10233,11 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 
 	// Handle HLSL-style 0-based vertex/instance index.
 	builtin_declaration = true;
+	bool old_is_using_builtin_array = is_using_builtin_array;
+	is_using_builtin_array = has_member_decoration(type.self, index, DecorationBuiltIn);
 	statement(to_struct_member(type, member_type_id, index, qualifier));
 	builtin_declaration = false;
+	is_using_builtin_array = old_is_using_builtin_array;
 }
 
 void CompilerMSL::emit_struct_padding_target(const SPIRType &type)
