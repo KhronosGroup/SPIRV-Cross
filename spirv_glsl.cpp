@@ -8653,6 +8653,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			// Internally, access chain implementation can also be used on composites,
 			// ignore scalar access workarounds in this case.
 			StorageClass effective_storage = StorageClassGeneric;
+			bool ignore_potential_sliced_writes = false;
 			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
 			{
 				auto *var = maybe_get_backing_variable(base);
@@ -8662,9 +8663,23 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					effective_storage = StorageClassStorageBuffer;
 				else if (expression_type(base).pointer)
 					effective_storage = get_expression_effective_storage_class(base);
-			}
 
-			if (!row_major_matrix_needs_conversion)
+				// Special consideration for control points.
+				// Control points can only be written by InvocationID, so there is no need
+				// to consider scalar access chains here.
+				// Cleans up some cases where it's very painful to determine the accurate storage class
+				// since blocks can be partially masked ...
+				if (var && var->storage == StorageClassOutput &&
+				    get_execution_model() == ExecutionModelTessellationControl &&
+				    !has_decoration(var->self, DecorationPatch))
+				{
+					ignore_potential_sliced_writes = true;
+				}
+			}
+			else
+				ignore_potential_sliced_writes = true;
+
+			if (!row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				// On some backends, we might not be able to safely access individual scalars in a vector.
 				// To work around this, we might have to cast the access chain reference to something which can,
@@ -8704,7 +8719,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
-			if (row_major_matrix_needs_conversion)
+			if (row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
 				                                       is_packed);

@@ -20,7 +20,7 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     device main0_patchOut& patchOut = spvPatchOut[gl_PrimitiveID];
     v0[gl_InvocationID] = float4(1.0);
-    ((threadgroup float*)&v0[gl_InvocationID])[0u] = 2.0;
+    v0[gl_InvocationID].x = 2.0;
     if (gl_InvocationID == 0)
     {
         patchOut.v1 = float4(2.0);

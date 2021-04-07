@@ -20,7 +20,7 @@ static inline __attribute__((always_inline))
 void write_in_func(threadgroup float4 (&v0)[4], thread uint& gl_InvocationID, device float4& v1, device main0_out* thread & gl_out)
 {
     v0[gl_InvocationID] = float4(1.0);
-    ((threadgroup float*)&v0[gl_InvocationID])[0u] = 2.0;
+    v0[gl_InvocationID].x = 2.0;
     if (gl_InvocationID == 0)
     {
         v1 = float4(2.0);
