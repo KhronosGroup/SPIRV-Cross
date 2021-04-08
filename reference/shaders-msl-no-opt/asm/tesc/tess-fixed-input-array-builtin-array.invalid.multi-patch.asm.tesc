@@ -64,7 +64,7 @@ struct HSConstantOut
 
 struct VertexOutput_1
 {
-    float3 uv;
+    float2 uv;
 };
 
 struct HSOut_1
@@ -80,8 +80,8 @@ struct main0_out
 
 struct main0_in
 {
-    float3 VertexOutput_uv;
-    ushort2 m_172;
+    VertexOutput_1 p;
+    ushort2 m_171;
     float4 gl_Position;
 };
 
@@ -113,11 +113,11 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 3, spvIndirectParams[1]);
     spvUnsafeArray<VertexOutput, 3> p;
     p[0].pos = gl_in[0].gl_Position;
-    p[0].uv = gl_in[0].VertexOutput_uv.xy;
+    p[0].uv = gl_in[0].p.uv;
     p[1].pos = gl_in[1].gl_Position;
-    p[1].uv = gl_in[1].VertexOutput_uv.xy;
+    p[1].uv = gl_in[1].p.uv;
     p[2].pos = gl_in[2].gl_Position;
-    p[2].uv = gl_in[2].VertexOutput_uv.xy;
+    p[2].uv = gl_in[2].p.uv;
     uint i = gl_InvocationID;
     spvUnsafeArray<VertexOutput, 3> param;
     param = p;

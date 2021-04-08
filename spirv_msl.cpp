@@ -1731,8 +1731,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 	// Add the global variables as arguments to the function
 	if (func_id != ir.default_entry_point)
 	{
-		bool added_in = false;
-		bool added_out = false;
+		bool control_point_added_in = false;
+		bool control_point_added_out = false;
+		bool patch_added_in = false;
+		bool patch_added_out = false;
+
 		for (uint32_t arg_id : added_arg_ids)
 		{
 			auto &var = get<SPIRVariable>(arg_id);
@@ -1741,16 +1744,19 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			BuiltIn bi_type = BuiltIn(get_decoration(arg_id, DecorationBuiltIn));
 
 			bool is_patch = has_decoration(arg_id, DecorationPatch) || is_patch_block(*p_type);
+			bool is_block = has_decoration(p_type->self, DecorationBlock);
 			bool is_control_point_storage =
 					!is_patch &&
 					((is_tessellation_shader() && var.storage == StorageClassInput) ||
 					 (get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassOutput));
+			bool is_patch_block_storage = is_patch && is_block && var.storage == StorageClassOutput;
 			bool is_builtin = is_builtin_variable(var);
 			bool variable_is_stage_io =
 					!is_builtin || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
 					bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
 					p_type->basetype == SPIRType::Struct;
-			bool is_redirected_to_global_stage_io = is_control_point_storage && variable_is_stage_io;
+			bool is_redirected_to_global_stage_io = (is_control_point_storage || is_patch_block_storage) &&
+			                                        variable_is_stage_io;
 
 			// If output is masked it is not considered part of the global stage IO interface.
 			if (is_redirected_to_global_stage_io && var.storage == StorageClassOutput)
@@ -1762,7 +1768,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// Similarly, tessellation evaluation shaders see per-vertex inputs as arrays.
 				// We collected them into a structure; we must pass the array of this
 				// structure to the function.
-				std::string name = var.storage == StorageClassInput ? "gl_in" : "gl_out";
+				std::string name;
+				if (is_patch)
+					name = var.storage == StorageClassInput ? patch_stage_in_var_name : patch_stage_out_var_name;
+				else
+					name = var.storage == StorageClassInput ? "gl_in" : "gl_out";
 
 				if (var.storage == StorageClassOutput &&
 				    has_decoration(p_type->self, DecorationBlock) &&
@@ -1797,16 +1807,18 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// structure to the function.
 				if (var.storage == StorageClassInput)
 				{
+					auto &added_in = is_patch ? patch_added_in : control_point_added_in;
 					if (added_in)
 						continue;
-					arg_id = stage_in_ptr_var_id;
+					arg_id = is_patch ? patch_stage_in_var_id : stage_in_ptr_var_id;
 					added_in = true;
 				}
 				else if (var.storage == StorageClassOutput)
 				{
+					auto &added_out = is_patch ? patch_added_out : control_point_added_out;
 					if (added_out)
 						continue;
-					arg_id = stage_out_ptr_var_id;
+					arg_id = is_patch ? patch_stage_out_var_id : stage_out_ptr_var_id;
 					added_out = true;
 				}
 
@@ -1915,14 +1927,23 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 
 uint32_t CompilerMSL::type_to_location_count(const SPIRType &type) const
 {
-	// In MSL, we cannot place structs in any context where we need locations.
-	assert(type.basetype != SPIRType::Struct);
+	uint32_t count;
+	if (type.basetype == SPIRType::Struct)
+	{
+		uint32_t mbr_count = uint32_t(type.member_types.size());
+		count = 0;
+		for (uint32_t i = 0; i < mbr_count; i++)
+			count += type_to_location_count(get<SPIRType>(type.member_types[i]));
+	}
+	else
+	{
+		count = type.columns > 1 ? type.columns : 1;
+	}
 
-	uint32_t dim = 1;
-	for (uint32_t i = 0; i < type.array.size(); i++)
-		dim *= to_array_size_literal(type, i);
+	uint32_t dim_count = uint32_t(type.array.size());
+	for (uint32_t i = 0; i < dim_count; i++)
+		count *= to_array_size_literal(type, i);
 
-	uint32_t count = dim * type.columns;
 	return count;
 }
 
@@ -2911,6 +2932,16 @@ void CompilerMSL::add_tess_level_input_to_interface_block(const std::string &ib_
 	}
 }
 
+bool CompilerMSL::variable_storage_requires_stage_io(spv::StorageClass storage) const
+{
+	if (storage == StorageClassOutput)
+		return !capture_output_to_buffer;
+	else if (storage == StorageClassInput)
+		return !(get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup);
+	else
+		return false;
+}
+
 void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const string &ib_var_ref, SPIRType &ib_type,
                                                   SPIRVariable &var, InterfaceBlockMeta &meta)
 {
@@ -2942,7 +2973,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		bool block_requires_flattening = is_block || !capture_output_to_buffer || storage == StorageClassInput;
+		bool block_requires_flattening = variable_storage_requires_stage_io(storage) || is_block;
 		bool needs_local_declaration = !is_builtin && block_requires_flattening && meta.allow_local_declaration;
 
 		if (needs_local_declaration)
@@ -3009,10 +3040,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type);
 					bool attribute_load_store =
 					    storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
-					bool storage_is_stage_io =
-					    (storage == StorageClassInput && !(get_execution_model() == ExecutionModelTessellationControl &&
-					                                       msl_options.multi_patch_workgroup)) ||
-					    storage == StorageClassOutput;
+					bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 
 					// ClipDistance always needs to be declared as user attributes.
 					if (builtin == BuiltInClipDistance)
@@ -3042,10 +3070,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		if (!is_builtin || has_active_builtin(builtin, storage))
 		{
 			bool is_composite_type = is_matrix(var_type) || is_array(var_type);
-			bool storage_is_stage_io =
-			    (storage == StorageClassInput &&
-			     !(get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup)) ||
-			    (storage == StorageClassOutput && !capture_output_to_buffer);
+			bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 			bool attribute_load_store = storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 
 			// ClipDistance always needs to be declared as user attributes.
@@ -3088,8 +3113,11 @@ void CompilerMSL::fix_up_interface_member_indices(StorageClass storage, uint32_t
 
 		auto &type = get_variable_element_type(var);
 
+		bool flatten_composites = variable_storage_requires_stage_io(var.storage);
+		bool is_block = has_decoration(type.self, DecorationBlock);
+
 		uint32_t mbr_idx = uint32_t(-1);
-		if (type.basetype == SPIRType::Struct)
+		if (type.basetype == SPIRType::Struct && (flatten_composites || is_block))
 			mbr_idx = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
 
 		if (mbr_idx != uint32_t(-1))
@@ -3579,6 +3607,10 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 uint32_t CompilerMSL::ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components)
 {
 	auto &type = get<SPIRType>(type_id);
+
+	// Struct types must match exactly.
+	if (type.basetype == SPIRType::Struct)
+		return type_id;
 
 	auto p_va = inputs_by_location.find(location);
 	if (p_va == end(inputs_by_location))
@@ -6525,15 +6557,21 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 	if (ptr_type.storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationEvaluation)
 		return false;
 
-	bool multi_patch_tess_ctl = get_execution_model() == ExecutionModelTessellationControl &&
-	                            msl_options.multi_patch_workgroup && ptr_type.storage == StorageClassInput;
-	bool flat_matrix = is_matrix(result_type) && ptr_type.storage == StorageClassInput && !multi_patch_tess_ctl;
-	bool flat_struct = result_type.basetype == SPIRType::Struct && ptr_type.storage == StorageClassInput;
-	bool flat_data_type = flat_matrix || is_array(result_type) || flat_struct;
-	if (!flat_data_type)
-		return false;
-
 	if (has_decoration(ptr, DecorationPatch))
+		return false;
+	bool ptr_is_io_variable = ir.ids[ptr].get_type() == TypeVariable;
+
+	bool flattened_io = variable_storage_requires_stage_io(ptr_type.storage);
+
+	bool flat_data_type = flattened_io &&
+	                      (is_matrix(result_type) || is_array(result_type) || result_type.basetype == SPIRType::Struct);
+
+	// Edge case, even with multi-patch workgroups, we still need to unroll load
+	// if we're loading control points directly.
+	if (ptr_is_io_variable && is_array(result_type))
+		flat_data_type = true;
+
+	if (!flat_data_type)
 		return false;
 
 	// Now, we must unflatten a composite type and take care of interleaving array access with gl_in/gl_out.
@@ -6543,12 +6581,31 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 	uint32_t interface_index = get_extended_decoration(ptr, SPIRVCrossDecorationInterfaceMemberIndex);
 	auto *var = maybe_get_backing_variable(ptr);
-	bool ptr_is_io_variable = ir.ids[ptr].get_type() == TypeVariable;
 	auto &expr_type = get_pointee_type(ptr_type.self);
 
 	const auto &iface_type = expression_type(stage_in_ptr_var_id);
 
-	if (result_type.array.size() > 2)
+	if (!flattened_io)
+	{
+		// Simplest case for multi-patch workgroups, just unroll array as-is.
+		if (interface_index == uint32_t(-1))
+			return false;
+
+		expr += type_to_glsl(result_type) + "({ ";
+		uint32_t num_control_points = to_array_size_literal(result_type, uint32_t(result_type.array.size()) - 1);
+
+		for (uint32_t i = 0; i < num_control_points; i++)
+		{
+			const uint32_t indices[2] = { i, interface_index };
+			AccessChainMeta meta;
+			expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
+			                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+			if (i + 1 < num_control_points)
+				expr += ", ";
+		}
+		expr += " })";
+	}
+	else if (result_type.array.size() > 2)
 	{
 		SPIRV_CROSS_THROW("Cannot load tessellation IO variables with more than 2 dimensions.");
 	}
@@ -6558,7 +6615,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			SPIRV_CROSS_THROW("Loading an array-of-array must be loaded directly from an IO variable.");
 		if (interface_index == uint32_t(-1))
 			SPIRV_CROSS_THROW("Interface index is unknown. Cannot continue.");
-		if (result_type.basetype == SPIRType::Struct || flat_matrix)
+		if (result_type.basetype == SPIRType::Struct || is_matrix(result_type))
 			SPIRV_CROSS_THROW("Cannot load array-of-array of composite type in tessellation IO.");
 
 		expr += type_to_glsl(result_type) + "({ ";
@@ -6572,44 +6629,19 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			expr += type_to_glsl(sub_type) + "({ ";
 			interface_index = base_interface_index;
 			uint32_t array_size = to_array_size_literal(result_type, 0);
-			if (multi_patch_tess_ctl)
+			for (uint32_t j = 0; j < array_size; j++, interface_index++)
 			{
-				for (uint32_t j = 0; j < array_size; j++)
-				{
-					const uint32_t indices[3] = { i, interface_index, j };
+				const uint32_t indices[2] = { i, interface_index };
 
-					AccessChainMeta meta;
-					expr +=
-					    access_chain_internal(stage_in_ptr_var_id, indices, 3,
-					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-					// If the expression has more vector components than the result type, insert
-					// a swizzle. This shouldn't happen normally on valid SPIR-V, but it might
-					// happen if we replace the type of an input variable.
-					if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
-					    expr_type.vecsize > sub_type.vecsize)
-						expr += vector_swizzle(sub_type.vecsize, 0);
+				AccessChainMeta meta;
+				expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
+				                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+				if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
+					expr_type.vecsize > sub_type.vecsize)
+					expr += vector_swizzle(sub_type.vecsize, 0);
 
-					if (j + 1 < array_size)
-						expr += ", ";
-				}
-			}
-			else
-			{
-				for (uint32_t j = 0; j < array_size; j++, interface_index++)
-				{
-					const uint32_t indices[2] = { i, interface_index };
-
-					AccessChainMeta meta;
-					expr +=
-					    access_chain_internal(stage_in_ptr_var_id, indices, 2,
-					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-					if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
-					    expr_type.vecsize > sub_type.vecsize)
-						expr += vector_swizzle(sub_type.vecsize, 0);
-
-					if (j + 1 < array_size)
-						expr += ", ";
-				}
+				if (j + 1 < array_size)
+					expr += ", ";
 			}
 			expr += " })";
 			if (i + 1 < num_control_points)
@@ -6617,7 +6649,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		}
 		expr += " })";
 	}
-	else if (flat_struct)
+	else if (result_type.basetype == SPIRType::Struct)
 	{
 		bool is_array_of_struct = is_array(result_type);
 		if (is_array_of_struct && !ptr_is_io_variable)
@@ -6650,7 +6682,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 				const auto &mbr_type = get<SPIRType>(struct_type.member_types[j]);
 				const auto &expr_mbr_type = get<SPIRType>(expr_type.member_types[j]);
-				if (is_matrix(mbr_type) && ptr_type.storage == StorageClassInput && !multi_patch_tess_ctl)
+				if (is_matrix(mbr_type) && ptr_type.storage == StorageClassInput)
 				{
 					expr += type_to_glsl(mbr_type) + "(";
 					for (uint32_t k = 0; k < mbr_type.columns; k++, interface_index++)
@@ -6660,8 +6692,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 							const uint32_t indices[2] = { i, interface_index };
 							AccessChainMeta meta;
 							expr += access_chain_internal(
-							    stage_in_ptr_var_id, indices, 2,
-							    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+									stage_in_ptr_var_id, indices, 2,
+									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 						}
 						else
 							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -6677,48 +6709,23 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				{
 					expr += type_to_glsl(mbr_type) + "({ ";
 					uint32_t array_size = to_array_size_literal(mbr_type, 0);
-					if (multi_patch_tess_ctl)
+					for (uint32_t k = 0; k < array_size; k++, interface_index++)
 					{
-						for (uint32_t k = 0; k < array_size; k++)
+						if (is_array_of_struct)
 						{
-							if (is_array_of_struct)
-							{
-								const uint32_t indices[3] = { i, interface_index, k };
-								AccessChainMeta meta;
-								expr += access_chain_internal(
-								    stage_in_ptr_var_id, indices, 3,
-								    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-							}
-							else
-								expr += join(to_expression(ptr), ".", to_member_name(iface_type, interface_index), "[",
-								             k, "]");
-							if (expr_mbr_type.vecsize > mbr_type.vecsize)
-								expr += vector_swizzle(mbr_type.vecsize, 0);
-
-							if (k + 1 < array_size)
-								expr += ", ";
+							const uint32_t indices[2] = { i, interface_index };
+							AccessChainMeta meta;
+							expr += access_chain_internal(
+									stage_in_ptr_var_id, indices, 2,
+									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 						}
-					}
-					else
-					{
-						for (uint32_t k = 0; k < array_size; k++, interface_index++)
-						{
-							if (is_array_of_struct)
-							{
-								const uint32_t indices[2] = { i, interface_index };
-								AccessChainMeta meta;
-								expr += access_chain_internal(
-								    stage_in_ptr_var_id, indices, 2,
-								    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-							}
-							else
-								expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
-							if (expr_mbr_type.vecsize > mbr_type.vecsize)
-								expr += vector_swizzle(mbr_type.vecsize, 0);
+						else
+							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
+						if (expr_mbr_type.vecsize > mbr_type.vecsize)
+							expr += vector_swizzle(mbr_type.vecsize, 0);
 
-							if (k + 1 < array_size)
-								expr += ", ";
-						}
+						if (k + 1 < array_size)
+							expr += ", ";
 					}
 					expr += " })";
 				}
@@ -6748,7 +6755,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		if (is_array_of_struct)
 			expr += " })";
 	}
-	else if (flat_matrix)
+	else if (is_matrix(result_type))
 	{
 		bool is_array_of_matrix = is_array(result_type);
 		if (is_array_of_matrix && !ptr_is_io_variable)
@@ -6774,9 +6781,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 					const uint32_t indices[2] = { i, interface_index };
 
 					AccessChainMeta meta;
-					expr +=
-					    access_chain_internal(stage_in_ptr_var_id, indices, 2,
-					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+					expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
+					                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 					if (expr_type.vecsize > result_type.vecsize)
 						expr += vector_swizzle(result_type.vecsize, 0);
 					if (j + 1 < result_type.columns)
@@ -6867,7 +6873,8 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	bool patch = false;
 	bool flat_data = false;
 	bool ptr_is_chain = false;
-	bool multi_patch = get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup;
+	bool flatten_composites = false;
+
 	bool is_block = false;
 
 	if (var)
@@ -6875,13 +6882,15 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 	if (var)
 	{
+		flatten_composites = variable_storage_requires_stage_io(var->storage);
 		patch = has_decoration(ops[2], DecorationPatch) || is_patch_block(get_variable_data_type(*var));
 
 		// Should match strip_array in add_interface_block.
 		flat_data = var->storage == StorageClassInput ||
 		            (var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
 
-		if (patch && (!is_block || var->storage != StorageClassOutput))
+		// Patch inputs are treated as normal block IO variables, so they don't deal with this path at all.
+		if (patch && (!is_block || var->storage == StorageClassInput))
 			flat_data = false;
 
 		// We might have a chained access chain, where
@@ -6943,7 +6952,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 		VariableID stage_var_id;
 		if (patch)
-			stage_var_id = patch_stage_out_var_id;
+			stage_var_id = var->storage == StorageClassInput ? patch_stage_in_var_id : patch_stage_out_var_id;
 		else
 			stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
 
@@ -6957,8 +6966,9 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		auto &result_ptr_type = get<SPIRType>(ops[0]);
 
 		uint32_t const_mbr_id = next_id++;
-		uint32_t index = get_extended_decoration(var->self, SPIRVCrossDecorationInterfaceMemberIndex);
-		if (var->storage == StorageClassInput || is_block)
+		uint32_t index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
+
+		if (flatten_composites || is_block)
 		{
 			uint32_t i = first_non_array_index;
 			auto *type = &get_variable_element_type(*var);
@@ -6977,9 +6987,9 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			// In this case, we're poking into flattened structures and arrays, so now we have to
 			// combine the following indices. If we encounter a non-constant index,
 			// we're hosed.
-			for (; i < length; ++i)
+			for (; flatten_composites && i < length; ++i)
 			{
-				if ((multi_patch || (!is_array(*type) && !is_matrix(*type))) && type->basetype != SPIRType::Struct)
+				if (!is_array(*type) && !is_matrix(*type) && type->basetype != SPIRType::Struct)
 					break;
 
 				auto *c = maybe_get<SPIRConstant>(ops[i]);
@@ -7007,31 +7017,48 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 					type = &get<SPIRType>(type->member_types[c->scalar()]);
 			}
 
-			if ((!multi_patch && (is_matrix(result_ptr_type) || is_array(result_ptr_type))) ||
-			    result_ptr_type.basetype == SPIRType::Struct)
-			{
-				// We're not going to emit the actual member name, we let any further OpLoad take care of that.
-				// Tag the access chain with the member index we're referencing.
-				set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, index);
-			}
-			else
+			// We're not going to emit the actual member name, we let any further OpLoad take care of that.
+			// Tag the access chain with the member index we're referencing.
+			bool defer_access_chain = flatten_composites && (is_matrix(result_ptr_type) || is_array(result_ptr_type) ||
+			                                                 result_ptr_type.basetype == SPIRType::Struct);
+
+			if (!defer_access_chain)
 			{
 				// Access the appropriate member of gl_in/gl_out.
 				set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
 				indices.push_back(const_mbr_id);
 
+				// Member index is now irrelevant.
+				index = uint32_t(-1);
+
 				// Append any straggling access chain indices.
 				if (i < length)
 					indices.insert(indices.end(), ops + i, ops + length);
 			}
+			else
+			{
+				// We must have consumed the entire access chain if we're deferring it.
+				assert(i == length);
+			}
+
+			if (index != uint32_t(-1))
+				set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, index);
+			else
+				unset_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex);
 		}
 		else
 		{
-			assert(index != uint32_t(-1));
-			set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
-			indices.push_back(const_mbr_id);
+			if (index != uint32_t(-1))
+			{
+				set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
+				indices.push_back(const_mbr_id);
+			}
 
-			indices.insert(indices.end(), ops + 4, ops + length);
+			// Member index is now irrelevant.
+			index = uint32_t(-1);
+			unset_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex);
+
+			indices.insert(indices.end(), ops + first_non_array_index, ops + length);
 		}
 
 		// We use the pointer to the base of the input/output array here,
@@ -7057,7 +7084,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			// First one is the gl_in/gl_out struct itself, then an index into that array.
 			// If we have traversed further, we use a normal access chain formulation.
 			auto *ptr_expr = maybe_get<SPIRExpression>(ptr);
-			if (ptr_expr && ptr_expr->implied_read_expressions.size() == 2)
+			if (flatten_composites && ptr_expr && ptr_expr->implied_read_expressions.size() == 2)
 			{
 				e = join(to_expression(ptr),
 				         access_chain_internal(stage_var_id, indices.data(), uint32_t(indices.size()),
@@ -10665,12 +10692,16 @@ uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(spv::BuiltIn
 	auto &mbr_type = get<SPIRType>(get<SPIRType>(type_id).member_types[index]);
 	uint32_t count = type_to_location_count(mbr_type);
 
-	// This should always be 1.
-	if (count != 1)
-		return k_unknown_location;
-
 	loc = 0;
-	while (location_inputs_in_use.count(loc) != 0)
+
+	const auto location_range_in_use = [this](uint32_t location, uint32_t location_count) -> bool {
+		for (uint32_t i = 0; i < location_count; i++)
+			if (location_inputs_in_use.count(location + i) != 0)
+				return true;
+		return false;
+	};
+
+	while (location_range_in_use(loc, count))
 		loc++;
 
 	set_member_decoration(type_id, index, DecorationLocation, loc);

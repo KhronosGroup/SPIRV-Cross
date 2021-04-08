@@ -11,8 +11,6 @@ struct main0_out
     float4 gl_Position;
     float gl_PointSize;
     float gl_ClipDistance[2];
-    float gl_ClipDistance_0;
-    float gl_ClipDistance_1;
 };
 
 static inline __attribute__((always_inline))
@@ -33,7 +31,5 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3
     if (any(gl_GlobalInvocationID >= spvStageInputSize))
         return;
     write_in_func(v0, out.v1, out.gl_Position, out.gl_PointSize, out.gl_ClipDistance);
-    out.gl_ClipDistance_0 = out.gl_ClipDistance[0];
-    out.gl_ClipDistance_1 = out.gl_ClipDistance[1];
 }
 

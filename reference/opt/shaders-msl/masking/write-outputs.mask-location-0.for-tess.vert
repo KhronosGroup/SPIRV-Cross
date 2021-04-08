@@ -9,8 +9,6 @@ struct main0_out
     float4 gl_Position;
     float gl_PointSize;
     float gl_ClipDistance[2];
-    float gl_ClipDistance_0;
-    float gl_ClipDistance_1;
 };
 
 kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 spvStageInputSize [[grid_size]], device main0_out* spvOut [[buffer(28)]])
@@ -25,7 +23,5 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3
     out.gl_PointSize = 4.0;
     out.gl_ClipDistance[0] = 1.0;
     out.gl_ClipDistance[1] = 0.5;
-    out.gl_ClipDistance_0 = out.gl_ClipDistance[0];
-    out.gl_ClipDistance_1 = out.gl_ClipDistance[1];
 }
 
