@@ -2196,7 +2196,9 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		uint32_t locn = get_decoration(var.self, DecorationLocation);
 		if (storage == StorageClassInput)
 		{
-			type_id = ensure_correct_input_type(var.basetype, locn, location_meta ? location_meta->num_components : 0);
+			type_id = ensure_correct_input_type(var.basetype, locn,
+			                                    location_meta ? location_meta->num_components : 0,
+			                                    meta.strip_array);
 			if (!location_meta)
 				var.basetype = type_id;
 
@@ -2366,8 +2368,8 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
 			if (storage == StorageClassInput)
 			{
-				var.basetype = ensure_correct_input_type(var.basetype, locn);
-				uint32_t mbr_type_id = ensure_correct_input_type(usable_type->self, locn);
+				var.basetype = ensure_correct_input_type(var.basetype, locn, 0, meta.strip_array);
+				uint32_t mbr_type_id = ensure_correct_input_type(usable_type->self, locn, 0, meta.strip_array);
 				if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 					ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
 				else
@@ -2712,7 +2714,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		uint32_t locn = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
 		if (storage == StorageClassInput)
 		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn);
+			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn, 0, meta.strip_array);
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
@@ -2729,7 +2731,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		uint32_t locn = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
 		if (storage == StorageClassInput)
 		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn);
+			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn, 0, meta.strip_array);
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
@@ -3604,12 +3606,14 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 // Ensure that the type is compatible with the shader input.
 // If it is, simply return the given type ID.
 // Otherwise, create a new type, and return its ID.
-uint32_t CompilerMSL::ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components)
+uint32_t CompilerMSL::ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components, bool strip_array)
 {
 	auto &type = get<SPIRType>(type_id);
 
-	// Struct types must match exactly.
-	if (type.basetype == SPIRType::Struct)
+	uint32_t max_array_dimensions = strip_array ? 1 : 0;
+
+	// Struct and array types must match exactly.
+	if (type.basetype == SPIRType::Struct || type.array.size() > max_array_dimensions)
 		return type_id;
 
 	auto p_va = inputs_by_location.find(location);

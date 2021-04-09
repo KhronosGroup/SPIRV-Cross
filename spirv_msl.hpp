@@ -824,7 +824,8 @@ protected:
 
 	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, spv::StorageClass storage);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
-	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components = 0);
+	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location,
+	                                   uint32_t num_components, bool strip_array);
 
 	void emit_custom_templates();
 	void emit_custom_functions();
