@@ -44,6 +44,14 @@ struct spvUnsafeArray
     }
 };
 
+struct gl_PerVertex
+{
+    float4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[1];
+    float gl_CullDistance[1];
+};
+
 struct main0_out
 {
     float4 v0;
@@ -58,6 +66,7 @@ struct main0_patchOut
 
 kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_PrimitiveID [[threadgroup_position_in_grid]], device main0_out* spvOut [[buffer(28)]], constant uint* spvIndirectParams [[buffer(29)]], device main0_patchOut* spvPatchOut [[buffer(27)]], device MTLQuadTessellationFactorsHalf* spvTessLevel [[buffer(26)]])
 {
+    threadgroup gl_PerVertex gl_out_masked[4];
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     device main0_patchOut& patchOut = spvPatchOut[gl_PrimitiveID];
     gl_out[gl_InvocationID].v0 = float4(1.0);
@@ -72,6 +81,6 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     patchOut.v3 = float4(5.0);
     gl_out[gl_InvocationID].gl_Position = float4(10.0);
     gl_out[gl_InvocationID].gl_Position.z = 20.0;
-    _RESERVED_IDENTIFIER_FIXUP_gl_out[gl_InvocationID].gl_PointSize = 40.0;
+    gl_out_masked[gl_InvocationID].gl_PointSize = 40.0;
 }
 

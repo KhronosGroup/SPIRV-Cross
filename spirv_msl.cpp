@@ -1778,43 +1778,12 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				{
 					// If we're redirecting a block, we might still need to access the original block
 					// variable if we're masking some members.
-					bool needs_local_declaration = false;
 					for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
-						if (is_stage_output_block_member_masked(var, mbr_idx, true))
-							needs_local_declaration = true;
-
-					if (needs_local_declaration)
 					{
-						if (is_builtin)
+						if (is_stage_output_block_member_masked(var, mbr_idx, true))
 						{
-							// Ensure correct names for the block members if we're actually going to
-							// declare gl_PerVertex.
-							for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
-							{
-								set_member_name(p_type->self, mbr_idx, builtin_to_glsl(
-										BuiltIn(get_member_decoration(p_type->self, mbr_idx, DecorationBuiltIn)),
-										StorageClassOutput));
-							}
-
-							if (!stage_out_var_id_masked_builtin)
-							{
-								stage_out_var_id_masked_builtin = ir.increase_bound_by(1);
-								set<SPIRVariable>(stage_out_var_id_masked_builtin, var.basetype, StorageClassOutput);
-								set_name(stage_out_var_id_masked_builtin, name + "_masked");
-								set_name(var.self, name + "_masked");
-
-								// Not required, but looks nicer.
-								set_name(p_type->self, "gl_PerVertex");
-
-								auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
-								entry_func.add_local_variable(stage_out_var_id_masked_builtin);
-							}
-							func.add_parameter(var.basetype, stage_out_var_id_masked_builtin, true);
-						}
-						else
-						{
-							// Local variable is declared in add_variable_to_interface_block().
 							func.add_parameter(var.basetype, var.self, true);
+							break;
 						}
 					}
 				}
@@ -3029,7 +2998,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 				if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 				{
-					masked_block = true;
+					if (is_block)
+						masked_block = true;
 
 					// Non-builtin block output variables are just ignored, since they will still access
 					// the block variable as-is. They're just not flattened.
@@ -3084,8 +3054,26 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 			// If we're redirecting a block, we might still need to access the original block
 			// variable if we're masking some members.
-			if (masked_block && !needs_local_declaration && !is_builtin_variable(var))
+			if (masked_block && !needs_local_declaration &&
+			    (!is_builtin_variable(var) || get_execution_model() == ExecutionModelTessellationControl))
+			{
+				if (is_builtin_variable(var))
+				{
+					// Ensure correct names for the block members if we're actually going to
+					// declare gl_PerVertex.
+					for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
+					{
+						set_member_name(var_type.self, mbr_idx, builtin_to_glsl(
+								BuiltIn(get_member_decoration(var_type.self, mbr_idx, DecorationBuiltIn)),
+								StorageClassOutput));
+					}
+
+					set_name(var_type.self, "gl_PerVertex");
+					set_name(var.self, "gl_out_masked");
+					stage_out_masked_builtin_type_id = var_type.self;
+				}
 				emit_local_masked_variable(var);
+			}
 		}
 	}
 	else if (get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput &&
@@ -6540,7 +6528,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 				is_declarable_struct = false;
 
 			// Special case. Declare builtin struct anyways if we need to emit a threadgroup version of it.
-			if (stage_out_var_id_masked_builtin && get<SPIRType>(get<SPIRVariable>(stage_out_var_id_masked_builtin).basetype).self == type_id)
+			if (stage_out_masked_builtin_type_id == type_id)
 				is_declarable_struct = true;
 
 			// Align and emit declarable structs...but avoid declaring each more than once.
