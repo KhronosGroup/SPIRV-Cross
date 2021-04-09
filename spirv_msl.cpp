@@ -146,7 +146,9 @@ void CompilerMSL::set_argument_buffer_device_address_space(uint32_t desc_set, bo
 
 bool CompilerMSL::is_msl_shader_input_used(uint32_t location)
 {
-	return location_inputs_in_use.count(location) != 0;
+	// Don't report internal location allocations to app.
+	return location_inputs_in_use.count(location) != 0 &&
+	       location_inputs_in_use_fallback.count(location) == 0;
 }
 
 uint32_t CompilerMSL::get_automatic_builtin_input_location(spv::BuiltIn builtin) const
@@ -1935,14 +1937,19 @@ uint32_t CompilerMSL::type_to_location_count(const SPIRType &type) const
 }
 
 // If a shader input exists at the location, it is marked as being used by this shader
-void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, StorageClass storage)
+void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
+                                                  StorageClass storage, bool fallback)
 {
 	if (storage != StorageClassInput)
 		return;
 
 	uint32_t count = type_to_location_count(type);
 	for (uint32_t i = 0; i < count; i++)
+	{
 		location_inputs_in_use.insert(location + i);
+		if (fallback)
+			location_inputs_in_use_fallback.insert(location + i);
+	}
 }
 
 uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t location) const
@@ -3454,7 +3461,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		// the struct containing them is the correct size and layout.
 		for (auto &input : inputs_by_location)
 		{
-			if (is_msl_shader_input_used(input.first))
+			if (location_inputs_in_use.count(input.first) != 0)
 				continue;
 
 			// Create a fake variable to put at the location.
@@ -10736,7 +10743,7 @@ uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(spv::BuiltIn
 	else
 		builtin_to_automatic_input_location[builtin] = loc;
 
-	mark_location_as_used_by_shader(loc, mbr_type, StorageClassInput);
+	mark_location_as_used_by_shader(loc, mbr_type, StorageClassInput, true);
 	return loc;
 }
 
