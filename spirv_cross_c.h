@@ -722,6 +722,10 @@ SPVC_PUBLIC_API spvc_result spvc_compiler_flatten_buffer_block(spvc_compiler com
 
 SPVC_PUBLIC_API spvc_bool spvc_compiler_variable_is_depth_or_compare(spvc_compiler compiler, spvc_variable_id id);
 
+SPVC_PUBLIC_API spvc_result spvc_compiler_mask_stage_output_by_location(spvc_compiler compiler,
+                                                                        unsigned location, unsigned component);
+SPVC_PUBLIC_API spvc_result spvc_compiler_mask_stage_output_by_builtin(spvc_compiler compiler, SpvBuiltIn builtin);
+
 /*
  * HLSL specifics.
  * Maps to C++ API.

@@ -818,6 +818,44 @@ spvc_bool spvc_compiler_variable_is_depth_or_compare(spvc_compiler compiler, spv
 #endif
 }
 
+spvc_result spvc_compiler_mask_stage_output_by_location(spvc_compiler compiler,
+                                                        unsigned location, unsigned component)
+{
+#if SPIRV_CROSS_C_API_GLSL
+	if (compiler->backend == SPVC_BACKEND_NONE)
+	{
+		compiler->context->report_error("Cross-compilation related option used on NONE backend which only supports reflection.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	static_cast<CompilerGLSL *>(compiler->compiler.get())->mask_stage_output_by_location(location, component);
+	return SPVC_SUCCESS;
+#else
+	(void)location;
+	(void)component;
+	compiler->context->report_error("Cross-compilation related option used on NONE backend which only supports reflection.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
+spvc_result spvc_compiler_mask_stage_output_by_builtin(spvc_compiler compiler, SpvBuiltIn builtin)
+{
+#if SPIRV_CROSS_C_API_GLSL
+	if (compiler->backend == SPVC_BACKEND_NONE)
+	{
+		compiler->context->report_error("Cross-compilation related option used on NONE backend which only supports reflection.");
+		return SPVC_ERROR_INVALID_ARGUMENT;
+	}
+
+	static_cast<CompilerGLSL *>(compiler->compiler.get())->mask_stage_output_by_builtin(spv::BuiltIn(builtin));
+	return SPVC_SUCCESS;
+#else
+	(void)builtin;
+	compiler->context->report_error("Cross-compilation related option used on NONE backend which only supports reflection.");
+	return SPVC_ERROR_INVALID_ARGUMENT;
+#endif
+}
+
 spvc_result spvc_compiler_hlsl_set_root_constants_layout(spvc_compiler compiler,
                                                          const spvc_hlsl_root_constants *constant_info,
                                                          size_t count)
