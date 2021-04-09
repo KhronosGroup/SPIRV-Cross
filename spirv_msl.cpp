@@ -1774,9 +1774,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				else
 					name = var.storage == StorageClassInput ? "gl_in" : "gl_out";
 
-				if (var.storage == StorageClassOutput &&
-				    has_decoration(p_type->self, DecorationBlock) &&
-				    is_builtin)
+				if (var.storage == StorageClassOutput && has_decoration(p_type->self, DecorationBlock))
 				{
 					// If we're redirecting a block, we might still need to access the original block
 					// variable if we're masking some members.
@@ -1787,29 +1785,37 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 					if (needs_local_declaration)
 					{
-						// Ensure correct names for the block members if we're actually going to
-						// declare gl_PerVertex.
-						for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
+						if (is_builtin)
 						{
-							set_member_name(p_type->self, mbr_idx, builtin_to_glsl(
-									BuiltIn(get_member_decoration(p_type->self, mbr_idx, DecorationBuiltIn)),
-									StorageClassOutput));
-						}
+							// Ensure correct names for the block members if we're actually going to
+							// declare gl_PerVertex.
+							for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
+							{
+								set_member_name(p_type->self, mbr_idx, builtin_to_glsl(
+										BuiltIn(get_member_decoration(p_type->self, mbr_idx, DecorationBuiltIn)),
+										StorageClassOutput));
+							}
 
-						if (!stage_out_var_id_masked)
+							if (!stage_out_var_id_masked_builtin)
+							{
+								stage_out_var_id_masked_builtin = ir.increase_bound_by(1);
+								set<SPIRVariable>(stage_out_var_id_masked_builtin, var.basetype, StorageClassOutput);
+								set_name(stage_out_var_id_masked_builtin, name + "_masked");
+								set_name(var.self, name + "_masked");
+
+								// Not required, but looks nicer.
+								set_name(p_type->self, "gl_PerVertex");
+
+								auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+								entry_func.add_local_variable(stage_out_var_id_masked_builtin);
+							}
+							func.add_parameter(var.basetype, stage_out_var_id_masked_builtin, true);
+						}
+						else
 						{
-							stage_out_var_id_masked = ir.increase_bound_by(1);
-							set<SPIRVariable>(stage_out_var_id_masked, var.basetype, StorageClassOutput);
-							set_name(stage_out_var_id_masked, name + "_masked");
-							set_name(var.self, name + "_masked");
-
-							// Not required, but looks nicer.
-							set_name(p_type->self, "gl_PerVertex");
-
-							auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
-							entry_func.add_local_variable(stage_out_var_id_masked);
+							// Local variable is declared in add_variable_to_interface_block().
+							func.add_parameter(var.basetype, var.self, true);
 						}
-						func.add_parameter(var.basetype, stage_out_var_id_masked, true);
 					}
 				}
 
@@ -3012,6 +3018,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		}
 		else
 		{
+			bool masked_block = false;
+
 			// Flatten the struct members into the interface struct
 			for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
 			{
@@ -3021,6 +3029,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 				if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 				{
+					masked_block = true;
+
 					// Non-builtin block output variables are just ignored, since they will still access
 					// the block variable as-is. They're just not flattened.
 					if (is_builtin && !meta.strip_array)
@@ -3071,6 +3081,11 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					}
 				}
 			}
+
+			// If we're redirecting a block, we might still need to access the original block
+			// variable if we're masking some members.
+			if (masked_block && !needs_local_declaration && !is_builtin_variable(var))
+				emit_local_masked_variable(var);
 		}
 	}
 	else if (get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput &&
@@ -6525,7 +6540,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 				is_declarable_struct = false;
 
 			// Special case. Declare builtin struct anyways if we need to emit a threadgroup version of it.
-			if (stage_out_var_id_masked && get<SPIRType>(get<SPIRVariable>(stage_out_var_id_masked).basetype).self == type_id)
+			if (stage_out_var_id_masked_builtin && get<SPIRType>(get<SPIRVariable>(stage_out_var_id_masked_builtin).basetype).self == type_id)
 				is_declarable_struct = true;
 
 			// Align and emit declarable structs...but avoid declaring each more than once.
@@ -13063,8 +13078,13 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 		auto model = get_execution_model();
 
 		// Specially masked IO block variable.
-		if (variable.self == stage_out_var_id_masked)
+		// Normally, we will never access IO blocks directly here.
+		// The only scenario which that should occur is with a masked IO block.
+		if (model == ExecutionModelTessellationControl && variable.storage == StorageClassOutput &&
+		    has_decoration(get<SPIRType>(variable.basetype).self, DecorationBlock))
+		{
 			return true;
+		}
 
 		return variable.storage == StorageClassOutput &&
 		       model == ExecutionModelTessellationControl &&
