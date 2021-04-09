@@ -1787,12 +1787,24 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 					if (needs_local_declaration)
 					{
+						// Ensure correct names for the block members if we're actually going to
+						// declare gl_PerVertex.
+						for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
+						{
+							set_member_name(p_type->self, mbr_idx, builtin_to_glsl(
+									BuiltIn(get_member_decoration(p_type->self, mbr_idx, DecorationBuiltIn)),
+									StorageClassOutput));
+						}
+
 						if (!stage_out_var_id_masked)
 						{
 							stage_out_var_id_masked = ir.increase_bound_by(1);
 							set<SPIRVariable>(stage_out_var_id_masked, var.basetype, StorageClassOutput);
 							set_name(stage_out_var_id_masked, name + "_masked");
 							set_name(var.self, name + "_masked");
+
+							// Not required, but looks nicer.
+							set_name(p_type->self, "gl_PerVertex");
 
 							auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 							entry_func.add_local_variable(stage_out_var_id_masked);
