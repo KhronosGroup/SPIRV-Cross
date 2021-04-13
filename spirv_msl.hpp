@@ -71,15 +71,23 @@ struct MSLShaderInput
 // resources consumed by this binding, if the binding represents an array of resources.
 // If the resource array is a run-time-sized array, which are legal in GLSL or SPIR-V, this value
 // will be used to declare the array size in MSL, which does not support run-time-sized arrays.
-// For resources that are not held in a run-time-sized array, the count field does not need to be populated.
+// If pad_argument_buffer_resources is enabled, the base_type and count values are used to
+// specify the base type and array size of the resource in the argument buffer, if that resource
+// is not defined and used by the shader. With pad_argument_buffer_resources enabled, this
+// information will be used to pad the argument buffer structure, in order to align that
+// structure consistently for all uses, across all shaders, of the descriptor set represented
+// by the arugment buffer. If pad_argument_buffer_resources is disabled, base_type does not
+// need to be populated, and if the resource is also not a run-time sized array, the count
+// field does not need to be populated.
 // If using MSL 2.0 argument buffers, the descriptor set is not marked as a discrete descriptor set,
 // and (for iOS only) the resource is not a storage image (sampled != 2), the binding reference we
 // remap to will become an [[id(N)]] attribute within the "descriptor set" argument buffer structure.
-// For resources which are bound in the "classic" MSL 1.0 way or discrete descriptors, the remap will become a
-// [[buffer(N)]], [[texture(N)]] or [[sampler(N)]] depending on the resource types used.
+// For resources which are bound in the "classic" MSL 1.0 way or discrete descriptors, the remap will
+// become a [[buffer(N)]], [[texture(N)]] or [[sampler(N)]] depending on the resource types used.
 struct MSLResourceBinding
 {
 	spv::ExecutionModel stage = spv::ExecutionModelMax;
+	SPIRType::BaseType base_type = SPIRType::Unknown;
 	uint32_t desc_set = 0;
 	uint32_t binding = 0;
 	uint32_t count = 0;
@@ -345,6 +353,19 @@ public:
 		// This ensures ABI compatibility between shaders where some resources might be unused,
 		// and would otherwise declare a different IAB.
 		bool force_active_argument_buffer_resources = false;
+
+		// Aligns each resource in an argument buffer to its assigned index value, id(N),
+		// by adding synthetic padding members in the argument buffer struct for any resources
+		// in the argument buffer that are not defined and used by the shader. This allows
+		// the shader to index into the correct argument in a descriptor set argument buffer
+		// that is shared across shaders, where not all resources in the argument buffer are
+		// defined in each shader. For this to work, an MSLResourceBinding must be provided for
+		// all descriptors in any descriptor set held in an argument buffer in the shader, and
+		// that MSLResourceBinding must have the basetype and count members populated correctly.
+		// The implementation here assumes any inline blocks in the argument buffer is provided
+		// in a Metal buffer, and doesn't take into consideration inline blocks that are
+		// optionally embedded directly into the argument buffer via add_inline_uniform_block().
+		bool pad_argument_buffer_resources = false;
 
 		// Forces the use of plain arrays, which works around certain driver bugs on certain versions
 		// of Intel Macbooks. See https://github.com/KhronosGroup/SPIRV-Cross/issues/1210.
@@ -913,6 +934,9 @@ protected:
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
 	uint32_t uint_type_id = 0;
+	uint32_t argument_buffer_padding_buffer_type_id = 0;
+	uint32_t argument_buffer_padding_image_type_id = 0;
+	uint32_t argument_buffer_padding_sampler_type_id = 0;
 
 	bool does_shader_write_sample_mask = false;
 
@@ -1027,6 +1051,11 @@ protected:
 
 	void analyze_argument_buffers();
 	bool descriptor_set_is_argument_buffer(uint32_t desc_set) const;
+	MSLResourceBinding& get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx);
+	void add_argument_buffer_padding_buffer_type(SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
+	void add_argument_buffer_padding_image_type(SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
+	void add_argument_buffer_padding_sampler_type(SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
+	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
