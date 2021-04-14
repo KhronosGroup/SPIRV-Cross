@@ -2950,10 +2950,32 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 	bool is_block = has_decoration(var_type.self, DecorationBlock);
 
-	const auto emit_local_masked_variable = [this, &entry_func](const SPIRVariable &masked_var) {
+	const auto emit_local_masked_variable = [this, &entry_func, meta](SPIRVariable &masked_var) {
 		entry_func.add_local_variable(masked_var.self);
 		if (!variable_decl_is_remapped_storage(masked_var, StorageClassWorkgroup))
+		{
 			vars_needing_early_declaration.push_back(masked_var.self);
+		}
+		else if (masked_var.initializer)
+		{
+			// Cannot directly initialize threadgroup variables. Need fixup hooks.
+			ID initializer = masked_var.initializer;
+			if (meta.strip_array)
+			{
+				entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+					statement(to_expression(masked_var.self), "[",
+					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "] = ",
+					          to_expression(initializer), "[",
+					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+				});
+			}
+			else
+			{
+				entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+					statement(to_expression(masked_var.self), " = ", to_expression(initializer), ";");
+				});
+			}
+		}
 	};
 
 	// If stage variables are masked out, emit them as plain variables instead.
