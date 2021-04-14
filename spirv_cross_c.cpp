@@ -1937,12 +1937,12 @@ SpvExecutionModel spvc_compiler_get_execution_model(spvc_compiler compiler)
 	return static_cast<SpvExecutionModel>(compiler->compiler->get_execution_model());
 }
 
-SPVC_PUBLIC_API void spvc_compiler_update_active_builtins(spvc_compiler compiler)
+void spvc_compiler_update_active_builtins(spvc_compiler compiler)
 {
        compiler->compiler->update_active_builtins();
 }
 
-SPVC_PUBLIC_API spvc_bool spvc_compiler_has_active_builtin(spvc_compiler compiler, SpvBuiltIn builtin, SpvStorageClass storage)
+spvc_bool spvc_compiler_has_active_builtin(spvc_compiler compiler, SpvBuiltIn builtin, SpvStorageClass storage)
 {
 	return compiler->compiler->has_active_builtin(static_cast<spv::BuiltIn>(builtin), static_cast<spv::StorageClass>(storage)) ?
 		SPVC_TRUE :
