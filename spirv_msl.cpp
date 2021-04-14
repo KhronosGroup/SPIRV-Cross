@@ -2770,13 +2770,33 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 				auto &type = this->get<SPIRType>(var.basetype);
 				uint32_t index = get_extended_member_decoration(var.self, mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex);
 
+				auto &mbr_type = this->get<SPIRType>(type.member_types[mbr_idx]);
+
+				bool unroll_array = !mbr_type.array.empty() && is_builtin;
+
 				AccessChainMeta chain_meta;
 				auto constant_chain = access_chain_internal(var.initializer, &builtin_invocation_id_id, 1, 0, &chain_meta);
 
-				statement(to_expression(stage_out_ptr_var_id), "[",
-				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
-				          to_member_name(ib_type, index), " = ",
-				          constant_chain, ".", to_member_name(type, mbr_idx), ";");
+				if (unroll_array)
+				{
+					// Member arrays in these blocks are always native arrays, unroll copy.
+					uint32_t len = to_array_size_literal(mbr_type);
+
+					for (uint32_t i = 0; i < len; i++)
+					{
+						statement(to_expression(stage_out_ptr_var_id), "[",
+						          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+						          to_member_name(ib_type, index), "[", i, "] = ",
+						          constant_chain, ".", to_member_name(type, mbr_idx), "[", i, "];");
+					}
+				}
+				else
+				{
+					statement(to_expression(stage_out_ptr_var_id), "[",
+					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+					          to_member_name(ib_type, index), " = ",
+					          constant_chain, ".", to_member_name(type, mbr_idx), ";");
+				}
 			});
 		}
 		else

@@ -87,8 +87,8 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     gl_out[gl_InvocationID].C_v = _18[gl_InvocationID].v;
     gl_out[gl_InvocationID].gl_Position = _33[gl_InvocationID].gl_Position;
-    gl_out[gl_InvocationID].gl_ClipDistance = _33[gl_InvocationID].gl_ClipDistance;
-    gl_out[gl_InvocationID].gl_CullDistance = _33[gl_InvocationID].gl_CullDistance;
+    gl_out[gl_InvocationID].gl_ClipDistance[0] = _33[gl_InvocationID].gl_ClipDistance[0];
+    gl_out[gl_InvocationID].gl_CullDistance[0] = _33[gl_InvocationID].gl_CullDistance[0];
     gl_out_masked[gl_InvocationID] = _33[gl_InvocationID];
     device main0_patchOut& patchOut = spvPatchOut[gl_PrimitiveID];
     patchOut.P_v = float4(0.0);
