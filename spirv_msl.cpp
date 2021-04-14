@@ -2958,6 +2958,77 @@ bool CompilerMSL::variable_storage_requires_stage_io(spv::StorageClass storage) 
 		return false;
 }
 
+void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, bool strip_array)
+{
+	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+	bool threadgroup_storage = variable_decl_is_remapped_storage(masked_var, StorageClassWorkgroup);
+
+	if (threadgroup_storage && msl_options.multi_patch_workgroup)
+	{
+		// We need one threadgroup block per patch, so fake this.
+		entry_func.fixup_hooks_in.push_back([this, &masked_var]() {
+			auto &type = get_variable_data_type(masked_var);
+			add_local_variable_name(masked_var.self);
+
+			bool old_is_builtin = is_using_builtin_array;
+			is_using_builtin_array = true;
+
+			const uint32_t max_control_points_per_patch = 32u;
+			uint32_t max_num_instances =
+					(max_control_points_per_patch + get_entry_point().output_vertices - 1u) /
+					get_entry_point().output_vertices;
+			statement("threadgroup ", type_to_glsl(type), " ",
+			          "spvStorage", to_name(masked_var.self), "[", max_num_instances, "]",
+			          type_to_array_glsl(type), ";");
+
+			// Assign a threadgroup slice to each PrimitiveID.
+			// We assume here that workgroup size is rounded to 32,
+			// since that's the maximum number of control points per patch.
+			// We cannot size the array based on fixed dispatch parameters,
+			// since Metal does not allow that. :(
+			// FIXME: We will likely need an option to support passing down target workgroup size,
+			// so we can emit appropriate size here.
+			statement("threadgroup ", type_to_glsl(type), " ",
+			          "(&", to_name(masked_var.self), ")",
+			          type_to_array_glsl(type), " = spvStorage", to_name(masked_var.self), "[",
+			          "(", to_expression(builtin_invocation_id_id), ".x / ",
+			          get_entry_point().output_vertices, ") % ",
+			          max_num_instances, "];");
+
+			is_using_builtin_array = old_is_builtin;
+		});
+	}
+	else
+	{
+		entry_func.add_local_variable(masked_var.self);
+	}
+
+	if (!threadgroup_storage)
+	{
+		vars_needing_early_declaration.push_back(masked_var.self);
+	}
+	else if (masked_var.initializer)
+	{
+		// Cannot directly initialize threadgroup variables. Need fixup hooks.
+		ID initializer = masked_var.initializer;
+		if (strip_array)
+		{
+			entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+				statement(to_expression(masked_var.self), "[",
+				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "] = ",
+				          to_expression(initializer), "[",
+				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+			});
+		}
+		else
+		{
+			entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+				statement(to_expression(masked_var.self), " = ", to_expression(initializer), ";");
+			});
+		}
+	}
+}
+
 void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const string &ib_var_ref, SPIRType &ib_type,
                                                   SPIRVariable &var, InterfaceBlockMeta &meta)
 {
@@ -2970,34 +3041,6 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 	bool is_block = has_decoration(var_type.self, DecorationBlock);
 
-	const auto emit_local_masked_variable = [this, &entry_func, meta](SPIRVariable &masked_var) {
-		entry_func.add_local_variable(masked_var.self);
-		if (!variable_decl_is_remapped_storage(masked_var, StorageClassWorkgroup))
-		{
-			vars_needing_early_declaration.push_back(masked_var.self);
-		}
-		else if (masked_var.initializer)
-		{
-			// Cannot directly initialize threadgroup variables. Need fixup hooks.
-			ID initializer = masked_var.initializer;
-			if (meta.strip_array)
-			{
-				entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
-					statement(to_expression(masked_var.self), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "] = ",
-					          to_expression(initializer), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
-				});
-			}
-			else
-			{
-				entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
-					statement(to_expression(masked_var.self), " = ", to_expression(initializer), ";");
-				});
-			}
-		}
-	};
-
 	// If stage variables are masked out, emit them as plain variables instead.
 	// For builtins, we query them one by one later.
 	// IO blocks are not masked here, we need to mask them per-member instead.
@@ -3005,7 +3048,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	{
 		// If we ignore an output, we must still emit it, since it might be used by app.
 		// Instead, just emit it as early declaration.
-		emit_local_masked_variable(var);
+		emit_local_masked_variable(var, meta.strip_array);
 		return;
 	}
 
@@ -3022,7 +3065,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			// we unflatten I/O blocks while running the shader,
 			// and pass the actual struct type down to leaf functions.
 			// We then unflatten inputs, and flatten outputs in the "fixup" stages.
-			emit_local_masked_variable(var);
+			emit_local_masked_variable(var, meta.strip_array);
 		}
 
 		if (!block_requires_flattening)
@@ -3121,7 +3164,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					set_name(var.self, "gl_out_masked");
 					stage_out_masked_builtin_type_id = var_type.self;
 				}
-				emit_local_masked_variable(var);
+				emit_local_masked_variable(var, meta.strip_array);
 			}
 		}
 	}
