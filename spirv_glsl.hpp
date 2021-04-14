@@ -673,6 +673,8 @@ protected:
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
 	                                  AccessChainMeta *meta);
 
+	virtual bool access_chain_needs_stage_io_builtin_translation(uint32_t base);
+
 	virtual void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
 	                                                    spv::StorageClass storage, bool &is_packed);
 

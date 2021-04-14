@@ -7354,6 +7354,21 @@ void CompilerMSL::prepare_access_chain_for_scalar_access(std::string &expr, cons
 	}
 }
 
+bool CompilerMSL::access_chain_needs_stage_io_builtin_translation(uint32_t base)
+{
+	auto *var = maybe_get_backing_variable(base);
+	if (!var || !is_tessellation_shader())
+		return true;
+
+	// We only need to rewrite builtin access chains when accessing flattened builtins like gl_ClipDistance_N.
+	// Avoid overriding it back to just gl_ClipDistance.
+	// This can only happen in scenarios where we cannot flatten/unflatten access chains, so, the only case
+	// where this triggers is evaluation shader inputs.
+	bool redirect_builtin = get_execution_model() == ExecutionModelTessellationEvaluation ?
+	                        var->storage == StorageClassOutput : false;
+	return redirect_builtin;
+}
+
 // Sets the interface member index for an access chain to a pull-model interpolant.
 void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t length)
 {

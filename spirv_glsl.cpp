@@ -8375,6 +8375,11 @@ void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_
 	expr += "]";
 }
 
+bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
+{
+	return true;
+}
+
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
                                            AccessChainFlags flags, AccessChainMeta *meta)
 {
@@ -8584,7 +8589,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
 			BuiltIn builtin;
-			if (is_member_builtin(*type, index, &builtin))
+			if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 			{
 				if (access_chain_is_arrayed)
 				{
