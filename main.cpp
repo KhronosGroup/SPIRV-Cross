@@ -849,7 +849,7 @@ static void print_help_common()
 	                "\t[--flip-vert-y]:\n\t\tInverts gl_Position.y (or equivalent) at the end of a vertex shader. This is equivalent to using negative viewport height.\n"
 	                "\t[--mask-stage-output-location <location> <component>]:\n"
 	                "\t\tIf a stage output variable with matching location and component is active, optimize away the variable if applicable.\n"
-	                "\t[--mask-stage-builtin <Position|PointSize|ClipDistance|CullDistance>]:\n"
+	                "\t[--mask-stage-output-builtin <Position|PointSize|ClipDistance|CullDistance>]:\n"
 	                "\t\tIf a stage output variable with matching builtin is active, "
 	                "optimize away the variable if it can affect cross-stage linking correctness.\n"
 	);
