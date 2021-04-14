@@ -3272,23 +3272,49 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_builtin = is_builtin_variable(var);
-		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+		bool is_block = has_decoration(type.self, DecorationBlock);
+
+		auto bi_type = BuiltInMax;
+		bool builtin_is_gl_in_out = false;
+		if (is_builtin && !is_block)
+		{
+			bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+			builtin_is_gl_in_out = bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
+			                       bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance;
+		}
+
+		if (is_builtin && is_block)
+			builtin_is_gl_in_out = true;
+
 		uint32_t location = get_decoration(var_id, DecorationLocation);
+
+		bool builtin_is_stage_in_out = builtin_is_gl_in_out ||
+		                               bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
+		                               bi_type == BuiltInBaryCoordNV || bi_type == BuiltInBaryCoordNoPerspNV ||
+		                               bi_type == BuiltInFragDepth ||
+		                               bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask;
 
 		// These builtins are part of the stage in/out structs.
 		bool is_interface_block_builtin =
-		    (bi_type == BuiltInPosition || bi_type == BuiltInPointSize || bi_type == BuiltInClipDistance ||
-		     bi_type == BuiltInCullDistance || bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
-		     bi_type == BuiltInBaryCoordNV || bi_type == BuiltInBaryCoordNoPerspNV || bi_type == BuiltInFragDepth ||
-		     bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask) ||
-		    (get_execution_model() == ExecutionModelTessellationEvaluation &&
-		     (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
+				builtin_is_stage_in_out ||
+				(get_execution_model() == ExecutionModelTessellationEvaluation &&
+				 (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
 
 		bool is_active = interface_variable_exists_in_entry_point(var.self);
 		if (is_builtin && is_active)
 		{
 			// Only emit the builtin if it's active in this entry point. Interface variable list might lie.
-			is_active = has_active_builtin(bi_type, storage);
+			if (is_block)
+			{
+				// If any builtin is active, the block is active.
+				uint32_t mbr_cnt = uint32_t(type.member_types.size());
+				for (uint32_t i = 0; !is_active && i < mbr_cnt; i++)
+					is_active = has_active_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), storage);
+			}
+			else
+			{
+				is_active = has_active_builtin(bi_type, storage);
+			}
 		}
 
 		bool filter_patch_decoration = (has_decoration(var_id, DecorationPatch) || is_patch_block(type)) == patch;
