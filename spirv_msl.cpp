@@ -2378,11 +2378,11 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && builtin == BuiltInClipDistance)
+		else if (is_builtin && (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance))
 		{
-			// Declare the ClipDistance as [[user(clipN)]].
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, i);
+			// Declare the Clip/CullDistance as [[user(clip/cullN)]].
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 		}
 
 		if (get_decoration_bitset(var.self).get(DecorationIndex))
@@ -2551,11 +2551,11 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && builtin == BuiltInClipDistance)
+		else if (is_builtin && (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance))
 		{
-			// Declare the ClipDistance as [[user(clipN)]].
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, i);
+			// Declare the Clip/CullDistance as [[user(clip/cullN)]].
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 		}
 
 		if (has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
@@ -3128,8 +3128,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					    storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 					bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 
-					// ClipDistance always needs to be declared as user attributes.
-					if (builtin == BuiltInClipDistance)
+					// Clip/CullDistance always need to be declared as user attributes.
+					if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
 						is_builtin = false;
 
 					if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
@@ -3182,8 +3182,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 			bool attribute_load_store = storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 
-			// ClipDistance always needs to be declared as user attributes.
-			if (builtin == BuiltInClipDistance)
+			// Clip/CullDistance always needs to be declared as user attributes.
+			if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
 				is_builtin = false;
 
 			// MSL does not allow matrices or arrays in input or output variables, so need to handle it specially.
@@ -3296,7 +3296,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		bool hidden = is_hidden_variable(var, incl_builtins);
 
 		// ClipDistance is never hidden, we need to emulate it when used as an input.
-		if (bi_type == BuiltInClipDistance)
+		if (bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance)
 			hidden = false;
 
 		// It's not enough to simply avoid marking fragment outputs if the pipeline won't
@@ -10489,8 +10489,14 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
 
 			case BuiltInClipDistance:
-				if (has_member_decoration(type.self, index, DecorationLocation))
-					return join(" [[user(clip", get_member_decoration(type.self, index, DecorationLocation), ")]]");
+				if (has_member_decoration(type.self, index, DecorationIndex))
+					return join(" [[user(clip", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+				else
+					return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
+
+			case BuiltInCullDistance:
+				if (has_member_decoration(type.self, index, DecorationIndex))
+					return join(" [[user(cull", get_member_decoration(type.self, index, DecorationIndex), ")]]");
 				else
 					return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
 
@@ -10611,7 +10617,9 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				break;
 
 			case BuiltInClipDistance:
-				return join(" [[user(clip", get_member_decoration(type.self, index, DecorationLocation), ")]]");
+				return join(" [[user(clip", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+			case BuiltInCullDistance:
+				return join(" [[user(cull", get_member_decoration(type.self, index, DecorationIndex), ")]]");
 
 			default:
 				break;
