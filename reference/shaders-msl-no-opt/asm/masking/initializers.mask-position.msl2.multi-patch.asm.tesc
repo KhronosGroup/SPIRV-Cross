@@ -74,13 +74,13 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     spvUnsafeArray<gl_PerVertex, 4> _29 = spvUnsafeArray<gl_PerVertex, 4>({ gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) } });
     
     device main0_out* gl_out = &spvOut[gl_GlobalInvocationID.x - gl_GlobalInvocationID.x % 4];
-    gl_out[gl_InvocationID].foo = _15[gl_InvocationID];
-    gl_out[gl_InvocationID].gl_PointSize = _29[gl_GlobalInvocationID].gl_PointSize;
-    gl_out[gl_InvocationID].gl_ClipDistance[0] = _29[gl_GlobalInvocationID].gl_ClipDistance[0];
-    gl_out[gl_InvocationID].gl_CullDistance[0] = _29[gl_GlobalInvocationID].gl_CullDistance[0];
+    gl_out[gl_GlobalInvocationID.x % 4].foo = _15[gl_GlobalInvocationID.x % 4];
+    gl_out[gl_GlobalInvocationID.x % 4].gl_PointSize = _29[gl_GlobalInvocationID.x % 4].gl_PointSize;
+    gl_out[gl_GlobalInvocationID.x % 4].gl_ClipDistance[0] = _29[gl_GlobalInvocationID.x % 4].gl_ClipDistance[0];
+    gl_out[gl_GlobalInvocationID.x % 4].gl_CullDistance[0] = _29[gl_GlobalInvocationID.x % 4].gl_CullDistance[0];
     threadgroup gl_PerVertex spvStoragegl_out_masked[8][4];
     threadgroup gl_PerVertex (&gl_out_masked)[4] = spvStoragegl_out_masked[(gl_GlobalInvocationID.x / 4) % 8];
-    gl_out_masked[gl_InvocationID] = _29[gl_InvocationID];
+    gl_out_masked[gl_GlobalInvocationID.x % 4] = _29[gl_GlobalInvocationID.x % 4];
     device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     patchOut.foo_patch = float4(0.0);
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;

@@ -72,7 +72,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     device main0_out* gl_out = &spvOut[gl_GlobalInvocationID.x - gl_GlobalInvocationID.x % 4];
     threadgroup C spvStoragec[8][4];
     threadgroup C (&c)[4] = spvStoragec[(gl_GlobalInvocationID.x / 4) % 8];
-    c[gl_InvocationID] = _18[gl_InvocationID];
+    c[gl_GlobalInvocationID.x % 4] = _18[gl_GlobalInvocationID.x % 4];
     device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     patchOut.P_v = float4(0.0);
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;

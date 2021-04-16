@@ -2169,10 +2169,11 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			{
 				entry_func.fixup_hooks_in.push_back([=, &var]() {
 					uint32_t index = get_extended_decoration(var.self, SPIRVCrossDecorationInterfaceMemberIndex);
+					auto invocation = to_tesc_invocation_id();
 					statement(to_expression(stage_out_ptr_var_id), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+					          invocation, "].",
 					          to_member_name(ib_type, index), " = ", to_expression(var.initializer), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+					          invocation, "];");
 				});
 			}
 			else
@@ -2774,8 +2775,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 
 				bool unroll_array = !mbr_type.array.empty() && is_builtin;
 
-				AccessChainMeta chain_meta;
-				auto constant_chain = access_chain_internal(var.initializer, &builtin_invocation_id_id, 1, 0, &chain_meta);
+				auto invocation = to_tesc_invocation_id();
+				auto constant_chain = join(to_expression(var.initializer), "[", invocation, "]");
 
 				if (unroll_array)
 				{
@@ -2785,15 +2786,16 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 					for (uint32_t i = 0; i < len; i++)
 					{
 						statement(to_expression(stage_out_ptr_var_id), "[",
-						          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+						          invocation, "].",
 						          to_member_name(ib_type, index), "[", i, "] = ",
-						          constant_chain, ".", to_member_name(type, mbr_idx), "[", i, "];");
+						          constant_chain, ".",
+						          to_member_name(type, mbr_idx), "[", i, "];");
 					}
 				}
 				else
 				{
 					statement(to_expression(stage_out_ptr_var_id), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+					          invocation, "].",
 					          to_member_name(ib_type, index), " = ",
 					          constant_chain, ".", to_member_name(type, mbr_idx), ";");
 				}
@@ -2958,6 +2960,18 @@ bool CompilerMSL::variable_storage_requires_stage_io(spv::StorageClass storage) 
 		return false;
 }
 
+string CompilerMSL::to_tesc_invocation_id()
+{
+	if (msl_options.multi_patch_workgroup)
+	{
+		// n.b. builtin_invocation_id_id here is the dispatch global invocation ID,
+		// not the TC invocation ID.
+		return join(to_expression(builtin_invocation_id_id), ".x % ", get_entry_point().output_vertices);
+	}
+	else
+		return builtin_to_glsl(BuiltInInvocationId, StorageClassInput);
+}
+
 void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, bool strip_array)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
@@ -3014,10 +3028,11 @@ void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, boo
 		if (strip_array)
 		{
 			entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+				auto invocation = to_tesc_invocation_id();
 				statement(to_expression(masked_var.self), "[",
-				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "] = ",
+				          invocation, "] = ",
 				          to_expression(initializer), "[",
-				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+				          invocation, "];");
 			});
 		}
 		else
