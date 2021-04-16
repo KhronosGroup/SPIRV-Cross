@@ -53,7 +53,7 @@ struct main0_out
 };
 
 static inline __attribute__((always_inline))
-void write_in_func(thread float4& v0, device float4& v1, device float4& gl_Position, device float& gl_PointSize, device float (&gl_ClipDistance)[2])
+void write_in_func(thread float4& v0, device float4& v1, device float4& gl_Position, device float& gl_PointSize, device spvUnsafeArray<float, 2>& gl_ClipDistance)
 {
     v0 = float4(1.0);
     v1 = float4(2.0);

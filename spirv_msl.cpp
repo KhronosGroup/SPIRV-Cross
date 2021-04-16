@@ -12387,7 +12387,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &var = get<SPIRVariable>(arg.id);
 	auto &type = get_variable_data_type(var);
 	auto &var_type = get<SPIRType>(arg.type);
-	StorageClass storage = var_type.storage;
+	StorageClass type_storage = var_type.storage;
 	bool is_pointer = var_type.pointer;
 
 	// If we need to modify the name of the variable, make sure we use the original variable.
@@ -12424,15 +12424,30 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	string address_space = get_argument_address_space(var);
 	bool builtin = has_decoration(var.self, DecorationBuiltIn);
 	auto builtin_type = BuiltIn(get_decoration(arg.id, DecorationBuiltIn));
-	is_using_builtin_array = builtin;
+
 	if (address_space == "threadgroup")
 		is_using_builtin_array = true;
 
 	if (var.basevariable && (var.basevariable == stage_in_ptr_var_id || var.basevariable == stage_out_ptr_var_id))
 		decl = join(cv_qualifier, type_to_glsl(type, arg.id));
 	else if (builtin)
-		decl = join(cv_qualifier, builtin_type_decl(builtin_type, arg.id));
-	else if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) && is_array(type))
+	{
+		// Only use templated array for Clip/Cull distance when feasible.
+		// In other scenarios, we need need to override array length for tess levels,
+		// or we need to emit the expected type for builtins (uint vs int).
+		if (builtin_type != BuiltInClipDistance && builtin_type != BuiltInCullDistance)
+			is_using_builtin_array = true;
+
+		auto storage = get<SPIRType>(var.basetype).storage;
+		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage))
+			is_using_builtin_array = true;
+
+		if (is_using_builtin_array)
+			decl = join(cv_qualifier, builtin_type_decl(builtin_type, arg.id));
+		else
+			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
+	}
+	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))
 	{
 		is_using_builtin_array = true;
 		decl += join(cv_qualifier, type_to_glsl(type, arg.id), "*");
@@ -12456,10 +12471,10 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
 	}
 
-	bool opaque_handle = storage == StorageClassUniformConstant;
+	bool opaque_handle = type_storage == StorageClassUniformConstant;
 
 	if (!builtin && !opaque_handle && !is_pointer &&
-	    (storage == StorageClassFunction || storage == StorageClassGeneric))
+	    (type_storage == StorageClassFunction || type_storage == StorageClassGeneric))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
 		if (msl_options.force_native_arrays && is_array(type))
@@ -12500,7 +12515,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		if (msl_options.argument_buffers)
 		{
 			uint32_t desc_set = get_decoration(name_id, DecorationDescriptorSet);
-			if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) &&
+			if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) &&
 			    descriptor_set_is_argument_buffer(desc_set))
 			{
 				// An awkward case where we need to emit *more* address space declarations (yay!).
@@ -14226,6 +14241,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 
 	// Vertex function out
 	case BuiltInClipDistance:
+	case BuiltInCullDistance:
 		return "float";
 	case BuiltInPointSize:
 		return "float";

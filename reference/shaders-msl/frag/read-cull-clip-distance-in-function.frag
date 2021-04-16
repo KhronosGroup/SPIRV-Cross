@@ -46,29 +46,33 @@ struct spvUnsafeArray
 
 struct main0_out
 {
-    float4 v0;
-    float4 v1;
-    float4 gl_Position;
-    spvUnsafeArray<float, 2> gl_ClipDistance;
+    float4 FragColor [[color(0)]];
+};
+
+struct main0_in
+{
+    float gl_ClipDistance_0 [[user(clip0)]];
+    float gl_ClipDistance_1 [[user(clip1)]];
+    float gl_CullDistance_0 [[user(cull0)]];
+    float gl_CullDistance_1 [[user(cull1)]];
 };
 
 static inline __attribute__((always_inline))
-void write_in_func(device float4& v0, device float4& v1, device float4& gl_Position, thread float& gl_PointSize, device spvUnsafeArray<float, 2>& gl_ClipDistance)
+float4 read_in_func(thread spvUnsafeArray<float, 2>& gl_CullDistance, thread spvUnsafeArray<float, 2>& gl_ClipDistance)
 {
-    v0 = float4(1.0);
-    v1 = float4(2.0);
-    gl_Position = float4(3.0);
-    gl_PointSize = 4.0;
-    gl_ClipDistance[0] = 1.0;
-    gl_ClipDistance[1] = 0.5;
+    return float4(gl_CullDistance[0], gl_CullDistance[1], gl_ClipDistance[0], gl_ClipDistance[1]);
 }
 
-kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 spvStageInputSize [[grid_size]], device main0_out* spvOut [[buffer(28)]])
+fragment main0_out main0(main0_in in [[stage_in]])
 {
-    float gl_PointSize = {};
-    device main0_out& out = spvOut[gl_GlobalInvocationID.y * spvStageInputSize.x + gl_GlobalInvocationID.x];
-    if (any(gl_GlobalInvocationID >= spvStageInputSize))
-        return;
-    write_in_func(out.v0, out.v1, out.gl_Position, gl_PointSize, out.gl_ClipDistance);
+    main0_out out = {};
+    spvUnsafeArray<float, 2> gl_CullDistance = {};
+    spvUnsafeArray<float, 2> gl_ClipDistance = {};
+    gl_CullDistance[0] = in.gl_CullDistance_0;
+    gl_CullDistance[1] = in.gl_CullDistance_1;
+    gl_ClipDistance[0] = in.gl_ClipDistance_0;
+    gl_ClipDistance[1] = in.gl_ClipDistance_1;
+    out.FragColor = read_in_func(gl_CullDistance, gl_ClipDistance);
+    return out;
 }
 
