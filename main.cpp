@@ -285,6 +285,61 @@ static bool write_string_to_file(const char *path, const char *string)
 #pragma warning(pop)
 #endif
 
+static void print_resources(const Compiler &compiler, spv::StorageClass storage,
+                            const SmallVector<BuiltInResource> &resources)
+{
+	fprintf(stderr, "%s\n", storage == StorageClassInput ? "builtin inputs" : "builtin outputs");
+	fprintf(stderr, "=============\n\n");
+	for (auto &res : resources)
+	{
+		bool active = compiler.has_active_builtin(res.builtin, storage);
+		const char *basetype = "?";
+		auto &type = compiler.get_type(res.value_type_id);
+		switch (type.basetype)
+		{
+		case SPIRType::Float: basetype = "float"; break;
+		case SPIRType::Int: basetype = "int"; break;
+		case SPIRType::UInt: basetype = "uint"; break;
+		default: break;
+		}
+
+		uint32_t array_size = 0;
+		bool array_size_literal = false;
+		if (!type.array.empty())
+		{
+			array_size = type.array.front();
+			array_size_literal = type.array_size_literal.front();
+		}
+
+		string type_str = basetype;
+		if (type.vecsize > 1)
+			type_str += std::to_string(type.vecsize);
+
+		if (array_size)
+		{
+			if (array_size_literal)
+				type_str += join("[", array_size, "]");
+			else
+				type_str += join("[", array_size, " (spec constant ID)]");
+		}
+
+		string builtin_str;
+		switch (res.builtin)
+		{
+		case spv::BuiltInPosition: builtin_str = "Position"; break;
+		case spv::BuiltInPointSize: builtin_str = "PointSize"; break;
+		case spv::BuiltInCullDistance: builtin_str = "CullDistance"; break;
+		case spv::BuiltInClipDistance: builtin_str = "ClipDistance"; break;
+		case spv::BuiltInTessLevelInner: builtin_str = "TessLevelInner"; break;
+		case spv::BuiltInTessLevelOuter: builtin_str = "TessLevelOuter"; break;
+		default: builtin_str = string("builtin #") + to_string(res.builtin);
+		}
+
+		fprintf(stderr, "Builtin %s (%s) (active: %s).\n", builtin_str.c_str(), type_str.c_str(), active ? "yes" : "no");
+	}
+	fprintf(stderr, "=============\n\n");
+}
+
 static void print_resources(const Compiler &compiler, const char *tag, const SmallVector<Resource> &resources)
 {
 	fprintf(stderr, "%s\n", tag);
@@ -475,6 +530,8 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "push", res.push_constant_buffers);
 	print_resources(compiler, "counters", res.atomic_counters);
 	print_resources(compiler, "acceleration structures", res.acceleration_structures);
+	print_resources(compiler, spv::StorageClassInput, res.builtin_inputs);
+	print_resources(compiler, spv::StorageClassOutput, res.builtin_outputs);
 }
 
 static void print_push_constant_resources(const Compiler &compiler, const SmallVector<Resource> &res)
@@ -1358,6 +1415,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 	if (args.dump_resources)
 	{
+		compiler->update_active_builtins();
 		print_resources(*compiler, res);
 		print_push_constant_resources(*compiler, res.push_constant_buffers);
 		print_spec_constants(*compiler);
