@@ -972,6 +972,7 @@ protected:
 	SmallVector<uint32_t> vars_needing_early_declaration;
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
+	std::unordered_map<StageSetBinding, uint32_t, InternalHasher> resource_arg_buff_idx_to_binding_number;
 	uint32_t type_to_location_count(const SPIRType &type) const;
 
 	uint32_t next_metal_resource_index_buffer = 0;
@@ -1051,11 +1052,12 @@ protected:
 
 	void analyze_argument_buffers();
 	bool descriptor_set_is_argument_buffer(uint32_t desc_set) const;
-	MSLResourceBinding& get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx);
-	void add_argument_buffer_padding_buffer_type(SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
-	void add_argument_buffer_padding_image_type(SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
-	void add_argument_buffer_padding_sampler_type(SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
-	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType& struct_type, uint32_t& mbr_idx, uint32_t count);
+	MSLResourceBinding &get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx);
+	uint32_t add_argument_buffer_padding_buffer_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t count);
+	uint32_t add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t count);
+	uint32_t add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t count);
+	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx,
+	                                      uint32_t count);
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
