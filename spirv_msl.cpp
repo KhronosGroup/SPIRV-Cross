@@ -12439,7 +12439,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			is_using_builtin_array = true;
 
 		auto storage = get<SPIRType>(var.basetype).storage;
-		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage))
+		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage) &&
+		    !is_stage_output_builtin_masked(builtin_type))
 			is_using_builtin_array = true;
 
 		if (is_using_builtin_array)
