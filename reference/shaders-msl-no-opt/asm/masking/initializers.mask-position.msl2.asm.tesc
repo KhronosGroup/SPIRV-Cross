@@ -48,8 +48,8 @@ struct gl_PerVertex
 {
     float4 gl_Position;
     float gl_PointSize;
-    float gl_ClipDistance[1];
-    float gl_CullDistance[1];
+    spvUnsafeArray<float, 1> gl_ClipDistance;
+    spvUnsafeArray<float, 1> gl_CullDistance;
 };
 
 constant spvUnsafeArray<float4, 4> _15 = spvUnsafeArray<float4, 4>({ float4(0.0), float4(0.0), float4(0.0), float4(0.0) });
@@ -60,8 +60,8 @@ struct main0_out
 {
     float4 foo;
     float gl_PointSize;
-    float gl_ClipDistance[1];
-    float gl_CullDistance[1];
+    spvUnsafeArray<float, 1> gl_ClipDistance;
+    spvUnsafeArray<float, 1> gl_CullDistance;
 };
 
 struct main0_patchOut
@@ -77,8 +77,8 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     gl_out[gl_InvocationID].foo = _15[gl_InvocationID];
     gl_out[gl_InvocationID].gl_PointSize = _29[gl_InvocationID].gl_PointSize;
-    gl_out[gl_InvocationID].gl_ClipDistance[0] = _29[gl_InvocationID].gl_ClipDistance[0];
-    gl_out[gl_InvocationID].gl_CullDistance[0] = _29[gl_InvocationID].gl_CullDistance[0];
+    gl_out[gl_InvocationID].gl_ClipDistance = _29[gl_InvocationID].gl_ClipDistance;
+    gl_out[gl_InvocationID].gl_CullDistance = _29[gl_InvocationID].gl_CullDistance;
     gl_out_masked[gl_InvocationID] = _29[gl_InvocationID];
     device main0_patchOut& patchOut = spvPatchOut[gl_PrimitiveID];
     patchOut.foo_patch = float4(0.0);

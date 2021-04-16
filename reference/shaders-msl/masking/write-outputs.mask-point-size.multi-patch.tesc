@@ -48,8 +48,8 @@ struct gl_PerVertex
 {
     float4 gl_Position;
     float gl_PointSize;
-    float gl_ClipDistance[1];
-    float gl_CullDistance[1];
+    spvUnsafeArray<float, 1> gl_ClipDistance;
+    spvUnsafeArray<float, 1> gl_CullDistance;
 };
 
 struct main0_out

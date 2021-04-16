@@ -2771,34 +2771,12 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 				auto &type = this->get<SPIRType>(var.basetype);
 				uint32_t index = get_extended_member_decoration(var.self, mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex);
 
-				auto &mbr_type = this->get<SPIRType>(type.member_types[mbr_idx]);
-
-				bool unroll_array = !mbr_type.array.empty() && is_builtin;
-
 				auto invocation = to_tesc_invocation_id();
 				auto constant_chain = join(to_expression(var.initializer), "[", invocation, "]");
-
-				if (unroll_array)
-				{
-					// Member arrays in these blocks are always native arrays, unroll copy.
-					uint32_t len = to_array_size_literal(mbr_type);
-
-					for (uint32_t i = 0; i < len; i++)
-					{
-						statement(to_expression(stage_out_ptr_var_id), "[",
-						          invocation, "].",
-						          to_member_name(ib_type, index), "[", i, "] = ",
-						          constant_chain, ".",
-						          to_member_name(type, mbr_idx), "[", i, "];");
-					}
-				}
-				else
-				{
-					statement(to_expression(stage_out_ptr_var_id), "[",
-					          invocation, "].",
-					          to_member_name(ib_type, index), " = ",
-					          constant_chain, ".", to_member_name(type, mbr_idx), ";");
-				}
+				statement(to_expression(stage_out_ptr_var_id), "[",
+				          invocation, "].",
+				          to_member_name(ib_type, index), " = ",
+				          constant_chain, ".", to_member_name(type, mbr_idx), ";");
 			});
 		}
 		else
@@ -10419,8 +10397,10 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		// we need flat arrays, but if we're somehow declaring gl_PerVertex for constant array reasons, we want
 		// template array types to be declared.
 		bool is_ib_in_out =
-				((stage_out_var_id && get_stage_out_struct_type().self == type.self) ||
-				 (stage_in_var_id && get_stage_in_struct_type().self == type.self));
+				((stage_out_var_id && get_stage_out_struct_type().self == type.self &&
+				  variable_storage_requires_stage_io(StorageClassOutput)) ||
+				 (stage_in_var_id && get_stage_in_struct_type().self == type.self &&
+				  variable_storage_requires_stage_io(StorageClassInput)));
 		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
@@ -10446,11 +10426,8 @@ void CompilerMSL::emit_struct_member(const SPIRType &type, uint32_t member_type_
 
 	// Handle HLSL-style 0-based vertex/instance index.
 	builtin_declaration = true;
-	bool old_is_using_builtin_array = is_using_builtin_array;
-	is_using_builtin_array = has_member_decoration(type.self, index, DecorationBuiltIn);
 	statement(to_struct_member(type, member_type_id, index, qualifier));
 	builtin_declaration = false;
-	is_using_builtin_array = old_is_using_builtin_array;
 }
 
 void CompilerMSL::emit_struct_padding_target(const SPIRType &type)
@@ -13256,11 +13233,7 @@ std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 	bool old_is_using_builtin_array = is_using_builtin_array;
 
 	// Threadgroup arrays can't have a wrapper type.
-	// More special cases. ClipDistance and CullDistance are emitted as plain arrays in stage out,
-	// so preserve that property when emitting them as masked variables. Avoids lots of extra special casing
-	// in argument_decl(). Similar argument for TessLevels.
-	if (variable_decl_is_remapped_storage(variable, StorageClassWorkgroup) ||
-	    has_decoration(variable.self, DecorationBuiltIn))
+	if (variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
 		is_using_builtin_array = true;
 
 	std::string expr = CompilerGLSL::variable_decl(variable);
