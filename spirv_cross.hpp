@@ -70,6 +70,7 @@ struct BuiltInResource
 
 	// This is the actual value type of the builtin.
 	// Typically float4, float, array<float, N> for the gl_PerVertex builtins.
+	// If the builtin is a control point, the control point array type will be stripped away here as appropriate.
 	TypeID value_type_id;
 
 	// This refers to the base resource which contains the builtin.
