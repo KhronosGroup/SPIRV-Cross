@@ -55,7 +55,7 @@ struct main0_patchIn
 };
 
 static inline __attribute__((always_inline))
-float4 read_tess_levels(thread float (&gl_TessLevelOuter)[4])
+float4 read_tess_levels(thread spvUnsafeArray<float, 4>& gl_TessLevelOuter)
 {
     return float4(gl_TessLevelOuter[0], gl_TessLevelOuter[1], gl_TessLevelOuter[2], gl_TessLevelOuter[3]);
 }

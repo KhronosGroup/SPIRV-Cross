@@ -12433,12 +12433,20 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else if (builtin)
 	{
 		// Only use templated array for Clip/Cull distance when feasible.
-		// In other scenarios, we need need to override array length for tess levels,
+		// In other scenarios, we need need to override array length for tess levels (if used as outputs),
 		// or we need to emit the expected type for builtins (uint vs int).
-		if (builtin_type != BuiltInClipDistance && builtin_type != BuiltInCullDistance)
-			is_using_builtin_array = true;
-
 		auto storage = get<SPIRType>(var.basetype).storage;
+
+		if (storage == StorageClassInput &&
+		    (builtin_type == BuiltInTessLevelInner || builtin_type == BuiltInTessLevelOuter))
+		{
+			is_using_builtin_array = false;
+		}
+		else if (builtin_type != BuiltInClipDistance && builtin_type != BuiltInCullDistance)
+		{
+			is_using_builtin_array = true;
+		}
+
 		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage) &&
 		    !is_stage_output_builtin_masked(builtin_type))
 			is_using_builtin_array = true;
