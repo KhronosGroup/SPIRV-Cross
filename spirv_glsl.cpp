@@ -8375,6 +8375,11 @@ void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_
 	expr += "]";
 }
 
+bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
+{
+	return true;
+}
+
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
                                            AccessChainFlags flags, AccessChainMeta *meta)
 {
@@ -8584,7 +8589,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
 			BuiltIn builtin;
-			if (is_member_builtin(*type, index, &builtin))
+			if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 			{
 				if (access_chain_is_arrayed)
 				{
@@ -8652,13 +8657,30 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			// Internally, access chain implementation can also be used on composites,
 			// ignore scalar access workarounds in this case.
-			StorageClass effective_storage;
-			if (expression_type(base).pointer)
-				effective_storage = get_expression_effective_storage_class(base);
-			else
-				effective_storage = StorageClassGeneric;
+			StorageClass effective_storage = StorageClassGeneric;
+			bool ignore_potential_sliced_writes = false;
+			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
+			{
+				if (expression_type(base).pointer)
+					effective_storage = get_expression_effective_storage_class(base);
 
-			if (!row_major_matrix_needs_conversion)
+				// Special consideration for control points.
+				// Control points can only be written by InvocationID, so there is no need
+				// to consider scalar access chains here.
+				// Cleans up some cases where it's very painful to determine the accurate storage class
+				// since blocks can be partially masked ...
+				auto *var = maybe_get_backing_variable(base);
+				if (var && var->storage == StorageClassOutput &&
+				    get_execution_model() == ExecutionModelTessellationControl &&
+				    !has_decoration(var->self, DecorationPatch))
+				{
+					ignore_potential_sliced_writes = true;
+				}
+			}
+			else
+				ignore_potential_sliced_writes = true;
+
+			if (!row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				// On some backends, we might not be able to safely access individual scalars in a vector.
 				// To work around this, we might have to cast the access chain reference to something which can,
@@ -8698,7 +8720,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
-			if (row_major_matrix_needs_conversion)
+			if (row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
 				                                       is_packed);
@@ -9885,7 +9907,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
+			emit_array_copy(to_expression(id), id, ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -10307,14 +10329,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// Including the base will prevent this and would trigger multiple reads
 			// from expression causing it to be forced to an actual temporary in GLSL.
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
-			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT, &meta);
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT |
+			                                  ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
 			e = &emit_op(result_type, id, expr, true, should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 			e->base_expression = ops[2];
 		}
 		else
 		{
-			auto expr = access_chain_internal(ops[2], &ops[3], length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+			auto expr = access_chain_internal(ops[2], &ops[3], length,
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
@@ -12644,6 +12668,11 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uin
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
+bool CompilerGLSL::variable_decl_is_remapped_storage(const SPIRVariable &var, StorageClass storage) const
+{
+	return var.storage == storage;
+}
+
 // Emit a structure member. Subclasses may override to modify output,
 // or to dynamically add a padding member if needed.
 void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
@@ -12869,7 +12898,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 		else if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			res += join(" = ", to_zero_initialized_expression(get_variable_data_type_id(variable)));
 	}
-	else if (variable.initializer)
+	else if (variable.initializer && !variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
 	{
 		uint32_t expr = variable.initializer;
 		if (ir.ids[expr].get_type() != TypeUndef)
@@ -13559,7 +13588,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		auto &var = get<SPIRVariable>(v);
 		var.deferred_declaration = false;
 
-		if (var.storage == StorageClassWorkgroup)
+		if (variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
 		{
 			// Special variable type which cannot have initializer,
 			// need to be declared as standalone variables.
@@ -14761,7 +14790,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				// The backend is responsible for setting this up, and redirection the return values as appropriate.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
-					emit_array_copy("spvReturnValue", block.return_value, StorageClassFunction,
+					emit_array_copy("spvReturnValue", 0, block.return_value, StorageClassFunction,
 					                get_expression_effective_storage_class(block.return_value));
 				}
 
@@ -14980,7 +15009,7 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }
 
-void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass, StorageClass)
+void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t, uint32_t rhs_id, StorageClass, StorageClass)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
 }
@@ -15787,4 +15816,136 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		request_workaround_wrapper_overload(loaded_type);
 		expr = join("spvWorkaroundRowMajor(", expr, ")");
 	}
+}
+
+void CompilerGLSL::mask_stage_output_by_location(uint32_t location, uint32_t component)
+{
+	masked_output_locations.insert({ location, component });
+}
+
+void CompilerGLSL::mask_stage_output_by_builtin(BuiltIn builtin)
+{
+	masked_output_builtins.insert(builtin);
+}
+
+bool CompilerGLSL::is_stage_output_variable_masked(const SPIRVariable &var) const
+{
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	// Blocks by themselves are never masked. Must be masked per-member.
+	if (is_block)
+		return false;
+
+	bool is_builtin = has_decoration(var.self, DecorationBuiltIn);
+
+	if (is_builtin)
+	{
+		return is_stage_output_builtin_masked(BuiltIn(get_decoration(var.self, DecorationBuiltIn)));
+	}
+	else
+	{
+		if (!has_decoration(var.self, DecorationLocation))
+			return false;
+
+		return is_stage_output_location_masked(
+				get_decoration(var.self, DecorationLocation),
+				get_decoration(var.self, DecorationComponent));
+	}
+}
+
+bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, uint32_t index, bool strip_array) const
+{
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	if (!is_block)
+		return false;
+
+	BuiltIn builtin = BuiltInMax;
+	if (is_member_builtin(type, index, &builtin))
+	{
+		return is_stage_output_builtin_masked(builtin);
+	}
+	else
+	{
+		uint32_t location = get_declared_member_location(var, index, strip_array);
+		uint32_t component = get_member_decoration(type.self, index, DecorationComponent);
+		return is_stage_output_location_masked(location, component);
+	}
+}
+
+bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t component) const
+{
+	return masked_output_locations.count({ location, component }) != 0;
+}
+
+bool CompilerGLSL::is_stage_output_builtin_masked(spv::BuiltIn builtin) const
+{
+	return masked_output_builtins.count(builtin) != 0;
+}
+
+uint32_t CompilerGLSL::get_declared_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
+{
+	auto &block_type = get<SPIRType>(var.basetype);
+	if (has_member_decoration(block_type.self, mbr_idx, DecorationLocation))
+		return get_member_decoration(block_type.self, mbr_idx, DecorationLocation);
+	else
+		return get_accumulated_member_location(var, mbr_idx, strip_array);
+}
+
+uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
+{
+	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
+	uint32_t location = get_decoration(var.self, DecorationLocation);
+
+	for (uint32_t i = 0; i < mbr_idx; i++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[i]);
+
+		// Start counting from any place we have a new location decoration.
+		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
+			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
+
+		uint32_t location_count = 1;
+
+		if (mbr_type.columns > 1)
+			location_count = mbr_type.columns;
+
+		if (!mbr_type.array.empty())
+			for (uint32_t j = 0; j < uint32_t(mbr_type.array.size()); j++)
+				location_count *= to_array_size_literal(mbr_type, j);
+
+		location += location_count;
+	}
+
+	return location;
+}
+
+StorageClass CompilerGLSL::get_expression_effective_storage_class(uint32_t ptr)
+{
+	auto *var = maybe_get_backing_variable(ptr);
+
+	// If the expression has been lowered to a temporary, we need to use the Generic storage class.
+	// We're looking for the effective storage class of a given expression.
+	// An access chain or forwarded OpLoads from such access chains
+	// will generally have the storage class of the underlying variable, but if the load was not forwarded
+	// we have lost any address space qualifiers.
+	bool forced_temporary = ir.ids[ptr].get_type() == TypeExpression && !get<SPIRExpression>(ptr).access_chain &&
+	                        (forced_temporaries.count(ptr) != 0 || forwarded_temporaries.count(ptr) == 0);
+
+	if (var && !forced_temporary)
+	{
+		if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
+			return StorageClassWorkgroup;
+		if (variable_decl_is_remapped_storage(*var, StorageClassStorageBuffer))
+			return StorageClassStorageBuffer;
+
+		// Normalize SSBOs to StorageBuffer here.
+		if (var->storage == StorageClassUniform &&
+		    has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			return StorageClassStorageBuffer;
+		else
+			return var->storage;
+	}
+	else
+		return expression_type(ptr).storage;
 }

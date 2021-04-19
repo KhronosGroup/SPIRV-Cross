@@ -10,8 +10,8 @@ struct main0_out
 
 struct main0_patchIn
 {
-    float2 gl_TessLevelInner [[attribute(0)]];
-    float4 gl_TessLevelOuter [[attribute(1)]];
+    float4 gl_TessLevelOuter [[attribute(0)]];
+    float2 gl_TessLevelInner [[attribute(1)]];
 };
 
 [[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], float2 gl_TessCoord [[position_in_patch]])

@@ -736,6 +736,8 @@ protected:
 	// Threadgroup arrays can't have a wrapper type
 	std::string variable_decl(const SPIRVariable &variable) override;
 
+	bool variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const override;
+
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
 
@@ -801,8 +803,11 @@ protected:
 		};
 		std::unordered_map<uint32_t, LocationMeta> location_meta;
 		bool strip_array = false;
+		bool allow_local_declaration = false;
 	};
 
+	std::string to_tesc_invocation_id();
+	void emit_local_masked_variable(const SPIRVariable &masked_var, bool strip_array);
 	void add_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref, SPIRType &ib_type,
 	                                     SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_composite_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
@@ -815,14 +820,15 @@ protected:
 	void add_composite_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                                      SPIRType &ib_type, SPIRVariable &var, uint32_t index,
 	                                                      InterfaceBlockMeta &meta);
-	uint32_t get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 
 	void fix_up_interface_member_indices(spv::StorageClass storage, uint32_t ib_type_id);
 
-	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, spv::StorageClass storage);
+	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
+	                                     spv::StorageClass storage, bool fallback = false);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
-	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components = 0);
+	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location,
+	                                   uint32_t num_components, bool strip_array);
 
 	void emit_custom_templates();
 	void emit_custom_functions();
@@ -907,8 +913,8 @@ protected:
 	void add_pragma_line(const std::string &line);
 	void add_typedef_line(const std::string &line);
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
-	void emit_array_copy(const std::string &lhs, uint32_t rhs_id, spv::StorageClass lhs_storage,
-	                     spv::StorageClass rhs_storage) override;
+	void emit_array_copy(const std::string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+	                     spv::StorageClass lhs_storage, spv::StorageClass rhs_storage) override;
 	void build_implicit_builtins();
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
@@ -946,6 +952,7 @@ protected:
 
 	void analyze_sampled_image_usage();
 
+	bool access_chain_needs_stage_io_builtin_translation(uint32_t base) override;
 	void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type, spv::StorageClass storage,
 	                                            bool &is_packed) override;
 	void fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t length);
@@ -965,6 +972,7 @@ protected:
 	std::map<uint32_t, MSLShaderInput> inputs_by_location;
 	std::unordered_map<uint32_t, MSLShaderInput> inputs_by_builtin;
 	std::unordered_set<uint32_t> location_inputs_in_use;
+	std::unordered_set<uint32_t> location_inputs_in_use_fallback;
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_input_location;
 	std::set<std::string> pragma_lines;
@@ -987,6 +995,7 @@ protected:
 	VariableID patch_stage_out_var_id = 0;
 	VariableID stage_in_ptr_var_id = 0;
 	VariableID stage_out_ptr_var_id = 0;
+	VariableID stage_out_masked_builtin_type_id = 0;
 
 	// Handle HLSL-style 0-based vertex/instance index.
 	enum class TriState
@@ -1074,6 +1083,8 @@ protected:
 	bool type_is_pointer_to_pointer(const SPIRType &type) const;
 	bool is_supported_argument_buffer_type(const SPIRType &type) const;
 
+	bool variable_storage_requires_stage_io(spv::StorageClass storage) const;
+
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
 	{
@@ -1117,11 +1128,8 @@ protected:
 	{
 		enum SortAspect
 		{
-			Location,
-			LocationReverse,
-			Offset,
-			OffsetThenLocationReverse,
-			Alphabetical
+			LocationThenBuiltInType,
+			Offset
 		};
 
 		void sort();

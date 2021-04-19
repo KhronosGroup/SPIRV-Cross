@@ -17,8 +17,8 @@ struct main0_in
 struct main0_patchIn
 {
     float4 FragColor [[attribute(0)]];
-    float2 gl_TessLevelInner [[attribute(3)]];
-    float4 gl_TessLevelOuter [[attribute(4)]];
+    float4 gl_TessLevelOuter [[attribute(3)]];
+    float2 gl_TessLevelInner [[attribute(4)]];
     patch_control_point<main0_in> gl_in;
 };
 

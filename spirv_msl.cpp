@@ -146,7 +146,9 @@ void CompilerMSL::set_argument_buffer_device_address_space(uint32_t desc_set, bo
 
 bool CompilerMSL::is_msl_shader_input_used(uint32_t location)
 {
-	return location_inputs_in_use.count(location) != 0;
+	// Don't report internal location allocations to app.
+	return location_inputs_in_use.count(location) != 0 &&
+	       location_inputs_in_use_fallback.count(location) == 0;
 }
 
 uint32_t CompilerMSL::get_automatic_builtin_input_location(spv::BuiltIn builtin) const
@@ -1731,8 +1733,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 	// Add the global variables as arguments to the function
 	if (func_id != ir.default_entry_point)
 	{
-		bool added_in = false;
-		bool added_out = false;
+		bool control_point_added_in = false;
+		bool control_point_added_out = false;
+		bool patch_added_in = false;
+		bool patch_added_out = false;
+
 		for (uint32_t arg_id : added_arg_ids)
 		{
 			auto &var = get<SPIRVariable>(arg_id);
@@ -1740,34 +1745,72 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			auto *p_type = &get<SPIRType>(type_id);
 			BuiltIn bi_type = BuiltIn(get_decoration(arg_id, DecorationBuiltIn));
 
-			if (((is_tessellation_shader() && var.storage == StorageClassInput) ||
-			     (get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassOutput)) &&
-			    !(has_decoration(arg_id, DecorationPatch) || is_patch_block(*p_type)) &&
-			    (!is_builtin_variable(var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
-			     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
-			     p_type->basetype == SPIRType::Struct))
+			bool is_patch = has_decoration(arg_id, DecorationPatch) || is_patch_block(*p_type);
+			bool is_block = has_decoration(p_type->self, DecorationBlock);
+			bool is_control_point_storage =
+					!is_patch &&
+					((is_tessellation_shader() && var.storage == StorageClassInput) ||
+					 (get_execution_model() == ExecutionModelTessellationControl && var.storage == StorageClassOutput));
+			bool is_patch_block_storage = is_patch && is_block && var.storage == StorageClassOutput;
+			bool is_builtin = is_builtin_variable(var);
+			bool variable_is_stage_io =
+					!is_builtin || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
+					bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
+					p_type->basetype == SPIRType::Struct;
+			bool is_redirected_to_global_stage_io = (is_control_point_storage || is_patch_block_storage) &&
+			                                        variable_is_stage_io;
+
+			// If output is masked it is not considered part of the global stage IO interface.
+			if (is_redirected_to_global_stage_io && var.storage == StorageClassOutput)
+				is_redirected_to_global_stage_io = !is_stage_output_variable_masked(var);
+
+			if (is_redirected_to_global_stage_io)
 			{
 				// Tessellation control shaders see inputs and per-vertex outputs as arrays.
 				// Similarly, tessellation evaluation shaders see per-vertex inputs as arrays.
 				// We collected them into a structure; we must pass the array of this
 				// structure to the function.
 				std::string name;
+				if (is_patch)
+					name = var.storage == StorageClassInput ? patch_stage_in_var_name : patch_stage_out_var_name;
+				else
+					name = var.storage == StorageClassInput ? "gl_in" : "gl_out";
+
+				if (var.storage == StorageClassOutput && has_decoration(p_type->self, DecorationBlock))
+				{
+					// If we're redirecting a block, we might still need to access the original block
+					// variable if we're masking some members.
+					for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(p_type->member_types.size()); mbr_idx++)
+					{
+						if (is_stage_output_block_member_masked(var, mbr_idx, true))
+						{
+							func.add_parameter(var.basetype, var.self, true);
+							break;
+						}
+					}
+				}
+
+				// Tessellation control shaders see inputs and per-vertex outputs as arrays.
+				// Similarly, tessellation evaluation shaders see per-vertex inputs as arrays.
+				// We collected them into a structure; we must pass the array of this
+				// structure to the function.
 				if (var.storage == StorageClassInput)
 				{
+					auto &added_in = is_patch ? patch_added_in : control_point_added_in;
 					if (added_in)
 						continue;
-					name = "gl_in";
-					arg_id = stage_in_ptr_var_id;
+					arg_id = is_patch ? patch_stage_in_var_id : stage_in_ptr_var_id;
 					added_in = true;
 				}
 				else if (var.storage == StorageClassOutput)
 				{
+					auto &added_out = is_patch ? patch_added_out : control_point_added_out;
 					if (added_out)
 						continue;
-					name = "gl_out";
-					arg_id = stage_out_ptr_var_id;
+					arg_id = is_patch ? patch_stage_out_var_id : stage_out_ptr_var_id;
 					added_out = true;
 				}
+
 				type_id = get<SPIRVariable>(arg_id).basetype;
 				uint32_t next_id = ir.increase_bound_by(1);
 				func.add_parameter(type_id, next_id, true);
@@ -1775,7 +1818,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 				set_name(next_id, name);
 			}
-			else if (is_builtin_variable(var) && p_type->basetype == SPIRType::Struct)
+			else if (is_builtin && has_decoration(p_type->self, DecorationBlock))
 			{
 				// Get the pointee type
 				type_id = get_pointee_type_id(type_id);
@@ -1785,7 +1828,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				for (auto &mbr_type_id : p_type->member_types)
 				{
 					BuiltIn builtin = BuiltInMax;
-					bool is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
+					is_builtin = is_member_builtin(*p_type, mbr_idx, &builtin);
 					if (is_builtin && has_active_builtin(builtin, var.storage))
 					{
 						// Add a arg variable with the same type and decorations as the member
@@ -1873,26 +1916,40 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 
 uint32_t CompilerMSL::type_to_location_count(const SPIRType &type) const
 {
-	// In MSL, we cannot place structs in any context where we need locations.
-	assert(type.basetype != SPIRType::Struct);
+	uint32_t count;
+	if (type.basetype == SPIRType::Struct)
+	{
+		uint32_t mbr_count = uint32_t(type.member_types.size());
+		count = 0;
+		for (uint32_t i = 0; i < mbr_count; i++)
+			count += type_to_location_count(get<SPIRType>(type.member_types[i]));
+	}
+	else
+	{
+		count = type.columns > 1 ? type.columns : 1;
+	}
 
-	uint32_t dim = 1;
-	for (uint32_t i = 0; i < type.array.size(); i++)
-		dim *= to_array_size_literal(type, i);
+	uint32_t dim_count = uint32_t(type.array.size());
+	for (uint32_t i = 0; i < dim_count; i++)
+		count *= to_array_size_literal(type, i);
 
-	uint32_t count = dim * type.columns;
 	return count;
 }
 
 // If a shader input exists at the location, it is marked as being used by this shader
-void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, StorageClass storage)
+void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
+                                                  StorageClass storage, bool fallback)
 {
 	if (storage != StorageClassInput)
 		return;
 
 	uint32_t count = type_to_location_count(type);
 	for (uint32_t i = 0; i < count; i++)
+	{
 		location_inputs_in_use.insert(location + i);
+		if (fallback)
+			location_inputs_in_use_fallback.insert(location + i);
+	}
 }
 
 uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t location) const
@@ -2112,10 +2169,11 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			{
 				entry_func.fixup_hooks_in.push_back([=, &var]() {
 					uint32_t index = get_extended_decoration(var.self, SPIRVCrossDecorationInterfaceMemberIndex);
+					auto invocation = to_tesc_invocation_id();
 					statement(to_expression(stage_out_ptr_var_id), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+					          invocation, "].",
 					          to_member_name(ib_type, index), " = ", to_expression(var.initializer), "[",
-					          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+					          invocation, "];");
 				});
 			}
 			else
@@ -2133,7 +2191,9 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 		uint32_t locn = get_decoration(var.self, DecorationLocation);
 		if (storage == StorageClassInput)
 		{
-			type_id = ensure_correct_input_type(var.basetype, locn, location_meta ? location_meta->num_components : 0);
+			type_id = ensure_correct_input_type(var.basetype, locn,
+			                                    location_meta ? location_meta->num_components : 0,
+			                                    meta.strip_array);
 			if (!location_meta)
 				var.basetype = type_id;
 
@@ -2303,8 +2363,8 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
 			if (storage == StorageClassInput)
 			{
-				var.basetype = ensure_correct_input_type(var.basetype, locn);
-				uint32_t mbr_type_id = ensure_correct_input_type(usable_type->self, locn);
+				var.basetype = ensure_correct_input_type(var.basetype, locn, 0, meta.strip_array);
+				uint32_t mbr_type_id = ensure_correct_input_type(usable_type->self, locn, 0, meta.strip_array);
 				if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 					ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
 				else
@@ -2319,11 +2379,11 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && builtin == BuiltInClipDistance)
+		else if (is_builtin && (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance))
 		{
-			// Declare the ClipDistance as [[user(clipN)]].
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, i);
+			// Declare the Clip/CullDistance as [[user(clip/cullN)]].
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 		}
 
 		if (get_decoration_bitset(var.self).get(DecorationIndex))
@@ -2395,34 +2455,6 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 			}
 		}
 	}
-}
-
-uint32_t CompilerMSL::get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array)
-{
-	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
-	uint32_t location = get_decoration(var.self, DecorationLocation);
-
-	for (uint32_t i = 0; i < mbr_idx; i++)
-	{
-		auto &mbr_type = get<SPIRType>(type.member_types[i]);
-
-		// Start counting from any place we have a new location decoration.
-		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
-			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
-
-		uint32_t location_count = 1;
-
-		if (mbr_type.columns > 1)
-			location_count = mbr_type.columns;
-
-		if (!mbr_type.array.empty())
-			for (uint32_t j = 0; j < uint32_t(mbr_type.array.size()); j++)
-				location_count *= to_array_size_literal(mbr_type, j);
-
-		location += location_count;
-	}
-
-	return location;
 }
 
 void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
@@ -2520,11 +2552,11 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && builtin == BuiltInClipDistance)
+		else if (is_builtin && (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance))
 		{
-			// Declare the ClipDistance as [[user(clipN)]].
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, BuiltInClipDistance);
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, i);
+			// Declare the Clip/CullDistance as [[user(clip/cullN)]].
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationIndex, i);
 		}
 
 		if (has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
@@ -2547,7 +2579,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, mbr_idx);
 
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
-		if (!meta.strip_array)
+		if (!meta.strip_array && meta.allow_local_declaration)
 		{
 			switch (storage)
 			{
@@ -2648,7 +2680,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		// so redirect to qualified name.
 		set_member_qualified_name(var_type.self, mbr_idx, qual_var_name);
 	}
-	else if (!meta.strip_array)
+	else if (!meta.strip_array && meta.allow_local_declaration)
 	{
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
 		switch (storage)
@@ -2677,7 +2709,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		uint32_t locn = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
 		if (storage == StorageClassInput)
 		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn);
+			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn, 0, meta.strip_array);
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
@@ -2694,7 +2726,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		uint32_t locn = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
 		if (storage == StorageClassInput)
 		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn);
+			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn, 0, meta.strip_array);
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
@@ -2737,14 +2769,12 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		{
 			entry_func.fixup_hooks_in.push_back([=, &var]() {
 				auto &type = this->get<SPIRType>(var.basetype);
-				uint32_t index = get_extended_decoration(var.self, SPIRVCrossDecorationInterfaceMemberIndex);
-				index += mbr_idx;
+				uint32_t index = get_extended_member_decoration(var.self, mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex);
 
-				AccessChainMeta chain_meta;
-				auto constant_chain = access_chain_internal(var.initializer, &builtin_invocation_id_id, 1, 0, &chain_meta);
-
+				auto invocation = to_tesc_invocation_id();
+				auto constant_chain = join(to_expression(var.initializer), "[", invocation, "]");
 				statement(to_expression(stage_out_ptr_var_id), "[",
-				          builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "].",
+				          invocation, "].",
 				          to_member_name(ib_type, index), " = ",
 				          constant_chain, ".", to_member_name(type, mbr_idx), ";");
 			});
@@ -2898,6 +2928,100 @@ void CompilerMSL::add_tess_level_input_to_interface_block(const std::string &ib_
 	}
 }
 
+bool CompilerMSL::variable_storage_requires_stage_io(spv::StorageClass storage) const
+{
+	if (storage == StorageClassOutput)
+		return !capture_output_to_buffer;
+	else if (storage == StorageClassInput)
+		return !(get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup);
+	else
+		return false;
+}
+
+string CompilerMSL::to_tesc_invocation_id()
+{
+	if (msl_options.multi_patch_workgroup)
+	{
+		// n.b. builtin_invocation_id_id here is the dispatch global invocation ID,
+		// not the TC invocation ID.
+		return join(to_expression(builtin_invocation_id_id), ".x % ", get_entry_point().output_vertices);
+	}
+	else
+		return builtin_to_glsl(BuiltInInvocationId, StorageClassInput);
+}
+
+void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, bool strip_array)
+{
+	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+	bool threadgroup_storage = variable_decl_is_remapped_storage(masked_var, StorageClassWorkgroup);
+
+	if (threadgroup_storage && msl_options.multi_patch_workgroup)
+	{
+		// We need one threadgroup block per patch, so fake this.
+		entry_func.fixup_hooks_in.push_back([this, &masked_var]() {
+			auto &type = get_variable_data_type(masked_var);
+			add_local_variable_name(masked_var.self);
+
+			bool old_is_builtin = is_using_builtin_array;
+			is_using_builtin_array = true;
+
+			const uint32_t max_control_points_per_patch = 32u;
+			uint32_t max_num_instances =
+					(max_control_points_per_patch + get_entry_point().output_vertices - 1u) /
+					get_entry_point().output_vertices;
+			statement("threadgroup ", type_to_glsl(type), " ",
+			          "spvStorage", to_name(masked_var.self), "[", max_num_instances, "]",
+			          type_to_array_glsl(type), ";");
+
+			// Assign a threadgroup slice to each PrimitiveID.
+			// We assume here that workgroup size is rounded to 32,
+			// since that's the maximum number of control points per patch.
+			// We cannot size the array based on fixed dispatch parameters,
+			// since Metal does not allow that. :(
+			// FIXME: We will likely need an option to support passing down target workgroup size,
+			// so we can emit appropriate size here.
+			statement("threadgroup ", type_to_glsl(type), " ",
+			          "(&", to_name(masked_var.self), ")",
+			          type_to_array_glsl(type), " = spvStorage", to_name(masked_var.self), "[",
+			          "(", to_expression(builtin_invocation_id_id), ".x / ",
+			          get_entry_point().output_vertices, ") % ",
+			          max_num_instances, "];");
+
+			is_using_builtin_array = old_is_builtin;
+		});
+	}
+	else
+	{
+		entry_func.add_local_variable(masked_var.self);
+	}
+
+	if (!threadgroup_storage)
+	{
+		vars_needing_early_declaration.push_back(masked_var.self);
+	}
+	else if (masked_var.initializer)
+	{
+		// Cannot directly initialize threadgroup variables. Need fixup hooks.
+		ID initializer = masked_var.initializer;
+		if (strip_array)
+		{
+			entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+				auto invocation = to_tesc_invocation_id();
+				statement(to_expression(masked_var.self), "[",
+				          invocation, "] = ",
+				          to_expression(initializer), "[",
+				          invocation, "];");
+			});
+		}
+		else
+		{
+			entry_func.fixup_hooks_in.push_back([this, &masked_var, initializer]() {
+				statement(to_expression(masked_var.self), " = ", to_expression(initializer), ";");
+			});
+		}
+	}
+}
+
 void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const string &ib_var_ref, SPIRType &ib_type,
                                                   SPIRVariable &var, InterfaceBlockMeta &meta)
 {
@@ -2908,11 +3032,25 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 	auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
 	bool is_builtin = is_builtin_variable(var);
 	auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+	bool is_block = has_decoration(var_type.self, DecorationBlock);
+
+	// If stage variables are masked out, emit them as plain variables instead.
+	// For builtins, we query them one by one later.
+	// IO blocks are not masked here, we need to mask them per-member instead.
+	if (storage == StorageClassOutput && is_stage_output_variable_masked(var))
+	{
+		// If we ignore an output, we must still emit it, since it might be used by app.
+		// Instead, just emit it as early declaration.
+		emit_local_masked_variable(var, meta.strip_array);
+		return;
+	}
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		if (!is_builtin_type(var_type) && (!capture_output_to_buffer || storage == StorageClassInput) &&
-		    !meta.strip_array)
+		bool block_requires_flattening = variable_storage_requires_stage_io(storage) || is_block;
+		bool needs_local_declaration = !is_builtin && block_requires_flattening && meta.allow_local_declaration;
+
+		if (needs_local_declaration)
 		{
 			// For I/O blocks or structs, we will need to pass the block itself around
 			// to functions if they are used globally in leaf functions.
@@ -2920,11 +3058,10 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			// we unflatten I/O blocks while running the shader,
 			// and pass the actual struct type down to leaf functions.
 			// We then unflatten inputs, and flatten outputs in the "fixup" stages.
-			entry_func.add_local_variable(var.self);
-			vars_needing_early_declaration.push_back(var.self);
+			emit_local_masked_variable(var, meta.strip_array);
 		}
 
-		if (capture_output_to_buffer && storage != StorageClassInput && !has_decoration(var_type.self, DecorationBlock))
+		if (!block_requires_flattening)
 		{
 			// In Metal tessellation shaders, the interface block itself is arrayed. This makes things
 			// very complicated, since stage-in structures in MSL don't support nested structures.
@@ -2935,6 +3072,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		}
 		else
 		{
+			bool masked_block = false;
+
 			// Flatten the struct members into the interface struct
 			for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
 			{
@@ -2942,18 +3081,48 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 				is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
 				auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
 
-				if (!is_builtin || has_active_builtin(builtin, storage))
+				if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
+				{
+					if (is_block)
+						masked_block = true;
+
+					// Non-builtin block output variables are just ignored, since they will still access
+					// the block variable as-is. They're just not flattened.
+					if (is_builtin && !meta.strip_array)
+					{
+						// Emit a fake variable instead.
+						uint32_t ids = ir.increase_bound_by(2);
+						uint32_t ptr_type_id = ids + 0;
+						uint32_t var_id = ids + 1;
+
+						auto ptr_type = mbr_type;
+						ptr_type.pointer = true;
+						ptr_type.pointer_depth++;
+						ptr_type.parent_type = var_type.member_types[mbr_idx];
+						ptr_type.storage = StorageClassOutput;
+
+						uint32_t initializer = 0;
+						if (var.initializer)
+							if (auto *c = maybe_get<SPIRConstant>(var.initializer))
+								initializer = c->subconstants[mbr_idx];
+
+						set<SPIRType>(ptr_type_id, ptr_type);
+						set<SPIRVariable>(var_id, ptr_type_id, StorageClassOutput, initializer);
+						entry_func.add_local_variable(var_id);
+						vars_needing_early_declaration.push_back(var_id);
+						set_name(var_id, builtin_to_glsl(builtin, StorageClassOutput));
+						set_decoration(var_id, DecorationBuiltIn, builtin);
+					}
+				}
+				else if (!is_builtin || has_active_builtin(builtin, storage))
 				{
 					bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type);
 					bool attribute_load_store =
 					    storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
-					bool storage_is_stage_io =
-					    (storage == StorageClassInput && !(get_execution_model() == ExecutionModelTessellationControl &&
-					                                       msl_options.multi_patch_workgroup)) ||
-					    storage == StorageClassOutput;
+					bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 
-					// ClipDistance always needs to be declared as user attributes.
-					if (builtin == BuiltInClipDistance)
+					// Clip/CullDistance always need to be declared as user attributes.
+					if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
 						is_builtin = false;
 
 					if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
@@ -2966,6 +3135,29 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type, var, mbr_idx, meta);
 					}
 				}
+			}
+
+			// If we're redirecting a block, we might still need to access the original block
+			// variable if we're masking some members.
+			if (masked_block && !needs_local_declaration &&
+			    (!is_builtin_variable(var) || get_execution_model() == ExecutionModelTessellationControl))
+			{
+				if (is_builtin_variable(var))
+				{
+					// Ensure correct names for the block members if we're actually going to
+					// declare gl_PerVertex.
+					for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
+					{
+						set_member_name(var_type.self, mbr_idx, builtin_to_glsl(
+								BuiltIn(get_member_decoration(var_type.self, mbr_idx, DecorationBuiltIn)),
+								StorageClassOutput));
+					}
+
+					set_name(var_type.self, "gl_PerVertex");
+					set_name(var.self, "gl_out_masked");
+					stage_out_masked_builtin_type_id = var_type.self;
+				}
+				emit_local_masked_variable(var, meta.strip_array);
 			}
 		}
 	}
@@ -2980,14 +3172,11 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		if (!is_builtin || has_active_builtin(builtin, storage))
 		{
 			bool is_composite_type = is_matrix(var_type) || is_array(var_type);
-			bool storage_is_stage_io =
-			    (storage == StorageClassInput &&
-			     !(get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup)) ||
-			    (storage == StorageClassOutput && !capture_output_to_buffer);
+			bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 			bool attribute_load_store = storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 
-			// ClipDistance always needs to be declared as user attributes.
-			if (builtin == BuiltInClipDistance)
+			// Clip/CullDistance always needs to be declared as user attributes.
+			if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
 				is_builtin = false;
 
 			// MSL does not allow matrices or arrays in input or output variables, so need to handle it specially.
@@ -3025,10 +3214,16 @@ void CompilerMSL::fix_up_interface_member_indices(StorageClass storage, uint32_t
 		auto &var = get<SPIRVariable>(var_id);
 
 		auto &type = get_variable_element_type(var);
-		if (storage == StorageClassInput && type.basetype == SPIRType::Struct)
-		{
-			uint32_t mbr_idx = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
 
+		bool flatten_composites = variable_storage_requires_stage_io(var.storage);
+		bool is_block = has_decoration(type.self, DecorationBlock);
+
+		uint32_t mbr_idx = uint32_t(-1);
+		if (type.basetype == SPIRType::Struct && (flatten_composites || is_block))
+			mbr_idx = get_extended_member_decoration(ib_type_id, i, SPIRVCrossDecorationInterfaceMemberIndex);
+
+		if (mbr_idx != uint32_t(-1))
+		{
 			// Only set the lowest InterfaceMemberIndex for each variable member.
 			// IB struct members will be emitted in-order w.r.t. interface member index.
 			if (!has_extended_member_decoration(var_id, mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex))
@@ -3070,23 +3265,49 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_builtin = is_builtin_variable(var);
-		auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+		bool is_block = has_decoration(type.self, DecorationBlock);
+
+		auto bi_type = BuiltInMax;
+		bool builtin_is_gl_in_out = false;
+		if (is_builtin && !is_block)
+		{
+			bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+			builtin_is_gl_in_out = bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
+			                       bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance;
+		}
+
+		if (is_builtin && is_block)
+			builtin_is_gl_in_out = true;
+
 		uint32_t location = get_decoration(var_id, DecorationLocation);
+
+		bool builtin_is_stage_in_out = builtin_is_gl_in_out ||
+		                               bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
+		                               bi_type == BuiltInBaryCoordNV || bi_type == BuiltInBaryCoordNoPerspNV ||
+		                               bi_type == BuiltInFragDepth ||
+		                               bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask;
 
 		// These builtins are part of the stage in/out structs.
 		bool is_interface_block_builtin =
-		    (bi_type == BuiltInPosition || bi_type == BuiltInPointSize || bi_type == BuiltInClipDistance ||
-		     bi_type == BuiltInCullDistance || bi_type == BuiltInLayer || bi_type == BuiltInViewportIndex ||
-		     bi_type == BuiltInBaryCoordNV || bi_type == BuiltInBaryCoordNoPerspNV || bi_type == BuiltInFragDepth ||
-		     bi_type == BuiltInFragStencilRefEXT || bi_type == BuiltInSampleMask) ||
-		    (get_execution_model() == ExecutionModelTessellationEvaluation &&
-		     (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
+				builtin_is_stage_in_out ||
+				(get_execution_model() == ExecutionModelTessellationEvaluation &&
+				 (bi_type == BuiltInTessLevelOuter || bi_type == BuiltInTessLevelInner));
 
 		bool is_active = interface_variable_exists_in_entry_point(var.self);
 		if (is_builtin && is_active)
 		{
 			// Only emit the builtin if it's active in this entry point. Interface variable list might lie.
-			is_active = has_active_builtin(bi_type, storage);
+			if (is_block)
+			{
+				// If any builtin is active, the block is active.
+				uint32_t mbr_cnt = uint32_t(type.member_types.size());
+				for (uint32_t i = 0; !is_active && i < mbr_cnt; i++)
+					is_active = has_active_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), storage);
+			}
+			else
+			{
+				is_active = has_active_builtin(bi_type, storage);
+			}
 		}
 
 		bool filter_patch_decoration = (has_decoration(var_id, DecorationPatch) || is_patch_block(type)) == patch;
@@ -3094,7 +3315,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		bool hidden = is_hidden_variable(var, incl_builtins);
 
 		// ClipDistance is never hidden, we need to emulate it when used as an input.
-		if (bi_type == BuiltInClipDistance)
+		if (bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance)
 			hidden = false;
 
 		// It's not enough to simply avoid marking fragment outputs if the pipeline won't
@@ -3329,7 +3550,11 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		     (get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput)) &&
 		    !patch;
 
+		// Fixing up flattened stores in TESC is impossible since the memory is group shared either via
+		// device (not masked) or threadgroup (masked) storage classes and it's race condition city.
 		meta.strip_array = strip_array;
+		meta.allow_local_declaration = !strip_array && !(get_execution_model() == ExecutionModelTessellationControl &&
+		                                                 storage == StorageClassOutput);
 		add_variable_to_interface_block(storage, ib_var_ref, ib_type, *p_var, meta);
 	}
 
@@ -3340,7 +3565,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		// the struct containing them is the correct size and layout.
 		for (auto &input : inputs_by_location)
 		{
-			if (is_msl_shader_input_used(input.first))
+			if (location_inputs_in_use.count(input.first) != 0)
 				continue;
 
 			// Create a fake variable to put at the location.
@@ -3382,18 +3607,18 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			auto &fake_var = set<SPIRVariable>(var_id, ptr_type_id, storage);
 			set_decoration(var_id, DecorationLocation, input.first);
 			meta.strip_array = true;
+			meta.allow_local_declaration = false;
 			add_variable_to_interface_block(storage, ib_var_ref, ib_type, fake_var, meta);
 		}
 	}
 
 	// Sort the members of the structure by their locations.
-	MemberSorter member_sorter(ib_type, ir.meta[ib_type_id], MemberSorter::Location);
+	MemberSorter member_sorter(ib_type, ir.meta[ib_type_id], MemberSorter::LocationThenBuiltInType);
 	member_sorter.sort();
 
 	// The member indices were saved to the original variables, but after the members
 	// were sorted, those indices are now likely incorrect. Fix those up now.
-	if (!patch)
-		fix_up_interface_member_indices(storage, ib_type_id);
+	fix_up_interface_member_indices(storage, ib_type_id);
 
 	// For patch inputs, add one more member, holding the array of control point data.
 	if (get_execution_model() == ExecutionModelTessellationEvaluation && storage == StorageClassInput && patch &&
@@ -3507,9 +3732,15 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 // Ensure that the type is compatible with the shader input.
 // If it is, simply return the given type ID.
 // Otherwise, create a new type, and return its ID.
-uint32_t CompilerMSL::ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components)
+uint32_t CompilerMSL::ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t num_components, bool strip_array)
 {
 	auto &type = get<SPIRType>(type_id);
+
+	uint32_t max_array_dimensions = strip_array ? 1 : 0;
+
+	// Struct and array types must match exactly.
+	if (type.basetype == SPIRType::Struct || type.array.size() > max_array_dimensions)
+		return type_id;
 
 	auto p_va = inputs_by_location.find(location);
 	if (p_va == end(inputs_by_location))
@@ -6407,6 +6638,10 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			if (patch_stage_in_var_id && get_patch_stage_in_struct_type().self == type_id)
 				is_declarable_struct = false;
 
+			// Special case. Declare builtin struct anyways if we need to emit a threadgroup version of it.
+			if (stage_out_masked_builtin_type_id == type_id)
+				is_declarable_struct = true;
+
 			// Align and emit declarable structs...but avoid declaring each more than once.
 			if (is_declarable_struct && declared_structs.count(type_id) == 0)
 			{
@@ -6452,15 +6687,21 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 	if (ptr_type.storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationEvaluation)
 		return false;
 
-	bool multi_patch_tess_ctl = get_execution_model() == ExecutionModelTessellationControl &&
-	                            msl_options.multi_patch_workgroup && ptr_type.storage == StorageClassInput;
-	bool flat_matrix = is_matrix(result_type) && ptr_type.storage == StorageClassInput && !multi_patch_tess_ctl;
-	bool flat_struct = result_type.basetype == SPIRType::Struct && ptr_type.storage == StorageClassInput;
-	bool flat_data_type = flat_matrix || is_array(result_type) || flat_struct;
-	if (!flat_data_type)
-		return false;
-
 	if (has_decoration(ptr, DecorationPatch))
+		return false;
+	bool ptr_is_io_variable = ir.ids[ptr].get_type() == TypeVariable;
+
+	bool flattened_io = variable_storage_requires_stage_io(ptr_type.storage);
+
+	bool flat_data_type = flattened_io &&
+	                      (is_matrix(result_type) || is_array(result_type) || result_type.basetype == SPIRType::Struct);
+
+	// Edge case, even with multi-patch workgroups, we still need to unroll load
+	// if we're loading control points directly.
+	if (ptr_is_io_variable && is_array(result_type))
+		flat_data_type = true;
+
+	if (!flat_data_type)
 		return false;
 
 	// Now, we must unflatten a composite type and take care of interleaving array access with gl_in/gl_out.
@@ -6470,12 +6711,31 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 	uint32_t interface_index = get_extended_decoration(ptr, SPIRVCrossDecorationInterfaceMemberIndex);
 	auto *var = maybe_get_backing_variable(ptr);
-	bool ptr_is_io_variable = ir.ids[ptr].get_type() == TypeVariable;
 	auto &expr_type = get_pointee_type(ptr_type.self);
 
 	const auto &iface_type = expression_type(stage_in_ptr_var_id);
 
-	if (result_type.array.size() > 2)
+	if (!flattened_io)
+	{
+		// Simplest case for multi-patch workgroups, just unroll array as-is.
+		if (interface_index == uint32_t(-1))
+			return false;
+
+		expr += type_to_glsl(result_type) + "({ ";
+		uint32_t num_control_points = to_array_size_literal(result_type, uint32_t(result_type.array.size()) - 1);
+
+		for (uint32_t i = 0; i < num_control_points; i++)
+		{
+			const uint32_t indices[2] = { i, interface_index };
+			AccessChainMeta meta;
+			expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
+			                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+			if (i + 1 < num_control_points)
+				expr += ", ";
+		}
+		expr += " })";
+	}
+	else if (result_type.array.size() > 2)
 	{
 		SPIRV_CROSS_THROW("Cannot load tessellation IO variables with more than 2 dimensions.");
 	}
@@ -6485,7 +6745,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			SPIRV_CROSS_THROW("Loading an array-of-array must be loaded directly from an IO variable.");
 		if (interface_index == uint32_t(-1))
 			SPIRV_CROSS_THROW("Interface index is unknown. Cannot continue.");
-		if (result_type.basetype == SPIRType::Struct || flat_matrix)
+		if (result_type.basetype == SPIRType::Struct || is_matrix(result_type))
 			SPIRV_CROSS_THROW("Cannot load array-of-array of composite type in tessellation IO.");
 
 		expr += type_to_glsl(result_type) + "({ ";
@@ -6499,44 +6759,19 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 			expr += type_to_glsl(sub_type) + "({ ";
 			interface_index = base_interface_index;
 			uint32_t array_size = to_array_size_literal(result_type, 0);
-			if (multi_patch_tess_ctl)
+			for (uint32_t j = 0; j < array_size; j++, interface_index++)
 			{
-				for (uint32_t j = 0; j < array_size; j++)
-				{
-					const uint32_t indices[3] = { i, interface_index, j };
+				const uint32_t indices[2] = { i, interface_index };
 
-					AccessChainMeta meta;
-					expr +=
-					    access_chain_internal(stage_in_ptr_var_id, indices, 3,
-					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-					// If the expression has more vector components than the result type, insert
-					// a swizzle. This shouldn't happen normally on valid SPIR-V, but it might
-					// happen if we replace the type of an input variable.
-					if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
-					    expr_type.vecsize > sub_type.vecsize)
-						expr += vector_swizzle(sub_type.vecsize, 0);
+				AccessChainMeta meta;
+				expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
+				                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+				if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
+					expr_type.vecsize > sub_type.vecsize)
+					expr += vector_swizzle(sub_type.vecsize, 0);
 
-					if (j + 1 < array_size)
-						expr += ", ";
-				}
-			}
-			else
-			{
-				for (uint32_t j = 0; j < array_size; j++, interface_index++)
-				{
-					const uint32_t indices[2] = { i, interface_index };
-
-					AccessChainMeta meta;
-					expr +=
-					    access_chain_internal(stage_in_ptr_var_id, indices, 2,
-					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-					if (!is_matrix(sub_type) && sub_type.basetype != SPIRType::Struct &&
-					    expr_type.vecsize > sub_type.vecsize)
-						expr += vector_swizzle(sub_type.vecsize, 0);
-
-					if (j + 1 < array_size)
-						expr += ", ";
-				}
+				if (j + 1 < array_size)
+					expr += ", ";
 			}
 			expr += " })";
 			if (i + 1 < num_control_points)
@@ -6544,7 +6779,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		}
 		expr += " })";
 	}
-	else if (flat_struct)
+	else if (result_type.basetype == SPIRType::Struct)
 	{
 		bool is_array_of_struct = is_array(result_type);
 		if (is_array_of_struct && !ptr_is_io_variable)
@@ -6577,7 +6812,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 
 				const auto &mbr_type = get<SPIRType>(struct_type.member_types[j]);
 				const auto &expr_mbr_type = get<SPIRType>(expr_type.member_types[j]);
-				if (is_matrix(mbr_type) && ptr_type.storage == StorageClassInput && !multi_patch_tess_ctl)
+				if (is_matrix(mbr_type) && ptr_type.storage == StorageClassInput)
 				{
 					expr += type_to_glsl(mbr_type) + "(";
 					for (uint32_t k = 0; k < mbr_type.columns; k++, interface_index++)
@@ -6587,8 +6822,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 							const uint32_t indices[2] = { i, interface_index };
 							AccessChainMeta meta;
 							expr += access_chain_internal(
-							    stage_in_ptr_var_id, indices, 2,
-							    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+									stage_in_ptr_var_id, indices, 2,
+									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 						}
 						else
 							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
@@ -6604,48 +6839,23 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 				{
 					expr += type_to_glsl(mbr_type) + "({ ";
 					uint32_t array_size = to_array_size_literal(mbr_type, 0);
-					if (multi_patch_tess_ctl)
+					for (uint32_t k = 0; k < array_size; k++, interface_index++)
 					{
-						for (uint32_t k = 0; k < array_size; k++)
+						if (is_array_of_struct)
 						{
-							if (is_array_of_struct)
-							{
-								const uint32_t indices[3] = { i, interface_index, k };
-								AccessChainMeta meta;
-								expr += access_chain_internal(
-								    stage_in_ptr_var_id, indices, 3,
-								    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-							}
-							else
-								expr += join(to_expression(ptr), ".", to_member_name(iface_type, interface_index), "[",
-								             k, "]");
-							if (expr_mbr_type.vecsize > mbr_type.vecsize)
-								expr += vector_swizzle(mbr_type.vecsize, 0);
-
-							if (k + 1 < array_size)
-								expr += ", ";
+							const uint32_t indices[2] = { i, interface_index };
+							AccessChainMeta meta;
+							expr += access_chain_internal(
+									stage_in_ptr_var_id, indices, 2,
+									ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 						}
-					}
-					else
-					{
-						for (uint32_t k = 0; k < array_size; k++, interface_index++)
-						{
-							if (is_array_of_struct)
-							{
-								const uint32_t indices[2] = { i, interface_index };
-								AccessChainMeta meta;
-								expr += access_chain_internal(
-								    stage_in_ptr_var_id, indices, 2,
-								    ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
-							}
-							else
-								expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
-							if (expr_mbr_type.vecsize > mbr_type.vecsize)
-								expr += vector_swizzle(mbr_type.vecsize, 0);
+						else
+							expr += to_expression(ptr) + "." + to_member_name(iface_type, interface_index);
+						if (expr_mbr_type.vecsize > mbr_type.vecsize)
+							expr += vector_swizzle(mbr_type.vecsize, 0);
 
-							if (k + 1 < array_size)
-								expr += ", ";
-						}
+						if (k + 1 < array_size)
+							expr += ", ";
 					}
 					expr += " })";
 				}
@@ -6675,7 +6885,7 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 		if (is_array_of_struct)
 			expr += " })";
 	}
-	else if (flat_matrix)
+	else if (is_matrix(result_type))
 	{
 		bool is_array_of_matrix = is_array(result_type);
 		if (is_array_of_matrix && !ptr_is_io_variable)
@@ -6701,9 +6911,8 @@ bool CompilerMSL::emit_tessellation_io_load(uint32_t result_type_id, uint32_t id
 					const uint32_t indices[2] = { i, interface_index };
 
 					AccessChainMeta meta;
-					expr +=
-					    access_chain_internal(stage_in_ptr_var_id, indices, 2,
-					                          ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
+					expr += access_chain_internal(stage_in_ptr_var_id, indices, 2,
+					                              ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_PTR_CHAIN_BIT, &meta);
 					if (expr_type.vecsize > result_type.vecsize)
 						expr += vector_swizzle(result_type.vecsize, 0);
 					if (j + 1 < result_type.columns)
@@ -6794,48 +7003,102 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	bool patch = false;
 	bool flat_data = false;
 	bool ptr_is_chain = false;
-	bool multi_patch = get_execution_model() == ExecutionModelTessellationControl && msl_options.multi_patch_workgroup;
+	bool flatten_composites = false;
+
+	bool is_block = false;
+
+	if (var)
+		is_block = has_decoration(get_variable_data_type(*var).self, DecorationBlock);
 
 	if (var)
 	{
+		flatten_composites = variable_storage_requires_stage_io(var->storage);
 		patch = has_decoration(ops[2], DecorationPatch) || is_patch_block(get_variable_data_type(*var));
 
 		// Should match strip_array in add_interface_block.
 		flat_data = var->storage == StorageClassInput ||
 		            (var->storage == StorageClassOutput && get_execution_model() == ExecutionModelTessellationControl);
 
+		// Patch inputs are treated as normal block IO variables, so they don't deal with this path at all.
+		if (patch && (!is_block || var->storage == StorageClassInput))
+			flat_data = false;
+
 		// We might have a chained access chain, where
 		// we first take the access chain to the control point, and then we chain into a member or something similar.
 		// In this case, we need to skip gl_in/gl_out remapping.
+		// Also, skip ptr chain for patches.
 		ptr_is_chain = var->self != ID(ops[2]);
 	}
 
-	BuiltIn bi_type = BuiltIn(get_decoration(ops[2], DecorationBuiltIn));
-	if (var && flat_data && !patch &&
-	    (!is_builtin_variable(*var) || bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
-	     bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance ||
-	     get_variable_data_type(*var).basetype == SPIRType::Struct))
+	bool builtin_variable = false;
+	bool variable_is_flat = false;
+
+	if (var && flat_data)
 	{
+		builtin_variable = is_builtin_variable(*var);
+
+		BuiltIn bi_type = BuiltInMax;
+		if (builtin_variable && !is_block)
+			bi_type = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
+
+		variable_is_flat = !builtin_variable || is_block ||
+		                   bi_type == BuiltInPosition || bi_type == BuiltInPointSize ||
+		                   bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance;
+	}
+
+	if (variable_is_flat)
+	{
+		// If output is masked, it is emitted as a "normal" variable, just go through normal code paths.
+		// Only check this for the first level of access chain.
+		// Dealing with this for partial access chains should be possible, but awkward.
+		if (var->storage == StorageClassOutput && !ptr_is_chain)
+		{
+			bool masked = false;
+			if (is_block)
+			{
+				uint32_t relevant_member_index = patch ? 3 : 4;
+				// FIXME: This won't work properly if the application first access chains into gl_out element,
+				// then access chains into the member. Super weird, but theoretically possible ...
+				if (length > relevant_member_index)
+				{
+					uint32_t mbr_idx = get<SPIRConstant>(ops[relevant_member_index]).scalar();
+					masked = is_stage_output_block_member_masked(*var, mbr_idx, true);
+				}
+			}
+			else if (var)
+				masked = is_stage_output_variable_masked(*var);
+
+			if (masked)
+				return false;
+		}
+
 		AccessChainMeta meta;
 		SmallVector<uint32_t> indices;
 		uint32_t next_id = ir.increase_bound_by(1);
 
 		indices.reserve(length - 3 + 1);
 
-		uint32_t first_non_array_index = ptr_is_chain ? 3 : 4;
-		VariableID stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
+		uint32_t first_non_array_index = (ptr_is_chain ? 3 : 4) - (patch ? 1 : 0);
+
+		VariableID stage_var_id;
+		if (patch)
+			stage_var_id = var->storage == StorageClassInput ? patch_stage_in_var_id : patch_stage_out_var_id;
+		else
+			stage_var_id = var->storage == StorageClassInput ? stage_in_ptr_var_id : stage_out_ptr_var_id;
+
 		VariableID ptr = ptr_is_chain ? VariableID(ops[2]) : stage_var_id;
-		if (!ptr_is_chain)
+		if (!ptr_is_chain && !patch)
 		{
 			// Index into gl_in/gl_out with first array index.
-			indices.push_back(ops[3]);
+			indices.push_back(ops[first_non_array_index - 1]);
 		}
 
 		auto &result_ptr_type = get<SPIRType>(ops[0]);
 
 		uint32_t const_mbr_id = next_id++;
-		uint32_t index = get_extended_decoration(var->self, SPIRVCrossDecorationInterfaceMemberIndex);
-		if (var->storage == StorageClassInput || has_decoration(get_variable_element_type(*var).self, DecorationBlock))
+		uint32_t index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
+
+		if (flatten_composites || is_block)
 		{
 			uint32_t i = first_non_array_index;
 			auto *type = &get_variable_element_type(*var);
@@ -6843,19 +7106,20 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			{
 				// Maybe this is a struct type in the input class, in which case
 				// we put it as a decoration on the corresponding member.
-				index = get_extended_member_decoration(var->self, get_constant(ops[first_non_array_index]).scalar(),
+				uint32_t mbr_idx = get_constant(ops[first_non_array_index]).scalar();
+				index = get_extended_member_decoration(var->self, mbr_idx,
 				                                       SPIRVCrossDecorationInterfaceMemberIndex);
 				assert(index != uint32_t(-1));
 				i++;
-				type = &get<SPIRType>(type->member_types[get_constant(ops[first_non_array_index]).scalar()]);
+				type = &get<SPIRType>(type->member_types[mbr_idx]);
 			}
 
 			// In this case, we're poking into flattened structures and arrays, so now we have to
 			// combine the following indices. If we encounter a non-constant index,
 			// we're hosed.
-			for (; i < length; ++i)
+			for (; flatten_composites && i < length; ++i)
 			{
-				if ((multi_patch || (!is_array(*type) && !is_matrix(*type))) && type->basetype != SPIRType::Struct)
+				if (!is_array(*type) && !is_matrix(*type) && type->basetype != SPIRType::Struct)
 					break;
 
 				auto *c = maybe_get<SPIRConstant>(ops[i]);
@@ -6866,7 +7130,16 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 				// We're in flattened space, so just increment the member index into IO block.
 				// We can only do this once in the current implementation, so either:
 				// Struct, Matrix or 1-dimensional array for a control point.
-				index += c->scalar();
+				if (type->basetype == SPIRType::Struct && var->storage == StorageClassOutput)
+				{
+					// Need to consider holes, since individual block members might be masked away.
+					uint32_t mbr_idx = c->scalar();
+					for (uint32_t j = 0; j < mbr_idx; j++)
+						if (!is_stage_output_block_member_masked(*var, j, true))
+							index++;
+				}
+				else
+					index += c->scalar();
 
 				if (type->parent_type)
 					type = &get<SPIRType>(type->parent_type);
@@ -6874,31 +7147,48 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 					type = &get<SPIRType>(type->member_types[c->scalar()]);
 			}
 
-			if ((!multi_patch && (is_matrix(result_ptr_type) || is_array(result_ptr_type))) ||
-			    result_ptr_type.basetype == SPIRType::Struct)
-			{
-				// We're not going to emit the actual member name, we let any further OpLoad take care of that.
-				// Tag the access chain with the member index we're referencing.
-				set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, index);
-			}
-			else
+			// We're not going to emit the actual member name, we let any further OpLoad take care of that.
+			// Tag the access chain with the member index we're referencing.
+			bool defer_access_chain = flatten_composites && (is_matrix(result_ptr_type) || is_array(result_ptr_type) ||
+			                                                 result_ptr_type.basetype == SPIRType::Struct);
+
+			if (!defer_access_chain)
 			{
 				// Access the appropriate member of gl_in/gl_out.
 				set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
 				indices.push_back(const_mbr_id);
 
+				// Member index is now irrelevant.
+				index = uint32_t(-1);
+
 				// Append any straggling access chain indices.
 				if (i < length)
 					indices.insert(indices.end(), ops + i, ops + length);
 			}
+			else
+			{
+				// We must have consumed the entire access chain if we're deferring it.
+				assert(i == length);
+			}
+
+			if (index != uint32_t(-1))
+				set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, index);
+			else
+				unset_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex);
 		}
 		else
 		{
-			assert(index != uint32_t(-1));
-			set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
-			indices.push_back(const_mbr_id);
+			if (index != uint32_t(-1))
+			{
+				set<SPIRConstant>(const_mbr_id, get_uint_type_id(), index, false);
+				indices.push_back(const_mbr_id);
+			}
 
-			indices.insert(indices.end(), ops + 4, ops + length);
+			// Member index is now irrelevant.
+			index = uint32_t(-1);
+			unset_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex);
+
+			indices.insert(indices.end(), ops + first_non_array_index, ops + length);
 		}
 
 		// We use the pointer to the base of the input/output array here,
@@ -6908,7 +7198,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		if (!ptr_is_chain)
 		{
 			// This is the start of an access chain, use ptr_chain to index into control point array.
-			e = access_chain(ptr, indices.data(), uint32_t(indices.size()), result_ptr_type, &meta, true);
+			e = access_chain(ptr, indices.data(), uint32_t(indices.size()), result_ptr_type, &meta, !patch);
 		}
 		else
 		{
@@ -6924,7 +7214,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			// First one is the gl_in/gl_out struct itself, then an index into that array.
 			// If we have traversed further, we use a normal access chain formulation.
 			auto *ptr_expr = maybe_get<SPIRExpression>(ptr);
-			if (ptr_expr && ptr_expr->implied_read_expressions.size() == 2)
+			if (flatten_composites && ptr_expr && ptr_expr->implied_read_expressions.size() == 2)
 			{
 				e = join(to_expression(ptr),
 				         access_chain_internal(stage_var_id, indices.data(), uint32_t(indices.size()),
@@ -7055,6 +7345,21 @@ void CompilerMSL::prepare_access_chain_for_scalar_access(std::string &expr, cons
 		// Further indexing should happen with packed rules (array index, not swizzle).
 		is_packed = true;
 	}
+}
+
+bool CompilerMSL::access_chain_needs_stage_io_builtin_translation(uint32_t base)
+{
+	auto *var = maybe_get_backing_variable(base);
+	if (!var || !is_tessellation_shader())
+		return true;
+
+	// We only need to rewrite builtin access chains when accessing flattened builtins like gl_ClipDistance_N.
+	// Avoid overriding it back to just gl_ClipDistance.
+	// This can only happen in scenarios where we cannot flatten/unflatten access chains, so, the only case
+	// where this triggers is evaluation shader inputs.
+	bool redirect_builtin = get_execution_model() == ExecutionModelTessellationEvaluation ?
+	                        var->storage == StorageClassOutput : false;
+	return redirect_builtin;
 }
 
 // Sets the interface member index for an access chain to a pull-model interpolant.
@@ -8092,20 +8397,46 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	flush_all_active_variables();
 }
 
-void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass lhs_storage,
-                                  StorageClass rhs_storage)
+static bool storage_class_array_is_thread(StorageClass storage)
+{
+	switch (storage)
+	{
+	case StorageClassInput:
+	case StorageClassOutput:
+	case StorageClassGeneric:
+	case StorageClassFunction:
+	case StorageClassPrivate:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+								  StorageClass lhs_storage, StorageClass rhs_storage)
 {
 	// Allow Metal to use the array<T> template to make arrays a value type.
 	// This, however, cannot be used for threadgroup address specifiers, so consider the custom array copy as fallback.
-	bool lhs_thread = (lhs_storage == StorageClassOutput || lhs_storage == StorageClassFunction ||
-	                   lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate);
-	bool rhs_thread = (rhs_storage == StorageClassInput || rhs_storage == StorageClassFunction ||
-	                   rhs_storage == StorageClassOutput ||
-	                   rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate);
+	bool lhs_is_thread_storage = storage_class_array_is_thread(lhs_storage);
+	bool rhs_is_thread_storage = storage_class_array_is_thread(rhs_storage);
+
+	bool lhs_is_array_template = lhs_is_thread_storage;
+	bool rhs_is_array_template = rhs_is_thread_storage;
+
+	// Special considerations for stage IO variables.
+	// If the variable is actually backed by non-user visible device storage, we use array templates for those.
+	auto *lhs_var = maybe_get_backing_variable(lhs_id);
+	if (lhs_var && lhs_storage == StorageClassStorageBuffer && storage_class_array_is_thread(lhs_var->storage))
+		lhs_is_array_template = true;
+
+	auto *rhs_var = maybe_get_backing_variable(rhs_id);
+	if (rhs_var && rhs_storage == StorageClassStorageBuffer && storage_class_array_is_thread(rhs_var->storage))
+		rhs_is_array_template = true;
 
 	// If threadgroup storage qualifiers are *not* used:
 	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
-	if (lhs_thread && rhs_thread && !using_builtin_array())
+	if (lhs_is_array_template && rhs_is_array_template && !using_builtin_array())
 	{
 		statement(lhs, " = ", to_expression(rhs_id), ";");
 	}
@@ -8147,15 +8478,15 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 			add_spv_func_and_recompile(SPVFuncImplArrayCopy);
 
 		const char *tag = nullptr;
-		if (lhs_thread && is_constant)
+		if (lhs_is_thread_storage && is_constant)
 			tag = "FromConstantToStack";
 		else if (lhs_storage == StorageClassWorkgroup && is_constant)
 			tag = "FromConstantToThreadGroup";
-		else if (lhs_thread && rhs_thread)
+		else if (lhs_is_thread_storage && rhs_is_thread_storage)
 			tag = "FromStackToStack";
-		else if (lhs_storage == StorageClassWorkgroup && rhs_thread)
+		else if (lhs_storage == StorageClassWorkgroup && rhs_is_thread_storage)
 			tag = "FromStackToThreadGroup";
-		else if (lhs_thread && rhs_storage == StorageClassWorkgroup)
+		else if (lhs_is_thread_storage && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToStack";
 		else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToThreadGroup";
@@ -8165,19 +8496,21 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 			tag = "FromConstantToDevice";
 		else if (lhs_storage == StorageClassStorageBuffer && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToDevice";
-		else if (lhs_storage == StorageClassStorageBuffer && rhs_thread)
+		else if (lhs_storage == StorageClassStorageBuffer && rhs_is_thread_storage)
 			tag = "FromStackToDevice";
 		else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassStorageBuffer)
 			tag = "FromDeviceToThreadGroup";
-		else if (lhs_thread && rhs_storage == StorageClassStorageBuffer)
+		else if (lhs_is_thread_storage && rhs_storage == StorageClassStorageBuffer)
 			tag = "FromDeviceToStack";
 		else
 			SPIRV_CROSS_THROW("Unknown storage class used for copying arrays.");
 
 		// Pass internal array of spvUnsafeArray<> into wrapper functions
-		if (lhs_thread && !msl_options.force_native_arrays)
+		if (lhs_is_array_template && rhs_is_array_template && !msl_options.force_native_arrays)
+			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".elements, ", to_expression(rhs_id), ".elements);");
+		if (lhs_is_array_template && !msl_options.force_native_arrays)
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".elements, ", to_expression(rhs_id), ");");
-		else if (rhs_thread && !msl_options.force_native_arrays)
+		else if (rhs_is_array_template && !msl_options.force_native_arrays)
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ".elements);");
 		else
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
@@ -8244,8 +8577,9 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	emit_array_copy(to_expression(id_lhs), id_rhs, get_expression_effective_storage_class(id_lhs),
-	                get_expression_effective_storage_class(id_rhs));
+	auto lhs_storage = get_expression_effective_storage_class(id_lhs);
+	auto rhs_storage = get_expression_effective_storage_class(id_rhs);
+	emit_array_copy(to_expression(id_lhs), id_lhs, id_rhs, lhs_storage, rhs_storage);
 	register_write(id_lhs);
 
 	return true;
@@ -8697,7 +9031,8 @@ void CompilerMSL::emit_interface_block(uint32_t ib_var_id)
 	{
 		auto &ib_var = get<SPIRVariable>(ib_var_id);
 		auto &ib_type = get_variable_data_type(ib_var);
-		assert(ib_type.basetype == SPIRType::Struct && !ib_type.member_types.empty());
+		//assert(ib_type.basetype == SPIRType::Struct && !ib_type.member_types.empty());
+		assert(ib_type.basetype == SPIRType::Struct);
 		emit_struct(ib_type);
 	}
 }
@@ -10091,8 +10426,10 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		// we need flat arrays, but if we're somehow declaring gl_PerVertex for constant array reasons, we want
 		// template array types to be declared.
 		bool is_ib_in_out =
-				((stage_out_var_id && get_stage_out_struct_type().self == type.self) ||
-				 (stage_in_var_id && get_stage_in_struct_type().self == type.self));
+				((stage_out_var_id && get_stage_out_struct_type().self == type.self &&
+				  variable_storage_requires_stage_io(StorageClassOutput)) ||
+				 (stage_in_var_id && get_stage_in_struct_type().self == type.self &&
+				  variable_storage_requires_stage_io(StorageClassInput)));
 		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
@@ -10214,8 +10551,14 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
 
 			case BuiltInClipDistance:
-				if (has_member_decoration(type.self, index, DecorationLocation))
-					return join(" [[user(clip", get_member_decoration(type.self, index, DecorationLocation), ")]]");
+				if (has_member_decoration(type.self, index, DecorationIndex))
+					return join(" [[user(clip", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+				else
+					return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
+
+			case BuiltInCullDistance:
+				if (has_member_decoration(type.self, index, DecorationIndex))
+					return join(" [[user(cull", get_member_decoration(type.self, index, DecorationIndex), ")]]");
 				else
 					return string(" [[") + builtin_qualifier(builtin) + "]]" + (mbr_type.array.empty() ? "" : " ");
 
@@ -10336,7 +10679,9 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 				break;
 
 			case BuiltInClipDistance:
-				return join(" [[user(clip", get_member_decoration(type.self, index, DecorationLocation), ")]]");
+				return join(" [[user(clip", get_member_decoration(type.self, index, DecorationIndex), ")]]");
+			case BuiltInCullDistance:
+				return join(" [[user(cull", get_member_decoration(type.self, index, DecorationIndex), ")]]");
 
 			default:
 				break;
@@ -10528,12 +10873,16 @@ uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(spv::BuiltIn
 	auto &mbr_type = get<SPIRType>(get<SPIRType>(type_id).member_types[index]);
 	uint32_t count = type_to_location_count(mbr_type);
 
-	// This should always be 1.
-	if (count != 1)
-		return k_unknown_location;
-
 	loc = 0;
-	while (location_inputs_in_use.count(loc) != 0)
+
+	const auto location_range_in_use = [this](uint32_t location, uint32_t location_count) -> bool {
+		for (uint32_t i = 0; i < location_count; i++)
+			if (location_inputs_in_use.count(location + i) != 0)
+				return true;
+		return false;
+	};
+
+	while (location_range_in_use(loc, count))
 		loc++;
 
 	set_member_decoration(type_id, index, DecorationLocation, loc);
@@ -10549,7 +10898,7 @@ uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(spv::BuiltIn
 	else
 		builtin_to_automatic_input_location[builtin] = loc;
 
-	mark_location_as_used_by_shader(loc, mbr_type, StorageClassInput);
+	mark_location_as_used_by_shader(loc, mbr_type, StorageClassInput, true);
 	return loc;
 }
 
@@ -10686,7 +11035,25 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 
 	case StorageClassOutput:
 		if (capture_output_to_buffer)
-			addr_space = "device";
+		{
+			if (var && type.storage == StorageClassOutput)
+			{
+				bool is_masked = is_stage_output_variable_masked(*var);
+
+				if (is_masked)
+				{
+					if (is_tessellation_shader())
+						addr_space = "threadgroup";
+					else
+						addr_space = "thread";
+				}
+				else if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
+					addr_space = "threadgroup";
+			}
+
+			if (!addr_space)
+				addr_space = "device";
+		}
 		break;
 
 	default:
@@ -12049,7 +12416,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &var = get<SPIRVariable>(arg.id);
 	auto &type = get_variable_data_type(var);
 	auto &var_type = get<SPIRType>(arg.type);
-	StorageClass storage = var_type.storage;
+	StorageClass type_storage = var_type.storage;
 	bool is_pointer = var_type.pointer;
 
 	// If we need to modify the name of the variable, make sure we use the original variable.
@@ -12084,17 +12451,41 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	string address_space = get_argument_address_space(var);
-	bool builtin = is_builtin_variable(var);
+	bool builtin = has_decoration(var.self, DecorationBuiltIn);
 	auto builtin_type = BuiltIn(get_decoration(arg.id, DecorationBuiltIn));
-	is_using_builtin_array = builtin;
+
 	if (address_space == "threadgroup")
 		is_using_builtin_array = true;
 
 	if (var.basevariable && (var.basevariable == stage_in_ptr_var_id || var.basevariable == stage_out_ptr_var_id))
 		decl = join(cv_qualifier, type_to_glsl(type, arg.id));
 	else if (builtin)
-		decl = join(cv_qualifier, builtin_type_decl(builtin_type, arg.id));
-	else if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) && is_array(type))
+	{
+		// Only use templated array for Clip/Cull distance when feasible.
+		// In other scenarios, we need need to override array length for tess levels (if used as outputs),
+		// or we need to emit the expected type for builtins (uint vs int).
+		auto storage = get<SPIRType>(var.basetype).storage;
+
+		if (storage == StorageClassInput &&
+		    (builtin_type == BuiltInTessLevelInner || builtin_type == BuiltInTessLevelOuter))
+		{
+			is_using_builtin_array = false;
+		}
+		else if (builtin_type != BuiltInClipDistance && builtin_type != BuiltInCullDistance)
+		{
+			is_using_builtin_array = true;
+		}
+
+		if (storage == StorageClassOutput && variable_storage_requires_stage_io(storage) &&
+		    !is_stage_output_builtin_masked(builtin_type))
+			is_using_builtin_array = true;
+
+		if (is_using_builtin_array)
+			decl = join(cv_qualifier, builtin_type_decl(builtin_type, arg.id));
+		else
+			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
+	}
+	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))
 	{
 		is_using_builtin_array = true;
 		decl += join(cv_qualifier, type_to_glsl(type, arg.id), "*");
@@ -12118,10 +12509,10 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
 	}
 
-	bool opaque_handle = storage == StorageClassUniformConstant;
+	bool opaque_handle = type_storage == StorageClassUniformConstant;
 
 	if (!builtin && !opaque_handle && !is_pointer &&
-	    (storage == StorageClassFunction || storage == StorageClassGeneric))
+	    (type_storage == StorageClassFunction || type_storage == StorageClassGeneric))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
 		if (msl_options.force_native_arrays && is_array(type))
@@ -12162,7 +12553,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		if (msl_options.argument_buffers)
 		{
 			uint32_t desc_set = get_decoration(name_id, DecorationDescriptorSet);
-			if ((storage == StorageClassUniform || storage == StorageClassStorageBuffer) &&
+			if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) &&
 			    descriptor_set_is_argument_buffer(desc_set))
 			{
 				// An awkward case where we need to emit *more* address space declarations (yay!).
@@ -12204,7 +12595,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		else
 		{
-			decl += " (&";
+			auto array_size_decl = type_to_array_glsl(type);
+			if (array_size_decl.empty())
+				decl += "& ";
+			else
+				decl += " (&";
+
 			const char *restrict_kw = to_restrict(name_id);
 			if (*restrict_kw)
 			{
@@ -12212,8 +12608,12 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += restrict_kw;
 			}
 			decl += to_expression(name_id);
-			decl += ")";
-			decl += type_to_array_glsl(type);
+
+			if (!array_size_decl.empty())
+			{
+				decl += ")";
+				decl += array_size_decl;
+			}
 		}
 	}
 	else if (!opaque_handle && (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
@@ -12658,8 +13058,10 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 {
 	string quals;
 
+	auto *var = maybe_get<SPIRVariable>(id);
 	auto &type = expression_type(id);
-	if (type.storage == StorageClassWorkgroup)
+
+	if (type.storage == StorageClassWorkgroup || (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup)))
 		quals += "threadgroup ";
 
 	return quals;
@@ -12840,18 +13242,55 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
-// Threadgroup arrays can't have a wrapper type
+bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const
+{
+	if (variable.storage == storage)
+		return true;
+
+	if (storage == StorageClassWorkgroup)
+	{
+		auto model = get_execution_model();
+
+		// Specially masked IO block variable.
+		// Normally, we will never access IO blocks directly here.
+		// The only scenario which that should occur is with a masked IO block.
+		if (model == ExecutionModelTessellationControl && variable.storage == StorageClassOutput &&
+		    has_decoration(get<SPIRType>(variable.basetype).self, DecorationBlock))
+		{
+			return true;
+		}
+
+		return variable.storage == StorageClassOutput &&
+		       model == ExecutionModelTessellationControl &&
+		       is_stage_output_variable_masked(variable);
+	}
+	else if (storage == StorageClassStorageBuffer)
+	{
+		// We won't be able to catch writes to control point outputs here since variable
+		// refers to a function local pointer.
+		// This is fine, as there cannot be concurrent writers to that memory anyways,
+		// so we just ignore that case.
+
+		return (variable.storage == StorageClassOutput || variable.storage == StorageClassInput) &&
+		       !variable_storage_requires_stage_io(variable.storage) &&
+		       (variable.storage != StorageClassOutput || !is_stage_output_variable_masked(variable));
+	}
+	else
+	{
+		return false;
+	}
+}
+
 std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 {
-	if (variable.storage == StorageClassWorkgroup)
-	{
+	bool old_is_using_builtin_array = is_using_builtin_array;
+
+	// Threadgroup arrays can't have a wrapper type.
+	if (variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
 		is_using_builtin_array = true;
-	}
+
 	std::string expr = CompilerGLSL::variable_decl(variable);
-	if (variable.storage == StorageClassWorkgroup)
-	{
-		is_using_builtin_array = false;
-	}
+	is_using_builtin_array = old_is_using_builtin_array;
 	return expr;
 }
 
@@ -13418,7 +13857,6 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
 	switch (builtin)
 	{
-
 	// Handle HLSL-style 0-based vertex/instance index.
 	// Override GLSL compiler strictness
 	case BuiltInVertexId:
@@ -13551,9 +13989,9 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInSampleMask:
 		if (get_execution_model() == ExecutionModelTessellationControl)
 			break;
-		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
+		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
+		    !is_stage_output_builtin_masked(builtin))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
-
 		break;
 
 	case BuiltInBaryCoordNV:
@@ -13841,6 +14279,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 
 	// Vertex function out
 	case BuiltInClipDistance:
+	case BuiltInCullDistance:
 		return "float";
 	case BuiltInPointSize:
 		return "float";
@@ -14684,30 +15123,23 @@ void CompilerMSL::MemberSorter::sort()
 	}
 }
 
-// Sort first by builtin status (put builtins at end), then by the sorting aspect.
 bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 {
 	auto &mbr_meta1 = meta.members[mbr_idx1];
 	auto &mbr_meta2 = meta.members[mbr_idx2];
-	if (mbr_meta1.builtin != mbr_meta2.builtin)
-		return mbr_meta2.builtin;
-	else
-		switch (sort_aspect)
-		{
-		case Location:
+
+	if (sort_aspect == LocationThenBuiltInType)
+	{
+		// Sort first by builtin status (put builtins at end), then by the sorting aspect.
+		if (mbr_meta1.builtin != mbr_meta2.builtin)
+			return mbr_meta2.builtin;
+		else if (mbr_meta1.builtin)
+			return mbr_meta1.builtin_type < mbr_meta2.builtin_type;
+		else
 			return mbr_meta1.location < mbr_meta2.location;
-		case LocationReverse:
-			return mbr_meta1.location > mbr_meta2.location;
-		case Offset:
-			return mbr_meta1.offset < mbr_meta2.offset;
-		case OffsetThenLocationReverse:
-			return (mbr_meta1.offset < mbr_meta2.offset) ||
-			       ((mbr_meta1.offset == mbr_meta2.offset) && (mbr_meta1.location > mbr_meta2.location));
-		case Alphabetical:
-			return mbr_meta1.alias < mbr_meta2.alias;
-		default:
-			return false;
-		}
+	}
+	else
+		return mbr_meta1.offset < mbr_meta2.offset;
 }
 
 CompilerMSL::MemberSorter::MemberSorter(SPIRType &t, Meta &m, SortAspect sa)

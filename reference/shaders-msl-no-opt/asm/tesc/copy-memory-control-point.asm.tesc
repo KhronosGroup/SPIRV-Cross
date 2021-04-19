@@ -72,7 +72,7 @@ void fork0_epilogue(thread const float4& _87, thread const float4& _88, thread c
 }
 
 static inline __attribute__((always_inline))
-void fork0(uint vForkInstanceId, device half (&gl_TessLevelOuter)[3], thread spvUnsafeArray<float4, 4> (&opc), constant cb1_struct& cb0_0, thread float4& v_48, thread float4& v_49, thread float4& v_50)
+void fork0(uint vForkInstanceId, device half (&gl_TessLevelOuter)[3], thread spvUnsafeArray<float4, 4>& opc, constant cb1_struct& cb0_0, thread float4& v_48, thread float4& v_49, thread float4& v_50)
 {
     float4 r0;
     r0.x = as_type<float>(vForkInstanceId);
@@ -90,7 +90,7 @@ void fork1_epilogue(thread const float4& _109, device half &gl_TessLevelInner)
 }
 
 static inline __attribute__((always_inline))
-void fork1(device half &gl_TessLevelInner, thread spvUnsafeArray<float4, 4> (&opc), constant cb1_struct& cb0_0, thread float4& v_56)
+void fork1(device half &gl_TessLevelInner, thread spvUnsafeArray<float4, 4>& opc, constant cb1_struct& cb0_0, thread float4& v_56)
 {
     opc[3u].x = cb0_0._m0[0u].x;
     v_56 = opc[3u];
