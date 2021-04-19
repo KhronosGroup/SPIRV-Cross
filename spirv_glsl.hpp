@@ -673,6 +673,7 @@ protected:
 	std::string access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count, AccessChainFlags flags,
 	                                  AccessChainMeta *meta);
 
+	spv::StorageClass get_expression_effective_storage_class(uint32_t ptr);
 	virtual bool access_chain_needs_stage_io_builtin_translation(uint32_t base);
 
 	virtual void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
@@ -739,8 +740,8 @@ protected:
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(VariableID image_id, VariableID samp_id);
 	virtual bool skip_argument(uint32_t id) const;
-	virtual void emit_array_copy(const std::string &lhs, uint32_t rhs_id, spv::StorageClass lhs_storage,
-	                             spv::StorageClass rhs_storage);
+	virtual void emit_array_copy(const std::string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+	                             spv::StorageClass lhs_storage, spv::StorageClass rhs_storage);
 	virtual void emit_block_hints(const SPIRBlock &block);
 	virtual std::string to_initializer_expression(const SPIRVariable &var);
 	virtual std::string to_zero_initialized_expression(uint32_t type_id);

@@ -8397,20 +8397,46 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	flush_all_active_variables();
 }
 
-void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass lhs_storage,
-                                  StorageClass rhs_storage)
+static bool storage_class_array_is_thread(StorageClass storage)
+{
+	switch (storage)
+	{
+	case StorageClassInput:
+	case StorageClassOutput:
+	case StorageClassGeneric:
+	case StorageClassFunction:
+	case StorageClassPrivate:
+		return true;
+
+	default:
+		return false;
+	}
+}
+
+void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+								  StorageClass lhs_storage, StorageClass rhs_storage)
 {
 	// Allow Metal to use the array<T> template to make arrays a value type.
 	// This, however, cannot be used for threadgroup address specifiers, so consider the custom array copy as fallback.
-	bool lhs_thread = (lhs_storage == StorageClassOutput || lhs_storage == StorageClassFunction ||
-	                   lhs_storage == StorageClassGeneric || lhs_storage == StorageClassPrivate);
-	bool rhs_thread = (rhs_storage == StorageClassInput || rhs_storage == StorageClassFunction ||
-	                   rhs_storage == StorageClassOutput ||
-	                   rhs_storage == StorageClassGeneric || rhs_storage == StorageClassPrivate);
+	bool lhs_is_thread_storage = storage_class_array_is_thread(lhs_storage);
+	bool rhs_is_thread_storage = storage_class_array_is_thread(rhs_storage);
+
+	bool lhs_is_array_template = lhs_is_thread_storage;
+	bool rhs_is_array_template = rhs_is_thread_storage;
+
+	// Special considerations for stage IO variables.
+	// If the variable is actually backed by non-user visible device storage, we use array templates for those.
+	auto *lhs_var = maybe_get_backing_variable(lhs_id);
+	if (lhs_var && lhs_storage == StorageClassStorageBuffer && storage_class_array_is_thread(lhs_var->storage))
+		lhs_is_array_template = true;
+
+	auto *rhs_var = maybe_get_backing_variable(rhs_id);
+	if (rhs_var && rhs_storage == StorageClassStorageBuffer && storage_class_array_is_thread(rhs_var->storage))
+		rhs_is_array_template = true;
 
 	// If threadgroup storage qualifiers are *not* used:
 	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
-	if (lhs_thread && rhs_thread && !using_builtin_array())
+	if (lhs_is_array_template && rhs_is_array_template && !using_builtin_array())
 	{
 		statement(lhs, " = ", to_expression(rhs_id), ";");
 	}
@@ -8452,15 +8478,15 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 			add_spv_func_and_recompile(SPVFuncImplArrayCopy);
 
 		const char *tag = nullptr;
-		if (lhs_thread && is_constant)
+		if (lhs_is_thread_storage && is_constant)
 			tag = "FromConstantToStack";
 		else if (lhs_storage == StorageClassWorkgroup && is_constant)
 			tag = "FromConstantToThreadGroup";
-		else if (lhs_thread && rhs_thread)
+		else if (lhs_is_thread_storage && rhs_is_thread_storage)
 			tag = "FromStackToStack";
-		else if (lhs_storage == StorageClassWorkgroup && rhs_thread)
+		else if (lhs_storage == StorageClassWorkgroup && rhs_is_thread_storage)
 			tag = "FromStackToThreadGroup";
-		else if (lhs_thread && rhs_storage == StorageClassWorkgroup)
+		else if (lhs_is_thread_storage && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToStack";
 		else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToThreadGroup";
@@ -8470,19 +8496,21 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageCla
 			tag = "FromConstantToDevice";
 		else if (lhs_storage == StorageClassStorageBuffer && rhs_storage == StorageClassWorkgroup)
 			tag = "FromThreadGroupToDevice";
-		else if (lhs_storage == StorageClassStorageBuffer && rhs_thread)
+		else if (lhs_storage == StorageClassStorageBuffer && rhs_is_thread_storage)
 			tag = "FromStackToDevice";
 		else if (lhs_storage == StorageClassWorkgroup && rhs_storage == StorageClassStorageBuffer)
 			tag = "FromDeviceToThreadGroup";
-		else if (lhs_thread && rhs_storage == StorageClassStorageBuffer)
+		else if (lhs_is_thread_storage && rhs_storage == StorageClassStorageBuffer)
 			tag = "FromDeviceToStack";
 		else
 			SPIRV_CROSS_THROW("Unknown storage class used for copying arrays.");
 
 		// Pass internal array of spvUnsafeArray<> into wrapper functions
-		if (lhs_thread && !msl_options.force_native_arrays)
+		if (lhs_is_array_template && rhs_is_array_template && !msl_options.force_native_arrays)
+			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".elements, ", to_expression(rhs_id), ".elements);");
+		if (lhs_is_array_template && !msl_options.force_native_arrays)
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ".elements, ", to_expression(rhs_id), ");");
-		else if (rhs_thread && !msl_options.force_native_arrays)
+		else if (rhs_is_array_template && !msl_options.force_native_arrays)
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ".elements);");
 		else
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
@@ -8549,8 +8577,9 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 	if (p_v_lhs)
 		flush_variable_declaration(p_v_lhs->self);
 
-	emit_array_copy(to_expression(id_lhs), id_rhs, get_expression_effective_storage_class(id_lhs),
-	                get_expression_effective_storage_class(id_rhs));
+	auto lhs_storage = get_expression_effective_storage_class(id_lhs);
+	auto rhs_storage = get_expression_effective_storage_class(id_rhs);
+	emit_array_copy(to_expression(id_lhs), id_lhs, id_rhs, lhs_storage, rhs_storage);
 	register_write(id_lhs);
 
 	return true;
@@ -13242,9 +13271,9 @@ bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable
 		// This is fine, as there cannot be concurrent writers to that memory anyways,
 		// so we just ignore that case.
 
-		return capture_output_to_buffer &&
-		       variable.storage == StorageClassOutput &&
-		       !is_stage_output_variable_masked(variable);
+		return (variable.storage == StorageClassOutput || variable.storage == StorageClassInput) &&
+		       !variable_storage_requires_stage_io(variable.storage) &&
+		       (variable.storage != StorageClassOutput || !is_stage_output_variable_masked(variable));
 	}
 	else
 	{

@@ -8661,12 +8661,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			bool ignore_potential_sliced_writes = false;
 			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
 			{
-				auto *var = maybe_get_backing_variable(base);
-				if (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
-					effective_storage = StorageClassWorkgroup;
-				else if (var && variable_decl_is_remapped_storage(*var, StorageClassStorageBuffer))
-					effective_storage = StorageClassStorageBuffer;
-				else if (expression_type(base).pointer)
+				if (expression_type(base).pointer)
 					effective_storage = get_expression_effective_storage_class(base);
 
 				// Special consideration for control points.
@@ -8674,6 +8669,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				// to consider scalar access chains here.
 				// Cleans up some cases where it's very painful to determine the accurate storage class
 				// since blocks can be partially masked ...
+				auto *var = maybe_get_backing_variable(base);
 				if (var && var->storage == StorageClassOutput &&
 				    get_execution_model() == ExecutionModelTessellationControl &&
 				    !has_decoration(var->self, DecorationPatch))
@@ -9911,7 +9907,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
+			emit_array_copy(to_expression(id), id, ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -14794,7 +14790,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				// The backend is responsible for setting this up, and redirection the return values as appropriate.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
-					emit_array_copy("spvReturnValue", block.return_value, StorageClassFunction,
+					emit_array_copy("spvReturnValue", 0, block.return_value, StorageClassFunction,
 					                get_expression_effective_storage_class(block.return_value));
 				}
 
@@ -15013,7 +15009,7 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }
 
-void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass, StorageClass)
+void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t, uint32_t rhs_id, StorageClass, StorageClass)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
 }
@@ -15922,4 +15918,34 @@ uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, 
 	}
 
 	return location;
+}
+
+StorageClass CompilerGLSL::get_expression_effective_storage_class(uint32_t ptr)
+{
+	auto *var = maybe_get_backing_variable(ptr);
+
+	// If the expression has been lowered to a temporary, we need to use the Generic storage class.
+	// We're looking for the effective storage class of a given expression.
+	// An access chain or forwarded OpLoads from such access chains
+	// will generally have the storage class of the underlying variable, but if the load was not forwarded
+	// we have lost any address space qualifiers.
+	bool forced_temporary = ir.ids[ptr].get_type() == TypeExpression && !get<SPIRExpression>(ptr).access_chain &&
+	                        (forced_temporaries.count(ptr) != 0 || forwarded_temporaries.count(ptr) == 0);
+
+	if (var && !forced_temporary)
+	{
+		if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
+			return StorageClassWorkgroup;
+		if (variable_decl_is_remapped_storage(*var, StorageClassStorageBuffer))
+			return StorageClassStorageBuffer;
+
+		// Normalize SSBOs to StorageBuffer here.
+		if (var->storage == StorageClassUniform &&
+		    has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			return StorageClassStorageBuffer;
+		else
+			return var->storage;
+	}
+	else
+		return expression_type(ptr).storage;
 }
