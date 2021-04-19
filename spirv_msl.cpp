@@ -67,6 +67,52 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 {
 	StageSetBinding tuple = { binding.stage, binding.desc_set, binding.binding };
 	resource_bindings[tuple] = { binding, false };
+
+	// If we might need to pad argument buffer members to positionally align
+	// arg buffer indexes, also maintain a lookup by argument buffer index.
+	if (msl_options.pad_argument_buffer_resources)
+	{
+		StageSetBinding arg_idx_tuple = { binding.stage, binding.desc_set, k_unknown_component };
+
+#define ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(rez) \
+	arg_idx_tuple.binding = binding.msl_##rez; \
+	resource_arg_buff_idx_to_binding_number[arg_idx_tuple] = binding.binding
+
+		switch (binding.basetype)
+		{
+		case SPIRType::Void:
+		case SPIRType::Boolean:
+		case SPIRType::SByte:
+		case SPIRType::UByte:
+		case SPIRType::Short:
+		case SPIRType::UShort:
+		case SPIRType::Int:
+		case SPIRType::UInt:
+		case SPIRType::Int64:
+		case SPIRType::UInt64:
+		case SPIRType::AtomicCounter:
+		case SPIRType::Half:
+		case SPIRType::Float:
+		case SPIRType::Double:
+			ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(buffer);
+			break;
+		case SPIRType::Image:
+			ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(texture);
+			break;
+		case SPIRType::Sampler:
+			ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(sampler);
+			break;
+		case SPIRType::SampledImage:
+			ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(texture);
+			ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP(sampler);
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unexpected argument buffer resource base type. When padding argument buffer elements, "
+			                  "all descriptor set resources must be supplied with a base type by the app.");
+			break;
+		}
+#undef ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP
+	}
 }
 
 void CompilerMSL::add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32_t index)
@@ -15094,10 +15140,67 @@ void CompilerMSL::analyze_argument_buffers()
 		});
 
 		uint32_t member_index = 0;
+		uint32_t next_arg_buff_index = 0;
 		for (auto &resource : resources)
 		{
 			auto &var = *resource.var;
 			auto &type = get_variable_data_type(var);
+
+			// If needed, synthesize and add padding members.
+			// member_index and next_arg_buff_index are incremented when padding members are added.
+			if (msl_options.pad_argument_buffer_resources)
+			{
+				while (resource.index > next_arg_buff_index)
+				{
+					auto &rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
+					switch (rez_bind.basetype)
+					{
+					case SPIRType::Void:
+					case SPIRType::Boolean:
+					case SPIRType::SByte:
+					case SPIRType::UByte:
+					case SPIRType::Short:
+					case SPIRType::UShort:
+					case SPIRType::Int:
+					case SPIRType::UInt:
+					case SPIRType::Int64:
+					case SPIRType::UInt64:
+					case SPIRType::AtomicCounter:
+					case SPIRType::Half:
+					case SPIRType::Float:
+					case SPIRType::Double:
+						add_argument_buffer_padding_buffer_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+						break;
+					case SPIRType::Image:
+						add_argument_buffer_padding_image_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+						break;
+					case SPIRType::Sampler:
+						add_argument_buffer_padding_sampler_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+						break;
+					case SPIRType::SampledImage:
+						if (next_arg_buff_index == rez_bind.msl_sampler)
+							add_argument_buffer_padding_sampler_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+						else
+							add_argument_buffer_padding_image_type(buffer_type, member_index, next_arg_buff_index, rez_bind);
+						break;
+					default:
+						break;
+					}
+				}
+
+				// Adjust the number of slots consumed by current member itself.
+				// If actual member is an array, allow runtime array resolution as well.
+				uint32_t elem_cnt = type.array.empty() ? 1 : to_array_size_literal(type);
+				if (elem_cnt == 0)
+					elem_cnt = get_resource_array_size(var.self);
+
+				// And if the member is a combined image sampler, it takes double the slots
+				if (type.basetype == SPIRType::SampledImage)
+					elem_cnt *= 2;
+
+				next_arg_buff_index += elem_cnt;
+			}
+
 			string mbr_name = ensure_valid_name(resource.name, "m");
 			if (resource.plane > 0)
 				mbr_name += join(plane_name_suffix, resource.plane);
@@ -15194,6 +15297,125 @@ void CompilerMSL::analyze_argument_buffers()
 			member_index++;
 		}
 	}
+}
+
+// Return the resource type of the app-provided resources for the descriptor set,
+// that matches the resource index of the argument buffer index.
+// This is a two-step lookup, first lookup the resource binding number from the argument buffer index,
+// then lookup the resource binding using the binding number.
+MSLResourceBinding &CompilerMSL::get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx)
+{
+	auto stage = get_entry_point().model;
+	StageSetBinding arg_idx_tuple = { stage, desc_set, arg_idx };
+	auto arg_itr = resource_arg_buff_idx_to_binding_number.find(arg_idx_tuple);
+	if (arg_itr != end(resource_arg_buff_idx_to_binding_number))
+	{
+		StageSetBinding bind_tuple = { stage, desc_set, arg_itr->second };
+		auto bind_itr = resource_bindings.find(bind_tuple);
+		if (bind_itr != end(resource_bindings))
+			return bind_itr->second.first;
+	}
+	SPIRV_CROSS_THROW("Argument buffer resource base type could not be determined. When padding argument buffer "
+	                  "elements, all descriptor set resources must be supplied with a base type by the app.");
+}
+
+// Adds an argument buffer padding argument buffer type as one or more members of the struct type at the member index.
+// Metal does not support arrays of buffers, so these are emitted as multiple struct members.
+void CompilerMSL::add_argument_buffer_padding_buffer_type(SPIRType &struct_type, uint32_t &mbr_idx,
+                                                          uint32_t &arg_buff_index, MSLResourceBinding &rez_bind)
+{
+	if (!argument_buffer_padding_buffer_type_id)
+	{
+		uint32_t buff_type_id = ir.increase_bound_by(2);
+		auto &buff_type = set<SPIRType>(buff_type_id);
+		buff_type.basetype = rez_bind.basetype;
+		buff_type.storage = StorageClassUniformConstant;
+
+		uint32_t ptr_type_id = buff_type_id + 1;
+		auto &ptr_type = set<SPIRType>(ptr_type_id);
+		ptr_type = buff_type;
+		ptr_type.pointer = true;
+		ptr_type.pointer_depth++;
+		ptr_type.parent_type = buff_type_id;
+
+		argument_buffer_padding_buffer_type_id = ptr_type_id;
+	}
+
+	for (uint32_t rez_idx = 0; rez_idx < rez_bind.count; rez_idx++)
+		add_argument_buffer_padding_type(argument_buffer_padding_buffer_type_id, struct_type, mbr_idx, arg_buff_index, 1);
+}
+
+// Adds an argument buffer padding argument image type as a member of the struct type at the member index.
+void CompilerMSL::add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx,
+                                                         uint32_t &arg_buff_index, MSLResourceBinding &rez_bind)
+{
+	if (!argument_buffer_padding_image_type_id)
+	{
+		uint32_t base_type_id = ir.increase_bound_by(2);
+		auto &base_type = set<SPIRType>(base_type_id);
+		base_type.basetype = SPIRType::Float;
+		base_type.width = 32;
+
+		uint32_t img_type_id = base_type_id + 1;
+		auto &img_type = set<SPIRType>(img_type_id);
+		img_type.basetype = SPIRType::Image;
+		img_type.storage = StorageClassUniformConstant;
+
+		img_type.image.type = base_type_id;
+		img_type.image.dim = Dim2D;
+		img_type.image.depth = false;
+		img_type.image.arrayed = false;
+		img_type.image.ms = false;
+		img_type.image.sampled = 1;
+		img_type.image.format = ImageFormatUnknown;
+		img_type.image.access = AccessQualifierMax;
+
+		argument_buffer_padding_image_type_id = img_type_id;
+	}
+
+	add_argument_buffer_padding_type(argument_buffer_padding_image_type_id, struct_type, mbr_idx, arg_buff_index, rez_bind.count);
+}
+
+// Adds an argument buffer padding argument sampler type as a member of the struct type at the member index.
+void CompilerMSL::add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx,
+                                                           uint32_t &arg_buff_index, MSLResourceBinding &rez_bind)
+{
+	if (!argument_buffer_padding_sampler_type_id)
+	{
+		uint32_t samp_type_id = ir.increase_bound_by(1);
+		auto &samp_type = set<SPIRType>(samp_type_id);
+		samp_type.basetype = SPIRType::Sampler;
+		samp_type.storage = StorageClassUniformConstant;
+
+		argument_buffer_padding_sampler_type_id = samp_type_id;
+	}
+
+	add_argument_buffer_padding_type(argument_buffer_padding_sampler_type_id, struct_type, mbr_idx, arg_buff_index, rez_bind.count);
+}
+
+// Adds the argument buffer padding argument type as a member of the struct type at the member index.
+// Advances both arg_buff_index and mbr_idx to next argument slots.
+void CompilerMSL::add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx,
+                                                   uint32_t &arg_buff_index, uint32_t count)
+{
+	uint32_t type_id = mbr_type_id;
+	if (count > 1)
+	{
+		uint32_t ary_type_id = ir.increase_bound_by(1);
+		auto &ary_type = set<SPIRType>(ary_type_id);
+		ary_type = get<SPIRType>(type_id);
+		ary_type.array.push_back(count);
+		ary_type.array_size_literal.push_back(true);
+		ary_type.parent_type = type_id;
+		type_id = ary_type_id;
+	}
+
+	set_member_name(struct_type.self, mbr_idx, join("_m", arg_buff_index, "_pad"));
+	set_extended_member_decoration(struct_type.self, mbr_idx, SPIRVCrossDecorationResourceIndexPrimary, arg_buff_index);
+	struct_type.member_types.push_back(type_id);
+
+	arg_buff_index += count;
+	mbr_idx++;
 }
 
 void CompilerMSL::activate_argument_buffer_resources()
