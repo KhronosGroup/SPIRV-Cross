@@ -12816,10 +12816,24 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 			res += "coherent ";
 		if (flags.get(DecorationRestrict))
 			res += "restrict ";
+
 		if (flags.get(DecorationNonWritable))
 			res += "readonly ";
+
+		bool formatted_load = type.image.format == ImageFormatUnknown;
 		if (flags.get(DecorationNonReadable))
+		{
 			res += "writeonly ";
+			formatted_load = false;
+		}
+
+		if (formatted_load)
+		{
+			if (!options.es)
+				require_extension_internal("GL_EXT_shader_image_load_formatted");
+			else
+				SPIRV_CROSS_THROW("Cannot use GL_EXT_shader_image_load_formatted in ESSL.");
+		}
 	}
 
 	res += to_precision_qualifiers_glsl(id);
