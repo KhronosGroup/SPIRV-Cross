@@ -15905,15 +15905,7 @@ uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, 
 		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
 			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
 
-		uint32_t location_count = 1;
-
-		if (mbr_type.columns > 1)
-			location_count = mbr_type.columns;
-
-		if (!mbr_type.array.empty())
-			for (uint32_t j = 0; j < uint32_t(mbr_type.array.size()); j++)
-				location_count *= to_array_size_literal(mbr_type, j);
-
+		uint32_t location_count = type_to_location_count(mbr_type);
 		location += location_count;
 	}
 
@@ -15948,4 +15940,26 @@ StorageClass CompilerGLSL::get_expression_effective_storage_class(uint32_t ptr)
 	}
 	else
 		return expression_type(ptr).storage;
+}
+
+uint32_t CompilerGLSL::type_to_location_count(const SPIRType &type) const
+{
+	uint32_t count;
+	if (type.basetype == SPIRType::Struct)
+	{
+		uint32_t mbr_count = uint32_t(type.member_types.size());
+		count = 0;
+		for (uint32_t i = 0; i < mbr_count; i++)
+			count += type_to_location_count(get<SPIRType>(type.member_types[i]));
+	}
+	else
+	{
+		count = type.columns > 1 ? type.columns : 1;
+	}
+
+	uint32_t dim_count = uint32_t(type.array.size());
+	for (uint32_t i = 0; i < dim_count; i++)
+		count *= to_array_size_literal(type, i);
+
+	return count;
 }
