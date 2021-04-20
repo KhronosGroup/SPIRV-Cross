@@ -8323,6 +8323,13 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		require_extension_internal("GL_EXT_device_group");
 		return "gl_DeviceIndex";
 
+	case BuiltInFullyCoveredEXT:
+		if (!options.es)
+			require_extension_internal("GL_NV_conservative_raster_underestimation");
+		else
+			SPIRV_CROSS_THROW("Need desktop GL to use GL_NV_conservative_raster_underestimation.");
+		return "gl_FragFullyCoveredNV";
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
