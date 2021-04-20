@@ -8317,6 +8317,22 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("Stencil export not supported in GLES.");
 	}
 
+	case BuiltInPrimitiveShadingRateKHR:
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Can only use PrimitiveShadingRateKHR in Vulkan GLSL.");
+		require_extension_internal("GL_EXT_fragment_shading_rate");
+		return "gl_PrimitiveShadingRateEXT";
+	}
+
+	case BuiltInShadingRateKHR:
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Can only use ShadingRateKHR in Vulkan GLSL.");
+		require_extension_internal("GL_EXT_fragment_shading_rate");
+		return "gl_ShadingRateEXT";
+	}
+
 	case BuiltInDeviceIndex:
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Need Vulkan semantics for device group support.");
@@ -15170,6 +15186,8 @@ void CompilerGLSL::cast_from_builtin_load(uint32_t source_id, std::string &expr,
 	case BuiltInFragStencilRefEXT:
 	case BuiltInInstanceCustomIndexNV:
 	case BuiltInSampleMask:
+	case BuiltInPrimitiveShadingRateKHR:
+	case BuiltInShadingRateKHR:
 		expected_type = SPIRType::Int;
 		break;
 
@@ -15214,6 +15232,8 @@ void CompilerGLSL::cast_to_builtin_store(uint32_t target_id, std::string &expr, 
 	case BuiltInViewportIndex:
 	case BuiltInFragStencilRefEXT:
 	case BuiltInSampleMask:
+	case BuiltInPrimitiveShadingRateKHR:
+	case BuiltInShadingRateKHR:
 		expected_type = SPIRType::Int;
 		break;
 
