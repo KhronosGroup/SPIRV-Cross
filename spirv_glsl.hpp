@@ -756,6 +756,7 @@ protected:
 	uint32_t type_to_packed_alignment(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing);
 	uint32_t type_to_packed_array_stride(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing);
 	uint32_t type_to_packed_size(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing);
+	uint32_t type_to_location_count(const SPIRType &type) const;
 
 	std::string bitcast_glsl(const SPIRType &result_type, uint32_t arg);
 	virtual std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type);

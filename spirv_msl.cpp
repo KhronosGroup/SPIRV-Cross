@@ -1914,28 +1914,6 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 	}
 }
 
-uint32_t CompilerMSL::type_to_location_count(const SPIRType &type) const
-{
-	uint32_t count;
-	if (type.basetype == SPIRType::Struct)
-	{
-		uint32_t mbr_count = uint32_t(type.member_types.size());
-		count = 0;
-		for (uint32_t i = 0; i < mbr_count; i++)
-			count += type_to_location_count(get<SPIRType>(type.member_types[i]));
-	}
-	else
-	{
-		count = type.columns > 1 ? type.columns : 1;
-	}
-
-	uint32_t dim_count = uint32_t(type.array.size());
-	for (uint32_t i = 0; i < dim_count; i++)
-		count *= to_array_size_literal(type, i);
-
-	return count;
-}
-
 // If a shader input exists at the location, it is marked as being used by this shader
 void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
                                                   StorageClass storage, bool fallback)
