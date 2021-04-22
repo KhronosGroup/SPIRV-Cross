@@ -628,6 +628,8 @@ protected:
 	void emit_trinary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
 	                          const char *op);
 	void emit_binary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
+	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2, const char *op);
 
 	void emit_unary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op,
 	                             SPIRType::BaseType input_type, SPIRType::BaseType expected_result_type);
@@ -706,6 +708,7 @@ protected:
 	void emit_uninitialized_temporary(uint32_t type, uint32_t id);
 	SPIRExpression &emit_uninitialized_temporary_expression(uint32_t type, uint32_t id);
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist);
+	std::string to_non_uniform_aware_expression(uint32_t id);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_composite_constructor_expression(uint32_t id, bool uses_buffer_offset);
 	std::string to_rerolled_array_expression(const std::string &expr, const SPIRType &type);
@@ -897,7 +900,7 @@ protected:
 	virtual void cast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type);
 	void unroll_array_from_complex_load(uint32_t target_id, uint32_t source_id, std::string &expr);
 	bool unroll_array_to_complex_store(uint32_t target_id, uint32_t source_id);
-	void convert_non_uniform_expression(const SPIRType &type, std::string &expr);
+	void convert_non_uniform_expression(std::string &expr, uint32_t ptr_id);
 
 	void handle_store_to_invariant_variable(uint32_t store_id, uint32_t value_id);
 	void disallow_forwarding_in_expression_chain(const SPIRExpression &expr);
@@ -915,8 +918,6 @@ protected:
 
 	void fixup_type_alias();
 	void reorder_type_alias();
-
-	void propagate_nonuniform_qualifier(uint32_t id);
 
 	static const char *vector_swizzle(int vecsize, int index);
 
