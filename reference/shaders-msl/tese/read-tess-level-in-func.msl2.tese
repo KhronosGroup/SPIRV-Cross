@@ -55,19 +55,21 @@ struct main0_patchIn
 };
 
 static inline __attribute__((always_inline))
-float4 read_tess_levels(thread spvUnsafeArray<float, 4>& gl_TessLevelOuter)
+float4 read_tess_levels(thread spvUnsafeArray<float, 4>& gl_TessLevelOuter, thread spvUnsafeArray<float, 2>& gl_TessLevelInner)
 {
-    return float4(gl_TessLevelOuter[0], gl_TessLevelOuter[1], gl_TessLevelOuter[2], gl_TessLevelOuter[3]);
+    return float4(gl_TessLevelOuter[0], gl_TessLevelOuter[1], gl_TessLevelOuter[2], gl_TessLevelOuter[3]) + float2(gl_TessLevelInner[0], gl_TessLevelInner[1]).xyxy;
 }
 
 [[ patch(triangle, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]])
 {
     main0_out out = {};
     spvUnsafeArray<float, 4> gl_TessLevelOuter = {};
+    spvUnsafeArray<float, 2> gl_TessLevelInner = {};
     gl_TessLevelOuter[0] = patchIn.gl_TessLevel.x;
     gl_TessLevelOuter[1] = patchIn.gl_TessLevel.y;
     gl_TessLevelOuter[2] = patchIn.gl_TessLevel.z;
-    out.gl_Position = read_tess_levels(gl_TessLevelOuter);
+    gl_TessLevelInner[0] = patchIn.gl_TessLevel.w;
+    out.gl_Position = read_tess_levels(gl_TessLevelOuter, gl_TessLevelInner);
     return out;
 }
 
