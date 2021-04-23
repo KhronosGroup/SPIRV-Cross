@@ -21,6 +21,10 @@ void comp_main()
     float3 first = WaveReadLaneFirst(20.0f.xxx);
     uint4 ballot_value = WaveActiveBallot(true);
     uint bit_count = countbits(ballot_value.x) + countbits(ballot_value.y) + countbits(ballot_value.z) + countbits(ballot_value.w);
+    uint shuffled = WaveReadLaneAt(10u, 8u);
+    uint shuffled_xor = WaveReadLaneAt(30u, WaveGetLaneIndex() ^ 8u);
+    uint shuffled_up = WaveReadLaneAt(20u, WaveGetLaneIndex() - 4u);
+    uint shuffled_down = WaveReadLaneAt(20u, WaveGetLaneIndex() + 4u);
     bool has_all = WaveActiveAllTrue(true);
     bool has_any = WaveActiveAnyTrue(true);
     bool has_equal = WaveActiveAllEqual(true);

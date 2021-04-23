@@ -4612,13 +4612,35 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	}
 
 	case OpGroupNonUniformShuffle:
-		SPIRV_CROSS_THROW("Cannot trivially implement Shuffle in HLSL.");
+		emit_binary_func_op(result_type, id, ops[3], ops[4], "WaveReadLaneAt");
+		break;
 	case OpGroupNonUniformShuffleXor:
-		SPIRV_CROSS_THROW("Cannot trivially implement ShuffleXor in HLSL.");
+	{
+		bool forward = should_forward(ops[3]);
+		emit_op(ops[0], ops[1],
+		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+		             "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"), forward);
+		inherit_expression_dependencies(ops[1], ops[3]);
+		break;
+	}
 	case OpGroupNonUniformShuffleUp:
-		SPIRV_CROSS_THROW("Cannot trivially implement ShuffleUp in HLSL.");
+	{
+		bool forward = should_forward(ops[3]);
+		emit_op(ops[0], ops[1],
+		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+		             "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"), forward);
+		inherit_expression_dependencies(ops[1], ops[3]);
+		break;
+	}
 	case OpGroupNonUniformShuffleDown:
-		SPIRV_CROSS_THROW("Cannot trivially implement ShuffleDown in HLSL.");
+	{
+		bool forward = should_forward(ops[3]);
+		emit_op(ops[0], ops[1],
+		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+		             "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"), forward);
+		inherit_expression_dependencies(ops[1], ops[3]);
+		break;
+	}
 
 	case OpGroupNonUniformAll:
 		emit_unary_func_op(result_type, id, ops[3], "WaveActiveAllTrue");
