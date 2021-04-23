@@ -1,5 +1,5 @@
 #version 450
-layout(triangles) in;
+layout(quads) in;
 
 vec4 read_tess_levels()
 {

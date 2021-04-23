@@ -2797,100 +2797,19 @@ void CompilerMSL::add_tess_level_input_to_interface_block(const std::string &ib_
 	BuiltIn builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
 
 	// Force the variable to have the proper name.
-	set_name(var.self, builtin_to_glsl(builtin, StorageClassFunction));
+	string var_name = builtin_to_glsl(builtin, StorageClassFunction);
+	set_name(var.self, var_name);
 
-	if (get_execution_mode_bitset().get(ExecutionModeTriangles))
-	{
-		// Triangles are tricky, because we want only one member in the struct.
+	// We need to declare the variable early and at entry-point scope.
+	entry_func.add_local_variable(var.self);
+	vars_needing_early_declaration.push_back(var.self);
+	bool triangles = get_execution_mode_bitset().get(ExecutionModeTriangles);
+	string mbr_name;
 
-		// We need to declare the variable early and at entry-point scope.
-		entry_func.add_local_variable(var.self);
-		vars_needing_early_declaration.push_back(var.self);
+	// Add a reference to the variable type to the interface struct.
+	uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 
-		string mbr_name = "gl_TessLevel";
-
-		// If we already added the other one, we can skip this step.
-		if (!added_builtin_tess_level)
-		{
-			// Add a reference to the variable type to the interface struct.
-			uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-
-			uint32_t type_id = build_extended_vector_type(var_type.self, 4);
-
-			ib_type.member_types.push_back(type_id);
-
-			// Give the member a name
-			set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-
-			// We cannot decorate both, but the important part is that
-			// it's marked as builtin so we can get automatic attribute assignment if needed.
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
-
-			// There is no qualified alias since we need to flatten the internal array on return.
-			if (get_decoration_bitset(var.self).get(DecorationLocation))
-			{
-				uint32_t locn = get_decoration(var.self, DecorationLocation);
-				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
-				mark_location_as_used_by_shader(locn, var_type, StorageClassInput);
-			}
-			else if (inputs_by_builtin.count(builtin))
-			{
-				uint32_t locn = inputs_by_builtin[builtin].location;
-				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
-				mark_location_as_used_by_shader(locn, var_type, StorageClassInput);
-			}
-
-			added_builtin_tess_level = true;
-		}
-
-		switch (builtin)
-		{
-		case BuiltInTessLevelOuter:
-			entry_func.fixup_hooks_in.push_back([=, &var]() {
-				statement(to_name(var.self), "[0] = ", ib_var_ref, ".", mbr_name, ".x;");
-				statement(to_name(var.self), "[1] = ", ib_var_ref, ".", mbr_name, ".y;");
-				statement(to_name(var.self), "[2] = ", ib_var_ref, ".", mbr_name, ".z;");
-			});
-			break;
-
-		case BuiltInTessLevelInner:
-			entry_func.fixup_hooks_in.push_back(
-			    [=, &var]() { statement(to_name(var.self), "[0] = ", ib_var_ref, ".", mbr_name, ".w;"); });
-			break;
-
-		default:
-			assert(false);
-			break;
-		}
-	}
-	else
-	{
-		// Add a reference to the variable type to the interface struct.
-		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-
-		uint32_t type_id = build_extended_vector_type(var_type.self, builtin == BuiltInTessLevelOuter ? 4 : 2);
-		// Change the type of the variable, too.
-		uint32_t ptr_type_id = ir.increase_bound_by(1);
-		auto &new_var_type = set<SPIRType>(ptr_type_id, get<SPIRType>(type_id));
-		new_var_type.pointer = true;
-		new_var_type.pointer_depth++;
-		new_var_type.storage = StorageClassInput;
-		new_var_type.parent_type = type_id;
-		var.basetype = ptr_type_id;
-
-		ib_type.member_types.push_back(type_id);
-
-		// Give the member a name
-		string mbr_name = to_expression(var.self);
-		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
-
-		// Since vectors can be indexed like arrays, there is no need to unpack this. We can
-		// just refer to the vector directly. So give it a qualified alias.
-		string qual_var_name = ib_var_ref + "." + mbr_name;
-		ir.meta[var.self].decoration.qualified_alias = qual_var_name;
-
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
-
+	const auto mark_locations = [&](const SPIRType &new_var_type) {
 		if (get_decoration_bitset(var.self).get(DecorationLocation))
 		{
 			uint32_t locn = get_decoration(var.self, DecorationLocation);
@@ -2903,6 +2822,76 @@ void CompilerMSL::add_tess_level_input_to_interface_block(const std::string &ib_
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, new_var_type, StorageClassInput);
 		}
+	};
+
+	if (triangles)
+	{
+		// Triangles are tricky, because we want only one member in the struct.
+		mbr_name = "gl_TessLevel";
+
+		// If we already added the other one, we can skip this step.
+		if (!added_builtin_tess_level)
+		{
+			uint32_t type_id = build_extended_vector_type(var_type.self, 4);
+
+			ib_type.member_types.push_back(type_id);
+
+			// Give the member a name
+			set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
+
+			// We cannot decorate both, but the important part is that
+			// it's marked as builtin so we can get automatic attribute assignment if needed.
+			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+
+			mark_locations(var_type);
+			added_builtin_tess_level = true;
+		}
+	}
+	else
+	{
+		mbr_name = var_name;
+
+		uint32_t type_id = build_extended_vector_type(var_type.self, builtin == BuiltInTessLevelOuter ? 4 : 2);
+
+		uint32_t ptr_type_id = ir.increase_bound_by(1);
+		auto &new_var_type = set<SPIRType>(ptr_type_id, get<SPIRType>(type_id));
+		new_var_type.pointer = true;
+		new_var_type.pointer_depth++;
+		new_var_type.storage = StorageClassInput;
+		new_var_type.parent_type = type_id;
+
+		ib_type.member_types.push_back(type_id);
+
+		// Give the member a name
+		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationBuiltIn, builtin);
+
+		mark_locations(new_var_type);
+	}
+
+	if (builtin == BuiltInTessLevelOuter)
+	{
+		entry_func.fixup_hooks_in.push_back([=]() {
+			statement(var_name, "[0] = ", ib_var_ref, ".", mbr_name, ".x;");
+			statement(var_name, "[1] = ", ib_var_ref, ".", mbr_name, ".y;");
+			statement(var_name, "[2] = ", ib_var_ref, ".", mbr_name, ".z;");
+			if (!triangles)
+				statement(var_name, "[3] = ", ib_var_ref, ".", mbr_name, ".w;");
+		});
+	}
+	else
+	{
+		entry_func.fixup_hooks_in.push_back([=]() {
+			if (triangles)
+			{
+				statement(var_name, "[0] = ", ib_var_ref, ".", mbr_name, ".w;");
+			}
+			else
+			{
+				statement(var_name, "[0] = ", ib_var_ref, ".", mbr_name, ".x;");
+				statement(var_name, "[1] = ", ib_var_ref, ".", mbr_name, ".y;");
+			}
+		});
 	}
 }
 
@@ -13979,31 +13968,21 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		break;
 
 	case BuiltInTessLevelOuter:
-		if (get_execution_model() == ExecutionModelTessellationEvaluation)
+		if (get_execution_model() == ExecutionModelTessellationControl &&
+		    storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
 		{
-			if (storage != StorageClassOutput && !get_entry_point().flags.get(ExecutionModeTriangles) &&
-			    current_function && (current_function->self == ir.default_entry_point))
-				return join(patch_stage_in_var_name, ".", CompilerGLSL::builtin_to_glsl(builtin, storage));
-			else
-				break;
-		}
-		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
 			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
 			            "].edgeTessellationFactor");
+		}
 		break;
 
 	case BuiltInTessLevelInner:
-		if (get_execution_model() == ExecutionModelTessellationEvaluation)
+		if (get_execution_model() == ExecutionModelTessellationControl &&
+		    storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
 		{
-			if (storage != StorageClassOutput && !get_entry_point().flags.get(ExecutionModeTriangles) &&
-			    current_function && (current_function->self == ir.default_entry_point))
-				return join(patch_stage_in_var_name, ".", CompilerGLSL::builtin_to_glsl(builtin, storage));
-			else
-				break;
-		}
-		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point))
 			return join(tess_factor_buffer_var_name, "[", to_expression(builtin_primitive_id_id),
 			            "].insideTessellationFactor");
+		}
 		break;
 
 	default:
