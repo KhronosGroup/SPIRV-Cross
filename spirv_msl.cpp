@@ -3462,17 +3462,17 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					{
 						entry_func.fixup_hooks_in.push_back([=]() {
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
-							          " = ", patch_output_buffer_var_name, "[", to_expression(builtin_invocation_id_id),
-							          ".x / ", get_entry_point().output_vertices, "];");
+							          " = ", patch_output_buffer_var_name, "[min(", to_expression(builtin_invocation_id_id),
+							          ".x / ", get_entry_point().output_vertices, ", spvIndirectParams[1] - 1)];");
 						});
 					}
 					else
 					{
 						entry_func.fixup_hooks_in.push_back([=]() {
+							uint32_t output_vertices = get_entry_point().output_vertices;
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "* gl_out = &",
-							          output_buffer_var_name, "[", to_expression(builtin_invocation_id_id), ".x - ",
-							          to_expression(builtin_invocation_id_id), ".x % ",
-							          get_entry_point().output_vertices, "];");
+							          output_buffer_var_name, "[min(", to_expression(builtin_invocation_id_id), ".x / ",
+							          output_vertices, ", ", "spvIndirectParams[1] - 1) * ", output_vertices, "];");
 						});
 					}
 				}
@@ -11796,7 +11796,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = min(",
 					          to_expression(builtin_invocation_id_id), ".x / ", this->get_entry_point().output_vertices,
-					          ", spvIndirectParams[1]);");
+					          ", spvIndirectParams[1] - 1);");
 				});
 				break;
 			case BuiltInPatchVertices:
