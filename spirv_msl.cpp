@@ -15583,10 +15583,6 @@ void CompilerMSL::analyze_argument_buffers()
 				if (elem_cnt == 0)
 					elem_cnt = get_resource_array_size(var.self);
 
-				// And if the member is a combined image sampler, it takes double the slots
-				if (type.basetype == SPIRType::SampledImage)
-					elem_cnt *= 2;
-
 				next_arg_buff_index += elem_cnt;
 			}
 
