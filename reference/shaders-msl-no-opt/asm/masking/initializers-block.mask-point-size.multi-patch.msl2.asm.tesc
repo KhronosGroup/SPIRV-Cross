@@ -83,7 +83,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     spvUnsafeArray<C, 4> _18 = spvUnsafeArray<C, 4>({ C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) } });
     spvUnsafeArray<gl_PerVertex, 4> _33 = spvUnsafeArray<gl_PerVertex, 4>({ gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) } });
     
-    device main0_out* gl_out = &spvOut[gl_GlobalInvocationID.x - gl_GlobalInvocationID.x % 4];
+    device main0_out* gl_out = &spvOut[min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1) * 4];
     gl_out[gl_GlobalInvocationID.x % 4].C_v = _18[gl_GlobalInvocationID.x % 4].v;
     gl_out[gl_GlobalInvocationID.x % 4].gl_Position = _33[gl_GlobalInvocationID.x % 4].gl_Position;
     gl_out[gl_GlobalInvocationID.x % 4].gl_ClipDistance = _33[gl_GlobalInvocationID.x % 4].gl_ClipDistance;
@@ -91,10 +91,10 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     threadgroup gl_PerVertex spvStoragegl_out_masked[8][4];
     threadgroup gl_PerVertex (&gl_out_masked)[4] = spvStoragegl_out_masked[(gl_GlobalInvocationID.x / 4) % 8];
     gl_out_masked[gl_GlobalInvocationID.x % 4] = _33[gl_GlobalInvocationID.x % 4];
-    device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
+    device main0_patchOut& patchOut = spvPatchOut[min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1)];
     patchOut.P_v = float4(0.0);
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
-    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1]);
+    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
     gl_out[gl_InvocationID].C_v = float4(1.0);
     patchOut.P_v = float4(2.0);
     gl_out[gl_InvocationID].gl_Position = float4(3.0);
