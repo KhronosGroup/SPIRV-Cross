@@ -75,7 +75,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     threadgroup P (&p) = spvStoragep[(gl_GlobalInvocationID.x / 4) % 8];
     p = P{ float4(0.0) };
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
-    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1]);
+    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
     gl_out[gl_InvocationID].C_v = float4(1.0);
     p.v = float4(2.0);
     gl_out[gl_InvocationID].gl_Position = float4(3.0);

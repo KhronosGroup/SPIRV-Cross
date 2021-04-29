@@ -46,7 +46,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     threadgroup P spvStorage_11[8];
     threadgroup P (&_11) = spvStorage_11[(gl_GlobalInvocationID.x / 4) % 8];
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
-    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1]);
+    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
     write_in_function(_11, patchOut, gl_out, gl_InvocationID);
 }
 

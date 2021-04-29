@@ -22,7 +22,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     threadgroup float4 spvStoragev1[8][2];
     threadgroup float4 (&v1)[2] = spvStoragev1[(gl_GlobalInvocationID.x / 4) % 8];
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
-    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1]);
+    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
     gl_out[gl_InvocationID].v0 = float4(1.0);
     gl_out[gl_InvocationID].v0.z = 3.0;
     if (gl_InvocationID == 0)

@@ -176,7 +176,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     device main0_in* gl_in = &spvIn[min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1) * spvIndirectParams[0]];
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
-    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1]);
+    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
     gl_out[gl_InvocationID].gl_Position = float4(1.0);
     spvArrayCopyFromDeviceToThreadGroup1(Foo[gl_InvocationID], gl_in[gl_InvocationID].iFoo.elements);
     if (gl_InvocationID == 0)

@@ -11796,7 +11796,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				entry_func.fixup_hooks_in.push_back([=]() {
 					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = min(",
 					          to_expression(builtin_invocation_id_id), ".x / ", this->get_entry_point().output_vertices,
-					          ", spvIndirectParams[1]);");
+					          ", spvIndirectParams[1] - 1);");
 				});
 				break;
 			case BuiltInPatchVertices:

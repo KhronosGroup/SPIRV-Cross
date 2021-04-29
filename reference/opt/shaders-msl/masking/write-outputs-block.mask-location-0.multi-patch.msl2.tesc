@@ -34,7 +34,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     threadgroup P spvStorage_11[8];
     threadgroup P (&_11) = spvStorage_11[(gl_GlobalInvocationID.x / 4) % 8];
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
-    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1]);
+    uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
     _11.a = 1.0;
     patchOut.P_b = 2.0;
     gl_out[gl_InvocationID].C_a = 3.0;
