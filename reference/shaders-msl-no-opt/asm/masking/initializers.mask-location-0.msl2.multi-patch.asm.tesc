@@ -73,7 +73,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
 {
     spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_gl_PerVertex, 4> _29 = spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_gl_PerVertex, 4>({ _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) } });
     
-    device main0_out* gl_out = &spvOut[min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1) * 4];
+    device main0_out* gl_out = &spvOut[gl_GlobalInvocationID.x - gl_GlobalInvocationID.x % 4];
     threadgroup float4 spvStoragefoo[8][4];
     threadgroup float4 (&foo)[4] = spvStoragefoo[(gl_GlobalInvocationID.x / 4) % 8];
     foo[gl_GlobalInvocationID.x % 4] = _15[gl_GlobalInvocationID.x % 4];
@@ -81,7 +81,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     gl_out[gl_GlobalInvocationID.x % 4].gl_PointSize = _29[gl_GlobalInvocationID.x % 4]._RESERVED_IDENTIFIER_FIXUP_gl_PointSize;
     gl_out[gl_GlobalInvocationID.x % 4].gl_ClipDistance = _29[gl_GlobalInvocationID.x % 4]._RESERVED_IDENTIFIER_FIXUP_gl_ClipDistance;
     gl_out[gl_GlobalInvocationID.x % 4].gl_CullDistance = _29[gl_GlobalInvocationID.x % 4]._RESERVED_IDENTIFIER_FIXUP_gl_CullDistance;
-    device main0_patchOut& patchOut = spvPatchOut[min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1)];
+    device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     patchOut.foo_patch = float4(0.0);
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
     uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);
