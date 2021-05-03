@@ -100,10 +100,11 @@ def get_shader_stats(shader):
 def print_msl_compiler_version():
     try:
         subprocess.check_call(['xcrun', '--sdk', 'iphoneos', 'metal', '--version'])
-        print('...are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
+        print('... are the Metal compiler characteristics.\n')   # display after so xcrun FNF is silent
     except OSError as e:
         if (e.errno != errno.ENOENT):    # Ignore xcrun not found error
             raise
+        print('Metal SDK is not present.\n')
     except subprocess.CalledProcessError:
         pass
 
@@ -323,6 +324,23 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-force-sample-rate-shading')
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
+    if '.mask-location-0.' in shader:
+        msl_args.append('--mask-stage-output-location')
+        msl_args.append('0')
+        msl_args.append('0')
+    if '.mask-location-1.' in shader:
+        msl_args.append('--mask-stage-output-location')
+        msl_args.append('1')
+        msl_args.append('0')
+    if '.mask-position.' in shader:
+        msl_args.append('--mask-stage-output-builtin')
+        msl_args.append('Position')
+    if '.mask-point-size.' in shader:
+        msl_args.append('--mask-stage-output-builtin')
+        msl_args.append('PointSize')
+    if '.mask-clip-distance.' in shader:
+        msl_args.append('--mask-stage-output-builtin')
+        msl_args.append('ClipDistance')
 
     subprocess.check_call(msl_args)
 

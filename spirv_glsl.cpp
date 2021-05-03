@@ -40,6 +40,13 @@ using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
+enum ExtraSubExpressionType
+{
+	// Create masks above any legal ID range to allow multiple address spaces into the extra_sub_expressions map.
+	EXTRA_SUB_EXPRESSION_TYPE_STREAM_OFFSET = 0x10000000,
+	EXTRA_SUB_EXPRESSION_TYPE_AUX = 0x20000000
+};
+
 static bool is_unsigned_opcode(Op op)
 {
 	// Don't have to be exhaustive, only relevant for legacy target checking ...
@@ -3601,6 +3608,21 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 			statement(to_expression(var.self), "[gl_InvocationID] = ", lut_name, "[gl_InvocationID];");
 		});
 	}
+	else if (has_decoration(var.self, DecorationBuiltIn) &&
+	         BuiltIn(get_decoration(var.self, DecorationBuiltIn)) == BuiltInSampleMask)
+	{
+		// We cannot copy the array since gl_SampleMask is unsized in GLSL. Unroll time! <_<
+		entry_func.fixup_hooks_in.push_back([&] {
+			auto &c = this->get<SPIRConstant>(var.initializer);
+			uint32_t num_constants = uint32_t(c.subconstants.size());
+			for (uint32_t i = 0; i < num_constants; i++)
+			{
+				// Don't use to_expression on constant since it might be uint, just fish out the raw int.
+				statement(to_expression(var.self), "[", i, "] = ",
+				          convert_to_string(this->get<SPIRConstant>(c.subconstants[i]).scalar_i32()), ";");
+			}
+		});
+	}
 	else
 	{
 		auto lut_name = join("_", var.self, "_init");
@@ -4371,6 +4393,16 @@ string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool uses_
 	}
 	else
 		return to_unpacked_expression(id);
+}
+
+string CompilerGLSL::to_non_uniform_aware_expression(uint32_t id)
+{
+	string expr = to_expression(id);
+
+	if (has_decoration(id, DecorationNonUniform))
+		convert_non_uniform_expression(expr, id);
+
+	return expr;
 }
 
 string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
@@ -5690,6 +5722,27 @@ void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id,
 	inherit_expression_dependencies(result_id, op1);
 }
 
+void CompilerGLSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
+                                       const char *op)
+{
+	forced_temporaries.insert(result_id);
+	emit_op(result_type, result_id,
+	        join(op, "(", to_non_uniform_aware_expression(op0), ", ",
+	             to_unpacked_expression(op1), ")"), false);
+	flush_all_atomic_capable_variables();
+}
+
+void CompilerGLSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id,
+                                       uint32_t op0, uint32_t op1, uint32_t op2,
+                                       const char *op)
+{
+	forced_temporaries.insert(result_id);
+	emit_op(result_type, result_id,
+	        join(op, "(", to_non_uniform_aware_expression(op0), ", ",
+	             to_unpacked_expression(op1), ", ", to_unpacked_expression(op2), ")"), false);
+	flush_all_atomic_capable_variables();
+}
+
 void CompilerGLSL::emit_unary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op,
                                            SPIRType::BaseType input_type, SPIRType::BaseType expected_result_type)
 {
@@ -5700,14 +5753,27 @@ void CompilerGLSL::emit_unary_func_op_cast(uint32_t result_type, uint32_t result
 	// Bit-widths might be different in unary cases because we use it for SConvert/UConvert and friends.
 	expected_type.basetype = input_type;
 	expected_type.width = expr_type.width;
-	string cast_op = expr_type.basetype != input_type ? bitcast_glsl(expected_type, op0) : to_unpacked_expression(op0);
+
+	string cast_op;
+	if (expr_type.basetype != input_type)
+	{
+		if (expr_type.basetype == SPIRType::Boolean)
+			cast_op = join(type_to_glsl(expected_type), "(", to_unpacked_expression(op0), ")");
+		else
+			cast_op = bitcast_glsl(expected_type, op0);
+	}
+	else
+		cast_op = to_unpacked_expression(op0);
 
 	string expr;
 	if (out_type.basetype != expected_result_type)
 	{
 		expected_type.basetype = expected_result_type;
 		expected_type.width = out_type.width;
-		expr = bitcast_glsl_op(out_type, expected_type);
+		if (out_type.basetype == SPIRType::Boolean)
+			expr = type_to_glsl(out_type);
+		else
+			expr = bitcast_glsl_op(out_type, expected_type);
 		expr += '(';
 		expr += join(op, "(", cast_op, ")");
 		expr += ')';
@@ -6179,7 +6245,7 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 {
 	// Keep track of the array indices we have used to load the image.
 	// We'll need to use the same array index into the combined image sampler array.
-	auto image_expr = to_expression(image_id);
+	auto image_expr = to_non_uniform_aware_expression(image_id);
 	string array_expr;
 	auto array_index = image_expr.find_first_of('[');
 	if (array_index != string::npos)
@@ -6407,20 +6473,8 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	auto &result_type = get<SPIRType>(result_type_id);
 
 	inherited_expressions.push_back(coord);
-
-	// Make sure non-uniform decoration is back-propagated to where it needs to be.
-	if (has_decoration(img, DecorationNonUniformEXT))
-	{
-		// In Vulkan GLSL, we cannot back-propgate nonuniform qualifiers if we
-		// use a combined image sampler constructor.
-		// We're only interested in back-propagating if we can trace back through access chains.
-		// If not, we will apply nonuniform to the sampled image expression itself.
-		auto *backing = maybe_get_backing_variable(img);
-		if (backing)
-			propagate_nonuniform_qualifier(img);
-		else
-			nonuniform_expression = true;
-	}
+	if (has_decoration(img, DecorationNonUniform) && !maybe_get_backing_variable(img))
+		nonuniform_expression = true;
 
 	switch (op)
 	{
@@ -6759,7 +6813,7 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 					// Don't need to consider Shadow state since the dummy sampler is always non-shadow.
 					auto sampled_type = type;
 					sampled_type.basetype = SPIRType::SampledImage;
-					return join(type_to_glsl(sampled_type), "(", to_expression(id), ", ",
+					return join(type_to_glsl(sampled_type), "(", to_non_uniform_aware_expression(id), ", ",
 					            to_expression(dummy_sampler_id), ")");
 				}
 				else
@@ -6779,7 +6833,7 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 		}
 	}
 
-	return to_expression(id);
+	return to_non_uniform_aware_expression(id);
 }
 
 // Returns the function args for a texture sampling function for the specified image and sampling characteristics.
@@ -6792,7 +6846,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	if (args.base.is_fetch)
 		farg_str = convert_separate_image_to_expression(img);
 	else
-		farg_str = to_expression(img);
+		farg_str = to_non_uniform_aware_expression(img);
 
 	if (args.nonuniform_expression && farg_str.find_first_of('[') != string::npos)
 	{
@@ -7364,7 +7418,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	{
 		// Make sure we have a unique ID here to avoid aliasing the extra sub-expressions between clamp and NMin sub-op.
 		// IDs cannot exceed 24 bits, so we can make use of the higher bits for some unique flags.
-		uint32_t &max_id = extra_sub_expressions[id | 0x80000000u];
+		uint32_t &max_id = extra_sub_expressions[id | EXTRA_SUB_EXPRESSION_TYPE_AUX];
 		if (!max_id)
 			max_id = ir.increase_bound_by(1);
 
@@ -7646,6 +7700,9 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	case OpGroupNonUniformBitwiseAnd:
 	case OpGroupNonUniformBitwiseOr:
 	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
 	{
 		auto operation = static_cast<GroupOperation>(ops[3]);
 		if (operation == GroupOperationClusteredReduce)
@@ -7802,6 +7859,9 @@ case OpGroupNonUniform##op: \
 	GLSL_GROUP_OP(BitwiseAnd, And)
 	GLSL_GROUP_OP(BitwiseOr, Or)
 	GLSL_GROUP_OP(BitwiseXor, Xor)
+	GLSL_GROUP_OP(LogicalAnd, And)
+	GLSL_GROUP_OP(LogicalOr, Or)
+	GLSL_GROUP_OP(LogicalXor, Xor)
 #undef GLSL_GROUP_OP
 #undef GLSL_GROUP_OP_CAST
 		// clang-format on
@@ -8276,11 +8336,34 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("Stencil export not supported in GLES.");
 	}
 
+	case BuiltInPrimitiveShadingRateKHR:
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Can only use PrimitiveShadingRateKHR in Vulkan GLSL.");
+		require_extension_internal("GL_EXT_fragment_shading_rate");
+		return "gl_PrimitiveShadingRateEXT";
+	}
+
+	case BuiltInShadingRateKHR:
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Can only use ShadingRateKHR in Vulkan GLSL.");
+		require_extension_internal("GL_EXT_fragment_shading_rate");
+		return "gl_ShadingRateEXT";
+	}
+
 	case BuiltInDeviceIndex:
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Need Vulkan semantics for device group support.");
 		require_extension_internal("GL_EXT_device_group");
 		return "gl_DeviceIndex";
+
+	case BuiltInFullyCoveredEXT:
+		if (!options.es)
+			require_extension_internal("GL_NV_conservative_raster_underestimation");
+		else
+			SPIRV_CROSS_THROW("Need desktop GL to use GL_NV_conservative_raster_underestimation.");
+		return "gl_FragFullyCoveredNV";
 
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
@@ -8304,7 +8387,7 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 	}
 }
 
-void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_t /*base*/, const SPIRType *type,
+void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_t /*base*/, const SPIRType * /*type*/,
                                                       AccessChainFlags flags, bool & /*access_chain_is_arrayed*/,
                                                       uint32_t index)
 {
@@ -8313,25 +8396,17 @@ void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_
 
 	expr += "[";
 
-	// If we are indexing into an array of SSBOs or UBOs, we need to index it with a non-uniform qualifier.
-	bool nonuniform_index =
-	    has_decoration(index, DecorationNonUniformEXT) &&
-	    (has_decoration(type->self, DecorationBlock) || has_decoration(type->self, DecorationBufferBlock));
-	if (nonuniform_index)
-	{
-		expr += backend.nonuniform_qualifier;
-		expr += "(";
-	}
-
 	if (index_is_literal)
 		expr += convert_to_string(index);
 	else
 		expr += to_expression(index, register_expression_read);
 
-	if (nonuniform_index)
-		expr += ")";
-
 	expr += "]";
+}
+
+bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
+{
+	return true;
 }
 
 string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indices, uint32_t count,
@@ -8543,7 +8618,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
 			BuiltIn builtin;
-			if (is_member_builtin(*type, index, &builtin))
+			if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 			{
 				if (access_chain_is_arrayed)
 				{
@@ -8611,13 +8686,30 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			// Internally, access chain implementation can also be used on composites,
 			// ignore scalar access workarounds in this case.
-			StorageClass effective_storage;
-			if (expression_type(base).pointer)
-				effective_storage = get_expression_effective_storage_class(base);
-			else
-				effective_storage = StorageClassGeneric;
+			StorageClass effective_storage = StorageClassGeneric;
+			bool ignore_potential_sliced_writes = false;
+			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
+			{
+				if (expression_type(base).pointer)
+					effective_storage = get_expression_effective_storage_class(base);
 
-			if (!row_major_matrix_needs_conversion)
+				// Special consideration for control points.
+				// Control points can only be written by InvocationID, so there is no need
+				// to consider scalar access chains here.
+				// Cleans up some cases where it's very painful to determine the accurate storage class
+				// since blocks can be partially masked ...
+				auto *var = maybe_get_backing_variable(base);
+				if (var && var->storage == StorageClassOutput &&
+				    get_execution_model() == ExecutionModelTessellationControl &&
+				    !has_decoration(var->self, DecorationPatch))
+				{
+					ignore_potential_sliced_writes = true;
+				}
+			}
+			else
+				ignore_potential_sliced_writes = true;
+
+			if (!row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				// On some backends, we might not be able to safely access individual scalars in a vector.
 				// To work around this, we might have to cast the access chain reference to something which can,
@@ -8657,7 +8749,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += "]";
 			}
 
-			if (row_major_matrix_needs_conversion)
+			if (row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
 				prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
 				                                       is_packed);
@@ -9638,17 +9730,22 @@ void CompilerGLSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_ex
 	{
 		handle_store_to_invariant_variable(lhs_expression, rhs_expression);
 
-		auto lhs = to_dereferenced_expression(lhs_expression);
+		if (!unroll_array_to_complex_store(lhs_expression, rhs_expression))
+		{
+			auto lhs = to_dereferenced_expression(lhs_expression);
+			if (has_decoration(lhs_expression, DecorationNonUniform))
+				convert_non_uniform_expression(lhs, lhs_expression);
 
-		// We might need to cast in order to store to a builtin.
-		cast_to_builtin_store(lhs_expression, rhs, expression_type(rhs_expression));
+			// We might need to cast in order to store to a builtin.
+			cast_to_builtin_store(lhs_expression, rhs, expression_type(rhs_expression));
 
-		// Tries to optimize assignments like "<lhs> = <lhs> op expr".
-		// While this is purely cosmetic, this is important for legacy ESSL where loop
-		// variable increments must be in either i++ or i += const-expr.
-		// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
-		if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
-			statement(lhs, " = ", rhs, ";");
+			// Tries to optimize assignments like "<lhs> = <lhs> op expr".
+			// While this is purely cosmetic, this is important for legacy ESSL where loop
+			// variable increments must be in either i++ or i += const-expr.
+			// Without this, we end up with i = i + 1, which is correct GLSL, but not correct GLES 2.0.
+			if (!optimize_read_modify_write(expression_type(rhs_expression), lhs, rhs))
+				statement(lhs, " = ", rhs, ";");
+		}
 		register_write(lhs_expression);
 	}
 }
@@ -9810,14 +9907,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We might be trying to load a gl_Position[N], where we should be
 		// doing float4[](gl_in[i].gl_Position, ...) instead.
 		// Similar workarounds are required for input arrays in tessellation.
+		// Also, loading from gl_SampleMask array needs special unroll.
 		unroll_array_from_complex_load(id, ptr, expr);
 
-		// Shouldn't need to check for ID, but current glslang codegen requires it in some cases
-		// when loading Image/Sampler descriptors. It does not hurt to check ID as well.
-		if (has_decoration(id, DecorationNonUniformEXT) || has_decoration(ptr, DecorationNonUniformEXT))
+		if (!type_is_opaque_value(type) && has_decoration(ptr, DecorationNonUniform))
 		{
-			propagate_nonuniform_qualifier(ptr);
-			convert_non_uniform_expression(type, expr);
+			// If we're loading something non-opaque, we need to handle non-uniform descriptor access.
+			convert_non_uniform_expression(expr, ptr);
 		}
 
 		if (forward && ptr_expression)
@@ -9840,7 +9936,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(to_expression(id), ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
+			emit_array_copy(to_expression(id), id, ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -9921,9 +10017,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expr.expression_dependencies.empty())
 			forwarded_temporaries.erase(ops[1]);
 
-		if (has_decoration(ops[1], DecorationNonUniformEXT))
-			propagate_nonuniform_qualifier(ops[1]);
-
 		break;
 	}
 
@@ -9961,6 +10054,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		auto e = access_chain_internal(ops[2], &ops[3], length - 3, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+		if (has_decoration(ops[2], DecorationNonUniform))
+			convert_non_uniform_expression(e, ops[2]);
 		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type,
 		                    true);
 		break;
@@ -10262,14 +10357,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// Including the base will prevent this and would trigger multiple reads
 			// from expression causing it to be forced to an actual temporary in GLSL.
 			auto expr = access_chain_internal(ops[2], &ops[3], length,
-			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT, &meta);
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_CHAIN_ONLY_BIT |
+			                                  ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
 			e = &emit_op(result_type, id, expr, true, should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 			e->base_expression = ops[2];
 		}
 		else
 		{
-			auto expr = access_chain_internal(ops[2], &ops[3], length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, &meta);
+			auto expr = access_chain_internal(ops[2], &ops[3], length,
+			                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT | ACCESS_CHAIN_FORCE_COMPOSITE_BIT, &meta);
 			e = &emit_op(result_type, id, expr, should_forward(ops[2]), should_suppress_usage_tracking(ops[2]));
 			inherit_expression_dependencies(id, ops[2]);
 		}
@@ -10314,10 +10411,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t rhs = ops[1];
 		if (lhs != rhs)
 		{
-			flush_variable_declaration(lhs);
-			flush_variable_declaration(rhs);
-			statement(to_expression(lhs), " = ", to_unpacked_expression(rhs), ";");
-			register_write(lhs);
+			uint32_t &tmp_id = extra_sub_expressions[instruction.offset | EXTRA_SUB_EXPRESSION_TYPE_STREAM_OFFSET];
+			if (!tmp_id)
+				tmp_id = ir.increase_bound_by(1);
+			uint32_t tmp_type_id = expression_type(rhs).parent_type;
+
+			EmbeddedInstruction fake_load, fake_store;
+			fake_load.op = OpLoad;
+			fake_load.length = 3;
+			fake_load.ops.push_back(tmp_type_id);
+			fake_load.ops.push_back(tmp_id);
+			fake_load.ops.push_back(rhs);
+
+			fake_store.op = OpStore;
+			fake_store.length = 2;
+			fake_store.ops.push_back(lhs);
+			fake_store.ops.push_back(tmp_id);
+
+			// Load and Store do a *lot* of workarounds, and we'd like to reuse them as much as possible.
+			// Synthesize a fake Load and Store pair for CopyMemory.
+			emit_instruction(fake_load);
+			emit_instruction(fake_store);
 		}
 		break;
 	}
@@ -11159,9 +11273,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Ignore semantics for now, probably only relevant to CL.
 		uint32_t val = ops[5];
 		const char *op = check_atomic_image(ptr) ? "imageAtomicExchange" : "atomicExchange";
-		forced_temporaries.insert(id);
-		emit_binary_func_op(result_type, id, ptr, val, op);
-		flush_all_atomic_capable_variables();
+
+		emit_atomic_func_op(result_type, id, ptr, val, op);
 		break;
 	}
 
@@ -11174,9 +11287,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t comp = ops[7];
 		const char *op = check_atomic_image(ptr) ? "imageAtomicCompSwap" : "atomicCompSwap";
 
-		forced_temporaries.insert(id);
-		emit_trinary_func_op(result_type, id, ptr, comp, val, op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(result_type, id, ptr, comp, val, op);
 		break;
 	}
 
@@ -11191,7 +11302,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		                     (atomic_image && get<SPIRType>(type.image.type).basetype == SPIRType::UInt);
 		const char *op = atomic_image ? "imageAtomicAdd" : "atomicAdd";
 		const char *increment = unsigned_type ? "0u" : "0";
-		emit_op(ops[0], ops[1], join(op, "(", to_expression(ops[2]), ", ", increment, ")"), false);
+		emit_op(ops[0], ops[1],
+		        join(op, "(",
+		             to_non_uniform_aware_expression(ops[2]), ", ", increment, ")"), false);
 		flush_all_atomic_capable_variables();
 		break;
 	}
@@ -11204,7 +11317,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Ignore semantics for now, probably only relevant to CL.
 		uint32_t val = ops[3];
 		const char *op = check_atomic_image(ptr) ? "imageAtomicExchange" : "atomicExchange";
-		statement(op, "(", to_expression(ptr), ", ", to_expression(val), ");");
+		statement(op, "(", to_non_uniform_aware_expression(ptr), ", ", to_expression(val), ");");
 		flush_all_atomic_capable_variables();
 		break;
 	}
@@ -11239,7 +11352,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 				increment = "-1";
 
-			emit_op(ops[0], ops[1], join(op, "(", to_expression(ops[2]), ", ", increment, ")"), false);
+			emit_op(ops[0], ops[1],
+			        join(op, "(", to_non_uniform_aware_expression(ops[2]), ", ", increment, ")"), false);
 		}
 
 		flush_all_atomic_capable_variables();
@@ -11249,9 +11363,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicIAdd:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAdd" : "atomicAdd";
-		forced_temporaries.insert(ops[1]);
-		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
@@ -11259,7 +11371,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAdd" : "atomicAdd";
 		forced_temporaries.insert(ops[1]);
-		auto expr = join(op, "(", to_expression(ops[2]), ", -", to_enclosed_expression(ops[5]), ")");
+		auto expr = join(op, "(", to_non_uniform_aware_expression(ops[2]), ", -", to_enclosed_expression(ops[5]), ")");
 		emit_op(ops[0], ops[1], expr, should_forward(ops[2]) && should_forward(ops[5]));
 		flush_all_atomic_capable_variables();
 		break;
@@ -11269,9 +11381,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicUMin:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicMin" : "atomicMin";
-		forced_temporaries.insert(ops[1]);
-		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
@@ -11279,36 +11389,28 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpAtomicUMax:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicMax" : "atomicMax";
-		forced_temporaries.insert(ops[1]);
-		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
 	case OpAtomicAnd:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAnd" : "atomicAnd";
-		forced_temporaries.insert(ops[1]);
-		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
 	case OpAtomicOr:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicOr" : "atomicOr";
-		forced_temporaries.insert(ops[1]);
-		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
 	case OpAtomicXor:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicXor" : "atomicXor";
-		forced_temporaries.insert(ops[1]);
-		emit_binary_func_op(ops[0], ops[1], ops[2], ops[5], op);
-		flush_all_atomic_capable_variables();
+		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
@@ -11403,16 +11505,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpImageQueryLod:
 	{
+		const char *op = nullptr;
 		if (!options.es && options.version < 400)
 		{
 			require_extension_internal("GL_ARB_texture_query_lod");
 			// For some reason, the ARB spec is all-caps.
-			GLSL_BFOP(textureQueryLOD);
+			op = "textureQueryLOD";
 		}
 		else if (options.es)
 			SPIRV_CROSS_THROW("textureQueryLod not supported in ES profile.");
 		else
-			GLSL_BFOP(textureQueryLod);
+			op = "textureQueryLod";
+
+		auto sampler_expr = to_expression(ops[2]);
+		if (has_decoration(ops[2], DecorationNonUniform))
+		{
+			if (maybe_get_backing_variable(ops[2]))
+				convert_non_uniform_expression(sampler_expr, ops[2]);
+			else if (*backend.nonuniform_qualifier != '\0')
+				sampler_expr = join(backend.nonuniform_qualifier, "(", sampler_expr, ")");
+		}
+
+		bool forward = should_forward(ops[3]);
+		emit_op(ops[0], ops[1],
+		        join(op, "(", sampler_expr, ", ", to_unpacked_expression(ops[3]), ")"),
+		        forward);
+		inherit_expression_dependencies(ops[1], ops[2]);
+		inherit_expression_dependencies(ops[1], ops[3]);
 		register_control_dependent_expression(ops[1]);
 		break;
 	}
@@ -11442,7 +11561,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		string expr;
 		if (type.image.sampled == 2)
-			expr = join("imageSamples(", to_expression(ops[2]), ")");
+			expr = join("imageSamples(", to_non_uniform_aware_expression(ops[2]), ")");
 		else
 			expr = join("textureSamples(", convert_separate_image_to_expression(ops[2]), ")");
 
@@ -11553,10 +11672,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
-					imgexpr = join("subpassLoad(", to_expression(ops[2]), ", ", to_expression(samples), ")");
+					imgexpr = join("subpassLoad(", to_non_uniform_aware_expression(ops[2]), ", ", to_expression(samples), ")");
 				}
 				else
-					imgexpr = join("subpassLoad(", to_expression(ops[2]), ")");
+					imgexpr = join("subpassLoad(", to_non_uniform_aware_expression(ops[2]), ")");
 			}
 			else
 			{
@@ -11568,13 +11687,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
-					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), ",
+					imgexpr = join("texelFetch(", to_non_uniform_aware_expression(ops[2]), ", ivec2(gl_FragCoord.xy), ",
 					               to_expression(samples), ")");
 				}
 				else
 				{
 					// Implement subpass loads via texture barrier style sampling.
-					imgexpr = join("texelFetch(", to_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
+					imgexpr = join("texelFetch(", to_non_uniform_aware_expression(ops[2]), ", ivec2(gl_FragCoord.xy), 0)");
 				}
 			}
 			imgexpr = remap_swizzle(get<SPIRType>(result_type), 4, imgexpr);
@@ -11605,12 +11724,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 						                  "operand mask was used.");
 
 					uint32_t samples = ops[5];
-					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_expression(ops[2]), ", ",
+					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_non_uniform_aware_expression(ops[2]), ", ",
 					          coord_expr, ", ", to_expression(samples), ", ", to_expression(sparse_texel_id), ");");
 				}
 				else
 				{
-					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_expression(ops[2]), ", ",
+					statement(to_expression(sparse_code_id), " = sparseImageLoadARB(", to_non_uniform_aware_expression(ops[2]), ", ",
 					          coord_expr, ", ", to_expression(sparse_texel_id), ");");
 				}
 				imgexpr = join(type_to_glsl(get<SPIRType>(result_type)), "(", to_expression(sparse_code_id), ", ",
@@ -11627,10 +11746,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 					uint32_t samples = ops[5];
 					imgexpr =
-					    join("imageLoad(", to_expression(ops[2]), ", ", coord_expr, ", ", to_expression(samples), ")");
+					    join("imageLoad(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ", ", to_expression(samples), ")");
 				}
 				else
-					imgexpr = join("imageLoad(", to_expression(ops[2]), ", ", coord_expr, ")");
+					imgexpr = join("imageLoad(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ")");
 			}
 
 			if (!sparse)
@@ -11671,9 +11790,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		coord_expr = bitcast_expression(target_coord_type, expression_type(ops[3]).basetype, coord_expr);
 
 		auto expr = join(to_expression(ops[2]), ", ", coord_expr);
-		if (has_decoration(id, DecorationNonUniformEXT) || has_decoration(ops[2], DecorationNonUniformEXT))
-			convert_non_uniform_expression(expression_type(ops[2]), expr);
-
 		auto &e = set<SPIRExpression>(id, expr, result_type, true);
 
 		// When using the pointer, we need to know which variable it is actually loaded from.
@@ -11716,11 +11832,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			if (operands != ImageOperandsSampleMask || length != 5)
 				SPIRV_CROSS_THROW("Multisampled image used in OpImageWrite, but unexpected operand mask was used.");
 			uint32_t samples = ops[4];
-			statement("imageStore(", to_expression(ops[0]), ", ", coord_expr, ", ", to_expression(samples), ", ",
+			statement("imageStore(", to_non_uniform_aware_expression(ops[0]), ", ", coord_expr, ", ", to_expression(samples), ", ",
 			          remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 		}
 		else
-			statement("imageStore(", to_expression(ops[0]), ", ", coord_expr, ", ",
+			statement("imageStore(", to_non_uniform_aware_expression(ops[0]), ", ", coord_expr, ", ",
 			          remap_swizzle(store_type, value_type.vecsize, to_expression(ops[2])), ");");
 
 		if (var && variable_storage_is_aliased(*var))
@@ -11745,7 +11861,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					SPIRV_CROSS_THROW("At least ESSL 3.10 required for imageSize.");
 
 				// The size of an image is always constant.
-				expr = join("imageSize(", to_expression(ops[2]), ")");
+				expr = join("imageSize(", to_non_uniform_aware_expression(ops[2]), ")");
 			}
 			else
 			{
@@ -12148,6 +12264,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupNonUniformBitwiseAnd:
 	case OpGroupNonUniformBitwiseOr:
 	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
 	case OpGroupNonUniformQuadSwap:
 	case OpGroupNonUniformQuadBroadcast:
 		emit_subgroup_op(instruction);
@@ -12267,9 +12386,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 	case OpTraceNV:
-		if (has_decoration(ops[0], DecorationNonUniformEXT))
-			propagate_nonuniform_qualifier(ops[0]);
-		statement("traceNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+		statement("traceNV(", to_non_uniform_aware_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
@@ -12278,9 +12395,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpTraceRayKHR:
 		if (!has_decoration(ops[10], DecorationLocation))
 			SPIRV_CROSS_THROW("A memory declaration object must be used in TraceRayKHR.");
-		if (has_decoration(ops[0], DecorationNonUniformEXT))
-			propagate_nonuniform_qualifier(ops[0]);
-		statement("traceRayEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+		statement("traceRayEXT(", to_non_uniform_aware_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", get_decoration(ops[10], DecorationLocation), ");");
@@ -12579,6 +12694,11 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uin
 	return join(type_name, " ", name, type_to_array_glsl(type));
 }
 
+bool CompilerGLSL::variable_decl_is_remapped_storage(const SPIRVariable &var, StorageClass storage) const
+{
+	return var.storage == storage;
+}
+
 // Emit a structure member. Subclasses may override to modify output,
 // or to dynamically add a padding member if needed.
 void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
@@ -12722,10 +12842,24 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 			res += "coherent ";
 		if (flags.get(DecorationRestrict))
 			res += "restrict ";
+
 		if (flags.get(DecorationNonWritable))
 			res += "readonly ";
+
+		bool formatted_load = type.image.format == ImageFormatUnknown;
 		if (flags.get(DecorationNonReadable))
+		{
 			res += "writeonly ";
+			formatted_load = false;
+		}
+
+		if (formatted_load)
+		{
+			if (!options.es)
+				require_extension_internal("GL_EXT_shader_image_load_formatted");
+			else
+				SPIRV_CROSS_THROW("Cannot use GL_EXT_shader_image_load_formatted in ESSL.");
+		}
 	}
 
 	res += to_precision_qualifiers_glsl(id);
@@ -12791,7 +12925,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	// Ignore the pointer type since GLSL doesn't have pointers.
 	auto &type = get_variable_data_type(variable);
 
-	if (type.pointer_depth > 1)
+	if (type.pointer_depth > 1 && !backend.support_pointer_to_pointer)
 		SPIRV_CROSS_THROW("Cannot declare pointer-to-pointer types.");
 
 	auto res = join(to_qualifiers_glsl(variable.self), variable_decl(type, to_name(variable.self), variable.self));
@@ -12804,7 +12938,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 		else if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			res += join(" = ", to_zero_initialized_expression(get_variable_data_type_id(variable)));
 	}
-	else if (variable.initializer)
+	else if (variable.initializer && !variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
 	{
 		uint32_t expr = variable.initializer;
 		if (ir.ids[expr].get_type() != TypeUndef)
@@ -13494,7 +13628,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		auto &var = get<SPIRVariable>(v);
 		var.deferred_declaration = false;
 
-		if (var.storage == StorageClassWorkgroup)
+		if (variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
 		{
 			// Special variable type which cannot have initializer,
 			// need to be declared as standalone variables.
@@ -14696,7 +14830,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				// The backend is responsible for setting this up, and redirection the return values as appropriate.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
-					emit_array_copy("spvReturnValue", block.return_value, StorageClassFunction,
+					emit_array_copy("spvReturnValue", 0, block.return_value, StorageClassFunction,
 					                get_expression_effective_storage_class(block.return_value));
 				}
 
@@ -14915,9 +15049,46 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }
 
-void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t rhs_id, StorageClass, StorageClass)
+void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t, uint32_t rhs_id, StorageClass, StorageClass)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
+}
+
+bool CompilerGLSL::unroll_array_to_complex_store(uint32_t target_id, uint32_t source_id)
+{
+	if (!backend.force_gl_in_out_block)
+		return false;
+	// This path is only relevant for GL backends.
+
+	auto *var = maybe_get<SPIRVariable>(target_id);
+	if (!var || var->storage != StorageClassOutput)
+		return false;
+
+	if (!is_builtin_variable(*var) || BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInSampleMask)
+		return false;
+
+	auto &type = expression_type(source_id);
+	string array_expr;
+	if (type.array_size_literal.back())
+	{
+		array_expr = convert_to_string(type.array.back());
+		if (type.array.back() == 0)
+			SPIRV_CROSS_THROW("Cannot unroll an array copy from unsized array.");
+	}
+	else
+		array_expr = to_expression(type.array.back());
+
+	SPIRType target_type;
+	target_type.basetype = SPIRType::Int;
+
+	statement("for (int i = 0; i < int(", array_expr, "); i++)");
+	begin_scope();
+	statement(to_expression(target_id), "[i] = ",
+	          bitcast_expression(target_type, type.basetype, join(to_expression(source_id), "[i]")),
+	          ";");
+	end_scope();
+
+	return true;
 }
 
 void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t source_id, std::string &expr)
@@ -14930,7 +15101,7 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 	if (!var)
 		return;
 
-	if (var->storage != StorageClassInput)
+	if (var->storage != StorageClassInput && var->storage != StorageClassOutput)
 		return;
 
 	auto &type = get_variable_data_type(*var);
@@ -14938,9 +15109,13 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 		return;
 
 	auto builtin = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
-	bool is_builtin = is_builtin_variable(*var) && (builtin == BuiltInPointSize || builtin == BuiltInPosition);
+	bool is_builtin = is_builtin_variable(*var) &&
+	                  (builtin == BuiltInPointSize ||
+	                   builtin == BuiltInPosition ||
+	                   builtin == BuiltInSampleMask);
 	bool is_tess = is_tessellation_shader();
 	bool is_patch = has_decoration(var->self, DecorationPatch);
+	bool is_sample_mask = is_builtin && builtin == BuiltInSampleMask;
 
 	// Tessellation input arrays are special in that they are unsized, so we cannot directly copy from it.
 	// We must unroll the array load.
@@ -14964,8 +15139,14 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 		// The array size might be a specialization constant, so use a for-loop instead.
 		statement("for (int i = 0; i < int(", array_expr, "); i++)");
 		begin_scope();
-		if (is_builtin)
+		if (is_builtin && !is_sample_mask)
 			statement(new_expr, "[i] = gl_in[i].", expr, ";");
+		else if (is_sample_mask)
+		{
+			SPIRType target_type;
+			target_type.basetype = SPIRType::Int;
+			statement(new_expr, "[i] = ", bitcast_expression(target_type, type.basetype, join(expr, "[i]")), ";");
+		}
 		else
 			statement(new_expr, "[i] = ", expr, "[i];");
 		end_scope();
@@ -14976,6 +15157,10 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 
 void CompilerGLSL::cast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
 {
+	// We will handle array cases elsewhere.
+	if (!expr_type.array.empty())
+		return;
+
 	auto *var = maybe_get_backing_variable(source_id);
 	if (var)
 		source_id = var->self;
@@ -15003,6 +15188,9 @@ void CompilerGLSL::cast_from_builtin_load(uint32_t source_id, std::string &expr,
 	case BuiltInDrawIndex:
 	case BuiltInFragStencilRefEXT:
 	case BuiltInInstanceCustomIndexNV:
+	case BuiltInSampleMask:
+	case BuiltInPrimitiveShadingRateKHR:
+	case BuiltInShadingRateKHR:
 		expected_type = SPIRType::Int;
 		break;
 
@@ -15028,6 +15216,10 @@ void CompilerGLSL::cast_from_builtin_load(uint32_t source_id, std::string &expr,
 
 void CompilerGLSL::cast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
+	auto *var = maybe_get_backing_variable(target_id);
+	if (var)
+		target_id = var->self;
+
 	// Only interested in standalone builtin variables.
 	if (!has_decoration(target_id, DecorationBuiltIn))
 		return;
@@ -15042,6 +15234,9 @@ void CompilerGLSL::cast_to_builtin_store(uint32_t target_id, std::string &expr, 
 	case BuiltInPrimitiveId:
 	case BuiltInViewportIndex:
 	case BuiltInFragStencilRefEXT:
+	case BuiltInSampleMask:
+	case BuiltInPrimitiveShadingRateKHR:
+	case BuiltInShadingRateKHR:
 		expected_type = SPIRType::Int;
 		break;
 
@@ -15057,64 +15252,62 @@ void CompilerGLSL::cast_to_builtin_store(uint32_t target_id, std::string &expr, 
 	}
 }
 
-void CompilerGLSL::convert_non_uniform_expression(const SPIRType &type, std::string &expr)
+void CompilerGLSL::convert_non_uniform_expression(string &expr, uint32_t ptr_id)
 {
 	if (*backend.nonuniform_qualifier == '\0')
 		return;
 
-	// Handle SPV_EXT_descriptor_indexing.
-	if (type.basetype == SPIRType::Sampler || type.basetype == SPIRType::SampledImage ||
-	    type.basetype == SPIRType::Image || type.basetype == SPIRType::AccelerationStructure)
+	auto *var = maybe_get_backing_variable(ptr_id);
+	if (!var)
+		return;
+
+	if (var->storage != StorageClassUniformConstant &&
+	    var->storage != StorageClassStorageBuffer &&
+	    var->storage != StorageClassUniform)
+		return;
+
+	auto &backing_type = get<SPIRType>(var->basetype);
+	if (backing_type.array.empty())
+		return;
+
+	// If we get here, we know we're accessing an arrayed resource which
+	// might require nonuniform qualifier.
+
+	auto start_array_index = expr.find_first_of('[');
+
+	if (start_array_index == string::npos)
+		return;
+
+	// We've opened a bracket, track expressions until we can close the bracket.
+	// This must be our resource index.
+	size_t end_array_index = string::npos;
+	unsigned bracket_count = 1;
+	for (size_t index = start_array_index + 1; index < expr.size(); index++)
 	{
-		// The image/sampler ID must be declared as non-uniform.
-		// However, it is not legal GLSL to have
-		// nonuniformEXT(samplers[index]), so we must move the nonuniform qualifier
-		// to the array indexing, like
-		// samplers[nonuniformEXT(index)].
-		// While the access chain will generally be nonuniformEXT, it's not necessarily so,
-		// so we might have to fixup the OpLoad-ed expression late.
-
-		auto start_array_index = expr.find_first_of('[');
-
-		if (start_array_index == string::npos)
-			return;
-
-		// Check for the edge case that a non-arrayed resource was marked to be nonuniform,
-		// and the bracket we found is actually part of non-resource related data.
-		if (expr.find_first_of(',') < start_array_index)
-			return;
-
-		// We've opened a bracket, track expressions until we can close the bracket.
-		// This must be our image index.
-		size_t end_array_index = string::npos;
-		unsigned bracket_count = 1;
-		for (size_t index = start_array_index + 1; index < expr.size(); index++)
+		if (expr[index] == ']')
 		{
-			if (expr[index] == ']')
+			if (--bracket_count == 0)
 			{
-				if (--bracket_count == 0)
-				{
-					end_array_index = index;
-					break;
-				}
+				end_array_index = index;
+				break;
 			}
-			else if (expr[index] == '[')
-				bracket_count++;
 		}
-
-		assert(bracket_count == 0);
-
-		// Doesn't really make sense to declare a non-arrayed image with nonuniformEXT, but there's
-		// nothing we can do here to express that.
-		if (start_array_index == string::npos || end_array_index == string::npos || end_array_index < start_array_index)
-			return;
-
-		start_array_index++;
-
-		expr = join(expr.substr(0, start_array_index), backend.nonuniform_qualifier, "(",
-		            expr.substr(start_array_index, end_array_index - start_array_index), ")",
-		            expr.substr(end_array_index, string::npos));
+		else if (expr[index] == '[')
+			bracket_count++;
 	}
+
+	assert(bracket_count == 0);
+
+	// Doesn't really make sense to declare a non-arrayed image with nonuniformEXT, but there's
+	// nothing we can do here to express that.
+	if (start_array_index == string::npos || end_array_index == string::npos || end_array_index < start_array_index)
+		return;
+
+	start_array_index++;
+
+	expr = join(expr.substr(0, start_array_index), backend.nonuniform_qualifier, "(",
+	            expr.substr(start_array_index, end_array_index - start_array_index), ")",
+	            expr.substr(end_array_index, string::npos));
 }
 
 void CompilerGLSL::emit_block_hints(const SPIRBlock &)
@@ -15217,40 +15410,6 @@ void CompilerGLSL::emit_line_directive(uint32_t file_id, uint32_t line_literal)
 	{
 		require_extension_internal("GL_GOOGLE_cpp_style_line_directive");
 		statement_no_indent("#line ", line_literal, " \"", get<SPIRString>(file_id).str, "\"");
-	}
-}
-
-void CompilerGLSL::propagate_nonuniform_qualifier(uint32_t id)
-{
-	// SPIR-V might only tag the very last ID with NonUniformEXT, but for codegen,
-	// we need to know NonUniformEXT a little earlier, when the resource is actually loaded.
-	// Back-propagate the qualifier based on the expression dependency chain.
-
-	if (!has_decoration(id, DecorationNonUniformEXT))
-	{
-		set_decoration(id, DecorationNonUniformEXT);
-		force_recompile();
-	}
-
-	auto *e = maybe_get<SPIRExpression>(id);
-	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
-	auto *chain = maybe_get<SPIRAccessChain>(id);
-	if (e)
-	{
-		for (auto &expr : e->expression_dependencies)
-			propagate_nonuniform_qualifier(expr);
-		for (auto &expr : e->implied_read_expressions)
-			propagate_nonuniform_qualifier(expr);
-	}
-	else if (combined)
-	{
-		propagate_nonuniform_qualifier(combined->image);
-		propagate_nonuniform_qualifier(combined->sampler);
-	}
-	else if (chain)
-	{
-		for (auto &expr : chain->implied_read_expressions)
-			propagate_nonuniform_qualifier(expr);
 	}
 }
 
@@ -15665,4 +15824,150 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		request_workaround_wrapper_overload(loaded_type);
 		expr = join("spvWorkaroundRowMajor(", expr, ")");
 	}
+}
+
+void CompilerGLSL::mask_stage_output_by_location(uint32_t location, uint32_t component)
+{
+	masked_output_locations.insert({ location, component });
+}
+
+void CompilerGLSL::mask_stage_output_by_builtin(BuiltIn builtin)
+{
+	masked_output_builtins.insert(builtin);
+}
+
+bool CompilerGLSL::is_stage_output_variable_masked(const SPIRVariable &var) const
+{
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	// Blocks by themselves are never masked. Must be masked per-member.
+	if (is_block)
+		return false;
+
+	bool is_builtin = has_decoration(var.self, DecorationBuiltIn);
+
+	if (is_builtin)
+	{
+		return is_stage_output_builtin_masked(BuiltIn(get_decoration(var.self, DecorationBuiltIn)));
+	}
+	else
+	{
+		if (!has_decoration(var.self, DecorationLocation))
+			return false;
+
+		return is_stage_output_location_masked(
+				get_decoration(var.self, DecorationLocation),
+				get_decoration(var.self, DecorationComponent));
+	}
+}
+
+bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, uint32_t index, bool strip_array) const
+{
+	auto &type = get<SPIRType>(var.basetype);
+	bool is_block = has_decoration(type.self, DecorationBlock);
+	if (!is_block)
+		return false;
+
+	BuiltIn builtin = BuiltInMax;
+	if (is_member_builtin(type, index, &builtin))
+	{
+		return is_stage_output_builtin_masked(builtin);
+	}
+	else
+	{
+		uint32_t location = get_declared_member_location(var, index, strip_array);
+		uint32_t component = get_member_decoration(type.self, index, DecorationComponent);
+		return is_stage_output_location_masked(location, component);
+	}
+}
+
+bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t component) const
+{
+	return masked_output_locations.count({ location, component }) != 0;
+}
+
+bool CompilerGLSL::is_stage_output_builtin_masked(spv::BuiltIn builtin) const
+{
+	return masked_output_builtins.count(builtin) != 0;
+}
+
+uint32_t CompilerGLSL::get_declared_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
+{
+	auto &block_type = get<SPIRType>(var.basetype);
+	if (has_member_decoration(block_type.self, mbr_idx, DecorationLocation))
+		return get_member_decoration(block_type.self, mbr_idx, DecorationLocation);
+	else
+		return get_accumulated_member_location(var, mbr_idx, strip_array);
+}
+
+uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
+{
+	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
+	uint32_t location = get_decoration(var.self, DecorationLocation);
+
+	for (uint32_t i = 0; i < mbr_idx; i++)
+	{
+		auto &mbr_type = get<SPIRType>(type.member_types[i]);
+
+		// Start counting from any place we have a new location decoration.
+		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
+			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
+
+		uint32_t location_count = type_to_location_count(mbr_type);
+		location += location_count;
+	}
+
+	return location;
+}
+
+StorageClass CompilerGLSL::get_expression_effective_storage_class(uint32_t ptr)
+{
+	auto *var = maybe_get_backing_variable(ptr);
+
+	// If the expression has been lowered to a temporary, we need to use the Generic storage class.
+	// We're looking for the effective storage class of a given expression.
+	// An access chain or forwarded OpLoads from such access chains
+	// will generally have the storage class of the underlying variable, but if the load was not forwarded
+	// we have lost any address space qualifiers.
+	bool forced_temporary = ir.ids[ptr].get_type() == TypeExpression && !get<SPIRExpression>(ptr).access_chain &&
+	                        (forced_temporaries.count(ptr) != 0 || forwarded_temporaries.count(ptr) == 0);
+
+	if (var && !forced_temporary)
+	{
+		if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
+			return StorageClassWorkgroup;
+		if (variable_decl_is_remapped_storage(*var, StorageClassStorageBuffer))
+			return StorageClassStorageBuffer;
+
+		// Normalize SSBOs to StorageBuffer here.
+		if (var->storage == StorageClassUniform &&
+		    has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
+			return StorageClassStorageBuffer;
+		else
+			return var->storage;
+	}
+	else
+		return expression_type(ptr).storage;
+}
+
+uint32_t CompilerGLSL::type_to_location_count(const SPIRType &type) const
+{
+	uint32_t count;
+	if (type.basetype == SPIRType::Struct)
+	{
+		uint32_t mbr_count = uint32_t(type.member_types.size());
+		count = 0;
+		for (uint32_t i = 0; i < mbr_count; i++)
+			count += type_to_location_count(get<SPIRType>(type.member_types[i]));
+	}
+	else
+	{
+		count = type.columns > 1 ? type.columns : 1;
+	}
+
+	uint32_t dim_count = uint32_t(type.array.size());
+	for (uint32_t i = 0; i < dim_count; i++)
+		count *= to_array_size_literal(type, i);
+
+	return count;
 }

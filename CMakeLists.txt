@@ -141,7 +141,8 @@ if (CMAKE_COMPILER_IS_GNUCXX OR ((${CMAKE_CXX_COMPILER_ID} MATCHES "Clang") AND 
 		set(spirv-cross-link-flags "${spirv-cross-link-flags} -fsanitize=thread")
 	endif()
 elseif (MSVC)
-	set(spirv-compiler-options ${spirv-compiler-options} /wd4267 /wd4996)
+	# AppVeyor spuriously fails in debug build on older MSVC without /bigobj.
+	set(spirv-compiler-options ${spirv-compiler-options} /wd4267 /wd4996 $<$<CONFIG:DEBUG>:/bigobj>)
 endif()
 
 macro(extract_headers out_abs file_list)
@@ -331,7 +332,7 @@ if (SPIRV_CROSS_STATIC)
 endif()
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 45)
+set(spirv-cross-abi-minor 47)
 set(spirv-cross-abi-patch 0)
 
 if (SPIRV_CROSS_SHARED)
