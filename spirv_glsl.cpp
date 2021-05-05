@@ -764,6 +764,8 @@ void CompilerGLSL::emit_header()
 			{
 				statement("#if defined(GL_AMD_gpu_shader_int16)");
 				statement("#extension GL_AMD_gpu_shader_int16 : require");
+				statement("#elif defined(GL_NV_gpu_shader5)");
+				statement("#extension GL_NV_gpu_shader5 : require");
 				statement("#else");
 				statement("#error No extension available for Int16.");
 				statement("#endif");
