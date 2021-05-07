@@ -570,7 +570,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 		switch (builtin)
 		{
 		case BuiltInPosition:
-			type = "float4";
+			type = is_position_invariant() && backend.support_precise_qualifier ? "precise float4" : "float4";
 			semantic = legacy ? "POSITION" : "SV_Position";
 			break;
 
@@ -818,8 +818,8 @@ string CompilerHLSL::to_interpolation_qualifiers(const Bitset &flags)
 		res += "patch "; // Seems to be different in actual HLSL.
 	if (flags.get(DecorationSample))
 		res += "sample ";
-	if (flags.get(DecorationInvariant))
-		res += "invariant "; // Not supported?
+	if (flags.get(DecorationInvariant) && backend.support_precise_qualifier)
+		res += "precise "; // Not supported?
 
 	return res;
 }
@@ -5730,6 +5730,9 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
+
+	// SM 4.1 does not support precise for some reason.
+	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
 
 	fixup_type_alias();
 	reorder_type_alias();
