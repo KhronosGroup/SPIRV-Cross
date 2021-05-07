@@ -4843,6 +4843,16 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		// "fsub" intrinsic support
+		case SPVFuncImplFSub:
+			statement("template<typename T>");
+			statement("T spvFSub(T l, T r)");
+			begin_scope();
+			statement("return fma(T(-1), r, l);");
+			end_scope();
+			statement("");
+			break;
+
 		// "fmul' intrinsic support
 		case SPVFuncImplFMul:
 			statement("template<typename T>");
@@ -7579,17 +7589,24 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFMul:
-		if (msl_options.invariant_float_math)
+		if (msl_options.invariant_float_math || has_decoration(ops[1], DecorationNoContraction))
 			MSL_BFOP(spvFMul);
 		else
 			MSL_BOP(*);
 		break;
 
 	case OpFAdd:
-		if (msl_options.invariant_float_math)
+		if (msl_options.invariant_float_math || has_decoration(ops[1], DecorationNoContraction))
 			MSL_BFOP(spvFAdd);
 		else
 			MSL_BOP(+);
+		break;
+
+	case OpFSub:
+		if (msl_options.invariant_float_math || has_decoration(ops[1], DecorationNoContraction))
+			MSL_BFOP(spvFSub);
+		else
+			MSL_BOP(-);
 		break;
 
 	// Atomics
@@ -8033,7 +8050,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
 	{
-		if (!msl_options.invariant_float_math)
+		if (!msl_options.invariant_float_math && !has_decoration(ops[1], DecorationNoContraction))
 		{
 			CompilerGLSL::emit_instruction(instruction);
 			break;
@@ -8075,7 +8092,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpMatrixTimesMatrix:
 	{
-		if (!msl_options.invariant_float_math)
+		if (!msl_options.invariant_float_math && !has_decoration(ops[1], DecorationNoContraction))
 		{
 			CompilerGLSL::emit_instruction(instruction);
 			break;
@@ -14856,9 +14873,11 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 		return SPVFuncImplMod;
 
 	case OpFAdd:
-		if (compiler.msl_options.invariant_float_math)
+	case OpFSub:
+		if (compiler.msl_options.invariant_float_math ||
+		    compiler.has_decoration(args[1], DecorationNoContraction))
 		{
-			return SPVFuncImplFAdd;
+			return opcode == OpFAdd ? SPVFuncImplFAdd : SPVFuncImplFSub;
 		}
 		break;
 
@@ -14867,7 +14886,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpMatrixTimesVector:
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesMatrix:
-		if (compiler.msl_options.invariant_float_math)
+		if (compiler.msl_options.invariant_float_math ||
+		    compiler.has_decoration(args[1], DecorationNoContraction))
 		{
 			return SPVFuncImplFMul;
 		}

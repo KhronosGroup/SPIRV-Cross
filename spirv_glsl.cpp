@@ -559,17 +559,18 @@ string CompilerGLSL::compile()
 {
 	ir.fixup_reserved_names();
 
-	if (options.vulkan_semantics)
-		backend.allow_precision_qualifiers = true;
-	else
+	if (!options.vulkan_semantics)
 	{
 		// only NV_gpu_shader5 supports divergent indexing on OpenGL, and it does so without extra qualifiers
 		backend.nonuniform_qualifier = "";
 		backend.needs_row_major_load_workaround = true;
 	}
+	backend.allow_precision_qualifiers = options.vulkan_semantics || options.es;
 	backend.force_gl_in_out_block = true;
 	backend.supports_extensions = true;
 	backend.use_array_constructor = true;
+
+	backend.support_precise_qualifier = (!options.es && options.version >= 400) || (options.es && options.version >= 320);
 
 	if (is_legacy_es())
 		backend.support_case_fallthrough = false;
@@ -5545,7 +5546,12 @@ void CompilerGLSL::emit_unary_op(uint32_t result_type, uint32_t result_id, uint3
 
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
-	bool forward = should_forward(op0) && should_forward(op1);
+	// Various FP arithmetic opcodes such as add, sub, mul will hit this.
+	bool force_temporary_precise = backend.support_precise_qualifier &&
+	                               has_decoration(result_id, DecorationNoContraction) &&
+	                               type_is_floating_point(get<SPIRType>(result_type));
+	bool forward = should_forward(op0) && should_forward(op1) && !force_temporary_precise;
+
 	emit_op(result_type, result_id,
 	        join(to_enclosed_unpacked_expression(op0), " ", op, " ", to_enclosed_unpacked_expression(op1)), forward);
 
@@ -12728,7 +12734,7 @@ void CompilerGLSL::emit_struct_padding_target(const SPIRType &)
 {
 }
 
-const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags)
+string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags)
 {
 	// GL_EXT_buffer_reference variables can be marked as restrict.
 	if (flags.get(DecorationRestrictPointerEXT))
@@ -12739,6 +12745,11 @@ const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const B
 	    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
 	    type.basetype != SPIRType::Sampler)
 		return "";
+
+	string qual;
+
+	if (flags.get(DecorationNoContraction) && backend.support_precise_qualifier)
+		qual = "precise ";
 
 	if (options.es)
 	{
@@ -12754,7 +12765,7 @@ const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const B
 			                        options.fragment.default_int_precision == Options::Mediump &&
 			                        execution.model == ExecutionModelFragment;
 
-			return implied_fmediump || implied_imediump ? "" : "mediump ";
+			qual += (implied_fmediump || implied_imediump) ? "" : "mediump ";
 		}
 		else
 		{
@@ -12768,7 +12779,7 @@ const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const B
 			                        execution.model == ExecutionModelFragment) ||
 			                       (execution.model != ExecutionModelFragment));
 
-			return implied_fhighp || implied_ihighp ? "" : "highp ";
+			qual += (implied_fhighp || implied_ihighp) ? "" : "highp ";
 		}
 	}
 	else if (backend.allow_precision_qualifiers)
@@ -12776,18 +12787,16 @@ const char *CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const B
 		// Vulkan GLSL supports precision qualifiers, even in desktop profiles, which is convenient.
 		// The default is highp however, so only emit mediump in the rare case that a shader has these.
 		if (flags.get(DecorationRelaxedPrecision))
-			return "mediump ";
-		else
-			return "";
+			qual += "mediump ";
 	}
-	else
-		return "";
+
+	return qual;
 }
 
-const char *CompilerGLSL::to_precision_qualifiers_glsl(uint32_t id)
+string CompilerGLSL::to_precision_qualifiers_glsl(uint32_t id)
 {
 	auto &type = expression_type(id);
-	bool use_precision_qualifiers = backend.allow_precision_qualifiers || options.es;
+	bool use_precision_qualifiers = backend.allow_precision_qualifiers;
 	if (use_precision_qualifiers && (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage))
 	{
 		// Force mediump for the sampler type. We cannot declare 16-bit or smaller image types.

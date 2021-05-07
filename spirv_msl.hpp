@@ -655,6 +655,7 @@ protected:
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
 		SPVFuncImplFMul,
 		SPVFuncImplFAdd,
+		SPVFuncImplFSub,
 		SPVFuncImplCubemapTo2DArrayFace,
 		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplInverse4x4,

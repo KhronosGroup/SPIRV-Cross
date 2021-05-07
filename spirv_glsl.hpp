@@ -581,6 +581,7 @@ protected:
 		bool use_array_constructor = false;
 		bool needs_row_major_load_workaround = false;
 		bool support_pointer_to_pointer = false;
+		bool support_precise_qualifier = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -734,9 +735,9 @@ protected:
 	virtual std::string to_qualifiers_glsl(uint32_t id);
 	void fixup_io_block_patch_qualifiers(const SPIRVariable &var);
 	void emit_output_variable_initializer(const SPIRVariable &var);
-	const char *to_precision_qualifiers_glsl(uint32_t id);
+	std::string to_precision_qualifiers_glsl(uint32_t id);
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
-	const char *flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
+	std::string flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
 	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	virtual std::string to_interpolation_qualifiers(const Bitset &flags);

@@ -5731,6 +5731,9 @@ string CompilerHLSL::compile()
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
 
+	// SM 4.1 does not support precise for some reason.
+	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
+
 	fixup_type_alias();
 	reorder_type_alias();
 	build_function_control_flow_graphs_and_analyze();
