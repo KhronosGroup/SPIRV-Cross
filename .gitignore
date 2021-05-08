@@ -21,3 +21,4 @@
 *.vcxproj.user
 
 !CMakeLists.txt
+!LICENSES/*.txt
