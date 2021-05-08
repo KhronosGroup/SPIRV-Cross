@@ -60,6 +60,8 @@ jobs:
     container: khronosgroup/docker-images:asciidoctor-spec
 
     steps:
+      - uses: actions/checkout@v2
+
       # REUSE license checker
       - name: license-check
         run: |
