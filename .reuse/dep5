@@ -5,3 +5,7 @@ Source: https://github.com/KhronosGroup/SPIRV-Cross
 Files: shaders*/* reference/* tests-other/*
 Copyright: 2016-2021 The Khronos Group, Inc.
 License: Apache-2.0
+
+Files: spirv.h spirv.hpp
+Copyright: 2016-2021 The Khronos Group, Inc.
+License: MIT
