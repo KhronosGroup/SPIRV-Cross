@@ -551,6 +551,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '1', '1']
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '2', '2']
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '3', '3']
+    if '.framebuffer-fetch-noncoherent.' in shader:
+        extra_args += ['--glsl-ext-framebuffer-fetch-noncoherent']
     if '.zero-initialize.' in shader:
         extra_args += ['--force-zero-initialized-variables']
     if '.force-flattened-io.' in shader:
