@@ -7145,7 +7145,17 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 		uint32_t const_mbr_id = next_id++;
 		uint32_t index = get_extended_decoration(ops[2], SPIRVCrossDecorationInterfaceMemberIndex);
 
-		if (flatten_composites || is_block)
+		// If we have a pointer chain expression, and we are no longer pointing to a composite
+		// object, we are in the clear. There is no longer a need to flatten anything.
+		bool further_access_chain_is_trivial = false;
+		if (ptr_is_chain && flatten_composites)
+		{
+			auto &ptr_type = expression_type(ptr);
+			if (!is_array(ptr_type) && !is_matrix(ptr_type) && ptr_type.basetype != SPIRType::Struct)
+				further_access_chain_is_trivial = true;
+		}
+
+		if (!further_access_chain_is_trivial && (flatten_composites || is_block))
 		{
 			uint32_t i = first_non_array_index;
 			auto *type = &get_variable_element_type(*var);
@@ -7261,7 +7271,11 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 			// First one is the gl_in/gl_out struct itself, then an index into that array.
 			// If we have traversed further, we use a normal access chain formulation.
 			auto *ptr_expr = maybe_get<SPIRExpression>(ptr);
-			if (flatten_composites && ptr_expr && ptr_expr->implied_read_expressions.size() == 2)
+			bool split_access_chain_formulation = flatten_composites && ptr_expr &&
+			                                      ptr_expr->implied_read_expressions.size() == 2 &&
+			                                      !further_access_chain_is_trivial;
+
+			if (split_access_chain_formulation)
 			{
 				e = join(to_expression(ptr),
 				         access_chain_internal(stage_var_id, indices.data(), uint32_t(indices.size()),
