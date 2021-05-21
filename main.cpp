@@ -662,6 +662,7 @@ struct CLIArguments
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	bool glsl_force_flattened_io_blocks = false;
 	SmallVector<pair<uint32_t, uint32_t>> glsl_ext_framebuffer_fetch;
+	bool glsl_ext_framebuffer_fetch_noncoherent = false;
 	bool vulkan_glsl_disable_ext_samplerless_texture_functions = false;
 	bool emit_line_directives = false;
 	bool enable_storage_image_qualifier_deduction = true;
@@ -754,6 +755,7 @@ static void print_help_glsl()
 	                "\t[--glsl-emit-ubo-as-plain-uniforms]:\n\t\tInstead of emitting UBOs, emit them as plain uniform structs.\n"
 	                "\t[--glsl-remap-ext-framebuffer-fetch input-attachment color-location]:\n\t\tRemaps an input attachment to use GL_EXT_shader_framebuffer_fetch.\n"
 	                "\t\tgl_LastFragData[location] is read from. The attachment to read from must be declared as an output in the shader.\n"
+	                "\t[--glsl-ext-framebuffer-fetch-noncoherent]:\n\t\tUses noncoherent qualifier for framebuffer fetch.\n"
 	                "\t[--vulkan-glsl-disable-ext-samplerless-texture-functions]:\n\t\tDo not allow use of GL_EXT_samperless_texture_functions, even in Vulkan GLSL.\n"
 	                "\t\tUse of texelFetch and similar might have to create dummy samplers to work around it.\n"
 	                "\t[--combined-samplers-inherit-bindings]:\n\t\tInherit binding information from the textures when building combined image samplers from separate textures and samplers.\n"
@@ -1279,7 +1281,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	compiler->set_common_options(opts);
 
 	for (auto &fetch : args.glsl_ext_framebuffer_fetch)
-		compiler->remap_ext_framebuffer_fetch(fetch.first, fetch.second);
+		compiler->remap_ext_framebuffer_fetch(fetch.first, fetch.second, !args.glsl_ext_framebuffer_fetch_noncoherent);
 
 	// Set HLSL specific options.
 	if (args.hlsl)
@@ -1468,6 +1470,9 @@ static int main_inner(int argc, char *argv[])
 		uint32_t input_index = parser.next_uint();
 		uint32_t color_attachment = parser.next_uint();
 		args.glsl_ext_framebuffer_fetch.push_back({ input_index, color_attachment });
+	});
+	cbs.add("--glsl-ext-framebuffer-fetch-noncoherent", [&args](CLIParser &) {
+		args.glsl_ext_framebuffer_fetch_noncoherent = true;
 	});
 	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions",
 	        [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
