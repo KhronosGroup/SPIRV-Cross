@@ -2339,6 +2339,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		if (get_decoration_bitset(var.self).get(DecorationLocation))
 		{
 			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
+			uint32_t comp = get_decoration(var.self, DecorationComponent);
 			if (storage == StorageClassInput)
 			{
 				var.basetype = ensure_correct_input_type(var.basetype, locn, 0, meta.strip_array);
@@ -2349,6 +2350,8 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 					ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 			}
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
+			if (comp)
+				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, comp);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
 		else if (is_builtin && is_tessellation_shader() && inputs_by_builtin.count(builtin))
@@ -3319,7 +3322,6 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				// Need to deal specially with DecorationComponent.
 				// Multiple variables can alias the same Location, and try to make sure each location is declared only once.
 				// We will swizzle data in and out to make this work.
-				// We only need to consider plain variables here, not composites.
 				// This is only relevant for vertex inputs and fragment outputs.
 				// Technically tessellation as well, but it is too complicated to support.
 				uint32_t component = get_decoration(var_id, DecorationComponent);
@@ -3329,8 +3331,15 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 						SPIRV_CROSS_THROW("Component decoration is not supported in tessellation shaders.");
 					else if (pack_components)
 					{
-						auto &location_meta = meta.location_meta[location];
-						location_meta.num_components = std::max(location_meta.num_components, component + type.vecsize);
+						uint32_t array_size = 1;
+						if (!type.array.empty())
+							array_size = to_array_size_literal(type);
+
+						for (uint32_t location_offset = 0; location_offset < array_size; location_offset++)
+						{
+							auto &location_meta = meta.location_meta[location + location_offset];
+							location_meta.num_components = std::max(location_meta.num_components, component + type.vecsize);
+						}
 					}
 				}
 			}
@@ -15112,6 +15121,8 @@ bool CompilerMSL::MemberSorter::operator()(uint32_t mbr_idx1, uint32_t mbr_idx2)
 			return mbr_meta2.builtin;
 		else if (mbr_meta1.builtin)
 			return mbr_meta1.builtin_type < mbr_meta2.builtin_type;
+		else if (mbr_meta1.location == mbr_meta2.location)
+			return mbr_meta1.component < mbr_meta2.component;
 		else
 			return mbr_meta1.location < mbr_meta2.location;
 	}
