@@ -4948,7 +4948,13 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 
 			char print_buffer[32];
 			sprintf(print_buffer, "0x%xu", c.scalar(col, row));
-			res = join(bitcast_glsl_op(out_type, in_type), "(", print_buffer, ")");
+
+			const char *comment = "inf";
+			if (float_value == -numeric_limits<float>::infinity())
+				comment = "-inf";
+			else if (std::isnan(float_value))
+				comment = "nan";
+			res = join(bitcast_glsl_op(out_type, in_type), "(", print_buffer, " /* ", comment, " */)");
 		}
 		else
 		{
@@ -5015,7 +5021,13 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 			char print_buffer[64];
 			sprintf(print_buffer, "0x%llx%s", static_cast<unsigned long long>(u64_value),
 			        backend.long_long_literal_suffix ? "ull" : "ul");
-			res = join(bitcast_glsl_op(out_type, in_type), "(", print_buffer, ")");
+
+			const char *comment = "inf";
+			if (double_value == -numeric_limits<double>::infinity())
+				comment = "-inf";
+			else if (std::isnan(double_value))
+				comment = "nan";
+			res = join(bitcast_glsl_op(out_type, in_type), "(", print_buffer, " /* ", comment, " */)");
 		}
 		else
 		{
