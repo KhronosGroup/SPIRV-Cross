@@ -7108,7 +7108,11 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	{
 		forward = forward && should_forward(args.component);
 		farg_str += ", ";
-		farg_str += to_expression(args.component);
+		auto &component_type = expression_type(args.component);
+		if (component_type.basetype == SPIRType::Int)
+			farg_str += to_expression(args.component);
+		else
+			farg_str += join("int(", to_expression(args.component), ")");
 	}
 
 	*p_forward = forward;
