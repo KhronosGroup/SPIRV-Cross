@@ -823,6 +823,22 @@ void CompilerGLSL::emit_header()
 			statement("#extension ", ext, " : enable");
 			statement("#endif");
 		}
+		else if (ext == "GL_EXT_control_flow_attributes")
+		{
+			// These are just hints so we can conditionally enable and fallback in the shader.
+			statement("#if defined(GL_EXT_control_flow_attributes)");
+			statement("#extension GL_EXT_control_flow_attributes : require");
+			statement("#define SPIRV_CROSS_FLATTEN [[flatten]]");
+			statement("#define SPIRV_CROSS_BRANCH [[dont_flatten]]");
+			statement("#define SPIRV_CROSS_UNROLL [[unroll]]");
+			statement("#define SPIRV_CROSS_LOOP [[dont_unroll]]");
+			statement("#else");
+			statement("#define SPIRV_CROSS_FLATTEN");
+			statement("#define SPIRV_CROSS_BRANCH");
+			statement("#define SPIRV_CROSS_UNROLL");
+			statement("#define SPIRV_CROSS_LOOP");
+			statement("#endif");
+		}
 		else
 			statement("#extension ", ext, " : require");
 	}
@@ -15372,8 +15388,32 @@ void CompilerGLSL::convert_non_uniform_expression(string &expr, uint32_t ptr_id)
 	            expr.substr(end_array_index, string::npos));
 }
 
-void CompilerGLSL::emit_block_hints(const SPIRBlock &)
+void CompilerGLSL::emit_block_hints(const SPIRBlock &block)
 {
+	if ((options.es && options.version < 310) || (!options.es && options.version < 140))
+		return;
+
+	switch (block.hint)
+	{
+	case SPIRBlock::HintFlatten:
+		require_extension_internal("GL_EXT_control_flow_attributes");
+		statement("SPIRV_CROSS_FLATTEN");
+		break;
+	case SPIRBlock::HintDontFlatten:
+		require_extension_internal("GL_EXT_control_flow_attributes");
+		statement("SPIRV_CROSS_BRANCH");
+		break;
+	case SPIRBlock::HintUnroll:
+		require_extension_internal("GL_EXT_control_flow_attributes");
+		statement("SPIRV_CROSS_UNROLL");
+		break;
+	case SPIRBlock::HintDontUnroll:
+		require_extension_internal("GL_EXT_control_flow_attributes");
+		statement("SPIRV_CROSS_LOOP");
+		break;
+	default:
+		break;
+	}
 }
 
 void CompilerGLSL::preserve_alias_on_reset(uint32_t id)
