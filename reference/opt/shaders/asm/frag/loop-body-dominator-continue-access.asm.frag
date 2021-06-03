@@ -34,9 +34,9 @@ void main()
         bool _225;
         int _229;
         uint _222 = 0u;
+        SPIRV_CROSS_UNROLL
         for (;;)
         {
-            SPIRV_CROSS_UNROLL
             if (_222 < _11.shadowCascadesNum)
             {
                 mat4 _223;
