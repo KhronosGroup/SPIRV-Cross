@@ -911,6 +911,8 @@ protected:
 	// Similar is implemented for images, as well as if subpass inputs are needed.
 	std::unordered_set<uint32_t> comparison_ids;
 	bool need_subpass_input = false;
+	bool need_subpass_color_input = false;
+	bool need_subpass_depth_input = false;
 
 	// In certain backends, we will need to use a dummy sampler to be able to emit code.
 	// GLSL does not support texelFetch on texture2D objects, but SPIR-V does,
@@ -950,6 +952,8 @@ protected:
 
 		void add_hierarchy_to_comparison_ids(uint32_t ids);
 		bool need_subpass_input = false;
+		bool need_subpass_color_input = false;
+		bool need_subpass_depth_input = false;
 		void add_dependency(uint32_t dst, uint32_t src);
 	};
 

@@ -280,7 +280,7 @@ void CompilerMSL::build_implicit_builtins()
 				return;
 
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
-			if (need_subpass_input && (!msl_options.use_framebuffer_fetch_subpasses))
+			if (need_subpass_input && (!msl_options.use_framebuffer_fetch_subpasses || need_subpass_depth_input))
 			{
 				switch (builtin)
 				{
@@ -428,7 +428,7 @@ void CompilerMSL::build_implicit_builtins()
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
 		if ((!has_frag_coord || (msl_options.multiview && !has_view_idx) ||
 		     (msl_options.arrayed_subpass_input && !msl_options.multiview && !has_layer)) &&
-		    (!msl_options.use_framebuffer_fetch_subpasses) && need_subpass_input)
+		    (!msl_options.use_framebuffer_fetch_subpasses || need_subpass_depth_input) && need_subpass_input)
 		{
 			if (!has_frag_coord)
 			{
@@ -1488,7 +1488,7 @@ void CompilerMSL::preprocess_op_codes()
 	// that function would add gl_FragCoord.
 	if (preproc.needs_sample_id || msl_options.force_sample_rate_shading ||
 	    (is_sample_rate() && (active_input_builtins.get(BuiltInFragCoord) ||
-	                          (need_subpass_input && !msl_options.use_framebuffer_fetch_subpasses))))
+	                          (need_subpass_input && (!msl_options.use_framebuffer_fetch_subpasses || need_subpass_depth_input)))))
 		needs_sample_id = true;
 }
 
@@ -1582,7 +1582,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// Use Metal's native frame-buffer fetch API for subpass inputs.
 				auto &type = get<SPIRType>(ops[0]);
 				if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData &&
-				    (!msl_options.use_framebuffer_fetch_subpasses))
+				    (!msl_options.use_framebuffer_fetch_subpasses || type.image.depth))
 				{
 					// Implicitly reads gl_FragCoord.
 					assert(builtin_frag_coord_id != 0);
@@ -8374,7 +8374,7 @@ void CompilerMSL::emit_texture_op(const Instruction &i, bool sparse)
 		auto &imgtype = get<SPIRType>(type.self);
 
 		// Use Metal's native frame-buffer fetch API for subpass inputs.
-		if (imgtype.image.dim == DimSubpassData)
+		if (imgtype.image.dim == DimSubpassData && !imgtype.image.depth)
 		{
 			// Subpass inputs cannot be invalidated,
 			// so just forward the expression directly.
@@ -11250,7 +11250,7 @@ bool CompilerMSL::is_sample_rate() const
 	return get_execution_model() == ExecutionModelFragment &&
 	       (msl_options.force_sample_rate_shading ||
 	        std::find(caps.begin(), caps.end(), CapabilitySampleRateShading) != caps.end() ||
-	        (msl_options.use_framebuffer_fetch_subpasses && need_subpass_input));
+	        (msl_options.use_framebuffer_fetch_subpasses && need_subpass_color_input));
 }
 
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
@@ -12457,8 +12457,8 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 
 bool CompilerMSL::type_is_msl_framebuffer_fetch(const SPIRType &type) const
 {
-	return type.basetype == SPIRType::Image && type.image.dim == DimSubpassData &&
-	       msl_options.use_framebuffer_fetch_subpasses;
+	return type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && !type.image.depth
+	       && msl_options.use_framebuffer_fetch_subpasses;
 }
 
 bool CompilerMSL::type_is_pointer(const SPIRType &type) const
@@ -13454,6 +13454,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		{
 		case Dim1D:
 		case Dim2D:
+		case DimSubpassData:
 			if (img_type.dim == Dim1D && !msl_options.texture_1D_as_2D)
 			{
 				// Use a native Metal 1D texture
