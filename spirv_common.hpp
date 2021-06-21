@@ -417,6 +417,11 @@ struct IVariant
 	virtual ~IVariant() = default;
 	virtual IVariant *clone(ObjectPoolBase *pool) = 0;
 	ID self = 0;
+
+protected:
+	IVariant() = default;
+	IVariant(const IVariant&) = default;
+	IVariant &operator=(const IVariant&) = default;
 };
 
 #define SPIRV_CROSS_DECLARE_CLONE(T)                                \
