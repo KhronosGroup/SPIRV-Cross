@@ -219,7 +219,10 @@ private:
 	void emit_resources();
 	void declare_undefined_values() override;
 	void emit_interface_block_globally(const SPIRVariable &type);
-	void emit_interface_block_in_struct(const SPIRVariable &type, std::unordered_set<uint32_t> &active_locations);
+	void emit_interface_block_in_struct(const SPIRVariable &var, std::unordered_set<uint32_t> &active_locations);
+	void emit_interface_block_member_in_struct(const SPIRVariable &var, uint32_t member_index,
+	                                           uint32_t location,
+	                                           std::unordered_set<uint32_t> &active_locations);
 	void emit_builtin_inputs_in_struct();
 	void emit_builtin_outputs_in_struct();
 	void emit_texture_op(const Instruction &i, bool sparse) override;
@@ -347,7 +350,6 @@ private:
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
 
-	void emit_io_block(const SPIRVariable &var);
 	std::string to_semantic(uint32_t location, spv::ExecutionModel em, spv::StorageClass sc);
 
 	uint32_t num_workgroups_builtin = 0;
