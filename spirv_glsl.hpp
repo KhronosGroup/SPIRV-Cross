@@ -133,6 +133,9 @@ public:
 		// what happens on legacy GLSL targets for blocks and structs.
 		bool force_flattened_io_blocks = false;
 
+		// If non-zero, controls layout(num_views = N) in; in GL_OVR_multiview2.
+		uint32_t ovr_multiview_view_count = 0;
+
 		enum Precision
 		{
 			DontCare,
