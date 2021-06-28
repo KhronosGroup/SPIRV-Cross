@@ -1930,6 +1930,28 @@ void CompilerHLSL::emit_resources()
 		end_scope();
 		statement("");
 	}
+
+	for (TypeID type_id : composite_selection_workaround_types)
+	{
+		// Need out variable since HLSL does not support returning arrays.
+		auto &type = get<SPIRType>(type_id);
+		auto type_str = type_to_glsl(type);
+		auto type_arr_str = type_to_array_glsl(type);
+		statement("void spvSelectComposite(out ", type_str, " out_value", type_arr_str, ", bool cond, ",
+		          type_str, " true_val", type_arr_str, ", ",
+		          type_str, " false_val", type_arr_str, ")");
+		begin_scope();
+		statement("if (cond)");
+		begin_scope();
+		statement("out_value = true_val;");
+		end_scope();
+		statement("else");
+		begin_scope();
+		statement("out_value = false_val;");
+		end_scope();
+		end_scope();
+		statement("");
+	}
 }
 
 void CompilerHLSL::emit_texture_size_variants(uint64_t variant_mask, const char *vecsize_qualifier, bool uav,
@@ -4784,6 +4806,34 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 				emit_unary_func_op(ops[0], ops[1], ops[2], "spvUnpackUint2x32");
 		}
 
+		break;
+	}
+
+	case OpSelect:
+	{
+		auto &value_type = expression_type(ops[3]);
+		if (value_type.basetype == SPIRType::Struct || is_array(value_type))
+		{
+			// HLSL does not support ternary expressions on composites.
+			// Cannot use branches, since we might be in a continue block
+			// where explicit control flow is prohibited.
+			// Emit a helper function where we can use control flow.
+			TypeID value_type_id = expression_type_id(ops[3]);
+			auto itr = std::find(composite_selection_workaround_types.begin(),
+			                     composite_selection_workaround_types.end(),
+			                     value_type_id);
+			if (itr == composite_selection_workaround_types.end())
+			{
+				composite_selection_workaround_types.push_back(value_type_id);
+				force_recompile();
+			}
+			emit_uninitialized_temporary_expression(ops[0], ops[1]);
+			statement("spvSelectComposite(",
+					  to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
+					  to_expression(ops[3]), ", ", to_expression(ops[4]), ");");
+		}
+		else
+			CompilerGLSL::emit_instruction(instruction);
 		break;
 	}
 

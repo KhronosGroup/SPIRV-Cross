@@ -470,7 +470,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
         float3 _245;
         if (any(abs(_142 - View_PrimitiveSceneData._m0[_222 + 5u].xyz) > (View_PrimitiveSceneData._m0[_222 + 19u].xyz + float3(1.0))))
         {
-            _245 = mix(float3(1.0, 1.0, 0.0), float3(0.0, 1.0, 1.0), select(float3(0.0), float3(1.0), float3(fract(dot(_142, float3(0.57700002193450927734375)) * 0.00200000009499490261077880859375)) > float3(0.5)));
+            _245 = mix(float3(1.0, 1.0, 0.0), float3(0.0, 1.0, 1.0), float3(float3(fract(dot(_142, float3(0.57700002193450927734375)) * 0.00200000009499490261077880859375)) > float3(0.5)));
         }
         else
         {
