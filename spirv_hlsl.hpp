@@ -369,6 +369,8 @@ private:
 
 	// Returns true for BuiltInSampleMask because gl_SampleMask[] is an array in SPIR-V, but SV_Coverage is a scalar in HLSL.
 	bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const override;
+
+	std::vector<TypeID> composite_selection_workaround_types;
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 

@@ -6191,44 +6191,57 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 	if (cleft->specialization || cright->specialization)
 		return false;
 
-	// We can only use trivial construction if we have a scalar
-	// (should be possible to do it for vectors as well, but that is overkill for now).
-	if (lerptype.basetype != SPIRType::Boolean || lerptype.vecsize > 1)
+	auto &value_type = get<SPIRType>(cleft->constant_type);
+
+	if (lerptype.basetype != SPIRType::Boolean)
+		return false;
+	if (value_type.basetype == SPIRType::Struct || is_array(value_type))
+		return false;
+	if (!backend.use_constructor_splatting && value_type.vecsize != lerptype.vecsize)
 		return false;
 
 	// If our bool selects between 0 and 1, we can cast from bool instead, making our trivial constructor.
-	bool ret = false;
-	switch (type.basetype)
+	bool ret = true;
+	for (uint32_t col = 0; col < value_type.columns; col++)
 	{
-	case SPIRType::Short:
-	case SPIRType::UShort:
-		ret = cleft->scalar_u16() == 0 && cright->scalar_u16() == 1;
-		break;
+		for (uint32_t row = 0; row < value_type.vecsize; row++)
+		{
+			switch (type.basetype)
+			{
+			case SPIRType::Short:
+			case SPIRType::UShort:
+				ret = cleft->scalar_u16(col, row) == 0 && cright->scalar_u16(col, row) == 1;
+				break;
 
-	case SPIRType::Int:
-	case SPIRType::UInt:
-		ret = cleft->scalar() == 0 && cright->scalar() == 1;
-		break;
+			case SPIRType::Int:
+			case SPIRType::UInt:
+				ret = cleft->scalar(col, row) == 0 && cright->scalar(col, row) == 1;
+				break;
 
-	case SPIRType::Half:
-		ret = cleft->scalar_f16() == 0.0f && cright->scalar_f16() == 1.0f;
-		break;
+			case SPIRType::Half:
+				ret = cleft->scalar_f16(col, row) == 0.0f && cright->scalar_f16(col, row) == 1.0f;
+				break;
 
-	case SPIRType::Float:
-		ret = cleft->scalar_f32() == 0.0f && cright->scalar_f32() == 1.0f;
-		break;
+			case SPIRType::Float:
+				ret = cleft->scalar_f32(col, row) == 0.0f && cright->scalar_f32(col, row) == 1.0f;
+				break;
 
-	case SPIRType::Double:
-		ret = cleft->scalar_f64() == 0.0 && cright->scalar_f64() == 1.0;
-		break;
+			case SPIRType::Double:
+				ret = cleft->scalar_f64(col, row) == 0.0 && cright->scalar_f64(col, row) == 1.0;
+				break;
 
-	case SPIRType::Int64:
-	case SPIRType::UInt64:
-		ret = cleft->scalar_u64() == 0 && cright->scalar_u64() == 1;
-		break;
+			case SPIRType::Int64:
+			case SPIRType::UInt64:
+				ret = cleft->scalar_u64(col, row) == 0 && cright->scalar_u64(col, row) == 1;
+				break;
 
-	default:
-		break;
+			default:
+				return false;
+			}
+		}
+
+		if (!ret)
+			break;
 	}
 
 	if (ret)

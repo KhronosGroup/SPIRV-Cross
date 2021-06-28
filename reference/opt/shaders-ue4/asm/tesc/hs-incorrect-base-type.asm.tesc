@@ -369,7 +369,7 @@ kernel void main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)
             float4 _537 = View.View_TranslatedWorldToClip * float4(temp_var_hullMainRetVal[2u].WorldPosition[0].xyz, 1.0);
             float3 _538 = _537.xyz;
             float _540 = _537.w;
-            if (any((((select(int3(0), int3(1), (_495 - _496) < float3(_498 + _499)) + (int3(2) * select(int3(0), int3(1), (_495 + _496) > float3((-_498) - _499)))) | (select(int3(0), int3(1), (_517 - _496) < float3(_519 + _499)) + (int3(2) * select(int3(0), int3(1), (_517 + _496) > float3((-_519) - _499))))) | (select(int3(0), int3(1), (_538 - _496) < float3(_540 + _499)) + (int3(2) * select(int3(0), int3(1), (_538 + _496) > float3((-_540) - _499))))) != int3(3)))
+            if (any((((int3((_495 - _496) < float3(_498 + _499)) + (int3(2) * int3((_495 + _496) > float3((-_498) - _499)))) | (int3((_517 - _496) < float3(_519 + _499)) + (int3(2) * int3((_517 + _496) > float3((-_519) - _499))))) | (int3((_538 - _496) < float3(_540 + _499)) + (int3(2) * int3((_538 + _496) > float3((-_540) - _499))))) != int3(3)))
             {
                 _589 = float4(0.0);
                 break;
