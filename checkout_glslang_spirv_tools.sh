@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright 2016-2021 The Khronos Group Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 GLSLANG_REV=3de5cfe50edecd001e6d703555284d9b10b3dd57
 SPIRV_TOOLS_REV=f3ccb633dfd7c5de1f9f0a2d2e9d7a25f2478206
