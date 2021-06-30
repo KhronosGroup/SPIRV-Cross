@@ -1136,8 +1136,22 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 		res += "sample ";
 	if (flags.get(DecorationInvariant))
 		res += "invariant ";
+
 	if (flags.get(DecorationExplicitInterpAMD))
+	{
+		require_extension_internal("GL_AMD_shader_explicit_vertex_parameter");
 		res += "__explicitInterpAMD ";
+	}
+
+	if (flags.get(DecorationPerVertexNV))
+	{
+		if (options.es && options.version < 320)
+			SPIRV_CROSS_THROW("pervertexNV requires ESSL 320.");
+		else if (!options.es && options.version < 450)
+			SPIRV_CROSS_THROW("pervertexNV requires GLSL 450.");
+		require_extension_internal("GL_NV_fragment_shader_barycentric");
+		res += "pervertexNV ";
+	}
 
 	return res;
 }
