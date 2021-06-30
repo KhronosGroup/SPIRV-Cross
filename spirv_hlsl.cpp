@@ -641,7 +641,6 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
-			break;
 		}
 
 		if (type && semantic)
@@ -770,7 +769,6 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 		default:
 			SPIRV_CROSS_THROW("Unsupported builtin in HLSL.");
-			break;
 		}
 
 		if (type && semantic)
@@ -4588,19 +4586,15 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 
 	case OpGroupNonUniformInverseBallot:
 		SPIRV_CROSS_THROW("Cannot trivially implement InverseBallot in HLSL.");
-		break;
 
 	case OpGroupNonUniformBallotBitExtract:
 		SPIRV_CROSS_THROW("Cannot trivially implement BallotBitExtract in HLSL.");
-		break;
 
 	case OpGroupNonUniformBallotFindLSB:
 		SPIRV_CROSS_THROW("Cannot trivially implement BallotFindLSB in HLSL.");
-		break;
 
 	case OpGroupNonUniformBallotFindMSB:
 		SPIRV_CROSS_THROW("Cannot trivially implement BallotFindMSB in HLSL.");
-		break;
 
 	case OpGroupNonUniformBallotBitCount:
 	{
