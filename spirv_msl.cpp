@@ -109,7 +109,6 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 		default:
 			SPIRV_CROSS_THROW("Unexpected argument buffer resource base type. When padding argument buffer elements, "
 			                  "all descriptor set resources must be supplied with a base type by the app.");
-			break;
 		}
 #undef ADD_ARG_IDX_TO_BINDING_NUM_LOOKUP
 	}
@@ -9912,7 +9911,6 @@ string CompilerMSL::to_component_argument(uint32_t id)
 	default:
 		SPIRV_CROSS_THROW("The value (" + to_string(component_index) + ") of OpConstant ID " + to_string(id) +
 		                  " is not a valid Component index, which must be one of 0, 1, 2, or 3.");
-		return "component::x";
 	}
 }
 
@@ -10120,7 +10118,6 @@ static string create_swizzle(MSLComponentSwizzle swizzle)
 		return "spvSwizzle::alpha";
 	default:
 		SPIRV_CROSS_THROW("Invalid component swizzle.");
-		return "";
 	}
 }
 
@@ -13745,7 +13742,6 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 			break;
 		default:
 			SPIRV_CROSS_THROW("Invalid BitCount operation.");
-			break;
 		}
 		break;
 	}

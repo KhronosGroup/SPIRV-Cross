@@ -8269,13 +8269,9 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			return "gl_BaseVertex";
 		}
-		else
-		{
-			// On regular GL, this is soft-enabled and we emit ifdefs in code.
-			require_extension_internal("GL_ARB_shader_draw_parameters");
-			return "SPIRV_Cross_BaseVertex";
-		}
-		break;
+		// On regular GL, this is soft-enabled and we emit ifdefs in code.
+		require_extension_internal("GL_ARB_shader_draw_parameters");
+		return "SPIRV_Cross_BaseVertex";
 
 	case BuiltInBaseInstance:
 		if (options.es)
@@ -8290,13 +8286,9 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			return "gl_BaseInstance";
 		}
-		else
-		{
-			// On regular GL, this is soft-enabled and we emit ifdefs in code.
-			require_extension_internal("GL_ARB_shader_draw_parameters");
-			return "SPIRV_Cross_BaseInstance";
-		}
-		break;
+		// On regular GL, this is soft-enabled and we emit ifdefs in code.
+		require_extension_internal("GL_ARB_shader_draw_parameters");
+		return "SPIRV_Cross_BaseInstance";
 
 	case BuiltInDrawIndex:
 		if (options.es)
@@ -8311,13 +8303,9 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			}
 			return "gl_DrawID";
 		}
-		else
-		{
-			// On regular GL, this is soft-enabled and we emit ifdefs in code.
-			require_extension_internal("GL_ARB_shader_draw_parameters");
-			return "gl_DrawIDARB";
-		}
-		break;
+		// On regular GL, this is soft-enabled and we emit ifdefs in code.
+		require_extension_internal("GL_ARB_shader_draw_parameters");
+		return "gl_DrawIDARB";
 
 	case BuiltInSampleId:
 		if (options.es && options.version < 320)
