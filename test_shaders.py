@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Copyright 2015-2021 Arm Limited
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -551,6 +552,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '1', '1']
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '2', '2']
         extra_args += ['--glsl-remap-ext-framebuffer-fetch', '3', '3']
+    if '.framebuffer-fetch-noncoherent.' in shader:
+        extra_args += ['--glsl-ext-framebuffer-fetch-noncoherent']
     if '.zero-initialize.' in shader:
         extra_args += ['--force-zero-initialized-variables']
     if '.force-flattened-io.' in shader:

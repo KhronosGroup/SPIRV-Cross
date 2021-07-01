@@ -1,5 +1,6 @@
 /*
  * Copyright 2015-2021 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@
  * At your option, you may choose to accept this material under either:
  *  1. The Apache License, Version 2.0, found at <http://www.apache.org/licenses/LICENSE-2.0>, or
  *  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
- * SPDX-License-Identifier: Apache-2.0 OR MIT.
  */
 
 #include "spirv_cpp.hpp"
@@ -658,10 +658,13 @@ struct CLIArguments
 	bool msl_emulate_subgroups = false;
 	uint32_t msl_fixed_subgroup_size = 0;
 	bool msl_force_sample_rate_shading = false;
+	const char *msl_combined_sampler_suffix = nullptr;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	bool glsl_force_flattened_io_blocks = false;
+	uint32_t glsl_ovr_multiview_view_count = 0;
 	SmallVector<pair<uint32_t, uint32_t>> glsl_ext_framebuffer_fetch;
+	bool glsl_ext_framebuffer_fetch_noncoherent = false;
 	bool vulkan_glsl_disable_ext_samplerless_texture_functions = false;
 	bool emit_line_directives = false;
 	bool enable_storage_image_qualifier_deduction = true;
@@ -754,6 +757,7 @@ static void print_help_glsl()
 	                "\t[--glsl-emit-ubo-as-plain-uniforms]:\n\t\tInstead of emitting UBOs, emit them as plain uniform structs.\n"
 	                "\t[--glsl-remap-ext-framebuffer-fetch input-attachment color-location]:\n\t\tRemaps an input attachment to use GL_EXT_shader_framebuffer_fetch.\n"
 	                "\t\tgl_LastFragData[location] is read from. The attachment to read from must be declared as an output in the shader.\n"
+	                "\t[--glsl-ext-framebuffer-fetch-noncoherent]:\n\t\tUses noncoherent qualifier for framebuffer fetch.\n"
 	                "\t[--vulkan-glsl-disable-ext-samplerless-texture-functions]:\n\t\tDo not allow use of GL_EXT_samperless_texture_functions, even in Vulkan GLSL.\n"
 	                "\t\tUse of texelFetch and similar might have to create dummy samplers to work around it.\n"
 	                "\t[--combined-samplers-inherit-bindings]:\n\t\tInherit binding information from the textures when building combined image samplers from separate textures and samplers.\n"
@@ -776,6 +780,7 @@ static void print_help_glsl()
 	                "\t[--remap-variable-type <variable_name> <new_variable_type>]:\n\t\tRemaps a variable type based on name.\n"
 	                "\t\tPrimary use case is supporting external samplers in ESSL for video rendering on Android where you could remap a texture to a YUV one.\n"
 	                "\t[--glsl-force-flattened-io-blocks]:\n\t\tAlways flatten I/O blocks and structs.\n"
+	                "\t[--glsl-ovr-multiview-view-count count]:\n\t\tIn GL_OVR_multiview2, specify layout(num_views).\n"
 	);
 	// clang-format on
 }
@@ -882,7 +887,8 @@ static void print_help_msl()
 	                "\t\tIntended for Vulkan Portability implementations where VK_EXT_subgroup_size_control is not supported or disabled.\n"
 	                "\t\tIf 0, assume variable subgroup size as actually exposed by Metal.\n"
 	                "\t[--msl-force-sample-rate-shading]:\n\t\tForce fragment shaders to run per sample.\n"
-	                "\t\tThis adds a [[sample_id]] parameter if none is already present.\n");
+	                "\t\tThis adds a [[sample_id]] parameter if none is already present.\n"
+	                "\t[--msl-combined-sampler-suffix <suffix>]:\n\t\tUses a custom suffix for combined samplers.\n");
 	// clang-format on
 }
 
@@ -1133,6 +1139,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.emulate_subgroups = args.msl_emulate_subgroups;
 		msl_opts.fixed_subgroup_size = args.msl_fixed_subgroup_size;
 		msl_opts.force_sample_rate_shading = args.msl_force_sample_rate_shading;
+		msl_opts.ios_support_base_vertex_instance = true;
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
@@ -1145,6 +1152,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			msl_comp->add_inline_uniform_block(v.first, v.second);
 		for (auto &v : args.msl_shader_inputs)
 			msl_comp->add_msl_shader_input(v);
+		if (args.msl_combined_sampler_suffix)
+			msl_comp->set_combined_sampler_suffix(args.msl_combined_sampler_suffix);
 	}
 	else if (args.hlsl)
 		compiler.reset(new CompilerHLSL(move(spirv_parser.get_parsed_ir())));
@@ -1273,13 +1282,14 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	opts.emit_push_constant_as_uniform_buffer = args.glsl_emit_push_constant_as_ubo;
 	opts.emit_uniform_buffer_as_plain_uniforms = args.glsl_emit_ubo_as_plain_uniforms;
 	opts.force_flattened_io_blocks = args.glsl_force_flattened_io_blocks;
+	opts.ovr_multiview_view_count = args.glsl_ovr_multiview_view_count;
 	opts.emit_line_directives = args.emit_line_directives;
 	opts.enable_storage_image_qualifier_deduction = args.enable_storage_image_qualifier_deduction;
 	opts.force_zero_initialized_variables = args.force_zero_initialized_variables;
 	compiler->set_common_options(opts);
 
 	for (auto &fetch : args.glsl_ext_framebuffer_fetch)
-		compiler->remap_ext_framebuffer_fetch(fetch.first, fetch.second);
+		compiler->remap_ext_framebuffer_fetch(fetch.first, fetch.second, !args.glsl_ext_framebuffer_fetch_noncoherent);
 
 	// Set HLSL specific options.
 	if (args.hlsl)
@@ -1464,10 +1474,14 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--glsl-emit-push-constant-as-ubo", [&args](CLIParser &) { args.glsl_emit_push_constant_as_ubo = true; });
 	cbs.add("--glsl-emit-ubo-as-plain-uniforms", [&args](CLIParser &) { args.glsl_emit_ubo_as_plain_uniforms = true; });
 	cbs.add("--glsl-force-flattened-io-blocks", [&args](CLIParser &) { args.glsl_force_flattened_io_blocks = true; });
+	cbs.add("--glsl-ovr-multiview-view-count", [&args](CLIParser &parser) { args.glsl_ovr_multiview_view_count = parser.next_uint(); });
 	cbs.add("--glsl-remap-ext-framebuffer-fetch", [&args](CLIParser &parser) {
 		uint32_t input_index = parser.next_uint();
 		uint32_t color_attachment = parser.next_uint();
 		args.glsl_ext_framebuffer_fetch.push_back({ input_index, color_attachment });
+	});
+	cbs.add("--glsl-ext-framebuffer-fetch-noncoherent", [&args](CLIParser &) {
+		args.glsl_ext_framebuffer_fetch_noncoherent = true;
 	});
 	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions",
 	        [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
@@ -1572,6 +1586,9 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-fixed-subgroup-size",
 	        [&args](CLIParser &parser) { args.msl_fixed_subgroup_size = parser.next_uint(); });
 	cbs.add("--msl-force-sample-rate-shading", [&args](CLIParser &) { args.msl_force_sample_rate_shading = true; });
+	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
+		args.msl_combined_sampler_suffix = parser.next_string();
+	});
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();

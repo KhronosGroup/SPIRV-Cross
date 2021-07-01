@@ -1,3 +1,8 @@
+<!--
+    Copyright 2020-2021 The Khronos Group, Inc.
+    SPDX-License-Identifier: CC-BY-4.0
+-->
+
 # SPIRV-Cross
 
 SPIRV-Cross is a tool designed for parsing and converting SPIR-V to other shader languages.
@@ -161,12 +166,12 @@ for (i = 0; i < count; i++)
 }
 
 // Modify options.
-spvc_compiler_create_compiler_options(context, &options);
+spvc_compiler_create_compiler_options(compiler_glsl, &options);
 spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_GLSL_VERSION, 330);
 spvc_compiler_options_set_bool(options, SPVC_COMPILER_OPTION_GLSL_ES, SPVC_FALSE);
 spvc_compiler_install_compiler_options(compiler_glsl, options);
 
-spvc_compiler_compile(compiler, &result);
+spvc_compiler_compile(compiler_glsl, &result);
 printf("Cross-compiled source: %s\n", result);
 
 // Frees all memory we allocated so far.

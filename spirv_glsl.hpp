@@ -1,5 +1,6 @@
 /*
  * Copyright 2015-2021 Arm Limited
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@
  * At your option, you may choose to accept this material under either:
  *  1. The Apache License, Version 2.0, found at <http://www.apache.org/licenses/LICENSE-2.0>, or
  *  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
- * SPDX-License-Identifier: Apache-2.0 OR MIT.
  */
 
 #ifndef SPIRV_CROSS_GLSL_HPP
@@ -133,6 +133,9 @@ public:
 		// what happens on legacy GLSL targets for blocks and structs.
 		bool force_flattened_io_blocks = false;
 
+		// If non-zero, controls layout(num_views = N) in; in GL_OVR_multiview2.
+		uint32_t ovr_multiview_view_count = 0;
+
 		enum Precision
 		{
 			DontCare,
@@ -178,7 +181,8 @@ public:
 
 	// Redirect a subpassInput reading from input_attachment_index to instead load its value from
 	// the color attachment at location = color_location. Requires ESSL.
-	void remap_ext_framebuffer_fetch(uint32_t input_attachment_index, uint32_t color_location);
+	// If coherent, uses GL_EXT_shader_framebuffer_fetch, if not, uses noncoherent variant.
+	void remap_ext_framebuffer_fetch(uint32_t input_attachment_index, uint32_t color_location, bool coherent);
 
 	explicit CompilerGLSL(std::vector<uint32_t> spirv_)
 	    : Compiler(std::move(spirv_))
@@ -581,6 +585,7 @@ protected:
 		bool use_array_constructor = false;
 		bool needs_row_major_load_workaround = false;
 		bool support_pointer_to_pointer = false;
+		bool support_precise_qualifier = false;
 	} backend;
 
 	void emit_struct(SPIRType &type);
@@ -734,9 +739,9 @@ protected:
 	virtual std::string to_qualifiers_glsl(uint32_t id);
 	void fixup_io_block_patch_qualifiers(const SPIRVariable &var);
 	void emit_output_variable_initializer(const SPIRVariable &var);
-	const char *to_precision_qualifiers_glsl(uint32_t id);
+	std::string to_precision_qualifiers_glsl(uint32_t id);
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
-	const char *flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
+	std::string flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
 	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	virtual std::string to_interpolation_qualifiers(const Bitset &flags);
@@ -857,7 +862,9 @@ protected:
 
 	// GL_EXT_shader_framebuffer_fetch support.
 	std::vector<std::pair<uint32_t, uint32_t>> subpass_to_framebuffer_fetch_attachment;
-	std::unordered_set<uint32_t> inout_color_attachments;
+	std::vector<std::pair<uint32_t, bool>> inout_color_attachments;
+	bool location_is_framebuffer_fetch(uint32_t location) const;
+	bool location_is_non_coherent_framebuffer_fetch(uint32_t location) const;
 	bool subpass_input_is_framebuffer_fetch(uint32_t id) const;
 	void emit_inout_fragment_outputs_copy_to_subpass_inputs();
 	const SPIRVariable *find_subpass_input_by_attachment_index(uint32_t index) const;

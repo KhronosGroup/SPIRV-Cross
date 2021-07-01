@@ -1,4 +1,5 @@
 # Copyright 2016-2021 Google Inc.
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +17,6 @@
 # At your option, you may choose to accept this material under either:
 #  1. The Apache License, Version 2.0, found at <http://www.apache.org/licenses/LICENSE-2.0>, or
 #  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
-# SPDX-License-Identifier: Apache-2.0 OR MIT.
 #
 
 cmake_minimum_required(VERSION 3.0)
@@ -332,7 +332,7 @@ if (SPIRV_CROSS_STATIC)
 endif()
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 47)
+set(spirv-cross-abi-minor 48)
 set(spirv-cross-abi-patch 0)
 
 if (SPIRV_CROSS_SHARED)

@@ -1,5 +1,6 @@
 /*
  * Copyright 2016-2021 The Brenwill Workshop Ltd.
+ * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +19,6 @@
  * At your option, you may choose to accept this material under either:
  *  1. The Apache License, Version 2.0, found at <http://www.apache.org/licenses/LICENSE-2.0>, or
  *  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
- * SPDX-License-Identifier: Apache-2.0 OR MIT.
  */
 
 #ifndef SPIRV_CROSS_MSL_HPP
@@ -655,6 +655,7 @@ protected:
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
 		SPVFuncImplFMul,
 		SPVFuncImplFAdd,
+		SPVFuncImplFSub,
 		SPVFuncImplCubemapTo2DArrayFace,
 		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplInverse4x4,
@@ -729,6 +730,7 @@ protected:
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	void emit_struct_padding_target(const SPIRType &type) override;
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
+	void emit_block_hints(const SPIRBlock &block) override;
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	std::string type_to_array_glsl(const SPIRType &type) override;
@@ -798,8 +800,12 @@ protected:
 	{
 		struct LocationMeta
 		{
+			uint32_t base_type_id = 0;
 			uint32_t num_components = 0;
-			uint32_t ib_index = ~0u;
+			bool flat = false;
+			bool noperspective = false;
+			bool centroid = false;
+			bool sample = false;
 		};
 		std::unordered_map<uint32_t, LocationMeta> location_meta;
 		bool strip_array = false;
@@ -814,6 +820,9 @@ protected:
 	                                               SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
 	void add_plain_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                           SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
+	bool add_component_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                               SPIRVariable &var, const SPIRType &type,
+	                                               InterfaceBlockMeta &meta);
 	void add_plain_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                                  SPIRType &ib_type, SPIRVariable &var, uint32_t index,
 	                                                  InterfaceBlockMeta &meta);
