@@ -13898,15 +13898,15 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	bool integral_cast = type_is_integral(out_type) && type_is_integral(in_type);
 	bool same_size_cast = out_type.width == in_type.width;
 
-	if (integral_cast && same_size_cast)
+	if (same_size_cast)
 	{
 		// Trivial bitcast case, casts between integers.
-		return type_to_glsl(out_type);
+		return "as_type<" + type_to_glsl(out_type) + ">";
 	}
 	else
 	{
 		// Fall back to the catch-all bitcast in MSL.
-		return "as_type<" + type_to_glsl(out_type) + ">";
+		return type_to_glsl(out_type);
 	}
 }
 
