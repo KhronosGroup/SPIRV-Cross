@@ -442,7 +442,7 @@ if (SPIRV_CROSS_CLI)
 	target_compile_definitions(spirv-cross PRIVATE ${spirv-compiler-defines} HAVE_SPIRV_CROSS_GIT_VERSION)
 	set_target_properties(spirv-cross PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 	if (NOT SPIRV_CROSS_SKIP_INSTALL)
-		install(TARGETS spirv-cross RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+		install(TARGETS spirv-cross DESTINATION ${CMAKE_INSTALL_BINDIR})
 	endif()
 	target_link_libraries(spirv-cross PRIVATE
 			spirv-cross-glsl
