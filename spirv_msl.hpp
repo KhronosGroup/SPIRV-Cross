@@ -1093,6 +1093,9 @@ protected:
 
 	bool variable_storage_requires_stage_io(spv::StorageClass storage) const;
 
+	bool has_additional_fixed_sample_mask() const { return msl_options.additional_fixed_sample_mask != 0xffffffff; }
+	std::string additional_fixed_sample_mask_str() const;
+
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
 	{
