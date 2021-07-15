@@ -14045,8 +14045,6 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		break;
 
 	case BuiltInSampleMask:
-		if (get_execution_model() == ExecutionModelTessellationControl)
-			break;
 		if (storage == StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
 			(has_additional_fixed_sample_mask() || needs_sample_id))
 		{
