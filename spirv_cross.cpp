@@ -167,6 +167,12 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpTraceRayKHR:
 		case OpExecuteCallableNV:
 		case OpExecuteCallableKHR:
+		case OpRayQueryInitializeKHR:
+		case OpRayQueryTerminateKHR:
+		case OpRayQueryGenerateIntersectionKHR:
+		case OpRayQueryConfirmIntersectionKHR:
+		case OpRayQueryProceedKHR:
+			// There are various getters in ray query, but they are considered pure.
 			return false;
 
 			// OpExtInst is potentially impure depending on extension, but GLSL builtins are at least pure.
