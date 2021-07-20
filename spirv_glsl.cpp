@@ -12546,6 +12546,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// Don't bother forwarding temporaries. Avoids having to test expression invalidation with ray query objects.
 	case OpRayQueryInitializeKHR:
+		flush_variable_declaration(ops[0]);
 		statement("rayQueryInitializeEXT(",
 		          to_expression(ops[0]), ", ", to_expression(ops[1]), ", ",
 		          to_expression(ops[2]), ", ", to_expression(ops[3]), ", ",
@@ -12553,23 +12554,29 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ");");
 		break;
 	case OpRayQueryProceedKHR:
+		flush_variable_declaration(ops[0]);
 		emit_op(ops[0], ops[1], join("rayQueryProceedEXT(", to_expression(ops[2]), ")"), false);
 		break;
 	case OpRayQueryTerminateKHR:
+		flush_variable_declaration(ops[0]);
 		statement("rayQueryTerminateEXT(", to_expression(ops[0]), ");");
 		break;
 	case OpRayQueryGenerateIntersectionKHR:
+		flush_variable_declaration(ops[0]);
 		statement("rayQueryGenerateIntersectionEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
 	case OpRayQueryConfirmIntersectionKHR:
+		flush_variable_declaration(ops[0]);
 		statement("rayQueryConfirmIntersectionEXT(", to_expression(ops[0]), ");");
 		break;
 #define GLSL_RAY_QUERY_GET_OP(op) \
 	case OpRayQueryGet##op##KHR: \
+		flush_variable_declaration(ops[2]); \
 		emit_op(ops[0], ops[1], join("rayQueryGet" #op "EXT(", to_expression(ops[2]), ")"), false); \
 		break
 #define GLSL_RAY_QUERY_GET_OP2(op) \
 	case OpRayQueryGet##op##KHR: \
+		flush_variable_declaration(ops[2]); \
 		emit_op(ops[0], ops[1], join("rayQueryGet" #op "EXT(", to_expression(ops[2]), ", ", "bool(", to_expression(ops[3]), "))"), false); \
 		break
 	GLSL_RAY_QUERY_GET_OP(RayTMin);
