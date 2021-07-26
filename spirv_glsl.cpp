@@ -12921,16 +12921,19 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset
 	if (flags.get(DecorationRestrictPointerEXT))
 		return "restrict ";
 
-	// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
-	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt &&
-	    type.basetype != SPIRType::Image && type.basetype != SPIRType::SampledImage &&
-	    type.basetype != SPIRType::Sampler)
-		return "";
-
 	string qual;
 
-	if (flags.get(DecorationNoContraction) && backend.support_precise_qualifier)
+	if (type_is_floating_point(type) && flags.get(DecorationNoContraction) && backend.support_precise_qualifier)
 		qual = "precise ";
+
+	// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
+	bool type_supports_precision =
+			type.basetype == SPIRType::Float || type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt ||
+			type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
+			type.basetype == SPIRType::Sampler;
+
+	if (!type_supports_precision)
+		return qual;
 
 	if (options.es)
 	{
