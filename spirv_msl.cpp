@@ -13880,18 +13880,21 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	assert(out_type.basetype != SPIRType::Boolean);
 	assert(in_type.basetype != SPIRType::Boolean);
 
-	bool integral_cast = type_is_integral(out_type) && type_is_integral(in_type);
-	bool same_size_cast = out_type.width == in_type.width;
+	bool integral_cast = type_is_integral(out_type) && type_is_integral(in_type) && (out_type.vecsize == in_type.vecsize);
+	bool same_size_cast = (out_type.width * out_type.vecsize) == (in_type.width * in_type.vecsize);
 
-	if (integral_cast && same_size_cast)
+	// Bitcasting can only be used between types of the same overall size.
+	// And always formally cast between integers, because it's trivial, and also
+	// because Metal can internally cast the results of some integer ops to a larger
+	// size (eg. short shift right becomes int), which means chaining integer ops
+	// together may introduce size variations that SPIR-V doesn't know about.
+	if (same_size_cast && !integral_cast)
 	{
-		// Trivial bitcast case, casts between integers.
-		return type_to_glsl(out_type);
+		return "as_type<" + type_to_glsl(out_type) + ">";
 	}
 	else
 	{
-		// Fall back to the catch-all bitcast in MSL.
-		return "as_type<" + type_to_glsl(out_type) + ">";
+		return type_to_glsl(out_type);
 	}
 }
 
