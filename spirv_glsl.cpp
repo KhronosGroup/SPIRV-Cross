@@ -8047,7 +8047,11 @@ string CompilerGLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &i
 {
 	// OpBitcast can deal with pointers.
 	if (out_type.pointer || in_type.pointer)
+	{
+		if (out_type.vecsize == 2 || in_type.vecsize == 2)
+			require_extension_internal("GL_EXT_buffer_reference_uvec2");
 		return type_to_glsl(out_type);
+	}
 
 	if (out_type.basetype == in_type.basetype)
 		return "";
@@ -12611,6 +12615,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (type.storage != StorageClassPhysicalStorageBufferEXT)
 			SPIRV_CROSS_THROW("Only StorageClassPhysicalStorageBufferEXT is supported by OpConvertUToPtr.");
 
+		auto &in_type = expression_type(ops[2]);
+		if (in_type.vecsize == 2)
+			require_extension_internal("GL_EXT_buffer_reference_uvec2");
+
 		auto op = type_to_glsl(type);
 		emit_unary_func_op(ops[0], ops[1], ops[2], op.c_str());
 		break;
@@ -12622,6 +12630,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto &ptr_type = expression_type(ops[2]);
 		if (ptr_type.storage != StorageClassPhysicalStorageBufferEXT)
 			SPIRV_CROSS_THROW("Only StorageClassPhysicalStorageBufferEXT is supported by OpConvertPtrToU.");
+
+		if (type.vecsize == 2)
+			require_extension_internal("GL_EXT_buffer_reference_uvec2");
 
 		auto op = type_to_glsl(type);
 		emit_unary_func_op(ops[0], ops[1], ops[2], op.c_str());
