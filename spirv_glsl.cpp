@@ -4712,6 +4712,14 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		GLSL_BOP(UGreaterThanEqual, ">=");
 		GLSL_BOP(SGreaterThanEqual, ">=");
 
+	case OpSRem:
+	{
+		uint32_t op0 = cop.arguments[0];
+		uint32_t op1 = cop.arguments[1];
+		return join(to_enclosed_expression(op0), " - ", to_enclosed_expression(op1), " * ", "(",
+		                 to_enclosed_expression(op0), " / ", to_enclosed_expression(op1), ")");
+	}
+
 	case OpSelect:
 	{
 		if (cop.arguments.size() < 3)

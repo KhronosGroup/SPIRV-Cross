@@ -13327,6 +13327,38 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
+string CompilerMSL::constant_op_expression(const SPIRConstantOp &cop)
+{
+	auto &type = get<SPIRType>(cop.basetype);
+	string op;
+
+	switch (cop.opcode)
+	{
+	case OpQuantizeToF16:
+		switch (type.vecsize)
+		{
+		case 1:
+			op = "float(half(";
+			break;
+		case 2:
+			op = "float2(half2(";
+			break;
+		case 3:
+			op = "float3(half3(";
+			break;
+		case 4:
+			op = "float4(half4(";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Illegal argument to OpSpecConstantOp QuantizeToF16.");
+		}
+		return join(op, to_expression(cop.arguments[0]), "))");
+
+	default:
+		return CompilerGLSL::constant_op_expression(cop);
+	}
+}
+
 bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const
 {
 	if (variable.storage == storage)
