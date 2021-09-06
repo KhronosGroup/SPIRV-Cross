@@ -734,6 +734,7 @@ protected:
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	std::string type_to_array_glsl(const SPIRType &type) override;
+	std::string constant_op_expression(const SPIRConstantOp &cop) override;
 
 	// Threadgroup arrays can't have a wrapper type
 	std::string variable_decl(const SPIRVariable &variable) override;
