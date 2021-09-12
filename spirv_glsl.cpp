@@ -15084,8 +15084,11 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 	}
 
+	// If the Kill is terminating a block with a (probably synthetic) return value, emit a return value statement.
 	case SPIRBlock::Kill:
 		statement(backend.discard_literal, ";");
+		if (block.return_value)
+			statement("return ", to_expression(block.return_value), ";");
 		break;
 
 	case SPIRBlock::Unreachable:
