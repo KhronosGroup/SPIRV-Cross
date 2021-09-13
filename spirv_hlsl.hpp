@@ -224,6 +224,7 @@ private:
 	                                           uint32_t location,
 	                                           std::unordered_set<uint32_t> &active_locations);
 	void emit_builtin_inputs_in_struct();
+	void emit_tess_builtin_inputs_in_struct();
 	void emit_builtin_outputs_in_struct();
 	void emit_texture_op(const Instruction &i, bool sparse) override;
 	void emit_instruction(const Instruction &instruction) override;
@@ -272,6 +273,10 @@ private:
 	void replace_illegal_names() override;
 
 	bool is_hlsl_force_storage_buffer_as_uav(ID id) const;
+	void append_gl_inout_to_functions(VariableID gl_in);
+	void append_gl_inout_to_function(VariableID gl_in, uint32_t func_id,
+	                                 std::unordered_set<uint32_t> &processed_func_ids);
+	void emit_per_vertex_inputs();
 
 	Options hlsl_options;
 

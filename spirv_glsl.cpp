@@ -8715,6 +8715,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					break;
 				}
 			}
+			else if (backend.force_gl_in_block_hlsl && i == 0 && var && !is_builtin_variable(*var) &&
+			    var->storage == StorageClassInput && !has_decoration(var->self, DecorationPatch))
+			{
+				expr = join("gl_in[", to_expression(index, register_expression_read), "].", expr);
+			}
 			else if (options.flatten_multidimensional_arrays && dimension_flatten)
 			{
 				// If we are flattening multidimensional arrays, do manual stride computation.
