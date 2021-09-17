@@ -22,6 +22,7 @@
 cmake_minimum_required(VERSION 3.0)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD 99)
 
 # Avoid a warning if parent project sets VERSION in project().
 if (${CMAKE_VERSION} VERSION_GREATER "3.0.1")
@@ -198,6 +199,18 @@ macro(spirv_cross_add_library name config_name library_type)
 	endif()
 endmacro()
 
+set(spirv-cross-ryu-sources
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/common.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/d2s.c
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/d2s_full_table.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/d2s_intrinsics.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/d2s_small_table.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/digit_table.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/f2s.c
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/f2s_full_table.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/f2s_intrinsics.h
+		${CMAKE_CURRENT_SOURCE_DIR}/ryu/ryu.h)
+
 set(spirv-cross-core-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/GLSL.std.450.h
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
@@ -211,7 +224,9 @@ set(spirv-cross-core-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_parsed_ir.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_parsed_ir.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.hpp
-		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.cpp)
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_ryu_interface.cpp
+		${spirv-cross-ryu-sources})
 
 set(spirv-cross-c-sources
 		spirv.h

@@ -9,3 +9,8 @@ License: Apache-2.0
 Files: spirv.h spirv.hpp GLSL.std.450.h
 Copyright: 2016-2021 The Khronos Group, Inc.
 License: MIT
+
+Files: ryu/*
+Copyright: 2018 Ulf Adams
+License: Apache-2.0
+Source: https://github.com/ulfjack/ryu

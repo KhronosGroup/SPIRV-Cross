@@ -241,33 +241,8 @@ static inline void fixup_radix_point(char *str, char radix_point)
 	}
 }
 
-inline std::string convert_to_string(float t, char locale_radix_point)
-{
-	// std::to_string for floating point values is broken.
-	// Fallback to something more sane.
-	char buf[64];
-	sprintf(buf, SPIRV_CROSS_FLT_FMT, t);
-	fixup_radix_point(buf, locale_radix_point);
-
-	// Ensure that the literal is float.
-	if (!strchr(buf, '.') && !strchr(buf, 'e'))
-		strcat(buf, ".0");
-	return buf;
-}
-
-inline std::string convert_to_string(double t, char locale_radix_point)
-{
-	// std::to_string for floating point values is broken.
-	// Fallback to something more sane.
-	char buf[64];
-	sprintf(buf, SPIRV_CROSS_FLT_FMT, t);
-	fixup_radix_point(buf, locale_radix_point);
-
-	// Ensure that the literal is float.
-	if (!strchr(buf, '.') && !strchr(buf, 'e'))
-		strcat(buf, ".0");
-	return buf;
-}
+std::string convert_to_string(float t, char locale_radix_point);
+std::string convert_to_string(double t, char locale_radix_point);
 
 template <typename T>
 struct ValueSaver

@@ -4,9 +4,10 @@
 TARGET := spirv-cross
 
 SOURCES := $(wildcard spirv_*.cpp)
+RYU_SOURCES := $(wildcard ryu/*.c)
 CLI_SOURCES := main.cpp
 
-OBJECTS := $(SOURCES:.cpp=.o)
+OBJECTS := $(SOURCES:.cpp=.o) $(RYU_SOURCES:.c=.o)
 CLI_OBJECTS := $(CLI_SOURCES:.cpp=.o)
 
 STATIC_LIB := lib$(TARGET).a
@@ -14,6 +15,7 @@ STATIC_LIB := lib$(TARGET).a
 DEPS := $(OBJECTS:.o=.d) $(CLI_OBJECTS:.o=.d)
 
 CXXFLAGS += -std=c++11 -Wall -Wextra -Wshadow -Wno-deprecated-declarations
+CFLAGS += -std=c99 -I.
 
 ifeq ($(DEBUG), 1)
 	CXXFLAGS += -O0 -g
@@ -37,6 +39,9 @@ $(STATIC_LIB): $(OBJECTS)
 
 %.o: %.cpp
 	$(CXX) -c -o $@ $< $(CXXFLAGS) -MMD
+
+%.o: %.c
+	$(CC) -c -o $@ $< $(CFLAGS) -MMD
 
 clean:
 	rm -f $(TARGET) $(OBJECTS) $(CLI_OBJECTS) $(STATIC_LIB) $(DEPS)
