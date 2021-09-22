@@ -176,7 +176,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Globals& _Globa
     float _644 = ((0.317398726940155029296875 + (4.25 * _Globals.WhiteTemp)) + ((4.2048167614439080352894961833954e-08 * _Globals.WhiteTemp) * _Globals.WhiteTemp)) / ((1.0 - (2.8974181986995972692966461181641e-05 * _Globals.WhiteTemp)) + ((1.6145605741257895715534687042236e-07 * _Globals.WhiteTemp) * _Globals.WhiteTemp));
     float _649 = ((2.0 * _633) - (8.0 * _644)) + 4.0;
     float2 _653 = float2((3.0 * _633) / _649, (2.0 * _644) / _649);
-    float2 _660 = normalize(float2(_633, _644));
+    float2 _660 = fast::normalize(float2(_633, _644));
     float _665 = _633 + (((-_660.y) * _Globals.WhiteTint) * 0.0500000007450580596923828125);
     float _669 = _644 + ((_660.x * _Globals.WhiteTint) * 0.0500000007450580596923828125);
     float _674 = ((2.0 * _665) - (8.0 * _669)) + 4.0;
@@ -273,7 +273,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Globals& _Globa
     }
     else
     {
-        _990 = 57.2957763671875 * atan2(sqrt(3.0) * (_974 - _976), ((2.0 * _973) - _974) - _976);
+        _990 = 57.2957763671875 * precise::atan2(sqrt(3.0) * (_974 - _976), ((2.0 * _973) - _974) - _976);
     }
     float _995;
     if (_990 < 0.0)
@@ -436,7 +436,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Globals& _Globa
                 }
                 else
                 {
-                    _2174 = 57.2957763671875 * atan2(sqrt(3.0) * (_2158 - _2160), ((2.0 * _2157) - _2158) - _2160);
+                    _2174 = 57.2957763671875 * precise::atan2(sqrt(3.0) * (_2158 - _2160), ((2.0 * _2157) - _2158) - _2160);
                 }
                 float _2179;
                 if (_2174 < 0.0)
@@ -909,7 +909,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_Globals& _Globa
                     }
                     else
                     {
-                        _1337 = 57.2957763671875 * atan2(sqrt(3.0) * (_1321 - _1323), ((2.0 * _1320) - _1321) - _1323);
+                        _1337 = 57.2957763671875 * precise::atan2(sqrt(3.0) * (_1321 - _1323), ((2.0 * _1320) - _1321) - _1323);
                     }
                     float _1342;
                     if (_1337 < 0.0)

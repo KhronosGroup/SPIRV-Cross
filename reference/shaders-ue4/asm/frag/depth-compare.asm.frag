@@ -246,7 +246,7 @@ fragment main0_out main0(constant type_View& View [[buffer(0)]], constant type_G
     float _218 = sqrt(mix(1.0, _213 * _213, _Globals.ShadowFadeFraction));
     float4 _219 = _107;
     _219.z = _218;
-    float3 _236 = normalize((SceneTexturesStruct_GBufferATexture.sample(SceneTexturesStruct_GBufferATextureSampler, _114, level(0.0)).xyz * float3(2.0)) - float3(1.0));
+    float3 _236 = fast::normalize((SceneTexturesStruct_GBufferATexture.sample(SceneTexturesStruct_GBufferATextureSampler, _114, level(0.0)).xyz * float3(2.0)) - float3(1.0));
     uint _240 = uint(round(SceneTexturesStruct_GBufferBTexture.sample(SceneTexturesStruct_GBufferBTextureSampler, _114, level(0.0)).w * 255.0));
     bool _248 = (_240 & 15u) == 5u;
     float _448;
@@ -259,7 +259,7 @@ fragment main0_out main0(constant type_View& View [[buffer(0)]], constant type_G
         if (_160)
         {
             float3 _278 = _152 / float3(_158);
-            float3 _280 = normalize(cross(_278, float3(0.0, 0.0, 1.0)));
+            float3 _280 = fast::normalize(cross(_278, float3(0.0, 0.0, 1.0)));
             float3 _284 = float3(_Globals.InvShadowmapResolution);
             float3 _285 = _280 * _284;
             float3 _286 = cross(_280, _278) * _284;
