@@ -656,6 +656,7 @@ protected:
 		SPVFuncImplFMul,
 		SPVFuncImplFAdd,
 		SPVFuncImplFSub,
+		SPVFuncImplQuantizeToF16,
 		SPVFuncImplCubemapTo2DArrayFace,
 		SPVFuncImplUnsafeArray, // Allow Metal to use the array<T> template to make arrays a value type
 		SPVFuncImplInverse4x4,

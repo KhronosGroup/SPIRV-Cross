@@ -5001,6 +5001,33 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplQuantizeToF16:
+			// Ensure fast-math is disabled to match Vulkan results.
+			statement("[[clang::optnone]] float spvQuantizeToF16(float val)");
+			begin_scope();
+			statement("return float(half(val));");
+			end_scope();
+			statement("");
+
+			statement("[[clang::optnone]] float2 spvQuantize2ToF16(float2 val)");
+			begin_scope();
+			statement("return float2(half2(val));");
+			end_scope();
+			statement("");
+
+			statement("[[clang::optnone]] float3 spvQuantize3ToF16(float3 val)");
+			begin_scope();
+			statement("return float3(half3(val));");
+			end_scope();
+			statement("");
+
+			statement("[[clang::optnone]] float4 spvQuantize4ToF16(float4 val)");
+			begin_scope();
+			statement("return float4(half4(val));");
+			end_scope();
+			statement("");
+			break;
+
 		// Emulate texturecube_array with texture2d_array for iOS where this type is not available
 		case SPVFuncImplCubemapTo2DArrayFace:
 			statement(force_inline);
@@ -8071,16 +8098,16 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		switch (type.vecsize)
 		{
 		case 1:
-			exp = join("float(half(", to_expression(arg), "))");
+			exp = join("spvQuantizeToF16(", to_expression(arg), ")");
 			break;
 		case 2:
-			exp = join("float2(half2(", to_expression(arg), "))");
+			exp = join("spvQuantize2ToF16(", to_expression(arg), ")");
 			break;
 		case 3:
-			exp = join("float3(half3(", to_expression(arg), "))");
+			exp = join("spvQuantize3ToF16(", to_expression(arg), ")");
 			break;
 		case 4:
-			exp = join("float4(half4(", to_expression(arg), "))");
+			exp = join("spvQuantize4ToF16(", to_expression(arg), ")");
 			break;
 		default:
 			SPIRV_CROSS_THROW("Illegal argument to OpQuantizeToF16.");
@@ -15053,6 +15080,9 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 			return SPVFuncImplFMul;
 		}
 		break;
+
+	case OpQuantizeToF16:
+		return SPVFuncImplQuantizeToF16;
 
 	case OpTypeArray:
 	{

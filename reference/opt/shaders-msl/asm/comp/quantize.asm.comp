@@ -1,3 +1,5 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -11,11 +13,31 @@ struct SSBO0
     float4 vec4_val;
 };
 
+[[clang::optnone]] float spvQuantizeToF16(float val)
+{
+    return float(half(val));
+}
+
+[[clang::optnone]] float2 spvQuantize2ToF16(float2 val)
+{
+    return float2(half2(val));
+}
+
+[[clang::optnone]] float3 spvQuantize3ToF16(float3 val)
+{
+    return float3(half3(val));
+}
+
+[[clang::optnone]] float4 spvQuantize4ToF16(float4 val)
+{
+    return float4(half4(val));
+}
+
 kernel void main0(device SSBO0& _4 [[buffer(0)]])
 {
-    _4.scalar = float(half(_4.scalar));
-    _4.vec2_val = float2(half2(_4.vec2_val));
-    _4.vec3_val = float3(half3(_4.vec3_val));
-    _4.vec4_val = float4(half4(_4.vec4_val));
+    _4.scalar = spvQuantizeToF16(_4.scalar);
+    _4.vec2_val = spvQuantize2ToF16(_4.vec2_val);
+    _4.vec3_val = spvQuantize3ToF16(_4.vec3_val);
+    _4.vec4_val = spvQuantize4ToF16(_4.vec4_val);
 }
 
