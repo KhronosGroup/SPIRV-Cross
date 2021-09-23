@@ -16,7 +16,7 @@ struct main0_in
 };
 
 template<typename T>
-inline T spvReflect(T i, T n)
+[[clang::optnone]] T spvReflect(T i, T n)
 {
     return i - T(2) * i * n * n;
 }

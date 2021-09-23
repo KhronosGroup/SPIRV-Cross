@@ -5719,8 +5719,9 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplReflectScalar:
 			// Metal does not support scalar versions of these functions.
+			// Ensure fast-math is disabled to match Vulkan results.
 			statement("template<typename T>");
-			statement("inline T spvReflect(T i, T n)");
+			statement("[[clang::optnone]] T spvReflect(T i, T n)");
 			begin_scope();
 			statement("return i - T(2) * i * n * n;");
 			end_scope();
@@ -8781,7 +8782,8 @@ const char *CompilerMSL::get_memory_order(uint32_t)
 	return "memory_order_relaxed";
 }
 
-// Override for MSL-specific extension syntax instructions
+// Override for MSL-specific extension syntax instructions.
+// In some cases, deliberately select either the fast or precise versions of the MSL functions to match Vulkan math precision results.
 void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t count)
 {
 	auto op = static_cast<GLSLstd450>(eop);
@@ -8793,8 +8795,17 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	switch (op)
 	{
+	case GLSLstd450Sinh:
+		emit_unary_func_op(result_type, id, args[0], "fast::sinh");
+		break;
+	case GLSLstd450Cosh:
+		emit_unary_func_op(result_type, id, args[0], "fast::cosh");
+		break;
+	case GLSLstd450Tanh:
+		emit_unary_func_op(result_type, id, args[0], "precise::tanh");
+		break;
 	case GLSLstd450Atan2:
-		emit_binary_func_op(result_type, id, args[0], args[1], "atan2");
+		emit_binary_func_op(result_type, id, args[0], args[1], "precise::atan2");
 		break;
 	case GLSLstd450InverseSqrt:
 		emit_unary_func_op(result_type, id, args[0], "rsqrt");
@@ -9018,25 +9029,20 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 
 	case GLSLstd450Length:
-		// MSL does not support scalar versions here.
+		// MSL does not support scalar versions, so use abs().
 		if (expression_type(args[0]).vecsize == 1)
-		{
-			// Equivalent to abs().
 			emit_unary_func_op(result_type, id, args[0], "abs");
-		}
 		else
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
 
 	case GLSLstd450Normalize:
 		// MSL does not support scalar versions here.
+		// Returns -1 or 1 for valid input, sign() does the job.
 		if (expression_type(args[0]).vecsize == 1)
-		{
-			// Returns -1 or 1 for valid input, sign() does the job.
 			emit_unary_func_op(result_type, id, args[0], "sign");
-		}
 		else
-			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
+			emit_unary_func_op(result_type, id, args[0], "fast::normalize");
 		break;
 
 	case GLSLstd450Reflect:

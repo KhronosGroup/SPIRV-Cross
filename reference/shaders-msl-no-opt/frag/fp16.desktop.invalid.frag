@@ -94,11 +94,11 @@ void test_builtins(thread half4& v4, thread half3& v3, thread half& v1)
     res = cos(v4);
     res = tan(v4);
     res = asin(v4);
-    res = atan2(v4, v3.xyzz);
+    res = precise::atan2(v4, v3.xyzz);
     res = atan(v4);
-    res = sinh(v4);
-    res = cosh(v4);
-    res = tanh(v4);
+    res = fast::sinh(v4);
+    res = fast::cosh(v4);
+    res = precise::tanh(v4);
     res = asinh(v4);
     res = acosh(v4);
     res = atanh(v4);
@@ -143,7 +143,7 @@ void test_builtins(thread half4& v4, thread half3& v3, thread half& v1)
     t0 = distance(v4, v4);
     t0 = dot(v4, v4);
     half3 res3 = cross(v3, v3);
-    res = normalize(v4);
+    res = fast::normalize(v4);
     res = faceforward(v4, v4, v4);
     res = reflect(v4, v4);
     res = refract(v4, v4, v1);
