@@ -14,7 +14,7 @@ jobs:
     name: "Build ${{ matrix.platform }}"
     strategy:
       matrix:
-        platform: [windows-latest, ubuntu-16.04, ubuntu-18.04, ubuntu-20.04, macos-latest]
+        platform: [windows-latest, ubuntu-18.04, ubuntu-20.04, macos-latest]
     env:
       PARALLEL: -j 2
 
