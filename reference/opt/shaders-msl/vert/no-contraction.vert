@@ -18,13 +18,13 @@ struct main0_in
 };
 
 template<typename T>
-T spvFMul(T l, T r)
+[[clang::optnone]] T spvFMul(T l, T r)
 {
     return fma(l, r, T(0));
 }
 
 template<typename T, int Cols, int Rows>
-vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)
+[[clang::optnone]] vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)
 {
     vec<T, Cols> res = vec<T, Cols>(0);
     for (uint i = Rows; i > 0; --i)
@@ -40,7 +40,7 @@ vec<T, Cols> spvFMulVectorMatrix(vec<T, Rows> v, matrix<T, Cols, Rows> m)
 }
 
 template<typename T, int Cols, int Rows>
-vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)
+[[clang::optnone]] vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)
 {
     vec<T, Rows> res = vec<T, Rows>(0);
     for (uint i = Cols; i > 0; --i)
@@ -51,7 +51,7 @@ vec<T, Rows> spvFMulMatrixVector(matrix<T, Cols, Rows> m, vec<T, Cols> v)
 }
 
 template<typename T, int LCols, int LRows, int RCols, int RRows>
-matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T, RCols, RRows> r)
+[[clang::optnone]] matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T, RCols, RRows> r)
 {
     matrix<T, RCols, LRows> res;
     for (uint i = 0; i < RCols; i++)
@@ -67,13 +67,13 @@ matrix<T, RCols, LRows> spvFMulMatrixMatrix(matrix<T, LCols, LRows> l, matrix<T,
 }
 
 template<typename T>
-T spvFAdd(T l, T r)
+[[clang::optnone]] T spvFAdd(T l, T r)
 {
     return fma(T(1), l, r);
 }
 
 template<typename T>
-T spvFSub(T l, T r)
+[[clang::optnone]] T spvFSub(T l, T r)
 {
     return fma(T(-1), r, l);
 }
