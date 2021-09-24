@@ -5003,27 +5003,16 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplQuantizeToF16:
 			// Ensure fast-math is disabled to match Vulkan results.
-			statement("[[clang::optnone]] float spvQuantizeToF16(float val)");
+			// SpvHalfTypeSelector is used to match the half* template type to the float* template type.
+			statement("template <typename F> struct SpvHalfTypeSelector;");
+			statement("template <> struct SpvHalfTypeSelector<float> { public: using H = half; };");
+			statement("template <> struct SpvHalfTypeSelector<float2> { public: using H = half2; };");
+			statement("template <> struct SpvHalfTypeSelector<float3> { public: using H = half3; };");
+			statement("template <> struct SpvHalfTypeSelector<float4> { public: using H = half4; };");
+			statement("template<typename F, typename H = typename SpvHalfTypeSelector<F>::H>");
+			statement("[[clang::optnone]] F spvQuantizeToF16(F val)");
 			begin_scope();
-			statement("return float(half(val));");
-			end_scope();
-			statement("");
-
-			statement("[[clang::optnone]] float2 spvQuantize2ToF16(float2 val)");
-			begin_scope();
-			statement("return float2(half2(val));");
-			end_scope();
-			statement("");
-
-			statement("[[clang::optnone]] float3 spvQuantize3ToF16(float3 val)");
-			begin_scope();
-			statement("return float3(half3(val));");
-			end_scope();
-			statement("");
-
-			statement("[[clang::optnone]] float4 spvQuantize4ToF16(float4 val)");
-			begin_scope();
-			statement("return float4(half4(val));");
+			statement("return F(H(val));");
 			end_scope();
 			statement("");
 			break;
@@ -8091,28 +8080,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t arg = ops[2];
-
-		string exp;
-		auto &type = get<SPIRType>(result_type);
-
-		switch (type.vecsize)
-		{
-		case 1:
-			exp = join("spvQuantizeToF16(", to_expression(arg), ")");
-			break;
-		case 2:
-			exp = join("spvQuantize2ToF16(", to_expression(arg), ")");
-			break;
-		case 3:
-			exp = join("spvQuantize3ToF16(", to_expression(arg), ")");
-			break;
-		case 4:
-			exp = join("spvQuantize4ToF16(", to_expression(arg), ")");
-			break;
-		default:
-			SPIRV_CROSS_THROW("Illegal argument to OpQuantizeToF16.");
-		}
-
+		string exp = join("spvQuantizeToF16(", to_expression(arg), ")");
 		emit_op(result_type, id, exp, should_forward(arg));
 		break;
 	}
