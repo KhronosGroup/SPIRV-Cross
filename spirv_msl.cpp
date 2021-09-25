@@ -5006,9 +5006,7 @@ void CompilerMSL::emit_custom_functions()
 			// SpvHalfTypeSelector is used to match the half* template type to the float* template type.
 			statement("template <typename F> struct SpvHalfTypeSelector;");
 			statement("template <> struct SpvHalfTypeSelector<float> { public: using H = half; };");
-			statement("template <> struct SpvHalfTypeSelector<float2> { public: using H = half2; };");
-			statement("template <> struct SpvHalfTypeSelector<float3> { public: using H = half3; };");
-			statement("template <> struct SpvHalfTypeSelector<float4> { public: using H = half4; };");
+			statement("template<uint N> struct SpvHalfTypeSelector<vec<float, N>> { using H = vec<half, N>; };");
 			statement("template<typename F, typename H = typename SpvHalfTypeSelector<F>::H>");
 			statement("[[clang::optnone]] F spvQuantizeToF16(F val)");
 			begin_scope();
