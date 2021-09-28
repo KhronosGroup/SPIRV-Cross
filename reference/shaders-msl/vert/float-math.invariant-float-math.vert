@@ -44,30 +44,6 @@ struct spvUnsafeArray
     }
 };
 
-struct Matrices
-{
-    float4x4 vpMatrix;
-    float4x4 wMatrix;
-    float4x3 wMatrix4x3;
-    float3x4 wMatrix3x4;
-};
-
-struct main0_out
-{
-    float3 OutNormal [[user(locn0)]];
-    float4 OutWorldPos_0 [[user(locn1)]];
-    float4 OutWorldPos_1 [[user(locn2)]];
-    float4 OutWorldPos_2 [[user(locn3)]];
-    float4 OutWorldPos_3 [[user(locn4)]];
-    float4 gl_Position [[position]];
-};
-
-struct main0_in
-{
-    float3 InPos [[attribute(0)]];
-    float3 InNormal [[attribute(1)]];
-};
-
 template<typename T>
 [[clang::optnone]] T spvFMul(T l, T r)
 {
@@ -116,6 +92,30 @@ template<typename T, int LCols, int LRows, int RCols, int RRows>
     }
     return res;
 }
+
+struct Matrices
+{
+    float4x4 vpMatrix;
+    float4x4 wMatrix;
+    float4x3 wMatrix4x3;
+    float3x4 wMatrix3x4;
+};
+
+struct main0_out
+{
+    float3 OutNormal [[user(locn0)]];
+    float4 OutWorldPos_0 [[user(locn1)]];
+    float4 OutWorldPos_1 [[user(locn2)]];
+    float4 OutWorldPos_2 [[user(locn3)]];
+    float4 OutWorldPos_3 [[user(locn4)]];
+    float4 gl_Position [[position]];
+};
+
+struct main0_in
+{
+    float3 InPos [[attribute(0)]];
+    float3 InNormal [[attribute(1)]];
+};
 
 vertex main0_out main0(main0_in in [[stage_in]], constant Matrices& _22 [[buffer(0)]])
 {

@@ -1462,9 +1462,9 @@ string CompilerMSL::compile()
 
 		emit_header();
 		emit_custom_templates();
+		emit_custom_functions();
 		emit_specialization_constants_and_structs();
 		emit_resources();
-		emit_custom_functions();
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 
 		pass_count++;
@@ -5004,13 +5004,17 @@ void CompilerMSL::emit_custom_functions()
 		case SPVFuncImplQuantizeToF16:
 			// Ensure fast-math is disabled to match Vulkan results.
 			// SpvHalfTypeSelector is used to match the half* template type to the float* template type.
+			// Depending on GPU, MSL does not always flush converted subnormal halfs to zero,
+			// as required by OpQuantizeToF16, so check for subnormals and flush them to zero.
 			statement("template <typename F> struct SpvHalfTypeSelector;");
 			statement("template <> struct SpvHalfTypeSelector<float> { public: using H = half; };");
 			statement("template<uint N> struct SpvHalfTypeSelector<vec<float, N>> { using H = vec<half, N>; };");
 			statement("template<typename F, typename H = typename SpvHalfTypeSelector<F>::H>");
-			statement("[[clang::optnone]] F spvQuantizeToF16(F val)");
+			statement("[[clang::optnone]] F spvQuantizeToF16(F fval)");
 			begin_scope();
-			statement("return F(H(val));");
+			statement("H hval = H(fval);");
+			statement("hval = select(copysign(H(0), hval), hval, isnormal(hval) || isinf(hval) || isnan(hval));");
+			statement("return F(hval);");
 			end_scope();
 			statement("");
 			break;
@@ -13331,31 +13335,11 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 
 string CompilerMSL::constant_op_expression(const SPIRConstantOp &cop)
 {
-	auto &type = get<SPIRType>(cop.basetype);
-	string op;
-
 	switch (cop.opcode)
 	{
 	case OpQuantizeToF16:
-		switch (type.vecsize)
-		{
-		case 1:
-			op = "float(half(";
-			break;
-		case 2:
-			op = "float2(half2(";
-			break;
-		case 3:
-			op = "float3(half3(";
-			break;
-		case 4:
-			op = "float4(half4(";
-			break;
-		default:
-			SPIRV_CROSS_THROW("Illegal argument to OpSpecConstantOp QuantizeToF16.");
-		}
-		return join(op, to_expression(cop.arguments[0]), "))");
-
+		add_spv_func_and_recompile(SPVFuncImplQuantizeToF16);
+		return join("spvQuantizeToF16(", to_expression(cop.arguments[0]), ")");
 	default:
 		return CompilerGLSL::constant_op_expression(cop);
 	}

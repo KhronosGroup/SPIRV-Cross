@@ -5,11 +5,6 @@
 
 using namespace metal;
 
-struct main0_out
-{
-    float FragColor [[color(0)]];
-};
-
 template<typename T>
 inline T spvSubgroupBroadcast(T value, ushort lane)
 {
@@ -223,6 +218,11 @@ inline vec<bool, N> spvQuadSwap(vec<bool, N> value, uint dir)
 {
     return (vec<bool, N>)quad_shuffle_xor((vec<ushort, N>)value, dir + 1);
 }
+
+struct main0_out
+{
+    float FragColor [[color(0)]];
+};
 
 fragment main0_out main0(uint gl_SubgroupSize [[threads_per_simdgroup]], uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]])
 {

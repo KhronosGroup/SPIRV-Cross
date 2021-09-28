@@ -5,23 +5,6 @@
 
 using namespace metal;
 
-struct spvDescriptorSetBuffer0
-{
-    array<texture2d<float>, 4> uSampler0 [[id(0)]];
-    array<sampler, 4> uSampler0Smplr [[id(4)]];
-    constant uint* spvSwizzleConstants [[id(8)]];
-};
-
-struct main0_out
-{
-    float4 FragColor [[color(0)]];
-};
-
-struct main0_in
-{
-    float2 vUV [[user(locn0)]];
-};
-
 template<typename T> struct spvRemoveReference { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
 template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
@@ -81,6 +64,23 @@ inline T spvTextureSwizzle(T x, uint s)
 {
     return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;
 }
+
+struct spvDescriptorSetBuffer0
+{
+    array<texture2d<float>, 4> uSampler0 [[id(0)]];
+    array<sampler, 4> uSampler0Smplr [[id(4)]];
+    constant uint* spvSwizzleConstants [[id(8)]];
+};
+
+struct main0_out
+{
+    float4 FragColor [[color(0)]];
+};
+
+struct main0_in
+{
+    float2 vUV [[user(locn0)]];
+};
 
 static inline __attribute__((always_inline))
 float4 sample_in_func_1(thread const array<texture2d<float>, 4> uSampler0, thread const array<sampler, 4> uSampler0Smplr, constant uint* uSampler0Swzl, thread float2& vUV)

@@ -5,20 +5,6 @@
 
 using namespace metal;
 
-struct ResType
-{
-    half4 _m0;
-    int4 _m1;
-};
-
-struct main0_in
-{
-    half v1 [[user(locn0)]];
-    half2 v2 [[user(locn1)]];
-    half3 v3 [[user(locn2)]];
-    half4 v4 [[user(locn3)]];
-};
-
 // Implementation of the GLSL mod() function, which is slightly different than Metal fmod()
 template<typename Tx, typename Ty>
 inline Tx mod(Tx x, Ty y)
@@ -39,6 +25,20 @@ inline T degrees(T r)
 {
     return r * T(57.2957795131);
 }
+
+struct ResType
+{
+    half4 _m0;
+    int4 _m1;
+};
+
+struct main0_in
+{
+    half v1 [[user(locn0)]];
+    half2 v2 [[user(locn1)]];
+    half3 v3 [[user(locn2)]];
+    half4 v4 [[user(locn3)]];
+};
 
 static inline __attribute__((always_inline))
 half2x2 test_mat2(thread const half2& a, thread const half2& b, thread const half2& c, thread const half2& d)
