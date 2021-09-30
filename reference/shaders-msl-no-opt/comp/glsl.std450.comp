@@ -5,27 +5,6 @@
 
 using namespace metal;
 
-struct SSBO
-{
-    float res;
-    int ires;
-    uint ures;
-    float4 f32;
-    int4 s32;
-    uint4 u32;
-    float2x2 m2;
-    float3x3 m3;
-    float4x4 m4;
-};
-
-struct ResType
-{
-    float _m0;
-    int _m1;
-};
-
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
-
 // Implementation of the GLSL radians() function
 template<typename T>
 inline T radians(T d)
@@ -196,6 +175,27 @@ inline T spvFaceForward(T n, T i, T nref)
 {
     return i * nref < T(0) ? n : -n;
 }
+
+struct SSBO
+{
+    float res;
+    int ires;
+    uint ures;
+    float4 f32;
+    int4 s32;
+    uint4 u32;
+    float2x2 m2;
+    float3x3 m3;
+    float4x4 m4;
+};
+
+struct ResType
+{
+    float _m0;
+    int _m1;
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
 kernel void main0(device SSBO& _19 [[buffer(0)]])
 {

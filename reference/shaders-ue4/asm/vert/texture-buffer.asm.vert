@@ -5,6 +5,13 @@
 
 using namespace metal;
 
+// Returns 2D texture coords corresponding to 1D texel buffer coords
+static inline __attribute__((always_inline))
+uint2 spvTexelBufferCoord(uint tc)
+{
+    return uint2(tc % 4096, tc / 4096);
+}
+
 struct type_View
 {
     float4x4 View_TranslatedWorldToClip;
@@ -280,13 +287,6 @@ struct main0_in
 {
     float2 in_var_ATTRIBUTE0 [[attribute(0)]];
 };
-
-// Returns 2D texture coords corresponding to 1D texel buffer coords
-static inline __attribute__((always_inline))
-uint2 spvTexelBufferCoord(uint tc)
-{
-    return uint2(tc % 4096, tc / 4096);
-}
 
 vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)]], constant type_Primitive& Primitive [[buffer(1)]], constant type_MobileShadowDepthPass& MobileShadowDepthPass [[buffer(2)]], constant type_EmitterDynamicUniforms& EmitterDynamicUniforms [[buffer(3)]], constant type_EmitterUniforms& EmitterUniforms [[buffer(4)]], constant type_Globals& _Globals [[buffer(5)]], texture2d<float> ParticleIndices [[texture(0)]], texture2d<float> PositionTexture [[texture(1)]], texture2d<float> VelocityTexture [[texture(2)]], texture2d<float> AttributesTexture [[texture(3)]], texture2d<float> CurveTexture [[texture(4)]], sampler PositionTextureSampler [[sampler(0)]], sampler VelocityTextureSampler [[sampler(1)]], sampler AttributesTextureSampler [[sampler(2)]], sampler CurveTextureSampler [[sampler(3)]], uint gl_VertexIndex [[vertex_id]], uint gl_InstanceIndex [[instance_id]])
 {

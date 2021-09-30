@@ -5,18 +5,6 @@
 
 using namespace metal;
 
-struct main0_out
-{
-    float4 gl_Position [[position]];
-};
-
-struct main0_in
-{
-    float4 vA [[attribute(0)]];
-    float4 vB [[attribute(1)]];
-    float4 vC [[attribute(2)]];
-};
-
 template<typename T>
 [[clang::optnone]] T spvFMul(T l, T r)
 {
@@ -77,6 +65,18 @@ template<typename T>
 {
     return fma(T(-1), r, l);
 }
+
+struct main0_out
+{
+    float4 gl_Position [[position]];
+};
+
+struct main0_in
+{
+    float4 vA [[attribute(0)]];
+    float4 vB [[attribute(1)]];
+    float4 vC [[attribute(2)]];
+};
 
 vertex main0_out main0(main0_in in [[stage_in]])
 {
