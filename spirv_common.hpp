@@ -1377,7 +1377,7 @@ public:
 	~Variant()
 	{
 		if (holder)
-			group->pools[type]->free_opaque(holder);
+			group->pools[type]->deallocate_opaque(holder);
 	}
 
 	// Marking custom move constructor as noexcept is important.
@@ -1396,7 +1396,7 @@ public:
 		if (this != &other)
 		{
 			if (holder)
-				group->pools[type]->free_opaque(holder);
+				group->pools[type]->deallocate_opaque(holder);
 			holder = other.holder;
 			group = other.group;
 			type = other.type;
@@ -1420,7 +1420,7 @@ public:
 		if (this != &other)
 		{
 			if (holder)
-				group->pools[type]->free_opaque(holder);
+				group->pools[type]->deallocate_opaque(holder);
 
 			if (other.holder)
 				holder = other.holder->clone(group->pools[other.type].get());
@@ -1436,13 +1436,13 @@ public:
 	void set(IVariant *val, Types new_type)
 	{
 		if (holder)
-			group->pools[type]->free_opaque(holder);
+			group->pools[type]->deallocate_opaque(holder);
 		holder = nullptr;
 
 		if (!allow_type_rewrite && type != TypeNone && type != new_type)
 		{
 			if (val)
-				group->pools[new_type]->free_opaque(val);
+				group->pools[new_type]->deallocate_opaque(val);
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
 		}
 
@@ -1497,7 +1497,7 @@ public:
 	void reset()
 	{
 		if (holder)
-			group->pools[type]->free_opaque(holder);
+			group->pools[type]->deallocate_opaque(holder);
 		holder = nullptr;
 		type = TypeNone;
 	}
