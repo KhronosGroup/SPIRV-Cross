@@ -67,4 +67,16 @@ jobs:
         run: |
           reuse lint
 
-
+  spm:
+    strategy:
+      matrix:
+        xcode_version: ['12.4']
+    runs-on: macos-latest
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode_version }}.app
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build SPIRV-Cross 
+        run: |
+          set -euo pipefail
+          swift build 
