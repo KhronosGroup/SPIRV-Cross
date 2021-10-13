@@ -22,3 +22,7 @@
 
 !CMakeLists.txt
 !LICENSES/*.txt
+
+## Swift Package Manager
+.build/
+.swiftpm/
