@@ -6265,9 +6265,9 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 
 	// If our bool selects between 0 and 1, we can cast from bool instead, making our trivial constructor.
 	bool ret = true;
-	for (uint32_t col = 0; col < value_type.columns; col++)
+	for (uint32_t col = 0; ret && col < value_type.columns; col++)
 	{
-		for (uint32_t row = 0; row < value_type.vecsize; row++)
+		for (uint32_t row = 0; ret && row < value_type.vecsize; row++)
 		{
 			switch (type.basetype)
 			{
@@ -6299,12 +6299,10 @@ bool CompilerGLSL::to_trivial_mix_op(const SPIRType &type, string &op, uint32_t 
 				break;
 
 			default:
-				return false;
+				ret = false;
+				break;
 			}
 		}
-
-		if (!ret)
-			break;
 	}
 
 	if (ret)
