@@ -671,15 +671,9 @@ string CompilerGLSL::compile()
 		statement("void main()");
 		begin_scope();
 		statement("// Interlocks were used in a way not compatible with GLSL, this is very slow.");
-		if (options.es)
-			statement("beginInvocationInterlockNV();");
-		else
-			statement("beginInvocationInterlockARB();");
+		statement("SPIRV_Cross_beginInvocationInterlock();");
 		statement("spvMainInterlockedBody();");
-		if (options.es)
-			statement("endInvocationInterlockNV();");
-		else
-			statement("endInvocationInterlockARB();");
+		statement("SPIRV_Cross_endInvocationInterlock();");
 		end_scope();
 	}
 
@@ -778,15 +772,27 @@ void CompilerGLSL::emit_header()
 		{
 			if (options.version < 310)
 				SPIRV_CROSS_THROW("At least ESSL 3.10 required for fragment shader interlock.");
-			require_extension_internal("GL_NV_fragment_shader_interlock");
+			statement("#extension GL_NV_fragment_shader_interlock : enable");
+			statement("#define SPIRV_Cross_beginInvocationInterlock() beginInvocationInterlockNV()");
+			statement("#define SPIRV_Cross_endInvocationInterlock() endInvocationInterlockNV()");
 		}
 		else
 		{
 			if (options.version < 420)
-				require_extension_internal("GL_ARB_shader_image_load_store");
-			require_extension_internal("GL_ARB_fragment_shader_interlock");
+				statement("#extension GL_ARB_shader_image_load_store : enable");
+
+		    statement("#ifdef GL_ARB_fragment_shader_interlock");
+		    statement("#extension GL_ARB_fragment_shader_interlock : enable");
+		    statement("#define SPIRV_Cross_beginInvocationInterlock() beginInvocationInterlockARB()");
+		    statement("#define SPIRV_Cross_endInvocationInterlock() endInvocationInterlockARB()");
+		    statement("#elif defined(GL_INTEL_fragment_shader_ordering)");
+		    statement("#extension GL_INTEL_fragment_shader_ordering : enable");
+		    statement("#define SPIRV_Cross_beginInvocationInterlock() beginFragmentShaderOrderingINTEL()");
+		    statement("#define SPIRV_Cross_endInvocationInterlock()");
+		    statement("#endif");
 		}
 	}
+
 
 	for (auto &ext : forced_extensions)
 	{
@@ -1041,14 +1047,32 @@ void CompilerGLSL::emit_header()
 		if (execution.flags.get(ExecutionModePostDepthCoverage))
 			inputs.push_back("post_depth_coverage");
 
+		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+			execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+			execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+			execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+		{
+			statement("#if defined(GL_ARB_fragment_shader_interlock)");
+		}
+
 		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT))
-			inputs.push_back("pixel_interlock_ordered");
+			statement("layout(pixel_interlock_ordered) in;");
 		else if (execution.flags.get(ExecutionModePixelInterlockUnorderedEXT))
-			inputs.push_back("pixel_interlock_unordered");
+			statement("layout(pixel_interlock_unordered) in;");
 		else if (execution.flags.get(ExecutionModeSampleInterlockOrderedEXT))
-			inputs.push_back("sample_interlock_ordered");
+			statement("layout(sample_interlock_ordered) in;");
 		else if (execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
-			inputs.push_back("sample_interlock_unordered");
+			statement("layout(sample_interlock_unordered) in;");
+		
+		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+			execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+			execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+			execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+		{
+			statement("#elif !defined(GL_INTEL_fragment_shader_ordering)");
+			statement("#error Fragment Shader Interlock/Ordering extension missing!");
+			statement("#endif");
+		}
 
 		if (!options.es && execution.flags.get(ExecutionModeDepthGreater))
 			statement("layout(depth_greater) out float gl_FragDepth;");
@@ -12583,11 +12607,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If the interlock is complex, we emit this elsewhere.
 		if (!interlocked_is_complex)
 		{
-			if (options.es)
-				statement("beginInvocationInterlockNV();");
-			else
-				statement("beginInvocationInterlockARB();");
-
+			statement("SPIRV_Cross_beginInvocationInterlock();");
 			flush_all_active_variables();
 			// Make sure forwarding doesn't propagate outside interlock region.
 		}
@@ -12597,11 +12617,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If the interlock is complex, we emit this elsewhere.
 		if (!interlocked_is_complex)
 		{
-			if (options.es)
-				statement("endInvocationInterlockNV();");
-			else
-				statement("endInvocationInterlockARB();");
-
+			statement("SPIRV_Cross_endInvocationInterlock();");
 			flush_all_active_variables();
 			// Make sure forwarding doesn't propagate outside interlock region.
 		}
