@@ -1121,6 +1121,7 @@ protected:
 		bool needs_subgroup_invocation_id = false;
 		bool needs_subgroup_size = false;
 		bool needs_sample_id = false;
+		bool ray_tracing = false;
 	};
 
 	// OpcodeHandler that scans for uses of sampled images
