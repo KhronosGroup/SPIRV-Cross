@@ -8150,7 +8150,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		expr += "(";
 		for (uint32_t col = 0; col < type.columns; col++)
 		{
-			expr += to_enclosed_expression(a);
+			expr += to_enclosed_unpacked_expression(a);
 			expr += " * ";
 			expr += to_extract_component_expression(b, col);
 			if (col + 1 < type.columns)
@@ -8255,19 +8255,19 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto &res_type = get<SPIRType>(type.member_types[1]);
 		if (opcode == OpIAddCarry)
 		{
-			statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", to_enclosed_expression(op0), " + ",
-			          to_enclosed_expression(op1), ";");
+			statement(to_expression(result_id), ".", to_member_name(type, 0), " = ",
+					  to_enclosed_unpacked_expression(op0), " + ", to_enclosed_unpacked_expression(op1), ";");
 			statement(to_expression(result_id), ".", to_member_name(type, 1), " = select(", type_to_glsl(res_type),
-			          "(1), ", type_to_glsl(res_type), "(0), ", to_expression(result_id), ".", to_member_name(type, 0),
-			          " >= max(", to_expression(op0), ", ", to_expression(op1), "));");
+			          "(1), ", type_to_glsl(res_type), "(0), ", to_unpacked_expression(result_id), ".", to_member_name(type, 0),
+			          " >= max(", to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), "));");
 		}
 		else
 		{
-			statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", to_enclosed_expression(op0), " - ",
-			          to_enclosed_expression(op1), ";");
+			statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", to_enclosed_unpacked_expression(op0), " - ",
+			          to_enclosed_unpacked_expression(op1), ";");
 			statement(to_expression(result_id), ".", to_member_name(type, 1), " = select(", type_to_glsl(res_type),
-			          "(1), ", type_to_glsl(res_type), "(0), ", to_enclosed_expression(op0),
-			          " >= ", to_enclosed_expression(op1), ");");
+			          "(1), ", type_to_glsl(res_type), "(0), ", to_enclosed_unpacked_expression(op0),
+			          " >= ", to_enclosed_unpacked_expression(op1), ");");
 		}
 		break;
 	}
@@ -8282,10 +8282,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto &type = get<SPIRType>(result_type);
 		emit_uninitialized_temporary_expression(result_type, result_id);
 
-		statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", to_enclosed_expression(op0), " * ",
-		          to_enclosed_expression(op1), ";");
-		statement(to_expression(result_id), ".", to_member_name(type, 1), " = mulhi(", to_expression(op0), ", ",
-		          to_expression(op1), ");");
+		statement(to_expression(result_id), ".", to_member_name(type, 0), " = ",
+				  to_enclosed_unpacked_expression(op0), " * ", to_enclosed_unpacked_expression(op1), ";");
+		statement(to_expression(result_id), ".", to_member_name(type, 1), " = mulhi(",
+				  to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ");");
 		break;
 	}
 
@@ -8340,8 +8340,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		uint32_t a = ops[2], b = ops[3];
 		bool forward = should_forward(a) && should_forward(b);
-		emit_op(result_type, id, join("int(short(", to_expression(a), ")) * int(short(", to_expression(b), "))"),
-		        forward);
+		emit_op(result_type, id, join("int(short(", to_unpacked_expression(a), ")) * int(short(", to_unpacked_expression(b), "))"), forward);
 		inherit_expression_dependencies(id, a);
 		inherit_expression_dependencies(id, b);
 		break;
@@ -8353,8 +8352,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		uint32_t a = ops[2], b = ops[3];
 		bool forward = should_forward(a) && should_forward(b);
-		emit_op(result_type, id, join("uint(ushort(", to_expression(a), ")) * uint(ushort(", to_expression(b), "))"),
-		        forward);
+		emit_op(result_type, id, join("uint(ushort(", to_unpacked_expression(a), ")) * uint(ushort(", to_unpacked_expression(b), "))"), forward);
 		inherit_expression_dependencies(id, a);
 		inherit_expression_dependencies(id, b);
 		break;

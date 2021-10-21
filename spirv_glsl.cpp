@@ -4375,19 +4375,7 @@ string CompilerGLSL::to_unpacked_expression(uint32_t id, bool register_expressio
 
 string CompilerGLSL::to_enclosed_unpacked_expression(uint32_t id, bool register_expression_read)
 {
-	// If we need to transpose, it will also take care of unpacking rules.
-	auto *e = maybe_get<SPIRExpression>(id);
-	bool need_transpose = e && e->need_transpose;
-	bool is_remapped = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
-	bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
-	if (!need_transpose && (is_remapped || is_packed))
-	{
-		return unpack_expression_type(to_expression(id, register_expression_read), expression_type(id),
-		                              get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID),
-		                              has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked), false);
-	}
-	else
-		return to_enclosed_expression(id, register_expression_read);
+	return enclose_expression(to_unpacked_expression(id, register_expression_read));
 }
 
 string CompilerGLSL::to_dereferenced_expression(uint32_t id, bool register_expression_read)
@@ -8541,7 +8529,7 @@ void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_
 	if (index_is_literal)
 		expr += convert_to_string(index);
 	else
-		expr += to_expression(index, register_expression_read);
+		expr += to_unpacked_expression(index, register_expression_read);
 
 	expr += "]";
 }
@@ -8805,7 +8793,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (is_literal)
 				expr += convert_to_string(index);
 			else
-				expr += to_expression(index, register_expression_read);
+				expr += to_unpacked_expression(index, register_expression_read);
 			expr += "]";
 
 			type_id = type->parent_type;
@@ -8887,7 +8875,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else
 			{
 				expr += "[";
-				expr += to_expression(index, register_expression_read);
+				expr += to_unpacked_expression(index, register_expression_read);
 				expr += "]";
 			}
 
@@ -13098,7 +13086,7 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 string CompilerGLSL::to_initializer_expression(const SPIRVariable &var)
 {
-	return to_expression(var.initializer);
+	return to_unpacked_expression(var.initializer);
 }
 
 string CompilerGLSL::to_zero_initialized_expression(uint32_t type_id)
@@ -13146,7 +13134,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	{
 		uint32_t expr = variable.static_expression;
 		if (ir.ids[expr].get_type() != TypeUndef)
-			res += join(" = ", to_expression(variable.static_expression));
+			res += join(" = ", to_unpacked_expression(variable.static_expression));
 		else if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			res += join(" = ", to_zero_initialized_expression(get_variable_data_type_id(variable)));
 	}
@@ -14931,7 +14919,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		else
 		{
 			emit_block_hints(block);
-			statement("switch (", to_expression(block.condition), ")");
+			statement("switch (", to_unpacked_expression(block.condition), ")");
 		}
 		begin_scope();
 
@@ -15067,7 +15055,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			{
 				// OpReturnValue can return Undef, so don't emit anything for this case.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
-					statement("return ", to_expression(block.return_value), ";");
+					statement("return ", to_unpacked_expression(block.return_value), ";");
 			}
 		}
 		else if (!cfg.node_terminates_control_flow_in_sub_graph(current_function->entry_block, block.self) ||
@@ -15086,7 +15074,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	case SPIRBlock::Kill:
 		statement(backend.discard_literal, ";");
 		if (block.return_value)
-			statement("return ", to_expression(block.return_value), ";");
+			statement("return ", to_unpacked_expression(block.return_value), ";");
 		break;
 
 	case SPIRBlock::Unreachable:
