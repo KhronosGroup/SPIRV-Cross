@@ -1,6 +1,3 @@
-#pragma clang diagnostic ignored "-Wmissing-prototypes"
-#pragma clang diagnostic ignored "-Wmissing-braces"
-
 #include <metal_stdlib>
 #include <simd/simd.h>
 #if __METAL_VERSION__ >= 230
@@ -9,44 +6,6 @@ using namespace metal::raytracing;
 #endif
 
 using namespace metal;
-
-template<typename T, size_t Num>
-struct spvUnsafeArray
-{
-    T elements[Num ? Num : 1];
-    
-    thread T& operator [] (size_t pos) thread
-    {
-        return elements[pos];
-    }
-    constexpr const thread T& operator [] (size_t pos) const thread
-    {
-        return elements[pos];
-    }
-    
-    device T& operator [] (size_t pos) device
-    {
-        return elements[pos];
-    }
-    constexpr const device T& operator [] (size_t pos) const device
-    {
-        return elements[pos];
-    }
-    
-    constexpr const constant T& operator [] (size_t pos) const constant
-    {
-        return elements[pos];
-    }
-    
-    threadgroup T& operator [] (size_t pos) threadgroup
-    {
-        return elements[pos];
-    }
-    constexpr const threadgroup T& operator [] (size_t pos) const threadgroup
-    {
-        return elements[pos];
-    }
-};
 
 struct Params
 {
@@ -64,7 +23,7 @@ kernel void main0(constant Params& _18 [[buffer(1)]], acceleration_structure<ins
 {
     intersection_query<instancing, triangle_data> q;
     q.reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS0, intersection_params());
-    spvUnsafeArray<intersection_query<instancing, triangle_data>, 2> q2;
+    intersection_query<instancing, triangle_data> q2[2];
     q2[1].reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS1, intersection_params());
     bool _63 = q.next();
     q2[0].abort();

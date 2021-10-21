@@ -13402,8 +13402,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("Acceleration Structure Type is supported in MSL 2.3 and above.");
 		break;
 	case SPIRType::RayQuery:
-		type_name = "intersection_query<instancing, triangle_data>";
-		break;
+		return "intersection_query<instancing, triangle_data>";
 
 	default:
 		return "unknown_type";
@@ -13448,6 +13447,7 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	{
 	case SPIRType::AtomicCounter:
 	case SPIRType::ControlPointArray:
+	case SPIRType::RayQuery:
 	{
 		return CompilerGLSL::type_to_array_glsl(type);
 	}
