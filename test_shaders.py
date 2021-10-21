@@ -132,6 +132,8 @@ def path_to_msl_standard(shader):
             return '-std=ios-metal2.2'
         elif '.msl23.' in shader:
             return '-std=ios-metal2.3'
+        elif '.msl24.' in shader:
+            return '-std=ios-metal2.4'
         elif '.msl11.' in shader:
             return '-std=ios-metal1.1'
         elif '.msl10.' in shader:
@@ -147,6 +149,8 @@ def path_to_msl_standard(shader):
             return '-std=macos-metal2.2'
         elif '.msl23.' in shader:
             return '-std=macos-metal2.3'
+        elif '.msl24.' in shader:
+            return '-std=macos-metal2.4'
         elif '.msl11.' in shader:
             return '-std=macos-metal1.1'
         else:
@@ -161,6 +165,8 @@ def path_to_msl_standard_cli(shader):
         return '20200'
     elif '.msl23.' in shader:
         return '20300'
+    elif '.msl24.' in shader:
+        return '20400'
     elif '.msl11.' in shader:
         return '10100'
     else:
@@ -768,7 +774,8 @@ def test_shader_msl(stats, shader, args, paths):
 
     shader_is_msl22 = 'msl22' in joined_path
     shader_is_msl23 = 'msl23' in joined_path
-    skip_validation = (shader_is_msl22 and (not args.msl22)) or (shader_is_msl23 and (not args.msl23))
+    shader_is_msl24 = 'msl24' in joined_path
+    skip_validation = (shader_is_msl22 and (not args.msl22)) or (shader_is_msl23 and (not args.msl23)) or (shader_is_msl24 and (not args.msl24))
     if '.invalid.' in joined_path:
         skip_validation = True
 
@@ -917,10 +924,12 @@ def main():
 
     args.msl22 = False
     args.msl23 = False
+    args.msl24 = False
     if args.msl:
         print_msl_compiler_version()
         args.msl22 = msl_compiler_supports_version('2.2')
         args.msl23 = msl_compiler_supports_version('2.3')
+        args.msl24 = msl_compiler_supports_version('2.4')
 
     backend = 'glsl'
     if (args.msl or args.metal):

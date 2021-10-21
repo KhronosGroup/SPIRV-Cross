@@ -1513,9 +1513,12 @@ void CompilerMSL::preprocess_op_codes()
 	                          (need_subpass_input && !msl_options.use_framebuffer_fetch_subpasses))))
 		needs_sample_id = true;
 
-	if (preproc.ray_tracing)
+	if (is_intersection_query())
 	{
+		add_header_line("#if __METAL_VERSION__ >= 230");
+		add_header_line("#include <metal_raytracing>");
 		add_header_line("using namespace metal::raytracing;");
+		add_header_line("#endif");
 	}
 }
 
@@ -8378,14 +8381,18 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("Raster order groups require MSL 2.0.");
 		break; // Nothing to do in the body
 
+	case OpConvertUToAccelerationStructureKHR:
+		if (!msl_options.supports_msl_version(2, 4))
+			SPIRV_CROSS_THROW("Intersection Query require MSL 2.4.");
+		break; // Nothing to do in the body
+
 	case OpRayQueryInitializeKHR:
 	{
 		flush_variable_declaration(ops[0]);
 
-		statement("intersection_params _intersection_params_;");
 		statement(to_expression(ops[0]), ".reset(", "ray(", to_expression(ops[4]), ", ", to_expression(ops[6]), ", ",
 		          to_expression(ops[5]), ", ", to_expression(ops[7]), "), ", to_expression(ops[1]),
-		          ", _intersection_params_);");
+		          ", intersection_params());");
 		break;
 	}
 	case OpRayQueryProceedKHR:
@@ -8394,7 +8401,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		emit_op(ops[0], ops[1], join(to_expression(ops[2]), ".next()"), false);
 		break;
 	}
-#define MSL_RAY_QUERY_IS_CANDIDATE to_expression(ops[3]) == "0u"
+#define MSL_RAY_QUERY_IS_CANDIDATE get<SPIRConstant>(ops[3]).scalar_i32() == 0
 
 #define MSL_RAY_QUERY_GET_OP(op, msl_op)                                                   \
 	case OpRayQueryGet##op##KHR:                                                           \
@@ -8431,11 +8438,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpRayQueryGetIntersectionTypeKHR:
 		flush_variable_declaration(ops[2]);
 		if (MSL_RAY_QUERY_IS_CANDIDATE)
-			emit_op(ops[0], ops[1], join("((uint)", to_expression(ops[2]), ".get_candidate_intersection_type()) - 1"),
+			emit_op(ops[0], ops[1], join("uint(", to_expression(ops[2]), ".get_candidate_intersection_type()) - 1"),
 			        false);
 		else
-			emit_op(ops[0], ops[1], join("(uint)", to_expression(ops[2]), ".get_committed_intersection_type()"), false);
-
+			emit_op(ops[0], ops[1], join("uint(", to_expression(ops[2]), ".get_committed_intersection_type())"), false);
 		break;
 	case OpRayQueryGetIntersectionTKHR:
 		flush_variable_declaration(ops[2]);
@@ -11389,6 +11395,12 @@ bool CompilerMSL::is_sample_rate() const
 	        (msl_options.use_framebuffer_fetch_subpasses && need_subpass_input));
 }
 
+bool CompilerMSL::is_intersection_query() const
+{
+	auto &caps = get_declared_capabilities();
+	return std::find(caps.begin(), caps.end(), CapabilityRayQueryKHR) != caps.end();
+}
+
 void CompilerMSL::entry_point_args_builtin(string &ep_args)
 {
 	// Builtin variables
@@ -13382,7 +13394,12 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		type_name = "double"; // Currently unsupported
 		break;
 	case SPIRType::AccelerationStructure:
-		type_name = "acceleration_structure<instancing>";
+		if (msl_options.supports_msl_version(2, 4))
+			type_name = "acceleration_structure<instancing>";
+		else if (msl_options.supports_msl_version(2, 3))
+			type_name = "instance_acceleration_structure";
+		else
+			SPIRV_CROSS_THROW("Acceleration Structure Type is supported in MSL 2.3 and above.");
 		break;
 	case SPIRType::RayQuery:
 		type_name = "intersection_query<instancing, triangle_data>";
@@ -15091,10 +15108,6 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		break;
 	}
 
-	case OpTypeRayQueryKHR:
-	case OpRayQueryInitializeKHR:
-		ray_tracing = true;
-		break;
 	default:
 		break;
 	}
