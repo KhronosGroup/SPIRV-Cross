@@ -8383,10 +8383,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpConvertUToAccelerationStructureKHR:
 		SPIRV_CROSS_THROW("ConvertUToAccelerationStructure is not supported in MSL.");
-		break; // Nothing to do in the body
 	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
 		SPIRV_CROSS_THROW("BindingTableRecordOffset is not supported in MSL.");
-		break; // Nothing to do in the body
 
 	case OpRayQueryInitializeKHR:
 	{
@@ -8460,7 +8458,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpRayQueryConfirmIntersectionKHR:
 		flush_variable_declaration(ops[0]);
-		statement(to_expression(ops[2]), ".commit_triangle_intersection();");
+		statement(to_expression(ops[0]), ".commit_triangle_intersection();");
 		break;
 	case OpRayQueryGenerateIntersectionKHR:
 		flush_variable_declaration(ops[0]);
@@ -13404,8 +13402,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("Acceleration Structure Type is supported in MSL 2.3 and above.");
 		break;
 	case SPIRType::RayQuery:
-		type_name = "intersection_query<instancing, triangle_data>";
-		break;
+		return "intersection_query<instancing, triangle_data>";
 
 	default:
 		return "unknown_type";
@@ -13450,6 +13447,7 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	{
 	case SPIRType::AtomicCounter:
 	case SPIRType::ControlPointArray:
+	case SPIRType::RayQuery:
 	{
 		return CompilerGLSL::type_to_array_glsl(type);
 	}
