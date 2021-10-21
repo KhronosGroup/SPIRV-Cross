@@ -8460,7 +8460,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpRayQueryConfirmIntersectionKHR:
 		flush_variable_declaration(ops[0]);
-		statement(to_expression(ops[2]), ".commit_triangle_intersection();");
+		statement(to_expression(ops[0]), ".commit_triangle_intersection();");
 		break;
 	case OpRayQueryGenerateIntersectionKHR:
 		flush_variable_declaration(ops[0]);
