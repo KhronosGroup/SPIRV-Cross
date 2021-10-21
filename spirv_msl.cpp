@@ -8383,10 +8383,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpConvertUToAccelerationStructureKHR:
 		SPIRV_CROSS_THROW("ConvertUToAccelerationStructure is not supported in MSL.");
-		break; // Nothing to do in the body
 	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
 		SPIRV_CROSS_THROW("BindingTableRecordOffset is not supported in MSL.");
-		break; // Nothing to do in the body
 
 	case OpRayQueryInitializeKHR:
 	{
