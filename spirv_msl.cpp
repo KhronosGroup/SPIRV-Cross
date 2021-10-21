@@ -8382,8 +8382,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break; // Nothing to do in the body
 
 	case OpConvertUToAccelerationStructureKHR:
-		if (!msl_options.supports_msl_version(2, 4))
-			SPIRV_CROSS_THROW("Intersection Query require MSL 2.4.");
+		SPIRV_CROSS_THROW("ConvertUToAccelerationStructure is not supported in MSL.");
+		break; // Nothing to do in the body
+	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
+		SPIRV_CROSS_THROW("BindingTableRecordOffset is not supported in MSL.");
 		break; // Nothing to do in the body
 
 	case OpRayQueryInitializeKHR:
