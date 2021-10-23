@@ -763,36 +763,26 @@ void CompilerGLSL::emit_header()
 		require_extension_internal("GL_ARB_post_depth_coverage");
 
 	// Needed for: layout({pixel,sample}_interlock_[un]ordered) in;
-	if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
-	    execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
-	    execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
-	    execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+	bool interlock_used = execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
+	                      execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
+	                      execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
+	                      execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT);
+
+	if (interlock_used)
 	{
 		if (options.es)
 		{
 			if (options.version < 310)
 				SPIRV_CROSS_THROW("At least ESSL 3.10 required for fragment shader interlock.");
-			statement("#extension GL_NV_fragment_shader_interlock : enable");
-			statement("#define SPIRV_Cross_beginInvocationInterlock() beginInvocationInterlockNV()");
-			statement("#define SPIRV_Cross_endInvocationInterlock() endInvocationInterlockNV()");
+			require_extension_internal("GL_NV_fragment_shader_interlock");
 		}
 		else
 		{
 			if (options.version < 420)
-				statement("#extension GL_ARB_shader_image_load_store : enable");
-
-		    statement("#ifdef GL_ARB_fragment_shader_interlock");
-		    statement("#extension GL_ARB_fragment_shader_interlock : enable");
-		    statement("#define SPIRV_Cross_beginInvocationInterlock() beginInvocationInterlockARB()");
-		    statement("#define SPIRV_Cross_endInvocationInterlock() endInvocationInterlockARB()");
-		    statement("#elif defined(GL_INTEL_fragment_shader_ordering)");
-		    statement("#extension GL_INTEL_fragment_shader_ordering : enable");
-		    statement("#define SPIRV_Cross_beginInvocationInterlock() beginFragmentShaderOrderingINTEL()");
-		    statement("#define SPIRV_Cross_endInvocationInterlock()");
-		    statement("#endif");
+				require_extension_internal("GL_ARB_shader_image_load_store");
+			require_extension_internal("GL_ARB_fragment_shader_interlock");
 		}
 	}
-
 
 	for (auto &ext : forced_extensions)
 	{
@@ -865,6 +855,24 @@ void CompilerGLSL::emit_header()
 			statement("#define SPIRV_CROSS_BRANCH");
 			statement("#define SPIRV_CROSS_UNROLL");
 			statement("#define SPIRV_CROSS_LOOP");
+			statement("#endif");
+		}
+		else if (ext == "GL_NV_fragment_shader_interlock")
+		{
+			statement("#extension GL_NV_fragment_shader_interlock : require");
+			statement("#define SPIRV_Cross_beginInvocationInterlock() beginInvocationInterlockNV()");
+			statement("#define SPIRV_Cross_endInvocationInterlock() endInvocationInterlockNV()");
+		}
+		else if (ext == "GL_ARB_fragment_shader_interlock")
+		{
+			statement("#ifdef GL_ARB_fragment_shader_interlock");
+			statement("#extension GL_ARB_fragment_shader_interlock : enable");
+			statement("#define SPIRV_Cross_beginInvocationInterlock() beginInvocationInterlockARB()");
+			statement("#define SPIRV_Cross_endInvocationInterlock() endInvocationInterlockARB()");
+			statement("#elif defined(GL_INTEL_fragment_shader_ordering)");
+			statement("#extension GL_INTEL_fragment_shader_ordering : enable");
+			statement("#define SPIRV_Cross_beginInvocationInterlock() beginFragmentShaderOrderingINTEL()");
+			statement("#define SPIRV_Cross_endInvocationInterlock()");
 			statement("#endif");
 		}
 		else
@@ -1047,10 +1055,7 @@ void CompilerGLSL::emit_header()
 		if (execution.flags.get(ExecutionModePostDepthCoverage))
 			inputs.push_back("post_depth_coverage");
 
-		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
-			execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
-			execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
-			execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+		if (interlock_used)
 		{
 			statement("#if defined(GL_ARB_fragment_shader_interlock)");
 		}
@@ -1064,10 +1069,7 @@ void CompilerGLSL::emit_header()
 		else if (execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
 			statement("layout(sample_interlock_unordered) in;");
 		
-		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
-			execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
-			execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
-			execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+		if (interlock_used)
 		{
 			statement("#elif !defined(GL_INTEL_fragment_shader_ordering)");
 			statement("#error Fragment Shader Interlock/Ordering extension missing!");
