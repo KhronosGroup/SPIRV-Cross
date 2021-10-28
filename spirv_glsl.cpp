@@ -8761,12 +8761,15 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			access_chain_is_arrayed = true;
 		}
-		// For structs, the index refers to a constant, which indexes into the members.
+		// For structs, the index refers to a constant, which indexes into the members, possibly through a redirection mapping.
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
 		else if (type->basetype == SPIRType::Struct)
 		{
 			if (!is_literal)
 				index = evaluate_constant_u32(index);
+
+			if (index < uint32_t(type->member_type_index_redirection.size()))
+				index = type->member_type_index_redirection[index];
 
 			if (index >= type->member_types.size())
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
