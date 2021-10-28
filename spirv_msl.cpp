@@ -4171,11 +4171,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		set_decoration(type_id, DecorationArrayStride, array_stride);
 
 		// Remove packed_ for vectors of size 1, 2 and 4.
-		if (has_extended_decoration(ib_type.self, SPIRVCrossDecorationPhysicalTypePacked))
-			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix "
-			                  "scalar and std140 layout rules.");
-		else
-			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
+		unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
 	}
 	else if (is_matrix(mbr_type))
 	{
@@ -4202,11 +4198,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypeID, type_id);
 
 		// Remove packed_ for vectors of size 1, 2 and 4.
-		if (has_extended_decoration(ib_type.self, SPIRVCrossDecorationPhysicalTypePacked))
-			SPIRV_CROSS_THROW("Unable to remove packed decoration as entire struct must be fully packed. Do not mix "
-			                  "scalar and std140 layout rules.");
-		else
-			unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
+		unset_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypePacked);
 	}
 	else
 		SPIRV_CROSS_THROW("Found a buffer packing case which we cannot represent in MSL.");
