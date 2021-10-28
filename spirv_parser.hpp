@@ -93,6 +93,11 @@ private:
 	SmallVector<uint32_t> global_struct_cache;
 	SmallVector<std::pair<uint32_t, uint32_t>> forward_pointer_fixups;
 
+	// We need to keep track of all the types that can derive a load because
+	// the switch can have wider types, but it's not contained in the op
+	// itself.
+	std::unordered_map<ID, SPIRType&> opload_types;
+
 	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
 	bool variable_storage_is_aliased(const SPIRVariable &v) const;
 };

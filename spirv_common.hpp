@@ -854,7 +854,7 @@ struct SPIRBlock : IVariant
 
 	struct Case
 	{
-		uint32_t value;
+		uint64_t value;
 		BlockID block;
 	};
 	SmallVector<Case> cases;

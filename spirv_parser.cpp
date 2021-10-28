@@ -771,6 +771,8 @@ void Parser::parse(const Instruction &instruction)
 
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
+		auto& type = get<SPIRType>(ops[0]);
+		opload_types.insert({ id, type });
 
 		// Instead of a temporary, create a new function-wide temporary with this ID instead.
 		auto &var = set<SPIRVariable>(id, result_type, spv::StorageClassFunction);
@@ -789,6 +791,7 @@ void Parser::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(ops[0]);
+		opload_types.insert({ id, type });
 
 		if (type.width > 32)
 			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
@@ -973,10 +976,30 @@ void Parser::parse(const Instruction &instruction)
 		current_block->terminator = SPIRBlock::MultiSelect;
 
 		current_block->condition = ops[0];
+		// If the size of the condition is bigger than 32 bits, all the
+		// cases should be casted to the size of the condition before
+		// doing the comparisons. So we need to find out the type of the
+		// condition first.
+		auto search = opload_types.find(current_block->condition);
+		if (search == opload_types.end()) {
+			SPIRV_CROSS_THROW("The condition has not been declared yet.");
+		}
+
+		auto &type = search->second;
+
 		current_block->default_block = ops[1];
 
-		for (uint32_t i = 2; i + 2 <= length; i += 2)
-			current_block->cases.push_back({ ops[i], ops[i + 1] });
+		if (type.width > 32) {
+			for (uint32_t i = 2; i + 3 <= length; i += 3) {
+				uint64_t literal = ((uint64_t)ops[i] << 32) | ops[i+1];
+				current_block->cases.push_back({ literal, ops[i+2] });
+			}
+		} else {
+			for (uint32_t i = 2; i + 2 <= length; i += 2) {
+				uint64_t literal = ops[i];
+				current_block->cases.push_back({ literal, ops[i+1] });
+			}
+		}
 
 		// If we jump to next block, make it break instead since we're inside a switch case block at that point.
 		ir.block_meta[current_block->next_block] |= ParsedIR::BLOCK_META_MULTISELECT_MERGE_BIT;
@@ -1128,6 +1151,25 @@ void Parser::parse(const Instruction &instruction)
 		// OpNoLine might come at global scope.
 		if (current_block)
 			current_block->ops.push_back(instruction);
+		break;
+	}
+
+	case OpConvertFToU:
+	case OpConvertFToS:
+	case OpConvertSToF:
+	case OpConvertUToF:
+	case OpBitcast:
+	case OpLoad:
+	{
+		// We need to keep track of the OpLoad types for the OpSwitch.
+		auto &type = get<SPIRType>(ops[0]);
+		opload_types.insert({ ops[1], type });
+
+		// We still need to trait OpLoad as an actual opcode, so we don't break
+		if (!current_block)
+			SPIRV_CROSS_THROW("Currently no block to insert opcode.");
+
+		current_block->ops.push_back(instruction);
 		break;
 	}
 
