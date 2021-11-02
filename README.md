@@ -444,9 +444,6 @@ All pull requests should ensure that test output does not change unexpectedly. T
 
 ```
 ./checkout_glslang_spirv_tools.sh # Checks out glslang and SPIRV-Tools at a fixed revision which matches the reference output.
-                                  # NOTE: Some users have reported problems cloning from git:// paths. To use https:// instead pass in
-                                  # $ PROTOCOL=https ./checkout_glslang_spirv_tools.sh
-                                  # instead.
 ./build_glslang_spirv_tools.sh    # Builds glslang and SPIRV-Tools.
 ./test_shaders.sh                 # Runs over all changes and makes sure that there are no deltas compared to reference files.
 ```
