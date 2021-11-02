@@ -1626,6 +1626,17 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 	}
 }
 
+void Compiler::fix_switch_branches(const SPIRBlock &block) const {
+	auto search = ir.load_types.find(block.condition);
+	if (search == ir.load_types.end()) {
+		SPIRV_CROSS_THROW("Use of undeclared variable on a switch statement.");
+	}
+
+	const auto& type = search->second;
+	if (type.width > 32)
+		block.cases = std::move(block.cases_64bit);
+}
+
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
 {
 	handler.set_current_block(block);

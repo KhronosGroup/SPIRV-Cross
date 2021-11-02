@@ -135,6 +135,7 @@ bool CFG::post_order_visit(uint32_t block_id)
 		break;
 
 	case SPIRBlock::MultiSelect:
+		compiler.fix_switch_branches(block);
 		for (auto &target : block.cases)
 		{
 			if (post_order_visit(target.block))
@@ -143,7 +144,6 @@ bool CFG::post_order_visit(uint32_t block_id)
 		if (block.default_block && post_order_visit(block.default_block))
 			add_branch(block_id, block.default_block);
 		break;
-
 	default:
 		break;
 	}
