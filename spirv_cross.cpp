@@ -1627,13 +1627,13 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 }
 
 void Compiler::fix_switch_branches(const SPIRBlock &block) const {
-	auto search = ir.load_types.find(block.condition);
-	if (search == ir.load_types.end()) {
+	auto search = ir.load_type_width.find(block.condition);
+	if (search == ir.load_type_width.end()) {
 		SPIRV_CROSS_THROW("Use of undeclared variable on a switch statement.");
 	}
 
-	const auto& type = search->second;
-	if (type.width > 32)
+	const uint32_t width = search->second;
+	if (width > 32)
 		block.cases = std::move(block.cases_64bit);
 }
 

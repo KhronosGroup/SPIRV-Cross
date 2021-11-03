@@ -772,7 +772,7 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(result_type);
-		ir.load_types.insert({ id, type });
+		ir.load_type_width.insert({ id, type.width });
 
 		// Instead of a temporary, create a new function-wide temporary with this ID instead.
 		auto &var = set<SPIRVariable>(id, result_type, spv::StorageClassFunction);
@@ -791,7 +791,7 @@ void Parser::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(ops[0]);
-		ir.load_types.insert({ id, type });
+		ir.load_type_width.insert({ id, type.width });
 
 		if (type.width > 32)
 			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
@@ -1147,7 +1147,7 @@ void Parser::parse(const Instruction &instruction)
 		if (ops) {
 			const auto *type = maybe_get<SPIRType>(ops[0]);
 			if (type) {
-				ir.load_types.insert({ ops[1], *type });
+				ir.load_type_width.insert({ ops[1], type->width });
 			}
 		}
 		if (!current_block)
