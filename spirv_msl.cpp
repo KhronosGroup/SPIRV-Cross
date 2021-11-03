@@ -2251,7 +2251,7 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, comp);
 		mark_location_as_used_by_shader(locn, get<SPIRType>(type_id), storage);
 	}
-	else if (is_builtin && is_tessellation_shader() && inputs_by_builtin.count(builtin))
+	else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 	{
 		uint32_t locn = inputs_by_builtin[builtin].location;
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
@@ -2416,7 +2416,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 				set_member_decoration(ib_type.self, ib_mbr_idx, DecorationComponent, comp);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && is_tessellation_shader() && inputs_by_builtin.count(builtin))
+		else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 		{
 			uint32_t locn = inputs_by_builtin[builtin].location + i;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
@@ -2589,7 +2589,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 			mark_location_as_used_by_shader(locn, *usable_type, storage);
 		}
-		else if (is_builtin && is_tessellation_shader() && inputs_by_builtin.count(builtin))
+		else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 		{
 			uint32_t locn = inputs_by_builtin[builtin].location + i;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
@@ -2780,7 +2780,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
 		mark_location_as_used_by_shader(locn, get<SPIRType>(mbr_type_id), storage);
 	}
-	else if (is_builtin && is_tessellation_shader() && inputs_by_builtin.count(builtin))
+	else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 	{
 		uint32_t locn = 0;
 		auto builtin_itr = inputs_by_builtin.find(builtin);
