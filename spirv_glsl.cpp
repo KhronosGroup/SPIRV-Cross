@@ -400,21 +400,30 @@ void CompilerGLSL::find_static_extensions()
 		}
 		else if (type.basetype == SPIRType::Half)
 		{
-			require_extension_internal("GL_EXT_shader_explicit_arithmetic_types_float16");
-			if (options.vulkan_semantics)
-				require_extension_internal("GL_EXT_shader_16bit_storage");
+			if (!options.es)
+			{
+				require_extension_internal("GL_EXT_shader_explicit_arithmetic_types_float16");
+				if (options.vulkan_semantics)
+					require_extension_internal("GL_EXT_shader_16bit_storage");
+			}
 		}
 		else if (type.basetype == SPIRType::SByte || type.basetype == SPIRType::UByte)
 		{
-			require_extension_internal("GL_EXT_shader_explicit_arithmetic_types_int8");
-			if (options.vulkan_semantics)
-				require_extension_internal("GL_EXT_shader_8bit_storage");
+			if (!options.es)
+			{
+				require_extension_internal("GL_EXT_shader_explicit_arithmetic_types_int8");
+				if (options.vulkan_semantics)
+					require_extension_internal("GL_EXT_shader_8bit_storage");
+			}
 		}
 		else if (type.basetype == SPIRType::Short || type.basetype == SPIRType::UShort)
 		{
-			require_extension_internal("GL_EXT_shader_explicit_arithmetic_types_int16");
-			if (options.vulkan_semantics)
-				require_extension_internal("GL_EXT_shader_16bit_storage");
+			if (!options.es)
+			{
+				require_extension_internal("GL_EXT_shader_explicit_arithmetic_types_int16");
+				if (options.vulkan_semantics)
+					require_extension_internal("GL_EXT_shader_16bit_storage");
+			}
 		}
 	});
 
@@ -4986,45 +4995,10 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 #pragma warning(disable : 4996)
 #endif
 
-string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
+string CompilerGLSL::float_to_string_shared(const SPIRConstant &c, uint32_t col, uint32_t row)
 {
 	string res;
 	float float_value = c.scalar_f16(col, row);
-
-	// There is no literal "hf" in GL_NV_gpu_shader5, so to avoid lots
-	// of complicated workarounds, just value-cast to the half type always.
-	if (std::isnan(float_value) || std::isinf(float_value))
-	{
-		SPIRType type;
-		type.basetype = SPIRType::Half;
-		type.vecsize = 1;
-		type.columns = 1;
-
-		if (float_value == numeric_limits<float>::infinity())
-			res = join(type_to_glsl(type), "(1.0 / 0.0)");
-		else if (float_value == -numeric_limits<float>::infinity())
-			res = join(type_to_glsl(type), "(-1.0 / 0.0)");
-		else if (std::isnan(float_value))
-			res = join(type_to_glsl(type), "(0.0 / 0.0)");
-		else
-			SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
-	}
-	else
-	{
-		SPIRType type;
-		type.basetype = SPIRType::Half;
-		type.vecsize = 1;
-		type.columns = 1;
-		res = join(type_to_glsl(type), "(", convert_to_string(float_value, current_locale_radix_character), ")");
-	}
-
-	return res;
-}
-
-string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
-{
-	string res;
-	float float_value = c.scalar_f32(col, row);
 
 	if (std::isnan(float_value) || std::isinf(float_value))
 	{
@@ -5083,8 +5057,52 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 		if (backend.float_literal_suffix)
 			res += "f";
 	}
+	return res;
+}
+
+string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
+{
+	if (options.es)
+	{
+		return float_to_string_shared(c, col, row);
+	}
+
+	string res;
+	float float_value = c.scalar_f16(col, row);
+
+	// There is no literal "hf" in GL_NV_gpu_shader5, so to avoid lots
+	// of complicated workarounds, just value-cast to the half type always.
+	if (std::isnan(float_value) || std::isinf(float_value))
+	{
+		SPIRType type;
+		type.basetype = SPIRType::Half;
+		type.vecsize = 1;
+		type.columns = 1;
+
+		if (float_value == numeric_limits<float>::infinity())
+			res = join(type_to_glsl(type), "(1.0 / 0.0)");
+		else if (float_value == -numeric_limits<float>::infinity())
+			res = join(type_to_glsl(type), "(-1.0 / 0.0)");
+		else if (std::isnan(float_value))
+			res = join(type_to_glsl(type), "(0.0 / 0.0)");
+		else
+			SPIRV_CROSS_THROW("Cannot represent non-finite floating point constant.");
+	}
+	else
+	{
+		SPIRType type;
+		type.basetype = SPIRType::Half;
+		type.vecsize = 1;
+		type.columns = 1;
+		res = join(type_to_glsl(type), "(", convert_to_string(float_value, current_locale_radix_character), ")");
+	}
 
 	return res;
+}
+
+string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
+{
+	return float_to_string_shared(c, col, row);
 }
 
 std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32_t col, uint32_t row)
@@ -5429,18 +5447,26 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
-					if (*backend.uint16_t_literal_suffix)
+					if (options.es)
 					{
 						res += convert_to_string(c.scalar_u16(vector, i));
-						res += backend.uint16_t_literal_suffix;
+						res += "u";
 					}
 					else
 					{
-						// If backend doesn't have a literal suffix, we need to value cast.
-						res += type_to_glsl(scalar_type);
-						res += "(";
-						res += convert_to_string(c.scalar_u16(vector, i));
-						res += ")";
+						if (*backend.uint16_t_literal_suffix)
+						{
+							res += convert_to_string(c.scalar_u16(vector, i));
+							res += backend.uint16_t_literal_suffix;
+						}
+						else
+						{
+							// If backend doesn't have a literal suffix, we need to value cast.
+							res += type_to_glsl(scalar_type);
+							res += "(";
+							res += convert_to_string(c.scalar_u16(vector, i));
+							res += ")";
+						}
 					}
 				}
 
@@ -5463,18 +5489,25 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
-					if (*backend.int16_t_literal_suffix)
+					if (options.es)
 					{
 						res += convert_to_string(c.scalar_i16(vector, i));
-						res += backend.int16_t_literal_suffix;
 					}
 					else
 					{
-						// If backend doesn't have a literal suffix, we need to value cast.
-						res += type_to_glsl(scalar_type);
-						res += "(";
-						res += convert_to_string(c.scalar_i16(vector, i));
-						res += ")";
+						if (*backend.int16_t_literal_suffix)
+						{
+							res += convert_to_string(c.scalar_i16(vector, i));
+							res += backend.int16_t_literal_suffix;
+						}
+						else
+						{
+							// If backend doesn't have a literal suffix, we need to value cast.
+							res += type_to_glsl(scalar_type);
+							res += "(";
+							res += convert_to_string(c.scalar_i16(vector, i));
+							res += ")";
+						}
 					}
 				}
 
@@ -5497,10 +5530,18 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
-					res += type_to_glsl(scalar_type);
-					res += "(";
-					res += convert_to_string(c.scalar_u8(vector, i));
-					res += ")";
+					if (options.es)
+					{
+						res += convert_to_string(c.scalar_u8(vector, i));
+						res += "u";
+					}
+					else
+					{
+						res += type_to_glsl(scalar_type);
+						res += "(";
+						res += convert_to_string(c.scalar_u8(vector, i));
+						res += ")";
+					}
 				}
 
 				if (i + 1 < c.vector_size())
@@ -5522,10 +5563,17 @@ string CompilerGLSL::constant_expression_vector(const SPIRConstant &c, uint32_t 
 					res += to_name(c.specialization_constant_id(vector, i));
 				else
 				{
-					res += type_to_glsl(scalar_type);
-					res += "(";
-					res += convert_to_string(c.scalar_i8(vector, i));
-					res += ")";
+					if (options.es)
+					{
+						res += convert_to_string(c.scalar_i8(vector, i));
+					}
+					else
+					{
+						res += type_to_glsl(scalar_type);
+						res += "(";
+						res += convert_to_string(c.scalar_i8(vector, i));
+						res += ")";
+					}	
 				}
 
 				if (i + 1 < c.vector_size())
@@ -12956,6 +13004,35 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset
 			type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 			type.basetype == SPIRType::Sampler;
 
+	if (options.es)
+	{
+		auto &execution = get_entry_point();
+		if (type.basetype == SPIRType::Half)
+		{
+			bool implied_fhighp = (execution.model != ExecutionModelFragment) ||
+			                      (options.fragment.default_float_precision == Options::Highp &&
+			                       execution.model == ExecutionModelFragment);
+			qual += implied_fhighp ? "mediump " : "";
+		}
+		else if (type.basetype == SPIRType::Short || type.basetype == SPIRType::UShort ||
+		         type.basetype == SPIRType::SByte || type.basetype == SPIRType::UByte)
+		{
+			bool implied_ihighp =
+			    (execution.model != ExecutionModelFragment) ||
+			    (options.fragment.default_int_precision == Options::Highp && execution.model == ExecutionModelFragment);
+			qual += implied_ihighp ? "mediump " : "";
+		}
+		else if (type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage)
+		{
+			// force mediump for samplers by default on mobile.
+			if (flags.get(DecorationRelaxedPrecision))
+			{
+				qual += "mediump ";
+				return qual;
+			}
+		}
+	}
+
 	if (!type_supports_precision)
 		return qual;
 
@@ -13462,6 +13539,8 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	if (type.basetype == SPIRType::UInt && is_legacy())
 		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
 
+	bool is_es = options.es;
+
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
 	{
 		switch (type.basetype)
@@ -13469,17 +13548,17 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		case SPIRType::Boolean:
 			return "bool";
 		case SPIRType::SByte:
-			return backend.basic_int8_type;
+			return is_es ? "int" : backend.basic_int8_type;
 		case SPIRType::UByte:
-			return backend.basic_uint8_type;
+			return is_es ? "uint" : backend.basic_uint8_type;
 		case SPIRType::Short:
-			return backend.basic_int16_type;
+			return is_es ? "int" : backend.basic_int16_type;
 		case SPIRType::UShort:
-			return backend.basic_uint16_type;
+			return is_es ? "uint" : backend.basic_uint16_type;
 		case SPIRType::Int:
-			return backend.basic_int_type;
+			return is_es ? "int" : backend.basic_int_type;
 		case SPIRType::UInt:
-			return backend.basic_uint_type;
+			return is_es ? "uint" : backend.basic_uint_type;
 		case SPIRType::AtomicCounter:
 			return "atomic_uint";
 		case SPIRType::Half:
@@ -14767,12 +14846,20 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		}
 
 		const char *label_suffix = "";
-		if (type.basetype == SPIRType::UInt && backend.uint32_t_literal_suffix)
-			label_suffix = "u";
-		else if (type.basetype == SPIRType::UShort)
-			label_suffix = backend.uint16_t_literal_suffix;
-		else if (type.basetype == SPIRType::Short)
-			label_suffix = backend.int16_t_literal_suffix;
+		if (options.es)
+		{
+			if (type.basetype == SPIRType::UInt || type.basetype == SPIRType::UShort)
+				label_suffix = "u";
+		}
+		else
+		{
+			if (type.basetype == SPIRType::UInt && backend.uint32_t_literal_suffix)
+				label_suffix = "u";
+			else if (type.basetype == SPIRType::UShort)
+				label_suffix = backend.uint16_t_literal_suffix;
+			else if (type.basetype == SPIRType::Short)
+				label_suffix = backend.int16_t_literal_suffix;
+		}
 
 		SPIRBlock *old_emitting_switch = current_emitting_switch;
 		current_emitting_switch = &block;
