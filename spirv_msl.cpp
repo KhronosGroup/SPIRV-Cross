@@ -1710,6 +1710,16 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 						added_arg_ids.insert(stage_in_var_id);
 						break;
 					}
+
+					case GLSLstd450Modf:
+					case GLSLstd450Frexp:
+					{
+						uint32_t base_id = ops[5];
+						if (global_var_ids.find(base_id) != global_var_ids.end())
+							added_arg_ids.insert(base_id);
+						break;
+					}
+
 					default:
 						break;
 					}

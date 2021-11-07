@@ -181,6 +181,30 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 			// This is a global side effect of the function.
 			return false;
 
+		case OpExtInst:
+		{
+			uint32_t extension_set = ops[2];
+			if (get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
+			{
+				auto op_450 = static_cast<GLSLstd450>(ops[3]);
+				switch (op_450)
+				{
+				case GLSLstd450Modf:
+				case GLSLstd450Frexp:
+				{
+					auto &type = expression_type(ops[5]);
+					if (type.storage != StorageClassFunction)
+						return false;
+					break;
+				}
+
+				default:
+					break;
+				}
+			}
+			break;
+		}
+
 		default:
 			break;
 		}
@@ -713,6 +737,15 @@ bool Compiler::InterfaceVariableAccessHandler::handle(Op opcode, const uint32_t 
 				auto *var = compiler.maybe_get<SPIRVariable>(args[4]);
 				if (var && storage_class_is_interface(var->storage))
 					variables.insert(args[4]);
+				break;
+			}
+
+			case GLSLstd450Modf:
+			case GLSLstd450Fract:
+			{
+				auto *var = compiler.maybe_get<SPIRVariable>(args[5]);
+				if (var && storage_class_is_interface(var->storage))
+					variables.insert(args[5]);
 				break;
 			}
 
@@ -3290,6 +3323,33 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 		for (uint32_t i = 4; i < length; i++)
 			notify_variable_access(args[i], current_block->self);
 		notify_variable_access(args[1], current_block->self);
+
+		uint32_t extension_set = args[2];
+		if (compiler.get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
+		{
+			auto op_450 = static_cast<GLSLstd450>(args[3]);
+			switch (op_450)
+			{
+			case GLSLstd450Modf:
+			case GLSLstd450Frexp:
+			{
+				uint32_t ptr = args[5];
+				auto *var = compiler.maybe_get_backing_variable(ptr);
+				if (var)
+				{
+					accessed_variables_to_block[var->self].insert(current_block->self);
+					if (var->self == ptr)
+						complete_write_variables_to_block[var->self].insert(current_block->self);
+					else
+						partial_write_variables_to_block[var->self].insert(current_block->self);
+				}
+				break;
+			}
+
+			default:
+				break;
+			}
+		}
 		break;
 	}
 
