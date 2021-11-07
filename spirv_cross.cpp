@@ -1729,10 +1729,22 @@ size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 	if (type.member_types.empty())
 		SPIRV_CROSS_THROW("Declared struct in block cannot be empty.");
 
-	uint32_t last = uint32_t(type.member_types.size() - 1);
-	size_t offset = type_struct_member_offset(type, last);
-	size_t size = get_declared_struct_member_size(type, last);
-	return offset + size;
+	// Offsets can be declared out of order, so we need to deduce the actual size
+	// based on last member instead.
+	uint32_t member_index = 0;
+	size_t highest_offset = 0;
+	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+	{
+		size_t offset = type_struct_member_offset(type, i);
+		if (offset > highest_offset)
+		{
+			highest_offset = offset;
+			member_index = i;
+		}
+	}
+
+	size_t size = get_declared_struct_member_size(type, member_index);
+	return highest_offset + size;
 }
 
 size_t Compiler::get_declared_struct_size_runtime_array(const SPIRType &type, size_t array_size) const
