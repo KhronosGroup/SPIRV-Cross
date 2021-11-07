@@ -4749,31 +4749,181 @@ Compiler::PhysicalStorageBufferPointerHandler::PhysicalStorageBufferPointerHandl
 {
 }
 
-bool Compiler::PhysicalStorageBufferPointerHandler::handle(Op op, const uint32_t *args, uint32_t)
+Compiler::PhysicalBlockMeta *Compiler::PhysicalStorageBufferPointerHandler::find_block_meta(uint32_t id) const
 {
-	if (op == OpConvertUToPtr || op == OpBitcast)
+	auto chain_itr = access_chain_to_physical_block.find(id);
+	if (chain_itr != access_chain_to_physical_block.end())
+		return chain_itr->second;
+	else
+		return nullptr;
+}
+
+void Compiler::PhysicalStorageBufferPointerHandler::mark_aligned_access(uint32_t id, const uint32_t *args, uint32_t length)
+{
+	uint32_t mask = *args;
+	args++;
+	length--;
+	if (length && (mask & MemoryAccessVolatileMask) != 0)
 	{
-		auto &type = compiler.get<SPIRType>(args[0]);
-		if (type.storage == StorageClassPhysicalStorageBufferEXT && type.pointer && type.pointer_depth == 1)
+		args++;
+		length--;
+	}
+
+	if (length && (mask & MemoryAccessAlignedMask) != 0)
+	{
+		uint32_t alignment = *args;
+		auto *meta = find_block_meta(id);
+
+		// This makes the assumption that the application does not rely on insane edge cases like:
+		// Bind buffer with ADDR = 8, use block offset of 8 bytes, load/store with 16 byte alignment.
+		// If we emit the buffer with alignment = 16 here, the first element at offset = 0 should
+		// actually have alignment of 8 bytes, but this is too theoretical and awkward to support.
+		// We could potentially keep track of any offset in the access chain, but it's
+		// practically impossible for high level compilers to emit code like that,
+		// so deducing overall alignment requirement based on maximum observed Alignment value is probably fine.
+		if (meta && alignment > meta->alignment)
+			meta->alignment = alignment;
+	}
+}
+
+bool Compiler::PhysicalStorageBufferPointerHandler::type_is_bda_block_entry(uint32_t type_id) const
+{
+	auto &type = compiler.get<SPIRType>(type_id);
+	return type.storage == StorageClassPhysicalStorageBufferEXT && type.pointer &&
+	       type.pointer_depth == 1 && !compiler.type_is_array_of_pointers(type);
+}
+
+uint32_t Compiler::PhysicalStorageBufferPointerHandler::get_minimum_scalar_alignment(const SPIRType &type) const
+{
+	if (type.storage == spv::StorageClassPhysicalStorageBufferEXT)
+		return 8;
+	else if (type.basetype == SPIRType::Struct)
+	{
+		uint32_t alignment = 0;
+		for (auto &member_type : type.member_types)
 		{
-			// If we need to cast to a pointer type which is not a block, we might need to synthesize ourselves
-			// a block type which wraps this POD type.
-			if (type.basetype != SPIRType::Struct)
-				types.insert(args[0]);
+			uint32_t member_align = get_minimum_scalar_alignment(compiler.get<SPIRType>(member_type));
+			if (member_align > alignment)
+				alignment = member_align;
 		}
+		return alignment;
+	}
+	else
+		return type.width / 8;
+}
+
+void Compiler::PhysicalStorageBufferPointerHandler::setup_meta_chain(uint32_t type_id, uint32_t var_id)
+{
+	if (type_is_bda_block_entry(type_id))
+	{
+		auto &meta = physical_block_type_meta[type_id];
+		access_chain_to_physical_block[var_id] = &meta;
+
+		auto &type = compiler.get<SPIRType>(type_id);
+		if (type.basetype != SPIRType::Struct)
+			non_block_types.insert(type_id);
+
+		if (meta.alignment == 0)
+			meta.alignment = get_minimum_scalar_alignment(compiler.get_pointee_type(type));
+	}
+}
+
+bool Compiler::PhysicalStorageBufferPointerHandler::handle(Op op, const uint32_t *args, uint32_t length)
+{
+	// When a BDA pointer comes to life, we need to keep a mapping of SSA ID -> type ID for the pointer type.
+	// For every load and store, we'll need to be able to look up the type ID being accessed and mark any alignment
+	// requirements.
+	switch (op)
+	{
+	case OpConvertUToPtr:
+	case OpBitcast:
+	case OpCompositeExtract:
+		// Extract can begin a new chain if we had a struct or array of pointers as input.
+		// We don't begin chains before we have a pure scalar pointer.
+		setup_meta_chain(args[0], args[1]);
+		break;
+
+	case OpAccessChain:
+	case OpInBoundsAccessChain:
+	case OpPtrAccessChain:
+	case OpCopyObject:
+	{
+		auto itr = access_chain_to_physical_block.find(args[2]);
+		if (itr != access_chain_to_physical_block.end())
+			access_chain_to_physical_block[args[1]] = itr->second;
+		break;
+	}
+
+	case OpLoad:
+	{
+		setup_meta_chain(args[0], args[1]);
+		if (length >= 4)
+			mark_aligned_access(args[2], args + 3, length - 3);
+		break;
+	}
+
+	case OpStore:
+	{
+		if (length >= 3)
+			mark_aligned_access(args[0], args + 2, length - 2);
+		break;
+	}
+
+	default:
+		break;
 	}
 
 	return true;
+}
+
+uint32_t Compiler::PhysicalStorageBufferPointerHandler::get_base_non_block_type_id(uint32_t type_id) const
+{
+	auto *type = &compiler.get<SPIRType>(type_id);
+	while (type->pointer &&
+	       type->storage == StorageClassPhysicalStorageBufferEXT &&
+	       !type_is_bda_block_entry(type_id))
+	{
+		type_id = type->parent_type;
+		type = &compiler.get<SPIRType>(type_id);
+	}
+
+	assert(type_is_bda_block_entry(type_id));
+	return type_id;
+}
+
+void Compiler::PhysicalStorageBufferPointerHandler::analyze_non_block_types_from_block(const SPIRType &type)
+{
+	for (auto &member : type.member_types)
+	{
+		auto &subtype = compiler.get<SPIRType>(member);
+		if (subtype.basetype != SPIRType::Struct && subtype.pointer &&
+		    subtype.storage == spv::StorageClassPhysicalStorageBufferEXT)
+		{
+			non_block_types.insert(get_base_non_block_type_id(member));
+		}
+		else if (subtype.basetype == SPIRType::Struct && !subtype.pointer)
+			analyze_non_block_types_from_block(subtype);
+	}
 }
 
 void Compiler::analyze_non_block_pointer_types()
 {
 	PhysicalStorageBufferPointerHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
-	physical_storage_non_block_pointer_types.reserve(handler.types.size());
-	for (auto type : handler.types)
+
+	// Analyze any block declaration we have to make. It might contain
+	// physical pointers to POD types which we never used, and thus never added to the list.
+	// We'll need to add those pointer types to the set of types we declare.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+		if (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock))
+			handler.analyze_non_block_types_from_block(type);
+	});
+
+	physical_storage_non_block_pointer_types.reserve(handler.non_block_types.size());
+	for (auto type : handler.non_block_types)
 		physical_storage_non_block_pointer_types.push_back(type);
 	sort(begin(physical_storage_non_block_pointer_types), end(physical_storage_non_block_pointer_types));
+	physical_storage_type_to_alignment = move(handler.physical_block_type_meta);
 }
 
 bool Compiler::InterlockedResourceAccessPrepassHandler::handle(Op op, const uint32_t *, uint32_t)
