@@ -4448,16 +4448,13 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		if (length < 4)
 			return false;
 
-		uint32_t result_type = args[0];
-		uint32_t result_id = args[1];
-		auto &type = compiler.get<SPIRType>(result_type);
-
 		// If the underlying resource has been used for comparison then duplicate loads of that resource must be too.
 		// This image must be a depth image.
+		uint32_t result_id = args[1];
 		uint32_t image = args[2];
 		uint32_t sampler = args[3];
 
-		if (type.image.depth || dref_combined_samplers.count(result_id) != 0)
+		if (dref_combined_samplers.count(result_id) != 0)
 		{
 			add_hierarchy_to_comparison_ids(image);
 
@@ -4717,9 +4714,11 @@ bool Compiler::is_desktop_only_format(spv::ImageFormat format)
 	return false;
 }
 
-bool Compiler::image_is_comparison(const SPIRType &type, uint32_t id) const
+// An image is determined to be a depth image if it is marked as a depth image and is not also
+// explicitly marked with a color format, or if there are any sample/gather compare operations on it.
+bool Compiler::is_depth_image(const SPIRType &type, uint32_t id) const
 {
-	return type.image.depth || (comparison_ids.count(id) != 0);
+	return (type.image.depth && type.image.format == ImageFormatUnknown) || comparison_ids.count(id);
 }
 
 bool Compiler::type_is_opaque_value(const SPIRType &type) const

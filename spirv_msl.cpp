@@ -9393,8 +9393,6 @@ static bool needs_chroma_reconstruction(const MSLConstexprSampler *constexpr_sam
 string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 {
 	VariableID img = args.base.img;
-	auto &imgtype = *args.base.imgtype;
-
 	const MSLConstexprSampler *constexpr_sampler = nullptr;
 	bool is_dynamic_img_sampler = false;
 	if (auto *var = maybe_get_backing_variable(img))
@@ -9408,8 +9406,9 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 	if (msl_options.swizzle_texture_samples && args.base.is_gather && !is_dynamic_img_sampler &&
 	    (!constexpr_sampler || !constexpr_sampler->ycbcr_conversion_enable))
 	{
-		add_spv_func_and_recompile(imgtype.image.depth ? SPVFuncImplGatherCompareSwizzle : SPVFuncImplGatherSwizzle);
-		return imgtype.image.depth ? "spvGatherCompareSwizzle" : "spvGatherSwizzle";
+		bool is_compare = comparison_ids.count(img);
+		add_spv_func_and_recompile(is_compare ? SPVFuncImplGatherCompareSwizzle : SPVFuncImplGatherSwizzle);
+		return is_compare ? "spvGatherCompareSwizzle" : "spvGatherSwizzle";
 	}
 
 	auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
@@ -10021,7 +10020,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 				image_var = var->self;
 			}
 
-			if (image_var == 0 || !image_is_comparison(expression_type(image_var), image_var))
+			if (image_var == 0 || !is_depth_image(expression_type(image_var), image_var))
 				farg_str += ", " + to_component_argument(args.component);
 		}
 	}
@@ -13631,7 +13630,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	// Bypass pointers because we need the real image struct
 	auto &img_type = get<SPIRType>(type.self).image;
-	if (image_is_comparison(type, id))
+	if (is_depth_image(type, id))
 	{
 		switch (img_type.dim)
 		{
