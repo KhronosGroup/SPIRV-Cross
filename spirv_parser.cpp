@@ -982,8 +982,9 @@ void Parser::parse(const Instruction &instruction)
 		for (uint32_t i = 2; i + 2 <= length; i += 2)
 			current_block->cases.push_back({ ops[i], ops[i + 1] });
 
-		if (remaining_ops % 3)
-			for (uint32_t i = 2; i + 3 <= length; i += 3) {
+		if ((remaining_ops % 3) == 0)
+			for (uint32_t i = 2; i + 3 <= length; i += 3)
+			{
 				uint64_t value = (static_cast<uint64_t>(ops[i]) << 32) | ops[i + 1];
 				current_block->cases_64bit.push_back({ value, ops[i + 2] });
 			}
@@ -1144,9 +1145,11 @@ void Parser::parse(const Instruction &instruction)
 	// Actual opcodes.
 	default:
 	{
-		if (ops) {
+		if (ops)
+		{
 			const auto *type = maybe_get<SPIRType>(ops[0]);
-			if (type) {
+			if (type)
+			{
 				ir.load_type_width.insert({ ops[1], type->width });
 			}
 		}

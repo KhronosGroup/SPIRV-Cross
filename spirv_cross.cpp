@@ -1626,9 +1626,11 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 	}
 }
 
-void Compiler::fix_switch_branches(const SPIRBlock &block) const {
+void Compiler::fix_switch_branches(const SPIRBlock &block) const
+{
 	auto search = ir.load_type_width.find(block.condition);
-	if (search == ir.load_type_width.end()) {
+	if (search == ir.load_type_width.end())
+	{
 		SPIRV_CROSS_THROW("Use of undeclared variable on a switch statement.");
 	}
 
