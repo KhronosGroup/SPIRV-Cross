@@ -14791,17 +14791,21 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// We only need to consider possible fallthrough if order[i] branches to order[i + 1].
 		for (auto &c : block.cases)
 		{
+			// It's safe to cast to uint32_t since we actually do a check
+			// previously that we're not using uint64_t as the switch selector.
+			auto case_value = static_cast<uint32_t>(c.value);
+
 			if (c.block != block.next_block && c.block != block.default_block)
 			{
 				if (!case_constructs.count(c.block))
 					block_declaration_order.push_back(c.block);
-				case_constructs[c.block].push_back(c.value);
+				case_constructs[c.block].push_back(case_value);
 			}
 			else if (c.block == block.next_block && block.default_block != block.next_block)
 			{
 				// We might have to flush phi inside specific case labels.
 				// If we can piggyback on default:, do so instead.
-				literals_to_merge.push_back(c.value);
+				literals_to_merge.push_back(case_value);
 			}
 		}
 
