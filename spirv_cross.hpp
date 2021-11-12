@@ -1117,7 +1117,11 @@ protected:
 	uint32_t evaluate_constant_u32(uint32_t id) const;
 
 	bool is_vertex_like_shader() const;
-	void fix_switch_branches(const SPIRBlock &block) const;
+
+	// Get the correct case list for the OpSwitch, since it can be either a
+	// 32 bit wide condition or a 64 bit, but the type is not embedded in the
+	// instruction itself.
+	const SmallVector<SPIRBlock::Case> &get_case_list(const SPIRBlock &block) const;
 
 private:
 	// Used only to implement the old deprecated get_entry_point() interface.

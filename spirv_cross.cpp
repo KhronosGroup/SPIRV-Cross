@@ -1626,7 +1626,7 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 	}
 }
 
-void Compiler::fix_switch_branches(const SPIRBlock &block) const
+const SmallVector<SPIRBlock::Case> &Compiler::get_case_list(const SPIRBlock &block) const
 {
 	auto search = ir.load_type_width.find(block.condition);
 	if (search == ir.load_type_width.end())
@@ -1636,7 +1636,9 @@ void Compiler::fix_switch_branches(const SPIRBlock &block) const
 
 	const uint32_t width = search->second;
 	if (width > 32)
-		block.cases = std::move(block.cases_64bit);
+		return block.cases_64bit;
+
+	return block.cases_32bit;
 }
 
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
@@ -3025,12 +3027,15 @@ void Compiler::AnalyzeVariableScopeAccessHandler::set_current_block(const SPIRBl
 		break;
 
 	case SPIRBlock::MultiSelect:
+	{
 		notify_variable_access(block.condition, block.self);
-		for (auto &target : block.cases)
+		auto &cases = compiler.get_case_list(block);
+		for (auto &target : cases)
 			test_phi(target.block);
 		if (block.default_block)
 			test_phi(block.default_block);
 		break;
+	}
 
 	default:
 		break;

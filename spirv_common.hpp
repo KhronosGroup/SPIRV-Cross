@@ -857,7 +857,7 @@ struct SPIRBlock : IVariant
 		uint64_t value;
 		BlockID block;
 	};
-	mutable SmallVector<Case> cases;
+	SmallVector<Case> cases_32bit;
 	SmallVector<Case> cases_64bit;
 
 	// If we have tried to optimize code for this block but failed,
