@@ -6215,7 +6215,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	// GLES has very limited support for shadow samplers.
 	// Basically shadow2D and shadow2DProj work through EXT_shadow_samplers,
 	// everything else can just throw
-	bool is_comparison = image_is_comparison(imgtype, tex);
+	bool is_comparison = is_depth_image(imgtype, tex);
 	if (is_comparison && is_legacy_es())
 	{
 		if (op == "texture" || op == "textureProj")
@@ -6842,7 +6842,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	expr += ")";
 
 	// texture(samplerXShadow) returns float. shadowX() returns vec4. Swizzle here.
-	if (is_legacy() && image_is_comparison(imgtype, img))
+	if (is_legacy() && is_depth_image(imgtype, img))
 		expr += ".r";
 
 	// Sampling from a texture which was deduced to be a depth image, might actually return 1 component here.
@@ -6853,16 +6853,16 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 		const auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
 		VariableID image_id = combined ? combined->image : img;
 
-		if (combined && image_is_comparison(imgtype, combined->image))
+		if (combined && is_depth_image(imgtype, combined->image))
 			image_is_depth = true;
-		else if (image_is_comparison(imgtype, img))
+		else if (is_depth_image(imgtype, img))
 			image_is_depth = true;
 
 		// We must also check the backing variable for the image.
 		// We might have loaded an OpImage, and used that handle for two different purposes.
 		// Once with comparison, once without.
 		auto *image_variable = maybe_get_backing_variable(image_id);
-		if (image_variable && image_is_comparison(get<SPIRType>(image_variable->basetype), image_variable->self))
+		if (image_variable && is_depth_image(get<SPIRType>(image_variable->basetype), image_variable->self))
 			image_is_depth = true;
 
 		if (image_is_depth)
@@ -6930,7 +6930,7 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
 	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    image_is_comparison(imgtype, tex) && args.lod)
+	    is_depth_image(imgtype, tex) && args.lod)
 	{
 		if (!expression_is_constant_null(args.lod))
 		{
@@ -7074,7 +7074,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad =
 	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
-	    image_is_comparison(imgtype, img) && args.lod != 0;
+	    is_depth_image(imgtype, img) && args.lod != 0;
 
 	if (args.dref)
 	{
@@ -13392,7 +13392,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	// "Shadow" state in GLSL only exists for samplers and combined image samplers.
 	if (((type.basetype == SPIRType::SampledImage) || (type.basetype == SPIRType::Sampler)) &&
-	    image_is_comparison(type, id))
+	    is_depth_image(type, id))
 	{
 		res += "Shadow";
 	}
@@ -15831,7 +15831,7 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 
 bool CompilerGLSL::variable_is_depth_or_compare(VariableID id) const
 {
-	return image_is_comparison(get<SPIRType>(get<SPIRVariable>(id).basetype), id);
+	return is_depth_image(get<SPIRType>(get<SPIRVariable>(id).basetype), id);
 }
 
 const char *CompilerGLSL::ShaderSubgroupSupportHelper::get_extension_name(Candidate c)
