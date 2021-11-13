@@ -1628,13 +1628,31 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 
 const SmallVector<SPIRBlock::Case> &Compiler::get_case_list(const SPIRBlock &block) const
 {
-	auto search = ir.load_type_width.find(block.condition);
-	if (search == ir.load_type_width.end())
+	uint32_t width = 0;
+
+	// First we check if we can get the type directly from the block.condition
+	// since it can be a SPIRConstant or a SPIRVariable.
+	if (const auto *constant = maybe_get<SPIRConstant>(block.condition))
 	{
-		SPIRV_CROSS_THROW("Use of undeclared variable on a switch statement.");
+		const auto &type = get<SPIRType>(constant->constant_type);
+		width = type.width;
+	}
+	else if (const auto *var = maybe_get<SPIRVariable>(block.condition))
+	{
+		const auto &type = get<SPIRType>(var->basetype);
+		width = type.width;
+	}
+	else
+	{
+		auto search = ir.load_type_width.find(block.condition);
+		if (search == ir.load_type_width.end())
+		{
+			SPIRV_CROSS_THROW("Use of undeclared variable on a switch statement.");
+		}
+
+		width = search->second;
 	}
 
-	const uint32_t width = search->second;
 	if (width > 32)
 		return block.cases_64bit;
 
