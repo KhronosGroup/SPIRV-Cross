@@ -1659,6 +1659,39 @@ SPIRBlock::ContinueBlockType Compiler::continue_block_type(const SPIRBlock &bloc
 	}
 }
 
+const SmallVector<SPIRBlock::Case> &Compiler::get_case_list(const SPIRBlock &block) const
+{
+	uint32_t width = 0;
+
+	// First we check if we can get the type directly from the block.condition
+	// since it can be a SPIRConstant or a SPIRVariable.
+	if (const auto *constant = maybe_get<SPIRConstant>(block.condition))
+	{
+		const auto &type = get<SPIRType>(constant->constant_type);
+		width = type.width;
+	}
+	else if (const auto *var = maybe_get<SPIRVariable>(block.condition))
+	{
+		const auto &type = get<SPIRType>(var->basetype);
+		width = type.width;
+	}
+	else
+	{
+		auto search = ir.load_type_width.find(block.condition);
+		if (search == ir.load_type_width.end())
+		{
+			SPIRV_CROSS_THROW("Use of undeclared variable on a switch statement.");
+		}
+
+		width = search->second;
+	}
+
+	if (width > 32)
+		return block.cases_64bit;
+
+	return block.cases_32bit;
+}
+
 bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHandler &handler) const
 {
 	handler.set_current_block(block);
@@ -3057,12 +3090,15 @@ void Compiler::AnalyzeVariableScopeAccessHandler::set_current_block(const SPIRBl
 		break;
 
 	case SPIRBlock::MultiSelect:
+	{
 		notify_variable_access(block.condition, block.self);
-		for (auto &target : block.cases)
+		auto &cases = compiler.get_case_list(block);
+		for (auto &target : cases)
 			test_phi(target.block);
 		if (block.default_block)
 			test_phi(block.default_block);
 		break;
+	}
 
 	default:
 		break;

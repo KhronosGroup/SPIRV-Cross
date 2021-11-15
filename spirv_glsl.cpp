@@ -14803,19 +14803,24 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// and let the default: block handle it.
 		// 2.11 in SPIR-V spec states that for fall-through cases, there is a very strict declaration order which we can take advantage of here.
 		// We only need to consider possible fallthrough if order[i] branches to order[i + 1].
-		for (auto &c : block.cases)
+		auto &cases = get_case_list(block);
+		for (auto &c : cases)
 		{
+			// It's safe to cast to uint32_t since we actually do a check
+			// previously that we're not using uint64_t as the switch selector.
+			auto case_value = static_cast<uint32_t>(c.value);
+
 			if (c.block != block.next_block && c.block != block.default_block)
 			{
 				if (!case_constructs.count(c.block))
 					block_declaration_order.push_back(c.block);
-				case_constructs[c.block].push_back(c.value);
+				case_constructs[c.block].push_back(case_value);
 			}
 			else if (c.block == block.next_block && block.default_block != block.next_block)
 			{
 				// We might have to flush phi inside specific case labels.
 				// If we can piggyback on default:, do so instead.
-				literals_to_merge.push_back(c.value);
+				literals_to_merge.push_back(case_value);
 			}
 		}
 
@@ -14935,7 +14940,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		// If there is only one default block, and no cases, this is a case where SPIRV-opt decided to emulate
 		// non-structured exits with the help of a switch block.
 		// This is buggy on FXC, so just emit the logical equivalent of a do { } while(false), which is more idiomatic.
-		bool degenerate_switch = block.default_block != block.merge_block && block.cases.empty();
+		bool degenerate_switch = block.default_block != block.merge_block && block.cases_32bit.empty();
 
 		if (degenerate_switch || is_legacy_es())
 		{
