@@ -3565,6 +3565,11 @@ void CompilerGLSL::emit_resources()
 		    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
 		    interface_variable_exists_in_entry_point(var.self) && !is_hidden)
 		{
+			if (options.es && get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput &&
+			    type.array.size() == 1)
+			{
+				SPIRV_CROSS_THROW("OpenGL ES doesn't support array input variables in vertex shader.");
+			}
 			emit_interface_block(var);
 			emitted = true;
 		}
