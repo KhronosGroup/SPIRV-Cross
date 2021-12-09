@@ -5785,8 +5785,8 @@ string CompilerHLSL::compile()
 	uint32_t pass_count = 0;
 	do
 	{
-		if (pass_count >= 3)
-			SPIRV_CROSS_THROW("Over 3 compilation loops detected. Must be a bug!");
+		if (pass_count >= 4)
+			SPIRV_CROSS_THROW("Over 4 compilation loops detected. Must be a bug!");
 
 		reset();
 
