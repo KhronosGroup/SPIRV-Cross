@@ -5847,6 +5847,34 @@ bool CompilerGLSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint3
 	return true;
 }
 
+static bool check_forward_limit_exceeded(uint32_t op0, uint32_t op1)
+{
+	static uint32_t forward_count = 0;
+	static uint32_t last_op0 = 0;
+	static uint32_t last_op1 = 0;
+
+	if ((last_op0 == op0) || (last_op0 == op1) || (last_op1 == op0) || (last_op1 == op1))
+	{
+		forward_count++;
+	}
+	else
+	{
+		last_op0 = op0;
+		last_op1 = op1;
+		forward_count = 0;
+	}
+
+	if (forward_count > 255)
+	{
+		// Reset the count to allow the references to be forwared
+		// again to avoid single statements after the limit is reached.
+		forward_count = 0;
+		return true;
+	}
+
+	return false;
+}
+
 void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op, SPIRType::BaseType input_type, bool skip_cast_if_equal_type)
 {
@@ -5869,7 +5897,8 @@ void CompilerGLSL::emit_binary_op_cast(uint32_t result_type, uint32_t result_id,
 	else
 		expr += join(cast_op0, " ", op, " ", cast_op1);
 
-	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1));
+	bool forward_limit_exceeded = check_forward_limit_exceeded(op0, op1);
+	emit_op(result_type, result_id, expr, should_forward(op0) && should_forward(op1) && !forward_limit_exceeded);
 	inherit_expression_dependencies(result_id, op0);
 	inherit_expression_dependencies(result_id, op1);
 }
