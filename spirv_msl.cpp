@@ -1317,6 +1317,14 @@ void CompilerMSL::emit_entry_point_declarations()
 		statement(variable_decl(var), ";");
 		var.deferred_declaration = false;
 	}
+
+	// Emit gl_TessCoord shadow variable.
+	if (get_entry_point().model == ExecutionModelTessellationEvaluation &&
+	    get_entry_point().flags.get(ExecutionModeQuads))
+	{
+		auto name = builtin_to_glsl(BuiltInTessCoord, StorageClassFunction);
+		statement("const float3 " + name + " = float3(" + name + "In.x, " + name + "In.y, 0.0);");
+	}
 }
 
 string CompilerMSL::compile()
@@ -11450,6 +11458,11 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				// Handle HLSL-style 0-based vertex/instance index.
 				builtin_declaration = true;
 				ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
+
+				// Handle different MSL gl_TessCoord types. (float2, float3)
+				if (bi_type == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
+					ep_args += "In";
+
 				ep_args += " [[" + builtin_qualifier(bi_type);
 				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
 				{
@@ -14581,7 +14594,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 
 	// Tess. evaluation function in
 	case BuiltInTessCoord:
-		return execution.flags.get(ExecutionModeTriangles) ? "float3" : "float2";
+		return execution.flags.get(ExecutionModeQuads) ? "float2" : "float3";
 
 	// Fragment function in
 	case BuiltInFrontFacing:
