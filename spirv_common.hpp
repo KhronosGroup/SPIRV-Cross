@@ -211,6 +211,28 @@ inline std::string convert_to_string(const T &t)
 	return std::to_string(t);
 }
 
+static inline std::string convert_to_string(int32_t value)
+{
+	// INT_MIN is ... special on some backends. If we use a decimal literal, and negate it, we
+	// could accidentally promote the literal to long first, then negate.
+	// To workaround it, emit int(0x80000000) instead.
+	if (value == std::numeric_limits<int32_t>::min())
+		return "int(0x80000000)";
+	else
+		return std::to_string(value);
+}
+
+static inline std::string convert_to_string(int64_t value, const std::string &int64_type, bool long_long_literal_suffix)
+{
+	// INT64_MIN is ... special on some backends.
+	// If we use a decimal literal, and negate it, we might overflow the representable numbers.
+	// To workaround it, emit int(0x80000000) instead.
+	if (value == std::numeric_limits<int64_t>::min())
+		return join(int64_type, "(0x8000000000000000u", (long_long_literal_suffix ? "ll" : "l"), ")");
+	else
+		return std::to_string(value) + (long_long_literal_suffix ? "ll" : "l");
+}
+
 // Allow implementations to set a convenient standard precision
 #ifndef SPIRV_CROSS_FLT_FMT
 #define SPIRV_CROSS_FLT_FMT "%.32g"
@@ -832,10 +854,11 @@ struct SPIRBlock : IVariant
 
 	struct Case
 	{
-		uint32_t value;
+		uint64_t value;
 		BlockID block;
 	};
-	SmallVector<Case> cases;
+	SmallVector<Case> cases_32bit;
+	SmallVector<Case> cases_64bit;
 
 	// If we have tried to optimize code for this block but failed,
 	// keep track of this.
@@ -1377,7 +1400,7 @@ public:
 	~Variant()
 	{
 		if (holder)
-			group->pools[type]->free_opaque(holder);
+			group->pools[type]->deallocate_opaque(holder);
 	}
 
 	// Marking custom move constructor as noexcept is important.
@@ -1396,7 +1419,7 @@ public:
 		if (this != &other)
 		{
 			if (holder)
-				group->pools[type]->free_opaque(holder);
+				group->pools[type]->deallocate_opaque(holder);
 			holder = other.holder;
 			group = other.group;
 			type = other.type;
@@ -1420,7 +1443,7 @@ public:
 		if (this != &other)
 		{
 			if (holder)
-				group->pools[type]->free_opaque(holder);
+				group->pools[type]->deallocate_opaque(holder);
 
 			if (other.holder)
 				holder = other.holder->clone(group->pools[other.type].get());
@@ -1436,13 +1459,13 @@ public:
 	void set(IVariant *val, Types new_type)
 	{
 		if (holder)
-			group->pools[type]->free_opaque(holder);
+			group->pools[type]->deallocate_opaque(holder);
 		holder = nullptr;
 
 		if (!allow_type_rewrite && type != TypeNone && type != new_type)
 		{
 			if (val)
-				group->pools[new_type]->free_opaque(val);
+				group->pools[new_type]->deallocate_opaque(val);
 			SPIRV_CROSS_THROW("Overwriting a variant with new type.");
 		}
 
@@ -1497,7 +1520,7 @@ public:
 	void reset()
 	{
 		if (holder)
-			group->pools[type]->free_opaque(holder);
+			group->pools[type]->deallocate_opaque(holder);
 		holder = nullptr;
 		type = TypeNone;
 	}

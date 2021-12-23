@@ -5,11 +5,6 @@
 
 using namespace metal;
 
-struct main0_out
-{
-    float4 fragColor [[color(0)]];
-};
-
 // Returns 2D texture coords corresponding to 1D texel buffer coords
 static inline __attribute__((always_inline))
 uint2 spvTexelBufferCoord(uint tc)
@@ -136,6 +131,11 @@ inline vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler s, uint
     }
     return t.gather_compare(s, spvForward<Ts>(params)...);
 }
+
+struct main0_out
+{
+    float4 fragColor [[color(0)]];
+};
 
 static inline __attribute__((always_inline))
 float4 do_samples(thread const texture1d<float> t1, thread const sampler t1Smplr, constant uint& t1Swzl, thread const texture2d<float> t2, constant uint& t2Swzl, thread const texture3d<float> t3, thread const sampler t3Smplr, constant uint& t3Swzl, thread const texturecube<float> tc, constant uint& tcSwzl, thread const texture2d_array<float> t2a, thread const sampler t2aSmplr, constant uint& t2aSwzl, thread const texturecube_array<float> tca, thread const sampler tcaSmplr, constant uint& tcaSwzl, thread const texture2d<float> tb, thread const depth2d<float> d2, thread const sampler d2Smplr, constant uint& d2Swzl, thread const depthcube<float> dc, thread const sampler dcSmplr, constant uint& dcSwzl, thread const depth2d_array<float> d2a, constant uint& d2aSwzl, thread const depthcube_array<float> dca, thread const sampler dcaSmplr, constant uint& dcaSwzl, thread sampler defaultSampler, thread sampler shadowSampler)

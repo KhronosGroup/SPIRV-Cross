@@ -5,6 +5,13 @@
 
 using namespace metal;
 
+// Returns 2D texture coords corresponding to 1D texel buffer coords
+static inline __attribute__((always_inline))
+uint2 spvTexelBufferCoord(uint tc)
+{
+    return uint2(tc % 4096, tc / 4096);
+}
+
 struct attr_desc
 {
     int type;
@@ -33,13 +40,6 @@ struct main0_out
     float4 back_color [[user(locn10)]];
     float4 gl_Position [[position]];
 };
-
-// Returns 2D texture coords corresponding to 1D texel buffer coords
-static inline __attribute__((always_inline))
-uint2 spvTexelBufferCoord(uint tc)
-{
-    return uint2(tc % 4096, tc / 4096);
-}
 
 static inline __attribute__((always_inline))
 attr_desc fetch_desc(thread const int& location, constant VertexBuffer& v_227)

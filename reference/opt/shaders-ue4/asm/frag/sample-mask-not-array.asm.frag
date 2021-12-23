@@ -462,7 +462,7 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     {
         _215 = in.in_var_TEXCOORD7;
     }
-    float3 _216 = fast::max(Material.Material_VectorExpressions[1].xyz * float3(((1.0 + dot(float3(-0.2857142984867095947265625, -0.4285714328289031982421875, 0.857142865657806396484375), normalize(float3x3(in.in_var_TEXCOORD10_centroid.xyz, cross(in.in_var_TEXCOORD11_centroid.xyz, in.in_var_TEXCOORD10_centroid.xyz) * float3(in.in_var_TEXCOORD11_centroid.w), in.in_var_TEXCOORD11_centroid.xyz) * normalize((float3(0.0, 0.0, 1.0) * float3(View.View_NormalOverrideParameter.w)) + View.View_NormalOverrideParameter.xyz)))) * 0.5) + 0.20000000298023223876953125), float3(0.0));
+    float3 _216 = fast::max(Material.Material_VectorExpressions[1].xyz * float3(((1.0 + dot(float3(-0.2857142984867095947265625, -0.4285714328289031982421875, 0.857142865657806396484375), fast::normalize(float3x3(in.in_var_TEXCOORD10_centroid.xyz, cross(in.in_var_TEXCOORD11_centroid.xyz, in.in_var_TEXCOORD10_centroid.xyz) * float3(in.in_var_TEXCOORD11_centroid.w), in.in_var_TEXCOORD11_centroid.xyz) * fast::normalize((float3(0.0, 0.0, 1.0) * float3(View.View_NormalOverrideParameter.w)) + View.View_NormalOverrideParameter.xyz)))) * 0.5) + 0.20000000298023223876953125), float3(0.0));
     float3 _246;
     if (View.View_OutOfBoundsMask > 0.0)
     {

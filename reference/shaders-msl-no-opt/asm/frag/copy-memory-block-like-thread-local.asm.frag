@@ -44,11 +44,6 @@ struct spvUnsafeArray
     }
 };
 
-struct _3
-{
-    float _m0[4];
-};
-
 template<typename T, uint A>
 inline void spvArrayCopyFromConstantToStack1(thread T (&dst)[A], constant T (&src)[A])
 {
@@ -156,6 +151,11 @@ inline void spvArrayCopyFromDeviceToThreadGroup1(threadgroup T (&dst)[A], device
         dst[i] = src[i];
     }
 }
+
+struct _3
+{
+    float _m0[4];
+};
 
 fragment void main0()
 {

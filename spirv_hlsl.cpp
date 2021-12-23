@@ -2489,7 +2489,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		    arg_type.image.dim != DimBuffer)
 		{
 			// Manufacture automatic sampler arg for SampledImage texture
-			arglist.push_back(join(image_is_comparison(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
+			arglist.push_back(join(is_depth_image(arg_type, arg.id) ? "SamplerComparisonState " : "SamplerState ",
 			                       to_sampler_expression(arg.id), type_to_array_glsl(arg_type)));
 		}
 
@@ -3168,7 +3168,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 		{
 			texop += img_expr;
 
-			if (image_is_comparison(imgtype, img))
+			if (is_depth_image(imgtype, img))
 			{
 				if (gather)
 				{
@@ -3644,7 +3644,7 @@ void CompilerHLSL::emit_modern_uniform(const SPIRVariable &var)
 		if (type.basetype == SPIRType::SampledImage && type.image.dim != DimBuffer)
 		{
 			// For combined image samplers, also emit a combined image sampler.
-			if (image_is_comparison(type, var.self))
+			if (is_depth_image(type, var.self))
 				statement("SamplerComparisonState ", to_sampler_expression(var.self), type_to_array_glsl(type),
 				          to_resource_binding_sampler(var), ";");
 			else
@@ -5954,6 +5954,7 @@ VariableID CompilerHLSL::remap_num_workgroups_builtin()
 	ir.meta[variable_id].decoration.alias = "SPIRV_Cross_NumWorkgroups";
 
 	num_workgroups_builtin = variable_id;
+	get_entry_point().interface_variables.push_back(num_workgroups_builtin);
 	return variable_id;
 }
 
