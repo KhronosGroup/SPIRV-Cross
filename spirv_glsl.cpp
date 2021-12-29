@@ -6396,6 +6396,11 @@ void CompilerGLSL::emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left,
 	// fall back to regular trinary statements.
 	if (lerptype.vecsize == 1)
 		has_boolean_mix = false;
+	
+	// Multiple sequencial OpSelect might introduce percision issues, 
+	// fall back to trinary for safety.
+	if (expression_type(left).basetype == SPIRType::Float || expression_type(left).basetype == SPIRType::Half)
+		has_boolean_mix = false;
 
 	// If we can reduce the mix to a simple cast, do so.
 	// This helps for cases like int(bool), uint(bool) which is implemented with
