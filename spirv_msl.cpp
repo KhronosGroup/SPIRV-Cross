@@ -8671,7 +8671,7 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t r
 		{
 			is_constant = true;
 		}
-		else if (rhs_storage == StorageClassUniform)
+		else if (rhs_storage == StorageClassUniform || rhs_storage == StorageClassUniformConstant)
 		{
 			is_constant = true;
 		}
