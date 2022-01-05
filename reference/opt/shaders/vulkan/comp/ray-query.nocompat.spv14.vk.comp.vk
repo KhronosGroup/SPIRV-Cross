@@ -43,10 +43,10 @@ void main()
     int _99 = rayQueryGetIntersectionGeometryIndexEXT(q2[1], bool(0));
     int _100 = rayQueryGetIntersectionPrimitiveIndexEXT(q, bool(1));
     vec2 _103 = rayQueryGetIntersectionBarycentricsEXT(q2[0], bool(0));
-    bool _106 = rayQueryGetIntersectionFrontFaceEXT(q, bool(1));
-    vec3 _107 = rayQueryGetIntersectionObjectRayDirectionEXT(q, bool(0));
-    vec3 _109 = rayQueryGetIntersectionObjectRayOriginEXT(q2[0], bool(1));
-    mat4x3 _113 = rayQueryGetIntersectionObjectToWorldEXT(q, bool(0));
-    mat4x3 _115 = rayQueryGetIntersectionWorldToObjectEXT(q2[1], bool(1));
+    bool _110 = rayQueryGetIntersectionFrontFaceEXT(q, bool(1));
+    vec3 _111 = rayQueryGetIntersectionObjectRayDirectionEXT(q, bool(0));
+    vec3 _113 = rayQueryGetIntersectionObjectRayOriginEXT(q2[0], bool(1));
+    mat4x3 _117 = rayQueryGetIntersectionObjectToWorldEXT(q, bool(0));
+    mat4x3 _119 = rayQueryGetIntersectionWorldToObjectEXT(q2[1], bool(1));
 }
 

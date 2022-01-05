@@ -115,7 +115,7 @@ struct type_Material
     float4 Material_ScalarExpressions[1];
 };
 
-constant float4 _182 = {};
+constant float4 _88 = {};
 
 struct main0_out
 {
@@ -160,7 +160,7 @@ kernel void main0(main0_in in [[stage_in]], constant type_Primitive& Primitive [
     threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
     if (gl_InvocationID == 0u)
     {
-        float4 _154 = _182;
+        float4 _154 = _88;
         _154.x = 0.5 * (temp_var_hullMainRetVal[1u].TessellationMultiplier + temp_var_hullMainRetVal[2u].TessellationMultiplier);
         float4 _160 = _154;
         _160.y = 0.5 * (temp_var_hullMainRetVal[2u].TessellationMultiplier + temp_var_hullMainRetVal[0u].TessellationMultiplier);

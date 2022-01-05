@@ -23,6 +23,7 @@ layout(push_constant, std430) uniform Push
 
 void main()
 {
+    uint v = _15.bar.b;
     uint _31 = atomicAdd(_15.bar.a, _15.bar.b);
 }
 
