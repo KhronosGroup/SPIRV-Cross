@@ -55,8 +55,9 @@ struct main0_patchIn
     float2 gl_TessLevelInner [[attribute(1)]];
 };
 
-[[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], float2 gl_TessCoord [[position_in_patch]])
+[[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], float2 gl_TessCoordIn [[position_in_patch]])
 {
+    float3 gl_TessCoord = float3(gl_TessCoordIn.x, gl_TessCoordIn.y, 0.0);
     main0_out out = {};
     spvUnsafeArray<float, 2> gl_TessLevelInner = {};
     spvUnsafeArray<float, 4> gl_TessLevelOuter = {};

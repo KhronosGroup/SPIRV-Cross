@@ -1317,6 +1317,39 @@ void CompilerMSL::emit_entry_point_declarations()
 		statement(variable_decl(var), ";");
 		var.deferred_declaration = false;
 	}
+
+	// Emit gl_TessCoord shadow variable.
+	if (get_entry_point().model == ExecutionModelTessellationEvaluation &&
+	    get_entry_point().flags.get(ExecutionModeQuads))
+	{
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var)
+		{
+			if (var.storage != StorageClassInput)
+				return;
+
+			auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
+
+			// Don't emit SamplePosition as a separate parameter. In the entry
+			// point, we get that by calling get_sample_position() on the sample ID.
+			if (is_builtin_variable(var) &&
+			    get_variable_data_type(var).basetype != SPIRType::Struct &&
+			    get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
+			{
+				// If the builtin is not part of the active input builtin set, don't emit it.
+				// Relevant for multiple entry-point modules which might declare unused builtins.
+				if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
+					return;
+
+				if (is_direct_input_builtin(bi_type) && bi_type == BuiltInTessCoord)
+				{
+					builtin_declaration = true;
+					auto name = builtin_to_glsl(BuiltInTessCoord, StorageClassInput);
+					statement("float3 " + name + " = float3(" + name + "In.x, " + name + "In.y, 0.0);");
+					builtin_declaration = false;
+				}
+			}
+		});
+	}
 }
 
 string CompilerMSL::compile()
@@ -11449,7 +11482,13 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 				// Handle HLSL-style 0-based vertex/instance index.
 				builtin_declaration = true;
-				ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
+
+				// Handle different MSL gl_TessCoord types. (float2, float3)
+				if (bi_type == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads))
+					ep_args += "float2 " + to_expression(var_id) + "In";
+				else
+					ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
+
 				ep_args += " [[" + builtin_qualifier(bi_type);
 				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
 				{
@@ -14581,7 +14620,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 
 	// Tess. evaluation function in
 	case BuiltInTessCoord:
-		return execution.flags.get(ExecutionModeTriangles) ? "float3" : "float2";
+		return "float3";
 
 	// Fragment function in
 	case BuiltInFrontFacing:
@@ -15532,13 +15571,6 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 			else
 				expr = bitcast_expression(expr_type, expected_type, expr);
 		}
-	}
-
-	if (builtin == BuiltInTessCoord && get_entry_point().flags.get(ExecutionModeQuads) && expr_type.vecsize == 3)
-	{
-		// In SPIR-V, this is always a vec3, even for quads. In Metal, though, it's a float2 for quads.
-		// The code is expecting a float3, so we need to widen this.
-		expr = join("float3(", expr, ", 0)");
 	}
 }
 
