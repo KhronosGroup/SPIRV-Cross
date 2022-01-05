@@ -1317,39 +1317,6 @@ void CompilerMSL::emit_entry_point_declarations()
 		statement(variable_decl(var), ";");
 		var.deferred_declaration = false;
 	}
-
-	// Emit gl_TessCoord shadow variable.
-	if (get_entry_point().model == ExecutionModelTessellationEvaluation &&
-	    get_entry_point().flags.get(ExecutionModeQuads))
-	{
-		ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var)
-		{
-			if (var.storage != StorageClassInput)
-				return;
-
-			auto bi_type = BuiltIn(get_decoration(var_id, DecorationBuiltIn));
-
-			// Don't emit SamplePosition as a separate parameter. In the entry
-			// point, we get that by calling get_sample_position() on the sample ID.
-			if (is_builtin_variable(var) &&
-			    get_variable_data_type(var).basetype != SPIRType::Struct &&
-			    get_variable_data_type(var).basetype != SPIRType::ControlPointArray)
-			{
-				// If the builtin is not part of the active input builtin set, don't emit it.
-				// Relevant for multiple entry-point modules which might declare unused builtins.
-				if (!active_input_builtins.get(bi_type) || !interface_variable_exists_in_entry_point(var_id))
-					return;
-
-				if (is_direct_input_builtin(bi_type) && bi_type == BuiltInTessCoord)
-				{
-					builtin_declaration = true;
-					auto name = builtin_to_glsl(BuiltInTessCoord, StorageClassInput);
-					statement("float3 " + name + " = float3(" + name + "In.x, " + name + "In.y, 0.0);");
-					builtin_declaration = false;
-				}
-			}
-		});
-	}
 }
 
 string CompilerMSL::compile()
@@ -12120,6 +12087,16 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					});
 				break;
 			case BuiltInTessCoord:
+				if (get_entry_point().flags.get(ExecutionModeQuads))
+				{
+					// The entry point will only have a float2 TessCoord variable.
+					// Pad to float3.
+					entry_func.fixup_hooks_in.push_back([=]() {
+						auto name = builtin_to_glsl(BuiltInTessCoord, StorageClassInput);
+						statement("float3 " + name + " = float3(" + name + "In.x, " + name + "In.y, 0.0);");
+					});
+				}
+
 				// Emit a fixup to account for the shifted domain. Don't do this for triangles;
 				// MoltenVK will just reverse the winding order instead.
 				if (msl_options.tess_domain_origin_lower_left && !get_entry_point().flags.get(ExecutionModeTriangles))

@@ -29,8 +29,8 @@ void set_position(thread float4& gl_Position, thread patch_control_point<main0_i
 
 [[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], float2 gl_TessCoordIn [[position_in_patch]])
 {
-    float3 gl_TessCoord = float3(gl_TessCoordIn.x, gl_TessCoordIn.y, 0.0);
     main0_out out = {};
+    float3 gl_TessCoord = float3(gl_TessCoordIn.x, gl_TessCoordIn.y, 0.0);
     set_position(out.gl_Position, patchIn.gl_in, gl_TessCoord);
     return out;
 }
