@@ -8894,29 +8894,36 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				                                       is_packed);
 			}
 
-			if (is_literal && !is_packed && !row_major_matrix_needs_conversion)
+			if (is_literal)
 			{
-				expr += ".";
-				expr += index_to_swizzle(index);
+				bool out_of_bounds = (index >= type->vecsize);
+
+				if (!is_packed && !row_major_matrix_needs_conversion)
+				{
+					expr += ".";
+					expr += index_to_swizzle(out_of_bounds ? 0 : index);
+				}
+				else
+				{
+					// For packed vectors, we can only access them as an array, not by swizzle.
+					expr += join("[", out_of_bounds ? 0 : index, "]");
+				}
 			}
 			else if (ir.ids[index].get_type() == TypeConstant && !is_packed && !row_major_matrix_needs_conversion)
 			{
 				auto &c = get<SPIRConstant>(index);
+				bool out_of_bounds = (c.scalar() >= type->vecsize);
+
 				if (c.specialization)
 				{
 					// If the index is a spec constant, we cannot turn extract into a swizzle.
-					expr += join("[", to_expression(index), "]");
+					expr += join("[", out_of_bounds ? "0" : to_expression(index), "]");
 				}
 				else
 				{
 					expr += ".";
-					expr += index_to_swizzle(c.scalar());
+					expr += index_to_swizzle(out_of_bounds ? 0 : c.scalar());
 				}
-			}
-			else if (is_literal)
-			{
-				// For packed vectors, we can only access them as an array, not by swizzle.
-				expr += join("[", index, "]");
 			}
 			else
 			{
