@@ -55,16 +55,17 @@ kernel void main0(constant Params& _18 [[buffer(1)]], acceleration_structure<ins
     int _97 = q.get_committed_primitive_id();
     ival = _97;
     float2 _100 = q2[0].get_candidate_triangle_barycentric_coord();
-    fvals = float3(_100.x, _100.y, fvals.z);
-    bool _103 = q.is_committed_triangle_front_facing();
-    res = _103;
-    float3 _104 = q.get_candidate_ray_direction();
-    fvals = _104;
-    float3 _106 = q2[0].get_committed_ray_origin();
-    fvals = _106;
-    float4x3 _110 = q.get_candidate_object_to_world_transform();
-    float4x3 matrices = _110;
-    float4x3 _112 = q2[1].get_committed_world_to_object_transform();
-    matrices = _112;
+    fvals.x = _100.x;
+    fvals.y = _100.y;
+    bool _107 = q.is_committed_triangle_front_facing();
+    res = _107;
+    float3 _108 = q.get_candidate_ray_direction();
+    fvals = _108;
+    float3 _110 = q2[0].get_committed_ray_origin();
+    fvals = _110;
+    float4x3 _114 = q.get_candidate_object_to_world_transform();
+    float4x3 matrices = _114;
+    float4x3 _116 = q2[1].get_committed_world_to_object_transform();
+    matrices = _116;
 }
 
