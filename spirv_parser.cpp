@@ -344,6 +344,22 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpExecutionModeId:
+	{
+		auto &execution = ir.entry_points[ops[0]];
+		auto mode = static_cast<ExecutionMode>(ops[1]);
+		execution.flags.set(mode);
+
+		if (mode == ExecutionModeLocalSizeId)
+		{
+			execution.workgroup_size.id_x = ops[2];
+			execution.workgroup_size.id_y = ops[3];
+			execution.workgroup_size.id_z = ops[4];
+		}
+
+		break;
+	}
+
 	case OpName:
 	{
 		uint32_t id = ops[0];
