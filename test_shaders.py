@@ -629,13 +629,22 @@ def regression_check_reflect(shader, json_file, args):
                 shutil.move(json_file, reference)
             else:
                 print('Generated reflection json in {} does not match reference {}!'.format(json_file, reference))
-                with open(json_file, 'r') as f:
-                    print('')
-                    print('Generated:')
-                    print('======================')
-                    print(f.read())
-                    print('======================')
-                    print('')
+                if args.diff:
+                    diff_path = generate_diff_file(reference, glsl)
+                    with open(diff_path, 'r') as f:
+                        print('')
+                        print('Diff:')
+                        print(f.read())
+                        print('')
+                    remove_file(diff_path)
+                else:
+                    with open(json_file, 'r') as f:
+                        print('')
+                        print('Generated:')
+                        print('======================')
+                        print(f.read())
+                        print('======================')
+                        print('')
 
                 # Otherwise, fail the test. Keep the shader file around so we can inspect.
                 if not args.keep:
@@ -648,6 +657,19 @@ def regression_check_reflect(shader, json_file, args):
         print('Found new shader {}. Placing generated source code in {}'.format(joined_path, reference))
         make_reference_dir(reference)
         shutil.move(json_file, reference)
+
+def generate_diff_file(origin, generated):
+    diff_destination = create_temporary()
+    with open(diff_destination, "w") as f:
+        try:
+            subprocess.check_call(["diff", origin, generated], stdout=f)
+        except subprocess.CalledProcessError as e:
+            # diff returns 1 when the files are different so we can safely
+            # ignore this case.
+            if e.returncode != 1:
+                raise e
+
+    return diff_destination
 
 def regression_check(shader, glsl, args):
     reference = reference_path(shader[0], shader[1], args.opt)
@@ -665,13 +687,22 @@ def regression_check(shader, glsl, args):
                 shutil.move(glsl, reference)
             else:
                 print('Generated source code in {} does not match reference {}!'.format(glsl, reference))
-                with open(glsl, 'r') as f:
-                    print('')
-                    print('Generated:')
-                    print('======================')
-                    print(f.read())
-                    print('======================')
-                    print('')
+                if args.diff:
+                    diff_path = generate_diff_file(reference, glsl)
+                    with open(diff_path, 'r') as f:
+                        print('')
+                        print('Diff:')
+                        print(f.read())
+                        print('')
+                    remove_file(diff_path)
+                else:
+                    with open(glsl, 'r') as f:
+                        print('')
+                        print('Generated:')
+                        print('======================')
+                        print(f.read())
+                        print('======================')
+                        print('')
 
                 # Otherwise, fail the test. Keep the shader file around so we can inspect.
                 if not args.keep:
@@ -869,6 +900,9 @@ def main():
     parser.add_argument('--keep',
             action = 'store_true',
             help = 'Leave failed GLSL shaders on disk if they fail regression. Useful for debugging.')
+    parser.add_argument('--diff',
+            action = 'store_true',
+            help = 'Displays a diff instead of the generated output on failure. Useful for debugging.')
     parser.add_argument('--malisc',
             action = 'store_true',
             help = 'Use malisc offline compiler to determine static cycle counts before and after spirv-cross.')
