@@ -516,8 +516,14 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
     spirv_path = create_temporary()
     glsl_path = create_temporary(os.path.basename(shader))
 
+    spirv_16 = '.spv16.' in shader
     spirv_14 = '.spv14.' in shader
-    spirv_env = 'vulkan1.1spv1.4' if spirv_14 else 'vulkan1.1'
+    if spirv_16:
+        spirv_env = 'spv1.6'
+    elif spirv_14:
+        spirv_env = 'vulkan1.1spv1.4'
+    else:
+        spirv_env = 'vulkan1.1'
 
     if vulkan or spirv:
         vulkan_glsl_path = create_temporary('vk' + os.path.basename(shader))
