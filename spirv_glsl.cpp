@@ -12662,7 +12662,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					    join("imageLoad(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ", ", to_expression(samples), ")");
 				}
 				else
-					imgexpr = join("imageLoad(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ")");
+				{
+					// 'imageLoad' can only be used if the image type is "image" (as per
+					// https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/imageLoad.xhtml) which is only true
+					// if image_type_glsl(...) returns a string containing "image", which is only true if
+					// type.image.sampled == 2. However type.image.sampled can be 0 in OpImageRead calls as per:
+					// https://www.khronos.org/registry/SPIR-V/specs/unified1/SPIRV.html#OpTypeImage , so that needs to
+					// be handled, as that may have an extra LOD argument:
+
+					if (type.image.sampled == 2)
+					{
+						// We're using an image, not a sampler - use imageLoad.
+						imgexpr = join("imageLoad(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ")");
+					}
+					else if (type.image.dim == Dim::DimBuffer || type.image.dim == Dim::DimRect)
+					{
+						// We're using a sampler so can't use imageLoad, despite our overloads of texelFetch having the
+						// same arguments.
+						imgexpr = join("texelFetch(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ")");
+					}
+					else
+					{
+						// We're using a sampler, so can't use imageLoad, but the overload of texelFetch needs a LOD
+						// argument.
+						imgexpr =
+						    join("texelFetch(", to_non_uniform_aware_expression(ops[2]), ", ", coord_expr, ", 0)");
+					}
+				}
 			}
 
 			if (!sparse)
@@ -12771,6 +12797,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			string expr;
 			if (type.image.sampled == 2)
 			{
+				// sampled == 2 indicates an image compatible with read/write operations (a storage or subpass data image).
 				if (!options.es && options.version < 430)
 					require_extension_internal("GL_ARB_shader_image_size");
 				else if (options.es && options.version < 310)
@@ -12781,14 +12808,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 			else
 			{
-				// This path is hit for samplerBuffers and multisampled images which do not have LOD.
+				// Image whose sampler usage is "only known at run time, not at compile time" or
+				// is "compatible with sampling operations".
+
 				std::string fname = "textureSize";
 				if (is_legacy())
 				{
 					auto &imgtype = get<SPIRType>(type.self);
 					fname = legacy_tex_op(fname, imgtype, ops[2]);
 				}
-				expr = join(fname, "(", convert_separate_image_to_expression(ops[2]), ")");
+
+				if (type.image.ms || type.image.dim == Dim::DimBuffer || type.image.dim == Dim::DimRect)
+				{
+					// This path is hit for samplerBuffers and multisampled images which do not have LOD, specifically
+					// these 5 variants from https://www.khronos.org/registry/OpenGL-Refpages/gl4/html/textureSize.xhtml:
+					// - ivec2 textureSize(gsamplerRect sampler);
+					// - ivec2 textureSize(gsamplerRectShadow sampler);
+					// - int textureSize(gsamplerBuffer sampler);
+					// - ivec2 textureSize(gsampler2DMS sampler);
+					// - ivec3 textureSize(gsampler2DMSArray sampler);
+
+					expr = join(fname, "(", convert_separate_image_to_expression(ops[2]), ")");
+				}
+				else
+				{
+					// The remaining 13 variants need a dummy LOD parameter
+					expr = join(fname, "(", convert_separate_image_to_expression(ops[2]), ", 0)");
+				}
 			}
 
 			auto &restype = get<SPIRType>(ops[0]);
