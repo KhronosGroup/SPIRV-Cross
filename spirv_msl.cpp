@@ -2515,8 +2515,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 																   const string &ib_var_ref, SPIRType &ib_type,
 																   SPIRVariable &var, SPIRType &var_type,
                                                                    uint32_t mbr_idx, InterfaceBlockMeta &meta,
-																   const string &ib_mbr_name,
-																   const string &var_access_chain,
+																   const string &mbr_name_qual,
+																   const string &var_chain_qual,
 																   uint32_t& location)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
@@ -2534,8 +2534,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 
 	uint32_t mbr_type_id = var_type.member_types[mbr_idx];
 	auto &mbr_type = get<SPIRType>(mbr_type_id);
-	uint32_t elem_cnt = 1;
 
+	uint32_t elem_cnt = 1;
 	if (is_matrix(mbr_type))
 	{
 		if (is_array(mbr_type))
@@ -2578,15 +2578,12 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			return;
 	}
 
-	string mbr_name_qual = ib_mbr_name.empty() ? to_name(var_type.self) : ib_mbr_name;
-	string var_chain_qual = var_access_chain.empty() ? to_name(var.self) : var_access_chain;
-
 	// Recursively handle nested structures.
 	if (mbr_type.basetype == SPIRType::Struct)
 	{
 		for (uint32_t i = 0; i < elem_cnt; i++)
 		{
-			string mbr_name = ensure_valid_name(append_member_name(mbr_name_qual, var_type, mbr_idx) + (elem_cnt == 1 ? "" : join("_", i)), "m");
+			string mbr_name = append_member_name(mbr_name_qual, var_type, mbr_idx) + (elem_cnt == 1 ? "" : join("_", i));
 			string var_chain = join(var_chain_qual, ".", to_member_name(var_type, mbr_idx), (elem_cnt == 1 ? "" : join("[", i, "]")));
 			uint32_t sub_mbr_cnt = uint32_t(mbr_type.member_types.size());
 			for (uint32_t sub_mbr_idx = 0; sub_mbr_idx < sub_mbr_cnt; sub_mbr_idx++)
@@ -2616,7 +2613,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		// Once we determine the location of the first member within nested structures,
 		// from a var of the topmost structure, the remaining flattened members of the
 		// nested structures will have consecutive location values.
-		if (location)
+		if (!is_builtin && location)
 		{
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 			mark_location_as_used_by_shader(location, *usable_type, storage);
@@ -2651,7 +2648,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		}
 
 		if (has_member_decoration(var_type.self, mbr_idx, DecorationComponent))
-			SPIRV_CROSS_THROW("DecorationComponent on matrices and arrays make little sense.");
+			SPIRV_CROSS_THROW("DecorationComponent on matrices and arrays is not supported.");
 
 		if (storage != StorageClassInput || !pull_model_inputs.count(var.self))
 		{
@@ -2712,11 +2709,14 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 	}
 }
 
-void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass storage, const string &ib_var_ref,
-                                                               SPIRType &ib_type, SPIRVariable &var, uint32_t mbr_idx,
-                                                               InterfaceBlockMeta &meta)
+void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass storage,
+															   const string &ib_var_ref, SPIRType &ib_type,
+															   SPIRVariable &var, SPIRType &var_type,
+															   uint32_t mbr_idx, InterfaceBlockMeta &meta,
+															   const string &mbr_name_qual,
+															   const string &var_chain_qual,
+															   uint32_t& location)
 {
-	auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	BuiltIn builtin = BuiltInMax;
@@ -2741,7 +2741,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		ib_type.member_types.push_back(mbr_type_id);
 
 	// Give the member a name
-	string mbr_name = ensure_valid_name(append_member_name(to_name(var_type.self), var_type, mbr_idx), "m");
+	string mbr_name = ensure_valid_name(append_member_name(mbr_name_qual, var_type, mbr_idx), "m");
 	set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 
 	// Update the original variable reference to include the structure reference
@@ -2758,7 +2758,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	}
 
 	bool flatten_stage_out = false;
-
+	string var_chain = var_chain_qual + "." + to_member_name(var_type, mbr_idx);
 	if (is_builtin && !meta.strip_array)
 	{
 		// For the builtin gl_PerVertex, we cannot treat it as a block anyways,
@@ -2772,14 +2772,14 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		{
 		case StorageClassInput:
 			entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
-				statement(to_name(var.self), ".", to_member_name(var_type, mbr_idx), " = ", qual_var_name, ";");
+				statement(var_chain, " = ", qual_var_name, ";");
 			});
 			break;
 
 		case StorageClassOutput:
 			flatten_stage_out = true;
 			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
-				statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(var_type, mbr_idx), ";");
+				statement(qual_var_name, " = ", var_chain, ";");
 			});
 			break;
 
@@ -2788,48 +2788,54 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		}
 	}
 
-	// Copy the variable location from the original variable to the member
-	if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
+	// Once we determine the location of the first member within nested structures,
+	// from a var of the topmost structure, the remaining flattened members of the
+	// nested structures will have consecutive location values.
+	if (!is_builtin && location)
 	{
-		uint32_t locn = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
+		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
+		location++;
+	}
+	else if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
+	{
+		location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
 		uint32_t comp = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
 		if (storage == StorageClassInput)
 		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn, comp, 0, meta.strip_array);
+			mbr_type_id = ensure_correct_input_type(mbr_type_id, location, comp, 0, meta.strip_array);
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
 			else
 				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 		}
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
-		mark_location_as_used_by_shader(locn, get<SPIRType>(mbr_type_id), storage);
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
+		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
+		location++;
 	}
 	else if (has_decoration(var.self, DecorationLocation))
 	{
-		// The block itself might have a location and in this case, all members of the block
-		// receive incrementing locations.
-		uint32_t locn = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
+		location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
 		if (storage == StorageClassInput)
 		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, locn, 0, 0, meta.strip_array);
+			mbr_type_id = ensure_correct_input_type(mbr_type_id, location, 0, 0, meta.strip_array);
 			var_type.member_types[mbr_idx] = mbr_type_id;
 			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
 				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
 			else
 				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 		}
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
-		mark_location_as_used_by_shader(locn, get<SPIRType>(mbr_type_id), storage);
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
+		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
+		location++;
 	}
 	else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 	{
-		uint32_t locn = 0;
-		auto builtin_itr = inputs_by_builtin.find(builtin);
-		if (builtin_itr != end(inputs_by_builtin))
-			locn = builtin_itr->second.location;
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, locn);
-		mark_location_as_used_by_shader(locn, get<SPIRType>(mbr_type_id), storage);
+		location = inputs_by_builtin[builtin].location;
+		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
+		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
+		location++;
 	}
 
 	// Copy the component location, if present.
@@ -3148,69 +3154,94 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		else
 		{
 			bool masked_block = false;
-
-			// Flatten the struct members into the interface struct
-			for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
+			uint32_t location = 0;
+			uint32_t elem_cnt = 1;
+			if (is_matrix(var_type))
 			{
-				builtin = BuiltInMax;
-				is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
-				auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
+				if (is_array(var_type))
+					SPIRV_CROSS_THROW("MSL cannot emit arrays-of-matrices in input and output variables.");
 
-				if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
+				elem_cnt = var_type.columns;
+			}
+			else if (is_array(var_type))
+			{
+				if (var_type.array.size() != 1)
+					SPIRV_CROSS_THROW("MSL cannot emit arrays-of-arrays in input and output variables.");
+
+				elem_cnt = to_array_size_literal(var_type);
+			}
+
+			for (uint32_t elem_idx = 0; elem_idx < elem_cnt; elem_idx++)
+			{
+				// Flatten the struct members into the interface struct
+				for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(var_type.member_types.size()); mbr_idx++)
 				{
-					if (is_block)
-						masked_block = true;
+					builtin = BuiltInMax;
+					is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
+					auto &mbr_type = get<SPIRType>(var_type.member_types[mbr_idx]);
 
-					// Non-builtin block output variables are just ignored, since they will still access
-					// the block variable as-is. They're just not flattened.
-					if (is_builtin && !meta.strip_array)
+					if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 					{
-						// Emit a fake variable instead.
-						uint32_t ids = ir.increase_bound_by(2);
-						uint32_t ptr_type_id = ids + 0;
-						uint32_t var_id = ids + 1;
+						location++;		// Skip this location
 
-						auto ptr_type = mbr_type;
-						ptr_type.pointer = true;
-						ptr_type.pointer_depth++;
-						ptr_type.parent_type = var_type.member_types[mbr_idx];
-						ptr_type.storage = StorageClassOutput;
+						if (is_block)
+							masked_block = true;
 
-						uint32_t initializer = 0;
-						if (var.initializer)
-							if (auto *c = maybe_get<SPIRConstant>(var.initializer))
-								initializer = c->subconstants[mbr_idx];
+						// Non-builtin block output variables are just ignored, since they will still access
+						// the block variable as-is. They're just not flattened.
+						if (is_builtin && !meta.strip_array)
+						{
+							// Emit a fake variable instead.
+							uint32_t ids = ir.increase_bound_by(2);
+							uint32_t ptr_type_id = ids + 0;
+							uint32_t var_id = ids + 1;
 
-						set<SPIRType>(ptr_type_id, ptr_type);
-						set<SPIRVariable>(var_id, ptr_type_id, StorageClassOutput, initializer);
-						entry_func.add_local_variable(var_id);
-						vars_needing_early_declaration.push_back(var_id);
-						set_name(var_id, builtin_to_glsl(builtin, StorageClassOutput));
-						set_decoration(var_id, DecorationBuiltIn, builtin);
+							auto ptr_type = mbr_type;
+							ptr_type.pointer = true;
+							ptr_type.pointer_depth++;
+							ptr_type.parent_type = var_type.member_types[mbr_idx];
+							ptr_type.storage = StorageClassOutput;
+
+							uint32_t initializer = 0;
+							if (var.initializer)
+								if (auto *c = maybe_get<SPIRConstant>(var.initializer))
+									initializer = c->subconstants[mbr_idx];
+
+							set<SPIRType>(ptr_type_id, ptr_type);
+							set<SPIRVariable>(var_id, ptr_type_id, StorageClassOutput, initializer);
+							entry_func.add_local_variable(var_id);
+							vars_needing_early_declaration.push_back(var_id);
+							set_name(var_id, builtin_to_glsl(builtin, StorageClassOutput));
+							set_decoration(var_id, DecorationBuiltIn, builtin);
+						}
 					}
-				}
-				else if (!is_builtin || has_active_builtin(builtin, storage))
-				{
-					bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type) || mbr_type.basetype == SPIRType::Struct;
-					bool attribute_load_store =
-					    storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
-					bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
-
-					// Clip/CullDistance always need to be declared as user attributes.
-					if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
-						is_builtin = false;
-
-					if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
+					else if (!is_builtin || has_active_builtin(builtin, storage))
 					{
-						uint32_t location = 0;
+						bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type) || mbr_type.basetype == SPIRType::Struct;
+						bool attribute_load_store =
+						storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
+						bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
+
+						// Clip/CullDistance always need to be declared as user attributes.
+						if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
+							is_builtin = false;
+
 						auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
-						add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
+						string mbr_name_qual = to_name(var_type.self) + (elem_cnt == 1 ? "" : join("_", elem_idx));
+						string var_chain_qual = to_name(var.self) + (elem_cnt == 1 ? "" : join("[", elem_idx, "]"));
+
+						if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
+						{
+							add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
+																			 var, var_type, mbr_idx, meta,
+																			 mbr_name_qual, var_chain_qual, location);
+						}
+						else
+						{
+							add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
 																		 var, var_type, mbr_idx, meta,
-																		 "", "", location);
-					}
-					else
-					{
-						add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type, var, mbr_idx, meta);
+																		 mbr_name_qual, var_chain_qual, location);
+						}
 					}
 				}
 			}

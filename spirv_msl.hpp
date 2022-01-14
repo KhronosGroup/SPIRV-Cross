@@ -826,15 +826,19 @@ protected:
 	bool add_component_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                               SPIRVariable &var, const SPIRType &type,
 	                                               InterfaceBlockMeta &meta);
-	void add_plain_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
-	                                                  SPIRType &ib_type, SPIRVariable &var, uint32_t index,
-	                                                  InterfaceBlockMeta &meta);
+	void add_plain_member_variable_to_interface_block(spv::StorageClass storage,
+													  const std::string &ib_var_ref, SPIRType &ib_type,
+													  SPIRVariable &var, SPIRType &var_type,
+													  uint32_t mbr_idx, InterfaceBlockMeta &meta,
+													  const std::string &mbr_name_qual,
+													  const std::string &var_chain_qual,
+													  uint32_t& location);
 	void add_composite_member_variable_to_interface_block(spv::StorageClass storage,
 														  const std::string &ib_var_ref, SPIRType &ib_type,
 														  SPIRVariable &var, SPIRType &var_type,
 														  uint32_t mbr_idx, InterfaceBlockMeta &meta,
-														  const std::string &ib_mbr_name,
-														  const std::string &var_access_chain,
+														  const std::string &mbr_name_qual,
+														  const std::string &var_chain_qual,
 														  uint32_t& location);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 
