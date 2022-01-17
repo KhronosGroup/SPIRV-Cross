@@ -1360,8 +1360,8 @@ string CompilerMSL::compile()
 	// Allow Metal to use the array<T> template unless we force it off.
 	backend.can_return_array = !msl_options.force_native_arrays;
 	backend.array_is_value_type = !msl_options.force_native_arrays;
-	// Arrays which are part of buffer objects are never considered to be native arrays.
-	backend.buffer_offset_array_is_value_type = false;
+	// Arrays which are part of buffer objects are never considered to be value types (just plain C-style).
+	backend.array_is_value_type_in_buffer_blocks = false;
 	backend.support_pointer_to_pointer = true;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
@@ -13578,7 +13578,7 @@ std::string CompilerMSL::variable_decl(const SPIRVariable &variable)
 	if (variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
 		is_using_builtin_array = true;
 
-	std::string expr = CompilerGLSL::variable_decl(variable);
+	auto expr = CompilerGLSL::variable_decl(variable);
 	is_using_builtin_array = old_is_using_builtin_array;
 	return expr;
 }
