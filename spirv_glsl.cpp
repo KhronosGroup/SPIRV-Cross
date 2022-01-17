@@ -296,8 +296,19 @@ const char *CompilerGLSL::vector_swizzle(int vecsize, int index)
 	return swizzle[vecsize - 1][index];
 }
 
-void CompilerGLSL::reset()
+void CompilerGLSL::reset(uint32_t iteration_count)
 {
+	// Sanity check the iteration count to be robust against a certain class of bugs where
+	// we keep forcing recompilations without making clear forward progress.
+	// In buggy situations we will loop forever, or loop for an unbounded number of iterations.
+	// Certain types of recompilations are considered to make forward progress,
+	// but in almost all situations, we'll never see more than 3 iterations.
+	// It is highly context-sensitive when we need to force recompilation,
+	// and it is not practical with the current architecture
+	// to resolve everything up front.
+	if (iteration_count >= 3 && !is_force_recompile_forward_progress)
+		SPIRV_CROSS_THROW("Over 3 compilation loops detected and no forward progress was made. Must be a bug!");
+
 	// We do some speculative optimizations which should pretty much always work out,
 	// but just in case the SPIR-V is rather weird, recompile until it's happy.
 	// This typically only means one extra pass.
@@ -664,10 +675,7 @@ string CompilerGLSL::compile()
 	uint32_t pass_count = 0;
 	do
 	{
-		if (pass_count >= 3)
-			SPIRV_CROSS_THROW("Over 3 compilation loops detected. Must be a bug!");
-
-		reset();
+		reset(pass_count);
 
 		buffer.reset();
 
@@ -4291,8 +4299,13 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 {
 	// We tried to read an invalidated expression.
 	// This means we need another pass at compilation, but next time, force temporary variables so that they cannot be invalidated.
-	forced_temporaries.insert(id);
-	force_recompile();
+	auto res = forced_temporaries.insert(id);
+
+	// Forcing new temporaries guarantees forward progress.
+	if (res.second)
+		force_recompile_guarantee_forward_progress();
+	else
+		force_recompile();
 }
 
 // Converts the format of the current expression from packed to unpacked,
@@ -14752,7 +14765,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	// as writes to said loop variables might have been masked out, we need a recompile.
 	if (!emitted_loop_header_variables && !block.loop_variables.empty())
 	{
-		force_recompile();
+		force_recompile_guarantee_forward_progress();
 		for (auto var : block.loop_variables)
 			get<SPIRVariable>(var).loop_variable = false;
 		block.loop_variables.clear();
