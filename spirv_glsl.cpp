@@ -4559,12 +4559,13 @@ string CompilerGLSL::to_rerolled_array_expression(const string &base_expr, const
 	return expr;
 }
 
-string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool uses_buffer_offset)
+string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool block_like_type)
 {
 	auto &type = expression_type(id);
 
-	bool reroll_array = !type.array.empty() && (!backend.array_is_value_type ||
-	                                            (uses_buffer_offset && !backend.buffer_offset_array_is_value_type));
+	bool reroll_array = !type.array.empty() &&
+	                    (!backend.array_is_value_type ||
+	                     (block_like_type && !backend.array_is_value_type_in_buffer_blocks));
 
 	if (reroll_array)
 	{
@@ -4966,7 +4967,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	}
 }
 
-string CompilerGLSL::constant_expression(const SPIRConstant &c)
+string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope)
 {
 	auto &type = get<SPIRType>(c.constant_type);
 
@@ -4979,6 +4980,15 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 		// Handles Arrays and structures.
 		string res;
 
+		// Only consider the decay if we are inside a struct scope.
+		// Outside a struct declaration, we can always bind to a constant array with templated type.
+		bool array_type_decays = inside_block_like_struct_scope &&
+		                         !type.array.empty() && !backend.array_is_value_type_in_buffer_blocks &&
+		                         has_decoration(c.constant_type, DecorationArrayStride);
+
+		if (type.array.empty() && type.basetype == SPIRType::Struct && type_is_block_like(type))
+			inside_block_like_struct_scope = true;
+
 		// Allow Metal to use the array<T> template to make arrays a value type
 		bool needs_trailing_tracket = false;
 		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
@@ -4987,7 +4997,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 			res = type_to_glsl_constructor(type) + "{ ";
 		}
 		else if (backend.use_initializer_list && backend.use_typed_initializer_list && backend.array_is_value_type &&
-		         !type.array.empty())
+		         !type.array.empty() && !array_type_decays)
 		{
 			res = type_to_glsl_constructor(type) + "({ ";
 			needs_trailing_tracket = true;
@@ -5007,7 +5017,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c)
 			if (subc.specialization)
 				res += to_name(elem);
 			else
-				res += constant_expression(subc);
+				res += constant_expression(subc, inside_block_like_struct_scope);
 
 			if (&elem != &c.subconstants.back())
 				res += ", ";
@@ -6965,7 +6975,7 @@ bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
 		return false;
 
 	auto &backed_type = get<SPIRType>(var->basetype);
-	return !backend.buffer_offset_array_is_value_type && backed_type.basetype == SPIRType::Struct &&
+	return !backend.array_is_value_type_in_buffer_blocks && backed_type.basetype == SPIRType::Struct &&
 	       has_member_decoration(backed_type.self, 0, DecorationOffset);
 }
 
