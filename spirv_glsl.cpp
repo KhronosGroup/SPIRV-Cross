@@ -9498,12 +9498,20 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 {
 	// If id is a variable we will try to forward it regardless of force_temporary check below
 	// This is important because otherwise we'll get local sampler copies (highp sampler2D foo = bar) that are invalid in OpenGL GLSL
+
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->forwardable)
 		return true;
 
 	// For debugging emit temporary variables for all expressions
 	if (options.force_temporary)
+		return false;
+
+	// If an expression carries enough dependencies we need to stop forwarding at some point,
+	// or we explode compilers. There are usually limits to how much we can nest expressions.
+	auto *expr = maybe_get<SPIRExpression>(id);
+	const uint32_t max_expression_dependencies = 64;
+	if (expr && expr->expression_dependencies.size() >= max_expression_dependencies)
 		return false;
 
 	// Immutable expression can always be forwarded.
