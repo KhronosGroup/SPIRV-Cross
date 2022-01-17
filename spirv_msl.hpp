@@ -832,14 +832,14 @@ protected:
 													  uint32_t mbr_idx, InterfaceBlockMeta &meta,
 													  const std::string &mbr_name_qual,
 													  const std::string &var_chain_qual,
-													  uint32_t& location);
+													  uint32_t& location, uint32_t& var_mbr_idx);
 	void add_composite_member_variable_to_interface_block(spv::StorageClass storage,
 														  const std::string &ib_var_ref, SPIRType &ib_type,
 														  SPIRVariable &var, SPIRType &var_type,
 														  uint32_t mbr_idx, InterfaceBlockMeta &meta,
 														  const std::string &mbr_name_qual,
 														  const std::string &var_chain_qual,
-														  uint32_t& location);
+														  uint32_t& location, uint32_t& var_mbr_idx);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 
 	void fix_up_interface_member_indices(spv::StorageClass storage, uint32_t ib_type_id);

@@ -2517,7 +2517,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
                                                                    uint32_t mbr_idx, InterfaceBlockMeta &meta,
 																   const string &mbr_name_qual,
 																   const string &var_chain_qual,
-																   uint32_t& location)
+																   uint32_t& location, uint32_t& var_mbr_idx)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -2591,7 +2591,8 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
 																 var, mbr_type, sub_mbr_idx,
 																 meta, mbr_name, var_chain,
-																 location);
+																 location, var_mbr_idx);
+				var_mbr_idx++;
 			}
 		}
 		return;
@@ -2664,7 +2665,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		}
 
 		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
-		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, mbr_idx);
+		set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, var_mbr_idx);
 
 		// Unflatten or flatten from [[stage_in]] or [[stage_out]] as appropriate.
 		if (!meta.strip_array && meta.allow_local_declaration)
@@ -2715,7 +2716,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 															   uint32_t mbr_idx, InterfaceBlockMeta &meta,
 															   const string &mbr_name_qual,
 															   const string &var_chain_qual,
-															   uint32_t& location)
+															   uint32_t& location, uint32_t& var_mbr_idx)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -2894,7 +2895,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	}
 
 	set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceOrigID, var.self);
-	set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, mbr_idx);
+	set_extended_member_decoration(ib_type.self, ib_mbr_idx, SPIRVCrossDecorationInterfaceMemberIndex, var_mbr_idx);
 }
 
 // In Metal, the tessellation levels are stored as tightly packed half-precision floating point values.
@@ -3155,6 +3156,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		{
 			bool masked_block = false;
 			uint32_t location = 0;
+			uint32_t var_mbr_idx = 0;
 			uint32_t elem_cnt = 1;
 			if (is_matrix(var_type))
 			{
@@ -3234,15 +3236,18 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						{
 							add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
 																			 var, var_type, mbr_idx, meta,
-																			 mbr_name_qual, var_chain_qual, location);
+																			 mbr_name_qual, var_chain_qual,
+																			 location, var_mbr_idx);
 						}
 						else
 						{
 							add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
 																		 var, var_type, mbr_idx, meta,
-																		 mbr_name_qual, var_chain_qual, location);
+																		 mbr_name_qual, var_chain_qual,
+																		 location, var_mbr_idx);
 						}
 					}
+					var_mbr_idx++;
 				}
 			}
 
