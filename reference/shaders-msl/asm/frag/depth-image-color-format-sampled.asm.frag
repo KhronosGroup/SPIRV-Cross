@@ -21,13 +21,13 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-void _108(int _109, thread texture2d<float> v_8, thread sampler v_9, device _7& v_10)
+void _108(int _109, texture2d<float> v_8, sampler v_9, device _7& v_10)
 {
     v_10._m0[_109] = v_8.sample(v_9, (float2(int2(_109 - 8 * (_109 / 8), _109 / 8)) / float2(8.0)), level(0.0));
 }
 
 static inline __attribute__((always_inline))
-float4 _98(float4 _121, thread texture2d<float> v_8, thread sampler v_9, device _7& v_10)
+float4 _98(float4 _121, texture2d<float> v_8, sampler v_9, device _7& v_10)
 {
     for (int _123 = 0; _123 < 64; _123++)
     {

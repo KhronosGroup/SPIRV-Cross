@@ -363,7 +363,8 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     float _339 = ((_145.z + ((_145.w * EmitterUniforms.EmitterUniforms_RotationRateScale) * _146)) * 6.283185482025146484375) + EmitterUniforms.EmitterUniforms_RotationBias;
     float3 _342 = float3(sin(_339));
     float3 _344 = float3(cos(_339));
-    float4 _371 = float4(_239 + ((float3(_204.x * (in.in_var_ATTRIBUTE0.x + EmitterUniforms.EmitterUniforms_PivotOffset.x)) * ((_342 * _336) + (_344 * _335))) + (float3(_204.y * (in.in_var_ATTRIBUTE0.y + EmitterUniforms.EmitterUniforms_PivotOffset.y)) * ((_344 * _336) - (_342 * _335)))), 1.0);
+    float3 _367 = _239 + ((float3(_204.x * (in.in_var_ATTRIBUTE0.x + EmitterUniforms.EmitterUniforms_PivotOffset.x)) * ((_342 * _336) + (_344 * _335))) + (float3(_204.y * (in.in_var_ATTRIBUTE0.y + EmitterUniforms.EmitterUniforms_PivotOffset.y)) * ((_344 * _336) - (_342 * _335))));
+    float4 _371 = float4(_367, 1.0);
     float4 _375 = MobileShadowDepthPass.MobileShadowDepthPass_ProjectionMatrix * float4(_371.x, _371.y, _371.z, _371.w);
     float4 _386;
     if ((MobileShadowDepthPass.MobileShadowDepthPass_bClampToNearPlane > 0.0) && (_375.z < 0.0))

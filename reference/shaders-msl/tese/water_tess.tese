@@ -45,7 +45,7 @@ float2 lod_factor(thread const float2& tess_coord, thread float4& vPatchLods)
 }
 
 static inline __attribute__((always_inline))
-float3 sample_height_displacement(thread const float2& uv, thread const float2& off, thread const float2& lod, thread texture2d<float> uHeightmapDisplacement, thread const sampler uHeightmapDisplacementSmplr)
+float3 sample_height_displacement(thread const float2& uv, thread const float2& off, thread const float2& lod, texture2d<float> uHeightmapDisplacement, sampler uHeightmapDisplacementSmplr)
 {
     return mix(uHeightmapDisplacement.sample(uHeightmapDisplacementSmplr, (uv + (off * 0.5)), level(lod.x)).xyz, uHeightmapDisplacement.sample(uHeightmapDisplacementSmplr, (uv + (off * 1.0)), level(lod.x + 1.0)).xyz, float3(lod.y));
 }

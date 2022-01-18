@@ -16,7 +16,7 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-float4 foo(thread bool& gl_HelperInvocation, thread texture2d<float> uSampler, thread const sampler uSamplerSmplr, thread float2& vUV)
+float4 foo(thread bool& gl_HelperInvocation, texture2d<float> uSampler, sampler uSamplerSmplr, thread float2& vUV)
 {
     float4 color;
     if (!gl_HelperInvocation)
