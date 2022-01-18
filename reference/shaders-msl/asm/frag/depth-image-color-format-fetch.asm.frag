@@ -21,14 +21,14 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-void _108(int _109, thread texture2d<float> v_8, device _7& v_10)
+void _108(int _109, texture2d<float> v_8, device _7& v_10)
 {
     int2 _113 = int2(_109 - 8 * (_109 / 8), _109 / 8);
     v_10._m0[_109] = v_8.read(uint2(_113), 0);
 }
 
 static inline __attribute__((always_inline))
-float4 _98(float4 _119, thread texture2d<float> v_8, device _7& v_10)
+float4 _98(float4 _119, texture2d<float> v_8, device _7& v_10)
 {
     for (int _121 = 0; _121 < 64; _121++)
     {

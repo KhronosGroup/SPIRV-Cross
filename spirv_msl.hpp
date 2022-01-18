@@ -872,6 +872,7 @@ protected:
 	std::string member_attribute_qualifier(const SPIRType &type, uint32_t index);
 	std::string member_location_attribute_qualifier(const SPIRType &type, uint32_t index);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
+	const char *descriptor_address_space(uint32_t id, spv::StorageClass storage, const char *plain_address_space) const;
 	std::string round_fp_tex_coords(std::string tex_coords, bool coord_is_fp);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype, uint32_t plane = 0);
 	uint32_t get_member_location(uint32_t type_id, uint32_t index, uint32_t *comp = nullptr) const;
