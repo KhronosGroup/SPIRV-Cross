@@ -2686,6 +2686,7 @@ string CompilerGLSL::constant_value_macro_name(uint32_t id)
 void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constant)
 {
 	auto &type = get<SPIRType>(constant.basetype);
+	add_resource_name(constant.self);
 	auto name = to_name(constant.self);
 	statement("const ", variable_decl(type, name), " = ", constant_op_expression(constant), ";");
 }
@@ -2713,7 +2714,6 @@ int CompilerGLSL::get_constant_mapping_to_workgroup_component(const SPIRConstant
 void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 {
 	auto &type = get<SPIRType>(constant.constant_type);
-	auto name = to_name(constant.self);
 
 	SpecializationConstant wg_x, wg_y, wg_z;
 	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
@@ -2739,6 +2739,9 @@ void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 		// Only bother declaring a workgroup size if it is actually a specialization constant, because we need macros.
 		return;
 	}
+
+	add_resource_name(constant.self);
+	auto name = to_name(constant.self);
 
 	// Only scalars have constant IDs.
 	if (has_decoration(constant.self, DecorationSpecId))
