@@ -1167,6 +1167,7 @@ void CompilerHLSL::emit_composite_constants()
 
 		if (type.basetype == SPIRType::Struct || !type.array.empty())
 		{
+			add_resource_name(c.self);
 			auto name = to_name(c.self);
 			statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");
 			emitted = true;
