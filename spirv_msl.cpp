@@ -9165,9 +9165,12 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	case GLSLstd450Normalize:
 		// MSL does not support scalar versions here.
+		// MSL has no implementation for normalize in the fast:: namespace for half2 and half3
 		// Returns -1 or 1 for valid input, sign() does the job.
 		if (expression_type(args[0]).vecsize == 1)
 			emit_unary_func_op(result_type, id, args[0], "sign");
+		else if (expression_type(args[0]).vecsize <= 3 && (get<SPIRType>(args[0]).basetype == spirv_cross::SPIRType::Half) )
+			emit_unary_func_op(result_type, id, args[0], "normalize");
 		else
 			emit_unary_func_op(result_type, id, args[0], "fast::normalize");
 		break;
