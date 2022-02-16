@@ -7237,18 +7237,11 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 			forward = forward && should_forward(args.lod);
 			farg_str += ", ";
 
-			auto &lod_expr_type = expression_type(args.lod);
-
 			// Lod expression for TexelFetch in GLSL must be int, and only int.
-			if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
-			    lod_expr_type.basetype != SPIRType::Int)
-			{
-				farg_str += join("int(", to_expression(args.lod), ")");
-			}
+			if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+				farg_str += bitcast_expression(SPIRType::Int, args.lod);
 			else
-			{
 				farg_str += to_expression(args.lod);
-			}
 		}
 	}
 	else if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
@@ -7261,19 +7254,19 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	{
 		forward = forward && should_forward(args.coffset);
 		farg_str += ", ";
-		farg_str += to_expression(args.coffset);
+		farg_str += bitcast_expression(SPIRType::Int, args.coffset);
 	}
 	else if (args.offset)
 	{
 		forward = forward && should_forward(args.offset);
 		farg_str += ", ";
-		farg_str += to_expression(args.offset);
+		farg_str += bitcast_expression(SPIRType::Int, args.offset);
 	}
 
 	if (args.sample)
 	{
 		farg_str += ", ";
-		farg_str += to_expression(args.sample);
+		farg_str += bitcast_expression(SPIRType::Int, args.sample);
 	}
 
 	if (args.min_lod)
@@ -7300,11 +7293,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	{
 		forward = forward && should_forward(args.component);
 		farg_str += ", ";
-		auto &component_type = expression_type(args.component);
-		if (component_type.basetype == SPIRType::Int)
-			farg_str += to_expression(args.component);
-		else
-			farg_str += join("int(", to_expression(args.component), ")");
+		farg_str += bitcast_expression(SPIRType::Int, args.component);
 	}
 
 	*p_forward = forward;
