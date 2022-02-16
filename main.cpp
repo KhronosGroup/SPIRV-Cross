@@ -791,6 +791,9 @@ static void print_help_hlsl()
 	// clang-format off
 	fprintf(stderr, "\nHLSL options:\n"
 	                "\t[--shader-model]:\n\t\tEnables a specific shader model, e.g. --shader-model 50 for SM 5.0.\n"
+	                "\t[--flatten-ubo]:\n\t\tEmit UBOs as plain uniform arrays.\n"
+	                "\t\tE.g.: uniform MyUBO { vec4 a; float b, c, d, e; }; will be emitted as uniform float4 MyUBO[2];\n"
+	                "\t\tCaveat: You cannot mix and match floating-point and integer in the same UBO with this option.\n"
 	                "\t[--hlsl-enable-compat]:\n\t\tAllow point size and point coord to be used, even if they won't work as expected.\n"
 	                "\t\tPointSize is ignored, and PointCoord returns (0.5, 0.5).\n"
 	                "\t[--hlsl-support-nonzero-basevertex-baseinstance]:\n\t\tSupport base vertex and base instance by emitting a special cbuffer declared as:\n"

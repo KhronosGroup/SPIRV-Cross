@@ -9184,8 +9184,13 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 {
 	std::string expr;
 
-	expr += type_to_glsl_constructor(target_type);
-	expr += "(";
+	if (backend.can_declare_struct_inline)
+	{
+		expr += type_to_glsl_constructor(target_type);
+		expr += "(";
+	}
+	else
+		expr += "{";
 
 	for (uint32_t i = 0; i < uint32_t(target_type.member_types.size()); ++i)
 	{
@@ -9215,7 +9220,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 			expr += tmp;
 	}
 
-	expr += ")";
+	expr += backend.can_declare_struct_inline ? ")" : "}";
 
 	return expr;
 }
@@ -10232,9 +10237,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		AccessChainMeta meta;
 		bool ptr_chain = opcode == OpPtrAccessChain;
-		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &meta, ptr_chain);
+		auto &target_type = get<SPIRType>(ops[0]);
+		auto e = access_chain(ops[2], &ops[3], length - 3, target_type, &meta, ptr_chain);
 
-		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
+		// If the base is flattened UBO of struct type, the expression has to be a composite.
+		// In that case, backends which do not support inline syntax need it to be bound to a temporary.
+		// Otherwise, invalid expressions like ({UBO[0].xyz, UBO[0].w, UBO[1]}).member are emitted.
+		bool requires_temporary = false;
+		if (flattened_buffer_blocks.count(ops[2]) && target_type.basetype == SPIRType::Struct)
+			requires_temporary = !backend.can_declare_struct_inline;
+
+		auto &expr = requires_temporary ?
+                         emit_op(ops[0], ops[1], move(e), false) :
+                         set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 
 		auto *backing_variable = maybe_get_backing_variable(ops[2]);
 		expr.loaded_from = backing_variable ? backing_variable->self : ID(ops[2]);

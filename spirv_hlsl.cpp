@@ -2102,7 +2102,11 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 	bool is_uav = var.storage == StorageClassStorageBuffer || has_decoration(type.self, DecorationBufferBlock);
 
-	if (is_uav)
+	if (flattened_buffer_blocks.count(var.self))
+	{
+		emit_buffer_block_flattened(var);
+	}
+	else if (is_uav)
 	{
 		Bitset flags = ir.get_buffer_block_flags(var);
 		bool is_readonly = flags.get(DecorationNonWritable) && !is_hlsl_force_storage_buffer_as_uav(var.self);
@@ -2207,7 +2211,11 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 {
-	if (root_constants_layout.empty())
+	if (flattened_buffer_blocks.count(var.self))
+	{
+		emit_buffer_block_flattened(var);
+	}
+	else if (root_constants_layout.empty())
 	{
 		emit_buffer_block(var);
 	}
