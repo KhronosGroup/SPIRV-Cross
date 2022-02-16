@@ -14626,9 +14626,16 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<TypeID, ID>> &tempo
 
 	for (auto &tmp : temporaries)
 	{
+		auto &type = get<SPIRType>(tmp.first);
+
+		// There are some rare scenarios where we are asked to declare pointer types as hoisted temporaries.
+		// This should be ignored unless we're doing actual variable pointers and backend supports it.
+		// Access chains cannot normally be lowered to temporaries in GLSL and HLSL.
+		if (type.pointer && !backend.native_pointers)
+			continue;
+
 		add_local_variable_name(tmp.second);
 		auto &flags = ir.meta[tmp.second].decoration.decoration_flags;
-		auto &type = get<SPIRType>(tmp.first);
 
 		// Not all targets support pointer literals, so don't bother with that case.
 		string initializer;
