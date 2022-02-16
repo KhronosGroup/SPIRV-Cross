@@ -306,8 +306,8 @@ void CompilerGLSL::reset(uint32_t iteration_count)
 	// It is highly context-sensitive when we need to force recompilation,
 	// and it is not practical with the current architecture
 	// to resolve everything up front.
-	if (iteration_count >= 3 && !is_force_recompile_forward_progress)
-		SPIRV_CROSS_THROW("Over 3 compilation loops detected and no forward progress was made. Must be a bug!");
+	if (iteration_count >= options.force_recompile_max_debug_iterations && !is_force_recompile_forward_progress)
+		SPIRV_CROSS_THROW("Maximum compilation loops detected and no forward progress was made. Must be a SPIRV-Cross bug!");
 
 	// We do some speculative optimizations which should pretty much always work out,
 	// but just in case the SPIR-V is rather weird, recompile until it's happy.
