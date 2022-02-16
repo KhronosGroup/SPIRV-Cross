@@ -886,6 +886,7 @@ protected:
 
 	void check_function_call_constraints(const uint32_t *args, uint32_t length);
 	void handle_invalid_expression(uint32_t id);
+	void force_temporary_and_recompile(uint32_t id);
 	void find_static_extensions();
 
 	std::string emit_for_loop_initializers(const SPIRBlock &block);

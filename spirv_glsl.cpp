@@ -4298,10 +4298,8 @@ string CompilerGLSL::to_func_call_arg(const SPIRFunction::Parameter &, uint32_t 
 	return to_expression(name_id);
 }
 
-void CompilerGLSL::handle_invalid_expression(uint32_t id)
+void CompilerGLSL::force_temporary_and_recompile(uint32_t id)
 {
-	// We tried to read an invalidated expression.
-	// This means we need another pass at compilation, but next time, force temporary variables so that they cannot be invalidated.
 	auto res = forced_temporaries.insert(id);
 
 	// Forcing new temporaries guarantees forward progress.
@@ -4309,6 +4307,14 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 		force_recompile_guarantee_forward_progress();
 	else
 		force_recompile();
+}
+
+void CompilerGLSL::handle_invalid_expression(uint32_t id)
+{
+	// We tried to read an invalidated expression.
+	// This means we need another pass at compilation, but next time,
+	// force temporary variables so that they cannot be invalidated.
+	force_temporary_and_recompile(id);
 }
 
 // Converts the format of the current expression from packed to unpacked,
@@ -9585,9 +9591,8 @@ void CompilerGLSL::track_expression_read(uint32_t id)
 			//if (v == 2)
 			//    fprintf(stderr, "ID %u was forced to temporary due to more than 1 expression use!\n", id);
 
-			forced_temporaries.insert(id);
 			// Force a recompile after this pass to avoid forwarding this variable.
-			force_recompile();
+			force_temporary_and_recompile(id);
 		}
 	}
 }
@@ -9941,9 +9946,8 @@ void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression 
 	if (expression_is_forwarded(expr.self) && !expression_suppresses_usage_tracking(expr.self) &&
 	    forced_invariant_temporaries.count(expr.self) == 0)
 	{
-		forced_temporaries.insert(expr.self);
+		force_temporary_and_recompile(expr.self);
 		forced_invariant_temporaries.insert(expr.self);
-		force_recompile();
 
 		for (auto &dependent : expr.expression_dependencies)
 			disallow_forwarding_in_expression_chain(get<SPIRExpression>(dependent));
