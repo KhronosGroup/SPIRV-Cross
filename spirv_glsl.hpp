@@ -83,6 +83,11 @@ public:
 
 		// Debug option to always emit temporary variables for all expressions.
 		bool force_temporary = false;
+		// Debug option, can be increased in an attempt to workaround SPIRV-Cross bugs temporarily.
+		// If this limit has to be increased, it points to an implementation bug.
+		// In certain scenarios, the maximum number of debug iterations may increase beyond this limit
+		// as long as we can prove we're making certain kinds of forward progress.
+		uint32_t force_recompile_max_debug_iterations = 3;
 
 		// If true, Vulkan GLSL features are used instead of GL-compatible features.
 		// Mostly useful for debugging SPIR-V files.
@@ -881,6 +886,7 @@ protected:
 
 	void check_function_call_constraints(const uint32_t *args, uint32_t length);
 	void handle_invalid_expression(uint32_t id);
+	void force_temporary_and_recompile(uint32_t id);
 	void find_static_extensions();
 
 	std::string emit_for_loop_initializers(const SPIRBlock &block);
