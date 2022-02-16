@@ -462,6 +462,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     hlsl_args = [spirv_cross_path, '--entry', 'main', '--output', hlsl_path, spirv_path, '--hlsl-enable-compat', '--hlsl', '--shader-model', sm, '--iterations', str(iterations)]
     if '.line.' in shader:
         hlsl_args.append('--emit-line-directives')
+    if '.flatten.' in shader:
+        hlsl_args.append('--flatten-ubo')
     if '.force-uav.' in shader:
         hlsl_args.append('--hlsl-force-storage-buffer-as-uav')
     if '.zero-initialize.' in shader:
