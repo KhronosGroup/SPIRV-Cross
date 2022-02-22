@@ -306,8 +306,8 @@ void CompilerGLSL::reset(uint32_t iteration_count)
 	// It is highly context-sensitive when we need to force recompilation,
 	// and it is not practical with the current architecture
 	// to resolve everything up front.
-	if (iteration_count >= 3 && !is_force_recompile_forward_progress)
-		SPIRV_CROSS_THROW("Over 3 compilation loops detected and no forward progress was made. Must be a bug!");
+	if (iteration_count >= options.force_recompile_max_debug_iterations && !is_force_recompile_forward_progress)
+		SPIRV_CROSS_THROW("Maximum compilation loops detected and no forward progress was made. Must be a SPIRV-Cross bug!");
 
 	// We do some speculative optimizations which should pretty much always work out,
 	// but just in case the SPIR-V is rather weird, recompile until it's happy.
@@ -4298,10 +4298,8 @@ string CompilerGLSL::to_func_call_arg(const SPIRFunction::Parameter &, uint32_t 
 	return to_expression(name_id);
 }
 
-void CompilerGLSL::handle_invalid_expression(uint32_t id)
+void CompilerGLSL::force_temporary_and_recompile(uint32_t id)
 {
-	// We tried to read an invalidated expression.
-	// This means we need another pass at compilation, but next time, force temporary variables so that they cannot be invalidated.
 	auto res = forced_temporaries.insert(id);
 
 	// Forcing new temporaries guarantees forward progress.
@@ -4309,6 +4307,14 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 		force_recompile_guarantee_forward_progress();
 	else
 		force_recompile();
+}
+
+void CompilerGLSL::handle_invalid_expression(uint32_t id)
+{
+	// We tried to read an invalidated expression.
+	// This means we need another pass at compilation, but next time,
+	// force temporary variables so that they cannot be invalidated.
+	force_temporary_and_recompile(id);
 }
 
 // Converts the format of the current expression from packed to unpacked,
@@ -7237,18 +7243,11 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 			forward = forward && should_forward(args.lod);
 			farg_str += ", ";
 
-			auto &lod_expr_type = expression_type(args.lod);
-
 			// Lod expression for TexelFetch in GLSL must be int, and only int.
-			if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms &&
-			    lod_expr_type.basetype != SPIRType::Int)
-			{
-				farg_str += join("int(", to_expression(args.lod), ")");
-			}
+			if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+				farg_str += bitcast_expression(SPIRType::Int, args.lod);
 			else
-			{
 				farg_str += to_expression(args.lod);
-			}
 		}
 	}
 	else if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
@@ -7261,19 +7260,19 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	{
 		forward = forward && should_forward(args.coffset);
 		farg_str += ", ";
-		farg_str += to_expression(args.coffset);
+		farg_str += bitcast_expression(SPIRType::Int, args.coffset);
 	}
 	else if (args.offset)
 	{
 		forward = forward && should_forward(args.offset);
 		farg_str += ", ";
-		farg_str += to_expression(args.offset);
+		farg_str += bitcast_expression(SPIRType::Int, args.offset);
 	}
 
 	if (args.sample)
 	{
 		farg_str += ", ";
-		farg_str += to_expression(args.sample);
+		farg_str += bitcast_expression(SPIRType::Int, args.sample);
 	}
 
 	if (args.min_lod)
@@ -7300,11 +7299,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	{
 		forward = forward && should_forward(args.component);
 		farg_str += ", ";
-		auto &component_type = expression_type(args.component);
-		if (component_type.basetype == SPIRType::Int)
-			farg_str += to_expression(args.component);
-		else
-			farg_str += join("int(", to_expression(args.component), ")");
+		farg_str += bitcast_expression(SPIRType::Int, args.component);
 	}
 
 	*p_forward = forward;
@@ -9189,8 +9184,13 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 {
 	std::string expr;
 
-	expr += type_to_glsl_constructor(target_type);
-	expr += "(";
+	if (backend.can_declare_struct_inline)
+	{
+		expr += type_to_glsl_constructor(target_type);
+		expr += "(";
+	}
+	else
+		expr += "{";
 
 	for (uint32_t i = 0; i < uint32_t(target_type.member_types.size()); ++i)
 	{
@@ -9220,7 +9220,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 			expr += tmp;
 	}
 
-	expr += ")";
+	expr += backend.can_declare_struct_inline ? ")" : "}";
 
 	return expr;
 }
@@ -9596,9 +9596,8 @@ void CompilerGLSL::track_expression_read(uint32_t id)
 			//if (v == 2)
 			//    fprintf(stderr, "ID %u was forced to temporary due to more than 1 expression use!\n", id);
 
-			forced_temporaries.insert(id);
 			// Force a recompile after this pass to avoid forwarding this variable.
-			force_recompile();
+			force_temporary_and_recompile(id);
 		}
 	}
 }
@@ -9952,9 +9951,8 @@ void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression 
 	if (expression_is_forwarded(expr.self) && !expression_suppresses_usage_tracking(expr.self) &&
 	    forced_invariant_temporaries.count(expr.self) == 0)
 	{
-		forced_temporaries.insert(expr.self);
+		force_temporary_and_recompile(expr.self);
 		forced_invariant_temporaries.insert(expr.self);
-		force_recompile();
 
 		for (auto &dependent : expr.expression_dependencies)
 			disallow_forwarding_in_expression_chain(get<SPIRExpression>(dependent));
@@ -10239,9 +10237,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		AccessChainMeta meta;
 		bool ptr_chain = opcode == OpPtrAccessChain;
-		auto e = access_chain(ops[2], &ops[3], length - 3, get<SPIRType>(ops[0]), &meta, ptr_chain);
+		auto &target_type = get<SPIRType>(ops[0]);
+		auto e = access_chain(ops[2], &ops[3], length - 3, target_type, &meta, ptr_chain);
 
-		auto &expr = set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
+		// If the base is flattened UBO of struct type, the expression has to be a composite.
+		// In that case, backends which do not support inline syntax need it to be bound to a temporary.
+		// Otherwise, invalid expressions like ({UBO[0].xyz, UBO[0].w, UBO[1]}).member are emitted.
+		bool requires_temporary = false;
+		if (flattened_buffer_blocks.count(ops[2]) && target_type.basetype == SPIRType::Struct)
+			requires_temporary = !backend.can_declare_struct_inline;
+
+		auto &expr = requires_temporary ?
+                         emit_op(ops[0], ops[1], move(e), false) :
+                         set<SPIRExpression>(ops[1], move(e), ops[0], should_forward(ops[2]));
 
 		auto *backing_variable = maybe_get_backing_variable(ops[2]);
 		expr.loaded_from = backing_variable ? backing_variable->self : ID(ops[2]);
@@ -14637,9 +14645,16 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<TypeID, ID>> &tempo
 
 	for (auto &tmp : temporaries)
 	{
+		auto &type = get<SPIRType>(tmp.first);
+
+		// There are some rare scenarios where we are asked to declare pointer types as hoisted temporaries.
+		// This should be ignored unless we're doing actual variable pointers and backend supports it.
+		// Access chains cannot normally be lowered to temporaries in GLSL and HLSL.
+		if (type.pointer && !backend.native_pointers)
+			continue;
+
 		add_local_variable_name(tmp.second);
 		auto &flags = ir.meta[tmp.second].decoration.decoration_flags;
-		auto &type = get<SPIRType>(tmp.first);
 
 		// Not all targets support pointer literals, so don't bother with that case.
 		string initializer;

@@ -669,6 +669,7 @@ struct CLIArguments
 	bool emit_line_directives = false;
 	bool enable_storage_image_qualifier_deduction = true;
 	bool force_zero_initialized_variables = false;
+	uint32_t force_recompile_max_debug_iterations = 3;
 	SmallVector<uint32_t> msl_discrete_descriptor_sets;
 	SmallVector<uint32_t> msl_device_argument_buffers;
 	SmallVector<pair<uint32_t, uint32_t>> msl_dynamic_buffers;
@@ -790,6 +791,9 @@ static void print_help_hlsl()
 	// clang-format off
 	fprintf(stderr, "\nHLSL options:\n"
 	                "\t[--shader-model]:\n\t\tEnables a specific shader model, e.g. --shader-model 50 for SM 5.0.\n"
+	                "\t[--flatten-ubo]:\n\t\tEmit UBOs as plain uniform arrays.\n"
+	                "\t\tE.g.: uniform MyUBO { vec4 a; float b, c, d, e; }; will be emitted as uniform float4 MyUBO[2];\n"
+	                "\t\tCaveat: You cannot mix and match floating-point and integer in the same UBO with this option.\n"
 	                "\t[--hlsl-enable-compat]:\n\t\tAllow point size and point coord to be used, even if they won't work as expected.\n"
 	                "\t\tPointSize is ignored, and PointCoord returns (0.5, 0.5).\n"
 	                "\t[--hlsl-support-nonzero-basevertex-baseinstance]:\n\t\tSupport base vertex and base instance by emitting a special cbuffer declared as:\n"
@@ -932,6 +936,8 @@ static void print_help_obscure()
 	                "\t\tdo not attempt to analyze usage, and always emit read/write state.\n"
 	                "\t[--flatten-multidimensional-arrays]:\n\t\tDo not support multi-dimensional arrays and flatten them to one dimension.\n"
 	                "\t[--cpp-interface-name <name>]:\n\t\tEmit a specific class name in C++ codegen.\n"
+	                "\t[--force-recompile-max-debug-iterations <count>]:\n\t\tAllow compilation loop to run for N loops.\n"
+	                "\t\tCan be used to triage workarounds, but should not be used as a crutch, since it masks an implementation bug.\n"
 	);
 	// clang-format on
 }
@@ -1286,6 +1292,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	opts.emit_line_directives = args.emit_line_directives;
 	opts.enable_storage_image_qualifier_deduction = args.enable_storage_image_qualifier_deduction;
 	opts.force_zero_initialized_variables = args.force_zero_initialized_variables;
+	opts.force_recompile_max_debug_iterations = args.force_recompile_max_debug_iterations;
 	compiler->set_common_options(opts);
 
 	for (auto &fetch : args.glsl_ext_framebuffer_fetch)
@@ -1676,6 +1683,10 @@ static int main_inner(int argc, char *argv[])
 			exit(EXIT_FAILURE);
 		}
 		args.masked_stage_builtins.push_back(masked_builtin);
+	});
+
+	cbs.add("--force-recompile-max-debug-iterations", [&](CLIParser &parser) {
+		args.force_recompile_max_debug_iterations = parser.next_uint();
 	});
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };

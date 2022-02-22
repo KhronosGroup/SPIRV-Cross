@@ -1677,6 +1677,11 @@ const SmallVector<SPIRBlock::Case> &Compiler::get_case_list(const SPIRBlock &blo
 		const auto &type = get<SPIRType>(var->basetype);
 		width = type.width;
 	}
+	else if (const auto *undef = maybe_get<SPIRUndef>(block.condition))
+	{
+		const auto &type = get<SPIRType>(undef->basetype);
+		width = type.width;
+	}
 	else
 	{
 		auto search = ir.load_type_width.find(block.condition);
