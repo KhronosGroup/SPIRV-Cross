@@ -3225,7 +3225,6 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
 							is_builtin = false;
 
-						auto &var_type = meta.strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
 						string mbr_name_qual = to_name(var_type.self) + (elem_cnt == 1 ? "" : join("_", elem_idx));
 						string var_chain_qual = to_name(var.self) + (elem_cnt == 1 ? "" : join("[", elem_idx, "]"));
 
