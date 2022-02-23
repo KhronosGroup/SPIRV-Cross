@@ -2671,7 +2671,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			switch (storage)
 			{
 			case StorageClassInput:
-				entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
+				entry_func.fixup_hooks_in.push_back([=, &var]() {
 					string lerp_call;
 					if (pull_model_inputs.count(var.self))
 					{
@@ -2687,16 +2687,11 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				break;
 
 			case StorageClassOutput:
-				entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
+				entry_func.fixup_hooks_out.push_back([=]() {
 					if (flatten_from_ib_var)
-					{
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i,
-						          "];");
-					}
+						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i, "];");
 					else
-					{
 						statement(ib_var_ref, ".", mbr_name, " = ", var_chain, ";");
-					}
 				});
 				break;
 
@@ -2769,14 +2764,14 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		switch (storage)
 		{
 		case StorageClassInput:
-			entry_func.fixup_hooks_in.push_back([=, &var, &var_type]() {
+			entry_func.fixup_hooks_in.push_back([=]() {
 				statement(var_chain, " = ", qual_var_name, ";");
 			});
 			break;
 
 		case StorageClassOutput:
 			flatten_stage_out = true;
-			entry_func.fixup_hooks_out.push_back([=, &var, &var_type]() {
+			entry_func.fixup_hooks_out.push_back([=]() {
 				statement(qual_var_name, " = ", var_chain, ";");
 			});
 			break;
