@@ -9335,6 +9335,9 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		else
 			decl += entry_point_args_classic(!func.arguments.empty());
 
+		// append entry point args to avoid conflicts in local variable names.
+		local_variable_names.insert(resource_names.begin(), resource_names.end());
+
 		// If entry point function has variables that require early declaration,
 		// ensure they each have an empty initializer, creating one if needed.
 		// This is done at this late stage because the initialization expression
