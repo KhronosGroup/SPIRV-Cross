@@ -826,12 +826,20 @@ protected:
 	bool add_component_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                               SPIRVariable &var, const SPIRType &type,
 	                                               InterfaceBlockMeta &meta);
-	void add_plain_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
-	                                                  SPIRType &ib_type, SPIRVariable &var, uint32_t index,
-	                                                  InterfaceBlockMeta &meta);
-	void add_composite_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
-	                                                      SPIRType &ib_type, SPIRVariable &var, uint32_t index,
-	                                                      InterfaceBlockMeta &meta);
+	void add_plain_member_variable_to_interface_block(spv::StorageClass storage,
+													  const std::string &ib_var_ref, SPIRType &ib_type,
+													  SPIRVariable &var, SPIRType &var_type,
+													  uint32_t mbr_idx, InterfaceBlockMeta &meta,
+													  const std::string &mbr_name_qual,
+													  const std::string &var_chain_qual,
+													  uint32_t& location, uint32_t& var_mbr_idx);
+	void add_composite_member_variable_to_interface_block(spv::StorageClass storage,
+														  const std::string &ib_var_ref, SPIRType &ib_type,
+														  SPIRVariable &var, SPIRType &var_type,
+														  uint32_t mbr_idx, InterfaceBlockMeta &meta,
+														  const std::string &mbr_name_qual,
+														  const std::string &var_chain_qual,
+														  uint32_t& location, uint32_t& var_mbr_idx);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 
 	void fix_up_interface_member_indices(spv::StorageClass storage, uint32_t ib_type_id);
@@ -858,7 +866,7 @@ protected:
 	std::string entry_point_arg_stage_in();
 	void entry_point_args_builtin(std::string &args);
 	void entry_point_args_discrete_descriptors(std::string &args);
-	std::string to_qualified_member_name(const SPIRType &type, uint32_t index);
+	std::string append_member_name(const std::string qualifier, const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
 	std::string to_swizzle_expression(uint32_t id);
