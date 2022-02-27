@@ -14550,7 +14550,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			SPIRV_CROSS_THROW("NumSubgroups is handled specially with emulation.");
 		if (!msl_options.supports_msl_version(2))
 			SPIRV_CROSS_THROW("Subgroup builtins require Metal 2.0.");
-		return msl_options.is_ios() ? "quadgroups_per_threadgroup" : "simdgroups_per_threadgroup";
+		return (msl_options.is_ios() && !msl_options.ios_use_simdgroup_functions) ? "quadgroups_per_threadgroup" : "simdgroups_per_threadgroup";
 
 	case BuiltInSubgroupId:
 		if (msl_options.emulate_subgroups)
@@ -14558,7 +14558,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			SPIRV_CROSS_THROW("SubgroupId is handled specially with emulation.");
 		if (!msl_options.supports_msl_version(2))
 			SPIRV_CROSS_THROW("Subgroup builtins require Metal 2.0.");
-		return msl_options.is_ios() ? "quadgroup_index_in_threadgroup" : "simdgroup_index_in_threadgroup";
+		return (msl_options.is_ios() && !msl_options.ios_use_simdgroup_functions) ? "quadgroup_index_in_threadgroup" : "simdgroup_index_in_threadgroup";
 
 	case BuiltInSubgroupLocalInvocationId:
 		if (msl_options.emulate_subgroups)
@@ -14577,7 +14577,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			// We are generating a Metal kernel function.
 			if (!msl_options.supports_msl_version(2))
 				SPIRV_CROSS_THROW("Subgroup builtins in kernel functions require Metal 2.0.");
-			return msl_options.is_ios() ? "thread_index_in_quadgroup" : "thread_index_in_simdgroup";
+			return (msl_options.is_ios() && !msl_options.ios_use_simdgroup_functions) ? "thread_index_in_quadgroup" : "thread_index_in_simdgroup";
 		}
 		else
 			SPIRV_CROSS_THROW("Subgroup builtins are not available in this type of function.");
