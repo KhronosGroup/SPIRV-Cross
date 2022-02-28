@@ -2625,7 +2625,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(
 		// Once we determine the location of the first member within nested structures,
 		// from a var of the topmost structure, the remaining flattened members of the
 		// nested structures will have consecutive location values.
-		if (!is_builtin && location)
+		if (!is_builtin && location != UINT32_MAX)
 		{
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 			mark_location_as_used_by_shader(location, *usable_type, storage);
@@ -2800,7 +2800,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	// Once we determine the location of the first member within nested structures,
 	// from a var of the topmost structure, the remaining flattened members of the
 	// nested structures will have consecutive location values.
-	if (!is_builtin && location)
+	if (!is_builtin && location != UINT32_MAX)
 	{
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
@@ -3169,7 +3169,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		else
 		{
 			bool masked_block = false;
-			uint32_t location = 0;
+			uint32_t location = UINT32_MAX;
 			uint32_t var_mbr_idx = 0;
 			uint32_t elem_cnt = 1;
 			if (is_matrix(var_type))
@@ -3199,7 +3199,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					if (storage == StorageClassOutput &&
 					    is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 					{
-						location++; // Skip this location
+						location = UINT32_MAX;		// Skip this member and resolve location again on next var member
 
 						if (is_block)
 							masked_block = true;
@@ -3244,8 +3244,12 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						if (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance)
 							is_builtin = false;
 
-						string mbr_name_qual = to_name(var_type.self) + (elem_cnt == 1 ? "" : join("_", elem_idx));
-						string var_chain_qual = to_name(var.self) + (elem_cnt == 1 ? "" : join("[", elem_idx, "]"));
+						string mbr_name_qual = to_name(var_type.self);
+						string var_chain_qual = to_name(var.self);
+						if (elem_cnt > 1) {
+							mbr_name_qual += join("_", elem_idx);
+							var_chain_qual += join("[", elem_idx, "]");
+						}
 
 						if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
 						{
@@ -13183,7 +13187,7 @@ string CompilerMSL::to_name(uint32_t id, bool allow_alias) const
 }
 
 // Appends the name of the member to the variable qualifier string, except for Builtins.
-string CompilerMSL::append_member_name(const string qualifier, const SPIRType &type, uint32_t index)
+string CompilerMSL::append_member_name(const string &qualifier, const SPIRType &type, uint32_t index)
 {
 	// Don't qualify Builtin names because they are unique and are treated as such when building expressions
 	BuiltIn builtin = BuiltInMax;
