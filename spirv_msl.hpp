@@ -393,7 +393,7 @@ public:
 		// and will be addressed using the current ViewIndex.
 		bool arrayed_subpass_input = false;
 
-		// Whether to use SIMD-group or quadgroup functions to implement group nnon-uniform
+		// Whether to use SIMD-group or quadgroup functions to implement group non-uniform
 		// operations. Some GPUs on iOS do not support the SIMD-group functions, only the
 		// quadgroup functions.
 		bool ios_use_simdgroup_functions = false;
@@ -443,6 +443,11 @@ public:
 		bool is_macos() const
 		{
 			return platform == macOS;
+		}
+
+		bool use_quadgroup_operation() const
+		{
+			return is_ios() && !ios_use_simdgroup_functions;
 		}
 
 		void set_msl_version(uint32_t major, uint32_t minor = 0, uint32_t patch = 0)
