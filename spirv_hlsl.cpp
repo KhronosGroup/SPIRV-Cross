@@ -1335,7 +1335,8 @@ void CompilerHLSL::emit_resources()
 		}
 	});
 
-	if (execution.model == ExecutionModelVertex && hlsl_options.shader_model <= 30)
+	if (execution.model == ExecutionModelVertex && hlsl_options.shader_model <= 30 &&
+	    active_output_builtins.get(BuiltInPosition))
 	{
 		statement("uniform float4 gl_HalfPixel;");
 		emitted = true;
@@ -2739,7 +2740,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 void CompilerHLSL::emit_fixup()
 {
-	if (is_vertex_like_shader())
+	if (is_vertex_like_shader() && active_output_builtins.get(BuiltInPosition))
 	{
 		// Do various mangling on the gl_Position.
 		if (hlsl_options.shader_model <= 30)
