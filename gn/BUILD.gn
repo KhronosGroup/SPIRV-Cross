@@ -18,6 +18,11 @@ config("spirv_cross_public") {
   include_dirs = [ ".." ]
 
   defines = [ "SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS" ]
+  cflags_cc = [
+    "-Wno-unknown-warning-option",
+    "-Wno-unqualified-std-cast-call",
+    "-Wunknown-warning-option",
+  ]
 }
 
 source_set("spirv_cross_sources") {
@@ -63,6 +68,10 @@ source_set("spirv_cross_sources") {
       "-Wno-newline-eof",
       "-Wno-sign-compare",
       "-Wno-unused-variable",
+
+      "-Wno-unknown-warning-option",
+      "-Wno-unqualified-std-cast-call",
+      "-Wunknown-warning-option",
     ]
   }
 }
