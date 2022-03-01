@@ -8,21 +8,21 @@ out gl_PerVertex
     float gl_CullDistance[1];
 };
 
-struct _21
+struct t21
 {
-    vec4 _m0;
-    vec4 _m1;
+    vec4 m0;
+    vec4 m1;
 };
 
-layout(location = 0) in vec4 _17;
-layout(location = 0) out _24
+layout(location = 0) in vec4 v17;
+layout(location = 0) out t24
 {
-    _21 _m0[3];
-} _26;
+    t21 m0[3];
+} v26;
 
 
 void main()
 {
-    gl_Position = _17;
-    _26._m0[1]._m1 = vec4(-4.0, -9.0, 3.0, 7.0);
+    gl_Position = v17;
+    v26.m0[1].m1 = vec4(-4.0, -9.0, 3.0, 7.0);
 }

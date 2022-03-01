@@ -9,23 +9,23 @@ out gl_PerVertex
     float gl_CullDistance[1];
 };
 
-struct _35
+struct t35
 {
-    vec2 _m0;
-    vec4 _m1;
+    vec2 m0;
+    vec4 m1;
 };
 
-layout(location = 0) in _36
+layout(location = 0) in t36
 {
-    vec2 _m0;
-    _35 _m1;
-} _40[32];
+    vec2 m0;
+    t35 m1;
+} v40[32];
 
-layout(location = 0) out float _80;
+layout(location = 0) out float v80;
 
 void main()
 {
     gl_Position = vec4((gl_TessCoord.xy * 2.0) - vec2(1.0), 0.0, 1.0);
-    float _34 = ((float(abs(_40[0]._m1._m1.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(_40[0]._m1._m1.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(_40[0]._m1._m1.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(_40[0]._m1._m1.w - 7.0) < 0.001000000047497451305389404296875);
-    _80 = _34;
+    float v34 = ((float(abs(v40[0].m1.m1.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(v40[0].m1.m1.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(v40[0].m1.m1.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(v40[0].m1.m1.w - 7.0) < 0.001000000047497451305389404296875);
+    v80 = v34;
 }

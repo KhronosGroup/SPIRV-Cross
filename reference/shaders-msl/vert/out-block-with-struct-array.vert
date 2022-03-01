@@ -44,40 +44,40 @@ struct spvUnsafeArray
     }
 };
 
-struct _RESERVED_IDENTIFIER_FIXUP_21
+struct t21
 {
-    float _RESERVED_IDENTIFIER_FIXUP_m0;
-    float4 _RESERVED_IDENTIFIER_FIXUP_m1;
+    float m0;
+    float4 m1;
 };
 
 struct main0_out
 {
-    float _RESERVED_IDENTIFIER_FIXUP_21_0_RESERVED_IDENTIFIER_FIXUP_m0 [[user(locn0)]];
-    float4 _RESERVED_IDENTIFIER_FIXUP_21_0_RESERVED_IDENTIFIER_FIXUP_m1 [[user(locn1)]];
-    float _RESERVED_IDENTIFIER_FIXUP_21_1_RESERVED_IDENTIFIER_FIXUP_m0 [[user(locn2)]];
-    float4 _RESERVED_IDENTIFIER_FIXUP_21_1_RESERVED_IDENTIFIER_FIXUP_m1 [[user(locn3)]];
-    float _RESERVED_IDENTIFIER_FIXUP_21_2_RESERVED_IDENTIFIER_FIXUP_m0 [[user(locn4)]];
-    float4 _RESERVED_IDENTIFIER_FIXUP_21_2_RESERVED_IDENTIFIER_FIXUP_m1 [[user(locn5)]];
+    float t21_0_m0 [[user(locn0)]];
+    float4 t21_0_m1 [[user(locn1)]];
+    float t21_1_m0 [[user(locn2)]];
+    float4 t21_1_m1 [[user(locn3)]];
+    float t21_2_m0 [[user(locn4)]];
+    float4 t21_2_m1 [[user(locn5)]];
     float4 gl_Position [[position]];
 };
 
 struct main0_in
 {
-    float4 _RESERVED_IDENTIFIER_FIXUP_17 [[attribute(0)]];
+    float4 v17 [[attribute(0)]];
 };
 
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_21, 3> _RESERVED_IDENTIFIER_FIXUP_25 = {};
-    out.gl_Position = in._RESERVED_IDENTIFIER_FIXUP_17;
-    _RESERVED_IDENTIFIER_FIXUP_25[2]._RESERVED_IDENTIFIER_FIXUP_m1 = float4(-4.0, -9.0, 3.0, 7.0);
-    out._RESERVED_IDENTIFIER_FIXUP_21_0_RESERVED_IDENTIFIER_FIXUP_m0 = _RESERVED_IDENTIFIER_FIXUP_25[0]._RESERVED_IDENTIFIER_FIXUP_m0;
-    out._RESERVED_IDENTIFIER_FIXUP_21_0_RESERVED_IDENTIFIER_FIXUP_m1 = _RESERVED_IDENTIFIER_FIXUP_25[0]._RESERVED_IDENTIFIER_FIXUP_m1;
-    out._RESERVED_IDENTIFIER_FIXUP_21_1_RESERVED_IDENTIFIER_FIXUP_m0 = _RESERVED_IDENTIFIER_FIXUP_25[1]._RESERVED_IDENTIFIER_FIXUP_m0;
-    out._RESERVED_IDENTIFIER_FIXUP_21_1_RESERVED_IDENTIFIER_FIXUP_m1 = _RESERVED_IDENTIFIER_FIXUP_25[1]._RESERVED_IDENTIFIER_FIXUP_m1;
-    out._RESERVED_IDENTIFIER_FIXUP_21_2_RESERVED_IDENTIFIER_FIXUP_m0 = _RESERVED_IDENTIFIER_FIXUP_25[2]._RESERVED_IDENTIFIER_FIXUP_m0;
-    out._RESERVED_IDENTIFIER_FIXUP_21_2_RESERVED_IDENTIFIER_FIXUP_m1 = _RESERVED_IDENTIFIER_FIXUP_25[2]._RESERVED_IDENTIFIER_FIXUP_m1;
+    spvUnsafeArray<t21, 3> v25 = {};
+    out.gl_Position = in.v17;
+    v25[2].m1 = float4(-4.0, -9.0, 3.0, 7.0);
+    out.t21_0_m0 = v25[0].m0;
+    out.t21_0_m1 = v25[0].m1;
+    out.t21_1_m0 = v25[1].m0;
+    out.t21_1_m1 = v25[1].m1;
+    out.t21_2_m0 = v25[2].m0;
+    out.t21_2_m1 = v25[2].m1;
     return out;
 }
 
