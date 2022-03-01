@@ -3,29 +3,29 @@
 
 using namespace metal;
 
-struct _RESERVED_IDENTIFIER_FIXUP_35
+struct t35
 {
-    float2 _RESERVED_IDENTIFIER_FIXUP_m0;
-    float4 _RESERVED_IDENTIFIER_FIXUP_m1;
+    float2 m0;
+    float4 m1;
 };
 
-struct _RESERVED_IDENTIFIER_FIXUP_36
+struct t36
 {
-    float2 _RESERVED_IDENTIFIER_FIXUP_m0;
-    _RESERVED_IDENTIFIER_FIXUP_35 _RESERVED_IDENTIFIER_FIXUP_m1;
+    float2 m0;
+    t35 m1;
 };
 
 struct main0_out
 {
-    float _RESERVED_IDENTIFIER_FIXUP_80 [[user(locn0)]];
+    float v80 [[user(locn0)]];
     float4 gl_Position [[position]];
 };
 
 struct main0_in
 {
-    float2 _RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m0 [[attribute(0)]];
-    float2 _RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m1_RESERVED_IDENTIFIER_FIXUP_m0 [[attribute(1)]];
-    float4 _RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m1_RESERVED_IDENTIFIER_FIXUP_m1 [[attribute(2)]];
+    float2 t36_m0 [[attribute(0)]];
+    float2 t36_m1_m0 [[attribute(1)]];
+    float4 t36_m1_m1 [[attribute(2)]];
 };
 
 struct main0_patchIn
@@ -37,8 +37,8 @@ struct main0_patchIn
 {
     main0_out out = {};
     out.gl_Position = float4((gl_TessCoord.xy * 2.0) - float2(1.0), 0.0, 1.0);
-    float _RESERVED_IDENTIFIER_FIXUP_34 = ((float(abs(patchIn.gl_in[0]._RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m1_RESERVED_IDENTIFIER_FIXUP_m1.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(patchIn.gl_in[0]._RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m1_RESERVED_IDENTIFIER_FIXUP_m1.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0]._RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m1_RESERVED_IDENTIFIER_FIXUP_m1.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0]._RESERVED_IDENTIFIER_FIXUP_36_RESERVED_IDENTIFIER_FIXUP_m1_RESERVED_IDENTIFIER_FIXUP_m1.w - 7.0) < 0.001000000047497451305389404296875);
-    out._RESERVED_IDENTIFIER_FIXUP_80 = _RESERVED_IDENTIFIER_FIXUP_34;
+    float v34 = ((float(abs(patchIn.gl_in[0].t36_m1_m1.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(patchIn.gl_in[0].t36_m1_m1.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0].t36_m1_m1.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0].t36_m1_m1.w - 7.0) < 0.001000000047497451305389404296875);
+    out.v80 = v34;
     return out;
 }
 
