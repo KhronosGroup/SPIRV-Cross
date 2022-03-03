@@ -2509,12 +2509,12 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 }
 
 void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass storage,
-																   const string &ib_var_ref, SPIRType &ib_type,
-																   SPIRVariable &var, SPIRType &var_type,
+                                                                   const string &ib_var_ref, SPIRType &ib_type,
+                                                                   SPIRVariable &var, SPIRType &var_type,
                                                                    uint32_t mbr_idx, InterfaceBlockMeta &meta,
-																   const string &mbr_name_qual,
-																   const string &var_chain_qual,
-																   uint32_t& location, uint32_t& var_mbr_idx)
+                                                                   const string &mbr_name_qual,
+                                                                   const string &var_chain_qual,
+                                                                   uint32_t &location, uint32_t &var_mbr_idx)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -2589,6 +2589,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 																 var, mbr_type, sub_mbr_idx,
 																 meta, mbr_name, var_chain,
 																 location, var_mbr_idx);
+				// FIXME: Recursive structs and tessellation breaks here.
 				var_mbr_idx++;
 			}
 		}
@@ -2705,12 +2706,12 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 }
 
 void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass storage,
-															   const string &ib_var_ref, SPIRType &ib_type,
-															   SPIRVariable &var, SPIRType &var_type,
-															   uint32_t mbr_idx, InterfaceBlockMeta &meta,
-															   const string &mbr_name_qual,
-															   const string &var_chain_qual,
-															   uint32_t& location, uint32_t& var_mbr_idx)
+                                                               const string &ib_var_ref, SPIRType &ib_type,
+                                                               SPIRVariable &var, SPIRType &var_type,
+                                                               uint32_t mbr_idx, InterfaceBlockMeta &meta,
+                                                               const string &mbr_name_qual,
+                                                               const string &var_chain_qual,
+                                                               uint32_t &location, uint32_t &var_mbr_idx)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
@@ -3232,15 +3233,19 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						}
 
 						if ((!is_builtin || attribute_load_store) && storage_is_stage_io && is_composite_type)
+						{
 							add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
-																			 var, var_type, mbr_idx, meta,
-																			 mbr_name_qual, var_chain_qual,
-																			 location, var_mbr_idx);
+							                                                 var, var_type, mbr_idx, meta,
+							                                                 mbr_name_qual, var_chain_qual,
+							                                                 location, var_mbr_idx);
+						}
 						else
+						{
 							add_plain_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
-																		 var, var_type, mbr_idx, meta,
-																		 mbr_name_qual, var_chain_qual,
-																		 location, var_mbr_idx);
+							                                             var, var_type, mbr_idx, meta,
+							                                             mbr_name_qual, var_chain_qual,
+							                                             location, var_mbr_idx);
+						}
 					}
 					var_mbr_idx++;
 				}
