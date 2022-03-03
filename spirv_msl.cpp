@@ -7632,6 +7632,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	auto ops = stream(instruction);
 	auto opcode = static_cast<Op>(instruction.op);
 
+	opcode = get_remapped_spirv_op(opcode);
+
 	// If we need to do implicit bitcasts, make sure we do it with the correct type.
 	uint32_t integer_width = get_integer_width_for_instruction(instruction);
 	auto int_type = to_signed_basetype(integer_width);
@@ -7674,6 +7676,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpLogicalNotEqual:
 	case OpFOrdNotEqual:
+		// TODO: Should probably negate the == result here.
+		// Typically OrdNotEqual comes from GLSL which itself does not really specify what
+		// happens with NaN.
+		// Consider fixing this if we run into real issues.
 		MSL_BOP(!=);
 		break;
 
@@ -7730,7 +7736,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFUnordNotEqual:
-		MSL_UNORD_BOP(!=);
+		// not equal in MSL generates une opcodes to begin with.
+		// Since unordered not equal is how it works in C, just inherit that behavior.
+		MSL_BOP(!=);
 		break;
 
 	case OpFUnordGreaterThan:
@@ -8992,6 +9000,8 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	uint32_t integer_width = get_integer_width_for_glsl_instruction(op, args, count);
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
+
+	op = get_remapped_glsl_op(op);
 
 	switch (op)
 	{

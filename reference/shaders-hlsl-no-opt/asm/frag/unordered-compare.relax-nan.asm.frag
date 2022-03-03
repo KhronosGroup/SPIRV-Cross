@@ -15,10 +15,10 @@ struct SPIRV_Cross_Output
 
 float4 test_vector()
 {
-    bool4 le = bool4(!(A.x >= B.x), !(A.y >= B.y), !(A.z >= B.z), !(A.w >= B.w));
-    bool4 leq = bool4(!(A.x > B.x), !(A.y > B.y), !(A.z > B.z), !(A.w > B.w));
-    bool4 ge = bool4(!(A.x <= B.x), !(A.y <= B.y), !(A.z <= B.z), !(A.w <= B.w));
-    bool4 geq = bool4(!(A.x < B.x), !(A.y < B.y), !(A.z < B.z), !(A.w < B.w));
+    bool4 le = bool4(A.x < B.x, A.y < B.y, A.z < B.z, A.w < B.w);
+    bool4 leq = bool4(A.x <= B.x, A.y <= B.y, A.z <= B.z, A.w <= B.w);
+    bool4 ge = bool4(A.x > B.x, A.y > B.y, A.z > B.z, A.w > B.w);
+    bool4 geq = bool4(A.x >= B.x, A.y >= B.y, A.z >= B.z, A.w >= B.w);
     bool4 eq = bool4(A.x == B.x, A.y == B.y, A.z == B.z, A.w == B.w);
     bool4 neq = bool4(A.x != B.x, A.y != B.y, A.z != B.z, A.w != B.w);
     neq = bool4(A.x != B.x, A.y != B.y, A.z != B.z, A.w != B.w);
@@ -27,10 +27,10 @@ float4 test_vector()
 
 float test_scalar()
 {
-    bool le = !(A.x >= B.x);
-    bool leq = !(A.x > B.x);
-    bool ge = !(A.x <= B.x);
-    bool geq = !(A.x < B.x);
+    bool le = A.x < B.x;
+    bool leq = A.x <= B.x;
+    bool ge = A.x > B.x;
+    bool geq = A.x >= B.x;
     bool eq = A.x == B.x;
     bool neq = A.x != B.x;
     return ((((float(le) + float(leq)) + float(ge)) + float(geq)) + float(eq)) + float(neq);

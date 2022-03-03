@@ -669,6 +669,7 @@ struct CLIArguments
 	bool emit_line_directives = false;
 	bool enable_storage_image_qualifier_deduction = true;
 	bool force_zero_initialized_variables = false;
+	bool relax_nan_checks = false;
 	uint32_t force_recompile_max_debug_iterations = 3;
 	SmallVector<uint32_t> msl_discrete_descriptor_sets;
 	SmallVector<uint32_t> msl_device_argument_buffers;
@@ -919,6 +920,7 @@ static void print_help_common()
 	                "\t[--mask-stage-output-builtin <Position|PointSize|ClipDistance|CullDistance>]:\n"
 	                "\t\tIf a stage output variable with matching builtin is active, "
 	                "optimize away the variable if it can affect cross-stage linking correctness.\n"
+	                "\t[--relax-nan-checks]:\n\t\tRelax NaN checks for N{Clamp,Min,Max} and ordered vs. unordered compare instructions.\n"
 	);
 	// clang-format on
 }
@@ -1292,6 +1294,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	opts.emit_line_directives = args.emit_line_directives;
 	opts.enable_storage_image_qualifier_deduction = args.enable_storage_image_qualifier_deduction;
 	opts.force_zero_initialized_variables = args.force_zero_initialized_variables;
+	opts.relax_nan_checks = args.relax_nan_checks;
 	opts.force_recompile_max_debug_iterations = args.force_recompile_max_debug_iterations;
 	compiler->set_common_options(opts);
 
@@ -1688,6 +1691,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--force-recompile-max-debug-iterations", [&](CLIParser &parser) {
 		args.force_recompile_max_debug_iterations = parser.next_uint();
 	});
+
+	cbs.add("--relax-nan-checks", [&](CLIParser &) { args.relax_nan_checks = true; });
 
 	cbs.default_handler = [&args](const char *value) { args.input = value; };
 	cbs.add("-", [&args](CLIParser &) { args.input = "-"; });

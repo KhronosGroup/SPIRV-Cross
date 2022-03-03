@@ -138,6 +138,13 @@ public:
 		// what happens on legacy GLSL targets for blocks and structs.
 		bool force_flattened_io_blocks = false;
 
+		// For opcodes where we have to perform explicit additional nan checks, very ugly code is generated.
+		// If we opt-in, ignore these requirements.
+		// In opcodes like NClamp/NMin/NMax and FP compare, ignore NaN behavior.
+		// Use FClamp/FMin/FMax semantics for clamps and lets implementation choose ordered or unordered
+		// compares.
+		bool relax_nan_checks = false;
+
 		// If non-zero, controls layout(num_views = N) in; in GL_OVR_multiview2.
 		uint32_t ovr_multiview_view_count = 0;
 
@@ -362,6 +369,11 @@ protected:
 
 	virtual void emit_instruction(const Instruction &instr);
 	void emit_block_instructions(SPIRBlock &block);
+
+	// For relax_nan_checks.
+	GLSLstd450 get_remapped_glsl_op(GLSLstd450 std450_op) const;
+	spv::Op get_remapped_spirv_op(spv::Op op) const;
+
 	virtual void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                          uint32_t count);
 	virtual void emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t result_id, uint32_t op,

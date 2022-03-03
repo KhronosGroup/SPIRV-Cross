@@ -3524,6 +3524,8 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
 
+	op = get_remapped_glsl_op(op);
+
 	switch (op)
 	{
 	case GLSLstd450InverseSqrt:
@@ -4791,6 +4793,8 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	uint32_t integer_width = get_integer_width_for_instruction(instruction);
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
+
+	opcode = get_remapped_spirv_op(opcode);
 
 	switch (opcode)
 	{
