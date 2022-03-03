@@ -77,7 +77,7 @@ struct CLICallbacks
 struct CLIParser
 {
 	CLIParser(CLICallbacks cbs_, int argc_, char *argv_[])
-	    : cbs(move(cbs_))
+	    : cbs(std::move(cbs_))
 	    , argc(argc_)
 	    , argv(argv_)
 	{
@@ -1089,7 +1089,7 @@ static HLSLBindingFlags hlsl_resource_type_to_flag(const std::string &arg)
 
 static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> spirv_file)
 {
-	Parser spirv_parser(move(spirv_file));
+	Parser spirv_parser(std::move(spirv_file));
 	spirv_parser.parse();
 
 	unique_ptr<CompilerGLSL> compiler;
@@ -1098,13 +1098,13 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 	if (args.cpp)
 	{
-		compiler.reset(new CompilerCPP(move(spirv_parser.get_parsed_ir())));
+		compiler.reset(new CompilerCPP(std::move(spirv_parser.get_parsed_ir())));
 		if (args.cpp_interface_name)
 			static_cast<CompilerCPP *>(compiler.get())->set_interface_name(args.cpp_interface_name);
 	}
 	else if (args.msl)
 	{
-		compiler.reset(new CompilerMSL(move(spirv_parser.get_parsed_ir())));
+		compiler.reset(new CompilerMSL(std::move(spirv_parser.get_parsed_ir())));
 
 		auto *msl_comp = static_cast<CompilerMSL *>(compiler.get());
 		auto msl_opts = msl_comp->get_msl_options();
@@ -1162,13 +1162,13 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			msl_comp->set_combined_sampler_suffix(args.msl_combined_sampler_suffix);
 	}
 	else if (args.hlsl)
-		compiler.reset(new CompilerHLSL(move(spirv_parser.get_parsed_ir())));
+		compiler.reset(new CompilerHLSL(std::move(spirv_parser.get_parsed_ir())));
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
 		if (!args.vulkan_semantics || args.vulkan_glsl_disable_ext_samplerless_texture_functions)
 			build_dummy_sampler = true;
-		compiler.reset(new CompilerGLSL(move(spirv_parser.get_parsed_ir())));
+		compiler.reset(new CompilerGLSL(std::move(spirv_parser.get_parsed_ir())));
 	}
 
 	if (!args.variable_type_remaps.empty())
@@ -1179,7 +1179,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 					out = remap.new_variable_type;
 		};
 
-		compiler->set_variable_type_remap_callback(move(remap_cb));
+		compiler->set_variable_type_remap_callback(std::move(remap_cb));
 	}
 
 	for (auto &masked : args.masked_stage_outputs)
@@ -1352,7 +1352,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	{
 		auto active = compiler->get_active_interface_variables();
 		res = compiler->get_shader_resources(active);
-		compiler->set_enabled_interface_variables(move(active));
+		compiler->set_enabled_interface_variables(std::move(active));
 	}
 	else
 		res = compiler->get_shader_resources();
@@ -1367,7 +1367,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 	auto pls_inputs = remap_pls(args.pls_in, res.stage_inputs, &res.subpass_inputs);
 	auto pls_outputs = remap_pls(args.pls_out, res.stage_outputs, nullptr);
-	compiler->remap_pixel_local_storage(move(pls_inputs), move(pls_outputs));
+	compiler->remap_pixel_local_storage(std::move(pls_inputs), std::move(pls_outputs));
 
 	for (auto &ext : args.extensions)
 		compiler->require_extension(ext);
@@ -1596,7 +1596,7 @@ static int main_inner(int argc, char *argv[])
 		auto old_name = parser.next_string();
 		auto new_name = parser.next_string();
 		auto model = stage_to_execution_model(parser.next_string());
-		args.entry_point_rename.push_back({ old_name, new_name, move(model) });
+		args.entry_point_rename.push_back({ old_name, new_name, std::move(model) });
 	});
 	cbs.add("--entry", [&args](CLIParser &parser) { args.entry = parser.next_string(); });
 	cbs.add("--stage", [&args](CLIParser &parser) { args.entry_stage = parser.next_string(); });
@@ -1605,20 +1605,20 @@ static int main_inner(int argc, char *argv[])
 		HLSLVertexAttributeRemap remap;
 		remap.location = parser.next_uint();
 		remap.semantic = parser.next_string();
-		args.hlsl_attr_remap.push_back(move(remap));
+		args.hlsl_attr_remap.push_back(std::move(remap));
 	});
 
 	cbs.add("--remap", [&args](CLIParser &parser) {
 		string src = parser.next_string();
 		string dst = parser.next_string();
 		uint32_t components = parser.next_uint();
-		args.remaps.push_back({ move(src), move(dst), components });
+		args.remaps.push_back({ std::move(src), std::move(dst), components });
 	});
 
 	cbs.add("--remap-variable-type", [&args](CLIParser &parser) {
 		string var_name = parser.next_string();
 		string new_type = parser.next_string();
-		args.variable_type_remaps.push_back({ move(var_name), move(new_type) });
+		args.variable_type_remaps.push_back({ std::move(var_name), std::move(new_type) });
 	});
 
 	cbs.add("--rename-interface-variable", [&args](CLIParser &parser) {
@@ -1631,18 +1631,18 @@ static int main_inner(int argc, char *argv[])
 
 		uint32_t loc = parser.next_uint();
 		string var_name = parser.next_string();
-		args.interface_variable_renames.push_back({ cls, loc, move(var_name) });
+		args.interface_variable_renames.push_back({ cls, loc, std::move(var_name) });
 	});
 
 	cbs.add("--pls-in", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
-		args.pls_in.push_back({ move(fmt), move(name) });
+		args.pls_in.push_back({ std::move(fmt), std::move(name) });
 	});
 	cbs.add("--pls-out", [&args](CLIParser &parser) {
 		auto fmt = pls_format(parser.next_string());
 		auto name = parser.next_string();
-		args.pls_out.push_back({ move(fmt), move(name) });
+		args.pls_out.push_back({ std::move(fmt), std::move(name) });
 	});
 	cbs.add("--shader-model", [&args](CLIParser &parser) {
 		args.shader_model = parser.next_uint();
@@ -1693,7 +1693,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("-", [&args](CLIParser &) { args.input = "-"; });
 	cbs.error_handler = [] { print_help(); };
 
-	CLIParser parser{ move(cbs), argc - 1, argv + 1 };
+	CLIParser parser{ std::move(cbs), argc - 1, argv + 1 };
 	if (!parser.parse())
 		return EXIT_FAILURE;
 	else if (parser.ended_state)
@@ -1713,10 +1713,10 @@ static int main_inner(int argc, char *argv[])
 	// Special case reflection because it has little to do with the path followed by code-outputting compilers
 	if (!args.reflect.empty())
 	{
-		Parser spirv_parser(move(spirv_file));
+		Parser spirv_parser(std::move(spirv_file));
 		spirv_parser.parse();
 
-		CompilerReflection compiler(move(spirv_parser.get_parsed_ir()));
+		CompilerReflection compiler(std::move(spirv_parser.get_parsed_ir()));
 		compiler.set_format(args.reflect);
 		auto json = compiler.compile();
 		if (args.output)
@@ -1729,7 +1729,7 @@ static int main_inner(int argc, char *argv[])
 	string compiled_output;
 
 	if (args.iterations == 1)
-		compiled_output = compile_iteration(args, move(spirv_file));
+		compiled_output = compile_iteration(args, std::move(spirv_file));
 	else
 	{
 		for (unsigned i = 0; i < args.iterations; i++)

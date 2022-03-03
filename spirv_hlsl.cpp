@@ -2374,7 +2374,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		out_argument += " ";
 		out_argument += "spvReturnValue";
 		out_argument += type_to_array_glsl(type);
-		arglist.push_back(move(out_argument));
+		arglist.push_back(std::move(out_argument));
 	}
 
 	for (auto &arg : func.arguments)
@@ -3996,7 +3996,7 @@ void CompilerHLSL::read_access_chain(string *expr, const string &lhs, const SPIR
 	if (lhs.empty())
 	{
 		assert(expr);
-		*expr = move(load_expr);
+		*expr = std::move(load_expr);
 	}
 	else
 		statement(lhs, " = ", load_expr, ";");
@@ -5673,7 +5673,7 @@ void CompilerHLSL::require_texture_query_variant(uint32_t var_id)
 
 void CompilerHLSL::set_root_constant_layouts(std::vector<RootConstants> layout)
 {
-	root_constants_layout = move(layout);
+	root_constants_layout = std::move(layout);
 }
 
 void CompilerHLSL::add_vertex_attribute_remap(const HLSLVertexAttributeRemap &vertex_attributes)
