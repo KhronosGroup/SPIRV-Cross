@@ -350,6 +350,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     if '.mask-clip-distance.' in shader:
         msl_args.append('--mask-stage-output-builtin')
         msl_args.append('ClipDistance')
+    if '.relax-nan.' in shader:
+        msl_args.append('--relax-nan-checks')
 
     subprocess.check_call(msl_args)
 
@@ -474,6 +476,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--hlsl-enable-16bit-types')
     if '.flatten-matrix-vertex-input.' in shader:
         hlsl_args.append('--hlsl-flatten-matrix-vertex-input-semantics')
+    if '.relax-nan.' in shader:
+        hlsl_args.append('--relax-nan-checks')
 
     subprocess.check_call(hlsl_args)
 
@@ -576,6 +580,8 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fl
         extra_args += ['--force-zero-initialized-variables']
     if '.force-flattened-io.' in shader:
         extra_args += ['--glsl-force-flattened-io-blocks']
+    if '.relax-nan.' in shader:
+        extra_args.append('--relax-nan-checks')
 
     spirv_cross_path = paths.spirv_cross
 

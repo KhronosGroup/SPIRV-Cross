@@ -7307,6 +7307,63 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	return farg_str;
 }
 
+Op CompilerGLSL::get_remapped_spirv_op(Op op) const
+{
+	if (options.relax_nan_checks)
+	{
+		switch (op)
+		{
+		case OpFUnordLessThan:
+			op = OpFOrdLessThan;
+			break;
+		case OpFUnordLessThanEqual:
+			op = OpFOrdLessThanEqual;
+			break;
+		case OpFUnordGreaterThan:
+			op = OpFOrdGreaterThan;
+			break;
+		case OpFUnordGreaterThanEqual:
+			op = OpFOrdGreaterThanEqual;
+			break;
+		case OpFUnordEqual:
+			op = OpFOrdEqual;
+			break;
+		case OpFOrdNotEqual:
+			op = OpFUnordNotEqual;
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	return op;
+}
+
+GLSLstd450 CompilerGLSL::get_remapped_glsl_op(GLSLstd450 std450_op) const
+{
+	// Relax to non-NaN aware opcodes.
+	if (options.relax_nan_checks)
+	{
+		switch (std450_op)
+		{
+		case GLSLstd450NClamp:
+			std450_op = GLSLstd450FClamp;
+			break;
+		case GLSLstd450NMin:
+			std450_op = GLSLstd450FMin;
+			break;
+		case GLSLstd450NMax:
+			std450_op = GLSLstd450FMax;
+			break;
+		default:
+			break;
+		}
+	}
+
+	return std450_op;
+}
+
 void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args, uint32_t length)
 {
 	auto op = static_cast<GLSLstd450>(eop);
@@ -7318,6 +7375,8 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	uint32_t integer_width = get_integer_width_for_glsl_instruction(op, args, length);
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
+
+	op = get_remapped_glsl_op(op);
 
 	switch (op)
 	{
@@ -10094,6 +10153,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
 
+	opcode = get_remapped_spirv_op(opcode);
+
 	switch (opcode)
 	{
 	// Dealing with memory
@@ -11220,7 +11281,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpLogicalNotEqual:
 	case OpFOrdNotEqual:
+	case OpFUnordNotEqual:
 	{
+		// GLSL is fuzzy on what to do with ordered vs unordered not equal.
+		// glslang started emitting UnorderedNotEqual some time ago to harmonize with IEEE,
+		// but this means we have no easy way of implementing ordered not equal.
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP(notEqual);
 		else
@@ -12540,7 +12605,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFUnordEqual:
-	case OpFUnordNotEqual:
 	case OpFUnordLessThan:
 	case OpFUnordGreaterThan:
 	case OpFUnordLessThanEqual:
@@ -12561,10 +12625,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			{
 			case OpFUnordEqual:
 				comp_op = "notEqual";
-				break;
-
-			case OpFUnordNotEqual:
-				comp_op = "equal";
 				break;
 
 			case OpFUnordLessThan:
@@ -12597,10 +12657,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			{
 			case OpFUnordEqual:
 				comp_op = " != ";
-				break;
-
-			case OpFUnordNotEqual:
-				comp_op = " == ";
 				break;
 
 			case OpFUnordLessThan:

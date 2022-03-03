@@ -475,6 +475,9 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_GLSL_OVR_MULTIVIEW_VIEW_COUNT:
 		options->glsl.ovr_multiview_view_count = value;
 		break;
+	case SPVC_COMPILER_OPTION_RELAX_NAN_CHECKS:
+		options->glsl.relax_nan_checks = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_HLSL
