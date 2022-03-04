@@ -1548,6 +1548,14 @@ void CompilerMSL::extract_global_variables_from_functions()
 	// Uniforms
 	unordered_set<uint32_t> global_var_ids;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		// Some builtins resolve directly to a function call which does not need any declared variables.
+		// Skip these.
+		if (var.storage == StorageClassInput && has_decoration(var.self, DecorationBuiltIn) &&
+		    BuiltIn(get_decoration(var.self, DecorationBuiltIn)) == BuiltInHelperInvocation)
+		{
+			return;
+		}
+
 		if (var.storage == StorageClassInput || var.storage == StorageClassOutput ||
 		    var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 		    var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer)
@@ -12163,16 +12171,6 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					});
 				}
 				break;
-			case BuiltInHelperInvocation:
-				if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
-					SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.3 on iOS.");
-				else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
-					SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
-
-				entry_func.fixup_hooks_in.push_back([=]() {
-					statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = simd_is_helper_thread();");
-				});
-				break;
 			case BuiltInInvocationId:
 				// This is direct-mapped without multi-patch workgroups.
 				if (get_execution_model() != ExecutionModelTessellationControl || !msl_options.multi_patch_workgroup)
@@ -14466,6 +14464,14 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			            "].insideTessellationFactor");
 		}
 		break;
+
+	case BuiltInHelperInvocation:
+		if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
+			SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.3 on iOS.");
+		else if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 1))
+			SPIRV_CROSS_THROW("simd_is_helper_thread() requires version 2.1 on macOS.");
+		// In SPIR-V 1.6 with Volatile HelperInvocation, we cannot emit a fixup early.
+		return "simd_is_helper_thread()";
 
 	default:
 		break;
