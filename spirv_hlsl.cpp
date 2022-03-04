@@ -729,7 +729,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			break;
 
 		case BuiltInHelperInvocation:
-			if (hlsl_options.shader_model < 50 || (get_entry_point().model != ExecutionModelFragment && get_entry_point().model != ExecutionModelGLCompute))
+			if (hlsl_options.shader_model < 50 || get_entry_point().model != ExecutionModelFragment)
 				SPIRV_CROSS_THROW("Helper Invocation input is only supported in PS 5.0 or higher.");
 			break;
 
@@ -5603,7 +5603,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpIsHelperInvocationEXT:
-		if (hlsl_options.shader_model < 50 || (get_entry_point().model != ExecutionModelFragment && get_entry_point().model != ExecutionModelGLCompute))
+		if (hlsl_options.shader_model < 50 || get_entry_point().model != ExecutionModelFragment)
 			SPIRV_CROSS_THROW("Helper Invocation input is only supported in PS 5.0 or higher.");
 		// Helper lane state with demote is volatile by nature.
 		// Do not forward this.
