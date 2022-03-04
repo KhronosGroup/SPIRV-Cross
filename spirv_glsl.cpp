@@ -9585,8 +9585,11 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	// This is important because otherwise we'll get local sampler copies (highp sampler2D foo = bar) that are invalid in OpenGL GLSL
 
 	auto *var = maybe_get<SPIRVariable>(id);
-	if (var && var->forwardable)
-		return true;
+	if (var)
+	{
+		// Never forward volatile variables, e.g. SPIR-V 1.6 IsHelperInvocation.
+		return !has_decoration(id, DecorationVolatile);
+	}
 
 	// For debugging emit temporary variables for all expressions
 	if (options.force_temporary)
@@ -9598,6 +9601,12 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	const uint32_t max_expression_dependencies = 64;
 	if (expr && expr->expression_dependencies.size() >= max_expression_dependencies)
 		return false;
+
+	if (expr && expr->loaded_from && has_decoration(expr->loaded_from, DecorationVolatile))
+	{
+		// Never forward volatile variables.
+		return false;
+	}
 
 	// Immutable expression can always be forwarded.
 	if (is_immutable(id))
@@ -12089,7 +12098,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			pure = false;
 		}
 
-		if (var && var->forwardable)
+		if (var)
 		{
 			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
 			auto &e = emit_op(result_type, id, imgexpr, forward);
@@ -12850,6 +12859,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
 		require_extension_internal("GL_EXT_demote_to_helper_invocation");
+		// Helper lane state with demote is volatile by nature.
+		// Do not forward this.
 		emit_op(ops[0], ops[1], "helperInvocationEXT()", false);
 		break;
 

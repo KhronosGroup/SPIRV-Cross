@@ -728,6 +728,11 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			// Handled specially.
 			break;
 
+		case BuiltInHelperInvocation:
+			if (hlsl_options.shader_model < 50 || (get_entry_point().model != ExecutionModelFragment && get_entry_point().model != ExecutionModelGLCompute))
+				SPIRV_CROSS_THROW("Helper Invocation input is only supported in PS 5.0 or higher.");
+			break;
+
 		case BuiltInClipDistance:
 			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
 			for (uint32_t clip = 0; clip < clip_distance_count; clip += 4)
@@ -984,6 +989,8 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 		return "WaveGetLaneIndex()";
 	case BuiltInSubgroupSize:
 		return "WaveGetLaneCount()";
+	case BuiltInHelperInvocation:
+		return "IsHelperLane()";
 
 	default:
 		return CompilerGLSL::builtin_to_glsl(builtin, storage);
@@ -1101,6 +1108,11 @@ void CompilerHLSL::emit_builtin_variables()
 			if (hlsl_options.shader_model < 60)
 				SPIRV_CROSS_THROW("Need SM 6.0 for Wave ops.");
 			type = "uint4";
+			break;
+
+		case BuiltInHelperInvocation:
+			if (hlsl_options.shader_model < 50)
+				SPIRV_CROSS_THROW("Need SM 5.0 for Helper Invocation.");
 			break;
 
 		case BuiltInClipDistance:
@@ -2521,6 +2533,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		case BuiltInPointCoord:
 		case BuiltInSubgroupSize:
 		case BuiltInSubgroupLocalInvocationId:
+		case BuiltInHelperInvocation:
 			break;
 
 		case BuiltInSubgroupEqMask:
@@ -5346,7 +5359,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 				                        image_format_to_components(get<SPIRType>(var->basetype).image.format), imgexpr);
 		}
 
-		if (var && var->forwardable)
+		if (var)
 		{
 			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
 			auto &e = emit_op(result_type, id, imgexpr, forward);
@@ -5590,7 +5603,12 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpIsHelperInvocationEXT:
-		SPIRV_CROSS_THROW("helperInvocationEXT() is not supported in HLSL.");
+		if (hlsl_options.shader_model < 50 || (get_entry_point().model != ExecutionModelFragment && get_entry_point().model != ExecutionModelGLCompute))
+			SPIRV_CROSS_THROW("Helper Invocation input is only supported in PS 5.0 or higher.");
+		// Helper lane state with demote is volatile by nature.
+		// Do not forward this.
+		emit_op(ops[0], ops[1], "IsHelperLane()", false);
+		break;
 
 	case OpBeginInvocationInterlockEXT:
 	case OpEndInvocationInterlockEXT:
