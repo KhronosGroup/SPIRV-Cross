@@ -9585,7 +9585,7 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	// This is important because otherwise we'll get local sampler copies (highp sampler2D foo = bar) that are invalid in OpenGL GLSL
 
 	auto *var = maybe_get<SPIRVariable>(id);
-	if (var && var->forwardable)
+	if (var)
 		return true;
 
 	// For debugging emit temporary variables for all expressions
@@ -12089,7 +12089,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			pure = false;
 		}
 
-		if (var && var->forwardable)
+		if (var)
 		{
 			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
 			auto &e = emit_op(result_type, id, imgexpr, forward);

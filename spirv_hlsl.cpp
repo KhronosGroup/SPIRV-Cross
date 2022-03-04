@@ -5359,7 +5359,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 				                        image_format_to_components(get<SPIRType>(var->basetype).image.format), imgexpr);
 		}
 
-		if (var && var->forwardable)
+		if (var)
 		{
 			bool forward = forced_temporaries.find(id) == end(forced_temporaries);
 			auto &e = emit_op(result_type, id, imgexpr, forward);

@@ -1072,7 +1072,6 @@ struct SPIRVariable : IVariant
 
 	// Temporaries which can remain forwarded as long as this variable is not modified.
 	SmallVector<ID> dependees;
-	bool forwardable = true;
 
 	bool deferred_declaration = false;
 	bool phi_variable = false;
