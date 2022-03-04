@@ -9586,7 +9586,10 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var)
-		return true;
+	{
+		// Never forward volatile variables, e.g. SPIR-V 1.6 IsHelperInvocation.
+		return !has_decoration(id, DecorationVolatile);
+	}
 
 	// For debugging emit temporary variables for all expressions
 	if (options.force_temporary)
@@ -9598,6 +9601,12 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	const uint32_t max_expression_dependencies = 64;
 	if (expr && expr->expression_dependencies.size() >= max_expression_dependencies)
 		return false;
+
+	if (expr && expr->loaded_from && has_decoration(expr->loaded_from, DecorationVolatile))
+	{
+		// Never forward volatile variables.
+		return false;
+	}
 
 	// Immutable expression can always be forwarded.
 	if (is_immutable(id))
