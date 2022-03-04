@@ -5603,7 +5603,12 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpIsHelperInvocationEXT:
-		SPIRV_CROSS_THROW("helperInvocationEXT() is not supported in HLSL.");
+		if (hlsl_options.shader_model < 50 || (get_entry_point().model != ExecutionModelFragment && get_entry_point().model != ExecutionModelGLCompute))
+			SPIRV_CROSS_THROW("Helper Invocation input is only supported in PS 5.0 or higher.");
+		// Helper lane state with demote is volatile by nature.
+		// Do not forward this.
+		emit_op(ops[0], ops[1], "IsHelperLane()", false);
+		break;
 
 	case OpBeginInvocationInterlockEXT:
 	case OpEndInvocationInterlockEXT:

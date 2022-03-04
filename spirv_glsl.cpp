@@ -12850,6 +12850,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
 		require_extension_internal("GL_EXT_demote_to_helper_invocation");
+		// Helper lane state with demote is volatile by nature.
+		// Do not forward this.
 		emit_op(ops[0], ops[1], "helperInvocationEXT()", false);
 		break;
 
