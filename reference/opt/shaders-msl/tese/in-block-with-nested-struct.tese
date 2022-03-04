@@ -23,9 +23,9 @@ struct main0_out
 
 struct main0_in
 {
-    float2 t36_m0 [[attribute(0)]];
-    float2 t36_m1_m0 [[attribute(1)]];
-    float4 t36_m1_m1 [[attribute(2)]];
+    float2 v40_m0 [[attribute(0)]];
+    float2 v40_m1_m0 [[attribute(1)]];
+    float4 v40_m1_m1 [[attribute(2)]];
 };
 
 struct main0_patchIn
@@ -37,7 +37,7 @@ struct main0_patchIn
 {
     main0_out out = {};
     out.gl_Position = float4((gl_TessCoord.xy * 2.0) - float2(1.0), 0.0, 1.0);
-    out.v80 = ((float(abs(patchIn.gl_in[0].t36_m1_m1.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(patchIn.gl_in[0].t36_m1_m1.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0].t36_m1_m1.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0].t36_m1_m1.w - 7.0) < 0.001000000047497451305389404296875);
+    out.v80 = ((float(abs(patchIn.gl_in[0].v40_m1_m1.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(patchIn.gl_in[0].v40_m1_m1.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0].v40_m1_m1.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(patchIn.gl_in[0].v40_m1_m1.w - 7.0) < 0.001000000047497451305389404296875);
     return out;
 }
 

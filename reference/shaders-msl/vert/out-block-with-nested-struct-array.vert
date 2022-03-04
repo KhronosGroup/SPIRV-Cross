@@ -57,12 +57,12 @@ struct t24
 
 struct main0_out
 {
-    float4 t24_m0_0_m0 [[user(locn0)]];
-    float4 t24_m0_0_m1 [[user(locn1)]];
-    float4 t24_m0_1_m0 [[user(locn2)]];
-    float4 t24_m0_1_m1 [[user(locn3)]];
-    float4 t24_m0_2_m0 [[user(locn4)]];
-    float4 t24_m0_2_m1 [[user(locn5)]];
+    float4 v26_m0_0_m0 [[user(locn0)]];
+    float4 v26_m0_0_m1 [[user(locn1)]];
+    float4 v26_m0_1_m0 [[user(locn2)]];
+    float4 v26_m0_1_m1 [[user(locn3)]];
+    float4 v26_m0_2_m0 [[user(locn4)]];
+    float4 v26_m0_2_m1 [[user(locn5)]];
     float4 gl_Position [[position]];
 };
 
@@ -77,12 +77,12 @@ vertex main0_out main0(main0_in in [[stage_in]])
     t24 v26 = {};
     out.gl_Position = in.v17;
     v26.m0[1].m1 = float4(-4.0, -9.0, 3.0, 7.0);
-    out.t24_m0_0_m0 = v26.m0[0].m0;
-    out.t24_m0_0_m1 = v26.m0[0].m1;
-    out.t24_m0_1_m0 = v26.m0[1].m0;
-    out.t24_m0_1_m1 = v26.m0[1].m1;
-    out.t24_m0_2_m0 = v26.m0[2].m0;
-    out.t24_m0_2_m1 = v26.m0[2].m1;
+    out.v26_m0_0_m0 = v26.m0[0].m0;
+    out.v26_m0_0_m1 = v26.m0[0].m1;
+    out.v26_m0_1_m0 = v26.m0[1].m0;
+    out.v26_m0_1_m1 = v26.m0[1].m1;
+    out.v26_m0_2_m0 = v26.m0[2].m0;
+    out.v26_m0_2_m1 = v26.m0[2].m1;
     return out;
 }
 
