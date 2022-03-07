@@ -3189,7 +3189,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 					if (storage == StorageClassOutput && is_stage_output_block_member_masked(var, mbr_idx, meta.strip_array))
 					{
-						location = UINT32_MAX;		// Skip this member and resolve location again on next var member
+						location = UINT32_MAX; // Skip this member and resolve location again on next var member
 
 						if (is_block)
 							masked_block = true;
@@ -3226,7 +3226,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 					{
 						bool is_composite_type = is_matrix(mbr_type) || is_array(mbr_type) || mbr_type.basetype == SPIRType::Struct;
 						bool attribute_load_store =
-						storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
+								storage == StorageClassInput && get_execution_model() != ExecutionModelFragment;
 						bool storage_is_stage_io = variable_storage_requires_stage_io(storage);
 
 						// Clip/CullDistance always need to be declared as user attributes.
@@ -3236,7 +3236,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 						const string var_name = to_name(var.self);
 						string mbr_name_qual = var_name;
 						string var_chain_qual = var_name;
-						if (elem_cnt > 1) {
+						if (elem_cnt > 1)
+						{
 							mbr_name_qual += join("_", elem_idx);
 							var_chain_qual += join("[", elem_idx, "]");
 						}
