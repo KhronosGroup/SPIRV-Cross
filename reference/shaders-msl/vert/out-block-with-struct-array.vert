@@ -52,12 +52,12 @@ struct t21
 
 struct main0_out
 {
-    float t21_0_m0 [[user(locn0)]];
-    float4 t21_0_m1 [[user(locn1)]];
-    float t21_1_m0 [[user(locn2)]];
-    float4 t21_1_m1 [[user(locn3)]];
-    float t21_2_m0 [[user(locn4)]];
-    float4 t21_2_m1 [[user(locn5)]];
+    float v25_0_m0 [[user(locn0)]];
+    float4 v25_0_m1 [[user(locn1)]];
+    float v25_1_m0 [[user(locn2)]];
+    float4 v25_1_m1 [[user(locn3)]];
+    float v25_2_m0 [[user(locn4)]];
+    float4 v25_2_m1 [[user(locn5)]];
     float4 gl_Position [[position]];
 };
 
@@ -72,12 +72,12 @@ vertex main0_out main0(main0_in in [[stage_in]])
     spvUnsafeArray<t21, 3> v25 = {};
     out.gl_Position = in.v17;
     v25[2].m1 = float4(-4.0, -9.0, 3.0, 7.0);
-    out.t21_0_m0 = v25[0].m0;
-    out.t21_0_m1 = v25[0].m1;
-    out.t21_1_m0 = v25[1].m0;
-    out.t21_1_m1 = v25[1].m1;
-    out.t21_2_m0 = v25[2].m0;
-    out.t21_2_m1 = v25[2].m1;
+    out.v25_0_m0 = v25[0].m0;
+    out.v25_0_m1 = v25[0].m1;
+    out.v25_1_m0 = v25[1].m0;
+    out.v25_1_m1 = v25[1].m1;
+    out.v25_2_m0 = v25[2].m0;
+    out.v25_2_m1 = v25[2].m1;
     return out;
 }
 
