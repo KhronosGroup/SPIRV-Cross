@@ -1267,6 +1267,25 @@ const Bitset &Compiler::get_member_decoration_bitset(TypeID id, uint32_t index) 
 	return ir.get_member_decoration_bitset(id, index);
 }
 
+bool Compiler::can_ignore_decoration_offset(const SPIRType &ty, uint32_t index) const
+{
+	bool has_decoration = ir.has_member_decoration(ty.self, index, DecorationOffset);
+	if (!has_decoration || index != 0)
+		return false;
+
+	auto offset = type_struct_member_offset(ty, 0);
+	auto struct_size = ty.member_types.size();
+	if (struct_size != 1)
+		return false;
+
+	bool check_is_scalar = Compiler::is_scalar(get<SPIRType>(ty.member_types[0]));
+	// In this case where the offset for the first struct member is 0, scaar
+	// and the struct total size is 1, we can safely ignore the
+	// DecorationOffset since it doesn't change the behavior from a normal
+	// struct.
+	return check_is_scalar && offset == 0;
+}
+
 bool Compiler::has_member_decoration(TypeID id, uint32_t index, Decoration decoration) const
 {
 	return ir.has_member_decoration(id, index, decoration);

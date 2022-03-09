@@ -8737,14 +8737,21 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t r
 	// This special case should also only apply to Function/Private storage classes.
 	// We should not check backing variable for temporaries.
 	auto *lhs_var = maybe_get_backing_variable(lhs_id);
+	SPIRType *lhs_ty = lhs_var ? maybe_get<SPIRType>(lhs_var->basetype) : nullptr;
+
 	if (lhs_var && lhs_storage == StorageClassStorageBuffer && storage_class_array_is_thread(lhs_var->storage))
 		lhs_is_array_template = true;
+	else if (lhs_ty && lhs_ty->basetype == SPIRType::Struct && Compiler::can_ignore_decoration_offset(*lhs_ty, 0))
+		lhs_is_array_template = true;
 	else if (lhs_var && (lhs_storage == StorageClassFunction || lhs_storage == StorageClassPrivate) &&
-	         type_is_block_like(get<SPIRType>(lhs_var->basetype)))
+	         type_is_block_like(*lhs_ty))
 		lhs_is_array_template = false;
 
 	auto *rhs_var = maybe_get_backing_variable(rhs_id);
+	SPIRType *rhs_ty = rhs_var ? maybe_get<SPIRType>(rhs_var->basetype) : nullptr;
 	if (rhs_var && rhs_storage == StorageClassStorageBuffer && storage_class_array_is_thread(rhs_var->storage))
+		rhs_is_array_template = true;
+	else if (rhs_ty && rhs_ty->basetype == SPIRType::Struct && Compiler::can_ignore_decoration_offset(*rhs_ty, 0))
 		rhs_is_array_template = true;
 	else if (rhs_var && (rhs_storage == StorageClassFunction || rhs_storage == StorageClassPrivate) &&
 	         type_is_block_like(get<SPIRType>(rhs_var->basetype)))
@@ -10726,7 +10733,8 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	// and generally we cannot copy full arrays in and out of buffers into Function
 	// address space.
 	// Array of resources should also be declared as builtin arrays.
-	if (has_member_decoration(type.self, index, DecorationOffset))
+	if (has_member_decoration(type.self, index, DecorationOffset) &&
+	    !Compiler::can_ignore_decoration_offset(type, index))
 		is_using_builtin_array = true;
 	else if (has_extended_member_decoration(type.self, index, SPIRVCrossDecorationResourceIndexPrimary))
 		is_using_builtin_array = true;

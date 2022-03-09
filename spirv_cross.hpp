@@ -241,6 +241,12 @@ public:
 	// Returns whether the decoration has been applied to a member of a struct.
 	bool has_member_decoration(TypeID id, uint32_t index, spv::Decoration decoration) const;
 
+	// Check if we can ignore the offset decoration. There are cases where the
+	// struct is only of one member and contains the Offset decorator, when the
+	// offset is 0 and the member is scalar, the decorator can be simply
+	// ignored since it won't affect in the final struct.
+	bool can_ignore_decoration_offset(const SPIRType &ty, uint32_t index) const;
+
 	// Similar to set_decoration, but for struct members.
 	void set_member_decoration(TypeID id, uint32_t index, spv::Decoration decoration, uint32_t argument = 0);
 	void set_member_decoration_string(TypeID id, uint32_t index, spv::Decoration decoration,
@@ -464,8 +470,8 @@ public:
 	// get_type(resource.base_type_id)
 	// as decorations are set in the basic Block type.
 	// The type passed in here must have these decorations set, or an exception is raised.
-	// Only UBOs and SSBOs or sub-structs which are part of these buffer types will have these decorations set.
 	uint32_t type_struct_member_offset(const SPIRType &type, uint32_t index) const;
+	// Only UBOs and SSBOs or sub-structs which are part of these buffer types will have these decorations set.
 	uint32_t type_struct_member_array_stride(const SPIRType &type, uint32_t index) const;
 	uint32_t type_struct_member_matrix_stride(const SPIRType &type, uint32_t index) const;
 
