@@ -1371,6 +1371,7 @@ string CompilerMSL::compile()
 	for (auto &id : next_metal_resource_ids)
 		id = 0;
 
+	fixup_anonymous_struct_names();
 	fixup_type_alias();
 	replace_illegal_names();
 	sync_entry_point_aliases_and_names();
