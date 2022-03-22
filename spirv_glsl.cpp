@@ -4990,14 +4990,13 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 		// Handles Arrays and structures.
 		string res;
 
-		// Only consider the decay if we are inside a struct scope.
-		// Outside a struct declaration, we can always bind to a constant array with templated type.
+		// Only consider the decay if we are inside a struct scope where we are emitting a member with Offset decoration.
+		// Outside a block-like struct declaration, we can always bind to a constant array with templated type.
+		// Should look at ArrayStride here as well, but it's possible to declare a constant struct
+		// with Offset = 0, using no ArrayStride on the enclosed array type.
+		// A particular CTS test hits this scenario.
 		bool array_type_decays = inside_block_like_struct_scope &&
-		                         !type.array.empty() && !backend.array_is_value_type_in_buffer_blocks &&
-		                         has_decoration(c.constant_type, DecorationArrayStride);
-
-		if (type.array.empty() && type.basetype == SPIRType::Struct && type_is_block_like(type))
-			inside_block_like_struct_scope = true;
+		                         !type.array.empty() && !backend.array_is_value_type_in_buffer_blocks;
 
 		// Allow Metal to use the array<T> template to make arrays a value type
 		bool needs_trailing_tracket = false;
@@ -5021,16 +5020,29 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 			res = type_to_glsl_constructor(type) + "(";
 		}
 
+		uint32_t subconstant_index = 0;
 		for (auto &elem : c.subconstants)
 		{
 			auto &subc = get<SPIRConstant>(elem);
 			if (subc.specialization)
 				res += to_name(elem);
 			else
+			{
+				if (type.array.empty() && type.basetype == SPIRType::Struct)
+				{
+					// When we get down to emitting struct members, override the block-like information.
+					// For constants, we can freely mix and match block-like state.
+					inside_block_like_struct_scope =
+							has_member_decoration(type.self, subconstant_index, DecorationOffset);
+				}
+
 				res += constant_expression(subc, inside_block_like_struct_scope);
+			}
 
 			if (&elem != &c.subconstants.back())
 				res += ", ";
+
+			subconstant_index++;
 		}
 
 		res += backend.use_initializer_list ? " }" : ")";
