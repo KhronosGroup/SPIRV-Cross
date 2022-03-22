@@ -1,5 +1,5 @@
 RWByteAddressBuffer _17 : register(u0);
-uniform RaytracingAccelerationStructure rtas;
+uniform RaytracingAccelerationStructure rtas : register(t1);
 
 static RayQuery<RAY_FLAG_NONE> rayQuery;
 

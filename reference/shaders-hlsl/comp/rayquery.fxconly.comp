@@ -8,7 +8,7 @@ struct Ray
 
 RWByteAddressBuffer _17 : register(u0);
 RWByteAddressBuffer _257 : register(u2);
-uniform RaytracingAccelerationStructure rtas;
+uniform RaytracingAccelerationStructure rtas : register(t1);
 
 static RayQuery<RAY_FLAG_NONE> rayQuery;
 
