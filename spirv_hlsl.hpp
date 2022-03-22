@@ -215,6 +215,7 @@ private:
 	std::string image_type_hlsl_legacy(const SPIRType &type, uint32_t id);
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
+	void emit_hlsl_patch_constant_func();
 	void emit_header() override;
 	void emit_resources();
 	void declare_undefined_values() override;
@@ -225,6 +226,7 @@ private:
 	                                           std::unordered_set<uint32_t> &active_locations);
 	void emit_builtin_inputs_in_struct();
 	void emit_builtin_outputs_in_struct();
+	void emit_tess_builtin_inputs_in_struct();
 	void emit_texture_op(const Instruction &i, bool sparse) override;
 	void emit_instruction(const Instruction &instruction) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
@@ -260,6 +262,8 @@ private:
 	void write_access_chain_array(const SPIRAccessChain &chain, uint32_t value,
 	                              const SmallVector<uint32_t> &composite_chain);
 	std::string write_access_chain_value(uint32_t value, const SmallVector<uint32_t> &composite_chain, bool enclose);
+	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
+	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false) override;
 	void emit_store(const Instruction &instruction);
 	void emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op);
 	void emit_subgroup_op(const Instruction &i) override;
@@ -273,6 +277,10 @@ private:
 	void replace_illegal_names() override;
 
 	bool is_hlsl_force_storage_buffer_as_uav(ID id) const;
+	void append_gl_inout_to_functions(VariableID gl_in);
+	void append_gl_inout_to_function(VariableID gl_in, uint32_t func_id,
+	                                 std::unordered_set<uint32_t> &processed_func_ids);
+	void emit_per_vertex_inputs();
 
 	Options hlsl_options;
 

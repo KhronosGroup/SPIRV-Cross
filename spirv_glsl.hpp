@@ -589,6 +589,7 @@ protected:
 		bool allow_precision_qualifiers = false;
 		bool can_swizzle_scalar = false;
 		bool force_gl_in_out_block = false;
+		bool force_gl_in_block_hlsl = false;
 		bool can_return_array = true;
 		bool allow_truncated_access_chain = false;
 		bool supports_extensions = false;
@@ -706,8 +707,9 @@ protected:
 	virtual void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
 	                                                    spv::StorageClass storage, bool &is_packed);
 
-	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
-	                         AccessChainMeta *meta = nullptr, bool ptr_chain = false);
+	virtual std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
+	                                 const SPIRType &target_type, AccessChainMeta *meta = nullptr,
+	                                 bool ptr_chain = false);
 
 	std::string flattened_access_chain(uint32_t base, const uint32_t *indices, uint32_t count,
 	                                   const SPIRType &target_type, uint32_t offset, uint32_t matrix_stride,
