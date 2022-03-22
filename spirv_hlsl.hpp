@@ -280,6 +280,8 @@ private:
 	void append_gl_inout_to_functions(VariableID gl_in);
 	void append_gl_inout_to_function(VariableID gl_in, uint32_t func_id,
 	                                 std::unordered_set<uint32_t> &processed_func_ids);
+
+	bool emitted_per_vertex_inputs = false;
 	void emit_per_vertex_inputs();
 
 	Options hlsl_options;

@@ -1642,6 +1642,17 @@ void CompilerHLSL::emit_resources()
 		statement("struct SPIRV_Cross_Input");
 		begin_scope();
 		emit_tess_builtin_inputs_in_struct();
+		sort(input_variables.begin(), input_variables.end(), variable_compare);
+		for (auto &var : input_variables)
+		{
+			if (!has_decoration(var.var->self, DecorationPatch))
+				continue;
+
+			if (var.block)
+				emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_inputs);
+			else
+				emit_interface_block_in_struct(*var.var, active_inputs);
+		}
 		end_scope_decl();
 		statement("");
 
@@ -2690,8 +2701,11 @@ void CompilerHLSL::append_gl_inout_to_function(VariableID gl_in, uint32_t func_i
 void CompilerHLSL::emit_per_vertex_inputs()
 {
 	const auto model = get_execution_model();
-	if (!is_tessellation_shader(model))
+	if (emitted_per_vertex_inputs || !is_tessellation_shader(model))
 		return;
+	if (!require_input)
+		return;
+	emitted_per_vertex_inputs = true;
 
 	// Tessellation evaluation per-vertex inputs are presented as arrays.
 	// But, in DirectX, this array uses a very special type, 'OutputPatch<T>',
@@ -6530,8 +6544,6 @@ string CompilerHLSL::compile()
 		backend.force_gl_in_block_hlsl = true;
 	}
 
-	emit_per_vertex_inputs();
-
 	uint32_t pass_count = 0;
 	do
 	{
@@ -6542,6 +6554,7 @@ string CompilerHLSL::compile()
 
 		emit_header();
 		emit_resources();
+		emit_per_vertex_inputs();
 
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 		if (get_execution_model() == ExecutionModelTessellationControl)
