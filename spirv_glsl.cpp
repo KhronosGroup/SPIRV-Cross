@@ -9600,8 +9600,8 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var)
 	{
-		// Never forward volatile variables, e.g. SPIR-V 1.6 IsHelperInvocation.
-		return !has_decoration(id, DecorationVolatile);
+		// Never forward volatile builtin variables, e.g. SPIR-V 1.6 HelperInvocation.
+		return !(has_decoration(id, DecorationBuiltIn) && has_decoration(id, DecorationVolatile));
 	}
 
 	// For debugging emit temporary variables for all expressions
@@ -9615,9 +9615,11 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	if (expr && expr->expression_dependencies.size() >= max_expression_dependencies)
 		return false;
 
-	if (expr && expr->loaded_from && has_decoration(expr->loaded_from, DecorationVolatile))
+	if (expr && expr->loaded_from
+		&& has_decoration(expr->loaded_from, DecorationBuiltIn)
+		&& has_decoration(expr->loaded_from, DecorationVolatile))
 	{
-		// Never forward volatile variables.
+		// Never forward volatile builtin variables, e.g. SPIR-V 1.6 HelperInvocation.
 		return false;
 	}
 
