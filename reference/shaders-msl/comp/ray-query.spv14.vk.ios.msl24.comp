@@ -19,11 +19,11 @@ struct Params
     float thit;
 };
 
-kernel void main0(constant Params& _18 [[buffer(1)]], acceleration_structure<instancing> AS0 [[buffer(0)]], acceleration_structure<instancing> AS1 [[buffer(2)]])
+kernel void main0(constant Params& _18 [[buffer(1)]], raytracing::acceleration_structure<raytracing::instancing> AS0 [[buffer(0)]], raytracing::acceleration_structure<raytracing::instancing> AS1 [[buffer(2)]])
 {
-    intersection_query<instancing, triangle_data> q;
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
     q.reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS0, intersection_params());
-    intersection_query<instancing, triangle_data> q2[2];
+    raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q2[2];
     q2[1].reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS1, intersection_params());
     bool _63 = q.next();
     bool res = _63;
@@ -32,9 +32,9 @@ kernel void main0(constant Params& _18 [[buffer(1)]], acceleration_structure<ins
     q2[1].commit_triangle_intersection();
     float _71 = q.get_ray_min_distance();
     float fval = _71;
-    float3 _74 = q.get_world_space_ray_origin();
+    float3 _74 = q.get_world_space_ray_direction();
     float3 fvals = _74;
-    float3 _75 = q.get_world_space_ray_direction();
+    float3 _75 = q.get_world_space_ray_origin();
     fvals = _75;
     uint _80 = uint(q2[1].get_committed_intersection_type());
     uint type = _80;
