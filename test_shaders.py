@@ -382,6 +382,10 @@ def shader_model_hlsl(shader):
             return '-Tps_5_1'
     elif '.comp' in shader:
         return '-Tcs_5_1'
+    elif '.tese' in shader:
+        return '-Tds_5_0'
+    elif '.tesc' in shader:
+        return '-Ths_5_0'
     else:
         return None
 

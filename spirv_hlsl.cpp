@@ -1631,8 +1631,14 @@ void CompilerHLSL::emit_resources()
 
 			if (var.block)
 			{
-				if (var.block_member_index == 0)
-					emit_interface_block_in_struct(*var.var, active_inputs);
+				if (is_tessellation_shader())
+				{
+					if (var.block_member_index == 0)
+						emit_interface_block_in_struct(*var.var, active_inputs);
+				}
+				else
+					emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location,
+					                                      active_inputs);
 			}
 			else
 				emit_interface_block_in_struct(*var.var, active_inputs);
