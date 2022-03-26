@@ -997,7 +997,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		// Allow semantic remap if specified.
 		auto semantic = to_semantic(location_number, execution.model, var.storage);
 
-		if (is_tessellation_shader() && !type.array.empty() && !has_decoration(var.self, DecorationPatch))
+		if (is_tessellation_shader() && !type.array.empty() && !is_per_patch_variable(var))
 		{
 			type.array.erase(type.array.begin());
 			type.array_size_literal.erase(type.array_size_literal.begin());
@@ -1044,6 +1044,8 @@ std::string CompilerHLSL::builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClas
 {
 	switch (builtin)
 	{
+	case BuiltInPosition:
+		return "gl_Position";
 	case BuiltInVertexId:
 		return "gl_VertexID";
 	case BuiltInInstanceId:
@@ -1501,7 +1503,7 @@ void CompilerHLSL::emit_resources()
 		    if (execution.model == ExecutionModelTessellationEvaluation ||
 		        execution.model == ExecutionModelTessellationControl)
 		    {
-			    is_cp_variable |= (var.storage == StorageClassInput && !has_decoration(var.self, DecorationPatch));
+			    is_cp_variable |= (var.storage == StorageClassInput && !is_per_patch_variable(var));
 		    }
 
 		    if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
@@ -1624,11 +1626,14 @@ void CompilerHLSL::emit_resources()
 		sort(input_variables.begin(), input_variables.end(), variable_compare);
 		for (auto &var : input_variables)
 		{
-			if (has_decoration(var.var->self, DecorationPatch))
+			if (is_per_patch_variable(*var.var))
 				continue;
 
 			if (var.block)
-				emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_inputs);
+			{
+				if (var.block_member_index == 0)
+					emit_interface_block_in_struct(*var.var, active_inputs);
+			}
 			else
 				emit_interface_block_in_struct(*var.var, active_inputs);
 		}
@@ -1645,7 +1650,7 @@ void CompilerHLSL::emit_resources()
 		sort(input_variables.begin(), input_variables.end(), variable_compare);
 		for (auto &var : input_variables)
 		{
-			if (!has_decoration(var.var->self, DecorationPatch))
+			if (!is_per_patch_variable(*var.var))
 				continue;
 
 			if (var.block)
@@ -1660,7 +1665,7 @@ void CompilerHLSL::emit_resources()
 		begin_scope();
 		for (auto &var : output_variables)
 		{
-			if (!has_decoration(var.var->self, DecorationPatch))
+			if (!is_per_patch_variable(*var.var))
 				continue;
 			if (var.block)
 				emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_inputs);
@@ -1708,7 +1713,7 @@ void CompilerHLSL::emit_resources()
 		sort(output_variables.begin(), output_variables.end(), variable_compare);
 		for (auto &var : output_variables)
 		{
-			if (has_decoration(var.var->self, DecorationPatch))
+			if (is_per_patch_variable(*var.var))
 				continue;
 
 			if (var.block)
@@ -2744,10 +2749,28 @@ void CompilerHLSL::emit_per_vertex_inputs()
 	append_gl_inout_to_functions(gl_in.self);
 }
 
+bool CompilerHLSL::is_per_patch_variable(const SPIRVariable &var) const
+{
+	if (has_decoration(var.self, DecorationPatch))
+		return true;
+
+	auto &type = get<SPIRType>(var.basetype);
+	if (!has_decoration(type.self, DecorationBlock))
+		return false;
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+	{
+		if (!has_member_decoration(type.self, i, DecorationPatch))
+			return false;
+	}
+
+	return true;
+}
+
 void CompilerHLSL::emit_hlsl_patch_constant_func()
 {
 	SmallVector<string> arguments;
-	arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input, 32> gl_in");
+	if (require_input)
+		arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input, 32> gl_in");
 
 	statement("SPIRV_Cross_Output", " tesc_patch_constant(", merge(arguments), ")");
 	begin_scope();
@@ -2755,12 +2778,17 @@ void CompilerHLSL::emit_hlsl_patch_constant_func()
 	auto &execution = get_entry_point();
 	for (uint32_t i = 0; i < execution.output_vertices; ++i)
 	{
-		auto builtin_expr = builtin_to_glsl(BuiltInInvocationId, StorageClassInput);
-		statement(builtin_expr, " = ", i, ";");
+		if (active_input_builtins.get(BuiltInInvocationId))
+		{
+			auto builtin_expr = builtin_to_glsl(BuiltInInvocationId, StorageClassInput);
+			statement(builtin_expr, " = ", i, ";");
+		}
 		if (require_input)
 			statement("tesc_main(gl_in);");
 		else
 			statement("tesc_main();");
+		if (!active_input_builtins.get(BuiltInInvocationId))
+			break;
 	}
 
 	statement("SPIRV_Cross_Output stage_output;");
@@ -2818,7 +2846,7 @@ void CompilerHLSL::emit_hlsl_patch_constant_func()
 			    else
 			    {
 				    auto name = to_name(var.self);
-				    if (has_decoration(var.self, DecorationPatch))
+				    if (is_per_patch_variable(var))
 				    {
 					    statement("stage_output.", name, " = ", name, ";");
 				    }
@@ -2841,8 +2869,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	{
 	case ExecutionModelTessellationControl:
 		arguments.push_back("SPIRV_Cross_Input stage_input");
-		if (require_input)
-			arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input, 32> gl_in");
+		arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input, 32> gl_in");
 		break;
 
 	case ExecutionModelTessellationEvaluation:
@@ -3090,7 +3117,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		if (var.storage != StorageClassInput)
 			return;
 
-		if (execution.model == ExecutionModelTessellationEvaluation && !has_decoration(var.self, DecorationPatch))
+		if (execution.model == ExecutionModelTessellationEvaluation && !is_per_patch_variable(var))
 			return;
 
 		if (execution.model == ExecutionModelTessellationControl)
@@ -3240,7 +3267,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					}
 					else if (execution.model == spv::ExecutionModelTessellationControl)
 					{
-						if (!has_decoration(var.self, DecorationPatch))
+						if (!is_per_patch_variable(var))
 						{
 							statement("stage_output.", name, " = ", name, "[gl_InvocationID];");
 						}
@@ -6076,6 +6103,9 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 
 		if (opcode == OpControlBarrier)
 		{
+			if (get_execution_model() == ExecutionModelTessellationControl)
+				SPIRV_CROSS_THROW("barrier()is not aviable in this execution model.");
+
 			// We cannot emit just execution barrier, for no memory semantics pick the cheapest option.
 			if (semantics == MemorySemanticsWorkgroupMemoryMask || semantics == 0)
 				statement("GroupMemoryBarrierWithGroupSync();");
@@ -6533,6 +6563,7 @@ string CompilerHLSL::compile()
 	ExecutionModel model = get_execution_model();
 	if (model == ExecutionModelTessellationControl)
 	{
+		active_input_builtins.set(BuiltInPosition);
 		backend.force_gl_in_block_hlsl = true;
 	}
 	if (model == ExecutionModelTessellationEvaluation)

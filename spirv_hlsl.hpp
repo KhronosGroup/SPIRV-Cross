@@ -284,6 +284,8 @@ private:
 	bool emitted_per_vertex_inputs = false;
 	void emit_per_vertex_inputs();
 
+	bool is_per_patch_variable(const SPIRVariable &var) const;
+
 	Options hlsl_options;
 
 	// TODO: Refactor this to be more similar to MSL, maybe have some common system in place?
