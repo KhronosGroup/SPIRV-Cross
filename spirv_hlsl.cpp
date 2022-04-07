@@ -674,6 +674,11 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_VertexID";
 			break;
 
+		case BuiltInPrimitiveId:
+			type = "uint";
+			semantic = "SV_PrimitiveID";
+			break;
+
 		case BuiltInInstanceId:
 		case BuiltInInstanceIndex:
 			if (legacy)
@@ -1131,6 +1136,10 @@ void CompilerHLSL::emit_builtin_variables()
 
 		case BuiltInSampleMask:
 			type = "int";
+			break;
+
+		case BuiltInPrimitiveId:
+			type = "uint";
 			break;
 
 		default:
