@@ -1765,6 +1765,45 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				break;
 			}
 
+			case OpRayQueryInitializeKHR:
+			case OpRayQueryProceedKHR:
+			case OpRayQueryTerminateKHR:
+			case OpRayQueryGenerateIntersectionKHR:
+			case OpRayQueryConfirmIntersectionKHR:
+			{
+				// Ray query accesses memory directly, need check pass down object if using Private storage class.
+				uint32_t base_id = ops[0];
+				if (global_var_ids.find(base_id) != global_var_ids.end())
+					added_arg_ids.insert(base_id);
+				break;
+			}
+
+			case OpRayQueryGetRayTMinKHR:
+			case OpRayQueryGetRayFlagsKHR:
+			case OpRayQueryGetWorldRayOriginKHR:
+			case OpRayQueryGetWorldRayDirectionKHR:
+			case OpRayQueryGetIntersectionCandidateAABBOpaqueKHR:
+			case OpRayQueryGetIntersectionTypeKHR:
+			case OpRayQueryGetIntersectionTKHR:
+			case OpRayQueryGetIntersectionInstanceCustomIndexKHR:
+			case OpRayQueryGetIntersectionInstanceIdKHR:
+			case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
+			case OpRayQueryGetIntersectionGeometryIndexKHR:
+			case OpRayQueryGetIntersectionPrimitiveIndexKHR:
+			case OpRayQueryGetIntersectionBarycentricsKHR:
+			case OpRayQueryGetIntersectionFrontFaceKHR:
+			case OpRayQueryGetIntersectionObjectRayDirectionKHR:
+			case OpRayQueryGetIntersectionObjectRayOriginKHR:
+			case OpRayQueryGetIntersectionObjectToWorldKHR:
+			case OpRayQueryGetIntersectionWorldToObjectKHR:
+			{
+				// Ray query accesses memory directly, need check pass down object if using Private storage class.
+				uint32_t base_id = ops[2];
+				if (global_var_ids.find(base_id) != global_var_ids.end())
+					added_arg_ids.insert(base_id);
+				break;
+			}
+
 			default:
 				break;
 			}
