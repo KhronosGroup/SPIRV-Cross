@@ -726,6 +726,13 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			semantic = "SV_IsFrontFace";
 			break;
 
+		case BuiltInViewIndex:
+			if (hlsl_options.shader_model < 61 || (get_entry_point().model != ExecutionModelVertex && get_entry_point().model != ExecutionModelFragment))
+				SPIRV_CROSS_THROW("View Index input is only supported in VS and PS 6.1 or higher.");
+			type = "uint";
+			semantic = "SV_ViewID";
+			break;
+
 		case BuiltInNumWorkgroups:
 		case BuiltInSubgroupSize:
 		case BuiltInSubgroupLocalInvocationId:
@@ -1139,6 +1146,7 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 
 		case BuiltInPrimitiveId:
+		case BuiltInViewIndex:
 			type = "uint";
 			break;
 
