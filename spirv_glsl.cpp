@@ -12410,30 +12410,49 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpExtInst:
 	{
 		uint32_t extension_set = ops[2];
+		auto ext = get<SPIRExtension>(extension_set).ext;
 
-		if (get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
+		if (ext == SPIRExtension::GLSL)
 		{
 			emit_glsl_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
-		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_ballot)
+		else if (ext == SPIRExtension::SPV_AMD_shader_ballot)
 		{
 			emit_spv_amd_shader_ballot_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
-		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter)
+		else if (ext == SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter)
 		{
 			emit_spv_amd_shader_explicit_vertex_parameter_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
-		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_shader_trinary_minmax)
+		else if (ext == SPIRExtension::SPV_AMD_shader_trinary_minmax)
 		{
 			emit_spv_amd_shader_trinary_minmax_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
-		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_AMD_gcn_shader)
+		else if (ext == SPIRExtension::SPV_AMD_gcn_shader)
 		{
 			emit_spv_amd_gcn_shader_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
-		else if (get<SPIRExtension>(extension_set).ext == SPIRExtension::SPV_debug_info)
+		else if (ext == SPIRExtension::SPV_debug_info)
 		{
 			break; // Ignore SPIR-V debug information extended instructions.
+		}
+		else if (ext == SPIRExtension::NonSemanticDebugPrintf)
+		{
+			// Operation 1 is printf.
+			if (ops[3] == 1)
+			{
+				if (!options.vulkan_semantics)
+					SPIRV_CROSS_THROW("Debug printf is only supported in Vulkan GLSL.\n");
+				require_extension_internal("GL_EXT_debug_printf");
+				auto &format_string = get<SPIRString>(ops[4]).str;
+				string expr = join("debugPrintfEXT(\"", format_string, "\"");
+				for (uint32_t i = 5; i < length; i++)
+				{
+					expr += ", ";
+					expr += to_expression(ops[i]);
+				}
+				statement(expr, ");");
+			}
 		}
 		else
 		{
