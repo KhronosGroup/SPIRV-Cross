@@ -4710,7 +4710,20 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 		// If we try to use a loop variable before the loop header, we have to redirect it to the static expression,
 		// the variable has not been declared yet.
 		if (var.statically_assigned || (var.loop_variable && !var.loop_variable_enable))
-			return to_expression(var.static_expression);
+		{
+			// We might try to load from a loop variable before it has been initialized.
+			// Prefer static expression and fallback to initializer.
+			if (var.static_expression)
+				return to_expression(var.static_expression);
+			else if (var.initializer)
+				return to_expression(var.initializer);
+			else
+			{
+				// We cannot declare the variable yet, so have to fake it.
+				uint32_t undef_id = ir.increase_bound_by(1);
+				return emit_uninitialized_temporary_expression(get_variable_data_type_id(var), undef_id).expression;
+			}
+		}
 		else if (var.deferred_declaration)
 		{
 			var.deferred_declaration = false;
@@ -14127,7 +14140,11 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 
 		// Loop variables are never declared outside their for-loop, so block any implicit declaration.
 		if (var.loop_variable)
+		{
 			var.deferred_declaration = false;
+			// Need to reset the static expression so we can fallback to initializer if need be.
+			var.static_expression = 0;
+		}
 	}
 
 	// Enforce declaration order for regression testing purposes.
