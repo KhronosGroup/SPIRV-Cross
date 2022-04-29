@@ -556,6 +556,11 @@ protected:
 		}
 	}
 
+	uint32_t *stream_mutable(const Instruction &instr) const
+	{
+		return const_cast<uint32_t *>(stream(instr));
+	}
+
 	ParsedIR ir;
 	// Marks variables which have global scope and variables which can alias with other variables
 	// (SSBO, image load store, etc)

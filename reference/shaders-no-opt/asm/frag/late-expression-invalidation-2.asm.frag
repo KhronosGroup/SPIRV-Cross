@@ -25,7 +25,8 @@ highp mat2x4 _60 = mat2x4(vec4(0.0), vec4(0.0));
 
 void main()
 {
-    int _68 = -(256 - 14);
+    int _65 = 256 - 14;
+    int _68 = -_65;
     highp vec2 pos = gl_FragCoord.xy / _7.resolution;
     ivec2 ipos = ivec2(int(pos.x * 16.0), int(pos.y * 16.0));
     int i = 0;
