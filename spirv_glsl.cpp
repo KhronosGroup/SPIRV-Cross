@@ -2130,9 +2130,8 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 	// OpenGL has no concept of push constant blocks, implement it as a uniform struct.
 	auto &type = get<SPIRType>(var.basetype);
 
-	auto &flags = ir.meta[var.self].decoration.decoration_flags;
-	flags.clear(DecorationBinding);
-	flags.clear(DecorationDescriptorSet);
+	unset_decoration(var.self, DecorationBinding);
+	unset_decoration(var.self, DecorationDescriptorSet);
 
 #if 0
     if (flags & ((1ull << DecorationBinding) | (1ull << DecorationDescriptorSet)))
@@ -2142,14 +2141,13 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 
 	// We're emitting the push constant block as a regular struct, so disable the block qualifier temporarily.
 	// Otherwise, we will end up emitting layout() qualifiers on naked structs which is not allowed.
-	auto &block_flags = ir.meta[type.self].decoration.decoration_flags;
-	bool block_flag = block_flags.get(DecorationBlock);
-	block_flags.clear(DecorationBlock);
+	bool block_flag = has_decoration(type.self, DecorationBlock);
+	unset_decoration(type.self, DecorationBlock);
 
 	emit_struct(type);
 
 	if (block_flag)
-		block_flags.set(DecorationBlock);
+		set_decoration(type.self, DecorationBlock);
 
 	emit_uniform(var);
 	statement("");
@@ -2986,11 +2984,10 @@ void CompilerGLSL::fixup_image_load_store_access()
 			// Solve this by making the image access as restricted as possible and loosen up if we need to.
 			// If any no-read/no-write flags are actually set, assume that the compiler knows what it's doing.
 
-			auto &flags = ir.meta[var].decoration.decoration_flags;
-			if (!flags.get(DecorationNonWritable) && !flags.get(DecorationNonReadable))
+			if (!has_decoration(var, DecorationNonWritable) && !has_decoration(var, DecorationNonReadable))
 			{
-				flags.set(DecorationNonWritable);
-				flags.set(DecorationNonReadable);
+				set_decoration(var, DecorationNonWritable);
+				set_decoration(var, DecorationNonReadable);
 			}
 		}
 	});
@@ -11984,10 +11981,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto *var = maybe_get_backing_variable(ops[2]);
 		if (var)
 		{
-			auto &flags = ir.meta[var->self].decoration.decoration_flags;
+			auto &flags = get_decoration_bitset(var->self);
 			if (flags.get(DecorationNonReadable))
 			{
-				flags.clear(DecorationNonReadable);
+				unset_decoration(var->self, DecorationNonReadable);
 				force_recompile();
 			}
 		}
@@ -12176,10 +12173,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto *var = maybe_get_backing_variable(ops[0]);
 		if (var)
 		{
-			auto &flags = ir.meta[var->self].decoration.decoration_flags;
-			if (flags.get(DecorationNonWritable))
+			if (has_decoration(var->self, DecorationNonWritable))
 			{
-				flags.clear(DecorationNonWritable);
+				unset_decoration(var->self, DecorationNonWritable);
 				force_recompile();
 			}
 		}
@@ -13266,7 +13262,7 @@ void CompilerGLSL::fixup_io_block_patch_qualifiers(const SPIRVariable &var)
 
 string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 {
-	auto &flags = ir.meta[id].decoration.decoration_flags;
+	auto &flags = get_decoration_bitset(id);
 	string res;
 
 	auto *var = maybe_get<SPIRVariable>(id);
@@ -13395,7 +13391,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 
 const char *CompilerGLSL::to_pls_qualifiers_glsl(const SPIRVariable &variable)
 {
-	auto &flags = ir.meta[variable.self].decoration.decoration_flags;
+	auto &flags = get_decoration_bitset(variable.self);
 	if (flags.get(DecorationRelaxedPrecision))
 		return "mediump ";
 	else
@@ -13853,7 +13849,7 @@ void CompilerGLSL::flatten_buffer_block(VariableID id)
 	auto &var = get<SPIRVariable>(id);
 	auto &type = get<SPIRType>(var.basetype);
 	auto name = to_name(type.self, false);
-	auto &flags = ir.meta[type.self].decoration.decoration_flags;
+	auto &flags = get_decoration_bitset(type.self);
 
 	if (!type.array.empty())
 		SPIRV_CROSS_THROW(name + " is an array of UBOs.");
@@ -13883,11 +13879,10 @@ bool CompilerGLSL::check_atomic_image(uint32_t id)
 		auto *var = maybe_get_backing_variable(id);
 		if (var)
 		{
-			auto &flags = ir.meta[var->self].decoration.decoration_flags;
-			if (flags.get(DecorationNonWritable) || flags.get(DecorationNonReadable))
+			if (has_decoration(var->self, DecorationNonWritable) || has_decoration(var->self, DecorationNonReadable))
 			{
-				flags.clear(DecorationNonWritable);
-				flags.clear(DecorationNonReadable);
+				unset_decoration(var->self, DecorationNonWritable);
+				unset_decoration(var->self, DecorationNonReadable);
 				force_recompile();
 			}
 		}
