@@ -21,7 +21,6 @@
  *  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
  */
 
-#define SPV_ENABLE_UTILITY_CODE
 #include "spirv_glsl.hpp"
 #include "GLSL.std.450.h"
 #include "spirv_common.hpp"
@@ -10495,10 +10494,8 @@ CompilerGLSL::TemporaryCopy CompilerGLSL::handle_instruction_precision(const Ins
 				forward_relaxed_precision(ops[1], &ops[2], forwarding_length);
 		}
 
-		bool has_type_id = false;
-		bool has_result_id = false;
-		HasResultAndType(opcode, &has_result_id, &has_type_id);
-		if (has_result_id && has_type_id)
+		uint32_t result_type = 0, result_id = 0;
+		if (instruction_to_result_type(result_type, result_id, opcode, ops, length))
 		{
 			auto itr = temporary_to_mirror_precision_alias.find(ops[1]);
 			if (itr != temporary_to_mirror_precision_alias.end())
