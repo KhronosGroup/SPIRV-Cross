@@ -13,6 +13,10 @@ layout(set = 0, binding = 0, std430) buffer SSBO
 
 void main()
 {
-    _8.values[gl_GlobalInvocationID.x] = ((((_8.values[gl_GlobalInvocationID.x] + vec4(2.0)) + vec3(_30).xyzz) * float(int(gl_WorkGroupSize.x))) * float(int(gl_WorkGroupSize.y))) * float(int(2u));
+    vec3 _38 = vec3(_30);
+    float _41 = float(int(gl_WorkGroupSize.x));
+    float _42 = float(int(gl_WorkGroupSize.y));
+    float _43 = float(int(2u));
+    _8.values[gl_GlobalInvocationID.x] = ((((_8.values[gl_GlobalInvocationID.x] + vec4(2.0)) + _38.xyzz) * _41) * _42) * _43;
 }
 

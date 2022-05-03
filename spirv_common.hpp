@@ -24,7 +24,11 @@
 #ifndef SPIRV_CROSS_COMMON_HPP
 #define SPIRV_CROSS_COMMON_HPP
 
+#ifndef SPV_ENABLE_UTILITY_CODE
+#define SPV_ENABLE_UTILITY_CODE
+#endif
 #include "spirv.hpp"
+
 #include "spirv_cross_containers.hpp"
 #include "spirv_cross_error_handling.hpp"
 #include <functional>
@@ -1564,6 +1568,7 @@ struct AccessChainMeta
 	bool storage_is_packed = false;
 	bool storage_is_invariant = false;
 	bool flattened_struct = false;
+	bool relaxed_precision = false;
 };
 
 enum ExtendedDecorations
