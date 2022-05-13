@@ -15,11 +15,14 @@ layout(location = 0) flat out int _4;
 void main()
 {
     vec4 pos = vec4(0.0);
-    pos.y += float(_20);
-    pos.z += float(_25);
+    float _42 = float(_20);
+    pos.y += _42;
+    float _47 = float(_25);
+    pos.z += _47;
     vec4 _52 = vec4(_32);
     pos += _52;
-    vec2 _58 = pos.xy + vec2(_34);
+    vec2 _55 = vec2(_34);
+    vec2 _58 = pos.xy + _55;
     pos = vec4(_58.x, _58.y, pos.z, pos.w);
     gl_Position = pos;
     _4 = _35;
