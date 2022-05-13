@@ -68,7 +68,7 @@ vertex main0_out main0(main0_in in [[stage_in]])
     c[1] = in.c_1;
     d[0] = in.d_0;
     d[1] = in.d_1;
-    out.gl_Position = float4(float(int(in.a.x)), float(in.b.x), float(uint(c[1])), float(d[0].w));
+    out.gl_Position = float4(float(int(short(in.a.x))), float(int(in.b.x)), float(uint(c[1])), float(d[0].w));
     return out;
 }
 

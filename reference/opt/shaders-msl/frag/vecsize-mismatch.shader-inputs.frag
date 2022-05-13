@@ -69,7 +69,7 @@ fragment main0_out main0(main0_in in [[stage_in]])
     c[1] = in.c_1;
     e[0] = in.e_0;
     e[1] = in.e_1;
-    out.FragColor = float4(float(int(in.a.x)), float(in.b.x), float2(float(uint(c[1])), float(e[0].w)) + in.d.xy);
+    out.FragColor = float4(float(int(short(in.a.x))), float(int(in.b.x)), float2(float(uint(c[1])), float(e[0].w)) + in.d.xy);
     return out;
 }
 
