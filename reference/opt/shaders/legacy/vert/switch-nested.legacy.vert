@@ -28,6 +28,7 @@ void main()
                     _101 = vec4(0.0);
                     break;
                 }
+                break; // unreachable workaround
             }
             _102 = _101;
             break;
@@ -37,6 +38,7 @@ void main()
             _102 = vec4(0.0);
             break;
         }
+        break; // unreachable workaround
     }
     gl_Position = _102;
 }

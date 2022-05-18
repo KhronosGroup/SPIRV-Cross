@@ -15763,8 +15763,43 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 
 	case SPIRBlock::Unreachable:
+	{
+		// Avoid emitting false fallthrough, which can happen for
+		// if (cond) break; else discard; inside a case label.
+		// Discard is not always implementable as a terminator.
+
+		auto &cfg = get_cfg_for_current_function();
+		bool inner_dominator_is_switch = false;
+		ID id = block.self;
+
+		while (id)
+		{
+			auto &iter_block = get<SPIRBlock>(id);
+			if (iter_block.terminator == SPIRBlock::MultiSelect ||
+			    iter_block.merge == SPIRBlock::MergeLoop)
+			{
+				ID next_block = iter_block.merge == SPIRBlock::MergeLoop ?
+				                iter_block.merge_block : iter_block.next_block;
+				bool outside_construct = next_block && cfg.find_common_dominator(next_block, block.self) == next_block;
+				if (!outside_construct)
+				{
+					inner_dominator_is_switch = iter_block.terminator == SPIRBlock::MultiSelect;
+					break;
+				}
+			}
+
+			if (cfg.get_preceding_edges(id).empty())
+				break;
+
+			id = cfg.get_immediate_dominator(id);
+		}
+
+		if (inner_dominator_is_switch)
+			statement("break; // unreachable workaround");
+
 		emit_next_block = false;
 		break;
+	}
 
 	case SPIRBlock::IgnoreIntersection:
 		statement("ignoreIntersectionEXT;");
