@@ -403,9 +403,8 @@ struct main0_patchIn
     }
     float3 _565 = _264 + ((_398[2] * float3(fast::min(_547 + Material.Material_ScalarExpressions[0].z, 0.0) * Material.Material_ScalarExpressions[0].w)) * float3(((_137[0] * gl_TessCoord.x) + (_137[1] * gl_TessCoord.y)) + (_137[2] * gl_TessCoord.z)));
     float4 _574 = View.View_TranslatedWorldToClip * float4(_565.x, _565.y, _565.z, _235.w);
-    float4 _579 = _574;
-    _579.z = _574.z + (0.001000000047497451305389404296875 * _574.w);
-    out.gl_Position = _579;
+    _574.z = _574.z + (0.001000000047497451305389404296875 * _574.w);
+    out.gl_Position = _574;
     out.out_var_TEXCOORD6 = ((_120[0] * _198) + (_120[1] * _202)) + (_120[2] * _207);
     out.out_var_TEXCOORD7 = ((_121[0] * _198) + (_121[1] * _202)) + (_121[2] * _207);
     out.out_var_TEXCOORD10_centroid = float4(_256.x, _256.y, _256.z, _118.w);

@@ -76,7 +76,7 @@ void main()
     {
         _467 = 0u;
     }
-    uvec4 _445 = _476;
+    uvec4 _445;
     _445.x = _467;
     bool _380 = _360.y < 32u;
     uint _470;
@@ -88,8 +88,7 @@ void main()
     {
         _470 = 0u;
     }
-    uvec4 _449 = _445;
-    _449.y = _470;
+    _445.y = _470;
     uint _472;
     if (_370)
     {
@@ -99,8 +98,7 @@ void main()
     {
         _472 = 0u;
     }
-    uvec4 _453 = _449;
-    _453.z = _472;
+    _445.z = _472;
     uint _474;
     if (_380)
     {
@@ -110,9 +108,8 @@ void main()
     {
         _474 = 0u;
     }
-    uvec4 _457 = _453;
-    _457.w = _474;
-    vec4 _416 = vec4((_360.xyxy + _457) & (~_367).xxyy);
+    _445.w = _474;
+    vec4 _416 = vec4((_360.xyxy + _445) & (~_367).xxyy);
     vec2 _197 = ((_53.Patches[(gl_InstanceID + SPIRV_Cross_BaseInstance)].Position.xz * _180.InvOceanSize_PatchScale.zw) + mix(_416.xy, _416.zw, vec2(_351 - _353))) * _180.InvOceanSize_PatchScale.xy;
     vec2 _204 = _197 * _180.NormalTexCoordScale.zw;
     mediump float _433 = textureLod(TexLOD, _197, 0.0).x * 7.96875;

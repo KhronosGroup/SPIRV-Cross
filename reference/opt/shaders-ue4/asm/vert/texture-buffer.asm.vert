@@ -371,9 +371,8 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     {
         float4 _384 = _375;
         _384.z = 9.9999999747524270787835121154785e-07;
-        float4 _385 = _384;
-        _385.w = 1.0;
-        _386 = _385;
+        _384.w = 1.0;
+        _386 = _384;
     }
     else
     {

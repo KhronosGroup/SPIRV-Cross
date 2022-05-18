@@ -25,9 +25,8 @@ void vert_main()
 {
     float4 _63 = 0.0f.xxxx;
     _63.y = float(_20);
-    float4 _66 = _63;
-    _66.z = float(_25);
-    float4 _52 = _66 + float4(_30);
+    _63.z = float(_25);
+    float4 _52 = _63 + float4(_30);
     float2 _56 = _52.xy + float2(_32);
     gl_Position = float4(_56.x, _56.y, _52.z, _52.w);
     _4 = _33;

@@ -346,14 +346,11 @@ kernel void main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)
     if (gl_InvocationID == 0u)
     {
         float4 _450 = (((((temp_var_hullMainRetVal[0u].WorldPosition[1] + temp_var_hullMainRetVal[0u].WorldPosition[2]) + temp_var_hullMainRetVal[1u].WorldPosition[1]) + temp_var_hullMainRetVal[1u].WorldPosition[2]) + temp_var_hullMainRetVal[2u].WorldPosition[1]) + temp_var_hullMainRetVal[2u].WorldPosition[2]) * float4(0.16666667163372039794921875);
-        float4 _463 = _142;
+        float4 _463;
         _463.x = 0.5 * (temp_var_hullMainRetVal[1u].TessellationMultiplier + temp_var_hullMainRetVal[2u].TessellationMultiplier);
-        float4 _469 = _463;
-        _469.y = 0.5 * (temp_var_hullMainRetVal[2u].TessellationMultiplier + temp_var_hullMainRetVal[0u].TessellationMultiplier);
-        float4 _474 = _469;
-        _474.z = 0.5 * (temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier);
-        float4 _481 = _474;
-        _481.w = 0.333000004291534423828125 * ((temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier) + temp_var_hullMainRetVal[2u].TessellationMultiplier);
+        _463.y = 0.5 * (temp_var_hullMainRetVal[2u].TessellationMultiplier + temp_var_hullMainRetVal[0u].TessellationMultiplier);
+        _463.z = 0.5 * (temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier);
+        _463.w = 0.333000004291534423828125 * ((temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier) + temp_var_hullMainRetVal[2u].TessellationMultiplier);
         float4 _589;
         for (;;)
         {
@@ -383,12 +380,12 @@ kernel void main0(main0_in in [[stage_in]], constant type_View& View [[buffer(0)
             float _573 = sqrt(dot(_559, _559) / dot(_566, _566));
             float _577 = sqrt(dot(_560, _560) / dot(_569, _569));
             float _581 = sqrt(dot(_558, _558) / dot(_563, _563));
-            float4 _586 = float4(_573, _577, _581, 1.0);
-            _586.w = 0.333000004291534423828125 * ((_573 + _577) + _581);
-            _589 = float4(View.View_AdaptiveTessellationFactor) * _586;
+            float4 _582 = float4(_573, _577, _581, 1.0);
+            _582.w = 0.333000004291534423828125 * ((_573 + _577) + _581);
+            _589 = float4(View.View_AdaptiveTessellationFactor) * _582;
             break;
         }
-        float4 _591 = fast::clamp(_481 * _589, float4(1.0), float4(15.0));
+        float4 _591 = fast::clamp(_463 * _589, float4(1.0), float4(15.0));
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0u] = half(_591.x);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1u] = half(_591.y);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2u] = half(_591.z);

@@ -262,40 +262,32 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
         float2 _311 = _303.xy * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.xy;
         float2 _312 = fract(_311);
         float2 _313 = floor(_311);
-        float3 _320 = _139;
+        float3 _320;
         _320.x = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(-0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _326 = _320;
-        _326.y = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(0.5, -0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _332 = _326;
-        _332.z = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(1.5, -0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
+        _320.y = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(0.5, -0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
+        _320.z = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(1.5, -0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
         float3 _335 = float3(MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDirectionAndShadowTransition.w);
         float3 _337 = float3((fast::min(_303.z, 0.999989986419677734375) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDirectionAndShadowTransition.w) - 1.0);
-        float3 _339 = fast::clamp((_332 * _335) - _337, float3(0.0), float3(1.0));
-        float3 _345 = _139;
+        float3 _339 = fast::clamp((_320 * _335) - _337, float3(0.0), float3(1.0));
+        float3 _345;
         _345.x = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(-0.5, 0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _351 = _345;
-        _351.y = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _357 = _351;
-        _357.z = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(1.5, 0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _360 = fast::clamp((_357 * _335) - _337, float3(0.0), float3(1.0));
-        float3 _366 = _139;
+        _345.y = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
+        _345.z = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(1.5, 0.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
+        float3 _360 = fast::clamp((_345 * _335) - _337, float3(0.0), float3(1.0));
+        float3 _366;
         _366.x = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(-0.5, 1.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _372 = _366;
-        _372.y = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(0.5, 1.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _378 = _372;
-        _378.z = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(1.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
-        float3 _381 = fast::clamp((_378 * _335) - _337, float3(0.0), float3(1.0));
+        _366.y = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(0.5, 1.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
+        _366.z = MobileDirectionalLight_DirectionalLightShadowTexture.sample(MobileDirectionalLight_DirectionalLightShadowSampler, ((_313 + float2(1.5)) * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightShadowSize.zw), level(0.0)).x;
+        float3 _381 = fast::clamp((_366 * _335) - _337, float3(0.0), float3(1.0));
         float _383 = _312.x;
         float _384 = 1.0 - _383;
-        float3 _399 = _136;
+        float3 _399;
         _399.x = ((_339.x * _384) + _339.y) + (_339.z * _383);
-        float3 _403 = _399;
-        _403.y = ((_360.x * _384) + _360.y) + (_360.z * _383);
-        float3 _407 = _403;
-        _407.z = ((_381.x * _384) + _381.y) + (_381.z * _383);
+        _399.y = ((_360.x * _384) + _360.y) + (_360.z * _383);
+        _399.z = ((_381.x * _384) + _381.y) + (_381.z * _383);
         float _408 = _312.y;
         float _420 = fast::clamp((_224 * MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDistanceFadeMAD.x) + MobileDirectionalLight.MobileDirectionalLight_DirectionalLightDistanceFadeMAD.y, 0.0, 1.0);
-        _423 = mix(fast::clamp(0.25 * dot(_407, float3(1.0 - _408, 1.0, _408)), 0.0, 1.0), 1.0, _420 * _420);
+        _423 = mix(fast::clamp(0.25 * dot(_399, float3(1.0 - _408, 1.0, _408)), 0.0, 1.0), 1.0, _420 * _420);
     }
     else
     {
@@ -361,9 +353,9 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
         }
     }
     float3 _567 = (mix(_488 + fast::max(float3(0.0), float3(0.0)), _270 + _484, float3(View.View_UnlitViewmodeMask)) * float3(in.in_var_TEXCOORD7.w)) + in.in_var_TEXCOORD7.xyz;
-    float4 _571 = float4(_567.x, _567.y, _567.z, _137.w);
-    _571.w = fast::min(in.in_var_TEXCOORD8.w, 65500.0);
-    out.out_var_SV_Target0 = _571;
+    float4 _568 = float4(_567.x, _567.y, _567.z, _137.w);
+    _568.w = fast::min(in.in_var_TEXCOORD8.w, 65500.0);
+    out.out_var_SV_Target0 = _568;
     return out;
 }
 

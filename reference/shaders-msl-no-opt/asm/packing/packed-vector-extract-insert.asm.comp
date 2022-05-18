@@ -13,9 +13,10 @@ struct SSBOScalar
 
 kernel void main0(device SSBOScalar& _4 [[buffer(0)]])
 {
-    float3 _24 = _4.b;
+    float3 _23 = float3(_4.b);
+    float3 _24 = _23;
     _24.z = 2.0;
-    _4.a = float2(_4.b[0], _4.b[1]) * _4.b[2];
+    _4.a = _23.xy * _23.z;
     _4.b = _24;
 }
 

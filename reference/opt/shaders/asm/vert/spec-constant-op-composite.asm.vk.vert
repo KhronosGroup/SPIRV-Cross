@@ -21,9 +21,8 @@ void main()
 {
     vec4 _65 = vec4(0.0);
     _65.y = float(_20);
-    vec4 _68 = _65;
-    _68.z = float(_25);
-    vec4 _54 = _68 + vec4(_32);
+    _65.z = float(_25);
+    vec4 _54 = _65 + vec4(_32);
     vec2 _58 = _54.xy + vec2(_34);
     gl_Position = vec4(_58.x, _58.y, _54.z, _54.w);
     _4 = _35;

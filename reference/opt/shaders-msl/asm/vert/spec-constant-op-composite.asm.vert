@@ -25,9 +25,8 @@ vertex main0_out main0()
     main0_out out = {};
     float4 _66 = float4(0.0);
     _66.y = float(_20);
-    float4 _69 = _66;
-    _69.z = float(_25);
-    float4 _55 = _69 + float4(_32);
+    _66.z = float(_25);
+    float4 _55 = _66 + float4(_32);
     float2 _59 = _55.xy + float2(_34);
     out.gl_Position = float4(_59.x, _59.y, _55.z, _55.w);
     out.m_4 = _35;
