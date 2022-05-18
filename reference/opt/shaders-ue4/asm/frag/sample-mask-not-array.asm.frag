@@ -482,18 +482,18 @@ fragment main0_out main0(main0_in in [[stage_in]], constant type_View& View [[bu
     {
         _246 = _216;
     }
-    float4 _256 = float4((_246 * float3(_215.w)) + _215.xyz, _108);
-    _256.w = 1.0;
+    float4 _255 = float4((_246 * float3(_215.w)) + _215.xyz, _108);
+    _255.w = 1.0;
     float4 _268;
     uint _269;
     if (View.View_NumSceneColorMSAASamples > 1)
     {
-        _268 = _256 * float4(float(View.View_NumSceneColorMSAASamples) * 0.25);
+        _268 = _255 * float4(float(View.View_NumSceneColorMSAASamples) * 0.25);
         _269 = gl_SampleMaskIn & 15u;
     }
     else
     {
-        _268 = _256;
+        _268 = _255;
         _269 = gl_SampleMaskIn;
     }
     out.out_var_SV_Target0 = _268;

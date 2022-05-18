@@ -316,6 +316,7 @@ void CompilerGLSL::reset(uint32_t iteration_count)
 
 	// Clear invalid expression tracking.
 	invalid_expressions.clear();
+	composite_insert_overwritten.clear();
 	current_function = nullptr;
 
 	// Clear temporary usage tracking.
@@ -4382,6 +4383,11 @@ void CompilerGLSL::handle_invalid_expression(uint32_t id)
 	// This means we need another pass at compilation, but next time,
 	// force temporary variables so that they cannot be invalidated.
 	force_temporary_and_recompile(id);
+
+	// If the invalid expression happened as a result of a CompositeInsert
+	// overwrite, we must block this from happening next iteration.
+	if (composite_insert_overwritten.count(id))
+		block_composite_insert_overwrite.insert(id);
 }
 
 // Converts the format of the current expression from packed to unpacked,
@@ -11108,11 +11114,61 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		flush_variable_declaration(composite);
 
-		// Make a copy, then use access chain to store the variable.
-		statement(declare_temporary(result_type, id), to_expression(composite), ";");
-		set<SPIRExpression>(id, to_name(id), result_type, true);
-		auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
-		statement(chain, " = ", to_unpacked_expression(obj), ";");
+		// CompositeInsert requires a copy + modification, but this is very awkward code in HLL.
+		// Speculate that the input composite is no longer used, and we can modify it in-place.
+		// There are various scenarios where this is not possible to satisfy.
+		bool can_modify_in_place = true;
+		forced_temporaries.insert(id);
+
+		// Cannot safely RMW PHI variables since they have no way to be invalidated,
+		// forcing temporaries is not going to help.
+		// This is similar for Constant and Undef inputs.
+		// The only safe thing to RMW is SPIRExpression.
+		if (invalid_expressions.count(composite) ||
+		    block_composite_insert_overwrite.count(composite) ||
+		    maybe_get<SPIRExpression>(composite) == nullptr)
+		{
+			can_modify_in_place = false;
+		}
+		else if (backend.requires_relaxed_precision_analysis &&
+		         has_decoration(composite, DecorationRelaxedPrecision) !=
+		         has_decoration(id, DecorationRelaxedPrecision) &&
+		         get<SPIRType>(result_type).basetype != SPIRType::Struct)
+		{
+			// Similarly, if precision does not match for input and output,
+			// we cannot alias them. If we write a composite into a relaxed precision
+			// ID, we might get a false truncation.
+			can_modify_in_place = false;
+		}
+
+		if (can_modify_in_place)
+		{
+			// Have to make sure the modified SSA value is bound to a temporary so we can modify it in-place.
+			if (!forced_temporaries.count(composite))
+				force_temporary_and_recompile(composite);
+
+			auto chain = access_chain_internal(composite, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+			statement(chain, " = ", to_unpacked_expression(obj), ";");
+			set<SPIRExpression>(id, to_expression(composite), result_type, true);
+			invalid_expressions.insert(composite);
+			composite_insert_overwritten.insert(composite);
+		}
+		else
+		{
+			if (maybe_get<SPIRUndef>(composite) != nullptr)
+			{
+				emit_uninitialized_temporary_expression(result_type, id);
+			}
+			else
+			{
+				// Make a copy, then use access chain to store the variable.
+				statement(declare_temporary(result_type, id), to_expression(composite), ";");
+				set<SPIRExpression>(id, to_name(id), result_type, true);
+			}
+
+			auto chain = access_chain_internal(id, elems, length, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+			statement(chain, " = ", to_unpacked_expression(obj), ";");
+		}
 
 		break;
 	}

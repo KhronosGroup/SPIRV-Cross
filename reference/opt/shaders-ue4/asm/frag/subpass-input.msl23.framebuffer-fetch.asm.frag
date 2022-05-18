@@ -206,9 +206,9 @@ fragment main0_out main0(constant type_View& View [[buffer(0)]], constant type_G
     float4 _82 = _Globals.ScreenToShadowMatrix * float4((((gl_FragCoord.xy * View.View_BufferSizeAndInvSize.zw) - View.View_ScreenPositionScaleBias.wz) / View.View_ScreenPositionScaleBias.xy) * float2(_68), _68, 1.0);
     float _118 = fast::clamp(((fast::clamp((ShadowDepthTexture.sample(ShadowDepthTextureSampler, (((_82.xyz / float3(_82.w)).xy * _Globals.ShadowTileOffsetAndSize.zw).xy + _Globals.ShadowTileOffsetAndSize.xy).xy, level(0.0)).xxx * float3(_Globals.SoftTransitionScale.z)) - float3((fast::min(_82.z, 0.999989986419677734375) * _Globals.SoftTransitionScale.z) - 1.0), float3(0.0), float3(1.0)).x - 0.5) * _Globals.ShadowSharpen) + 0.5, 0.0, 1.0);
     float3 _127 = mix(_Globals.ModulatedShadowColor.xyz, float3(1.0), float3(mix(1.0, _118 * _118, _Globals.ShadowFadeFraction)));
-    float4 _129 = float4(_127.x, _127.y, _127.z, _58.w);
-    _129.w = 0.0;
-    out.out_var_SV_Target0 = _129;
+    float4 _128 = float4(_127.x, _127.y, _127.z, _58.w);
+    _128.w = 0.0;
+    out.out_var_SV_Target0 = _128;
     return out;
 }
 

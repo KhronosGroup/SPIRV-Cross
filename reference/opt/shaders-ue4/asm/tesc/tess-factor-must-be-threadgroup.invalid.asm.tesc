@@ -160,15 +160,12 @@ kernel void main0(main0_in in [[stage_in]], constant type_Primitive& Primitive [
     threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
     if (gl_InvocationID == 0u)
     {
-        float4 _154 = _88;
+        float4 _154;
         _154.x = 0.5 * (temp_var_hullMainRetVal[1u].TessellationMultiplier + temp_var_hullMainRetVal[2u].TessellationMultiplier);
-        float4 _160 = _154;
-        _160.y = 0.5 * (temp_var_hullMainRetVal[2u].TessellationMultiplier + temp_var_hullMainRetVal[0u].TessellationMultiplier);
-        float4 _165 = _160;
-        _165.z = 0.5 * (temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier);
-        float4 _172 = _165;
-        _172.w = 0.333000004291534423828125 * ((temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier) + temp_var_hullMainRetVal[2u].TessellationMultiplier);
-        float4 _173 = fast::clamp(_172, float4(1.0), float4(15.0));
+        _154.y = 0.5 * (temp_var_hullMainRetVal[2u].TessellationMultiplier + temp_var_hullMainRetVal[0u].TessellationMultiplier);
+        _154.z = 0.5 * (temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier);
+        _154.w = 0.333000004291534423828125 * ((temp_var_hullMainRetVal[0u].TessellationMultiplier + temp_var_hullMainRetVal[1u].TessellationMultiplier) + temp_var_hullMainRetVal[2u].TessellationMultiplier);
+        float4 _173 = fast::clamp(_154, float4(1.0), float4(15.0));
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0u] = half(_173.x);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1u] = half(_173.y);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2u] = half(_173.z);

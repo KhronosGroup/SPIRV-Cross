@@ -78,11 +78,11 @@ fragment main0_out main0(main0_in in [[stage_in]], const device type_StructuredB
     float2 _93 = float2(_Globals.ShadowTileListGroupSize);
     float2 _96 = ((_91 / _93) * float2(2.0)) - float2(1.0);
     float2 _100 = (((_91 + float2(1.0)) / _93) * float2(2.0)) - float2(1.0);
-    float3 _102 = float3(_100.x, _100.y, _70.z);
-    _102.z = 1.0;
+    float3 _101 = float3(_100.x, _100.y, _70.z);
+    _101.z = 1.0;
     uint _103 = in.in_var_TEXCOORD0 * 5u;
     uint _107 = _103 + 1u;
-    if (all(CulledObjectBoxBounds._m0[_107].xy > _96.xy) && all(CulledObjectBoxBounds._m0[_103].xyz < _102))
+    if (all(CulledObjectBoxBounds._m0[_107].xy > _96.xy) && all(CulledObjectBoxBounds._m0[_103].xyz < _101))
     {
         float3 _121 = float3(0.5) * (CulledObjectBoxBounds._m0[_103].xyz + CulledObjectBoxBounds._m0[_107].xyz);
         float _122 = _96.x;
