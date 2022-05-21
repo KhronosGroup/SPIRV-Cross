@@ -645,9 +645,9 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		case BuiltInLayer:
 			if (hlsl_options.shader_model < 50 || get_entry_point().model != ExecutionModelGeometry)
-				SPIRV_CROSS_THROW("Render target index output is only supported in GS 5.0 or higher.");
+				SPIRV_CROSS_THROW("Render target array index output is only supported in GS 5.0 or higher.");
 			type = "uint";
-			semantic = "SV_RenderTargetIndex";
+			semantic = "SV_RenderTargetArrayIndex";
 			break;
 
 		default:
@@ -797,9 +797,9 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 		case BuiltInLayer:
 			if (hlsl_options.shader_model < 50 || get_entry_point().model != ExecutionModelFragment)
-				SPIRV_CROSS_THROW("Render target index input is only supported in PS 5.0 or higher.");
+				SPIRV_CROSS_THROW("Render target array index input is only supported in PS 5.0 or higher.");
 			type = "uint";
-			semantic = "SV_RenderTargetIndex";
+			semantic = "SV_RenderTargetArrayIndex";
 			break;
 
 		default:
