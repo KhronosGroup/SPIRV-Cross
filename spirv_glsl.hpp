@@ -877,6 +877,7 @@ protected:
 	bool requires_transpose_3x3 = false;
 	bool requires_transpose_4x4 = false;
 	bool ray_tracing_is_khr = false;
+	bool barycentric_is_nv = false;
 	void ray_tracing_khr_fixup_locations();
 
 	bool args_will_forward(uint32_t id, const uint32_t *args, uint32_t num_args, bool pure);

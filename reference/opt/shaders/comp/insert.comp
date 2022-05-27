@@ -6,16 +6,9 @@ layout(binding = 0, std430) writeonly buffer SSBO
     vec4 out_data[];
 } _27;
 
-vec4 _53;
-
 void main()
 {
-    vec4 _46;
-    _46.x = 10.0;
-    _46.y = 30.0;
-    _46.z = 70.0;
-    _46.w = 90.0;
-    _27.out_data[gl_GlobalInvocationID.x] = _46;
+    _27.out_data[gl_GlobalInvocationID.x] = vec4(10.0, 30.0, 70.0, 90.0);
     _27.out_data[gl_GlobalInvocationID.x].y = 20.0;
 }
 

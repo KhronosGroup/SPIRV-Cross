@@ -33,10 +33,11 @@ void main()
     for (int _60 = -3; _60 <= 3; )
     {
         float _64 = float(_60);
+        float _68 = exp(((-_64) * _64) * 0.2222220003604888916015625);
         vec4 _72 = texture(SPIRV_Cross_CombinedmapTexturemapSampler, IN_uv + (_45 * _64));
-        float _78 = exp(((-_64) * _64) * 0.2222220003604888916015625) * float(abs(_72.y - _50) < _53);
-        _55 += (_72.x * _78);
-        _58 += _78;
+        float _77 = float(abs(_72.y - _50) < _53);
+        _55 = fma(_72.x, _68 * _77, _55);
+        _58 = fma(_68, _77, _58);
         _60++;
         continue;
     }

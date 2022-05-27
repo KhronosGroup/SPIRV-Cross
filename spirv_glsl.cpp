@@ -619,6 +619,11 @@ void CompilerGLSL::find_static_extensions()
 			SPIRV_CROSS_THROW("OVR_multiview2 can only be used with Vertex shaders.");
 		require_extension_internal("GL_OVR_multiview2");
 	}
+
+	// KHR one is likely to get promoted at some point, so if we don't see an explicit SPIR-V extension, assume KHR.
+	for (auto &ext : ir.declared_extensions)
+		if (ext == "SPV_NV_fragment_shader_barycentric")
+			barycentric_is_nv = true;
 }
 
 void CompilerGLSL::ray_tracing_khr_fixup_locations()
@@ -1206,14 +1211,23 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 		res += "__explicitInterpAMD ";
 	}
 
-	if (flags.get(DecorationPerVertexNV))
+	if (flags.get(DecorationPerVertexKHR))
 	{
 		if (options.es && options.version < 320)
-			SPIRV_CROSS_THROW("pervertexNV requires ESSL 320.");
+			SPIRV_CROSS_THROW("pervertexEXT requires ESSL 320.");
 		else if (!options.es && options.version < 450)
-			SPIRV_CROSS_THROW("pervertexNV requires GLSL 450.");
-		require_extension_internal("GL_NV_fragment_shader_barycentric");
-		res += "pervertexNV ";
+			SPIRV_CROSS_THROW("pervertexEXT requires GLSL 450.");
+
+		if (barycentric_is_nv)
+		{
+			require_extension_internal("GL_NV_fragment_shader_barycentric");
+			res += "pervertexNV ";
+		}
+		else
+		{
+			require_extension_internal("GL_EXT_fragment_shader_barycentric");
+			res += "pervertexEXT ";
+		}
 	}
 
 	return res;
@@ -8758,24 +8772,42 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInIncomingRayFlagsKHR:
 		return ray_tracing_is_khr ? "gl_IncomingRayFlagsEXT" : "gl_IncomingRayFlagsNV";
 
-	case BuiltInBaryCoordNV:
+	case BuiltInBaryCoordKHR:
 	{
 		if (options.es && options.version < 320)
-			SPIRV_CROSS_THROW("gl_BaryCoordNV requires ESSL 320.");
+			SPIRV_CROSS_THROW("gl_BaryCoordEXT requires ESSL 320.");
 		else if (!options.es && options.version < 450)
-			SPIRV_CROSS_THROW("gl_BaryCoordNV requires GLSL 450.");
-		require_extension_internal("GL_NV_fragment_shader_barycentric");
-		return "gl_BaryCoordNV";
+			SPIRV_CROSS_THROW("gl_BaryCoordEXT requires GLSL 450.");
+
+		if (barycentric_is_nv)
+		{
+			require_extension_internal("GL_NV_fragment_shader_barycentric");
+			return "gl_BaryCoordNV";
+		}
+		else
+		{
+			require_extension_internal("GL_EXT_fragment_shader_barycentric");
+			return "gl_BaryCoordEXT";
+		}
 	}
 
 	case BuiltInBaryCoordNoPerspNV:
 	{
 		if (options.es && options.version < 320)
-			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspNV requires ESSL 320.");
+			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspEXT requires ESSL 320.");
 		else if (!options.es && options.version < 450)
-			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspNV requires GLSL 450.");
-		require_extension_internal("GL_NV_fragment_shader_barycentric");
-		return "gl_BaryCoordNoPerspNV";
+			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspEXT requires GLSL 450.");
+
+		if (barycentric_is_nv)
+		{
+			require_extension_internal("GL_NV_fragment_shader_barycentric");
+			return "gl_BaryCoordNoPerspNV";
+		}
+		else
+		{
+			require_extension_internal("GL_EXT_fragment_shader_barycentric");
+			return "gl_BaryCoordNoPerspEXT";
+		}
 	}
 
 	case BuiltInFragStencilRefEXT:
