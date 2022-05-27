@@ -6066,6 +6066,16 @@ void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id,
 void CompilerGLSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op)
 {
+	auto &type = get<SPIRType>(result_type);
+	if (type_is_floating_point(type))
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Floating point atomics requires Vulkan semantics.");
+		if (options.es)
+			SPIRV_CROSS_THROW("Floating point atomics requires desktop GLSL.");
+		require_extension_internal("GL_EXT_shader_atomic_float");
+	}
+
 	forced_temporaries.insert(result_id);
 	emit_op(result_type, result_id,
 	        join(op, "(", to_non_uniform_aware_expression(op0), ", ",
@@ -12182,6 +12192,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	case OpAtomicIAdd:
+	case OpAtomicFAddEXT:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAdd" : "atomicAdd";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
