@@ -276,7 +276,7 @@ struct main0_patchIn
     float4 _111 = float4(gl_TessCoord.x);
     float4 _113 = float4(gl_TessCoord.y);
     float4 _116 = float4(gl_TessCoord.z);
-    float4 _118 = ((_97[0] * _111) + (_97[1] * _113)) + (_97[2] * _116);
+    float4 _118 = fma(_97[2], _116, fma(_97[0], _111, _97[1] * _113));
     spvUnsafeArray<float4, 1> _72;
     _72 = _79[0];
     spvUnsafeArray<float4, 1> _71;
@@ -286,7 +286,7 @@ struct main0_patchIn
     spvUnsafeArray<float4, 1> _73;
     for (int _133 = 0; _133 < 1; )
     {
-        _73[_133] = (_72[_133] * _111) + (_71[_133] * _113);
+        _73[_133] = fma(_72[_133], _111, _71[_133] * _113);
         _133++;
         continue;
     }
@@ -295,22 +295,22 @@ struct main0_patchIn
     spvUnsafeArray<float4, 1> _74;
     _74 = _79[2];
     float3 _155 = float3(gl_TessCoord.z);
-    float3 _157 = ((_77[0].xyz * _120) + (_77[1].xyz * _123)).xyz + (_77[2].xyz * _155);
+    float3 _157 = fma(_77[2].xyz, _155, fma(_77[0].xyz, _120, _77[1].xyz * _123).xyz);
     spvUnsafeArray<float4, 1> _76;
     for (int _164 = 0; _164 < 1; )
     {
-        _76[_164] = _75[_164] + (_74[_164] * _116);
+        _76[_164] = fma(_74[_164], _116, _75[_164]);
         _164++;
         continue;
     }
     float4 _181 = float4(_118.x, _118.y, _118.z, _118.w);
     out.out_var_TEXCOORD10_centroid = float4(_157.x, _157.y, _157.z, _68.w);
-    out.out_var_TEXCOORD11_centroid = ((_78[0] * _111) + (_78[1] * _113)) + (_78[2] * _116);
+    out.out_var_TEXCOORD11_centroid = fma(_78[2], _116, fma(_78[0], _111, _78[1] * _113));
     out_var_TEXCOORD0 = _76;
-    out.out_var_COLOR1 = ((_80[0] * _111) + (_80[1] * _113)) + (_80[2] * _116);
-    out.out_var_COLOR2 = ((_81[0] * _111) + (_81[1] * _113)) + (_81[2] * _116);
+    out.out_var_COLOR1 = fma(_80[2], _116, fma(_80[0], _111, _80[1] * _113));
+    out.out_var_COLOR2 = fma(_81[2], _116, fma(_81[0], _111, _81[1] * _113));
     out.out_var_TEXCOORD6 = _181;
-    out.out_var_TEXCOORD7 = ((_98[0] * _120) + (_98[1] * _123)) + (_98[2] * _155);
+    out.out_var_TEXCOORD7 = fma(_98[2], _155, fma(_98[0], _120, _98[1] * _123));
     out.gl_Position = View.View_TranslatedWorldToClip * _181;
     out.out_var_TEXCOORD0_0 = out_var_TEXCOORD0[0];
     return out;

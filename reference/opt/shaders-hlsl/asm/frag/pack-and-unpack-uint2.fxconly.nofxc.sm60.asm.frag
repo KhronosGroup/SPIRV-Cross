@@ -7,8 +7,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    uint2 unpacked = uint2(18u, 52u);
-    FragColor = float4(float(unpacked.x), float(unpacked.y), 1.0f, 1.0f);
+    FragColor = float4(18.0f, 52.0f, 1.0f, 1.0f);
 }
 
 SPIRV_Cross_Output main()
