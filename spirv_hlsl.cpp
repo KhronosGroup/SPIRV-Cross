@@ -2776,7 +2776,7 @@ void CompilerHLSL::emit_hlsl_patch_constant_func()
 {
 	SmallVector<string> arguments;
 	if (require_input)
-		arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input, 32> gl_in");
+    arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input,32> gl_in");
 
 	statement("SPIRV_Cross_Output", " tesc_patch_constant(", merge(arguments), ")");
 	begin_scope();
@@ -2875,13 +2875,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	{
 	case ExecutionModelTessellationControl:
 		arguments.push_back("SPIRV_Cross_Input stage_input");
-		arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input, 32> gl_in");
+    arguments.push_back("InputPatch<SPIRV_Cross_HS_Point_Input,32> gl_in");
 		break;
 
 	case ExecutionModelTessellationEvaluation:
 		arguments.push_back("SPIRV_Cross_Input stage_input");
 		if (require_input)
-			arguments.push_back("OutputPatch<SPIRV_Cross_DS_Point_Input, 3> gl_in");
+      arguments.push_back("OutputPatch<SPIRV_Cross_DS_Point_Input,3> gl_in");
 		break;
 
 	default:
