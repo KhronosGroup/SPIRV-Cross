@@ -104,7 +104,7 @@ int main()
 	spirv_cross::CompilerGLSL::Options options;
 	options.version = 310;
 	options.es = true;
-	glsl.set_options(options);
+	glsl.set_common_options(options);
 
 	// Compile to GLSL, ready to give to GL driver.
 	std::string source = glsl.compile();
