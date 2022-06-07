@@ -405,10 +405,9 @@ void CompilerGLSL::find_static_extensions()
 		}
 		else if (type.basetype == SPIRType::Int64 || type.basetype == SPIRType::UInt64)
 		{
-			if (options.es)
-				SPIRV_CROSS_THROW("64-bit integers not supported in ES profile.");
-			if (!options.es)
-				require_extension_internal("GL_ARB_gpu_shader_int64");
+			if (options.es && options.version < 310) // GL_NV_gpu_shader5 fallback requires 310.
+				SPIRV_CROSS_THROW("64-bit integers not supported in ES profile before version 310.");
+			require_extension_internal("GL_ARB_gpu_shader_int64");
 		}
 		else if (type.basetype == SPIRType::Half)
 		{
@@ -826,7 +825,20 @@ void CompilerGLSL::emit_header()
 
 	for (auto &ext : forced_extensions)
 	{
-		if (ext == "GL_EXT_shader_explicit_arithmetic_types_float16")
+		if (ext == "GL_ARB_gpu_shader_int64")
+		{
+			statement("#if defined(GL_ARB_gpu_shader_int64)");
+			statement("#extension GL_ARB_gpu_shader_int64 : require");
+			if (!options.vulkan_semantics || options.es)
+			{
+				statement("#elif defined(GL_NV_gpu_shader5)");
+				statement("#extension GL_NV_gpu_shader5 : require");
+			}
+			statement("#else");
+			statement("#error No extension available for 64-bit integers.");
+			statement("#endif");
+		}
+		else if (ext == "GL_EXT_shader_explicit_arithmetic_types_float16")
 		{
 			// Special case, this extension has a potential fallback to another vendor extension in normal GLSL.
 			// GL_AMD_gpu_shader_half_float is a superset, so try that first.
@@ -846,13 +858,30 @@ void CompilerGLSL::emit_header()
 			statement("#error No extension available for FP16.");
 			statement("#endif");
 		}
+		else if (ext == "GL_EXT_shader_explicit_arithmetic_types_int8")
+		{
+			if (options.vulkan_semantics)
+				statement("#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require");
+			else
+			{
+				statement("#if defined(GL_EXT_shader_explicit_arithmetic_types_int8)");
+				statement("#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require");
+				statement("#elif defined(GL_NV_gpu_shader5)");
+				statement("#extension GL_NV_gpu_shader5 : require");
+				statement("#else");
+				statement("#error No extension available for Int8.");
+				statement("#endif");
+			}
+		}
 		else if (ext == "GL_EXT_shader_explicit_arithmetic_types_int16")
 		{
 			if (options.vulkan_semantics)
 				statement("#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require");
 			else
 			{
-				statement("#if defined(GL_AMD_gpu_shader_int16)");
+				statement("#if defined(GL_EXT_shader_explicit_arithmetic_types_int16)");
+				statement("#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require");
+				statement("#elif defined(GL_AMD_gpu_shader_int16)");
 				statement("#extension GL_AMD_gpu_shader_int16 : require");
 				statement("#elif defined(GL_NV_gpu_shader5)");
 				statement("#extension GL_NV_gpu_shader5 : require");
@@ -5313,8 +5342,8 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 
 			uint64_t u64_value = c.scalar_u64(col, row);
 
-			if (options.es)
-				SPIRV_CROSS_THROW("64-bit integers/float not supported in ES profile.");
+			if (options.es && options.version < 310) // GL_NV_gpu_shader5 fallback requires 310.
+				SPIRV_CROSS_THROW("64-bit integers not supported in ES profile before version 310.");
 			require_extension_internal("GL_ARB_gpu_shader_int64");
 
 			char print_buffer[64];

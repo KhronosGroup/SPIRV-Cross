@@ -6,7 +6,9 @@
 #else
 #error No extension available for FP16.
 #endif
-#if defined(GL_AMD_gpu_shader_int16)
+#if defined(GL_EXT_shader_explicit_arithmetic_types_int16)
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
+#elif defined(GL_AMD_gpu_shader_int16)
 #extension GL_AMD_gpu_shader_int16 : require
 #elif defined(GL_NV_gpu_shader5)
 #extension GL_NV_gpu_shader5 : require
