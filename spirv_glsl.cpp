@@ -13379,9 +13379,30 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 #undef GLSL_RAY_QUERY_GET_OP2
 
 	case OpConvertUToAccelerationStructureKHR:
+	{
 		require_extension_internal("GL_EXT_ray_tracing");
-		GLSL_UFOP(accelerationStructureEXT);
+
+		bool elide_temporary = should_forward(ops[2]) && forced_temporaries.count(ops[1]) == 0 &&
+		                       !hoisted_temporaries.count(ops[1]);
+
+		if (elide_temporary)
+		{
+			GLSL_UFOP(accelerationStructureEXT);
+		}
+		else
+		{
+			// Force this path in subsequent iterations.
+			forced_temporaries.insert(ops[1]);
+
+			// We cannot declare a temporary acceleration structure in GLSL.
+			// If we get to this point, we'll have to emit a temporary uvec2,
+			// and cast to RTAS on demand.
+			statement(declare_temporary(expression_type_id(ops[2]), ops[1]), to_unpacked_expression(ops[2]), ";");
+			// Use raw SPIRExpression interface to block all usage tracking.
+			set<SPIRExpression>(ops[1], join("accelerationStructureEXT(", to_name(ops[1]), ")"), ops[0], true);
+		}
 		break;
+	}
 
 	case OpConvertUToPtr:
 	{
