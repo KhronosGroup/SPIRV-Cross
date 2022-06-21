@@ -659,6 +659,16 @@ void Parser::parse(const Instruction &instruction)
 	{
 		uint32_t id = ops[0];
 
+		// The type may have previously been declared as an OpTypeForwardPointer.
+		// If so, we want to retain that knowledge, in case content needs to be emitted
+		// relative to when the forward pointer was declared, not when the pointer is
+		// declared. SPIR-V allows composites to contain a type that has only been
+		// declared as a forward pointer when the composite is defined, but in many
+		// languages, it is necessary to emit the component before the composite.
+		// Retrieve this info *before* overwriting the type info for the id below.
+		auto *fwd_ptr = maybe_get<SPIRType>(id);
+		bool was_fwd_ptr = fwd_ptr && fwd_ptr->forward_pointer;
+
 		// Very rarely, we might receive a FunctionPrototype here.
 		// We won't be able to compile it, but we shouldn't crash when parsing.
 		// We should be able to reflect.
@@ -671,6 +681,7 @@ void Parser::parse(const Instruction &instruction)
 		ptrbase.pointer = true;
 		ptrbase.pointer_depth++;
 		ptrbase.storage = static_cast<StorageClass>(ops[1]);
+		ptrbase.was_forward_referenced = was_fwd_ptr;
 
 		if (ptrbase.storage == StorageClassAtomicCounter)
 			ptrbase.basetype = SPIRType::AtomicCounter;
