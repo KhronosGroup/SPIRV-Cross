@@ -5213,7 +5213,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 	}
 }
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 // snprintf does not exist or is buggy on older MSVC versions, some of them
 // being used by MinGW. Use sprintf instead and disable corresponding warning.
 #pragma warning(push)
@@ -5408,7 +5408,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 	return res;
 }
 
-#ifdef _WIN32
+#ifdef _MSC_VER
 #pragma warning(pop)
 #endif
 
