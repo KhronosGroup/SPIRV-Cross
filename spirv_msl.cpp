@@ -16405,6 +16405,20 @@ void CompilerMSL::emit_block_hints(const SPIRBlock &)
 string CompilerMSL::additional_fixed_sample_mask_str() const
 {
 	char print_buffer[32];
+#ifdef _MSC_VER
+	// snprintf does not exist or is buggy on older MSVC versions, some of
+	// them being used by MinGW. Use sprintf instead and disable
+	// corresponding warning.
+#pragma warning(push)
+#pragma warning(disable : 4996)
+#endif
+#if _WIN32
 	sprintf(print_buffer, "0x%x", msl_options.additional_fixed_sample_mask);
+#else
+	snprintf(print_buffer, sizeof(print_buffer), "0x%x", msl_options.additional_fixed_sample_mask);
+#endif
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 	return print_buffer;
 }
