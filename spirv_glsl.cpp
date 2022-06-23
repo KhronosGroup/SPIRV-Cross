@@ -5213,9 +5213,9 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 	}
 }
 
-#ifdef _MSC_VER
-// sprintf warning.
-// We cannot rely on snprintf existing because, ..., MSVC.
+#ifdef _WIN32
+// snprintf does not exist or is buggy on older MSVC versions, some of them
+// being used by MinGW. Use sprintf instead and disable corresponding warning.
 #pragma warning(push)
 #pragma warning(disable : 4996)
 #endif
@@ -5275,7 +5275,11 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 			in_type.width = 32;
 
 			char print_buffer[32];
+#ifdef _WIN32
+			sprintf(print_buffer, "0x%xu", c.scalar(col, row));
+#else
 			snprintf(print_buffer, sizeof(print_buffer), "0x%xu", c.scalar(col, row));
+#endif
 
 			const char *comment = "inf";
 			if (float_value == -numeric_limits<float>::infinity())
@@ -5347,8 +5351,13 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 			require_extension_internal("GL_ARB_gpu_shader_int64");
 
 			char print_buffer[64];
+#ifdef _WIN32
+			sprintf(print_buffer, "0x%llx%s", static_cast<unsigned long long>(u64_value),
+			        backend.long_long_literal_suffix ? "ull" : "ul");
+#else
 			snprintf(print_buffer, sizeof(print_buffer), "0x%llx%s", static_cast<unsigned long long>(u64_value),
 			         backend.long_long_literal_suffix ? "ull" : "ul");
+#endif
 
 			const char *comment = "inf";
 			if (double_value == -numeric_limits<double>::infinity())
@@ -5399,7 +5408,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 	return res;
 }
 
-#ifdef _MSC_VER
+#ifdef _WIN32
 #pragma warning(pop)
 #endif
 
