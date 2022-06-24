@@ -3,20 +3,23 @@
 
 using namespace metal;
 
+struct Position;
+struct PositionReferences;
+
 struct Position
 {
     float2 positions[1];
-};
-
-struct PositionReferences
-{
-    device Position* buffers[1];
 };
 
 struct Registers
 {
     float4x4 view_projection;
     device PositionReferences* references;
+};
+
+struct PositionReferences
+{
+    device Position* buffers[1];
 };
 
 struct main0_out

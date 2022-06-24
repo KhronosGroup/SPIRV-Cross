@@ -591,7 +591,6 @@ struct SPIRType : IVariant
 	uint32_t pointer_depth = 0;
 	bool pointer = false;
 	bool forward_pointer = false;
-	bool was_forward_referenced = false;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
 

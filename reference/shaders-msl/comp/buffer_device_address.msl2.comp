@@ -3,20 +3,23 @@
 
 using namespace metal;
 
+struct Position;
+struct PositionReferences;
+
 struct Position
 {
     float2 positions[1];
-};
-
-struct PositionReferences
-{
-    device Position* buffers[1];
 };
 
 struct Registers
 {
     device PositionReferences* references;
     float fract_time;
+};
+
+struct PositionReferences
+{
+    device Position* buffers[1];
 };
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(8u, 8u, 1u);

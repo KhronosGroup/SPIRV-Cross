@@ -6804,6 +6804,25 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	// these types for purpose of iterating over them in ir.ids_for_type and friends.
 	auto loop_lock = ir.create_loop_soft_lock();
 
+	// Physical storage buffer pointers can have cyclical references,
+	// so emit forward declarations of them before other structs.
+	// Ignore type_id because we want the underlying struct type from the pointer.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t /* type_id */, const SPIRType &type) {
+		if (type.basetype == SPIRType::Struct &&
+			type.pointer && type.storage == StorageClassPhysicalStorageBuffer &&
+			declared_structs.count(type.self) == 0)
+		{
+			statement("struct ", to_name(type.self), ";");
+			declared_structs.insert(type.self);
+			emitted = true;
+		}
+	});
+	if (emitted)
+		statement("");
+
+	emitted = false;
+	declared_structs.clear();
+
 	for (auto &id_ : ir.ids_for_constant_or_type)
 	{
 		auto &id = ir.ids[id_];
@@ -6880,9 +6899,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 			auto &type = id.get<SPIRType>();
 			TypeID type_id = type.self;
 
-			// Forward references can change the declaration dependency order.
-			// Ensure that change is considered when emitting MSL structs, which must be emitted in dependency order.
-			bool is_struct = (type.basetype == SPIRType::Struct) && type.array.empty() && (!type.pointer || type.was_forward_referenced);
+			bool is_struct = (type.basetype == SPIRType::Struct) && type.array.empty() && !type.pointer;
 			bool is_block =
 			    has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
 
@@ -13543,7 +13560,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		const char *restrict_kw;
 
 		auto type_address_space = get_type_address_space(type, id);
-		const auto* p_parent_type = &get<SPIRType>(type.parent_type);
+		const auto *p_parent_type = &get<SPIRType>(type.parent_type);
 
 		// Work around C pointer qualifier rules. If glsl_type is a pointer type as well
 		// we'll need to emit the address space to the right.
@@ -13556,7 +13573,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		{
 			// Since this is not a pointer-to-pointer, ensure we've dug down to the base type.
 			// Some situations chain pointers even though they are not formally pointers-of-pointers.
-			while(type_is_pointer(*p_parent_type))
+			while (type_is_pointer(*p_parent_type))
 				p_parent_type = &get<SPIRType>(p_parent_type->parent_type);
 
 			type_name = join(type_address_space, " ", type_to_glsl(*p_parent_type, id));

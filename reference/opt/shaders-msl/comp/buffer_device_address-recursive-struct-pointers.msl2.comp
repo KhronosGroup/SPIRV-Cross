@@ -3,7 +3,9 @@
 
 using namespace metal;
 
-struct t21
+struct t21;
+
+struct t24
 {
     int4 m0[2];
     int m1;
@@ -12,7 +14,7 @@ struct t21
     float2x4 m4;
 };
 
-struct t24
+struct t21
 {
     int4 m0[2];
     int m1;
