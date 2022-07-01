@@ -15099,8 +15099,7 @@ uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_p
 
 		// Work our way through potentially layered arrays,
 		// stopping when we hit a pointer that is not also an array.
-		size_t dim_cnt = type.array.size();
-		int32_t dim_idx = dim_cnt - 1;
+		int32_t dim_idx = (int32_t)type.array.size() - 1;
 		auto *p_type = &type;
 		while (!type_is_pointer(*p_type) && dim_idx >= 0)
 		{
