@@ -1,0 +1,26 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct SSBO;
+
+struct UBO
+{
+    uint2 b;
+};
+
+struct SSBO
+{
+    packed_float3 a1;
+    float a2;
+};
+
+kernel void main0(constant UBO& _10 [[buffer(0)]])
+{
+    ((device SSBO*)as_type<uint64_t>(_10.b))->a1 = float3(1.0, 2.0, 3.0);
+    uint2 v2 = as_type<uint2>((uint64_t)((device SSBO*)as_type<uint64_t>(_10.b + uint2(32u))));
+    float3 v3 = float3(((device SSBO*)as_type<uint64_t>(v2))->a1);
+    ((device SSBO*)as_type<uint64_t>(v2))->a1 = v3 + float3(1.0);
+}
+

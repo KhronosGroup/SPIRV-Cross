@@ -1967,6 +1967,13 @@ void CompilerMSL::mark_packable_structs()
 				mark_as_packable(type);
 		}
 	});
+
+	// Physical storage buffer pointers can appear outside of the context of a variable, if the address
+	// is calculated from a ulong or uvec2 and cast to a pointer, so check if they need to be packed too.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+		if (type.basetype == SPIRType::Struct && type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
+			mark_as_packable(type);
+	});
 }
 
 // If the specified type is a struct, it and any nested structs
@@ -4325,8 +4332,17 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 
 		auto physical_type = mbr_type;
 		physical_type.vecsize = elems_per_stride;
-		if (!is_buff_ptr)
-			physical_type.parent_type = 0;
+		physical_type.parent_type = 0;
+
+		// If this is a physical buffer pointer, replace type with a ulongn vector.
+		if (is_buff_ptr)
+		{
+			physical_type.width = 64;
+			physical_type.basetype = to_unsigned_basetype(physical_type.width);
+			physical_type.pointer = false;
+			physical_type.pointer_depth = false;
+			physical_type.forward_pointer = false;
+		}
 
 		uint32_t type_id = ir.increase_bound_by(1);
 		set<SPIRType>(type_id, physical_type);
@@ -7707,6 +7723,23 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	}
 	// Save this to the access chain itself so we can recover it later when calling an interpolation function.
 	set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, interface_index);
+}
+
+
+// If the physical type of a physical buffer pointer has been changed
+// to a ulong or ulongn vector, add a cast back to the pointer type.
+void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type)
+{
+	auto *p_physical_type = maybe_get<SPIRType>(physical_type);
+	if (p_physical_type &&
+		p_physical_type->storage == StorageClassPhysicalStorageBuffer &&
+		p_physical_type->basetype == to_unsigned_basetype(64))
+	{
+		if (p_physical_type->vecsize > 1)
+			expr += ".x";
+
+		expr = join("((", type_to_glsl(*type), ")", expr, ")");
+	}
 }
 
 // Override for MSL-specific syntax instructions
@@ -14362,18 +14395,31 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	// size (eg. short shift right becomes int), which means chaining integer ops
 	// together may introduce size variations that SPIR-V doesn't know about.
 	if (same_size_cast && !integral_cast)
-	{
 		return "as_type<" + type_to_glsl(out_type) + ">";
-	}
 	else
-	{
 		return type_to_glsl(out_type);
-	}
 }
 
-bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
+bool CompilerMSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0)
 {
-	return false;
+	auto &out_type = get<SPIRType>(result_type);
+	auto &in_type = expression_type(op0);
+	bool uvec2_to_ptr = (in_type.basetype == SPIRType::UInt && in_type.vecsize == 2 &&
+						 out_type.pointer && out_type.storage == StorageClassPhysicalStorageBuffer);
+	bool ptr_to_uvec2 = (in_type.pointer && in_type.storage == StorageClassPhysicalStorageBuffer &&
+						 out_type.basetype == SPIRType::UInt && out_type.vecsize == 2);
+	string expr;
+
+	// Casting between uvec2 and buffer storage pointer per GL_EXT_buffer_reference_uvec2
+	if (uvec2_to_ptr)
+		expr = join("((", type_to_glsl(out_type), ")as_type<uint64_t>(", to_unpacked_expression(op0), "))");
+	else if (ptr_to_uvec2)
+		expr = join("as_type<", type_to_glsl(out_type), ">((uint64_t)", to_unpacked_expression(op0), ")");
+	else
+		return false;
+
+	emit_op(result_type, id, expr, should_forward(op0));
+	return true;
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin.
@@ -15050,9 +15096,18 @@ uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_p
 	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
 	{
 		uint32_t type_size = 8 * (type.vecsize == 3 ? 4 : type.vecsize);
+
+		// Work our way through potentially layered arrays,
+		// stopping when we hit a pointer that is not also an array.
 		size_t dim_cnt = type.array.size();
-		for (uint32_t dim_idx = 0; dim_idx < dim_cnt; dim_idx++)
-			type_size *= to_array_size_literal(type, dim_idx);
+		int32_t dim_idx = dim_cnt - 1;
+		auto *p_type = &type;
+		while (!type_is_pointer(*p_type) && dim_idx >= 0)
+		{
+			type_size *= to_array_size_literal(*p_type, dim_idx);
+			p_type = &get<SPIRType>(p_type->parent_type);
+			dim_idx--;
+		}
 
 		return type_size;
 	}
