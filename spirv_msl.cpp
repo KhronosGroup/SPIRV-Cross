@@ -1967,6 +1967,13 @@ void CompilerMSL::mark_packable_structs()
 				mark_as_packable(type);
 		}
 	});
+
+	// Physical storage buffer pointers can appear outside of the context of a variable, if the address
+	// is calculated from a ulong or uvec2 and cast to a pointer, so check if they need to be packed too.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
+		if (type.basetype == SPIRType::Struct && type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
+			mark_as_packable(type);
+	});
 }
 
 // If the specified type is a struct, it and any nested structs
@@ -1980,7 +1987,8 @@ void CompilerMSL::mark_as_packable(SPIRType &type)
 		return;
 	}
 
-	if (type.basetype == SPIRType::Struct)
+	// Handle possible recursion when a struct contains a pointer to its own type nested somewhere.
+	if (type.basetype == SPIRType::Struct && !has_extended_decoration(type.self, SPIRVCrossDecorationBufferBlockRepacked))
 	{
 		set_extended_decoration(type.self, SPIRVCrossDecorationBufferBlockRepacked);
 
@@ -4039,6 +4047,10 @@ uint32_t CompilerMSL::ensure_correct_input_type(uint32_t type_id, uint32_t locat
 
 void CompilerMSL::mark_struct_members_packed(const SPIRType &type)
 {
+	// Handle possible recursion when a struct contains a pointer to its own type nested somewhere.
+	if (has_extended_decoration(type.self, SPIRVCrossDecorationPhysicalTypePacked))
+		return;
+
 	set_extended_decoration(type.self, SPIRVCrossDecorationPhysicalTypePacked);
 
 	// Problem case! Struct needs to be placed at an awkward alignment.
@@ -4065,8 +4077,9 @@ void CompilerMSL::mark_scalar_layout_structs(const SPIRType &type)
 	uint32_t mbr_cnt = uint32_t(type.member_types.size());
 	for (uint32_t i = 0; i < mbr_cnt; i++)
 	{
+		// Handle possible recursion when a struct contains a pointer to its own type nested somewhere.
 		auto &mbr_type = get<SPIRType>(type.member_types[i]);
-		if (mbr_type.basetype == SPIRType::Struct)
+		if (mbr_type.basetype == SPIRType::Struct && !(mbr_type.pointer && mbr_type.storage == StorageClassPhysicalStorageBuffer))
 		{
 			auto *struct_type = &mbr_type;
 			while (!struct_type->array.empty())
@@ -4278,8 +4291,10 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 	// This case will be nightmare-ish to deal with. This could possibly happen if struct alignment does not quite
 	// match up with what we want. Scalar block layout comes to mind here where we might have to work around the rule
 	// that struct alignment == max alignment of all members and struct size depends on this alignment.
+	// Can't repack structs, but can repack pointers to structs.
 	auto &mbr_type = get<SPIRType>(ib_type.member_types[index]);
-	if (mbr_type.basetype == SPIRType::Struct)
+	bool is_buff_ptr = mbr_type.pointer && mbr_type.storage == StorageClassPhysicalStorageBuffer;
+	if (mbr_type.basetype == SPIRType::Struct && !is_buff_ptr)
 		SPIRV_CROSS_THROW("Cannot perform any repacking for structs when it is used as a member of another struct.");
 
 	// Perform remapping here.
@@ -4306,7 +4321,9 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		for (uint32_t dim = 0; dim < dimensions; dim++)
 			array_stride /= max(to_array_size_literal(mbr_type, dim), 1u);
 
-		uint32_t elems_per_stride = array_stride / (mbr_type.width / 8);
+		// Pointers are 8 bytes
+		uint32_t mbr_width_in_bytes = is_buff_ptr ? 8 : (mbr_type.width / 8);
+		uint32_t elems_per_stride = array_stride / mbr_width_in_bytes;
 
 		if (elems_per_stride == 3)
 			SPIRV_CROSS_THROW("Cannot use ArrayStride of 3 elements in remapping scenarios.");
@@ -4316,6 +4333,17 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		auto physical_type = mbr_type;
 		physical_type.vecsize = elems_per_stride;
 		physical_type.parent_type = 0;
+
+		// If this is a physical buffer pointer, replace type with a ulongn vector.
+		if (is_buff_ptr)
+		{
+			physical_type.width = 64;
+			physical_type.basetype = to_unsigned_basetype(physical_type.width);
+			physical_type.pointer = false;
+			physical_type.pointer_depth = false;
+			physical_type.forward_pointer = false;
+		}
+
 		uint32_t type_id = ir.increase_bound_by(1);
 		set<SPIRType>(type_id, physical_type);
 		set_extended_member_decoration(ib_type.self, index, SPIRVCrossDecorationPhysicalTypeID, type_id);
@@ -6792,6 +6820,25 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	// these types for purpose of iterating over them in ir.ids_for_type and friends.
 	auto loop_lock = ir.create_loop_soft_lock();
 
+	// Physical storage buffer pointers can have cyclical references,
+	// so emit forward declarations of them before other structs.
+	// Ignore type_id because we want the underlying struct type from the pointer.
+	ir.for_each_typed_id<SPIRType>([&](uint32_t /* type_id */, const SPIRType &type) {
+		if (type.basetype == SPIRType::Struct &&
+			type.pointer && type.storage == StorageClassPhysicalStorageBuffer &&
+			declared_structs.count(type.self) == 0)
+		{
+			statement("struct ", to_name(type.self), ";");
+			declared_structs.insert(type.self);
+			emitted = true;
+		}
+	});
+	if (emitted)
+		statement("");
+
+	emitted = false;
+	declared_structs.clear();
+
 	for (auto &id_ : ir.ids_for_constant_or_type)
 	{
 		auto &id = ir.ids[id_];
@@ -7676,6 +7723,23 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 	}
 	// Save this to the access chain itself so we can recover it later when calling an interpolation function.
 	set_extended_decoration(ops[1], SPIRVCrossDecorationInterfaceMemberIndex, interface_index);
+}
+
+
+// If the physical type of a physical buffer pointer has been changed
+// to a ulong or ulongn vector, add a cast back to the pointer type.
+void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type)
+{
+	auto *p_physical_type = maybe_get<SPIRType>(physical_type);
+	if (p_physical_type &&
+		p_physical_type->storage == StorageClassPhysicalStorageBuffer &&
+		p_physical_type->basetype == to_unsigned_basetype(64))
+	{
+		if (p_physical_type->vecsize > 1)
+			expr += ".x";
+
+		expr = join("((", type_to_glsl(*type), ")", expr, ")");
+	}
 }
 
 // Override for MSL-specific syntax instructions
@@ -11400,6 +11464,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		break;
 
 	case StorageClassStorageBuffer:
+	case StorageClassPhysicalStorageBuffer:
 	{
 		// For arguments from variable pointers, we use the write count deduction, so
 		// we should not assume any constness here. Only for global SSBOs.
@@ -13528,7 +13593,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		const char *restrict_kw;
 
 		auto type_address_space = get_type_address_space(type, id);
-		auto type_decl = type_to_glsl(get<SPIRType>(type.parent_type), id);
+		const auto *p_parent_type = &get<SPIRType>(type.parent_type);
 
 		// Work around C pointer qualifier rules. If glsl_type is a pointer type as well
 		// we'll need to emit the address space to the right.
@@ -13536,9 +13601,16 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		// Prefer emitting thread T *foo over T thread* foo since it's more readable,
 		// but we'll have to emit thread T * thread * T constant bar; for example.
 		if (type_is_pointer_to_pointer(type))
-			type_name = join(type_decl, " ", type_address_space, " ");
+			type_name = join(type_to_glsl(*p_parent_type, id), " ", type_address_space, " ");
 		else
-			type_name = join(type_address_space, " ", type_decl);
+		{
+			// Since this is not a pointer-to-pointer, ensure we've dug down to the base type.
+			// Some situations chain pointers even though they are not formally pointers-of-pointers.
+			while (type_is_pointer(*p_parent_type))
+				p_parent_type = &get<SPIRType>(p_parent_type->parent_type);
+
+			type_name = join(type_address_space, " ", type_to_glsl(*p_parent_type, id));
+		}
 
 		switch (type.basetype)
 		{
@@ -14323,18 +14395,31 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 	// size (eg. short shift right becomes int), which means chaining integer ops
 	// together may introduce size variations that SPIR-V doesn't know about.
 	if (same_size_cast && !integral_cast)
-	{
 		return "as_type<" + type_to_glsl(out_type) + ">";
-	}
 	else
-	{
 		return type_to_glsl(out_type);
-	}
 }
 
-bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
+bool CompilerMSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0)
 {
-	return false;
+	auto &out_type = get<SPIRType>(result_type);
+	auto &in_type = expression_type(op0);
+	bool uvec2_to_ptr = (in_type.basetype == SPIRType::UInt && in_type.vecsize == 2 &&
+						 out_type.pointer && out_type.storage == StorageClassPhysicalStorageBuffer);
+	bool ptr_to_uvec2 = (in_type.pointer && in_type.storage == StorageClassPhysicalStorageBuffer &&
+						 out_type.basetype == SPIRType::UInt && out_type.vecsize == 2);
+	string expr;
+
+	// Casting between uvec2 and buffer storage pointer per GL_EXT_buffer_reference_uvec2
+	if (uvec2_to_ptr)
+		expr = join("((", type_to_glsl(out_type), ")as_type<uint64_t>(", to_unpacked_expression(op0), "))");
+	else if (ptr_to_uvec2)
+		expr = join("as_type<", type_to_glsl(out_type), ">((uint64_t)", to_unpacked_expression(op0), ")");
+	else
+		return false;
+
+	emit_op(result_type, id, expr, should_forward(op0));
+	return true;
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin.
@@ -15007,6 +15092,25 @@ uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type, 
 // Returns the byte size of a struct member.
 uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_packed, bool row_major) const
 {
+	// Pointers take 8 bytes each
+	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
+	{
+		uint32_t type_size = 8 * (type.vecsize == 3 ? 4 : type.vecsize);
+
+		// Work our way through potentially layered arrays,
+		// stopping when we hit a pointer that is not also an array.
+		int32_t dim_idx = (int32_t)type.array.size() - 1;
+		auto *p_type = &type;
+		while (!type_is_pointer(*p_type) && dim_idx >= 0)
+		{
+			type_size *= to_array_size_literal(*p_type, dim_idx);
+			p_type = &get<SPIRType>(p_type->parent_type);
+			dim_idx--;
+		}
+
+		return type_size;
+	}
+
 	switch (type.basetype)
 	{
 	case SPIRType::Unknown:
@@ -15066,6 +15170,10 @@ uint32_t CompilerMSL::get_declared_input_size_msl(const SPIRType &type, uint32_t
 // Returns the byte alignment of a type.
 uint32_t CompilerMSL::get_declared_type_alignment_msl(const SPIRType &type, bool is_packed, bool row_major) const
 {
+	// Pointers aligns on multiples of 8 bytes
+	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
+		return 8 * (type.vecsize == 3 ? 4 : type.vecsize);
+
 	switch (type.basetype)
 	{
 	case SPIRType::Unknown:

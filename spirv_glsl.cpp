@@ -8990,6 +8990,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		if (!is_literal)
 			mod_flags &= ~ACCESS_CHAIN_INDEX_IS_LITERAL_BIT;
 		access_chain_internal_append_index(expr, base, type, mod_flags, access_chain_is_arrayed, index);
+		check_physical_type_cast(expr, type, physical_type);
 	};
 
 	for (uint32_t i = 0; i < count; i++)
@@ -9320,6 +9321,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	}
 
 	return expr;
+}
+
+void CompilerGLSL::check_physical_type_cast(std::string &, const SPIRType *, uint32_t)
+{
 }
 
 void CompilerGLSL::prepare_access_chain_for_scalar_access(std::string &, const SPIRType &, spv::StorageClass, bool &)
