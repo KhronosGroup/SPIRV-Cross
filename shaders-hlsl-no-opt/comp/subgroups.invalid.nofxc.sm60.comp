@@ -40,8 +40,8 @@ void main()
 	//bool inverse_ballot_value = subgroupInverseBallot(ballot_value);
 	//bool bit_extracted = subgroupBallotBitExtract(uvec4(10u), 8u);
 	uint bit_count = subgroupBallotBitCount(ballot_value);
-	//uint inclusive_bit_count = subgroupBallotInclusiveBitCount(ballot_value);
-	//uint exclusive_bit_count = subgroupBallotExclusiveBitCount(ballot_value);
+	uint inclusive_bit_count = subgroupBallotInclusiveBitCount(ballot_value);
+	uint exclusive_bit_count = subgroupBallotExclusiveBitCount(ballot_value);
 	//uint lsb = subgroupBallotFindLSB(ballot_value);
 	//uint msb = subgroupBallotFindMSB(ballot_value);
 

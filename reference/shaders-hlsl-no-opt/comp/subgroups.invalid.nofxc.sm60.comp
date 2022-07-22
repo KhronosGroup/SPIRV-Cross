@@ -21,6 +21,8 @@ void comp_main()
     float3 first = WaveReadLaneFirst(20.0f.xxx);
     uint4 ballot_value = WaveActiveBallot(true);
     uint bit_count = countbits(ballot_value.x) + countbits(ballot_value.y) + countbits(ballot_value.z) + countbits(ballot_value.w);
+    uint inclusive_bit_count = countbits(ballot_value.x & gl_SubgroupLeMask.x) + countbits(ballot_value.y & gl_SubgroupLeMask.y) + countbits(ballot_value.z & gl_SubgroupLeMask.z) + countbits(ballot_value.w & gl_SubgroupLeMask.w);
+    uint exclusive_bit_count = countbits(ballot_value.x & gl_SubgroupLtMask.x) + countbits(ballot_value.y & gl_SubgroupLtMask.y) + countbits(ballot_value.z & gl_SubgroupLtMask.z) + countbits(ballot_value.w & gl_SubgroupLtMask.w);
     uint shuffled = WaveReadLaneAt(10u, 8u);
     uint shuffled_xor = WaveReadLaneAt(30u, WaveGetLaneIndex() ^ 8u);
     uint shuffled_up = WaveReadLaneAt(20u, WaveGetLaneIndex() - 4u);

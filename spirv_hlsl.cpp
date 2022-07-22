@@ -4747,9 +4747,9 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	case OpGroupNonUniformBallotBitCount:
 	{
 		auto operation = static_cast<GroupOperation>(ops[3]);
+		bool forward = should_forward(ops[4]);
 		if (operation == GroupOperationReduce)
 		{
-			bool forward = should_forward(ops[4]);
 			auto left = join("countbits(", to_enclosed_expression(ops[4]), ".x) + countbits(",
 			                 to_enclosed_expression(ops[4]), ".y)");
 			auto right = join("countbits(", to_enclosed_expression(ops[4]), ".z) + countbits(",
@@ -4758,9 +4758,31 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 			inherit_expression_dependencies(id, ops[4]);
 		}
 		else if (operation == GroupOperationInclusiveScan)
-			SPIRV_CROSS_THROW("Cannot trivially implement BallotBitCount Inclusive Scan in HLSL.");
+		{
+			auto left = join("countbits(", to_enclosed_expression(ops[4]), ".x & gl_SubgroupLeMask.x) + countbits(",
+			                 to_enclosed_expression(ops[4]), ".y & gl_SubgroupLeMask.y)");
+			auto right = join("countbits(", to_enclosed_expression(ops[4]), ".z & gl_SubgroupLeMask.z) + countbits(",
+			                  to_enclosed_expression(ops[4]), ".w & gl_SubgroupLeMask.w)");
+			emit_op(result_type, id, join(left, " + ", right), forward);
+			if (!active_input_builtins.get(BuiltInSubgroupLeMask))
+			{
+				active_input_builtins.set(BuiltInSubgroupLeMask);
+				force_recompile_guarantee_forward_progress();
+			}
+		}
 		else if (operation == GroupOperationExclusiveScan)
-			SPIRV_CROSS_THROW("Cannot trivially implement BallotBitCount Exclusive Scan in HLSL.");
+		{
+			auto left = join("countbits(", to_enclosed_expression(ops[4]), ".x & gl_SubgroupLtMask.x) + countbits(",
+			                 to_enclosed_expression(ops[4]), ".y & gl_SubgroupLtMask.y)");
+			auto right = join("countbits(", to_enclosed_expression(ops[4]), ".z & gl_SubgroupLtMask.z) + countbits(",
+			                  to_enclosed_expression(ops[4]), ".w & gl_SubgroupLtMask.w)");
+			emit_op(result_type, id, join(left, " + ", right), forward);
+			if (!active_input_builtins.get(BuiltInSubgroupLtMask))
+			{
+				active_input_builtins.set(BuiltInSubgroupLtMask);
+				force_recompile_guarantee_forward_progress();
+			}
+		}
 		else
 			SPIRV_CROSS_THROW("Invalid BitCount operation.");
 		break;
