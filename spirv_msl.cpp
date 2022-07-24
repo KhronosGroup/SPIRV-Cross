@@ -10907,8 +10907,8 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		array_type = type_to_array_glsl(physical_type);
 	}
 
-	auto result = join(pack_pfx, type_to_glsl(*declared_type, orig_id), " ", qualifier, to_member_name(type, index),
-	                   member_attribute_qualifier(type, index), array_type, ";");
+	auto result = join(pack_pfx, type_to_glsl(*declared_type, orig_id, true), " ", qualifier,
+	                   to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
 
 	is_using_builtin_array = false;
 	return result;
@@ -13581,7 +13581,7 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 // The optional id parameter indicates the object whose type we are trying
 // to find the description for. It is optional. Most type descriptions do not
 // depend on a specific object's use of that type.
-string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
+string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 {
 	string type_name;
 
@@ -13671,9 +13671,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		// Need to special-case threadgroup booleans. They are supposed to be logical
 		// storage, but MSL compilers will sometimes crash if you use threadgroup bool.
 		// Workaround this by using 16-bit types instead and fixup on load-store to this data.
-		// FIXME: We have no sane way of working around this problem if a struct member is boolean
-		// and that struct is used as a threadgroup variable, but ... sigh.
-		if ((var && var->storage == StorageClassWorkgroup) || type.storage == StorageClassWorkgroup)
+		if ((var && var->storage == StorageClassWorkgroup) || type.storage == StorageClassWorkgroup || member)
 			type_name = "short";
 		else
 			type_name = "bool";
@@ -13763,6 +13761,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		res += type_name + sizes;
 		return res;
 	}
+}
+
+string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
+{
+	return type_to_glsl(type, id, false);
 }
 
 string CompilerMSL::type_to_array_glsl(const SPIRType &type)
@@ -15787,11 +15790,16 @@ void CompilerMSL::remap_constexpr_sampler_by_binding(uint32_t desc_set, uint32_t
 void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type)
 {
 	auto *var = maybe_get_backing_variable(source_id);
+	SPIRType *var_type;
 	if (var)
+	{
 		source_id = var->self;
+		var_type = &get_variable_data_type(*var);
+	}
 
 	// Type fixups for workgroup variables if they are booleans.
-	if (var && var->storage == StorageClassWorkgroup && expr_type.basetype == SPIRType::Boolean)
+	if (var && (var->storage == StorageClassWorkgroup || var_type->basetype == SPIRType::Struct) &&
+	    expr_type.basetype == SPIRType::Boolean)
 		expr = join(type_to_glsl(expr_type), "(", expr, ")");
 
 	// Only interested in standalone builtin variables in the switch below.
@@ -15886,11 +15894,16 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 void CompilerMSL::cast_to_variable_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
 	auto *var = maybe_get_backing_variable(target_id);
+	SPIRType *var_type;
 	if (var)
+	{
 		target_id = var->self;
+		var_type = &get_variable_data_type(*var);
+	}
 
 	// Type fixups for workgroup variables if they are booleans.
-	if (var && var->storage == StorageClassWorkgroup && expr_type.basetype == SPIRType::Boolean)
+	if (var && (var->storage == StorageClassWorkgroup || var_type->basetype == SPIRType::Struct) &&
+	    expr_type.basetype == SPIRType::Boolean)
 	{
 		auto short_type = expr_type;
 		short_type.basetype = SPIRType::Short;

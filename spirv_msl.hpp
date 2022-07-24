@@ -736,6 +736,7 @@ protected:
 	void emit_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
 	                        const std::string &qualifier = "", uint32_t base_offset = 0) override;
 	void emit_struct_padding_target(const SPIRType &type) override;
+	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
 
