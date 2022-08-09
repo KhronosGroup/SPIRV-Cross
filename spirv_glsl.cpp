@@ -11267,8 +11267,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// forcing temporaries is not going to help.
 		// This is similar for Constant and Undef inputs.
 		// The only safe thing to RMW is SPIRExpression.
+		// If the expression has already been used (i.e. used in a continue block), we have to keep using
+		// that loop variable, since we won't be able to override the expression after the fact.
+		// If the composite is hoisted, we might never be able to properly invalidate any usage
+		// of that composite in a subsequent loop iteration.
 		if (invalid_expressions.count(composite) ||
 		    block_composite_insert_overwrite.count(composite) ||
+		    hoisted_temporaries.count(id) || hoisted_temporaries.count(composite) ||
 		    maybe_get<SPIRExpression>(composite) == nullptr)
 		{
 			can_modify_in_place = false;
