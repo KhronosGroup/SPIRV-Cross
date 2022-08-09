@@ -8851,6 +8851,34 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 #undef MSL_RAY_QUERY_IS_OP2
 #undef MSL_RAY_QUERY_GET_OP2
 #undef MSL_RAY_QUERY_OP_INNER2
+
+	case OpConvertPtrToU:
+	case OpConvertUToPtr:
+	case OpBitcast:
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		auto &input_type = expression_type(ops[2]);
+
+		if (opcode != OpBitcast || type.pointer || input_type.pointer)
+		{
+			string op;
+
+			if (type.vecsize == 1 && input_type.vecsize == 1)
+				op = join("reinterpret_cast<", type_to_glsl(type), ">(", to_unpacked_expression(ops[2]), ")");
+			else if (input_type.vecsize == 2)
+				op = join("reinterpret_cast<", type_to_glsl(type), ">(as_type<ulong>(", to_unpacked_expression(ops[2]), "))");
+			else
+				op = join("as_type<", type_to_glsl(type), ">(reinterpret_cast<ulong>(", to_unpacked_expression(ops[2]), "))");
+
+			emit_op(ops[0], ops[1], op, should_forward(ops[2]));
+			inherit_expression_dependencies(ops[1], ops[2]);
+		}
+		else
+			CompilerGLSL::emit_instruction(instruction);
+
+		break;
+	}
+
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
@@ -14590,26 +14618,10 @@ string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in
 		return type_to_glsl(out_type);
 }
 
-bool CompilerMSL::emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0)
+bool CompilerMSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
 {
-	auto &out_type = get<SPIRType>(result_type);
-	auto &in_type = expression_type(op0);
-	bool uvec2_to_ptr = (in_type.basetype == SPIRType::UInt && in_type.vecsize == 2 &&
-						 out_type.pointer && out_type.storage == StorageClassPhysicalStorageBuffer);
-	bool ptr_to_uvec2 = (in_type.pointer && in_type.storage == StorageClassPhysicalStorageBuffer &&
-						 out_type.basetype == SPIRType::UInt && out_type.vecsize == 2);
-	string expr;
-
-	// Casting between uvec2 and buffer storage pointer per GL_EXT_buffer_reference_uvec2
-	if (uvec2_to_ptr)
-		expr = join("((", type_to_glsl(out_type), ")as_type<uint64_t>(", to_unpacked_expression(op0), "))");
-	else if (ptr_to_uvec2)
-		expr = join("as_type<", type_to_glsl(out_type), ">((uint64_t)", to_unpacked_expression(op0), ")");
-	else
-		return false;
-
-	emit_op(result_type, id, expr, should_forward(op0));
-	return true;
+	// This is handled from the outside where we deal with PtrToU/UToPtr and friends.
+	return false;
 }
 
 // Returns an MSL string identifying the name of a SPIR-V builtin.
