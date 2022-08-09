@@ -4867,7 +4867,7 @@ void CompilerMSL::add_typedef_line(const string &line)
 // Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared
 void CompilerMSL::emit_custom_templates()
 {
-	static const string address_spaces[] = {
+	static const char * const address_spaces[] = {
 		"thread", "constant", "device", "threadgroup", "threadgroup_imageblock", "ray_data", "object_data"
 	};
 
