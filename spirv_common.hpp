@@ -1636,6 +1636,12 @@ enum ExtendedDecorations
 	// results of interpolation can.
 	SPIRVCrossDecorationInterpolantComponentExpr,
 
+	// Apply to any struct type that is used in the Workgroup storage class.
+	// This causes matrices in MSL prior to Metal 3.0 to be emitted using a special
+	// class that is convertible to the standard matrix type, to work around the
+	// lack of constructors in the 'threadgroup' address space.
+	SPIRVCrossDecorationWorkgroupStruct,
+
 	SPIRVCrossDecorationCount
 };
 

@@ -10741,8 +10741,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (expr_type.vecsize > type.vecsize)
 			expr = enclose_expression(expr + vector_swizzle(type.vecsize, 0));
 
+		if (forward && ptr_expression)
+			ptr_expression->need_transpose = old_need_transpose;
+
 		// We might need to cast in order to load from a builtin.
 		cast_from_variable_load(ptr, expr, type);
+
+		if (forward && ptr_expression)
+			ptr_expression->need_transpose = false;
 
 		// We might be trying to load a gl_Position[N], where we should be
 		// doing float4[](gl_in[i].gl_Position, ...) instead.
