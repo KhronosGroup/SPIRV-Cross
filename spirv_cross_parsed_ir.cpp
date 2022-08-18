@@ -342,6 +342,8 @@ void ParsedIR::set_name(ID id, const string &name)
 {
 	auto &m = meta[id];
 	m.decoration.alias = name;
+	if (ids[id].get_type() == TypeVariable && get<SPIRVariable>(id).remapped_variable)
+		return;
 	if (!is_valid_identifier(name) || is_reserved_identifier(name, false, false))
 		meta_needing_name_fixup.insert(id);
 }
