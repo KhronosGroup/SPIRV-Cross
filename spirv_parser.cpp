@@ -349,6 +349,10 @@ void Parser::parse(const Instruction &instruction)
 			execution.output_vertices = ops[2];
 			break;
 
+		case ExecutionModeOutputPrimitivesEXT:
+			execution.output_primitives = ops[2];
+			break;
+
 		default:
 			break;
 		}

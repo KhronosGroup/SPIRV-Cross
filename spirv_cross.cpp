@@ -154,6 +154,10 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 		case OpEmitVertex:
 			return false;
 
+		// Mesh shader functions modify global state.
+		case OpSetMeshOutputsEXT:
+			return false;
+
 		// Barriers disallow any reordering, so we should treat blocks with barrier as writing.
 		case OpControlBarrier:
 		case OpMemoryBarrier:
@@ -1069,8 +1073,11 @@ void Compiler::parse_fixup()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
+			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
 			    var.storage == StorageClassOutput)
+			{
 				global_variables.push_back(var.self);
+			}
 			if (variable_storage_is_aliased(var))
 				aliased_variables.push_back(var.self);
 		}
@@ -2177,6 +2184,10 @@ void Compiler::set_execution_mode(ExecutionMode mode, uint32_t arg0, uint32_t ar
 		execution.output_vertices = arg0;
 		break;
 
+	case ExecutionModeOutputPrimitivesEXT:
+		execution.output_primitives = arg0;
+		break;
+
 	default:
 		break;
 	}
@@ -2296,6 +2307,9 @@ uint32_t Compiler::get_execution_mode_argument(spv::ExecutionMode mode, uint32_t
 
 	case ExecutionModeOutputVertices:
 		return execution.output_vertices;
+
+	case ExecutionModeOutputPrimitivesEXT:
+		return execution.output_primitives;
 
 	default:
 		return 0;
