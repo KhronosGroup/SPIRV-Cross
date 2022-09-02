@@ -10,14 +10,12 @@ layout(binding = 0, std430) buffer BUF
 
 void main()
 {
-    int _44;
-    _44 = o.a;
-    int _41;
+    int c = o.a;
+    int a;
     for (;;)
     {
-        int _48;
         bool _22_ladder_break = false;
-        switch (_44)
+        switch (c)
         {
             case 5:
             {
@@ -29,6 +27,7 @@ void main()
                         case 10:
                         case 20:
                         {
+                            c += c;
                             _30_ladder_break = true;
                             break;
                         }
@@ -42,19 +41,14 @@ void main()
                         break;
                     }
                 }
-                _48 = _44 + _44;
                 break;
             }
             case 1:
             case 2:
             case 3:
             {
+                a = c;
                 _22_ladder_break = true;
-                break;
-            }
-            default:
-            {
-                _48 = _44;
                 break;
             }
         }
@@ -62,10 +56,9 @@ void main()
         {
             break;
         }
-        _41 = _48 + 1;
-        _44 = _41;
+        c++;
         continue;
     }
-    o.b = _44;
+    o.b = a;
 }
 

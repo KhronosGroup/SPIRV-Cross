@@ -50,6 +50,7 @@ kernel void main0(constant Registers& registers [[buffer(0)]], uint3 gl_GlobalIn
     pos.x = fma(0.5, _133, pos.x);
     float _142 = sin(fma(6.283125400543212890625, _70, 0.300000011920928955078125));
     pos.y = fma(0.5, _142, pos.y);
-    registers.references->buffers[gl_WorkGroupID.z]->positions[_30] = (pos / ((float2(8.0) * float2(gl_NumWorkGroups.xy)) - float2(1.0))) - float2(0.5);
+    float2 _155 = float2(gl_NumWorkGroups.xy);
+    registers.references->buffers[gl_WorkGroupID.z]->positions[_30] = (pos / fma(float2(8.0), _155, float2(-1.0))) - float2(0.5);
 }
 
