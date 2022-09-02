@@ -311,7 +311,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     {
         float3 _279 = cross(_265, float3(0.0, 0.0, 1.0));
         float3 _284 = _279 / float3(sqrt(fast::max(dot(_279, _279), 0.00999999977648258209228515625)));
-        float3 _286 = float3(fast::clamp((_261 * EmitterUniforms.EmitterUniforms_CameraFacingBlend[1]) - EmitterUniforms.EmitterUniforms_CameraFacingBlend[2], 0.0, 1.0));
+        float3 _286 = float3(fast::clamp(fma(_261, EmitterUniforms.EmitterUniforms_CameraFacingBlend[1], -EmitterUniforms.EmitterUniforms_CameraFacingBlend[2]), 0.0, 1.0));
         _335 = fast::normalize(mix(_251, _284, _286));
         _336 = fast::normalize(mix(_259, cross(_265, _284), _286));
     }
@@ -363,7 +363,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     float _339 = fma(fma(_145.w * EmitterUniforms.EmitterUniforms_RotationRateScale, _146, _145.z), 6.283185482025146484375, EmitterUniforms.EmitterUniforms_RotationBias);
     float3 _342 = float3(sin(_339));
     float3 _344 = float3(cos(_339));
-    float3 _367 = _239 + fma(float3(_204.x * (in.in_var_ATTRIBUTE0.x + EmitterUniforms.EmitterUniforms_PivotOffset.x)), fma(_342, _336, _344 * _335), float3(_204.y * (in.in_var_ATTRIBUTE0.y + EmitterUniforms.EmitterUniforms_PivotOffset.y)) * ((_344 * _336) - (_342 * _335)));
+    float3 _367 = _239 + fma(float3(_204.x * (in.in_var_ATTRIBUTE0.x + EmitterUniforms.EmitterUniforms_PivotOffset.x)), fma(_342, _336, _344 * _335), float3(_204.y * (in.in_var_ATTRIBUTE0.y + EmitterUniforms.EmitterUniforms_PivotOffset.y)) * fma(_344, _336, -(_342 * _335)));
     float4 _371 = float4(_367, 1.0);
     float4 _375 = MobileShadowDepthPass.MobileShadowDepthPass_ProjectionMatrix * float4(_371.x, _371.y, _371.z, _371.w);
     float4 _386;

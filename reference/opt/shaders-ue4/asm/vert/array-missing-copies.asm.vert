@@ -325,24 +325,26 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     in_var_ATTRIBUTE1[1] = in.in_var_ATTRIBUTE1_1;
     float4 _115 = in.in_var_ATTRIBUTE0 * float4(255.0);
     float2 _116 = _115.zw;
-    float2 _119 = fract(_116 * float2(0.5)) * float2(2.0);
-    float2 _121 = (_116 - _119) * float2(0.0039215688593685626983642578125);
+    float2 _118 = fract(_116 * float2(0.5));
+    float2 _119 = _118 * float2(2.0);
+    float2 _121 = fma(-_118, float2(2.0), _116) * float2(0.0039215688593685626983642578125);
     float2 _122 = _115.xy;
     float2 _126 = _122 * float2(_Globals.LodValues.w);
     float _127 = _126.y;
     float _128 = _126.x;
-    float4 _132 = float4(_127, _128, 1.0 - _128, 1.0 - _127) * float4(2.0);
+    float4 _131 = float4(_127, _128, 1.0 - _128, 1.0 - _127);
+    float4 _132 = _131 * float4(2.0);
     float4 _186;
     if (_119.y > 0.5)
     {
         float4 _161;
         if (_119.x > 0.5)
         {
-            _161 = fma(_132, float4(_Globals.SectionLods.w), (float4(1.0) - _132) * _Globals.NeighborSectionLod[3]);
+            _161 = fma(_132, float4(_Globals.SectionLods.w), fma(-_131, float4(2.0), float4(1.0)) * _Globals.NeighborSectionLod[3]);
         }
         else
         {
-            _161 = fma(_132, float4(_Globals.SectionLods.z), (float4(1.0) - _132) * _Globals.NeighborSectionLod[2]);
+            _161 = fma(_132, float4(_Globals.SectionLods.z), fma(-_131, float4(2.0), float4(1.0)) * _Globals.NeighborSectionLod[2]);
         }
         _186 = _161;
     }
@@ -351,11 +353,11 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
         float4 _185;
         if (_119.x > 0.5)
         {
-            _185 = fma(_132, float4(_Globals.SectionLods.y), (float4(1.0) - _132) * _Globals.NeighborSectionLod[1]);
+            _185 = fma(_132, float4(_Globals.SectionLods.y), fma(-_131, float4(2.0), float4(1.0)) * _Globals.NeighborSectionLod[1]);
         }
         else
         {
-            _185 = fma(_132, float4(_Globals.SectionLods.x), (float4(1.0) - _132) * _Globals.NeighborSectionLod[0]);
+            _185 = fma(_132, float4(_Globals.SectionLods.x), fma(-_131, float4(2.0), float4(1.0)) * _Globals.NeighborSectionLod[0]);
         }
         _186 = _185;
     }
@@ -393,7 +395,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     float _245 = (fma(in_var_ATTRIBUTE1[0].x, 65280.0, in_var_ATTRIBUTE1[0].y * 255.0) - 32768.0) * 0.0078125;
     float _252 = (fma(in_var_ATTRIBUTE1[0].z, 65280.0, in_var_ATTRIBUTE1[0].w * 255.0) - 32768.0) * 0.0078125;
     float2 _257 = floor(_122 * float2(_236));
-    float2 _271 = float2((LandscapeParameters.LandscapeParameters_SubsectionSizeVertsLayerUVPan.x * _236) - 1.0, fast::max((LandscapeParameters.LandscapeParameters_SubsectionSizeVertsLayerUVPan.x * 0.5) * _236, 2.0) - 1.0) * float2(LandscapeParameters.LandscapeParameters_SubsectionSizeVertsLayerUVPan.y);
+    float2 _271 = float2(fma(LandscapeParameters.LandscapeParameters_SubsectionSizeVertsLayerUVPan.x, _236, -1.0), fast::max((LandscapeParameters.LandscapeParameters_SubsectionSizeVertsLayerUVPan.x * 0.5) * _236, 2.0) - 1.0) * float2(LandscapeParameters.LandscapeParameters_SubsectionSizeVertsLayerUVPan.y);
     float3 _287 = mix(float3(_257 / float2(_271.x), mix(_245, _252, _235.y)), float3(floor(_257 * float2(0.5)) / float2(_271.y), mix(_245, _252, _235.z)), float3(_206 - _207));
     float2 _288 = _119.xy;
     float3 _296 = _287 + float3(_288 * LandscapeParameters.LandscapeParameters_SubsectionOffsetParams.ww, 0.0);
@@ -415,10 +417,10 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     {
         float _361 = _357 * _346;
         float _365 = fma(_361, _354, View.View_WorldCameraOrigin[2]);
-        _393 = (1.0 - _361) * _347;
+        _393 = fma(-_357, _346, 1.0) * _347;
         _394 = MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters2.z * exp2(-fast::max(-127.0, MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters2.y * (_365 - MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters2.w)));
         _395 = MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters3.x * exp2(-fast::max(-127.0, MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters.y * (_365 - MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters3.y)));
-        _396 = _354 - (_361 * _354);
+        _396 = fma(-_361, _354, _354);
     }
     else
     {
@@ -429,7 +431,7 @@ vertex main0_out main0(main0_in in [[stage_in]], constant type_View& View [[buff
     }
     float _400 = fast::max(-127.0, MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters.y * _396);
     float _417 = fast::max(-127.0, MobileBasePass.MobileBasePass_Fog_ExponentialFogParameters2.y * _396);
-    float _428 = fma(_395, (abs(_400) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_400)) / _400) : (0.693147182464599609375 - (0.2402265071868896484375 * _400)), _394 * ((abs(_417) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_417)) / _417) : (0.693147182464599609375 - (0.2402265071868896484375 * _417))));
+    float _428 = fma(_395, (abs(_400) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_400)) / _400) : fma(-0.2402265071868896484375, _400, 0.693147182464599609375), _394 * ((abs(_417) > 0.00999999977648258209228515625) ? ((1.0 - exp2(-_417)) / _417) : fma(-0.2402265071868896484375, _417, 0.693147182464599609375)));
     float3 _459;
     if (MobileBasePass.MobileBasePass_Fog_InscatteringLightDirection.w >= 0.0)
     {
