@@ -777,7 +777,8 @@ struct SPIRBlock : IVariant
 		Unreachable, // Noop
 		Kill, // Discard
 		IgnoreIntersection, // Ray Tracing
-		TerminateRay // Ray Tracing
+		TerminateRay, // Ray Tracing
+		EmitMeshTasks // Mesh shaders
 	};
 
 	enum Merge
@@ -838,6 +839,13 @@ struct SPIRBlock : IVariant
 	BlockID true_block = 0;
 	BlockID false_block = 0;
 	BlockID default_block = 0;
+
+	// If terminator is EmitMeshTasksEXT.
+	struct
+	{
+		ID groups[3];
+		ID payload;
+	} mesh = {};
 
 	SmallVector<Instruction> ops;
 

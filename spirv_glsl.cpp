@@ -498,6 +498,7 @@ void CompilerGLSL::find_static_extensions()
 		break;
 
 	case ExecutionModelMeshEXT:
+	case ExecutionModelTaskEXT:
 		if (options.es || options.version < 450)
 			SPIRV_CROSS_THROW("Mesh shaders require GLSL 450 or above.");
 		if (!options.vulkan_semantics)
@@ -16103,6 +16104,13 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	case SPIRBlock::TerminateRay:
 		statement("terminateRayEXT;");
+		break;
+
+	case SPIRBlock::EmitMeshTasks:
+		statement("EmitMeshTasksEXT(",
+		          to_unpacked_expression(block.mesh.groups[0]), ", ",
+		          to_unpacked_expression(block.mesh.groups[1]), ", ",
+		          to_unpacked_expression(block.mesh.groups[2]), ");");
 		break;
 
 	default:

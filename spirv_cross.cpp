@@ -98,7 +98,8 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 	// This is a global side effect of the function.
 	if (block.terminator == SPIRBlock::Kill ||
 	    block.terminator == SPIRBlock::TerminateRay ||
-	    block.terminator == SPIRBlock::IgnoreIntersection)
+	    block.terminator == SPIRBlock::IgnoreIntersection ||
+	    block.terminator == SPIRBlock::EmitMeshTasks)
 		return false;
 
 	for (auto &i : block.ops)
@@ -155,6 +156,7 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 			return false;
 
 		// Mesh shader functions modify global state.
+		// (EmitMeshTasks is a terminator).
 		case OpSetMeshOutputsEXT:
 			return false;
 
