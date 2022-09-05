@@ -3,7 +3,7 @@
 
 layout(location = 0) out vec2 value;
 layout(location = 0) pervertexEXT in vec2 vUV[3];
-layout(location = 1) pervertexEXT in vec2 vUV2[3];
+layout(location = 3) pervertexEXT in vec2 vUV2[3];
 
 void main()
 {
