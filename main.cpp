@@ -1082,6 +1082,10 @@ static ExecutionModel stage_to_execution_model(const std::string &stage)
 		return ExecutionModelMissKHR;
 	else if (stage == "rcall")
 		return ExecutionModelCallableKHR;
+	else if (stage == "mesh")
+		return spv::ExecutionModelMeshEXT;
+	else if (stage == "task")
+		return spv::ExecutionModelTaskEXT;
 	else
 		SPIRV_CROSS_THROW("Invalid stage.");
 }

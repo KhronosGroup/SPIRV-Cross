@@ -682,6 +682,7 @@ struct SPIREntryPoint
 	} workgroup_size;
 	uint32_t invocations = 0;
 	uint32_t output_vertices = 0;
+	uint32_t output_primitives = 0;
 	spv::ExecutionModel model = spv::ExecutionModelMax;
 	bool geometry_passthrough = false;
 };
@@ -776,7 +777,8 @@ struct SPIRBlock : IVariant
 		Unreachable, // Noop
 		Kill, // Discard
 		IgnoreIntersection, // Ray Tracing
-		TerminateRay // Ray Tracing
+		TerminateRay, // Ray Tracing
+		EmitMeshTasks // Mesh shaders
 	};
 
 	enum Merge
@@ -837,6 +839,13 @@ struct SPIRBlock : IVariant
 	BlockID true_block = 0;
 	BlockID false_block = 0;
 	BlockID default_block = 0;
+
+	// If terminator is EmitMeshTasksEXT.
+	struct
+	{
+		ID groups[3];
+		ID payload;
+	} mesh = {};
 
 	SmallVector<Instruction> ops;
 
