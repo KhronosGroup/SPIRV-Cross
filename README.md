@@ -57,6 +57,20 @@ The make and CMake build flavors offer the option to treat exceptions as asserti
 
 You can use `-DSPIRV_CROSS_STATIC=ON/OFF` `-DSPIRV_CROSS_SHARED=ON/OFF` `-DSPIRV_CROSS_CLI=ON/OFF` to control which modules are built (and installed).
 
+### Installing SPIRV-Cross (vcpkg)
+
+Alternatively, you can build and install SPIRV-Cross using [vcpkg](https://github.com/Microsoft/vcpkg/) dependency manager:
+
+```
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+./bootstrap-vcpkg.sh
+./vcpkg integrate install
+./vcpkg install spirv-cross
+```
+
+The SPIRV-Cross port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please [create an issue or pull request](https://github.com/Microsoft/vcpkg) on the vcpkg repository.
+
 ## Usage
 
 ### Using the C++ API
