@@ -755,6 +755,7 @@ protected:
 	void inherit_expression_dependencies(uint32_t dst, uint32_t source);
 	void add_implied_read_expression(SPIRExpression &e, uint32_t source);
 	void add_implied_read_expression(SPIRAccessChain &e, uint32_t source);
+	void add_active_interface_variable(uint32_t var_id);
 
 	// For proper multiple entry point support, allow querying if an Input or Output
 	// variable is part of that entry points interface.

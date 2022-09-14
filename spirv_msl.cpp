@@ -1414,19 +1414,19 @@ string CompilerMSL::compile()
 		activate_argument_buffer_resources();
 
 	if (swizzle_buffer_id)
-		active_interface_variables.insert(swizzle_buffer_id);
+		add_active_interface_variable(swizzle_buffer_id);
 	if (buffer_size_buffer_id)
-		active_interface_variables.insert(buffer_size_buffer_id);
+		add_active_interface_variable(buffer_size_buffer_id);
 	if (view_mask_buffer_id)
-		active_interface_variables.insert(view_mask_buffer_id);
+		add_active_interface_variable(view_mask_buffer_id);
 	if (dynamic_offsets_buffer_id)
-		active_interface_variables.insert(dynamic_offsets_buffer_id);
+		add_active_interface_variable(dynamic_offsets_buffer_id);
 	if (builtin_layer_id)
-		active_interface_variables.insert(builtin_layer_id);
+		add_active_interface_variable(builtin_layer_id);
 	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
-		active_interface_variables.insert(builtin_dispatch_base_id);
+		add_active_interface_variable(builtin_dispatch_base_id);
 	if (builtin_sample_mask_id)
-		active_interface_variables.insert(builtin_sample_mask_id);
+		add_active_interface_variable(builtin_sample_mask_id);
 
 	// Create structs to hold input, output and uniform variables.
 	// Do output first to ensure out. is declared at top of entry function.
@@ -7239,6 +7239,23 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 		statement("");
 }
 
+void CompilerMSL::emit_binary_ptr_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
+{
+	bool forward = should_forward(op0) && should_forward(op1);
+	emit_op(result_type, result_id, join(to_ptr_expression(op0), " ", op, " ", to_ptr_expression(op1)), forward);
+	inherit_expression_dependencies(result_id, op0);
+	inherit_expression_dependencies(result_id, op1);
+}
+
+string CompilerMSL::to_ptr_expression(uint32_t id, bool register_expression_read)
+{
+	auto *e = maybe_get<SPIRExpression>(id);
+	auto expr = enclose_expression(e && e->need_transpose ? e->expression : to_expression(id, register_expression_read));
+	if (!should_dereference(id))
+		expr = address_of_expression(expr);
+	return expr;
+}
+
 void CompilerMSL::emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op)
 {
@@ -8027,6 +8044,7 @@ void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *ty
 void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
 #define MSL_BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
+#define MSL_PTR_BOP(op) emit_binary_ptr_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define MSL_BOP_CAST(op, type) \
 	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
 #define MSL_UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
@@ -8164,6 +8182,19 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpFUnordLessThanEqual:
 		MSL_UNORD_BOP(<=);
+		break;
+
+	// Pointer math
+	case OpPtrEqual:
+		MSL_PTR_BOP(==);
+		break;
+
+	case OpPtrNotEqual:
+		MSL_PTR_BOP(!=);
+		break;
+
+	case OpPtrDiff:
+		MSL_PTR_BOP(-);
 		break;
 
 	// Derivatives
@@ -10871,6 +10902,10 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 			constants.push_back(id);
 		}
 	}
+	// Dereference pointer variables where needed.
+	// FIXME: This dereference is actually backwards. We should really just support passing pointer variables between functions.
+	else if (should_dereference(id))
+		arg_str += dereference_expression(type, CompilerGLSL::to_func_call_arg(arg, id));
 	else
 		arg_str += CompilerGLSL::to_func_call_arg(arg, id);
 
@@ -14170,16 +14205,13 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	case SPIRType::AtomicCounter:
 	case SPIRType::ControlPointArray:
 	case SPIRType::RayQuery:
-	{
 		return CompilerGLSL::type_to_array_glsl(type);
-	}
+
 	default:
-	{
-		if (using_builtin_array())
+		if (type_is_array_of_pointers(type) || using_builtin_array())
 			return CompilerGLSL::type_to_array_glsl(type);
 		else
 			return "";
-	}
 	}
 }
 
@@ -16920,7 +16952,7 @@ void CompilerMSL::activate_argument_buffer_resources()
 
 		uint32_t desc_set = get_decoration(self, DecorationDescriptorSet);
 		if (descriptor_set_is_argument_buffer(desc_set))
-			active_interface_variables.insert(self);
+			add_active_interface_variable(self);
 	});
 }
 

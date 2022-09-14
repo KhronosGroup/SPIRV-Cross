@@ -8975,20 +8975,31 @@ const char *CompilerGLSL::index_to_swizzle(uint32_t index)
 }
 
 void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_t /*base*/, const SPIRType * /*type*/,
-                                                      AccessChainFlags flags, bool & /*access_chain_is_arrayed*/,
+                                                      AccessChainFlags flags, bool &access_chain_is_arrayed,
                                                       uint32_t index)
 {
 	bool index_is_literal = (flags & ACCESS_CHAIN_INDEX_IS_LITERAL_BIT) != 0;
+	bool ptr_chain = (flags & ACCESS_CHAIN_PTR_CHAIN_BIT) != 0;
 	bool register_expression_read = (flags & ACCESS_CHAIN_SKIP_REGISTER_EXPRESSION_READ_BIT) == 0;
 
-	expr += "[";
+	string idx_expr = index_is_literal ? convert_to_string(index) : to_unpacked_expression(index, register_expression_read);
 
-	if (index_is_literal)
-		expr += convert_to_string(index);
+	// For the case where the base of an OpPtrAccessChain already ends in [n],
+	// we need to use the index as an offset to the existing index, otherwise,
+	// we can just use the index directly.
+	if (ptr_chain && access_chain_is_arrayed)
+	{
+		size_t split_pos = expr.find_last_of(']');
+		string expr_front = expr.substr(0, split_pos);
+		string expr_back = expr.substr(split_pos);
+		expr = expr_front + " + " +  enclose_expression(idx_expr) + expr_back;
+	}
 	else
-		expr += to_unpacked_expression(index, register_expression_read);
-
-	expr += "]";
+	{
+		expr += "[";
+		expr += idx_expr;
+		expr += "]";
+	}
 }
 
 bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
@@ -9049,10 +9060,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 
-	const auto append_index = [&](uint32_t index, bool is_literal) {
+	const auto append_index = [&](uint32_t index, bool is_literal, bool is_ptr_chain = false) {
 		AccessChainFlags mod_flags = flags;
 		if (!is_literal)
 			mod_flags &= ~ACCESS_CHAIN_INDEX_IS_LITERAL_BIT;
+		if (!is_ptr_chain)
+			mod_flags &= ~ACCESS_CHAIN_PTR_CHAIN_BIT;
 		access_chain_internal_append_index(expr, base, type, mod_flags, access_chain_is_arrayed, index);
 		check_physical_type_cast(expr, type, physical_type);
 	};
@@ -9105,7 +9118,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 			else
 			{
-				append_index(index, is_literal);
+				append_index(index, is_literal, true);
 			}
 
 			if (type->basetype == SPIRType::ControlPointArray)
