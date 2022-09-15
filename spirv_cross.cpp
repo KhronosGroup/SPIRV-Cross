@@ -2375,6 +2375,19 @@ void Compiler::add_implied_read_expression(SPIRAccessChain &e, uint32_t source)
 		e.implied_read_expressions.push_back(source);
 }
 
+void Compiler::add_active_interface_variable(uint32_t var_id)
+{
+	active_interface_variables.insert(var_id);
+
+	// In SPIR-V 1.4 and up we must also track the interface variable in the entry point.
+	if (ir.get_spirv_version() >= 0x10400)
+	{
+		auto &vars = get_entry_point().interface_variables;
+		if (find(begin(vars), end(vars), VariableID(var_id)) == end(vars))
+			vars.push_back(var_id);
+	}
+}
+
 void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_expression)
 {
 	// Don't inherit any expression dependencies if the expression in dst
