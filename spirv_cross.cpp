@@ -4439,6 +4439,7 @@ void Compiler::analyze_image_and_sampler_usage()
 
 	comparison_ids = std::move(handler.comparison_ids);
 	need_subpass_input = handler.need_subpass_input;
+	need_subpass_input_ms = handler.need_subpass_input_ms;
 
 	// Forward information from separate images and samplers into combined image samplers.
 	for (auto &combined : combined_image_samplers)
@@ -4605,7 +4606,11 @@ bool Compiler::CombinedImageSamplerUsageHandler::handle(Op opcode, const uint32_
 		// If we load an image, we're going to use it and there is little harm in declaring an unused gl_FragCoord.
 		auto &type = compiler.get<SPIRType>(args[0]);
 		if (type.image.dim == DimSubpassData)
+		{
 			need_subpass_input = true;
+			if (type.image.ms)
+				need_subpass_input_ms = true;
+		}
 
 		// If we load a SampledImage and it will be used with Dref, propagate the state up.
 		if (dref_combined_samplers.count(args[1]) != 0)
