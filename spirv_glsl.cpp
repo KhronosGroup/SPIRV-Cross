@@ -12597,12 +12597,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t img = ops[2];
+		auto &type = expression_type(img);
+		auto &imgtype = get<SPIRType>(type.self);
 
 		std::string fname = "textureSize";
 		if (is_legacy_desktop())
 		{
-			auto &type = expression_type(img);
-			auto &imgtype = get<SPIRType>(type.self);
 			fname = legacy_tex_op(fname, imgtype, img);
 		}
 		else if (is_legacy_es())
@@ -12610,6 +12610,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		auto expr = join(fname, "(", convert_separate_image_to_expression(img), ", ",
 		                 bitcast_expression(SPIRType::Int, ops[3]), ")");
+
+		// ES needs to emulate 1D images as 2D.
+		if (type.image.dim == Dim1D && options.es)
+			expr = join(expr, ".x");
+
 		auto &restype = get<SPIRType>(ops[0]);
 		expr = bitcast_expression(restype, SPIRType::Int, expr);
 		emit_op(result_type, id, expr, true);
