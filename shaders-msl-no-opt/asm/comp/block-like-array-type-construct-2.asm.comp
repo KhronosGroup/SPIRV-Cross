@@ -24,7 +24,7 @@
                OpDecorate %CommonConstants DescriptorSet 0
                OpDecorate %CommonConstants Binding 0
                OpDecorate %g_data DescriptorSet 0
-               OpDecorate %g_data Binding 0
+               OpDecorate %g_data Binding 1
                OpMemberDecorate %type_CommonConstants 0 Offset 0
                OpMemberDecorate %type_CommonConstants 1 Offset 4
                OpDecorate %type_CommonConstants Block

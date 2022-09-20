@@ -1314,7 +1314,7 @@ void CompilerMSL::emit_entry_point_declarations()
 	}
 
 	// Emit buffer arrays here.
-	for (uint32_t array_id : buffer_arrays)
+	for (uint32_t array_id : buffer_arrays_discrete)
 	{
 		const auto &var = get<SPIRVariable>(array_id);
 		const auto &type = get_variable_data_type(var);
@@ -1328,8 +1328,57 @@ void CompilerMSL::emit_entry_point_declarations()
 		end_scope_decl();
 		statement_no_indent("");
 	}
-	// For some reason, without this, we end up emitting the arrays twice.
-	buffer_arrays.clear();
+	// Discrete descriptors are processed in entry point emission every compiler iteration.
+	buffer_arrays_discrete.clear();
+
+	// Emit buffer aliases here.
+	for (auto &var_id : buffer_aliases_discrete)
+	{
+		const auto &var = get<SPIRVariable>(var_id);
+		const auto &type = get_variable_data_type(var);
+		auto addr_space = get_argument_address_space(var);
+		auto name = to_name(var_id);
+
+		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+		uint32_t desc_binding = get_decoration(var_id, DecorationBinding);
+		auto alias_name = join("spvBufferAliasSet", desc_set, "Binding", desc_binding);
+
+		statement(addr_space, " auto& ", to_restrict(var_id),
+		          name,
+		          " = *(", addr_space, " ", type_to_glsl(type), "*)", alias_name, ";");
+	}
+	// Discrete descriptors are processed in entry point emission every compiler iteration.
+	buffer_aliases_discrete.clear();
+
+	for (auto &var_pair : buffer_aliases_argument)
+	{
+		uint32_t var_id = var_pair.first;
+		uint32_t alias_id = var_pair.second;
+
+		const auto &var = get<SPIRVariable>(var_id);
+		const auto &type = get_variable_data_type(var);
+		auto addr_space = get_argument_address_space(var);
+
+		if (type.array.empty())
+		{
+			statement(addr_space, " auto& ", to_restrict(var_id), to_name(var_id), " = (", addr_space, " ",
+			          type_to_glsl(type), "&)", ir.meta[alias_id].decoration.qualified_alias, ";");
+		}
+		else
+		{
+			const char *desc_addr_space = descriptor_address_space(var_id, var.storage, "thread");
+
+			// Esoteric type cast. Reference to array of pointers.
+			// Auto here defers to UBO or SSBO. The address space of the reference needs to refer to the
+			// address space of the argument buffer itself, which is usually constant, but can be const device for
+			// large argument buffers.
+			is_using_builtin_array = true;
+			statement(desc_addr_space, " auto& ", to_restrict(var_id), to_name(var_id), " = (", addr_space, " ",
+			          type_to_glsl(type), "* ", desc_addr_space, " (&)",
+			          type_to_array_glsl(type), ")", ir.meta[alias_id].decoration.qualified_alias, ";");
+			is_using_builtin_array = false;
+		}
+	}
 
 	// Emit disabled fragment outputs.
 	std::sort(disabled_frag_outputs.begin(), disabled_frag_outputs.end());
@@ -12392,6 +12441,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 	struct Resource
 	{
 		SPIRVariable *var;
+		SPIRVariable *descriptor_alias;
 		string name;
 		SPIRType::BaseType basetype;
 		uint32_t index;
@@ -12413,6 +12463,31 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 				if (descriptor_set_is_argument_buffer(desc_set))
 					return;
+			}
+
+			// Handle descriptor aliasing. We can handle aliasing of buffers by casting pointers,
+			// but not for typed resources.
+			SPIRVariable *descriptor_alias = nullptr;
+			for (auto &resource : resources)
+			{
+				if (get_decoration(resource.var->self, DecorationDescriptorSet) == get_decoration(var_id, DecorationDescriptorSet) &&
+				    get_decoration(resource.var->self, DecorationBinding) == get_decoration(var_id, DecorationBinding) &&
+				    resource.basetype == SPIRType::Struct &&
+				    type.basetype == SPIRType::Struct)
+				{
+					// Possible, but horrible to implement, ignore for now.
+					if (!type.array.empty())
+						SPIRV_CROSS_THROW("Aliasing arrayed discrete descriptors is currently not supported.");
+
+					descriptor_alias = resource.var;
+					// Self-reference marks that we should declare the resource,
+					// and it's being used as an alias (so we can emit void* instead).
+					resource.descriptor_alias = resource.var;
+					// Need to promote interlocked usage so that the primary declaration is correct.
+					if (interlocked_resources.count(var_id))
+						interlocked_resources.insert(resource.var->self);
+					break;
+				}
 			}
 
 			const MSLConstexprSampler *constexpr_sampler = nullptr;
@@ -12442,12 +12517,12 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					plane_count = constexpr_sampler->planes;
 
 				for (uint32_t i = 0; i < plane_count; i++)
-					resources.push_back({ &var, to_name(var_id), SPIRType::Image,
+					resources.push_back({ &var, descriptor_alias, to_name(var_id), SPIRType::Image,
 					                      get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
 
 				if (type.image.dim != DimBuffer && !constexpr_sampler)
 				{
-					resources.push_back({ &var, to_sampler_expression(var_id), SPIRType::Sampler,
+					resources.push_back({ &var, descriptor_alias, to_sampler_expression(var_id), SPIRType::Sampler,
 					                      get_metal_resource_index(var, SPIRType::Sampler), 0, 0 });
 				}
 			}
@@ -12455,13 +12530,19 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			{
 				// constexpr samplers are not declared as resources.
 				add_resource_name(var_id);
-				resources.push_back({ &var, to_name(var_id), type.basetype,
-				                      get_metal_resource_index(var, type.basetype), 0, secondary_index });
+
+				// Don't allocate resource indices for aliases.
+				uint32_t resource_index = ~0u;
+				if (!descriptor_alias)
+					resource_index = get_metal_resource_index(var, type.basetype);
+
+				resources.push_back({ &var, descriptor_alias, to_name(var_id), type.basetype,
+				                      resource_index, 0, secondary_index });
 			}
 		}
 	});
 
-	sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
+	stable_sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
 		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
 	});
 
@@ -12479,7 +12560,29 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			auto &m = ir.meta[type.self];
 			if (m.members.size() == 0)
 				break;
-			if (!type.array.empty())
+
+			if (r.descriptor_alias)
+			{
+				if (r.var == r.descriptor_alias)
+				{
+					auto primary_name = join("spvBufferAliasSet",
+					                         get_decoration(var_id, DecorationDescriptorSet),
+					                         "Binding",
+					                         get_decoration(var_id, DecorationBinding));
+
+					// Declare the primary alias as void*
+					if (!ep_args.empty())
+						ep_args += ", ";
+					ep_args += get_argument_address_space(var) + " void* " + primary_name;
+					ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
+					if (interlocked_resources.count(var_id))
+						ep_args += ", raster_order_group(0)";
+					ep_args += "]]";
+				}
+
+				buffer_aliases_discrete.push_back(r.var->self);
+			}
+			else if (!type.array.empty())
 			{
 				if (type.array.size() > 1)
 					SPIRV_CROSS_THROW("Arrays of arrays of buffers are not supported.");
@@ -12494,7 +12597,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 				// Allow Metal to use the array<T> template to make arrays a value type
 				is_using_builtin_array = true;
-				buffer_arrays.push_back(var_id);
+				buffer_arrays_discrete.push_back(var_id);
 				for (uint32_t i = 0; i < array_size; ++i)
 				{
 					if (!ep_args.empty())
@@ -16471,6 +16574,7 @@ void CompilerMSL::analyze_argument_buffers()
 	struct Resource
 	{
 		SPIRVariable *var;
+		SPIRVariable *descriptor_alias;
 		string name;
 		SPIRType::BaseType basetype;
 		uint32_t index;
@@ -16510,6 +16614,27 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 			}
 
+			// Handle descriptor aliasing as well as we can.
+			// We can handle aliasing of buffers by casting pointers, but not for typed resources.
+			// Inline UBOs cannot be handled since it's not a pointer, but inline data.
+			SPIRVariable *descriptor_alias = nullptr;
+			for (auto &resource : resources_in_set[desc_set])
+			{
+				if (get_decoration(resource.var->self, DecorationBinding) == get_decoration(var_id, DecorationBinding) &&
+				    resource.basetype == SPIRType::Struct &&
+				    type.basetype == SPIRType::Struct)
+				{
+					descriptor_alias = resource.var;
+					// Self-reference marks that we should declare the resource,
+					// and it's being used as an alias (so we can emit void* instead).
+					resource.descriptor_alias = resource.var;
+					// Need to promote interlocked usage so that the primary declaration is correct.
+					if (interlocked_resources.count(var_id))
+						interlocked_resources.insert(resource.var->self);
+					break;
+				}
+			}
+
 			uint32_t binding = get_decoration(var_id, DecorationBinding);
 			if (type.basetype == SPIRType::SampledImage)
 			{
@@ -16523,14 +16648,14 @@ void CompilerMSL::analyze_argument_buffers()
 				{
 					uint32_t image_resource_index = get_metal_resource_index(var, SPIRType::Image, i);
 					resources_in_set[desc_set].push_back(
-					    { &var, to_name(var_id), SPIRType::Image, image_resource_index, i });
+					    { &var, descriptor_alias, to_name(var_id), SPIRType::Image, image_resource_index, i });
 				}
 
 				if (type.image.dim != DimBuffer && !constexpr_sampler)
 				{
 					uint32_t sampler_resource_index = get_metal_resource_index(var, SPIRType::Sampler);
 					resources_in_set[desc_set].push_back(
-					    { &var, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0 });
+					    { &var, descriptor_alias, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0 });
 				}
 			}
 			else if (inline_uniform_blocks.count(SetBindingPair{ desc_set, binding }))
@@ -16542,15 +16667,20 @@ void CompilerMSL::analyze_argument_buffers()
 				// constexpr samplers are not declared as resources.
 				// Inline uniform blocks are always emitted at the end.
 				add_resource_name(var_id);
+
+				uint32_t resource_index = ~0u;
+				if (!descriptor_alias)
+					resource_index = get_metal_resource_index(var, type.basetype);
+
 				resources_in_set[desc_set].push_back(
-					{ &var, to_name(var_id), type.basetype, get_metal_resource_index(var, type.basetype), 0 });
+					{ &var, descriptor_alias, to_name(var_id), type.basetype, resource_index, 0 });
 
 				// Emulate texture2D atomic operations
 				if (atomic_image_vars.count(var.self))
 				{
 					uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 					resources_in_set[desc_set].push_back(
-						{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
+						{ &var, descriptor_alias, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
 				}
 			}
 
@@ -16597,7 +16727,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kSwizzleBufferBinding);
 				resources_in_set[desc_set].push_back(
-				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
+				    { &var, nullptr, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
 			}
 
 			if (set_needs_buffer_sizes[desc_set])
@@ -16608,7 +16738,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kBufferSizeBufferBinding);
 				resources_in_set[desc_set].push_back(
-				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
+				    { &var, nullptr, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
 			}
 		}
 	}
@@ -16620,7 +16750,7 @@ void CompilerMSL::analyze_argument_buffers()
 		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 		add_resource_name(var_id);
 		resources_in_set[desc_set].push_back(
-		    { &var, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0 });
+		    { &var, nullptr, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0 });
 	}
 
 	for (uint32_t desc_set = 0; desc_set < kMaxArgumentBuffers; desc_set++)
@@ -16664,7 +16794,7 @@ void CompilerMSL::analyze_argument_buffers()
 		set_name(buffer_variable_id, join("spvDescriptorSet", desc_set));
 
 		// Ids must be emitted in ID order.
-		sort(begin(resources), end(resources), [&](const Resource &lhs, const Resource &rhs) -> bool {
+		stable_sort(begin(resources), end(resources), [&](const Resource &lhs, const Resource &rhs) -> bool {
 			return tie(lhs.index, lhs.basetype) < tie(rhs.index, rhs.basetype);
 		});
 
@@ -16769,12 +16899,18 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 				else if (buffers_requiring_dynamic_offset.count(pair))
 				{
+					if (resource.descriptor_alias)
+						SPIRV_CROSS_THROW("Descriptor aliasing is currently not supported with dynamic offsets.");
+
 					// Don't set the qualified name here; we'll define a variable holding the corrected buffer address later.
 					buffer_type.member_types.push_back(var.basetype);
 					buffers_requiring_dynamic_offset[pair].second = var.self;
 				}
 				else if (inline_uniform_blocks.count(pair))
 				{
+					if (resource.descriptor_alias)
+						SPIRV_CROSS_THROW("Descriptor aliasing is currently not supported with inline UBOs.");
+
 					// Put the buffer block itself into the argument buffer.
 					buffer_type.member_types.push_back(get_variable_data_type_id(var));
 					set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
@@ -16806,9 +16942,12 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 				else
 				{
-					// Resources will be declared as pointers not references, so automatically dereference as appropriate.
-					buffer_type.member_types.push_back(var.basetype);
-					if (type.array.empty())
+					if (!resource.descriptor_alias || resource.descriptor_alias == resource.var)
+						buffer_type.member_types.push_back(var.basetype);
+
+					if (resource.descriptor_alias && resource.descriptor_alias != resource.var)
+						buffer_aliases_argument.push_back({ var.self, resource.descriptor_alias->self });
+					else if (type.array.empty())
 						set_qualified_name(var.self, join("(*", to_name(buffer_variable_id), ".", mbr_name, ")"));
 					else
 						set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));

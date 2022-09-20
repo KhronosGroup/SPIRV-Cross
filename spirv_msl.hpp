@@ -1107,7 +1107,9 @@ protected:
 	const MSLConstexprSampler *find_constexpr_sampler(uint32_t id) const;
 
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
-	SmallVector<uint32_t> buffer_arrays;
+	SmallVector<uint32_t> buffer_arrays_discrete;
+	SmallVector<std::pair<uint32_t, uint32_t>> buffer_aliases_argument;
+	SmallVector<uint32_t> buffer_aliases_discrete;
 	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
 
