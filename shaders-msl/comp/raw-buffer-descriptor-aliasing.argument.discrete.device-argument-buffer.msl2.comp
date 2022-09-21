@@ -76,9 +76,14 @@ layout(set = 2, binding = 0) readonly buffer SSBO_I
 	uvec2 data[];
 } ssbo_i;
 
+layout(push_constant) uniform Registers
+{
+	float reg;
+};
+
 void func0()
 {
-	ssbo_a.data[gl_GlobalInvocationID.x] = ubo_c.data[gl_WorkGroupID.x];
+	ssbo_a.data[gl_GlobalInvocationID.x] = ubo_c.data[gl_WorkGroupID.x] + reg;
 	ssbo_b.data[gl_GlobalInvocationID.x] =
 		ubo_d.data[gl_WorkGroupID.y] + ssbo_b_readonly.data[gl_GlobalInvocationID.x];
 }

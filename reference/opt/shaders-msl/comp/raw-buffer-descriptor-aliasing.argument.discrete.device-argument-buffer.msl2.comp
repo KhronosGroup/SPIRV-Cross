@@ -13,6 +13,11 @@ struct UBO_C
     float4 data[1024];
 };
 
+struct Registers
+{
+    float reg;
+};
+
 struct SSBO_B
 {
     uint2 data[1];
@@ -88,7 +93,7 @@ struct spvDescriptorSetBuffer0
     constant UBO_Cs* ubo_cs [[id(6)]][4];
 };
 
-kernel void main0(const device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], device void* spvBufferAliasSet2Binding0 [[buffer(1)]], constant void* spvBufferAliasSet2Binding1 [[buffer(2)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
+kernel void main0(const device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant Registers& _42 [[buffer(1)]], device void* spvBufferAliasSet2Binding0 [[buffer(2)]], constant void* spvBufferAliasSet2Binding1 [[buffer(3)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
     device auto& ssbo_e = *(device SSBO_E*)spvBufferAliasSet2Binding0;
     constant auto& ubo_g = *(constant UBO_G*)spvBufferAliasSet2Binding1;
@@ -101,7 +106,7 @@ kernel void main0(const device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buff
     const device auto& ssbo_bs = (device SSBO_Bs* const device (&)[4])spvDescriptorSet0.ssbo_as;
     const device auto& ubo_ds = (constant UBO_Ds* const device (&)[4])spvDescriptorSet0.ubo_cs;
     const device auto& ssbo_bs_readonly = (const device SSBO_BsRO* const device (&)[4])spvDescriptorSet0.ssbo_as;
-    (*spvDescriptorSet0.ssbo_a).data[gl_GlobalInvocationID.x] = (*spvDescriptorSet0.ubo_c).data[gl_WorkGroupID.x].x;
+    (*spvDescriptorSet0.ssbo_a).data[gl_GlobalInvocationID.x] = (*spvDescriptorSet0.ubo_c).data[gl_WorkGroupID.x].x + _42.reg;
     ssbo_b.data[gl_GlobalInvocationID.x] = ubo_d.data[gl_WorkGroupID.y].xy + ssbo_b_readonly.data[gl_GlobalInvocationID.x];
     spvDescriptorSet0.ssbo_as[gl_WorkGroupID.x]->data[gl_GlobalInvocationID.x] = spvDescriptorSet0.ubo_cs[gl_WorkGroupID.x]->data[0].x;
     ssbo_bs[gl_WorkGroupID.x]->data[gl_GlobalInvocationID.x] = ubo_ds[gl_WorkGroupID.x]->data[0].xy + ssbo_bs_readonly[gl_WorkGroupID.x]->data[gl_GlobalInvocationID.x];
