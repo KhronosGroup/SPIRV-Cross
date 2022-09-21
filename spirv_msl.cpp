@@ -12468,25 +12468,31 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			// Handle descriptor aliasing. We can handle aliasing of buffers by casting pointers,
 			// but not for typed resources.
 			SPIRVariable *descriptor_alias = nullptr;
-			for (auto &resource : resources)
+			if (var.storage == StorageClassUniform || var.storage == StorageClassStorageBuffer)
 			{
-				if (get_decoration(resource.var->self, DecorationDescriptorSet) == get_decoration(var_id, DecorationDescriptorSet) &&
-				    get_decoration(resource.var->self, DecorationBinding) == get_decoration(var_id, DecorationBinding) &&
-				    resource.basetype == SPIRType::Struct &&
-				    type.basetype == SPIRType::Struct)
+				for (auto &resource : resources)
 				{
-					// Possible, but horrible to implement, ignore for now.
-					if (!type.array.empty())
-						SPIRV_CROSS_THROW("Aliasing arrayed discrete descriptors is currently not supported.");
+					if (get_decoration(resource.var->self, DecorationDescriptorSet) ==
+					    get_decoration(var_id, DecorationDescriptorSet) &&
+					    get_decoration(resource.var->self, DecorationBinding) ==
+					    get_decoration(var_id, DecorationBinding) &&
+					    resource.basetype == SPIRType::Struct && type.basetype == SPIRType::Struct &&
+					    (resource.var->storage == StorageClassUniform ||
+					     resource.var->storage == StorageClassStorageBuffer))
+					{
+						// Possible, but horrible to implement, ignore for now.
+						if (!type.array.empty())
+							SPIRV_CROSS_THROW("Aliasing arrayed discrete descriptors is currently not supported.");
 
-					descriptor_alias = resource.var;
-					// Self-reference marks that we should declare the resource,
-					// and it's being used as an alias (so we can emit void* instead).
-					resource.descriptor_alias = resource.var;
-					// Need to promote interlocked usage so that the primary declaration is correct.
-					if (interlocked_resources.count(var_id))
-						interlocked_resources.insert(resource.var->self);
-					break;
+						descriptor_alias = resource.var;
+						// Self-reference marks that we should declare the resource,
+						// and it's being used as an alias (so we can emit void* instead).
+						resource.descriptor_alias = resource.var;
+						// Need to promote interlocked usage so that the primary declaration is correct.
+						if (interlocked_resources.count(var_id))
+							interlocked_resources.insert(resource.var->self);
+						break;
+					}
 				}
 			}
 
@@ -16618,20 +16624,25 @@ void CompilerMSL::analyze_argument_buffers()
 			// We can handle aliasing of buffers by casting pointers, but not for typed resources.
 			// Inline UBOs cannot be handled since it's not a pointer, but inline data.
 			SPIRVariable *descriptor_alias = nullptr;
-			for (auto &resource : resources_in_set[desc_set])
+			if (var.storage == StorageClassUniform || var.storage == StorageClassStorageBuffer)
 			{
-				if (get_decoration(resource.var->self, DecorationBinding) == get_decoration(var_id, DecorationBinding) &&
-				    resource.basetype == SPIRType::Struct &&
-				    type.basetype == SPIRType::Struct)
+				for (auto &resource : resources_in_set[desc_set])
 				{
-					descriptor_alias = resource.var;
-					// Self-reference marks that we should declare the resource,
-					// and it's being used as an alias (so we can emit void* instead).
-					resource.descriptor_alias = resource.var;
-					// Need to promote interlocked usage so that the primary declaration is correct.
-					if (interlocked_resources.count(var_id))
-						interlocked_resources.insert(resource.var->self);
-					break;
+					if (get_decoration(resource.var->self, DecorationBinding) ==
+					    get_decoration(var_id, DecorationBinding) &&
+					    resource.basetype == SPIRType::Struct && type.basetype == SPIRType::Struct &&
+					    (resource.var->storage == StorageClassUniform ||
+					     resource.var->storage == StorageClassStorageBuffer))
+					{
+						descriptor_alias = resource.var;
+						// Self-reference marks that we should declare the resource,
+						// and it's being used as an alias (so we can emit void* instead).
+						resource.descriptor_alias = resource.var;
+						// Need to promote interlocked usage so that the primary declaration is correct.
+						if (interlocked_resources.count(var_id))
+							interlocked_resources.insert(resource.var->self);
+						break;
+					}
 				}
 			}
 
