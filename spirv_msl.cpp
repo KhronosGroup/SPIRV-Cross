@@ -9413,6 +9413,9 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	else if (opcode == OpAtomicSMax || opcode == OpAtomicSMin)
 		expected_type = to_signed_basetype(type.width);
 
+	if (type.width == 64)
+		SPIRV_CROSS_THROW("MSL currently does not support 64-bit atomics.");
+
 	auto remapped_type = type;
 	remapped_type.basetype = expected_type;
 
@@ -13734,6 +13737,8 @@ const std::unordered_set<std::string> &CompilerMSL::get_reserved_keyword_set()
 		"vertex",
 		"fragment",
 		"compute",
+		"constant",
+		"device",
 		"bias",
 		"level",
 		"gradient2d",
@@ -13860,6 +13865,8 @@ const std::unordered_set<std::string> &CompilerMSL::get_reserved_keyword_set()
 		"M_SQRT2",
 		"M_SQRT1_2",
 		"quad_broadcast",
+		"thread",
+		"threadgroup",
 	};
 
 	return keywords;
