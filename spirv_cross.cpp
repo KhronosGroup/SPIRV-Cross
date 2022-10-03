@@ -991,6 +991,10 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			// in the future.
 			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 		}
+		else if (type.storage == StorageClassShaderRecordBufferKHR)
+		{
+			res.shader_record_buffers.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, ssbo_instance_name) });
+		}
 		// Images
 		else if (type.storage == StorageClassUniformConstant && type.basetype == SPIRType::Image &&
 		         type.image.sampled == 2)
