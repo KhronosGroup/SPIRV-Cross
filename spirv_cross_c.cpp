@@ -715,6 +715,14 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_IOS_SUPPORT_BASE_VERTEX_INSTANCE:
 		options->msl.ios_support_base_vertex_instance = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_RAW_BUFFER_TESE_INPUT:
+		options->msl.raw_buffer_tese_input = value != 0;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_SHADER_PATCH_INPUT_BUFFER_INDEX:
+		options->msl.shader_patch_input_buffer_index = value;
+		break;
 #endif
 
 	default:

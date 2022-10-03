@@ -59,10 +59,10 @@ struct main0_patchIn
     main0_out out = {};
     spvUnsafeArray<float, 4> gl_TessLevelOuter = {};
     spvUnsafeArray<float, 2> gl_TessLevelInner = {};
-    gl_TessLevelOuter[0] = patchIn.gl_TessLevel.x;
-    gl_TessLevelOuter[1] = patchIn.gl_TessLevel.y;
-    gl_TessLevelOuter[2] = patchIn.gl_TessLevel.z;
-    gl_TessLevelInner[0] = patchIn.gl_TessLevel.w;
+    gl_TessLevelOuter[0] = patchIn.gl_TessLevel[0];
+    gl_TessLevelOuter[1] = patchIn.gl_TessLevel[1];
+    gl_TessLevelOuter[2] = patchIn.gl_TessLevel[2];
+    gl_TessLevelInner[0] = patchIn.gl_TessLevel[3];
     out.gl_Position = float4(gl_TessLevelOuter[0], gl_TessLevelOuter[1], gl_TessLevelOuter[2], gl_TessLevelOuter[3]) + float2(gl_TessLevelInner[0], gl_TessLevelInner[1]).xyxy;
     return out;
 }

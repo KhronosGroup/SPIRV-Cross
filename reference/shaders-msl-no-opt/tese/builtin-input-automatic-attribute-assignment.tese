@@ -68,12 +68,12 @@ struct main0_patchIn
     main0_out out = {};
     spvUnsafeArray<float, 2> gl_TessLevelInner = {};
     spvUnsafeArray<float, 4> gl_TessLevelOuter = {};
-    gl_TessLevelInner[0] = patchIn.gl_TessLevelInner.x;
-    gl_TessLevelInner[1] = patchIn.gl_TessLevelInner.y;
-    gl_TessLevelOuter[0] = patchIn.gl_TessLevelOuter.x;
-    gl_TessLevelOuter[1] = patchIn.gl_TessLevelOuter.y;
-    gl_TessLevelOuter[2] = patchIn.gl_TessLevelOuter.z;
-    gl_TessLevelOuter[3] = patchIn.gl_TessLevelOuter.w;
+    gl_TessLevelInner[0] = patchIn.gl_TessLevelInner[0];
+    gl_TessLevelInner[1] = patchIn.gl_TessLevelInner[1];
+    gl_TessLevelOuter[0] = patchIn.gl_TessLevelOuter[0];
+    gl_TessLevelOuter[1] = patchIn.gl_TessLevelOuter[1];
+    gl_TessLevelOuter[2] = patchIn.gl_TessLevelOuter[2];
+    gl_TessLevelOuter[3] = patchIn.gl_TessLevelOuter[3];
     out.gl_Position = (((((float4(1.0) + patchIn.FragColor) + patchIn.gl_in[0].FragColors) + patchIn.gl_in[1].FragColors) + float4(gl_TessLevelInner[0])) + float4(gl_TessLevelOuter[int(gl_PrimitiveID) & 1])) + patchIn.gl_in[0].gl_Position;
     return out;
 }

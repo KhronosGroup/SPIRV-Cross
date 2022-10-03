@@ -49,26 +49,22 @@ struct main0_out
     float4 gl_Position [[position]];
 };
 
-struct main0_patchIn
+static inline __attribute__((always_inline))
+float4 read_tess_levels(thread spvUnsafeArray<float, 4>& gl_TessLevelOuter, thread spvUnsafeArray<float, 2>& gl_TessLevelInner)
 {
-    float4 gl_TessLevelOuter [[attribute(0)]];
-    float2 gl_TessLevelInner [[attribute(1)]];
-};
+    return float4(gl_TessLevelOuter[0], gl_TessLevelOuter[1], gl_TessLevelOuter[2], gl_TessLevelOuter[3]) + float2(gl_TessLevelInner[0], gl_TessLevelInner[1]).xyxy;
+}
 
-[[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], float2 gl_TessCoordIn [[position_in_patch]])
+[[ patch(triangle, 0) ]] vertex main0_out main0(uint gl_PrimitiveID [[patch_id]], const device MTLTriangleTessellationFactorsHalf* spvTessLevel [[buffer(26)]])
 {
     main0_out out = {};
-    spvUnsafeArray<float, 2> gl_TessLevelInner = {};
     spvUnsafeArray<float, 4> gl_TessLevelOuter = {};
-    gl_TessLevelInner[0] = patchIn.gl_TessLevelInner[0];
-    gl_TessLevelInner[1] = patchIn.gl_TessLevelInner[1];
-    gl_TessLevelOuter[0] = patchIn.gl_TessLevelOuter[0];
-    gl_TessLevelOuter[1] = patchIn.gl_TessLevelOuter[1];
-    gl_TessLevelOuter[2] = patchIn.gl_TessLevelOuter[2];
-    gl_TessLevelOuter[3] = patchIn.gl_TessLevelOuter[3];
-    float3 gl_TessCoord = float3(gl_TessCoordIn.x, gl_TessCoordIn.y, 0.0);
-    gl_TessCoord.y = 1.0 - gl_TessCoord.y;
-    out.gl_Position = float4(((gl_TessCoord.x * gl_TessLevelInner[0]) * gl_TessLevelOuter[0]) + (((1.0 - gl_TessCoord.x) * gl_TessLevelInner[0]) * gl_TessLevelOuter[2]), ((gl_TessCoord.y * gl_TessLevelInner[1]) * gl_TessLevelOuter[3]) + (((1.0 - gl_TessCoord.y) * gl_TessLevelInner[1]) * gl_TessLevelOuter[1]), 0.0, 1.0);
+    spvUnsafeArray<float, 2> gl_TessLevelInner = {};
+    gl_TessLevelOuter[0] = spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0];
+    gl_TessLevelOuter[1] = spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1];
+    gl_TessLevelOuter[2] = spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2];
+    gl_TessLevelInner[0] = spvTessLevel[gl_PrimitiveID].insideTessellationFactor;
+    out.gl_Position = read_tess_levels(gl_TessLevelOuter, gl_TessLevelInner);
     return out;
 }
 
