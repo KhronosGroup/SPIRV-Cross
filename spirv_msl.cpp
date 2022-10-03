@@ -856,7 +856,7 @@ void CompilerMSL::build_implicit_builtins()
 		swizzle_buffer_id = var_id;
 	}
 
-	if (!buffers_requiring_array_length.empty())
+	if (needs_buffer_size_buffer())
 	{
 		uint32_t var_id = build_constant_uint_array_pointer();
 		set_name(var_id, "spvBufferSizeConstants");
@@ -10021,7 +10021,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 			decl += join(", constant uint", arg_is_array ? "* " : "& ", to_swizzle_expression(arg.id));
 		}
 
-		if (buffers_requiring_array_length.count(name_id))
+		if (buffer_requires_array_length(name_id))
 		{
 			bool arg_is_array = !arg_type.array.empty();
 			decl += join(", constant uint", arg_is_array ? "* " : "& ", to_buffer_size_expression(name_id));
@@ -11058,7 +11058,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 		else if (msl_options.swizzle_texture_samples && has_sampled_images && is_sampled_image_type(type))
 			arg_str += ", " + to_swizzle_expression(var_id ? var_id : id);
 
-		if (buffers_requiring_array_length.count(var_id))
+		if (buffer_requires_array_length(var_id))
 			arg_str += ", " + to_buffer_size_expression(var_id ? var_id : id);
 
 		if (is_dynamic_img_sampler)
@@ -12767,7 +12767,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		else if ((var.storage == StorageClassStorageBuffer || (var.storage == StorageClassUniform && ssbo)) &&
 		         !is_hidden_variable(var))
 		{
-			if (buffers_requiring_array_length.count(var.self))
+			if (buffer_requires_array_length(var.self))
 			{
 				entry_func.fixup_hooks_in.push_back([this, &type, &var, var_id]() {
 					bool is_array_type = !type.array.empty();
@@ -16710,7 +16710,7 @@ void CompilerMSL::analyze_argument_buffers()
 			// Check if this descriptor set needs a swizzle buffer.
 			if (needs_swizzle_buffer_def && is_sampled_image_type(type))
 				set_needs_swizzle_buffer[desc_set] = true;
-			else if (buffers_requiring_array_length.count(var_id) != 0)
+			else if (buffer_requires_array_length(var_id))
 			{
 				set_needs_buffer_sizes[desc_set] = true;
 				needs_buffer_sizes = true;

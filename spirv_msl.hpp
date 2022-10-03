@@ -504,6 +504,11 @@ public:
 		return !buffers_requiring_array_length.empty();
 	}
 
+	bool buffer_requires_array_length(VariableID id) const
+	{
+		return buffers_requiring_array_length.count(id) != 0;
+	}
+
 	// Provide feedback to calling API to allow it to pass a buffer
 	// containing the view mask for the current multiview subpass.
 	bool needs_view_mask_buffer() const
