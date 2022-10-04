@@ -1236,6 +1236,12 @@ bool CompilerHLSL::is_hlsl_aux_buffer_binding_used(HLSLAuxBinding binding) const
 		return false;
 }
 
+void CompilerHLSL::set_hlsl_push_constant_binding(uint32_t register_index, uint32_t register_space)
+{
+	push_constant_info.register_index = register_index;
+	push_constant_info.register_space = register_space;
+}
+
 void CompilerHLSL::emit_composite_constants()
 {
 	// HLSL cannot declare structs or arrays inline, so we must move them out to
@@ -3470,8 +3476,8 @@ string CompilerHLSL::to_resource_binding(const SPIRVariable &var)
 		return "";
 
 	uint32_t desc_set =
-	    resource_flags == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT ? ResourceBindingPushConstantDescriptorSet : 0u;
-	uint32_t binding = resource_flags == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT ? ResourceBindingPushConstantBinding : 0u;
+		resource_flags == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT ? push_constant_info.register_space : 0u;
+	uint32_t binding = resource_flags == HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT ? push_constant_info.register_index : 0u;
 
 	if (has_decoration(var.self, DecorationBinding))
 		binding = get_decoration(var.self, DecorationBinding);

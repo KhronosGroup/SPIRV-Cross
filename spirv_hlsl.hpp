@@ -54,8 +54,6 @@ enum HLSLBindingFlagBits
 	HLSL_BINDING_AUTO_NONE_BIT = 0,
 
 	// Push constant (root constant) resources will be declared as CBVs (b-space) without a register() declaration.
-	// A register will be automatically assigned by the D3D compiler, but must therefore be reflected in D3D-land.
-	// Push constants do not normally have a DecorationBinding set, but if they do, this can be used to ignore it.
 	HLSL_BINDING_AUTO_PUSH_CONSTANT_BIT = 1 << 0,
 
 	// cbuffer resources will be declared as CBVs (b-space) without a register() declaration.
@@ -220,6 +218,8 @@ public:
 	void set_hlsl_aux_buffer_binding(HLSLAuxBinding binding, uint32_t register_index, uint32_t register_space);
 	void unset_hlsl_aux_buffer_binding(HLSLAuxBinding binding);
 	bool is_hlsl_aux_buffer_binding_used(HLSLAuxBinding binding) const;
+
+	void set_hlsl_push_constant_binding(uint32_t register_index, uint32_t register_space);
 
 private:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
@@ -390,6 +390,12 @@ private:
 		bool explicit_binding = false;
 		bool used = false;
 	} base_vertex_info;
+
+	struct
+	{
+		uint32_t register_index = 0;
+		uint32_t register_space = 0;
+	} push_constant_info;
 
 	// Returns true for BuiltInSampleMask because gl_SampleMask[] is an array in SPIR-V, but SV_Coverage is a scalar in HLSL.
 	bool builtin_translates_to_nonarray(spv::BuiltIn builtin) const override;

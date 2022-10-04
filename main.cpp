@@ -715,6 +715,8 @@ struct CLIArguments
 	bool hlsl_base_vertex_index_explicit_binding = false;
 	uint32_t hlsl_base_vertex_index_register_index = 0;
 	uint32_t hlsl_base_vertex_index_register_space = 0;
+	uint32_t hlsl_push_constant_register_index = ResourceBindingPushConstantBinding;
+	uint32_t hlsl_push_constant_register_space = ResourceBindingPushConstantDescriptorSet;
 
 	bool hlsl_force_storage_buffer_as_uav = false;
 	bool hlsl_nonwritable_uav_texture_as_srv = false;
@@ -1377,6 +1379,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		hlsl_opts.flatten_matrix_vertex_input_semantics = args.hlsl_flatten_matrix_vertex_input_semantics;
 		hlsl->set_hlsl_options(hlsl_opts);
 		hlsl->set_resource_binding_flags(args.hlsl_binding_flags);
+		hlsl->set_hlsl_push_constant_binding(args.hlsl_push_constant_register_index, args.hlsl_push_constant_register_space);
 		if (args.hlsl_base_vertex_index_explicit_binding)
 		{
 			hlsl->set_hlsl_aux_buffer_binding(HLSL_AUX_BINDING_BASE_VERTEX_INSTANCE,
@@ -1549,6 +1552,10 @@ static int main_inner(int argc, char *argv[])
 		args.hlsl_base_vertex_index_explicit_binding = true;
 		args.hlsl_base_vertex_index_register_index = parser.next_uint();
 		args.hlsl_base_vertex_index_register_space = parser.next_uint();
+	});
+	cbs.add("--hlsl-push-constant-binding", [&args](CLIParser &parser) {
+		args.hlsl_push_constant_register_index = parser.next_uint();
+		args.hlsl_push_constant_register_space = parser.next_uint();
 	});
 	cbs.add("--hlsl-auto-binding", [&args](CLIParser &parser) {
 		args.hlsl_binding_flags |= hlsl_resource_type_to_flag(parser.next_string());
