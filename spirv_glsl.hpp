@@ -602,6 +602,7 @@ protected:
 		bool allow_precision_qualifiers = false;
 		bool can_swizzle_scalar = false;
 		bool force_gl_in_out_block = false;
+		bool force_merged_mesh_block = false;
 		bool can_return_array = true;
 		bool allow_truncated_access_chain = false;
 		bool supports_extensions = false;
@@ -982,6 +983,7 @@ protected:
 	bool is_stage_output_builtin_masked(spv::BuiltIn builtin) const;
 	bool is_stage_output_variable_masked(const SPIRVariable &var) const;
 	bool is_stage_output_block_member_masked(const SPIRVariable &var, uint32_t index, bool strip_array) const;
+	bool is_per_primitive_variable(const SPIRVariable &var) const;
 	uint32_t get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const;
 	uint32_t get_declared_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const;
 	std::unordered_set<LocationComponentPair, InternalHasher> masked_output_locations;

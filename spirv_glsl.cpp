@@ -3146,9 +3146,32 @@ void CompilerGLSL::fixup_implicit_builtin_block_names(ExecutionModel model)
 			{
 				auto flags = get_buffer_block_flags(var.self);
 				if (flags.get(DecorationPerPrimitiveEXT))
+				{
 					set_name(var.self, "gl_MeshPrimitivesEXT");
+					set_name(type.self, "gl_MeshPerPrimitiveEXT");
+				}
 				else
+				{
 					set_name(var.self, "gl_MeshVerticesEXT");
+					set_name(type.self, "gl_MeshPerVertexEXT");
+				}
+			}
+		}
+
+		if (model == ExecutionModelMeshEXT && var.storage == StorageClassOutput && !block)
+		{
+			auto *m = ir.find_meta(var.self);
+			if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitivePointIndicesEXT)
+			{
+				set_name(var.self, "gl_PrimitivePointIndicesEXT");
+			}
+			else if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitiveLineIndicesEXT)
+			{
+				set_name(var.self, "gl_PrimitiveLineIndicesEXT");
+			}
+			else if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitiveTriangleIndicesEXT)
+			{
+				set_name(var.self, "gl_PrimitiveTriangleIndicesEXT");
 			}
 		}
 	});
@@ -9193,6 +9216,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool relaxed_precision = has_decoration(base, DecorationRelaxedPrecision);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
+	bool clip_cull_fixup = false;
 
 	const auto append_index = [&](uint32_t index, bool is_literal, bool is_ptr_chain = false) {
 		AccessChainFlags mod_flags = flags;
@@ -9323,6 +9347,18 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					break;
 				}
 			}
+			else if (backend.force_merged_mesh_block && i == 0 && var && !is_builtin_variable(*var) &&
+					 var->storage == StorageClassOutput)
+			{
+				if(is_per_primitive_variable(*var))
+				{
+					expr = join("gl_MeshPrimitivesEXT[", to_expression(index, register_expression_read), "].", expr);
+				}
+				else
+				{
+					expr = join("gl_MeshVerticesEXT[", to_expression(index, register_expression_read), "].", expr);
+				}
+			}
 			else if (options.flatten_multidimensional_arrays && dimension_flatten)
 			{
 				// If we are flattening multidimensional arrays, do manual stride computation.
@@ -9346,6 +9382,14 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 				if (!pending_array_enclose)
 					expr += "]";
+			}
+			else if (clip_cull_fixup)
+			{
+				string idx_expr = is_literal ? convert_to_string(index) : to_enclosed_unpacked_expression(index, register_expression_read);
+
+				expr += "[" + idx_expr + " / 4]";
+				expr += "[" + idx_expr + " % 4]";
+				clip_cull_fixup = false;
 			}
 			// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
 			// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
@@ -9372,7 +9416,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (index >= type->member_types.size())
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
-			BuiltIn builtin;
+			BuiltIn builtin = BuiltInMax;
 			if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 			{
 				if (access_chain_is_arrayed)
@@ -9405,6 +9449,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				physical_type = get_extended_member_decoration(type->self, index, SPIRVCrossDecorationPhysicalTypeID);
 			else
 				physical_type = 0;
+
+			clip_cull_fixup = (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance) && backend.force_merged_mesh_block;
 
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);
@@ -14120,7 +14166,7 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 
 	if (var && var->storage == StorageClassWorkgroup && !backend.shared_is_implied)
 		res += "shared ";
-	else if (var && var->storage == StorageClassTaskPayloadWorkgroupEXT)
+	else if (var && var->storage == StorageClassTaskPayloadWorkgroupEXT && !backend.shared_is_implied)
 		res += "taskPayloadSharedEXT ";
 
 	res += to_interpolation_qualifiers(flags);
@@ -17363,6 +17409,23 @@ bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, 
 		uint32_t component = get_member_decoration(type.self, index, DecorationComponent);
 		return is_stage_output_location_masked(location, component);
 	}
+}
+
+bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable &var) const
+{
+	if (has_decoration(var.self, DecorationPerPrimitiveEXT))
+		return true;
+
+	auto &type = get<SPIRType>(var.basetype);
+	if (!has_decoration(type.self, DecorationBlock))
+		return false;
+	for (uint32_t i = 0; i < type.member_types.size(); i++)
+	{
+		if (!has_member_decoration(type.self, i, DecorationPerPrimitiveEXT))
+			return false;
+	}
+
+	return true;
 }
 
 bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t component) const
