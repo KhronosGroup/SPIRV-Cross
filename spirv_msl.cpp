@@ -3359,7 +3359,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 
 	if (var_type.basetype == SPIRType::Struct)
 	{
-		bool block_requires_flattening = variable_storage_requires_stage_io(storage) || is_block;
+		bool block_requires_flattening =
+		    variable_storage_requires_stage_io(storage) || (is_block && var_type.array.empty());
 		bool needs_local_declaration = !is_builtin && block_requires_flattening && meta.allow_local_declaration;
 
 		if (needs_local_declaration)
@@ -3978,7 +3979,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			if (location_inputs_in_use.count(input.first.location) != 0)
 				continue;
 
-			if (input.second.patch != patch)
+			if (patch != (input.second.rate == MSL_SHADER_VARIABLE_RATE_PER_PATCH))
 				continue;
 
 			// Tessellation levels have their own struct, so there's no need to add them here.
@@ -7719,20 +7720,22 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 	bool flatten_composites = false;
 
 	bool is_block = false;
-
-	if (var)
-		is_block = has_decoration(get_variable_data_type(*var).self, DecorationBlock);
+	bool is_arrayed = false;
 
 	if (var)
 	{
+		auto &type = get_variable_data_type(*var);
+		is_block = has_decoration(type.self, DecorationBlock);
+		is_arrayed = !type.array.empty();
+
 		flatten_composites = variable_storage_requires_stage_io(var->storage);
-		patch = has_decoration(ops[2], DecorationPatch) || is_patch_block(get_variable_data_type(*var));
+		patch = has_decoration(ops[2], DecorationPatch) || is_patch_block(type);
 
 		// Should match strip_array in add_interface_block.
 		flat_data = var->storage == StorageClassInput || (var->storage == StorageClassOutput && is_tesc_shader());
 
 		// Patch inputs are treated as normal block IO variables, so they don't deal with this path at all.
-		if (patch && (!is_block || var->storage == StorageClassInput))
+		if (patch && (!is_block || is_arrayed || var->storage == StorageClassInput))
 			flat_data = false;
 
 		// We might have a chained access chain, where
@@ -12053,8 +12056,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		if (is_tese_shader() && msl_options.raw_buffer_tese_input && var)
 		{
 			bool is_stage_in = var->basevariable == stage_in_ptr_var_id;
-			bool is_patch_stage_in = has_decoration(var->self, DecorationPatch) ||
-			                         is_patch_block(get_variable_data_type(get<SPIRVariable>(var->basevariable)));
+			bool is_patch_stage_in = has_decoration(var->self, DecorationPatch);
 			bool is_builtin = has_decoration(var->self, DecorationBuiltIn);
 			BuiltIn builtin = (BuiltIn)get_decoration(var->self, DecorationBuiltIn);
 			bool is_tess_level = is_builtin && (builtin == BuiltInTessLevelOuter || builtin == BuiltInTessLevelInner);

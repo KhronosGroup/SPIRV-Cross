@@ -58,6 +58,17 @@ enum MSLShaderVariableFormat
 	MSL_SHADER_VARIABLE_FORMAT_INT_MAX = 0x7fffffff
 };
 
+// Indicates the rate at which a variable changes value, one of: per-vertex,
+// per-primitive, or per-patch.
+enum MSLShaderVariableRate
+{
+	MSL_SHADER_VARIABLE_RATE_PER_VERTEX = 0,
+	MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE = 1,
+	MSL_SHADER_VARIABLE_RATE_PER_PATCH = 2,
+
+	MSL_SHADER_VARIABLE_RATE_INT_MAX = 0x7fffffff,
+};
+
 // Defines MSL characteristics of a shader interface variable at a particular location.
 // After compilation, it is possible to query whether or not this location was used.
 // If vecsize is nonzero, it must be greater than or equal to the vecsize declared in the shader,
@@ -69,6 +80,7 @@ struct MSLShaderInterfaceVariable
 	MSLShaderVariableFormat format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
 	spv::BuiltIn builtin = spv::BuiltInMax;
 	uint32_t vecsize = 0;
+	MSLShaderVariableRate rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
 };
 
 // Matches the binding index of a MSL resource for a binding within a descriptor set.
