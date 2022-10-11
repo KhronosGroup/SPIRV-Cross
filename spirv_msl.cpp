@@ -2994,7 +2994,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 	{
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location++;
+		location += type_to_location_count(get<SPIRType>(mbr_type_id));
 	}
 	else if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
 	{
@@ -3011,7 +3011,7 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		}
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location++;
+		location += type_to_location_count(get<SPIRType>(mbr_type_id));
 	}
 	else if (has_decoration(var.self, DecorationLocation))
 	{
@@ -3027,21 +3027,21 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		}
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location++;
+		location += type_to_location_count(get<SPIRType>(mbr_type_id));
 	}
 	else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
 	{
 		location = inputs_by_builtin[builtin].location;
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location++;
+		location += type_to_location_count(get<SPIRType>(mbr_type_id));
 	}
 	else if (is_builtin && capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
 	{
 		location = outputs_by_builtin[builtin].location;
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location++;
+		location += type_to_location_count(get<SPIRType>(mbr_type_id));
 	}
 
 	// Copy the component location, if present.
