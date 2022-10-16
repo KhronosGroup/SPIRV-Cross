@@ -771,7 +771,7 @@ protected:
 	virtual std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain);
 	std::string to_multi_member_reference(const SPIRType &type, const SmallVector<uint32_t> &indices);
 	std::string type_to_glsl_constructor(const SPIRType &type);
-	virtual std::string argument_decl(const SPIRFunction::Parameter &arg);
+	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	virtual std::string to_qualifiers_glsl(uint32_t id);
 	void fixup_io_block_patch_primitive_qualifiers(const SPIRVariable &var);
 	void emit_output_variable_initializer(const SPIRVariable &var);

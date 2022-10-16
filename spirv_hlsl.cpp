@@ -968,24 +968,6 @@ std::string CompilerHLSL::to_initializer_expression(const SPIRVariable &var)
 		return CompilerGLSL::to_initializer_expression(var);
 }
 
-string CompilerHLSL::argument_decl(const SPIRFunction::Parameter& arg)
-{
-	auto &type = expression_type(arg.id);
-	const char *direction = "";
-
-	if (type.pointer)
-	{
-		if (arg.write_count && arg.read_count)
-			direction = "inout ";
-		else if (arg.write_count)
-			direction = "out ";
-		else if (arg.read_count)
-			direction = "in ";
-	}
-
-	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id), arg.id));
-}
-
 void CompilerHLSL::emit_interface_block_member_in_struct(const SPIRVariable &var, uint32_t member_index,
                                                          uint32_t location,
                                                          std::unordered_set<uint32_t> &active_locations)
@@ -1778,38 +1760,38 @@ void CompilerHLSL::emit_resources()
 	SmallVector<IOVariable> output_variables;
 
 	ir.for_each_typed_id<SPIRVariable>(
-	    [&](uint32_t, SPIRVariable &var)
-	    {
-		    auto &type = this->get<SPIRType>(var.basetype);
-		    bool block = has_decoration(type.self, DecorationBlock);
+		[&](uint32_t, SPIRVariable &var)
+		{
+			auto &type = this->get<SPIRType>(var.basetype);
+			bool block = has_decoration(type.self, DecorationBlock);
 
-		    if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
-			    return;
+			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+				return;
 
-		    if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-		        interface_variable_exists_in_entry_point(var.self))
-		    {
-			    if (block)
-			    {
-				    for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
-				    {
-					    uint32_t location = get_declared_member_location(var, i, false);
-					    if (var.storage == StorageClassInput)
-						    input_variables.push_back({ &var, location, i, true });
-					    else
-						    output_variables.push_back({ &var, location, i, true });
-				    }
-			    }
-			    else
-			    {
-				    uint32_t location = get_decoration(var.self, DecorationLocation);
-				    if (var.storage == StorageClassInput)
-					    input_variables.push_back({ &var, location, 0, false });
-				    else
-					    output_variables.push_back({ &var, location, 0, false });
-			    }
-		    }
-	    });
+			if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
+				interface_variable_exists_in_entry_point(var.self))
+			{
+				if (block)
+				{
+					for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+					{
+						uint32_t location = get_declared_member_location(var, i, false);
+						if (var.storage == StorageClassInput)
+							input_variables.push_back({ &var, location, i, true });
+						else
+							output_variables.push_back({ &var, location, i, true });
+					}
+				}
+				else
+				{
+					uint32_t location = get_decoration(var.self, DecorationLocation);
+					if (var.storage == StorageClassInput)
+						input_variables.push_back({ &var, location, 0, false });
+					else
+						output_variables.push_back({ &var, location, 0, false });
+				}
+			}
+		});
 
 	const auto variable_compare = [&](const IOVariable &a, const IOVariable &b) -> bool
 	{
@@ -1884,7 +1866,9 @@ void CompilerHLSL::emit_resources()
 		{
 			if (is_per_primitive_variable(*var.var))
 				continue;
-			if (var.block)
+			if (var.block && is_mesh_shader && var.block_member_index!=0)
+				continue;
+			if (var.block && !is_mesh_shader)
 				emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_outputs);
 			else
 				emit_interface_block_in_struct(*var.var, active_outputs);
@@ -1903,7 +1887,9 @@ void CompilerHLSL::emit_resources()
 			{
 				if (!is_per_primitive_variable(*var.var))
 					continue;
-				if (var.block)
+				if (var.block && is_mesh_shader && var.block_member_index!=0)
+					continue;
+				if (var.block && !is_mesh_shader)
 					emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_outputs);
 				else
 					emit_interface_block_in_struct(*var.var, active_outputs);
@@ -6594,7 +6580,7 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
-	backend.force_meged_mesh_block_hlsl = true;
+	backend.force_meged_mesh_block_hlsl = (get_execution_model()==ExecutionModelMeshEXT || get_execution_model()==ExecutionModelMeshNV);
 
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
