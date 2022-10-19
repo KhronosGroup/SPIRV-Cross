@@ -44,31 +44,30 @@ struct spvUnsafeArray
     }
 };
 
+struct _35
+{
+    float dummy;
+    float4 variableInStruct;
+};
+
 struct main0_out
 {
+    float outResult [[user(locn0)]];
     float4 gl_Position [[position]];
 };
 
-struct main0_patchIn
+struct main0_in
 {
-    float4 gl_TessLevelOuter [[attribute(0)]];
-    float2 gl_TessLevelInner [[attribute(1)]];
+    spvUnsafeArray<_35, 3> testStructArray;
 };
 
-[[ patch(quad, 0) ]] vertex main0_out main0(main0_patchIn patchIn [[stage_in]], float2 gl_TessCoordIn [[position_in_patch]])
+[[ patch(triangle, 0) ]] vertex main0_out main0(float3 gl_TessCoord [[position_in_patch]], uint gl_PrimitiveID [[patch_id]], const device main0_in* spvIn [[buffer(22)]])
 {
     main0_out out = {};
-    spvUnsafeArray<float, 2> gl_TessLevelInner = {};
-    spvUnsafeArray<float, 4> gl_TessLevelOuter = {};
-    gl_TessLevelInner[0] = patchIn.gl_TessLevelInner[0];
-    gl_TessLevelInner[1] = patchIn.gl_TessLevelInner[1];
-    gl_TessLevelOuter[0] = patchIn.gl_TessLevelOuter[0];
-    gl_TessLevelOuter[1] = patchIn.gl_TessLevelOuter[1];
-    gl_TessLevelOuter[2] = patchIn.gl_TessLevelOuter[2];
-    gl_TessLevelOuter[3] = patchIn.gl_TessLevelOuter[3];
-    float3 gl_TessCoord = float3(gl_TessCoordIn.x, gl_TessCoordIn.y, 0.0);
-    gl_TessCoord.y = 1.0 - gl_TessCoord.y;
-    out.gl_Position = float4(((gl_TessCoord.x * gl_TessLevelInner[0]) * gl_TessLevelOuter[0]) + (((1.0 - gl_TessCoord.x) * gl_TessLevelInner[0]) * gl_TessLevelOuter[2]), ((gl_TessCoord.y * gl_TessLevelInner[1]) * gl_TessLevelOuter[3]) + (((1.0 - gl_TessCoord.y) * gl_TessLevelInner[1]) * gl_TessLevelOuter[1]), 0.0, 1.0);
+    const device main0_in* gl_in = &spvIn[gl_PrimitiveID * 0];
+    out.gl_Position = float4((gl_TessCoord.xy * 2.0) - float2(1.0), 0.0, 1.0);
+    float result = ((float(abs(gl_in[0].testStructArray[2].variableInStruct.x - (-4.0)) < 0.001000000047497451305389404296875) * float(abs(gl_in[0].testStructArray[2].variableInStruct.y - (-9.0)) < 0.001000000047497451305389404296875)) * float(abs(gl_in[0].testStructArray[2].variableInStruct.z - 3.0) < 0.001000000047497451305389404296875)) * float(abs(gl_in[0].testStructArray[2].variableInStruct.w - 7.0) < 0.001000000047497451305389404296875);
+    out.outResult = result;
     return out;
 }
 

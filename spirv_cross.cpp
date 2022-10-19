@@ -2345,6 +2345,11 @@ bool Compiler::is_tessellation_shader() const
 	return is_tessellation_shader(get_execution_model());
 }
 
+bool Compiler::is_tessellating_triangles() const
+{
+	return get_execution_mode_bitset().get(ExecutionModeTriangles);
+}
+
 void Compiler::set_remapped_variable_state(VariableID id, bool remap_enable)
 {
 	get<SPIRVariable>(id).remapped_variable = remap_enable;

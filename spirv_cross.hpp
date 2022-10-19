@@ -371,6 +371,7 @@ public:
 	spv::ExecutionModel get_execution_model() const;
 
 	bool is_tessellation_shader() const;
+	bool is_tessellating_triangles() const;
 
 	// In SPIR-V, the compute work group size can be represented by a constant vector, in which case
 	// the LocalSize execution mode is ignored.

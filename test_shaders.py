@@ -321,6 +321,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('1')
         msl_args.append('any16')
         msl_args.append('2')
+    if '.raw-tess-in.' in shader:
+        msl_args.append('--msl-raw-buffer-tese-input')
     if '.for-tess.' in shader:
         msl_args.append('--msl-vertex-for-tessellation')
     if '.fixed-sample-mask.' in shader:

@@ -654,6 +654,7 @@ struct CLIArguments
 	bool msl_enable_frag_stencil_ref_builtin = true;
 	uint32_t msl_enable_frag_output_mask = 0xffffffff;
 	bool msl_enable_clip_distance_user_varying = true;
+	bool msl_raw_buffer_tese_input = false;
 	bool msl_multi_patch_workgroup = false;
 	bool msl_vertex_for_tessellation = false;
 	uint32_t msl_additional_fixed_sample_mask = 0xffffffff;
@@ -878,20 +879,33 @@ static void print_help_msl()
 	                "\t[--msl-disable-frag-stencil-ref-builtin]:\n\t\tDisable FragStencilRef output. Useful if pipeline does not enable stencil output, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-enable-frag-output-mask <mask>]:\n\t\tOnly selectively enable fragment outputs. Useful if pipeline does not enable fragment output for certain locations, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-no-clip-distance-user-varying]:\n\t\tDo not emit user varyings to emulate gl_ClipDistance in fragment shaders.\n"
+	                "\t[--msl-add-shader-input <index> <format> <size> <rate>]:\n\t\tSpecify the format of the shader input at <index>.\n"
+	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
+	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader. <rate> can be 'vertex', "
+	                "'primitive', or 'patch' to indicate a per-vertex, per-primitive, or per-patch variable.\n"
+	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
+	                "\t[--msl-add-shader-output <index> <format> <size> <rate>]:\n\t\tSpecify the format of the shader output at <index>.\n"
+	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
+	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader. <rate> can be 'vertex', "
+	                "'primitive', or 'patch' to indicate a per-vertex, per-primitive, or per-patch variable.\n"
+	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-shader-input <index> <format> <size>]:\n\t\tSpecify the format of the shader input at <index>.\n"
 	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
-	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader.\n"
-	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
+	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
+	                "\t\tEquivalent to --msl-add-shader-input with a rate of 'vertex'.\n"
 	                "\t[--msl-shader-output <index> <format> <size>]:\n\t\tSpecify the format of the shader output at <index>.\n"
 	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
-	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader.\n"
-	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
+	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
+	                "\t\tEquivalent to --msl-add-shader-output with a rate of 'vertex'.\n"
+	                "\t[--msl-raw-buffer-tese-input]:\n\t\tUse raw buffers for tessellation evaluation input.\n"
+	                "\t\tThis allows the use of nested structures and arrays.\n"
+	                "\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
 	                "\t[--msl-multi-patch-workgroup]:\n\t\tUse the new style of tessellation control processing, where multiple patches are processed per workgroup.\n"
-					"\t\tThis should increase throughput by ensuring all the GPU's SIMD lanes are occupied, but it is not compatible with the old style.\n"
-					"\t\tIn addition, this style also passes input variables in buffers directly instead of using vertex attribute processing.\n"
-					"\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
+	                "\t\tThis should increase throughput by ensuring all the GPU's SIMD lanes are occupied, but it is not compatible with the old style.\n"
+	                "\t\tIn addition, this style also passes input variables in buffers directly instead of using vertex attribute processing.\n"
+	                "\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
 	                "\t[--msl-vertex-for-tessellation]:\n\t\tWhen handling a vertex shader, marks it as one that will be used with a new-style tessellation control shader.\n"
-					"\t\tThe vertex shader is output to MSL as a compute kernel which outputs vertices to the buffer in the order they are received, rather than in index order as with --msl-capture-output normally.\n"
+	                "\t\tThe vertex shader is output to MSL as a compute kernel which outputs vertices to the buffer in the order they are received, rather than in index order as with --msl-capture-output normally.\n"
 	                "\t[--msl-additional-fixed-sample-mask <mask>]:\n"
 	                "\t\tSet an additional fixed sample mask. If the shader outputs a sample mask, then the final sample mask will be a bitwise AND of the two.\n"
 	                "\t[--msl-arrayed-subpass-input]:\n\t\tAssume that images of dimension SubpassData have multiple layers. Layered input attachments are accessed relative to BuiltInLayer.\n"
@@ -1170,6 +1184,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.enable_frag_stencil_ref_builtin = args.msl_enable_frag_stencil_ref_builtin;
 		msl_opts.enable_frag_output_mask = args.msl_enable_frag_output_mask;
 		msl_opts.enable_clip_distance_user_varying = args.msl_enable_clip_distance_user_varying;
+		msl_opts.raw_buffer_tese_input = args.msl_raw_buffer_tese_input;
 		msl_opts.multi_patch_workgroup = args.msl_multi_patch_workgroup;
 		msl_opts.vertex_for_tessellation = args.msl_vertex_for_tessellation;
 		msl_opts.additional_fixed_sample_mask = args.msl_additional_fixed_sample_mask;
@@ -1609,6 +1624,56 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &parser) { args.msl_enable_frag_output_mask = parser.next_hex_uint(); });
 	cbs.add("--msl-no-clip-distance-user-varying",
 	        [&args](CLIParser &) { args.msl_enable_clip_distance_user_varying = false; });
+	cbs.add("--msl-add-shader-input", [&args](CLIParser &parser) {
+		MSLShaderInterfaceVariable input;
+		// Make sure next_uint() is called in-order.
+		input.location = parser.next_uint();
+		const char *format = parser.next_value_string("other");
+		if (strcmp(format, "any32") == 0)
+			input.format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
+		else if (strcmp(format, "any16") == 0)
+			input.format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
+		else if (strcmp(format, "u16") == 0)
+			input.format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
+		else if (strcmp(format, "u8") == 0)
+			input.format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
+		else
+			input.format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		input.vecsize = parser.next_uint();
+		const char *rate = parser.next_value_string("vertex");
+		if (strcmp(rate, "primitive") == 0)
+			input.rate = MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE;
+		else if (strcmp(rate, "patch") == 0)
+			input.rate = MSL_SHADER_VARIABLE_RATE_PER_PATCH;
+		else
+			input.rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		args.msl_shader_inputs.push_back(input);
+	});
+	cbs.add("--msl-add-shader-output", [&args](CLIParser &parser) {
+		MSLShaderInterfaceVariable output;
+		// Make sure next_uint() is called in-order.
+		output.location = parser.next_uint();
+		const char *format = parser.next_value_string("other");
+		if (strcmp(format, "any32") == 0)
+			output.format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
+		else if (strcmp(format, "any16") == 0)
+			output.format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
+		else if (strcmp(format, "u16") == 0)
+			output.format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
+		else if (strcmp(format, "u8") == 0)
+			output.format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
+		else
+			output.format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		output.vecsize = parser.next_uint();
+		const char *rate = parser.next_value_string("vertex");
+		if (strcmp(rate, "primitive") == 0)
+			output.rate = MSL_SHADER_VARIABLE_RATE_PER_PRIMITIVE;
+		else if (strcmp(rate, "patch") == 0)
+			output.rate = MSL_SHADER_VARIABLE_RATE_PER_PATCH;
+		else
+			output.rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
+		args.msl_shader_outputs.push_back(output);
+	});
 	cbs.add("--msl-shader-input", [&args](CLIParser &parser) {
 		MSLShaderInterfaceVariable input;
 		// Make sure next_uint() is called in-order.
@@ -1645,6 +1710,7 @@ static int main_inner(int argc, char *argv[])
 		output.vecsize = parser.next_uint();
 		args.msl_shader_outputs.push_back(output);
 	});
+	cbs.add("--msl-raw-buffer-tese-input", [&args](CLIParser &) { args.msl_raw_buffer_tese_input = true; });
 	cbs.add("--msl-multi-patch-workgroup", [&args](CLIParser &) { args.msl_multi_patch_workgroup = true; });
 	cbs.add("--msl-vertex-for-tessellation", [&args](CLIParser &) { args.msl_vertex_for_tessellation = true; });
 	cbs.add("--msl-additional-fixed-sample-mask",
