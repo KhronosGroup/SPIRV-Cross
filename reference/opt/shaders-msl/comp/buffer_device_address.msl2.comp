@@ -32,7 +32,7 @@ kernel void main0(constant Registers& registers [[buffer(0)]], uint3 gl_GlobalIn
     uint _30 = ((_19 * 8u) * gl_NumWorkGroups.x) + _29;
     uint local_index = _30;
     uint slice = gl_WorkGroupID.z;
-    device Position* positions = registers.references->buffers[gl_WorkGroupID.z];
+    device Position* __restrict positions = registers.references->buffers[gl_WorkGroupID.z];
     float _66 = float(gl_WorkGroupID.z);
     float _70 = fract(fma(_66, 0.100000001490116119384765625, registers.fract_time));
     float _71 = 6.283125400543212890625 * _70;

@@ -1275,7 +1275,7 @@ void CompilerMSL::emit_entry_point_declarations()
 			else
 			{
 				is_using_builtin_array = true;
-				statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id), name,
+				statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
 				          type_to_array_glsl(type), " =");
 
 				uint32_t dim = uint32_t(type.array.size());
@@ -1310,7 +1310,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		}
 		else
 		{
-			statement(get_argument_address_space(var), " auto& ", to_restrict(var_id), name, " = *(",
+			statement(get_argument_address_space(var), " auto& ", to_restrict(var_id, true), name, " = *(",
 			          get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false), ")((",
 			          get_argument_address_space(var), " char* ", to_restrict(var_id, false), ")", to_name(arg_id), ".",
 			          ensure_valid_name(name, "m"), " + ", to_name(dynamic_offsets_buffer_id), "[", base_index, "]);");
@@ -1324,7 +1324,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
 		string name = to_name(array_id);
-		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id), name,
+		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id, true), name,
 		          "[] =");
 		begin_scope();
 		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
@@ -1347,7 +1347,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		uint32_t desc_binding = get_decoration(var_id, DecorationBinding);
 		auto alias_name = join("spvBufferAliasSet", desc_set, "Binding", desc_binding);
 
-		statement(addr_space, " auto& ", to_restrict(var_id),
+		statement(addr_space, " auto& ", to_restrict(var_id, true),
 		          name,
 		          " = *(", addr_space, " ", type_to_glsl(type), "*)", alias_name, ";");
 	}
@@ -1365,7 +1365,7 @@ void CompilerMSL::emit_entry_point_declarations()
 
 		if (type.array.empty())
 		{
-			statement(addr_space, " auto& ", to_restrict(var_id), to_name(var_id), " = (", addr_space, " ",
+			statement(addr_space, " auto& ", to_restrict(var_id, true), to_name(var_id), " = (", addr_space, " ",
 			          type_to_glsl(type), "&)", ir.meta[alias_id].decoration.qualified_alias, ";");
 		}
 		else
@@ -1377,7 +1377,7 @@ void CompilerMSL::emit_entry_point_declarations()
 			// address space of the argument buffer itself, which is usually constant, but can be const device for
 			// large argument buffers.
 			is_using_builtin_array = true;
-			statement(desc_addr_space, " auto& ", to_restrict(var_id), to_name(var_id), " = (", addr_space, " ",
+			statement(desc_addr_space, " auto& ", to_restrict(var_id, true), to_name(var_id), " = (", addr_space, " ",
 			          type_to_glsl(type), "* ", desc_addr_space, " (&)",
 			          type_to_array_glsl(type), ")", ir.meta[alias_id].decoration.qualified_alias, ";");
 			is_using_builtin_array = false;
@@ -12120,7 +12120,8 @@ const char *CompilerMSL::to_restrict(uint32_t id, bool space)
 	else
 		flags = get_decoration_bitset(id);
 
-	return flags.get(DecorationRestrict) ? (space ? "restrict " : "restrict") : "";
+	return flags.get(DecorationRestrict) || flags.get(DecorationRestrictPointerEXT) ?
+	       (space ? "__restrict " : "__restrict") : "";
 }
 
 string CompilerMSL::entry_point_arg_stage_in()
@@ -12525,7 +12526,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 
 		claimed_bindings.set(buffer_binding);
 
-		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(id) + to_name(id);
+		ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(id, true) + to_name(id);
 		ep_args += " [[buffer(" + convert_to_string(buffer_binding) + ")]]";
 
 		next_metal_resource_index_buffer = max(next_metal_resource_index_buffer, buffer_binding + 1);
@@ -12737,7 +12738,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				{
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + to_restrict(var_id) +
+					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + to_restrict(var_id, true) +
 					           r.name + "_" + convert_to_string(i);
 					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")";
 					if (interlocked_resources.count(var_id))
@@ -12751,7 +12752,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (!ep_args.empty())
 					ep_args += ", ";
 				ep_args +=
-				    get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(var_id) + r.name;
+				    get_argument_address_space(var) + " " + type_to_glsl(type) + "& " + to_restrict(var_id, true) + r.name;
 				ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
 				if (interlocked_resources.count(var_id))
 					ep_args += ", raster_order_group(0)";
@@ -13687,7 +13688,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			// non-constant arrays, but we can create thread const from constant.
 			decl = string("thread const ") + decl;
 			decl += " (&";
-			const char *restrict_kw = to_restrict(name_id);
+			const char *restrict_kw = to_restrict(name_id, true);
 			if (*restrict_kw)
 			{
 				decl += " ";
@@ -13744,7 +13745,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			else
 				decl += " (&";
 
-			const char *restrict_kw = to_restrict(name_id);
+			const char *restrict_kw = to_restrict(name_id, true);
 			if (*restrict_kw)
 			{
 				decl += " ";
@@ -13776,7 +13777,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		decl += "&";
 		decl += " ";
-		decl += to_restrict(name_id);
+		decl += to_restrict(name_id, true);
 		decl += to_expression(name_id);
 	}
 	else if (type_is_image)
@@ -14276,7 +14277,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		default:
 			// Anything else can be a raw pointer.
 			type_name += "*";
-			restrict_kw = to_restrict(id);
+			restrict_kw = to_restrict(id, false);
 			if (*restrict_kw)
 			{
 				type_name += " ";

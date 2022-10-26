@@ -29,7 +29,7 @@ kernel void main0(constant Registers& registers [[buffer(0)]], uint3 gl_GlobalIn
     uint2 local_offset = gl_GlobalInvocationID.xy;
     uint local_index = ((local_offset.y * 8u) * gl_NumWorkGroups.x) + local_offset.x;
     uint slice = gl_WorkGroupID.z;
-    device Position* positions = registers.references->buffers[slice];
+    device Position* __restrict positions = registers.references->buffers[slice];
     float offset = 6.283125400543212890625 * fract(registers.fract_time + (float(slice) * 0.100000001490116119384765625));
     float2 pos = float2(local_offset);
     pos.x += (0.20000000298023223876953125 * sin((2.2000000476837158203125 * pos.x) + offset));
