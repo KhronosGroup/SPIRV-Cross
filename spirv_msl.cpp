@@ -14196,7 +14196,7 @@ void CompilerMSL::sync_entry_point_aliases_and_names()
 
 string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain)
 {
-	auto *var = maybe_get<SPIRVariable>(base);
+	auto *var = maybe_get_backing_variable(base);
 	// If this is a buffer array, we have to dereference the buffer pointers.
 	// Otherwise, if this is a pointer expression, dereference it.
 
