@@ -4859,6 +4859,9 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 				}
 			}
 
+			if (expression_is_forwarded(id))
+				return constant_expression(c);
+
 			return to_name(id);
 		}
 		else if (c.is_used_as_lut)
@@ -4928,6 +4931,80 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 	default:
 		return to_name(id);
 	}
+}
+
+SmallVector<ConstantID> CompilerGLSL::get_composite_constant_ids(ConstantID const_id)
+{
+	if (auto *constant = maybe_get<SPIRConstant>(const_id))
+	{
+		const auto &type = get<SPIRType>(constant->constant_type);
+		if (is_array(type) || type.basetype == SPIRType::Struct)
+			return constant->subconstants;
+		if (is_matrix(type))
+			return constant->m.id;
+		if (is_vector(type))
+			return constant->m.c[0].id;
+		SPIRV_CROSS_THROW("Unexpected scalar constant!");
+	}
+	if (!const_composite_insert_ids.count(const_id))
+		SPIRV_CROSS_THROW("Unimplemented for this OpSpecConstantOp!");
+	return const_composite_insert_ids[const_id];
+}
+
+void CompilerGLSL::fill_composite_constant(SPIRConstant &constant, TypeID type_id,
+                                           const SmallVector<ConstantID> &initializers)
+{
+	auto &type = get<SPIRType>(type_id);
+	constant.specialization = true;
+	if (is_array(type) || type.basetype == SPIRType::Struct)
+	{
+		constant.subconstants = initializers;
+	}
+	else if (is_matrix(type))
+	{
+		constant.m.columns = type.columns;
+		for (uint32_t i = 0; i < type.columns; ++i)
+		{
+			constant.m.id[i] = initializers[i];
+			constant.m.c[i].vecsize = type.vecsize;
+		}
+	}
+	else if (is_vector(type))
+	{
+		constant.m.c[0].vecsize = type.vecsize;
+		for (uint32_t i = 0; i < type.vecsize; ++i)
+			constant.m.c[0].id[i] = initializers[i];
+	}
+	else
+		SPIRV_CROSS_THROW("Unexpected scalar in SpecConstantOp CompositeInsert!");
+}
+
+void CompilerGLSL::set_composite_constant(ConstantID const_id, TypeID type_id,
+                                          const SmallVector<ConstantID> &initializers)
+{
+	if (maybe_get<SPIRConstantOp>(const_id))
+	{
+		const_composite_insert_ids[const_id] = initializers;
+		return;
+	}
+
+	auto &constant = set<SPIRConstant>(const_id, type_id);
+	fill_composite_constant(constant, type_id, initializers);
+	forwarded_temporaries.insert(const_id);
+}
+
+TypeID CompilerGLSL::get_composite_member_type(TypeID type_id, uint32_t member_idx)
+{
+	auto &type = get<SPIRType>(type_id);
+	if (is_array(type))
+		return type.parent_type;
+	if (type.basetype == SPIRType::Struct)
+		return type.member_types[member_idx];
+	if (is_matrix(type))
+		return type.parent_type;
+	if (is_vector(type))
+		return type.parent_type;
+	SPIRV_CROSS_THROW("Shouldn't reach lower than vector handling OpSpecConstantOp CompositeInsert!");
 }
 
 string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
@@ -5034,10 +5111,21 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		for (uint32_t i = 2; i < uint32_t(cop.arguments.size()); i++)
 		{
 			uint32_t index = cop.arguments[i];
-			if (index >= left_components)
+			if (index == 0xFFFFFFFF)
+			{
+				SPIRConstant c;
+				c.constant_type = type.parent_type;
+				assert(type.parent_type != ID(0));
+				expr += constant_expression(c);
+			}
+			else if (index >= left_components)
+			{
 				expr += right_arg + "." + "xyzw"[index - left_components];
+			}
 			else
+			{
 				expr += left_arg + "." + "xyzw"[index];
+			}
 
 			if (i + 1 < uint32_t(cop.arguments.size()))
 				expr += ", ";
@@ -5055,7 +5143,30 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	}
 
 	case OpCompositeInsert:
-		SPIRV_CROSS_THROW("OpCompositeInsert spec constant op is not supported.");
+	{
+		SmallVector<ConstantID> new_init = get_composite_constant_ids(cop.arguments[1]);
+		uint32_t idx;
+		uint32_t target_id = cop.self;
+		uint32_t target_type_id = cop.basetype;
+		// We have to drill down to the part we want to modify, and create new
+		// constants for each containing part.
+		for (idx = 2; idx < cop.arguments.size() - 1; ++idx)
+		{
+			uint32_t new_const = ir.increase_bound_by(1);
+			uint32_t old_const = new_init[cop.arguments[idx]];
+			new_init[cop.arguments[idx]] = new_const;
+			set_composite_constant(target_id, target_type_id, new_init);
+			new_init = get_composite_constant_ids(old_const);
+			target_id = new_const;
+			target_type_id = get_composite_member_type(target_type_id, cop.arguments[idx]);
+		}
+		// Now replace the initializer with the one from this instruction.
+		new_init[cop.arguments[idx]] = cop.arguments[0];
+		set_composite_constant(target_id, target_type_id, new_init);
+		SPIRConstant tmp_const(cop.basetype);
+		fill_composite_constant(tmp_const, cop.basetype, const_composite_insert_ids[cop.self]);
+		return constant_expression(tmp_const);
+	}
 
 	default:
 		// Some opcodes are unimplemented here, these are currently not possible to test from glslang.
@@ -5206,20 +5317,27 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 		uint32_t subconstant_index = 0;
 		for (auto &elem : c.subconstants)
 		{
-			auto &subc = get<SPIRConstant>(elem);
-			if (subc.specialization)
-				res += to_name(elem);
+			if (auto *op = maybe_get<SPIRConstantOp>(elem))
+			{
+				res += constant_op_expression(*op);
+			}
 			else
 			{
-				if (type.array.empty() && type.basetype == SPIRType::Struct)
+				auto &subc = get<SPIRConstant>(elem);
+				if (subc.specialization && !expression_is_forwarded(elem))
+					res += to_name(elem);
+				else
 				{
-					// When we get down to emitting struct members, override the block-like information.
-					// For constants, we can freely mix and match block-like state.
-					inside_block_like_struct_scope =
-							has_member_decoration(type.self, subconstant_index, DecorationOffset);
-				}
+					if (type.array.empty() && type.basetype == SPIRType::Struct)
+					{
+						// When we get down to emitting struct members, override the block-like information.
+						// For constants, we can freely mix and match block-like state.
+						inside_block_like_struct_scope =
+						    has_member_decoration(type.self, subconstant_index, DecorationOffset);
+					}
 
-				res += constant_expression(subc, inside_block_like_struct_scope);
+					res += constant_expression(subc, inside_block_like_struct_scope);
+				}
 			}
 
 			if (&elem != &c.subconstants.back())

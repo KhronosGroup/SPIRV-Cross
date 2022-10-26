@@ -989,6 +989,12 @@ protected:
 
 private:
 	void init();
+
+	SmallVector<ConstantID> get_composite_constant_ids(ConstantID const_id);
+	void fill_composite_constant(SPIRConstant &constant, TypeID type_id, const SmallVector<ConstantID> &initializers);
+	void set_composite_constant(ConstantID const_id, TypeID type_id, const SmallVector<ConstantID> &initializers);
+	TypeID get_composite_member_type(TypeID type_id, uint32_t member_idx);
+	std::unordered_map<uint32_t, SmallVector<ConstantID>> const_composite_insert_ids;
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 
