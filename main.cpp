@@ -613,6 +613,12 @@ struct InterfaceVariableRename
 	string variable_name;
 };
 
+struct HLSLVertexAttributeRemapNamed
+{
+	std::string name;
+	std::string semantic;
+};
+
 struct CLIArguments
 {
 	const char *input = nullptr;
@@ -692,6 +698,7 @@ struct CLIArguments
 	SmallVector<VariableTypeRemap> variable_type_remaps;
 	SmallVector<InterfaceVariableRename> interface_variable_renames;
 	SmallVector<HLSLVertexAttributeRemap> hlsl_attr_remap;
+	SmallVector<HLSLVertexAttributeRemapNamed> hlsl_attr_remap_named;
 	SmallVector<std::pair<uint32_t, uint32_t>> masked_stage_outputs;
 	SmallVector<BuiltIn> masked_stage_builtins;
 	string entry;
@@ -824,6 +831,8 @@ static void print_help_hlsl()
 	                "\t\tShader must ensure that read/write state is consistent at all call sites.\n"
 	                "\t[--set-hlsl-vertex-input-semantic <location> <semantic>]:\n\t\tEmits a specific vertex input semantic for a given location.\n"
 	                "\t\tOtherwise, TEXCOORD# is used as semantics, where # is location.\n"
+	                "\t[--set-hlsl-named-vertex-input-semantic <name> <semantic>]:\n\t\tEmits a specific vertex input semantic for a given name.\n"
+	                "\t\tOpName reflection information must be intact.\n"
 	                "\t[--hlsl-enable-16bit-types]:\n\t\tEnables native use of half/int16_t/uint16_t and ByteAddressBuffer interaction with these types. Requires SM 6.2.\n"
 	                "\t[--hlsl-flatten-matrix-vertex-input-semantics]:\n\t\tEmits matrix vertex inputs with input semantics as if they were independent vectors, e.g. TEXCOORD{2,3,4} rather than matrix form TEXCOORD2_{0,1,2}.\n"
 	);
@@ -1485,6 +1494,22 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	{
 		for (auto &remap : args.hlsl_attr_remap)
 			static_cast<CompilerHLSL *>(compiler.get())->add_vertex_attribute_remap(remap);
+
+		for (auto &named_remap : args.hlsl_attr_remap_named)
+		{
+			auto itr = std::find_if(res.stage_inputs.begin(), res.stage_inputs.end(), [&](const Resource &input_res) {
+				return input_res.name == named_remap.name;
+			});
+
+			if (itr != res.stage_inputs.end())
+			{
+				HLSLVertexAttributeRemap remap = {
+					compiler->get_decoration(itr->id, DecorationLocation),
+					named_remap.semantic,
+				};
+				static_cast<CompilerHLSL *>(compiler.get())->add_vertex_attribute_remap(remap);
+			}
+		}
 	}
 
 	auto ret = compiler->compile();
@@ -1744,6 +1769,12 @@ static int main_inner(int argc, char *argv[])
 		remap.location = parser.next_uint();
 		remap.semantic = parser.next_string();
 		args.hlsl_attr_remap.push_back(std::move(remap));
+	});
+	cbs.add("--set-hlsl-named-vertex-input-semantic", [&args](CLIParser &parser) {
+		HLSLVertexAttributeRemapNamed remap;
+		remap.name = parser.next_string();
+		remap.semantic = parser.next_string();
+		args.hlsl_attr_remap_named.push_back(std::move(remap));
 	});
 
 	cbs.add("--remap", [&args](CLIParser &parser) {
