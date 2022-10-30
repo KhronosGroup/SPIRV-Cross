@@ -382,6 +382,10 @@ def shader_model_hlsl(shader):
             return '-Tps_5_1'
     elif '.comp' in shader:
         return '-Tcs_5_1'
+    elif '.mesh' in shader:
+        return '-Tms_6_5'
+    elif '.task' in shader:
+        return '-Tas_6_5'
     else:
         return None
 
@@ -405,6 +409,8 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
     if '.nonuniformresource.' in shader:
         test_glslang = False
     if '.fxconly.' in shader:
+        test_glslang = False
+    if '.task' in shader or '.mesh' in shader:
         test_glslang = False
 
     hlsl_args = [paths.glslang, '--amb', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader]
