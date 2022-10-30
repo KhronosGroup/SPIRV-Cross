@@ -41,7 +41,7 @@ void main()
 {
 	SetMeshOutputsEXT(24, 22);
 	gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = vec4(gl_GlobalInvocationID, 1.0);
-	gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_PointSize = 2.0;
+	// gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_PointSize = 2.0;
 	gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_ClipDistance[0] = 4.0;
 	gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_CullDistance[1] = 5.0;
 	vOut[gl_LocalInvocationIndex] = vec4(gl_GlobalInvocationID, 2.0);

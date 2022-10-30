@@ -55,9 +55,8 @@ void mesh_main(out gl_MeshPerVertexEXT gl_MeshVerticesEXT[24], out gl_MeshPerPri
 {
     SetMeshOutputCounts(24u, 22u);
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = float4(float3(gl_GlobalInvocationID), 1.0f);
-    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_PointSize = 2.0f;
-    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_ClipDistance[0] = 4.0f;
-    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_CullDistance[1] = 5.0f;
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_ClipDistance[0/4][0%4] = 4.0f;
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_CullDistance[1/4][1%4] = 5.0f;
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].vOut = float4(float3(gl_GlobalInvocationID), 2.0f);
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].outputs.a = 5.0f.xxxx;
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].outputs.b = 6.0f.xxxx;
