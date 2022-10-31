@@ -604,7 +604,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		case BuiltInClipDistance:
 			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
-			if(execution.model==ExecutionModelMeshEXT)
+			if (execution.model == ExecutionModelMeshEXT)
 			{
 				const uint32_t clip = (clip_distance_count + 3) / 4;
 				statement("float4 gl_ClipDistance", "[", clip,"] : SV_ClipDistance;");
@@ -628,7 +628,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		case BuiltInCullDistance:
 			// HLSL is a bit weird here, use SV_CullDistance0, SV_CullDistance1 and so on with vectors.
-			if(execution.model==ExecutionModelMeshEXT)
+			if (execution.model == ExecutionModelMeshEXT)
 			{
 				const uint32_t cull = (cull_distance_count + 3) / 4;
 				statement("float4 gl_CullDistance", "[", cull,"] : SV_CullDistance;");
@@ -694,7 +694,7 @@ void CompilerHLSL::emit_builtin_primitive_outputs_in_struct()
 		{
 			const ExecutionModel model = get_entry_point().model;
 			if (hlsl_options.shader_model < 50 ||
-				(model != ExecutionModelGeometry && model != spv::ExecutionModelMeshEXT &&
+				(model != ExecutionModelGeometry && model != ExecutionModelMeshEXT &&
 				 model != spv::ExecutionModelMeshNV))
 				SPIRV_CROSS_THROW("Render target array index output is only supported in GS/MS 5.0 or higher.");
 			type = "uint";
@@ -1054,7 +1054,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		else
 		{
 			auto decl_type = type;
-			if (execution.model == spv::ExecutionModelMeshEXT)
+			if (execution.model == ExecutionModelMeshEXT)
 			{
 				decl_type.array.erase(decl_type.array.begin());
 				decl_type.array_size_literal.erase(decl_type.array_size_literal.begin());
@@ -1727,7 +1727,7 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
-	const bool is_mesh_shader = (execution.model == ExecutionModelMeshEXT || execution.model == ExecutionModelMeshNV);
+	const bool is_mesh_shader = (execution.model == ExecutionModelMeshEXT);
 	if (!output_variables.empty() || !active_output_builtins.empty())
 	{
 		sort(output_variables.begin(), output_variables.end(), variable_compare);
@@ -1784,7 +1784,7 @@ void CompilerHLSL::emit_resources()
 		{
 			if (!variable_is_lut(var))
 			{
-				if(var.storage==StorageClassTaskPayloadWorkgroupEXT)
+				if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
 					continue;
 
 				add_resource_name(var.self);
@@ -2732,7 +2732,7 @@ string CompilerHLSL::get_inner_entry_point_name() const
 		return "frag_main";
 	else if (execution.model == ExecutionModelGLCompute)
 		return "comp_main";
-	else if (execution.model == spv::ExecutionModelMeshEXT)
+	else if (execution.model == ExecutionModelMeshEXT)
 		return "mesh_main";
 	else
 		SPIRV_CROSS_THROW("Unsupported execution model.");
@@ -6460,7 +6460,7 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
-	backend.force_meged_mesh_block = (get_execution_model()==ExecutionModelMeshEXT);
+	backend.force_meged_mesh_block = (get_execution_model() == ExecutionModelMeshEXT);
 
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
