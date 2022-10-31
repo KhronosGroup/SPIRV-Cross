@@ -9213,7 +9213,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					break;
 				}
 			}
-			else if (backend.force_meged_mesh_block_hlsl && i == 0 && var && !is_builtin_variable(*var) &&
+			else if (backend.force_meged_mesh_block && i == 0 && var && !is_builtin_variable(*var) &&
 					 var->storage == StorageClassOutput)
 			{
 				if(is_per_primitive_variable(*var))
@@ -9316,7 +9316,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			else
 				physical_type = 0;
 
-			clip_cull_fixup = (builtin==BuiltInClipDistance || builtin==BuiltInCullDistance) && backend.force_meged_mesh_block_hlsl;
+			clip_cull_fixup = (builtin==BuiltInClipDistance || builtin==BuiltInCullDistance) && backend.force_meged_mesh_block;
 
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);

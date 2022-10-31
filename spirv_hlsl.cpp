@@ -621,7 +621,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 					static const char *types[] = { "float", "float2", "float3", "float4" };
 					statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassOutput), semantic_index,
-							  " : SV_ClipDistance", semantic_index, ";");
+					          " : SV_ClipDistance", semantic_index, ";");
 				}
 			}
 			break;
@@ -645,7 +645,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 					static const char *types[] = { "float", "float2", "float3", "float4" };
 					statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassOutput), semantic_index,
-							  " : SV_CullDistance", semantic_index, ";");
+					          " : SV_CullDistance", semantic_index, ";");
 				}
 			}
 			break;
@@ -972,9 +972,9 @@ void CompilerHLSL::emit_interface_block_member_in_struct(const SPIRVariable &var
 	auto &mbr_type = get<SPIRType>(type.member_types[member_index]);
 
 	statement(to_interpolation_qualifiers(get_member_decoration_bitset(type.self, member_index)),
-			  type_to_glsl(mbr_type),
-			  " ", mbr_name, type_to_array_glsl(mbr_type),
-			  " : ", semantic, ";");
+	          type_to_glsl(mbr_type),
+	          " ", mbr_name, type_to_array_glsl(mbr_type),
+	          " : ", semantic, ";");
 
 	// Structs and arrays should consume more locations.
 	uint32_t consumed_locations = type_to_consumed_locations(mbr_type);
@@ -1151,7 +1151,7 @@ void CompilerHLSL::emit_builtin_variables()
 		if (init_itr != builtin_to_initializer.end())
 			init_expr = join(" = ", to_expression(init_itr->second));
 
-		if (get_execution_model() == spv::ExecutionModelMeshEXT)
+		if (get_execution_model() == ExecutionModelMeshEXT)
 		{
 			if (builtin == BuiltInPosition || builtin == BuiltInPointSize || builtin == BuiltInClipDistance ||
 				builtin == BuiltInCullDistance || builtin == BuiltInLayer || builtin == BuiltInPrimitiveId ||
@@ -1373,9 +1373,9 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 		if ((var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
-			!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-			interface_variable_exists_in_entry_point(var.self) &&
-			has_decoration(type.self, DecorationBlock))
+		    !var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
+		    interface_variable_exists_in_entry_point(var.self) &&
+		    has_decoration(type.self, DecorationBlock))
 		{
 			io_block_types.insert(type.self);
 		}
@@ -1393,7 +1393,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 			if (c.self == workgroup_size_id)
 			{
 				statement("static const uint3 gl_WorkGroupSize = ",
-					  constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+				          constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
 				emitted = true;
 			}
 			else if (c.specialization)
@@ -1431,10 +1431,11 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 		else if (id.get_type() == TypeType)
 		{
 			auto &type = id.get<SPIRType>();
-			bool is_non_io_block = has_decoration(type.self, DecorationBlock) && io_block_types.count(type.self) == 0;
+			bool is_non_io_block = has_decoration(type.self, DecorationBlock) && 
+			                       io_block_types.count(type.self) == 0;
 			bool is_buffer_block = has_decoration(type.self, DecorationBufferBlock);
 			if (type.basetype == SPIRType::Struct && type.array.empty() &&
-				!type.pointer && !is_non_io_block && !is_buffer_block)
+			    !type.pointer && !is_non_io_block && !is_buffer_block)
 			{
 				if (emitted)
 					statement("");
@@ -1537,10 +1538,10 @@ void CompilerHLSL::emit_resources()
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
 		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-							   ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 
 		if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
-			has_block_flags)
+		    has_block_flags)
 		{
 			emit_buffer_block(var);
 			emitted = true;
@@ -1551,7 +1552,7 @@ void CompilerHLSL::emit_resources()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 		if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
-			!is_hidden_variable(var))
+		    !is_hidden_variable(var))
 		{
 			emit_push_constant_block(var);
 			emitted = true;
@@ -1583,8 +1584,8 @@ void CompilerHLSL::emit_resources()
 		}
 
 		if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			type.pointer && (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
-			!is_hidden_variable(var))
+		    type.pointer && (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
+		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
 			emitted = true;
@@ -1598,7 +1599,7 @@ void CompilerHLSL::emit_resources()
 	// Emit builtin input and output variables here.
 	emit_builtin_variables();
 
-	if (execution.model != ExecutionModelMeshEXT && execution.model != ExecutionModelMeshNV)
+	if (execution.model != ExecutionModelMeshEXT)
 	{
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 			auto &type = this->get<SPIRType>(var.basetype);
@@ -1642,7 +1643,7 @@ void CompilerHLSL::emit_resources()
 			return;
 
 		if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-			interface_variable_exists_in_entry_point(var.self))
+		    interface_variable_exists_in_entry_point(var.self))
 		{
 			if (block)
 			{
@@ -2105,56 +2106,56 @@ void CompilerHLSL::emit_resources()
 		statement_no_indent("");
 		statement("// Create the transpose of the cofactors, as the classical adjoint of the matrix.");
 		statement(
-			"adj[0][0] =  spvDet3x3(m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
-			"m[3][3]);");
+		    "adj[0][0] =  spvDet3x3(m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
+		    "m[3][3]);");
 		statement(
-			"adj[0][1] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
-			"m[3][3]);");
+		    "adj[0][1] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[2][1], m[2][2], m[2][3], m[3][1], m[3][2], "
+		    "m[3][3]);");
 		statement(
-			"adj[0][2] =  spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[3][1], m[3][2], "
-			"m[3][3]);");
+		    "adj[0][2] =  spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[3][1], m[3][2], "
+		    "m[3][3]);");
 		statement(
-			"adj[0][3] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], "
-			"m[2][3]);");
+		    "adj[0][3] = -spvDet3x3(m[0][1], m[0][2], m[0][3], m[1][1], m[1][2], m[1][3], m[2][1], m[2][2], "
+		    "m[2][3]);");
 		statement_no_indent("");
 		statement(
-			"adj[1][0] = -spvDet3x3(m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
-			"m[3][3]);");
+		    "adj[1][0] = -spvDet3x3(m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
+		    "m[3][3]);");
 		statement(
-			"adj[1][1] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
-			"m[3][3]);");
+		    "adj[1][1] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[2][0], m[2][2], m[2][3], m[3][0], m[3][2], "
+		    "m[3][3]);");
 		statement(
-			"adj[1][2] = -spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[3][0], m[3][2], "
-			"m[3][3]);");
+		    "adj[1][2] = -spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[3][0], m[3][2], "
+		    "m[3][3]);");
 		statement(
-			"adj[1][3] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], "
-			"m[2][3]);");
+		    "adj[1][3] =  spvDet3x3(m[0][0], m[0][2], m[0][3], m[1][0], m[1][2], m[1][3], m[2][0], m[2][2], "
+		    "m[2][3]);");
 		statement_no_indent("");
 		statement(
-			"adj[2][0] =  spvDet3x3(m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
-			"m[3][3]);");
+		    "adj[2][0] =  spvDet3x3(m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
+		    "m[3][3]);");
 		statement(
-			"adj[2][1] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
-			"m[3][3]);");
+		    "adj[2][1] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[2][0], m[2][1], m[2][3], m[3][0], m[3][1], "
+		    "m[3][3]);");
 		statement(
-			"adj[2][2] =  spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[3][0], m[3][1], "
-			"m[3][3]);");
+		    "adj[2][2] =  spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[3][0], m[3][1], "
+		    "m[3][3]);");
 		statement(
-			"adj[2][3] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], "
-			"m[2][3]);");
+		    "adj[2][3] = -spvDet3x3(m[0][0], m[0][1], m[0][3], m[1][0], m[1][1], m[1][3], m[2][0], m[2][1], "
+		    "m[2][3]);");
 		statement_no_indent("");
 		statement(
-			"adj[3][0] = -spvDet3x3(m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
-			"m[3][2]);");
+		    "adj[3][0] = -spvDet3x3(m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
+		    "m[3][2]);");
 		statement(
-			"adj[3][1] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
-			"m[3][2]);");
+		    "adj[3][1] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[2][0], m[2][1], m[2][2], m[3][0], m[3][1], "
+		    "m[3][2]);");
 		statement(
-			"adj[3][2] = -spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[3][0], m[3][1], "
-			"m[3][2]);");
+		    "adj[3][2] = -spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[3][0], m[3][1], "
+		    "m[3][2]);");
 		statement(
-			"adj[3][3] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], "
-			"m[2][2]);");
+		    "adj[3][3] =  spvDet3x3(m[0][0], m[0][1], m[0][2], m[1][0], m[1][1], m[1][2], m[2][0], m[2][1], "
+		    "m[2][2]);");
 		statement_no_indent("");
 		statement("// Calculate the determinant as a combination of the cofactors of the first row.");
 		statement("float det = (adj[0][0] * m[0][0]) + (adj[0][1] * m[1][0]) + (adj[0][2] * m[2][0]) + (adj[0][3] "
@@ -2214,8 +2215,8 @@ void CompilerHLSL::emit_resources()
 		auto type_str = type_to_glsl(type);
 		auto type_arr_str = type_to_array_glsl(type);
 		statement("void spvSelectComposite(out ", type_str, " out_value", type_arr_str, ", bool cond, ",
-				  type_str, " true_val", type_arr_str, ", ",
-				  type_str, " false_val", type_arr_str, ")");
+		          type_str, " true_val", type_arr_str, ", ",
+		          type_str, " false_val", type_arr_str, ")");
 		begin_scope();
 		statement("if (cond)");
 		begin_scope();
@@ -2262,8 +2263,8 @@ void CompilerHLSL::emit_texture_size_variants(uint64_t variant_mask, const char 
 				continue;
 
 			statement(ret_types[index], " spv", (uav ? "Image" : "Texture"), "Size(", (uav ? "RW" : ""),
-					  dims[index], "<", type_qualifier, types[type_index], vecsize_qualifier, "> Tex, ",
-					  (uav ? "" : "uint Level, "), "out uint Param)");
+			          dims[index], "<", type_qualifier, types[type_index], vecsize_qualifier, "> Tex, ",
+			          (uav ? "" : "uint Level, "), "out uint Param)");
 			begin_scope();
 			statement(ret_types[index], " ret;");
 			switch (return_arguments[index])
@@ -2478,7 +2479,7 @@ void CompilerHLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 	}
 
 	statement(layout_for_member(type, index), qualifier,
-			  variable_decl(membertype, to_member_name(type, index)), packing_offset, ";");
+	          variable_decl(membertype, to_member_name(type, index)), packing_offset, ";");
 }
 
 void CompilerHLSL::emit_rayquery_function(const char *commited, const char *candidate, const uint32_t *ops)
@@ -2731,7 +2732,7 @@ string CompilerHLSL::get_inner_entry_point_name() const
 		return "frag_main";
 	else if (execution.model == ExecutionModelGLCompute)
 		return "comp_main";
-	else if (execution.model == spv::ExecutionModelMeshEXT || execution.model == spv::ExecutionModelMeshNV)
+	else if (execution.model == spv::ExecutionModelMeshEXT)
 		return "mesh_main";
 	else
 		SPIRV_CROSS_THROW("Unsupported execution model.");
@@ -3050,13 +3051,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		case BuiltInClipDistance:
 			for (uint32_t clip = 0; clip < clip_distance_count; clip++)
 				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3],
-						  ";");
+				          ";");
 			break;
 
 		case BuiltInCullDistance:
 			for (uint32_t cull = 0; cull < cull_distance_count; cull++)
 				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3],
-						  ";");
+				          ";");
 			break;
 
 		default:
@@ -3076,7 +3077,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
 
 		if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-			interface_variable_exists_in_entry_point(var.self))
+		    interface_variable_exists_in_entry_point(var.self))
 		{
 			if (block)
 			{
@@ -3109,9 +3110,9 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex ||
-		execution.model == ExecutionModelFragment ||
-		execution.model == ExecutionModelGLCompute ||
-		execution.model == ExecutionModelMeshEXT)
+	    execution.model == ExecutionModelFragment ||
+	    execution.model == ExecutionModelGLCompute ||
+	    execution.model == ExecutionModelMeshEXT)
 	{
 		SmallVector<string> arglist;
 		auto& fn = get<SPIRFunction>(ir.default_entry_point);
@@ -3145,13 +3146,13 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			case BuiltInClipDistance:
 				for (uint32_t clip = 0; clip < clip_distance_count; clip++)
 					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], " = gl_ClipDistance[",
-							  clip, "];");
+					          clip, "];");
 				break;
 
 			case BuiltInCullDistance:
 				for (uint32_t cull = 0; cull < cull_distance_count; cull++)
 					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[",
-							  cull, "];");
+					          cull, "];");
 				break;
 
 			default:
@@ -3171,8 +3172,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				return;
 
 			if (!var.remapped_variable && type.pointer &&
-				!is_builtin_variable(var) &&
-				interface_variable_exists_in_entry_point(var.self))
+			    !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
 				if (block)
 				{
@@ -4707,7 +4708,7 @@ void CompilerHLSL::write_access_chain(const SPIRAccessChain &chain, uint32_t val
 		else
 			store_op = "Store";
 		statement(base, ".", store_op, template_expr, "(", chain.dynamic_index, chain.static_index, ", ",
-				  store_expr, ");");
+		          store_expr, ");");
 	}
 	else if (type.columns == 1)
 	{
@@ -5007,7 +5008,7 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 		if (data_type.storage == StorageClassImage || !chain)
 		{
 			statement(atomic_op, "(", to_non_uniform_aware_expression(ops[0]), ", ",
-					  to_expression(ops[3]), ", ", to_expression(tmp_id), ");");
+			          to_expression(ops[3]), ", ", to_expression(tmp_id), ");");
 		}
 		else
 		{
@@ -5016,7 +5017,7 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 				convert_non_uniform_expression(base, chain->self);
 			// RWByteAddress buffer is always uint in its underlying type.
 			statement(base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ",
-					  to_expression(ops[3]), ", ", to_expression(tmp_id), ");");
+			          to_expression(ops[3]), ", ", to_expression(tmp_id), ");");
 		}
 	}
 	else
@@ -5044,7 +5045,7 @@ void CompilerHLSL::emit_atomic(const uint32_t *ops, uint32_t length, spv::Op op)
 				convert_non_uniform_expression(base, chain->self);
 			expr_type = SPIRType::UInt;
 			statement(base, ".", atomic_op, "(", chain->dynamic_index, chain->static_index, ", ", value_expr,
-					  ", ", to_name(id), ");");
+			          ", ", to_name(id), ");");
 		}
 
 		auto expr = bitcast_expression(type, expr_type, to_name(id));
@@ -5168,8 +5169,8 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	{
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
-			join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-				 "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"), forward);
+		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+		        "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5177,8 +5178,8 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	{
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
-			join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-				 "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"), forward);
+		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+		        "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5186,8 +5187,8 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	{
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
-			join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-				 "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"), forward);
+		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+		        "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5350,8 +5351,8 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			// Emit a helper function where we can use control flow.
 			TypeID value_type_id = expression_type_id(ops[3]);
 			auto itr = std::find(composite_selection_workaround_types.begin(),
-								 composite_selection_workaround_types.end(),
-								 value_type_id);
+			                     composite_selection_workaround_types.end(),
+			                     value_type_id);
 			if (itr == composite_selection_workaround_types.end())
 			{
 				composite_selection_workaround_types.push_back(value_type_id);
@@ -6124,7 +6125,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		statement("RayDesc ", ray_desc_name, " = {", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 			to_expression(ops[6]), ", ", to_expression(ops[7]), "};");
 
-		statement(to_expression(ops[0]), ".TraceRayInline(",
+		statement(to_expression(ops[0]), ".TraceRayInline(", 
 			to_expression(ops[1]), ", ", // acc structure
 			to_expression(ops[2]), ", ", // ray flags
 			to_expression(ops[3]), ", ", // mask
@@ -6136,7 +6137,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		flush_variable_declaration(ops[0]);
 		emit_op(ops[0], ops[1], join(to_expression(ops[2]), ".Proceed()"), false);
 		break;
-	}
+	}	
 	case OpRayQueryTerminateKHR:
 	{
 		flush_variable_declaration(ops[0]);
@@ -6177,7 +6178,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
 	{
-		emit_rayquery_function(".CommittedInstanceContributionToHitGroupIndex()",
+		emit_rayquery_function(".CommittedInstanceContributionToHitGroupIndex()", 
 			".CandidateInstanceContributionToHitGroupIndex()", ops);
 		break;
 	}
@@ -6459,7 +6460,7 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
-	backend.force_meged_mesh_block_hlsl = (get_execution_model()==ExecutionModelMeshEXT || get_execution_model()==ExecutionModelMeshNV);
+	backend.force_meged_mesh_block = (get_execution_model()==ExecutionModelMeshEXT);
 
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
