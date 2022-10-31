@@ -3157,6 +3157,7 @@ void CompilerGLSL::fixup_implicit_builtin_block_names(ExecutionModel model)
 				}
 			}
 		}
+
 		if (model == ExecutionModelMeshEXT && var.storage == StorageClassOutput && !block)
 		{
 			auto *m = ir.find_meta(var.self);
@@ -17255,7 +17256,7 @@ bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, 
 	}
 }
 
-bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable& var) const
+bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable &var) const
 {
 	if (has_decoration(var.self, DecorationPerPrimitiveEXT) ||
 		has_decoration(var.self, DecorationPerPrimitiveNV))
