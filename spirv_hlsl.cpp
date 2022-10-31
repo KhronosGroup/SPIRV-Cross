@@ -604,7 +604,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		case BuiltInClipDistance:
 			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
-			if(execution.model==ExecutionModelMeshEXT || execution.model==ExecutionModelMeshNV)
+			if(execution.model==ExecutionModelMeshEXT)
 			{
 				const uint32_t clip = (clip_distance_count + 3) / 4;
 				statement("float4 gl_ClipDistance", "[", clip,"] : SV_ClipDistance;");
@@ -628,7 +628,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 		case BuiltInCullDistance:
 			// HLSL is a bit weird here, use SV_CullDistance0, SV_CullDistance1 and so on with vectors.
-			if(execution.model==ExecutionModelMeshEXT || execution.model==ExecutionModelMeshNV)
+			if(execution.model==ExecutionModelMeshEXT)
 			{
 				const uint32_t cull = (cull_distance_count + 3) / 4;
 				statement("float4 gl_CullDistance", "[", cull,"] : SV_CullDistance;");
@@ -806,8 +806,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 			break;
 
 		case BuiltInViewIndex:
-			if (hlsl_options.shader_model < 61 || (get_entry_point().model != ExecutionModelVertex &&
-												   get_entry_point().model != ExecutionModelFragment))
+			if (hlsl_options.shader_model < 61 || (get_entry_point().model != ExecutionModelVertex && get_entry_point().model != ExecutionModelFragment))
 				SPIRV_CROSS_THROW("View Index input is only supported in VS and PS 6.1 or higher.");
 			type = "uint";
 			semantic = "SV_ViewID";
@@ -843,7 +842,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
 				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassInput), semantic_index,
-						  " : SV_ClipDistance", semantic_index, ";");
+					  " : SV_ClipDistance", semantic_index, ";");
 			}
 			break;
 
@@ -859,7 +858,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
 				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassInput), semantic_index,
-						  " : SV_CullDistance", semantic_index, ";");
+					  " : SV_CullDistance", semantic_index, ";");
 			}
 			break;
 
@@ -1006,7 +1005,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			type.vecsize = 4;
 	}
 
-	const auto get_vacant_location = [&]() -> uint32_t{
+	const auto get_vacant_location = [&]() -> uint32_t {
 		for (uint32_t i = 0; i < 64; i++)
 			if (!active_locations.count(i))
 				return i;
@@ -1055,7 +1054,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 		else
 		{
 			auto decl_type = type;
-			if (execution.model==spv::ExecutionModelMeshEXT || execution.model==spv::ExecutionModelMeshNV)
+			if (execution.model == spv::ExecutionModelMeshEXT)
 			{
 				decl_type.array.erase(decl_type.array.begin());
 				decl_type.array_size_literal.erase(decl_type.array_size_literal.begin());
@@ -1116,7 +1115,7 @@ void CompilerHLSL::emit_builtin_variables()
 	builtins.merge_or(active_output_builtins);
 
 	std::unordered_map<uint32_t, ID> builtin_to_initializer;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		if (!is_builtin_variable(var) || var.storage != StorageClassOutput || !var.initializer)
 			return;
 
@@ -1142,7 +1141,7 @@ void CompilerHLSL::emit_builtin_variables()
 	});
 
 	// Emit global variables for the interface variables which are statically used by the shader.
-	builtins.for_each_bit([&](uint32_t i){
+	builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
 		auto builtin = static_cast<BuiltIn>(i);
 		uint32_t array_size = 0;
@@ -1280,8 +1279,7 @@ void CompilerHLSL::emit_builtin_variables()
 		if (type)
 		{
 			if (array_size)
-				statement("static ", type, " ", builtin_to_glsl(builtin, storage), "[", array_size, "]", init_expr,
-						  ";");
+				statement("static ", type, " ", builtin_to_glsl(builtin, storage), "[", array_size, "]", init_expr, ";");
 			else
 				statement("static ", type, " ", builtin_to_glsl(builtin, storage), init_expr, ";");
 		}
@@ -1343,7 +1341,7 @@ void CompilerHLSL::emit_composite_constants()
 	// global constants directly.
 	bool emitted = false;
 
-	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, SPIRConstant &c){
+	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, SPIRConstant &c) {
 		if (c.specialization)
 			return;
 
@@ -1372,10 +1370,11 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
 
 	std::unordered_set<TypeID> io_block_types;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
-		if ((var.storage == StorageClassInput || var.storage == StorageClassOutput) && !var.remapped_variable &&
-			type.pointer && !is_builtin_variable(var) && interface_variable_exists_in_entry_point(var.self) &&
+		if ((var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
+			interface_variable_exists_in_entry_point(var.self) &&
 			has_decoration(type.self, DecorationBlock))
 		{
 			io_block_types.insert(type.self);
@@ -1394,7 +1393,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 			if (c.self == workgroup_size_id)
 			{
 				statement("static const uint3 gl_WorkGroupSize = ",
-						  constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
+					  constant_expression(get<SPIRConstant>(workgroup_size_id)), ";");
 				emitted = true;
 			}
 			else if (c.specialization)
@@ -1412,7 +1411,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 					statement("#ifndef ", c.specialization_constant_macro_name);
 					statement("#define ", c.specialization_constant_macro_name, " ", constant_expression(c));
 					statement("#endif");
-					statement("static const ", variable_decl(type, name), " = ", c.specialization_constant_macro_name,";");
+					statement("static const ", variable_decl(type, name), " = ", c.specialization_constant_macro_name, ";");
 				}
 				else
 					statement("static const ", variable_decl(type, name), " = ", constant_expression(c), ";");
@@ -1434,8 +1433,8 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 			auto &type = id.get<SPIRType>();
 			bool is_non_io_block = has_decoration(type.self, DecorationBlock) && io_block_types.count(type.self) == 0;
 			bool is_buffer_block = has_decoration(type.self, DecorationBufferBlock);
-			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer && !is_non_io_block &&
-			    !is_buffer_block)
+			if (type.basetype == SPIRType::Struct && type.array.empty() &&
+				!type.pointer && !is_non_io_block && !is_buffer_block)
 			{
 				if (emitted)
 					statement("");
@@ -1459,6 +1458,7 @@ void CompilerHLSL::replace_illegal_names()
 		"BlendState", "bool", "break", "Buffer", "ByteAddressBuffer",
 		"case", "cbuffer", "centroid", "class", "column_major", "compile",
 		"compile_fragment", "CompileShader", "const", "continue", "ComputeShader",
+		"ConsumeStructuredBuffer",
 		"default", "DepthStencilState", "DepthStencilView", "discard", "do",
 		"double", "DomainShader", "dword",
 		"else", "export", "false", "float", "for", "fxgroup",
@@ -1489,7 +1489,7 @@ void CompilerHLSL::replace_illegal_names()
 void CompilerHLSL::declare_undefined_values()
 {
 	bool emitted = false;
-	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, const SPIRUndef &undef){
+	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, const SPIRUndef &undef) {
 		auto &type = this->get<SPIRType>(undef.basetype);
 		// OpUndef can be void for some reason ...
 		if (type.basetype == SPIRType::Void)
@@ -1532,7 +1532,7 @@ void CompilerHLSL::emit_resources()
 	bool emitted = false;
 
 	// Output UBOs and SSBOs
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform;
@@ -1548,7 +1548,7 @@ void CompilerHLSL::emit_resources()
 	});
 
 	// Output push constant blocks
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 		if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
 			!is_hidden_variable(var))
@@ -1568,7 +1568,7 @@ void CompilerHLSL::emit_resources()
 	bool skip_separate_image_sampler = !combined_image_samplers.empty() || hlsl_options.shader_model <= 30;
 
 	// Output Uniform Constants (values, samplers, images, etc).
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
 		// If we're remapping separate samplers and images, only emit the combined samplers.
@@ -1583,8 +1583,7 @@ void CompilerHLSL::emit_resources()
 		}
 
 		if (var.storage != StorageClassFunction && !is_builtin_variable(var) && !var.remapped_variable &&
-			type.pointer &&
-			(type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
+			type.pointer && (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter) &&
 			!is_hidden_variable(var))
 		{
 			emit_uniform(var);
@@ -1601,12 +1600,12 @@ void CompilerHLSL::emit_resources()
 
 	if (execution.model != ExecutionModelMeshEXT && execution.model != ExecutionModelMeshNV)
 	{
-		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 			auto &type = this->get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-				(var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
-				interface_variable_exists_in_entry_point(var.self))
+			   (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
+			   interface_variable_exists_in_entry_point(var.self))
 			{
 				// Builtin variables are handled separately.
 				emit_interface_block_globally(var);
@@ -1635,7 +1634,7 @@ void CompilerHLSL::emit_resources()
 	SmallVector<IOVariable> input_variables;
 	SmallVector<IOVariable> output_variables;
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = has_decoration(type.self, DecorationBlock);
 
@@ -2933,7 +2932,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	bool legacy = hlsl_options.shader_model <= 30;
 
 	// Copy builtins from entry point arguments to globals.
-	active_input_builtins.for_each_bit([&](uint32_t i){
+	active_input_builtins.for_each_bit([&](uint32_t i) {
 		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
 		switch (static_cast<BuiltIn>(i))
 		{
@@ -3050,14 +3049,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 		case BuiltInClipDistance:
 			for (uint32_t clip = 0; clip < clip_distance_count; clip++)
-				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".",
-						  "xyzw"[clip & 3], ";");
+				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3],
+						  ";");
 			break;
 
 		case BuiltInCullDistance:
 			for (uint32_t cull = 0; cull < cull_distance_count; cull++)
-				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".",
-						  "xyzw"[cull & 3], ";");
+				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3],
+						  ";");
 			break;
 
 		default:
@@ -3067,7 +3066,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	});
 
 	// Copy from stage input struct to globals.
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var){
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 		bool block = has_decoration(type.self, DecorationBlock);
 
@@ -3109,8 +3108,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	});
 
 	// Run the shader.
-	if (execution.model == ExecutionModelVertex || execution.model == ExecutionModelFragment ||
-		execution.model == ExecutionModelGLCompute || execution.model == spv::ExecutionModelMeshEXT)
+	if (execution.model == ExecutionModelVertex ||
+		execution.model == ExecutionModelFragment ||
+		execution.model == ExecutionModelGLCompute ||
+		execution.model == ExecutionModelMeshEXT)
 	{
 		SmallVector<string> arglist;
 		auto& fn = get<SPIRFunction>(ir.default_entry_point);
@@ -3134,7 +3135,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("SPIRV_Cross_Output stage_output;");
 
 		// Copy builtins from globals to return struct.
-		active_output_builtins.for_each_bit([&](uint32_t i){
+		active_output_builtins.for_each_bit([&](uint32_t i) {
 			// PointSize doesn't exist in HLSL.
 			if (i == BuiltInPointSize)
 				return;
@@ -3143,14 +3144,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			{
 			case BuiltInClipDistance:
 				for (uint32_t clip = 0; clip < clip_distance_count; clip++)
-					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3],
-							  " = gl_ClipDistance[", clip, "];");
+					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], " = gl_ClipDistance[",
+							  clip, "];");
 				break;
 
 			case BuiltInCullDistance:
 				for (uint32_t cull = 0; cull < cull_distance_count; cull++)
-					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3],
-							  " = gl_CullDistance[", cull, "];");
+					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[",
+							  cull, "];");
 				break;
 
 			default:
@@ -3169,7 +3170,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			if (var.storage != StorageClassOutput)
 				return;
 
-			if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
+			if (!var.remapped_variable && type.pointer &&
+				!is_builtin_variable(var) &&
 				interface_variable_exists_in_entry_point(var.self))
 			{
 				if (block)
@@ -5166,9 +5168,8 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	{
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
-				join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-					 "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"),
-		        forward);
+			join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+				 "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5176,9 +5177,8 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	{
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
-				join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-					 "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"),
-		        forward);
+			join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+				 "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5186,9 +5186,8 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 	{
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
-				join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-					 "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"),
-		        forward);
+			join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
+				 "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5361,7 +5360,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 			emit_uninitialized_temporary_expression(ops[0], ops[1]);
 			statement("spvSelectComposite(",
 					  to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
-			          to_expression(ops[3]), ", ", to_expression(ops[4]), ");");
+					  to_expression(ops[3]), ", ", to_expression(ops[4]), ");");
 		}
 		else
 			CompilerGLSL::emit_instruction(instruction);
@@ -6125,7 +6124,8 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		statement("RayDesc ", ray_desc_name, " = {", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 			to_expression(ops[6]), ", ", to_expression(ops[7]), "};");
 
-		statement(to_expression(ops[0]), ".TraceRayInline(", to_expression(ops[1]), ", ", // acc structure
+		statement(to_expression(ops[0]), ".TraceRayInline(",
+			to_expression(ops[1]), ", ", // acc structure
 			to_expression(ops[2]), ", ", // ray flags
 			to_expression(ops[3]), ", ", // mask
 			ray_desc_name, ");"); // ray
@@ -6178,13 +6178,13 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	case OpRayQueryGetIntersectionInstanceShaderBindingTableRecordOffsetKHR:
 	{
 		emit_rayquery_function(".CommittedInstanceContributionToHitGroupIndex()",
-				".CandidateInstanceContributionToHitGroupIndex()", ops);
+			".CandidateInstanceContributionToHitGroupIndex()", ops);
 		break;
 	}
 	case OpRayQueryGetIntersectionGeometryIndexKHR:
 	{
 		emit_rayquery_function(".CommittedGeometryIndex()",
-			".CandidateGeometryIndex()", ops);
+				".CandidateGeometryIndex()", ops);
 		break;
 	}
 	case OpRayQueryGetIntersectionPrimitiveIndexKHR:

@@ -3161,15 +3161,15 @@ void CompilerGLSL::fixup_implicit_builtin_block_names(ExecutionModel model)
 		if (model == ExecutionModelMeshEXT && var.storage == StorageClassOutput && !block)
 		{
 			auto *m = ir.find_meta(var.self);
-			if (m!=nullptr && m->decoration.builtin_type==BuiltInPrimitivePointIndicesEXT)
+			if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitivePointIndicesEXT)
 			{
 				set_name(var.self, "gl_PrimitivePointIndicesEXT");
 			}
-			else if (m!=nullptr && m->decoration.builtin_type==BuiltInPrimitiveLineIndicesEXT)
+			else if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitiveLineIndicesEXT)
 			{
 				set_name(var.self, "gl_PrimitiveLineIndicesEXT");
 			}
-			else if (m!=nullptr && m->decoration.builtin_type==BuiltInPrimitiveTriangleIndicesEXT)
+			else if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitiveTriangleIndicesEXT)
 			{
 				set_name(var.self, "gl_PrimitiveTriangleIndicesEXT");
 			}
