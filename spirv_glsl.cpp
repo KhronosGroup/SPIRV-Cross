@@ -9282,7 +9282,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (index >= type->member_types.size())
 				SPIRV_CROSS_THROW("Member index is out of bounds!");
 
-			BuiltIn builtin;
+			BuiltIn builtin = BuiltInMax;
 			if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 			{
 				if (access_chain_is_arrayed)
@@ -17258,8 +17258,7 @@ bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, 
 
 bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable &var) const
 {
-	if (has_decoration(var.self, DecorationPerPrimitiveEXT) ||
-		has_decoration(var.self, DecorationPerPrimitiveNV))
+	if (has_decoration(var.self, DecorationPerPrimitiveEXT))
 		return true;
 
 	auto &type = get<SPIRType>(var.basetype);
@@ -17267,8 +17266,7 @@ bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable &var) const
 		return false;
 	for (uint32_t i = 0; i < type.member_types.size(); i++)
 	{
-		if (!has_member_decoration(type.self, i, DecorationPerPrimitiveEXT) &&
-			!has_member_decoration(type.self, i, DecorationPerPrimitiveNV))
+		if (!has_member_decoration(type.self, i, DecorationPerPrimitiveEXT))
 			return false;
 	}
 
