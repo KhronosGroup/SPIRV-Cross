@@ -1439,6 +1439,7 @@ string CompilerMSL::compile()
 	// Arrays which are part of buffer objects are never considered to be value types (just plain C-style).
 	backend.array_is_value_type_in_buffer_blocks = false;
 	backend.support_pointer_to_pointer = true;
+	backend.implicit_c_integer_promotion_rules = true;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
@@ -8167,8 +8168,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 {
 #define MSL_BOP(op) emit_binary_op(ops[0], ops[1], ops[2], ops[3], #op)
 #define MSL_PTR_BOP(op) emit_binary_ptr_op(ops[0], ops[1], ops[2], ops[3], #op)
+	// MSL does care about implicit integer promotion, but those cases are all handled in common code.
 #define MSL_BOP_CAST(op, type) \
-	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode))
+	emit_binary_op_cast(ops[0], ops[1], ops[2], ops[3], #op, type, opcode_is_sign_invariant(opcode), false)
 #define MSL_UOP(op) emit_unary_op(ops[0], ops[1], ops[2], #op)
 #define MSL_QFOP(op) emit_quaternary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], #op)
 #define MSL_TFOP(op) emit_trinary_func_op(ops[0], ops[1], ops[2], ops[3], ops[4], #op)
