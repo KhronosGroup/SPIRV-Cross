@@ -842,7 +842,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
 				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassInput), semantic_index,
-					  " : SV_ClipDistance", semantic_index, ";");
+				          " : SV_ClipDistance", semantic_index, ";");
 			}
 			break;
 
@@ -858,7 +858,7 @@ void CompilerHLSL::emit_builtin_inputs_in_struct()
 
 				static const char *types[] = { "float", "float2", "float3", "float4" };
 				statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassInput), semantic_index,
-					  " : SV_CullDistance", semantic_index, ";");
+				          " : SV_CullDistance", semantic_index, ";");
 			}
 			break;
 
@@ -1431,7 +1431,7 @@ void CompilerHLSL::emit_specialization_constants_and_structs()
 		else if (id.get_type() == TypeType)
 		{
 			auto &type = id.get<SPIRType>();
-			bool is_non_io_block = has_decoration(type.self, DecorationBlock) && 
+			bool is_non_io_block = has_decoration(type.self, DecorationBlock) &&
 			                       io_block_types.count(type.self) == 0;
 			bool is_buffer_block = has_decoration(type.self, DecorationBufferBlock);
 			if (type.basetype == SPIRType::Struct && type.array.empty() &&
@@ -5170,7 +5170,7 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
 		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-		        "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"), forward);
+		             "WaveGetLaneIndex() ^ ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5179,7 +5179,7 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
 		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-		        "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"), forward);
+		             "WaveGetLaneIndex() - ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
@@ -5188,7 +5188,7 @@ void CompilerHLSL::emit_subgroup_op(const Instruction &i)
 		bool forward = should_forward(ops[3]);
 		emit_op(ops[0], ops[1],
 		        join("WaveReadLaneAt(", to_unpacked_expression(ops[3]), ", ",
-		        "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"), forward);
+		             "WaveGetLaneIndex() + ", to_enclosed_expression(ops[4]), ")"), forward);
 		inherit_expression_dependencies(ops[1], ops[3]);
 		break;
 	}
