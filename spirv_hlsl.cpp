@@ -2314,7 +2314,6 @@ void CompilerHLSL::analyze_meshlet_writes()
 	{
 		uint32_t id_per_vertex = 0;
 		uint32_t id_per_primitive = 0;
-		uint32_t id_payload = 0;
 		bool need_per_primitive = false;
 
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, SPIRVariable &var) {
@@ -2338,10 +2337,6 @@ void CompilerHLSL::analyze_meshlet_writes()
 
 				if (flags.get(DecorationPerPrimitiveEXT))
 					need_per_primitive = true;
-			}
-			if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
-			{
-				id_payload = var.self;
 			}
 		});
 
@@ -2383,12 +2378,11 @@ void CompilerHLSL::analyze_meshlet_writes()
 		}
 
 		unordered_set<uint32_t> processed_func_ids;
-		analyze_meshlet_writes(ir.default_entry_point, id_payload, id_per_vertex, id_per_primitive, processed_func_ids);
+		analyze_meshlet_writes(ir.default_entry_point, id_per_vertex, id_per_primitive, processed_func_ids);
 	}
 }
 
-void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_payload,
-                                          const uint32_t id_per_vertex, const uint32_t id_per_primitive,
+void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, const uint32_t id_per_vertex, const uint32_t id_per_primitive,
                                           std::unordered_set<uint32_t>& processed_func_ids)
 {
 	// Avoid processing a function more than once
@@ -2414,7 +2408,7 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_payload,
 			{
 				// Then recurse into the function itself to extract globals used internally in the function
 				uint32_t inner_func_id = ops[2];
-				analyze_meshlet_writes(inner_func_id, id_payload, id_per_vertex, id_per_primitive, processed_func_ids);
+				analyze_meshlet_writes(inner_func_id, id_per_vertex, id_per_primitive, processed_func_ids);
 				auto &inner_func = get<SPIRFunction>(inner_func_id);
 				for (auto& iarg : inner_func.arguments)
 				{
@@ -2448,7 +2442,7 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_payload,
 					auto *m = ir.find_meta(var.self);
 
 					uint32_t var_id = var.self;
-					if (m!=nullptr && var_id!=id_payload &&
+					if (m!=nullptr && var.storage != StorageClassTaskPayloadWorkgroupEXT &&
 						m->decoration.builtin_type != BuiltInPrimitivePointIndicesEXT &&
 						m->decoration.builtin_type != BuiltInPrimitiveLineIndicesEXT &&
 						m->decoration.builtin_type != BuiltInPrimitiveTriangleIndicesEXT)
