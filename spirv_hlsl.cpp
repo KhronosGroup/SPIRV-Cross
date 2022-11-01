@@ -694,8 +694,7 @@ void CompilerHLSL::emit_builtin_primitive_outputs_in_struct()
 		{
 			const ExecutionModel model = get_entry_point().model;
 			if (hlsl_options.shader_model < 50 ||
-				(model != ExecutionModelGeometry && model != ExecutionModelMeshEXT &&
-				 model != spv::ExecutionModelMeshNV))
+				(model != ExecutionModelGeometry && model != ExecutionModelMeshEXT))
 				SPIRV_CROSS_THROW("Render target array index output is only supported in GS/MS 5.0 or higher.");
 			type = "uint";
 			semantic = "SV_RenderTargetArrayIndex";
@@ -2316,6 +2315,8 @@ void CompilerHLSL::analyze_meshlet_writes()
 		uint32_t id_per_vertex = 0;
 		uint32_t id_per_primitive = 0;
 		uint32_t id_payload = 0;
+		bool need_per_primitive = false;
+
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, SPIRVariable &var) {
 			auto &type = this->get<SPIRType>(var.basetype);
 			bool block = has_decoration(type.self, DecorationBlock);
@@ -2327,11 +2328,59 @@ void CompilerHLSL::analyze_meshlet_writes()
 				else
 					id_per_vertex = var.self;
 			}
+			else if (var.storage == StorageClassOutput)
+			{
+				Bitset flags;
+				if (block)
+					flags = get_buffer_block_flags(var.self);
+				else
+					flags = get_decoration_bitset(var.self);
+
+				if (flags.get(DecorationPerPrimitiveEXT))
+					need_per_primitive = true;
+			}
 			if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
 			{
 				id_payload = var.self;
 			}
 		});
+
+		// If we have per-primitive outputs, and no per-primitive builtins, empty version of gl_MeshPerPrimitiveEXT will be emitted
+		if (id_per_primitive == 0 && need_per_primitive)
+		{
+			auto &execution = get_entry_point();
+
+			uint32_t op_type = ir.increase_bound_by(4);
+			uint32_t op_arr = op_type + 1;
+			uint32_t op_ptr = op_type + 2;
+			uint32_t op_var = op_type + 3;
+
+			auto& type = set<SPIRType>(op_type);
+			type.basetype = SPIRType::Struct;
+			set_name(op_type, "gl_MeshPerPrimitiveEXT");
+			set_decoration(op_type, DecorationBlock);
+			set_decoration(op_type, DecorationPerPrimitiveEXT);
+
+			auto& arr = set<SPIRType>(op_arr, type);
+			arr.parent_type = type.self;
+			arr.array.push_back(execution.output_primitives);
+			arr.array_size_literal.push_back(true);
+
+			auto& ptr = set<SPIRType>(op_ptr, arr);
+			ptr.parent_type = arr.self;
+			ptr.pointer = true;
+			ptr.pointer_depth++;
+			ptr.storage = StorageClassOutput;
+			set_decoration(op_ptr, DecorationBlock);
+			set_name(op_ptr, "gl_MeshPerPrimitiveEXT");
+
+			auto& var = set<SPIRVariable>(op_var, op_ptr, StorageClassOutput);
+			set_decoration(op_var, DecorationPerPrimitiveEXT);
+			set_name(op_var, "gl_MeshPrimitivesEXT");
+			execution.interface_variables.push_back(var.self);
+
+			id_per_primitive = op_var;
+		}
 
 		unordered_set<uint32_t> processed_func_ids;
 		analyze_meshlet_writes(ir.default_entry_point, id_payload, id_per_vertex, id_per_primitive, processed_func_ids);
@@ -2349,9 +2398,7 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_payload,
 	}
 	processed_func_ids.insert(func_id);
 
-	std::unordered_set<uint32_t> variables;
 	auto &func = get<SPIRFunction>(func_id);
-
 	// Recursively establish global args added to functions on which we depend.
 	for (auto& block : func.blocks)
 	{
@@ -2402,9 +2449,9 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_payload,
 
 					uint32_t var_id = var.self;
 					if (m!=nullptr && var_id!=id_payload &&
-						m->decoration.builtin_type!=BuiltInPrimitivePointIndicesEXT &&
-						m->decoration.builtin_type!=BuiltInPrimitiveLineIndicesEXT &&
-						m->decoration.builtin_type!=BuiltInPrimitiveTriangleIndicesEXT)
+						m->decoration.builtin_type != BuiltInPrimitivePointIndicesEXT &&
+						m->decoration.builtin_type != BuiltInPrimitiveLineIndicesEXT &&
+						m->decoration.builtin_type != BuiltInPrimitiveTriangleIndicesEXT)
 					{
 						bool block = has_decoration(base_type.self, DecorationBlock);
 						auto flags = block ? get_buffer_block_flags(var.self) : Bitset();
@@ -2885,8 +2932,16 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				}
 				else
 				{
-					arguments.push_back("out indices uint2 gl_PrimitiveLineIndicesEXT[" +
-										std::to_string(execution.output_primitives) + "]");
+					if (execution.flags.get(ExecutionModeOutputTrianglesEXT))
+					{
+						arguments.push_back("out indices uint3 gl_PrimitiveTriangleIndicesEXT[" +
+											std::to_string(execution.output_primitives) + "]");
+					}
+					else
+					{
+						arguments.push_back("out indices uint2 gl_PrimitiveLineIndicesEXT[" +
+											std::to_string(execution.output_primitives) + "]");
+					}
 				}
 			}
 		}
@@ -6460,7 +6515,7 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
-	backend.force_meged_mesh_block = (get_execution_model() == ExecutionModelMeshEXT);
+	backend.force_merged_mesh_block = (get_execution_model() == ExecutionModelMeshEXT);
 
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
