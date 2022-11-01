@@ -55,12 +55,12 @@ void main()
         prim_outputs[gl_LocalInvocationIndex].a = vec4(payload.a);
         prim_outputs[gl_LocalInvocationIndex].b = vec4(payload.b);
         gl_PrimitiveTriangleIndicesEXT[gl_LocalInvocationIndex] = uvec3(0u, 1u, 2u) + uvec3(gl_LocalInvocationIndex);
-        int _128 = int(gl_GlobalInvocationID.x);
-        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveID = _128;
-        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_Layer = _128 + 1;
-        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_ViewportIndex = _128 + 2;
+        int _127 = int(gl_GlobalInvocationID.x);
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveID = _127;
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_Layer = _127 + 1;
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_ViewportIndex = _127 + 2;
         gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_CullPrimitiveEXT = (gl_GlobalInvocationID.x & 1u) != 0u;
-        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveShadingRateEXT = _128 + 3;
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveShadingRateEXT = _127 + 3;
     }
 }
 
