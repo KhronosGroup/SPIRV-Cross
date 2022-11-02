@@ -3161,17 +3161,15 @@ void CompilerGLSL::fixup_implicit_builtin_block_names(ExecutionModel model)
 		if (model == ExecutionModelMeshEXT && var.storage == StorageClassOutput && !block)
 		{
 			auto *m = ir.find_meta(var.self);
-			if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitivePointIndicesEXT)
+			if (m && m->decoration.builtin)
 			{
-				set_name(var.self, "gl_PrimitivePointIndicesEXT");
-			}
-			else if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitiveLineIndicesEXT)
-			{
-				set_name(var.self, "gl_PrimitiveLineIndicesEXT");
-			}
-			else if (m != nullptr && m->decoration.builtin_type == BuiltInPrimitiveTriangleIndicesEXT)
-			{
-				set_name(var.self, "gl_PrimitiveTriangleIndicesEXT");
+				auto builtin_type = m->decoration.builtin_type;
+				if (builtin_type == BuiltInPrimitivePointIndicesEXT)
+					set_name(var.self, "gl_PrimitivePointIndicesEXT");
+				else if (builtin_type == BuiltInPrimitiveLineIndicesEXT)
+					set_name(var.self, "gl_PrimitiveLineIndicesEXT");
+				else if (builtin_type == BuiltInPrimitiveTriangleIndicesEXT)
+					set_name(var.self, "gl_PrimitiveTriangleIndicesEXT");
 			}
 		}
 	});
@@ -9347,17 +9345,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					break;
 				}
 			}
-			else if (backend.force_merged_mesh_block && i == 0 && var && !is_builtin_variable(*var) &&
-					 var->storage == StorageClassOutput)
+			else if (backend.force_merged_mesh_block && i == 0 && var &&
+			         !is_builtin_variable(*var) && var->storage == StorageClassOutput)
 			{
-				if(is_per_primitive_variable(*var))
-				{
+				if (is_per_primitive_variable(*var))
 					expr = join("gl_MeshPrimitivesEXT[", to_expression(index, register_expression_read), "].", expr);
-				}
 				else
-				{
 					expr = join("gl_MeshVerticesEXT[", to_expression(index, register_expression_read), "].", expr);
-				}
 			}
 			else if (options.flatten_multidimensional_arrays && dimension_flatten)
 			{
@@ -17419,11 +17413,10 @@ bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable &var) const
 	auto &type = get<SPIRType>(var.basetype);
 	if (!has_decoration(type.self, DecorationBlock))
 		return false;
-	for (uint32_t i = 0; i < type.member_types.size(); i++)
-	{
+
+	for (uint32_t i = 0, n = uint32_t(type.member_types.size()); i < n; i++)
 		if (!has_member_decoration(type.self, i, DecorationPerPrimitiveEXT))
 			return false;
-	}
 
 	return true;
 }

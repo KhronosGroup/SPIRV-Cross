@@ -356,8 +356,8 @@ private:
 	};
 
 	void analyze_meshlet_writes();
-	void analyze_meshlet_writes(uint32_t func_id, const uint32_t id_per_vertex, const uint32_t id_per_primitive,
-								std::unordered_set<uint32_t> &processed_func_ids);
+	void analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vertex, uint32_t id_per_primitive,
+	                            std::unordered_set<uint32_t> &processed_func_ids);
 
 	BitcastType get_bitcast_type(uint32_t result_type, uint32_t op0);
 

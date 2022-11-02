@@ -606,7 +606,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
 			if (execution.model == ExecutionModelMeshEXT)
 			{
-				const uint32_t clip = (clip_distance_count + 3) / 4;
+				uint32_t clip = (clip_distance_count + 3) / 4;
 				statement("float4 gl_ClipDistance", "[", clip,"] : SV_ClipDistance;");
 			}
 			else
@@ -630,7 +630,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 			// HLSL is a bit weird here, use SV_CullDistance0, SV_CullDistance1 and so on with vectors.
 			if (execution.model == ExecutionModelMeshEXT)
 			{
-				const uint32_t cull = (cull_distance_count + 3) / 4;
+				uint32_t cull = (cull_distance_count + 3) / 4;
 				statement("float4 gl_CullDistance", "[", cull,"] : SV_CullDistance;");
 			}
 			else
@@ -684,7 +684,7 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 void CompilerHLSL::emit_builtin_primitive_outputs_in_struct()
 {
-	active_output_builtins.for_each_bit([&](uint32_t i){
+	active_output_builtins.for_each_bit([&](uint32_t i) {
 		const char *type = nullptr;
 		const char *semantic = nullptr;
 		auto builtin = static_cast<BuiltIn>(i);
@@ -694,7 +694,7 @@ void CompilerHLSL::emit_builtin_primitive_outputs_in_struct()
 		{
 			const ExecutionModel model = get_entry_point().model;
 			if (hlsl_options.shader_model < 50 ||
-				(model != ExecutionModelGeometry && model != ExecutionModelMeshEXT))
+			    (model != ExecutionModelGeometry && model != ExecutionModelMeshEXT))
 				SPIRV_CROSS_THROW("Render target array index output is only supported in GS/MS 5.0 or higher.");
 			type = "uint";
 			semantic = "SV_RenderTargetArrayIndex";
@@ -1153,10 +1153,10 @@ void CompilerHLSL::emit_builtin_variables()
 		if (get_execution_model() == ExecutionModelMeshEXT)
 		{
 			if (builtin == BuiltInPosition || builtin == BuiltInPointSize || builtin == BuiltInClipDistance ||
-				builtin == BuiltInCullDistance || builtin == BuiltInLayer || builtin == BuiltInPrimitiveId ||
-				builtin == BuiltInViewportIndex || builtin == BuiltInCullPrimitiveEXT ||
-				builtin == BuiltInPrimitiveShadingRateKHR || builtin == BuiltInPrimitivePointIndicesEXT ||
-				builtin == BuiltInPrimitiveLineIndicesEXT || builtin == BuiltInPrimitiveTriangleIndicesEXT)
+			    builtin == BuiltInCullDistance || builtin == BuiltInLayer || builtin == BuiltInPrimitiveId ||
+			    builtin == BuiltInViewportIndex || builtin == BuiltInCullPrimitiveEXT ||
+			    builtin == BuiltInPrimitiveShadingRateKHR || builtin == BuiltInPrimitivePointIndicesEXT ||
+			    builtin == BuiltInPrimitiveLineIndicesEXT || builtin == BuiltInPrimitiveTriangleIndicesEXT)
 			{
 				return;
 			}
@@ -1726,7 +1726,7 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
-	const bool is_mesh_shader = (execution.model == ExecutionModelMeshEXT);
+	const bool is_mesh_shader = execution.model == ExecutionModelMeshEXT;
 	if (!output_variables.empty() || !active_output_builtins.empty())
 	{
 		sort(output_variables.begin(), output_variables.end(), variable_compare);
@@ -1738,7 +1738,7 @@ void CompilerHLSL::emit_resources()
 		{
 			if (is_per_primitive_variable(*var.var))
 				continue;
-			if (var.block && is_mesh_shader && var.block_member_index!=0)
+			if (var.block && is_mesh_shader && var.block_member_index != 0)
 				continue;
 			if (var.block && !is_mesh_shader)
 				emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_outputs);
@@ -1759,12 +1759,10 @@ void CompilerHLSL::emit_resources()
 			{
 				if (!is_per_primitive_variable(*var.var))
 					continue;
-				if (var.block && is_mesh_shader && var.block_member_index!=0)
+				if (var.block && var.block_member_index != 0)
 					continue;
-				if (var.block && !is_mesh_shader)
-					emit_interface_block_member_in_struct(*var.var, var.block_member_index, var.location, active_outputs);
-				else
-					emit_interface_block_in_struct(*var.var, active_outputs);
+
+				emit_interface_block_in_struct(*var.var, active_outputs);
 			}
 			emit_builtin_primitive_outputs_in_struct();
 			end_scope_decl();
@@ -1779,13 +1777,11 @@ void CompilerHLSL::emit_resources()
 		if (is_hidden_variable(var, true))
 			continue;
 
-		if (var.storage != StorageClassOutput)
+		if (var.storage != StorageClassOutput &&
+		    var.storage != StorageClassTaskPayloadWorkgroupEXT)
 		{
 			if (!variable_is_lut(var))
 			{
-				if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
-					continue;
-
 				add_resource_name(var.self);
 
 				const char *storage = nullptr;
@@ -2382,14 +2378,12 @@ void CompilerHLSL::analyze_meshlet_writes()
 	}
 }
 
-void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, const uint32_t id_per_vertex, const uint32_t id_per_primitive,
-                                          std::unordered_set<uint32_t>& processed_func_ids)
+void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vertex, uint32_t id_per_primitive,
+                                          std::unordered_set<uint32_t> &processed_func_ids)
 {
 	// Avoid processing a function more than once
 	if (processed_func_ids.find(func_id) != processed_func_ids.end())
-	{
 		return;
-	}
 	processed_func_ids.insert(func_id);
 
 	auto &func = get<SPIRFunction>(func_id);
@@ -2900,13 +2894,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				statement("[outputtopology(\"line\")]");
 			else if (execution.flags.get(ExecutionModeOutputPoints))
 				SPIRV_CROSS_THROW("Topology mode \"points\" is not supported in DirectX");
-			auto& fn = get<SPIRFunction>(ir.default_entry_point);
-			for (auto& arg : fn.arguments)
+
+			auto &func = get<SPIRFunction>(ir.default_entry_point);
+			for (auto &arg : func.arguments)
 			{
 				auto &var = get<SPIRVariable>(arg.id);
 				auto &base_type = get<SPIRType>(var.basetype);
 				bool block = has_decoration(base_type.self, DecorationBlock);
-				if (var.storage==StorageClassTaskPayloadWorkgroupEXT)
+				if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
 				{
 					arguments.push_back("in payload " + variable_decl(var));
 				}
@@ -2916,12 +2911,12 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					if (flags.get(DecorationPerPrimitiveEXT) || has_decoration(arg.id, DecorationPerPrimitiveEXT))
 					{
 						arguments.push_back("out primitives gl_MeshPerPrimitiveEXT gl_MeshPrimitivesEXT[" +
-											std::to_string(execution.output_primitives) + "]");
+						                    std::to_string(execution.output_primitives) + "]");
 					}
 					else
 					{
 						arguments.push_back("out vertices gl_MeshPerVertexEXT gl_MeshVerticesEXT[" +
-											std::to_string(execution.output_vertices) + "]");
+						                    std::to_string(execution.output_vertices) + "]");
 					}
 				}
 				else
@@ -2929,12 +2924,12 @@ void CompilerHLSL::emit_hlsl_entry_point()
 					if (execution.flags.get(ExecutionModeOutputTrianglesEXT))
 					{
 						arguments.push_back("out indices uint3 gl_PrimitiveTriangleIndicesEXT[" +
-											std::to_string(execution.output_primitives) + "]");
+						                    std::to_string(execution.output_primitives) + "]");
 					}
 					else
 					{
 						arguments.push_back("out indices uint2 gl_PrimitiveLineIndicesEXT[" +
-											std::to_string(execution.output_primitives) + "]");
+						                    std::to_string(execution.output_primitives) + "]");
 					}
 				}
 			}
@@ -3163,17 +3158,14 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	    execution.model == ExecutionModelGLCompute ||
 	    execution.model == ExecutionModelMeshEXT)
 	{
+		// For mesh shaders, we receive special arguments that we must pass down as function arguments.
+		// HLSL does not support proper reference types for passing these IO blocks,
+		// but DXC post-inlining seems to magically fix it up anyways *shrug*.
 		SmallVector<string> arglist;
-		auto& fn = get<SPIRFunction>(ir.default_entry_point);
-		for (auto& arg : fn.arguments)
-		{
-			// Do not pass in separate images or samplers if we're remapping
-			// to combined image samplers.
-			if (skip_argument(arg.type))
-				continue;
-
-			arglist.push_back(to_expression(arg.id,false));
-		}
+		auto &func = get<SPIRFunction>(ir.default_entry_point);
+		// The arguments are marked out, avoid detecting reads and emitting inout.
+		for (auto &arg : func.arguments)
+			arglist.push_back(to_expression(arg.id, false));
 		statement(get_inner_entry_point_name(), "(", merge(arglist), ");");
 	}
 	else
@@ -6509,7 +6501,7 @@ string CompilerHLSL::compile()
 	backend.can_return_array = false;
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
-	backend.force_merged_mesh_block = (get_execution_model() == ExecutionModelMeshEXT);
+	backend.force_merged_mesh_block = get_execution_model() == ExecutionModelMeshEXT;
 
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
