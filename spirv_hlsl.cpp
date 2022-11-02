@@ -2309,6 +2309,7 @@ void CompilerHLSL::analyze_meshlet_writes()
 	uint32_t id_per_vertex = 0;
 	uint32_t id_per_primitive = 0;
 	bool need_per_primitive = false;
+	bool need_per_vertex = false;
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
@@ -2331,13 +2332,16 @@ void CompilerHLSL::analyze_meshlet_writes()
 
 			if (flags.get(DecorationPerPrimitiveEXT))
 				need_per_primitive = true;
+			else
+				need_per_vertex = true;
 		}
 	});
 
 	// If we have per-primitive outputs, and no per-primitive builtins,
-	// empty version of gl_MeshPerPrimitiveEXT will be emitted
-	if (id_per_primitive == 0 && need_per_primitive)
-	{
+	// empty version of gl_MeshPerPrimitiveEXT will be emitted.
+	// If we don't use block IO for vertex output, we'll also need to synthesize the PerVertex block.
+
+	const auto generate_block = [&](const char *block_name, const char *instance_name, bool per_primitive) -> uint32_t {
 		auto &execution = get_entry_point();
 
 		uint32_t op_type = ir.increase_bound_by(4);
@@ -2345,32 +2349,39 @@ void CompilerHLSL::analyze_meshlet_writes()
 		uint32_t op_ptr = op_type + 2;
 		uint32_t op_var = op_type + 3;
 
-		auto& type = set<SPIRType>(op_type);
+		auto &type = set<SPIRType>(op_type);
 		type.basetype = SPIRType::Struct;
-		set_name(op_type, "gl_MeshPerPrimitiveEXT");
+		set_name(op_type, block_name);
 		set_decoration(op_type, DecorationBlock);
-		set_decoration(op_type, DecorationPerPrimitiveEXT);
+		if (per_primitive)
+			set_decoration(op_type, DecorationPerPrimitiveEXT);
 
-		auto& arr = set<SPIRType>(op_arr, type);
+		auto &arr = set<SPIRType>(op_arr, type);
 		arr.parent_type = type.self;
-		arr.array.push_back(execution.output_primitives);
+		arr.array.push_back(per_primitive ? execution.output_primitives : execution.output_vertices);
 		arr.array_size_literal.push_back(true);
 
-		auto& ptr = set<SPIRType>(op_ptr, arr);
+		auto &ptr = set<SPIRType>(op_ptr, arr);
 		ptr.parent_type = arr.self;
 		ptr.pointer = true;
 		ptr.pointer_depth++;
 		ptr.storage = StorageClassOutput;
 		set_decoration(op_ptr, DecorationBlock);
-		set_name(op_ptr, "gl_MeshPerPrimitiveEXT");
+		set_name(op_ptr, block_name);
 
-		auto& var = set<SPIRVariable>(op_var, op_ptr, StorageClassOutput);
-		set_decoration(op_var, DecorationPerPrimitiveEXT);
-		set_name(op_var, "gl_MeshPrimitivesEXT");
+		auto &var = set<SPIRVariable>(op_var, op_ptr, StorageClassOutput);
+		if (per_primitive)
+			set_decoration(op_var, DecorationPerPrimitiveEXT);
+		set_name(op_var, instance_name);
 		execution.interface_variables.push_back(var.self);
 
-		id_per_primitive = op_var;
-	}
+		return op_var;
+	};
+
+	if (id_per_vertex == 0 && need_per_vertex)
+		id_per_vertex = generate_block("gl_MeshPerVertexEXT", "gl_MeshVerticesEXT", false);
+	if (id_per_primitive == 0 && need_per_primitive)
+		id_per_primitive = generate_block("gl_MeshPerPrimitiveEXT", "gl_MeshPrimitivesEXT", true);
 
 	unordered_set<uint32_t> processed_func_ids;
 	analyze_meshlet_writes(ir.default_entry_point, id_per_vertex, id_per_primitive, processed_func_ids);
