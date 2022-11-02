@@ -2312,7 +2312,7 @@ void CompilerHLSL::analyze_meshlet_writes()
 		uint32_t id_per_primitive = 0;
 		bool need_per_primitive = false;
 
-		ir.for_each_typed_id<SPIRVariable>([&](uint32_t id, SPIRVariable &var) {
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 			auto &type = this->get<SPIRType>(var.basetype);
 			bool block = has_decoration(type.self, DecorationBlock);
 			if (var.storage == StorageClassOutput && block && is_builtin_variable(var))
@@ -2441,8 +2441,8 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vert
 						m->decoration.builtin_type != BuiltInPrimitiveLineIndicesEXT &&
 						m->decoration.builtin_type != BuiltInPrimitiveTriangleIndicesEXT)
 					{
-						bool block = has_decoration(base_type.self, DecorationBlock);
-						auto flags = block ? get_buffer_block_flags(var.self) : Bitset();
+						bool is_block = has_decoration(base_type.self, DecorationBlock);
+						auto flags = is_block ? get_buffer_block_flags(var.self) : Bitset();
 						if (flags.get(DecorationPerPrimitiveEXT) || has_decoration(var_id, DecorationPerPrimitiveEXT))
 							var_id = id_per_primitive;
 						else
