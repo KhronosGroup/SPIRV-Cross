@@ -9214,7 +9214,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool relaxed_precision = has_decoration(base, DecorationRelaxedPrecision);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
-	bool clip_cull_fixup = false;
 
 	const auto append_index = [&](uint32_t index, bool is_literal, bool is_ptr_chain = false) {
 		AccessChainFlags mod_flags = flags;
@@ -9377,14 +9376,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!pending_array_enclose)
 					expr += "]";
 			}
-			else if (clip_cull_fixup)
-			{
-				string idx_expr = is_literal ? convert_to_string(index) : to_enclosed_unpacked_expression(index, register_expression_read);
-
-				expr += "[" + idx_expr + " / 4]";
-				expr += "[" + idx_expr + " % 4]";
-				clip_cull_fixup = false;
-			}
 			// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
 			// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
 			else if (!builtin_translates_to_nonarray(BuiltIn(get_decoration(base, DecorationBuiltIn))))
@@ -9443,8 +9434,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				physical_type = get_extended_member_decoration(type->self, index, SPIRVCrossDecorationPhysicalTypeID);
 			else
 				physical_type = 0;
-
-			clip_cull_fixup = (builtin == BuiltInClipDistance || builtin == BuiltInCullDistance) && backend.force_merged_mesh_block;
 
 			row_major_matrix_needs_conversion = member_is_non_native_row_major_matrix(*type, index);
 			type = &get<SPIRType>(type->member_types[index]);

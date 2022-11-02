@@ -603,11 +603,25 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 			break;
 
 		case BuiltInClipDistance:
+		{
+			static const char *types[] = { "float", "float2", "float3", "float4" };
+
 			// HLSL is a bit weird here, use SV_ClipDistance0, SV_ClipDistance1 and so on with vectors.
 			if (execution.model == ExecutionModelMeshEXT)
 			{
-				uint32_t clip = (clip_distance_count + 3) / 4;
-				statement("float4 gl_ClipDistance", "[", clip,"] : SV_ClipDistance;");
+				if (clip_distance_count > 4)
+					SPIRV_CROSS_THROW("Clip distance count > 4 not supported for mesh shaders.");
+
+				if (clip_distance_count == 1)
+				{
+					// Avoids having to hack up access_chain code. Makes it trivially indexable.
+					statement("float gl_ClipDistance[1] : SV_ClipDistance;");
+				}
+				else
+				{
+					// Replace array with vector directly, avoids any weird fixup path.
+					statement(types[clip_distance_count - 1], " gl_ClipDistance : SV_ClipDistance;");
+				}
 			}
 			else
 			{
@@ -619,19 +633,33 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 					uint32_t semantic_index = clip / 4;
 
-					static const char *types[] = { "float", "float2", "float3", "float4" };
 					statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassOutput), semantic_index,
 					          " : SV_ClipDistance", semantic_index, ";");
 				}
 			}
 			break;
+		}
 
 		case BuiltInCullDistance:
+		{
+			static const char *types[] = { "float", "float2", "float3", "float4" };
+
 			// HLSL is a bit weird here, use SV_CullDistance0, SV_CullDistance1 and so on with vectors.
 			if (execution.model == ExecutionModelMeshEXT)
 			{
-				uint32_t cull = (cull_distance_count + 3) / 4;
-				statement("float4 gl_CullDistance", "[", cull,"] : SV_CullDistance;");
+				if (cull_distance_count > 4)
+					SPIRV_CROSS_THROW("Cull distance count > 4 not supported for mesh shaders.");
+
+				if (cull_distance_count == 1)
+				{
+					// Avoids having to hack up access_chain code. Makes it trivially indexable.
+					statement("float gl_CullDistance[1] : SV_CullDistance;");
+				}
+				else
+				{
+					// Replace array with vector directly, avoids any weird fixup path.
+					statement(types[cull_distance_count - 1], " gl_CullDistance : SV_CullDistance;");
+				}
 			}
 			else
 			{
@@ -643,12 +671,12 @@ void CompilerHLSL::emit_builtin_outputs_in_struct()
 
 					uint32_t semantic_index = cull / 4;
 
-					static const char *types[] = { "float", "float2", "float3", "float4" };
 					statement(types[to_declare - 1], " ", builtin_to_glsl(builtin, StorageClassOutput), semantic_index,
 					          " : SV_CullDistance", semantic_index, ";");
 				}
 			}
 			break;
+		}
 
 		case BuiltInPointSize:
 			// If point_size_compat is enabled, just ignore PointSize.
