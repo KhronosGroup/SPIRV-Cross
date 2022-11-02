@@ -2306,76 +2306,74 @@ void CompilerHLSL::emit_texture_size_variants(uint64_t variant_mask, const char 
 
 void CompilerHLSL::analyze_meshlet_writes()
 {
-	if (get_execution_model() == ExecutionModelMeshEXT)
-	{
-		uint32_t id_per_vertex = 0;
-		uint32_t id_per_primitive = 0;
-		bool need_per_primitive = false;
+	uint32_t id_per_vertex = 0;
+	uint32_t id_per_primitive = 0;
+	bool need_per_primitive = false;
 
-		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-			auto &type = this->get<SPIRType>(var.basetype);
-			bool block = has_decoration(type.self, DecorationBlock);
-			if (var.storage == StorageClassOutput && block && is_builtin_variable(var))
-			{
-				auto flags = get_buffer_block_flags(var.self);
-				if (flags.get(DecorationPerPrimitiveEXT))
-					id_per_primitive = var.self;
-				else
-					id_per_vertex = var.self;
-			}
-			else if (var.storage == StorageClassOutput)
-			{
-				Bitset flags;
-				if (block)
-					flags = get_buffer_block_flags(var.self);
-				else
-					flags = get_decoration_bitset(var.self);
-
-				if (flags.get(DecorationPerPrimitiveEXT))
-					need_per_primitive = true;
-			}
-		});
-
-		// If we have per-primitive outputs, and no per-primitive builtins, empty version of gl_MeshPerPrimitiveEXT will be emitted
-		if (id_per_primitive == 0 && need_per_primitive)
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = this->get<SPIRType>(var.basetype);
+		bool block = has_decoration(type.self, DecorationBlock);
+		if (var.storage == StorageClassOutput && block && is_builtin_variable(var))
 		{
-			auto &execution = get_entry_point();
-
-			uint32_t op_type = ir.increase_bound_by(4);
-			uint32_t op_arr = op_type + 1;
-			uint32_t op_ptr = op_type + 2;
-			uint32_t op_var = op_type + 3;
-
-			auto& type = set<SPIRType>(op_type);
-			type.basetype = SPIRType::Struct;
-			set_name(op_type, "gl_MeshPerPrimitiveEXT");
-			set_decoration(op_type, DecorationBlock);
-			set_decoration(op_type, DecorationPerPrimitiveEXT);
-
-			auto& arr = set<SPIRType>(op_arr, type);
-			arr.parent_type = type.self;
-			arr.array.push_back(execution.output_primitives);
-			arr.array_size_literal.push_back(true);
-
-			auto& ptr = set<SPIRType>(op_ptr, arr);
-			ptr.parent_type = arr.self;
-			ptr.pointer = true;
-			ptr.pointer_depth++;
-			ptr.storage = StorageClassOutput;
-			set_decoration(op_ptr, DecorationBlock);
-			set_name(op_ptr, "gl_MeshPerPrimitiveEXT");
-
-			auto& var = set<SPIRVariable>(op_var, op_ptr, StorageClassOutput);
-			set_decoration(op_var, DecorationPerPrimitiveEXT);
-			set_name(op_var, "gl_MeshPrimitivesEXT");
-			execution.interface_variables.push_back(var.self);
-
-			id_per_primitive = op_var;
+			auto flags = get_buffer_block_flags(var.self);
+			if (flags.get(DecorationPerPrimitiveEXT))
+				id_per_primitive = var.self;
+			else
+				id_per_vertex = var.self;
 		}
+		else if (var.storage == StorageClassOutput)
+		{
+			Bitset flags;
+			if (block)
+				flags = get_buffer_block_flags(var.self);
+			else
+				flags = get_decoration_bitset(var.self);
 
-		unordered_set<uint32_t> processed_func_ids;
-		analyze_meshlet_writes(ir.default_entry_point, id_per_vertex, id_per_primitive, processed_func_ids);
+			if (flags.get(DecorationPerPrimitiveEXT))
+				need_per_primitive = true;
+		}
+	});
+
+	// If we have per-primitive outputs, and no per-primitive builtins,
+	// empty version of gl_MeshPerPrimitiveEXT will be emitted
+	if (id_per_primitive == 0 && need_per_primitive)
+	{
+		auto &execution = get_entry_point();
+
+		uint32_t op_type = ir.increase_bound_by(4);
+		uint32_t op_arr = op_type + 1;
+		uint32_t op_ptr = op_type + 2;
+		uint32_t op_var = op_type + 3;
+
+		auto& type = set<SPIRType>(op_type);
+		type.basetype = SPIRType::Struct;
+		set_name(op_type, "gl_MeshPerPrimitiveEXT");
+		set_decoration(op_type, DecorationBlock);
+		set_decoration(op_type, DecorationPerPrimitiveEXT);
+
+		auto& arr = set<SPIRType>(op_arr, type);
+		arr.parent_type = type.self;
+		arr.array.push_back(execution.output_primitives);
+		arr.array_size_literal.push_back(true);
+
+		auto& ptr = set<SPIRType>(op_ptr, arr);
+		ptr.parent_type = arr.self;
+		ptr.pointer = true;
+		ptr.pointer_depth++;
+		ptr.storage = StorageClassOutput;
+		set_decoration(op_ptr, DecorationBlock);
+		set_name(op_ptr, "gl_MeshPerPrimitiveEXT");
+
+		auto& var = set<SPIRVariable>(op_var, op_ptr, StorageClassOutput);
+		set_decoration(op_var, DecorationPerPrimitiveEXT);
+		set_name(op_var, "gl_MeshPrimitivesEXT");
+		execution.interface_variables.push_back(var.self);
+
+		id_per_primitive = op_var;
 	}
+
+	unordered_set<uint32_t> processed_func_ids;
+	analyze_meshlet_writes(ir.default_entry_point, id_per_vertex, id_per_primitive, processed_func_ids);
 }
 
 void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vertex, uint32_t id_per_primitive,
@@ -2404,67 +2402,78 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vert
 				uint32_t inner_func_id = ops[2];
 				analyze_meshlet_writes(inner_func_id, id_per_vertex, id_per_primitive, processed_func_ids);
 				auto &inner_func = get<SPIRFunction>(inner_func_id);
-				for (auto& iarg : inner_func.arguments)
+				for (auto &iarg : inner_func.arguments)
 				{
 					if (!iarg.alias_global_variable)
 						continue;
-					bool already_declarated = false;
-					for (auto& arg : func.arguments)
-						if (arg.id==iarg.id)
+
+					bool already_declared = false;
+					for (auto &arg : func.arguments)
+					{
+						if (arg.id == iarg.id)
 						{
-							already_declarated=true;
+							already_declared = true;
 							break;
 						}
-					if (!already_declarated)
+					}
+
+					if (!already_declared)
 					{
-						func.arguments.push_back({ ops[0], iarg.id, iarg.read_count, iarg.write_count, true });
+						// basetype is effectively ignored here since we declare the argument
+						// with explicit types. Just pass down a valid type.
+						func.arguments.push_back({ expression_type_id(iarg.id), iarg.id,
+						                           iarg.read_count, iarg.write_count, true });
 					}
 				}
 				break;
 			}
+
+			case OpStore:
 			case OpLoad:
 			case OpInBoundsAccessChain:
 			case OpAccessChain:
+			case OpPtrAccessChain:
+			case OpInBoundsPtrAccessChain:
 			case OpArrayLength:
 			{
-				auto &type = get<SPIRType>(ops[0]);
-				if (type.storage==StorageClassOutput || type.storage==StorageClassTaskPayloadWorkgroupEXT)
+				auto *var = maybe_get<SPIRVariable>(ops[op == OpStore ? 0 : 2]);
+				if (var && (var->storage == StorageClassOutput || var->storage == StorageClassTaskPayloadWorkgroupEXT))
 				{
-					bool already_declarated = false;
-					auto &var = get<SPIRVariable>(ops[2]);
-					auto &base_type = get<SPIRType>(var.basetype);
-					auto *m = ir.find_meta(var.self);
+					bool already_declared = false;
+					auto builtin_type = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
 
-					uint32_t var_id = var.self;
-					if (m!=nullptr && var.storage != StorageClassTaskPayloadWorkgroupEXT &&
-						m->decoration.builtin_type != BuiltInPrimitivePointIndicesEXT &&
-						m->decoration.builtin_type != BuiltInPrimitiveLineIndicesEXT &&
-						m->decoration.builtin_type != BuiltInPrimitiveTriangleIndicesEXT)
+					uint32_t var_id = var->self;
+					if (var->storage != StorageClassTaskPayloadWorkgroupEXT &&
+						builtin_type != BuiltInPrimitivePointIndicesEXT &&
+						builtin_type != BuiltInPrimitiveLineIndicesEXT &&
+						builtin_type != BuiltInPrimitiveTriangleIndicesEXT)
 					{
-						bool is_block = has_decoration(base_type.self, DecorationBlock);
-						auto flags = is_block ? get_buffer_block_flags(var.self) : Bitset();
-						if (flags.get(DecorationPerPrimitiveEXT) || has_decoration(var_id, DecorationPerPrimitiveEXT))
-							var_id = id_per_primitive;
-						else
-							var_id = id_per_vertex;
+						var_id = is_per_primitive_variable(*var) ? id_per_primitive : id_per_vertex;
 					}
 
-					for (auto& arg : func.arguments)
-						if (arg.id==var_id)
+					for (auto &arg : func.arguments)
+					{
+						if (arg.id == var_id)
 						{
-							already_declarated=true;
+							already_declared = true;
 							break;
 						}
-					if (!already_declarated)
+					}
+
+					if (!already_declared)
 					{
-						if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
-							func.arguments.push_back({ ops[0], var_id, 1u, 0u, true });
+						// basetype is effectively ignored here since we declare the argument
+						// with explicit types. Just pass down a valid type.
+						uint32_t type_id = expression_type_id(var_id);
+						if (var->storage == StorageClassTaskPayloadWorkgroupEXT)
+							func.arguments.push_back({ type_id, var_id, 1u, 0u, true });
 						else
-							func.arguments.push_back({ ops[0], var_id, 0u, 1u, true });
+							func.arguments.push_back({ type_id, var_id, 1u, 1u, true });
 					}
 				}
 				break;
 			}
+
 			default:
 				break;
 			}
@@ -6514,7 +6523,8 @@ string CompilerHLSL::compile()
 	update_active_builtins();
 	analyze_image_and_sampler_usage();
 	analyze_interlocked_resource_usage();
-	analyze_meshlet_writes();
+	if (get_execution_model() == ExecutionModelMeshEXT)
+		analyze_meshlet_writes();
 
 	// Subpass input needs SV_Position.
 	if (need_subpass_input)
