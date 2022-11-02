@@ -30,10 +30,10 @@ void mesh_main(inout gl_MeshPerVertexEXT gl_MeshVerticesEXT[24], _12 _11, inout 
     _9[gl_LocalInvocationIndex] = float(gl_LocalInvocationIndex);
     GroupMemoryBarrierWithGroupSync();
     SetMeshOutputCounts(24u, 8u);
-    gl_Position[gl_LocalInvocationIndex].x = _9[gl_LocalInvocationIndex];
-    gl_Position[gl_LocalInvocationIndex].y = _9[gl_LocalInvocationIndex];
-    gl_Position[gl_LocalInvocationIndex].z = _9[gl_LocalInvocationIndex];
-    gl_Position[gl_LocalInvocationIndex].w = _9[gl_LocalInvocationIndex];
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position.x = _9[gl_LocalInvocationIndex];
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position.y = _9[gl_LocalInvocationIndex];
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position.z = _9[gl_LocalInvocationIndex];
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position.w = _9[gl_LocalInvocationIndex];
     float _63 = _11._m0 + _9[gl_LocalInvocationIndex ^ 1u];
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].B.x = _63;
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].B.y = _63;
@@ -43,9 +43,9 @@ void mesh_main(inout gl_MeshPerVertexEXT gl_MeshVerticesEXT[24], _12 _11, inout 
     {
         uint _71 = gl_LocalInvocationIndex * 3u;
         gl_PrimitiveTriangleIndicesEXT[gl_LocalInvocationIndex] = uint3(_71, _71 + 1u, _71 + 2u);
-        gl_CullPrimitiveEXT[gl_LocalInvocationIndex] = (gl_LocalInvocationIndex & 1u) != 0u;
-        gl_PrimitiveID[gl_LocalInvocationIndex] = int(gl_LocalInvocationIndex);
-        gl_Layer[gl_LocalInvocationIndex] = int(gl_LocalInvocationIndex);
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_CullPrimitiveEXT = (gl_LocalInvocationIndex & 1u) != 0u;
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveID = int(gl_LocalInvocationIndex);
+        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_Layer = int(gl_LocalInvocationIndex);
         uint _81 = gl_LocalInvocationIndex ^ 2u;
         gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].C.x = _9[_81];
         gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].C.y = _9[_81];

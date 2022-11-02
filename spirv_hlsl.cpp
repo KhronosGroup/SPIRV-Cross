@@ -6550,6 +6550,7 @@ string CompilerHLSL::compile()
 	backend.nonuniform_qualifier = "NonUniformResourceIndex";
 	backend.support_case_fallthrough = false;
 	backend.force_merged_mesh_block = get_execution_model() == ExecutionModelMeshEXT;
+	backend.force_gl_in_out_block = backend.force_merged_mesh_block;
 
 	// SM 4.1 does not support precise for some reason.
 	backend.support_precise_qualifier = hlsl_options.shader_model >= 50 || hlsl_options.shader_model == 40;
