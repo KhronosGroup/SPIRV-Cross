@@ -464,6 +464,14 @@ public:
 		// until the bug is fixed in Metal; it is provided as an option to allow disabling it when that occurs.
 		bool manual_helper_invocation_updates = true;
 
+		// If set, extra checks will be emitted in fragment shaders to prevent writes
+		// from discarded fragments. Some Metal devices have a bug where writes to storage resources
+		// from discarded fragment threads continue to occur, despite the fragment being
+		// discarded. This is a workaround that is only expected to be needed until the
+		// bug is fixed in Metal; it is provided as an option so it can be enabled
+		// only when the bug is present.
+		bool check_discarded_frag_stores = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -1036,6 +1044,7 @@ protected:
 	uint32_t argument_buffer_padding_sampler_type_id = 0;
 
 	bool does_shader_write_sample_mask = false;
+	bool frag_shader_needs_discard_checks = false;
 
 	void cast_to_variable_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void cast_from_variable_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
@@ -1192,6 +1201,11 @@ protected:
 	{
 		return msl_options.manual_helper_invocation_updates && msl_options.supports_msl_version(2, 3);
 	}
+	bool needs_frag_discard_checks() const
+	{
+		return get_execution_model() == spv::ExecutionModelFragment && msl_options.supports_msl_version(2, 3) &&
+		       msl_options.check_discarded_frag_stores && frag_shader_needs_discard_checks;
+	}
 
 	bool has_additional_fixed_sample_mask() const { return msl_options.additional_fixed_sample_mask != 0xffffffff; }
 	std::string additional_fixed_sample_mask_str() const;
@@ -1213,7 +1227,9 @@ protected:
 		std::unordered_map<uint32_t, uint32_t> image_pointers; // Emulate texture2D atomic operations
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
-		bool uses_resource_write = false;
+		bool uses_image_write = false;
+		bool uses_buffer_write = false;
+		bool uses_discard = false;
 		bool needs_subgroup_invocation_id = false;
 		bool needs_subgroup_size = false;
 		bool needs_sample_id = false;

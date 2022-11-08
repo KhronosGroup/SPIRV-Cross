@@ -342,6 +342,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('32')
     if '.force-sample.' in shader:
         msl_args.append('--msl-force-sample-rate-shading')
+    if '.discard-checks.' in shader:
+        msl_args.append('--msl-check-discarded-frag-stores')
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
     if '.mask-location-0.' in shader:

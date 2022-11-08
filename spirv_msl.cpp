@@ -1614,7 +1614,8 @@ void CompilerMSL::preprocess_op_codes()
 
 	// Before MSL 2.1 (2.2 for textures), Metal vertex functions that write to
 	// resources must disable rasterization and return void.
-	if (preproc.uses_resource_write)
+	if ((preproc.uses_buffer_write && !msl_options.supports_msl_version(2, 1)) ||
+	    (preproc.uses_image_write && !msl_options.supports_msl_version(2, 2)))
 		is_rasterization_disabled = true;
 
 	// Tessellation control shaders are run as compute functions in Metal, and so
@@ -1638,6 +1639,25 @@ void CompilerMSL::preprocess_op_codes()
 		needs_sample_id = true;
 	if (preproc.needs_helper_invocation)
 		needs_helper_invocation = true;
+
+	// OpKill is removed by the parser, so we need to identify those by inspecting
+	// blocks.
+	ir.for_each_typed_id<SPIRBlock>([&preproc](uint32_t, SPIRBlock &block) {
+		if (block.terminator == SPIRBlock::Kill)
+			preproc.uses_discard = true;
+	});
+
+	// Fragment shaders that both write to storage resources and discard fragments
+	// need checks on the writes, to work around Metal allowing these writes despite
+	// the fragment being dead.
+	if (msl_options.check_discarded_frag_stores && preproc.uses_discard &&
+	    (preproc.uses_buffer_write || preproc.uses_image_write))
+	{
+		frag_shader_needs_discard_checks = true;
+		needs_helper_invocation = true;
+		// Fragment discard store checks imply manual HelperInvocation updates.
+		msl_options.manual_helper_invocation_updates = true;
+	}
 
 	if (is_intersection_query())
 	{
@@ -1692,7 +1712,7 @@ void CompilerMSL::extract_global_variables_from_functions()
 				// Make sure this is declared and initialized.
 				// Force this to have the proper name.
 				set_name(var.self, builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput));
-				auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+				auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
 				entry_func.add_local_variable(var.self);
 				vars_needing_early_declaration.push_back(var.self);
 				entry_func.fixup_hooks_in.push_back([this, &var]()
@@ -1813,6 +1833,9 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				if (global_var_ids.find(rvalue_id) != global_var_ids.end())
 					added_arg_ids.insert(rvalue_id);
 
+				if (needs_frag_discard_checks())
+					added_arg_ids.insert(builtin_helper_invocation_id);
+
 				break;
 			}
 
@@ -1826,6 +1849,25 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 					added_arg_ids.insert(base_id);
 				break;
 			}
+
+			case OpAtomicExchange:
+			case OpAtomicCompareExchange:
+			case OpAtomicStore:
+			case OpAtomicIIncrement:
+			case OpAtomicIDecrement:
+			case OpAtomicIAdd:
+			case OpAtomicISub:
+			case OpAtomicSMin:
+			case OpAtomicUMin:
+			case OpAtomicSMax:
+			case OpAtomicUMax:
+			case OpAtomicAnd:
+			case OpAtomicOr:
+			case OpAtomicXor:
+			case OpImageWrite:
+				if (needs_frag_discard_checks())
+					added_arg_ids.insert(builtin_helper_invocation_id);
+				break;
 
 			// Emulate texture2D atomic operations
 			case OpImageTexelPointer:
@@ -8698,9 +8740,16 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		args.base.is_fetch = true;
 		args.coord = coord_id;
 		args.lod = lod;
-		statement(join(to_expression(img_id), ".write(",
-		               remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)), ", ",
-		               CompilerMSL::to_function_args(args, &forward), ");"));
+
+		string expr;
+		if (needs_frag_discard_checks())
+			expr = join("(", builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), " ? ((void)0) : ");
+		expr += join(to_expression(img_id), ".write(",
+		             remap_swizzle(store_type, texel_type.vecsize, to_expression(texel_id)), ", ",
+		             CompilerMSL::to_function_args(args, &forward), ")");
+		if (needs_frag_discard_checks())
+			expr += ")";
+		statement(expr, ";");
 
 		if (p_var && variable_storage_is_aliased(*p_var))
 			flush_all_aliased_variables();
@@ -8855,14 +8904,34 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpStore:
+	{
+		const auto &type = expression_type(ops[0]);
+
 		if (is_out_of_bounds_tessellation_level(ops[0]))
 			break;
 
-		if (maybe_emit_array_assignment(ops[0], ops[1]))
-			break;
-
-		CompilerGLSL::emit_instruction(instruction);
+		if (needs_frag_discard_checks() &&
+		    (type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform))
+		{
+			// If we're in a continue block, this kludge will make the block too complex
+			// to emit normally.
+			assert(current_emitting_block);
+			auto cont_type = continue_block_type(*current_emitting_block);
+			if (cont_type != SPIRBlock::ContinueNone && cont_type != SPIRBlock::ComplexLoop)
+			{
+				current_emitting_block->complex_continue = true;
+				force_recompile();
+			}
+			statement("if (!", builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), ")");
+			begin_scope();
+		}
+		if (!maybe_emit_array_assignment(ops[0], ops[1]))
+			CompilerGLSL::emit_instruction(instruction);
+		if (needs_frag_discard_checks() &&
+		    (type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform))
+			end_scope();
 		break;
+	}
 
 	// Compute barriers
 	case OpMemoryBarrier:
@@ -9562,7 +9631,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
                                       uint32_t mem_order_1, uint32_t mem_order_2, bool has_mem_order_2, uint32_t obj, uint32_t op1,
                                       bool op1_is_pointer, bool op1_is_literal, uint32_t op2)
 {
-	string exp = string(op) + "(";
+	string exp;
 
 	auto &type = get_pointee_type(expression_type(obj));
 	auto expected_type = type.basetype;
@@ -9577,13 +9646,33 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	auto remapped_type = type;
 	remapped_type.basetype = expected_type;
 
-	exp += "(";
 	auto *var = maybe_get_backing_variable(obj);
 	if (!var)
 		SPIRV_CROSS_THROW("No backing variable for atomic operation.");
-
-	// Emulate texture2D atomic operations
 	const auto &res_type = get<SPIRType>(var->basetype);
+
+	bool is_atomic_compare_exchange_strong = op1_is_pointer && op1;
+
+	bool check_discard = opcode != OpAtomicLoad && needs_frag_discard_checks() &&
+	                     ((res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image) ||
+	                      var->storage == StorageClassStorageBuffer || var->storage == StorageClassUniform);
+
+	if (check_discard)
+	{
+		if (is_atomic_compare_exchange_strong)
+		{
+			// We're already emitting a CAS loop here; a conditional won't hurt.
+			emit_uninitialized_temporary_expression(result_type, result_id);
+			statement("if (!", builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), ")");
+			begin_scope();
+		}
+		else
+			exp = join("(!", builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), " ? ");
+	}
+
+	exp += string(op) + "(";
+	exp += "(";
+	// Emulate texture2D atomic operations
 	if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
 	{
 		exp += "device";
@@ -9601,8 +9690,6 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 
 	exp += "&";
 	exp += to_enclosed_expression(obj);
-
-	bool is_atomic_compare_exchange_strong = op1_is_pointer && op1;
 
 	if (is_atomic_compare_exchange_strong)
 	{
@@ -9625,11 +9712,42 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		// the CAS loop, otherwise it will loop infinitely, with the comparison test always failing.
 		// The function updates the comparitor value from the memory value, so the additional
 		// comparison test evaluates the memory value against the expected value.
-		emit_uninitialized_temporary_expression(result_type, result_id);
+		if (!check_discard)
+			emit_uninitialized_temporary_expression(result_type, result_id);
 		statement("do");
 		begin_scope();
 		statement(to_name(result_id), " = ", to_expression(op1), ";");
 		end_scope_decl(join("while (!", exp, " && ", to_name(result_id), " == ", to_enclosed_expression(op1), ")"));
+		if (check_discard)
+		{
+			end_scope();
+			statement("else");
+			begin_scope();
+			exp = "atomic_load_explicit(";
+			exp += "(";
+			// Emulate texture2D atomic operations
+			if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
+				exp += "device";
+			else
+				exp += get_argument_address_space(*var);
+
+			exp += " atomic_";
+			exp += type_to_glsl(remapped_type);
+			exp += "*)";
+
+			exp += "&";
+			exp += to_enclosed_expression(obj);
+
+			if (has_mem_order_2)
+				exp += string(", ") + get_memory_order(mem_order_2);
+			else
+				exp += string(", ") + get_memory_order(mem_order_1);
+
+			exp += ")";
+
+			statement(to_name(result_id), " = ", exp, ";");
+			end_scope();
+		}
 	}
 	else
 	{
@@ -9649,6 +9767,38 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 			exp += string(", ") + get_memory_order(mem_order_2);
 
 		exp += ")";
+
+		if (check_discard)
+		{
+			exp += " : ";
+			if (strcmp(op, "atomic_store_explicit") != 0)
+			{
+				exp += "atomic_load_explicit(";
+				exp += "(";
+				// Emulate texture2D atomic operations
+				if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
+					exp += "device";
+				else
+					exp += get_argument_address_space(*var);
+
+				exp += " atomic_";
+				exp += type_to_glsl(remapped_type);
+				exp += "*)";
+
+				exp += "&";
+				exp += to_enclosed_expression(obj);
+
+				if (has_mem_order_2)
+					exp += string(", ") + get_memory_order(mem_order_2);
+				else
+					exp += string(", ") + get_memory_order(mem_order_1);
+
+				exp += ")";
+			}
+			else
+				exp += "((void)0)";
+			exp += ")";
+		}
 
 		if (expected_type != type.basetype)
 			exp = bitcast_expression(type, expected_type, exp);
@@ -16067,6 +16217,10 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		suppress_missing_prototypes = true;
 		break;
 
+	case OpDemoteToHelperInvocationEXT:
+		uses_discard = true;
+		break;
+
 	// Emulate texture2D atomic operations
 	case OpImageTexelPointer:
 	{
@@ -16076,8 +16230,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	}
 
 	case OpImageWrite:
-		if (!compiler.msl_options.supports_msl_version(2, 2))
-			uses_resource_write = true;
+		uses_image_write = true;
 		break;
 
 	case OpStore:
@@ -16104,9 +16257,11 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		auto it = image_pointers.find(args[2]);
 		if (it != image_pointers.end())
 		{
+			uses_image_write = true;
 			compiler.atomic_image_vars.insert(it->second);
 		}
-		check_resource_write(args[2]);
+		else
+			check_resource_write(args[2]);
 		break;
 	}
 
@@ -16117,8 +16272,10 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		if (it != image_pointers.end())
 		{
 			compiler.atomic_image_vars.insert(it->second);
+			uses_image_write = true;
 		}
-		check_resource_write(args[0]);
+		else
+			check_resource_write(args[0]);
 		break;
 	}
 
@@ -16243,9 +16400,8 @@ void CompilerMSL::OpCodePreprocessor::check_resource_write(uint32_t var_id)
 {
 	auto *p_var = compiler.maybe_get_backing_variable(var_id);
 	StorageClass sc = p_var ? p_var->storage : StorageClassMax;
-	if (!compiler.msl_options.supports_msl_version(2, 1) &&
-	    (sc == StorageClassUniform || sc == StorageClassStorageBuffer))
-		uses_resource_write = true;
+	if (sc == StorageClassUniform || sc == StorageClassStorageBuffer)
+		uses_buffer_write = true;
 }
 
 // Returns an enumeration of a SPIR-V function that needs to be output for certain Op codes.
