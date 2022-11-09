@@ -5342,6 +5342,10 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 			{
 				res += constant_op_expression(*op);
 			}
+			else if (maybe_get<SPIRUndef>(elem) != nullptr)
+			{
+				res += to_name(elem);
+			}
 			else
 			{
 				auto &subc = get<SPIRConstant>(elem);
