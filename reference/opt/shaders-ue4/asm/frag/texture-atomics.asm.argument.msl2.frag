@@ -16,6 +16,8 @@ struct type_Globals
     uint2 ShadowTileListGroupSize;
 };
 
+constant float3 _70 = {};
+
 struct spvDescriptorSetBuffer0
 {
     const device type_StructuredBuffer_v4float* CulledObjectBoxBounds [[id(0)]];
@@ -23,8 +25,6 @@ struct spvDescriptorSetBuffer0
     texture2d<uint> RWShadowTileNumCulledObjects [[id(2)]];
     device atomic_uint* RWShadowTileNumCulledObjects_atomic [[id(3)]];
 };
-
-constant float3 _70 = {};
 
 struct main0_out
 {

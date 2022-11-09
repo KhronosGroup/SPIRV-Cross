@@ -61,6 +61,15 @@ struct Params
     vec4 LqmatFarTilingFactor;
 };
 
+VertexOutput _121;
+SurfaceInput _122;
+vec2 _123;
+vec4 _124;
+Surface _125;
+vec4 _192;
+vec4 _219;
+vec4 _297;
+
 layout(binding = 0, std140) uniform CB0
 {
     Globals CB0;
@@ -85,15 +94,6 @@ layout(location = 6) in vec3 IN_Tangent;
 layout(location = 7) in vec4 IN_PosLightSpace_Reflectance;
 layout(location = 8) in float IN_studIndex;
 layout(location = 0) out vec4 _entryPointOutput;
-
-VertexOutput _121;
-SurfaceInput _122;
-vec2 _123;
-vec4 _124;
-Surface _125;
-vec4 _192;
-vec4 _219;
-vec4 _297;
 
 void main()
 {

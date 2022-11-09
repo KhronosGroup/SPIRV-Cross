@@ -12,11 +12,11 @@ struct _5
     int _m1;
 };
 
-layout(location = 0) flat in int _2;
-layout(location = 0) out int _3;
-
 _4 _16;
 int _21;
+
+layout(location = 0) flat in int _2;
+layout(location = 0) out int _3;
 
 void main()
 {

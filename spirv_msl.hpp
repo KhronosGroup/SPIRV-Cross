@@ -820,7 +820,6 @@ protected:
 	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain) override;
 	std::string to_qualifiers_glsl(uint32_t id) override;
 	void replace_illegal_names() override;
-	void declare_undefined_values() override;
 	void declare_constant_arrays();
 
 	void replace_illegal_entry_point_names();

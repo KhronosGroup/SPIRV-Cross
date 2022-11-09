@@ -17,6 +17,8 @@ struct _28
     vec4 _m0;
 };
 
+_28 _74;
+
 layout(binding = 0, std140) uniform _6_7
 {
     vec4 _m0;
@@ -101,8 +103,6 @@ uniform sampler2D SPIRV_Cross_Combined_1;
 uniform sampler2D SPIRV_Cross_Combined_2;
 
 layout(location = 0) out vec4 _5;
-
-_28 _74;
 
 void main()
 {

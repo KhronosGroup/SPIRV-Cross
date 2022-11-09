@@ -1,3 +1,5 @@
+static float4 _32;
+
 static const float4 _34[2] = { 0.0f.xxxx, 0.0f.xxxx };
 
 static float4 vInput;
@@ -12,8 +14,6 @@ struct SPIRV_Cross_Output
 {
     float4 FragColor : SV_Target0;
 };
-
-static float4 _32;
 
 void frag_main()
 {

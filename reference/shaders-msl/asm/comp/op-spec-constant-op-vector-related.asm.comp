@@ -54,6 +54,7 @@ struct _7
     int _m0[1];
 };
 
+constant int3 _32 = {};
 constant int _3_tmp [[function_constant(0)]];
 constant int _3 = is_function_constant_defined(_3_tmp) ? _3_tmp : 0;
 constant int _4_tmp [[function_constant(1)]];
@@ -102,8 +103,6 @@ constant int _74 = (_73 * _72);
 
 constant spvUnsafeArray<int, 3> _33 = spvUnsafeArray<int, 3>({ 0, 0, 0 });
 constant spvUnsafeArray<spvUnsafeArray<int, 3>, 3> _34 = spvUnsafeArray<spvUnsafeArray<int, 3>, 3>({ spvUnsafeArray<int, 3>({ 0, 0, 0 }), spvUnsafeArray<int, 3>({ 0, 0, 0 }), spvUnsafeArray<int, 3>({ 0, 0, 0 }) });
-
-constant int3 _32 = {};
 
 kernel void main0(device _7& _8 [[buffer(0)]], device _7& _9 [[buffer(1)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
