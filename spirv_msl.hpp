@@ -458,6 +458,12 @@ public:
 		// the extra threads away.
 		bool force_sample_rate_shading = false;
 
+		// If set, gl_HelperInvocation will be set manually whenever a fragment is discarded.
+		// Some Metal devices have a bug where simd_is_helper_thread() does not return true
+		// after a fragment has been discarded. This is a workaround that is only expected to be needed
+		// until the bug is fixed in Metal; it is provided as an option to allow disabling it when that occurs.
+		bool manual_helper_invocation_updates = true;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -1005,6 +1011,7 @@ protected:
 	uint32_t builtin_frag_coord_id = 0;
 	uint32_t builtin_sample_id_id = 0;
 	uint32_t builtin_sample_mask_id = 0;
+	uint32_t builtin_helper_invocation_id = 0;
 	uint32_t builtin_vertex_idx_id = 0;
 	uint32_t builtin_base_vertex_id = 0;
 	uint32_t builtin_instance_idx_id = 0;
@@ -1113,6 +1120,7 @@ protected:
 	bool needs_subgroup_invocation_id = false;
 	bool needs_subgroup_size = false;
 	bool needs_sample_id = false;
+	bool needs_helper_invocation = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
@@ -1180,6 +1188,11 @@ protected:
 
 	bool variable_storage_requires_stage_io(spv::StorageClass storage) const;
 
+	bool needs_manual_helper_invocation_updates() const
+	{
+		return msl_options.manual_helper_invocation_updates && msl_options.supports_msl_version(2, 3);
+	}
+
 	bool has_additional_fixed_sample_mask() const { return msl_options.additional_fixed_sample_mask != 0xffffffff; }
 	std::string additional_fixed_sample_mask_str() const;
 
@@ -1204,6 +1217,7 @@ protected:
 		bool needs_subgroup_invocation_id = false;
 		bool needs_subgroup_size = false;
 		bool needs_sample_id = false;
+		bool needs_helper_invocation = false;
 	};
 
 	// OpcodeHandler that scans for uses of sampled images

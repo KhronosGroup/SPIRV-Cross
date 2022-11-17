@@ -5,7 +5,9 @@ using namespace metal;
 
 fragment void main0()
 {
-    discard_fragment();
-    bool _9 = simd_is_helper_thread();
+    bool gl_HelperInvocation = {};
+    gl_HelperInvocation = simd_is_helper_thread();
+    gl_HelperInvocation = true, discard_fragment();
+    bool _9 = gl_HelperInvocation;
 }
 

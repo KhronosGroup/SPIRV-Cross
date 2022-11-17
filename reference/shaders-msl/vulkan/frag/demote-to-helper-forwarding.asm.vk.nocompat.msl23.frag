@@ -11,8 +11,10 @@ struct main0_out
 fragment main0_out main0()
 {
     main0_out out = {};
-    bool _15 = simd_is_helper_thread();
-    discard_fragment();
+    bool gl_HelperInvocation = {};
+    gl_HelperInvocation = simd_is_helper_thread();
+    bool _15 = gl_HelperInvocation;
+    gl_HelperInvocation = true, discard_fragment();
     if (!_15)
     {
         out.FragColor = float4(1.0, 0.0, 0.0, 1.0);
