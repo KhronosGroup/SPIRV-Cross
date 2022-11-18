@@ -9421,7 +9421,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				else if (flatten_member_reference)
 					expr += join("_", to_member_name(*type, index));
 				else
-					expr += to_member_reference(base, *type, index, ptr_chain);
+					expr += to_member_reference(base, *type, index, i, ptr_chain);
 			}
 
 			if (has_member_decoration(type->self, index, DecorationInvariant))
@@ -13843,9 +13843,9 @@ string CompilerGLSL::to_member_name(const SPIRType &type, uint32_t index)
 		return join("_m", index);
 }
 
-string CompilerGLSL::to_member_reference(uint32_t, const SPIRType &type, uint32_t index, bool)
+string CompilerGLSL::to_member_reference(uint32_t, const SPIRType &type, uint32_t member_index, uint32_t chain_index, bool)
 {
-	return join(".", to_member_name(type, index));
+	return join(".", to_member_name(type, member_index));
 }
 
 string CompilerGLSL::to_multi_member_reference(const SPIRType &type, const SmallVector<uint32_t> &indices)
