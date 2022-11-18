@@ -770,7 +770,7 @@ protected:
 	std::string address_of_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
-	virtual std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain);
+	virtual std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t member_index, uint32_t chain_index, bool ptr_chain);
 	std::string to_multi_member_reference(const SPIRType &type, const SmallVector<uint32_t> &indices);
 	std::string type_to_glsl_constructor(const SPIRType &type);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
