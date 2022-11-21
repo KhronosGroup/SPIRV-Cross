@@ -3,14 +3,15 @@
 
 using namespace metal;
 
+constant int uninit_int = {};
+constant int4 uninit_vector = {};
+constant float4x4 uninit_matrix = {};
+
 struct Foo
 {
     int a;
 };
 
-constant int uninit_int = {};
-constant int4 uninit_vector = {};
-constant float4x4 uninit_matrix = {};
 constant Foo uninit_foo = {};
 
 struct main0_out

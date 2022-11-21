@@ -7217,28 +7217,6 @@ static string inject_top_level_storage_qualifier(const string &expr, const strin
 	}
 }
 
-// Undefined global memory is not allowed in MSL.
-// Declare constant and init to zeros. Use {}, as global constructors can break Metal.
-void CompilerMSL::declare_undefined_values()
-{
-	bool emitted = false;
-	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, SPIRUndef &undef) {
-		auto &type = this->get<SPIRType>(undef.basetype);
-		// OpUndef can be void for some reason ...
-		if (type.basetype == SPIRType::Void)
-			return;
-
-		statement(inject_top_level_storage_qualifier(
-				variable_decl(type, to_name(undef.self), undef.self),
-				"constant"),
-		          " = {};");
-		emitted = true;
-	});
-
-	if (emitted)
-		statement("");
-}
-
 void CompilerMSL::declare_constant_arrays()
 {
 	bool fully_inlined = ir.ids_for_type[TypeFunction].size() == 1;
@@ -7304,7 +7282,6 @@ void CompilerMSL::declare_complex_constant_arrays()
 void CompilerMSL::emit_resources()
 {
 	declare_constant_arrays();
-	declare_undefined_values();
 
 	// Emit the special [[stage_in]] and [[stage_out]] interface blocks which we created.
 	emit_interface_block(stage_out_var_id);
@@ -7367,7 +7344,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	emitted = false;
 	declared_structs.clear();
 
-	for (auto &id_ : ir.ids_for_constant_or_type)
+	for (auto &id_ : ir.ids_for_constant_undef_or_type)
 	{
 		auto &id = ir.ids[id_];
 
@@ -7479,6 +7456,21 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 				// Make sure we declare the underlying struct type, and not the "decorated" type with pointers, etc.
 				emit_struct(get<SPIRType>(type_id));
 			}
+		}
+		else if (id.get_type() == TypeUndef)
+		{
+			auto &undef = id.get<SPIRUndef>();
+			auto &type = get<SPIRType>(undef.basetype);
+			// OpUndef can be void for some reason ...
+			if (type.basetype == SPIRType::Void)
+				return;
+
+			// Undefined global memory is not allowed in MSL.
+			// Declare constant and init to zeros. Use {}, as global constructors can break Metal.
+			statement(
+			    inject_top_level_storage_qualifier(variable_decl(type, to_name(undef.self), undef.self), "constant"),
+			    " = {};");
+			emitted = true;
 		}
 	}
 
@@ -9088,12 +9080,33 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t op0 = ops[2];
 		uint32_t op1 = ops[3];
 		auto &type = get<SPIRType>(result_type);
+		auto input_type = opcode == OpSMulExtended ? int_type : uint_type;
+		auto &output_type = get_type(result_type);
+		string cast_op0, cast_op1;
+
+		auto expected_type = binary_op_bitcast_helper(cast_op0, cast_op1, input_type, op0, op1, false);
+
 		emit_uninitialized_temporary_expression(result_type, result_id);
 
-		statement(to_expression(result_id), ".", to_member_name(type, 0), " = ",
-				  to_enclosed_unpacked_expression(op0), " * ", to_enclosed_unpacked_expression(op1), ";");
-		statement(to_expression(result_id), ".", to_member_name(type, 1), " = mulhi(",
-				  to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ");");
+		string mullo_expr, mulhi_expr;
+		mullo_expr = join(cast_op0, " * ", cast_op1);
+		mulhi_expr = join("mulhi(", cast_op0, ", ", cast_op1, ")");
+
+		auto &low_type = get_type(output_type.member_types[0]);
+		auto &high_type = get_type(output_type.member_types[1]);
+		if (low_type.basetype != input_type)
+		{
+			expected_type.basetype = input_type;
+			mullo_expr = join(bitcast_glsl_op(low_type, expected_type), "(", mullo_expr, ")");
+		}
+		if (high_type.basetype != input_type)
+		{
+			expected_type.basetype = input_type;
+			mulhi_expr = join(bitcast_glsl_op(high_type, expected_type), "(", mulhi_expr, ")");
+		}
+
+		statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", mullo_expr, ";");
+		statement(to_expression(result_id), ".", to_member_name(type, 1), " = ", mulhi_expr, ";");
 		break;
 	}
 

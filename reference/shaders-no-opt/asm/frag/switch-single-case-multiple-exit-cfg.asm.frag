@@ -2,9 +2,9 @@
 precision mediump float;
 precision highp int;
 
-layout(location = 0) out highp vec4 _GLF_color;
-
 vec2 _19;
+
+layout(location = 0) out highp vec4 _GLF_color;
 
 void main()
 {

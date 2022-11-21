@@ -2,10 +2,10 @@
 precision mediump float;
 precision highp int;
 
+vec4 _32;
+
 layout(location = 0) in vec4 vInput;
 layout(location = 0) out vec4 FragColor;
-
-vec4 _32;
 
 void main()
 {

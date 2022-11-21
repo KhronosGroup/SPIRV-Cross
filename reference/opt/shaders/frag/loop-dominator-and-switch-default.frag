@@ -2,9 +2,9 @@
 precision mediump float;
 precision highp int;
 
-layout(location = 0) out vec4 fragColor;
-
 vec4 _80;
+
+layout(location = 0) out vec4 fragColor;
 
 void main()
 {

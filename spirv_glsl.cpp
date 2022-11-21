@@ -3416,27 +3416,6 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	statement("");
 }
 
-void CompilerGLSL::declare_undefined_values()
-{
-	bool emitted = false;
-	ir.for_each_typed_id<SPIRUndef>([&](uint32_t, const SPIRUndef &undef) {
-		auto &type = this->get<SPIRType>(undef.basetype);
-		// OpUndef can be void for some reason ...
-		if (type.basetype == SPIRType::Void)
-			return;
-
-		string initializer;
-		if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
-			initializer = join(" = ", to_zero_initialized_expression(undef.basetype));
-
-		statement(variable_decl(type, to_name(undef.self), undef.self), initializer, ";");
-		emitted = true;
-	});
-
-	if (emitted)
-		statement("");
-}
-
 bool CompilerGLSL::variable_is_lut(const SPIRVariable &var) const
 {
 	bool statically_assigned = var.statically_assigned && var.static_expression != ID(0) && var.remapped_variable;
@@ -3537,7 +3516,7 @@ void CompilerGLSL::emit_resources()
 	//
 	{
 		auto loop_lock = ir.create_loop_hard_lock();
-		for (auto &id_ : ir.ids_for_constant_or_type)
+		for (auto &id_ : ir.ids_for_constant_undef_or_type)
 		{
 			auto &id = ir.ids[id_];
 
@@ -3589,6 +3568,22 @@ void CompilerGLSL::emit_resources()
 
 					emit_struct(*type);
 				}
+			}
+			else if (id.get_type() == TypeUndef)
+			{
+				auto &undef = id.get<SPIRUndef>();
+				auto &type = this->get<SPIRType>(undef.basetype);
+				// OpUndef can be void for some reason ...
+				if (type.basetype == SPIRType::Void)
+					return;
+
+				string initializer;
+				if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
+					initializer = join(" = ", to_zero_initialized_expression(undef.basetype));
+
+				// FIXME: If used in a constant, we must declare it as one.
+				statement(variable_decl(type, to_name(undef.self), undef.self), initializer, ";");
+				emitted = true;
 			}
 		}
 	}
@@ -3806,8 +3801,6 @@ void CompilerGLSL::emit_resources()
 
 	if (emitted)
 		statement("");
-
-	declare_undefined_values();
 }
 
 void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
@@ -5341,6 +5334,10 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 			if (auto *op = maybe_get<SPIRConstantOp>(elem))
 			{
 				res += constant_op_expression(*op);
+			}
+			else if (maybe_get<SPIRUndef>(elem) != nullptr)
+			{
+				res += to_name(elem);
 			}
 			else
 			{
@@ -10064,9 +10061,32 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 	if (auto *var = maybe_get<SPIRVariable>(id))
 		return var->phi_variable;
 
-	// If id is an access chain, we should not dereference it.
 	if (auto *expr = maybe_get<SPIRExpression>(id))
-		return !expr->access_chain;
+	{
+		// If id is an access chain, we should not dereference it.
+		if (expr->access_chain)
+			return false;
+
+		// If id is a forwarded copy of a variable pointer, we should not dereference it.
+		SPIRVariable *var = nullptr;
+		while (expr->loaded_from && expression_is_forwarded(expr->self))
+		{
+			auto &src_type = expression_type(expr->loaded_from);
+			// To be a copy, the pointer and its source expression must be the
+			// same type. Can't check type.self, because for some reason that's
+			// usually the base type with pointers stripped off. This check is
+			// complex enough that I've hoisted it out of the while condition.
+			if (src_type.pointer != type.pointer || src_type.pointer_depth != type.pointer ||
+			    src_type.parent_type != type.parent_type)
+				break;
+			if ((var = maybe_get<SPIRVariable>(expr->loaded_from)))
+				break;
+			if (!(expr = maybe_get<SPIRExpression>(expr->loaded_from)))
+				break;
+		}
+
+		return !var || var->phi_variable;
+	}
 
 	// Otherwise, we should dereference this pointer expression.
 	return true;
@@ -11663,7 +11683,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// RHS expression is immutable, so just forward it.
 			// Copying these things really make no sense, but
 			// seems to be allowed anyways.
-			auto &e = set<SPIRExpression>(id, to_expression(rhs), result_type, true);
+			auto &e = emit_op(result_type, id, to_expression(rhs), true, true);
 			if (pointer)
 			{
 				auto *var = maybe_get_backing_variable(rhs);
@@ -16900,7 +16920,7 @@ void CompilerGLSL::reorder_type_alias()
 			if (alias_itr < master_itr)
 			{
 				// Must also swap the type order for the constant-type joined array.
-				auto &joined_types = ir.ids_for_constant_or_type;
+				auto &joined_types = ir.ids_for_constant_undef_or_type;
 				auto alt_alias_itr = find(begin(joined_types), end(joined_types), *alias_itr);
 				auto alt_master_itr = find(begin(joined_types), end(joined_types), *master_itr);
 				assert(alt_alias_itr != end(joined_types));
