@@ -9418,7 +9418,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				else if (flatten_member_reference)
 					expr += join("_", to_member_name(*type, index));
 				else
-					expr += to_member_reference(base, *type, index, ptr_chain);
+				{
+					// Any pointer de-refences for values are handled in the first access chain.
+					// For pointer chains, the pointer-ness is resolved through an array access.
+					// The only time this is not true is when accessing array of SSBO/UBO.
+					// This case is explicitly handled.
+					expr += to_member_reference(base, *type, index, ptr_chain || i != 0);
+				}
 			}
 
 			if (has_member_decoration(type->self, index, DecorationInvariant))
