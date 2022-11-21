@@ -14432,7 +14432,7 @@ void CompilerMSL::sync_entry_point_aliases_and_names()
 		entry.second.name = ir.meta[entry.first].decoration.alias;
 }
 
-string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t member_index, uint32_t chain_index, bool ptr_chain)
+string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain_is_resolved)
 {
 	auto *var = maybe_get_backing_variable(base);
 	// If this is a buffer array, we have to dereference the buffer pointers.
@@ -14451,10 +14451,10 @@ string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uin
 		declared_as_pointer = is_buffer_variable && is_array(get<SPIRType>(var->basetype));
 	}
 
-	if (declared_as_pointer || (!ptr_chain && should_dereference(base) && chain_index == 0))
-		return join("->", to_member_name(type, member_index));
+	if (declared_as_pointer || (!ptr_chain_is_resolved && should_dereference(base)))
+		return join("->", to_member_name(type, index));
 	else
-		return join(".", to_member_name(type, member_index));
+		return join(".", to_member_name(type, index));
 }
 
 string CompilerMSL::to_qualifiers_glsl(uint32_t id)
