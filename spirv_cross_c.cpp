@@ -479,6 +479,9 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_RELAX_NAN_CHECKS:
 		options->glsl.relax_nan_checks = value != 0;
 		break;
+	case SPVC_COMPILER_OPTION_GLSL_ENABLE_ROW_MAJOR_LOAD_WORKAROUND:
+		options->glsl.enable_row_major_load_workaround = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_HLSL

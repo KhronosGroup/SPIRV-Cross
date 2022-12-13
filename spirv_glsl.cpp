@@ -4362,8 +4362,18 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		for (auto &type_id : workaround_ubo_load_overload_types)
 		{
 			auto &type = get<SPIRType>(type_id);
-			statement(type_to_glsl(type), " spvWorkaroundRowMajor(", type_to_glsl(type),
-			          " wrap) { return wrap; }");
+
+			if (options.es && is_matrix(type))
+			{
+				// Need both variants.
+				// GLSL cannot overload on precision, so need to dispatch appropriately.
+				statement("highp ", type_to_glsl(type), " spvWorkaroundRowMajor(highp ", type_to_glsl(type), " wrap) { return wrap; }");
+				statement("mediump ", type_to_glsl(type), " spvWorkaroundRowMajorMP(mediump ", type_to_glsl(type), " wrap) { return wrap; }");
+			}
+			else
+			{
+				statement(type_to_glsl(type), " spvWorkaroundRowMajor(", type_to_glsl(type), " wrap) { return wrap; }");
+			}
 		}
 		statement("");
 	}
@@ -17335,6 +17345,7 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 
 	auto *type = &get<SPIRType>(loaded_type);
 	bool rewrite = false;
+	bool relaxed = options.es;
 
 	if (is_matrix(*type))
 	{
@@ -17345,24 +17356,31 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		// If an access chain occurred, the workaround is not required, so loading vectors or scalars don't need workaround.
 		type = &backing_type;
 	}
+	else
+	{
+		// If we're loading a composite, we don't have overloads like these.
+		relaxed = false;
+	}
 
 	if (type->basetype == SPIRType::Struct)
 	{
 		// If we're loading a struct where any member is a row-major matrix, apply the workaround.
 		for (uint32_t i = 0; i < uint32_t(type->member_types.size()); i++)
 		{
-			if (combined_decoration_for_member(*type, i).get(DecorationRowMajor))
-			{
+			auto decorations = combined_decoration_for_member(*type, i);
+			if (decorations.get(DecorationRowMajor))
 				rewrite = true;
-				break;
-			}
+
+			// Since we decide on a per-struct basis, only use mediump wrapper if all candidates are mediump.
+			if (!decorations.get(DecorationRelaxedPrecision))
+				relaxed = false;
 		}
 	}
 
 	if (rewrite)
 	{
 		request_workaround_wrapper_overload(loaded_type);
-		expr = join("spvWorkaroundRowMajor(", expr, ")");
+		expr = join("spvWorkaroundRowMajor", (relaxed ? "MP" : ""), "(", expr, ")");
 	}
 }
 

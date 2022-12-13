@@ -11,7 +11,8 @@ uniform Buffer _13;
 
 attribute vec4 Position;
 
-mat4 spvWorkaroundRowMajor(mat4 wrap) { return wrap; }
+highp mat4 spvWorkaroundRowMajor(highp mat4 wrap) { return wrap; }
+mediump mat4 spvWorkaroundRowMajorMP(mediump mat4 wrap) { return wrap; }
 
 mat4 spvTranspose(mat4 m)
 {
