@@ -8,7 +8,8 @@ layout(binding = 0, std140) uniform Block
 layout(location = 0) in vec4 a_position;
 layout(location = 0) out mediump float v_vtxResult;
 
-mat2x3 spvWorkaroundRowMajor(mat2x3 wrap) { return wrap; }
+highp mat2x3 spvWorkaroundRowMajor(highp mat2x3 wrap) { return wrap; }
+mediump mat2x3 spvWorkaroundRowMajorMP(mediump mat2x3 wrap) { return wrap; }
 
 mediump float compare_float(float a, float b)
 {
