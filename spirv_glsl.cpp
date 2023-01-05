@@ -4965,9 +4965,9 @@ SmallVector<ConstantID> CompilerGLSL::get_composite_constant_ids(ConstantID cons
 		if (is_array(type) || type.basetype == SPIRType::Struct)
 			return constant->subconstants;
 		if (is_matrix(type))
-			return constant->m.id;
+			return SmallVector<ConstantID>(constant->m.id);
 		if (is_vector(type))
-			return constant->m.c[0].id;
+			return SmallVector<ConstantID>(constant->m.c[0].id);
 		SPIRV_CROSS_THROW("Unexpected scalar constant!");
 	}
 	if (!const_composite_insert_ids.count(const_id))
