@@ -11612,11 +11612,10 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	if (physical_type.basetype == SPIRType::Image &&
 		physical_type.image.sampled == 2 &&
 		msl_options.is_ios() &&
-		msl_options.argument_buffers &&
 		msl_options.argument_buffers_tier <= Options::ArgumentBuffersTier::Tier1 &&
 		!has_decoration(orig_id, DecorationNonWritable))
 	{
-			SPIRV_CROSS_THROW("Writable images are not allowed on Tier1 argument buffers on iOS.");
+		SPIRV_CROSS_THROW("Writable images are not allowed on Tier1 argument buffers on iOS.");
 	}
 
 	// Array information is baked into these types.

@@ -736,7 +736,7 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 		break;
 
 	case SPVC_COMPILER_OPTION_MSL_ARGUMENT_BUFFERS_TIER:
-			options->msl.argument_buffers_tier = (CompilerMSL::Options::ArgumentBuffersTier)value;
+		options->msl.argument_buffers_tier = static_cast<CompilerMSL::Options::ArgumentBuffersTier>(value);
 		break;
 #endif
 
