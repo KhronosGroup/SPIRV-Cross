@@ -11608,11 +11608,14 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		}
 	}
 
-	// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
-	if (msl_options.is_ios() && physical_type.basetype == SPIRType::Image && physical_type.image.sampled == 2)
+	// iOS Tier 1 argument buffers do not support writable images.
+	if (physical_type.basetype == SPIRType::Image &&
+		physical_type.image.sampled == 2 &&
+		msl_options.is_ios() &&
+		msl_options.argument_buffers_tier <= Options::ArgumentBuffersTier::Tier1 &&
+		!has_decoration(orig_id, DecorationNonWritable))
 	{
-		if (!has_decoration(orig_id, DecorationNonWritable))
-			SPIRV_CROSS_THROW("Writable images are not allowed in argument buffers on iOS.");
+		SPIRV_CROSS_THROW("Writable images are not allowed on Tier1 argument buffers on iOS.");
 	}
 
 	// Array information is baked into these types.
@@ -16953,13 +16956,14 @@ bool CompilerMSL::descriptor_set_is_argument_buffer(uint32_t desc_set) const
 
 bool CompilerMSL::is_supported_argument_buffer_type(const SPIRType &type) const
 {
-	// Very specifically, image load-store in argument buffers are disallowed on MSL on iOS.
-	// But we won't know when the argument buffer is encoded whether this image will have
-	// a NonWritable decoration. So just use discrete arguments for all storage images
-	// on iOS.
-	bool is_storage_image = type.basetype == SPIRType::Image && type.image.sampled == 2;
-	bool is_supported_type = !msl_options.is_ios() || !is_storage_image;
-	return !type_is_msl_framebuffer_fetch(type) && is_supported_type;
+	// iOS Tier 1 argument buffers do not support writable images.
+	// When the argument buffer is encoded, we don't know whether this image will have a
+	// NonWritable decoration, so just use discrete arguments for all storage images on iOS.
+	bool is_supported_type = !(type.basetype == SPIRType::Image &&
+							   type.image.sampled == 2 &&
+							   msl_options.is_ios() &&
+							   msl_options.argument_buffers_tier <= Options::ArgumentBuffersTier::Tier1);
+	return is_supported_type && !type_is_msl_framebuffer_fetch(type);
 }
 
 void CompilerMSL::analyze_argument_buffers()
