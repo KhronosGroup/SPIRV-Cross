@@ -752,6 +752,7 @@ protected:
 	bool is_force_recompile = false;
 	bool is_force_recompile_forward_progress = false;
 
+	bool block_is_noop(const SPIRBlock &block) const;
 	bool block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const;
 
 	bool types_are_logically_equivalent(const SPIRType &a, const SPIRType &b) const;
