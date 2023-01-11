@@ -1468,6 +1468,39 @@ bool Compiler::get_binary_offset_for_decoration(VariableID id, spv::Decoration d
 	return true;
 }
 
+bool Compiler::block_is_noop(const SPIRBlock &block) const
+{
+	if (block.terminator != SPIRBlock::Direct)
+		return false;
+
+	// Verify all instructions have no semantic impact.
+	for (auto &i : block.ops)
+	{
+		auto op = static_cast<Op>(i.op);
+
+		switch (op)
+		{
+		// Non-Semantic instructions.
+		case OpNop:
+		case OpSourceContinued:
+		case OpSource:
+		case OpSourceExtension:
+		case OpName:
+		case OpMemberName:
+		case OpString:
+		case OpLine:
+		case OpNoLine:
+		case OpModuleProcessed:
+			break;
+
+		default:
+			return false;
+		}
+	}
+
+	return true;
+}
+
 bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const
 {
 	// Tried and failed.
@@ -1525,7 +1558,7 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 	{
 		// Empty loop header that just sets up merge target
 		// and branches to loop body.
-		bool ret = block.terminator == SPIRBlock::Direct && block.merge == SPIRBlock::MergeLoop && block.ops.empty();
+		bool ret = block.terminator == SPIRBlock::Direct && block.merge == SPIRBlock::MergeLoop && block_is_noop(block);
 
 		if (!ret)
 			return false;
