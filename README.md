@@ -8,7 +8,7 @@
 SPIRV-Cross is a tool designed for parsing and converting SPIR-V to other shader languages.
 
 [![CI](https://github.com/KhronosGroup/SPIRV-Cross/actions/workflows/main.yml/badge.svg)](https://github.com/KhronosGroup/SPIRV-Cross/actions/workflows/main.yml)
-[![Build Status](https://ci.appveyor.com/api/projects/status/github/KhronosGroup/SPIRV-Cross?svg=true&branch=master)](https://ci.appveyor.com/project/HansKristian-Work/SPIRV-Cross)
+[![Build Status](https://ci.appveyor.com/api/projects/status/github/KhronosGroup/SPIRV-Cross?svg=true&branch=main)](https://ci.appveyor.com/project/HansKristian-Work/SPIRV-Cross)
 
 ## Features
 
@@ -30,6 +30,10 @@ However, most missing features are expected to be "trivial" improvements at this
 ## Building
 
 SPIRV-Cross has been tested on Linux, iOS/OSX, Windows and Android. CMake is the main build system.
+
+### NOTE: main branch rename
+
+On 2023-01-12, `master` was renamed to `main` as per Khronos policy.
 
 ### Linux and macOS
 
@@ -499,7 +503,7 @@ to update the reference files and include these changes as part of the pull requ
 Always make sure you are running the correct version of glslangValidator as well as SPIRV-Tools when updating reference files.
 See `checkout_glslang_spirv_tools.sh` which revisions are currently expected. The revisions change regularly.
 
-In short, the master branch should always be able to run `./test_shaders.py shaders` and friends without failure.
+In short, the main branch should always be able to run `./test_shaders.py shaders` and friends without failure.
 SPIRV-Cross uses Travis CI to test all pull requests, so it is not strictly needed to perform testing yourself if you have problems running it locally.
 A pull request which does not pass testing on Travis will not be accepted however.
 
