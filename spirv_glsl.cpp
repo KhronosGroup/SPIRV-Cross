@@ -7290,8 +7290,14 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	args.grad_x = grad_x;
 	args.grad_y = grad_y;
 	args.lod = lod;
-	args.coffset = coffset;
-	args.offset = offset;
+
+	if (coffsets)
+		args.offset = coffsets;
+	else if (coffset)
+		args.offset = coffset;
+	else
+		args.offset = offset;
+
 	args.bias = bias;
 	args.component = comp;
 	args.sample = sample;
@@ -7683,13 +7689,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 		farg_str += ", 0";
 	}
 
-	if (args.coffset)
-	{
-		forward = forward && should_forward(args.coffset);
-		farg_str += ", ";
-		farg_str += bitcast_expression(SPIRType::Int, args.coffset);
-	}
-	else if (args.offset)
+	if (args.offset)
 	{
 		forward = forward && should_forward(args.offset);
 		farg_str += ", ";
