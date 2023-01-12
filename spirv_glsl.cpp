@@ -3181,7 +3181,6 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	Bitset global_builtins;
 	const SPIRVariable *block_var = nullptr;
 	bool emitted_block = false;
-	bool builtin_array = false;
 
 	// Need to use declared size in the type.
 	// These variables might have been declared, but not statically used, so we haven't deduced their size yet.
@@ -3305,7 +3304,6 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 
 		emitted_builtins = builtins;
 		emitted_block = true;
-		builtin_array = !type.array.empty();
 		block_var = &var;
 	});
 
@@ -3404,12 +3402,23 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			statement("float gl_CullDistance[", cull_distance_size, "];");
 	}
 
+	bool builtin_array = model == ExecutionModelTessellationControl ||
+	                     (model == ExecutionModelMeshEXT && storage == StorageClassOutput) ||
+	                     (model == ExecutionModelGeometry && storage == StorageClassInput) ||
+	                     (model == ExecutionModelTessellationEvaluation && storage == StorageClassInput);
+
 	if (builtin_array)
 	{
-		if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
-			end_scope_decl(join(to_name(block_var->self), "[", get_entry_point().output_vertices, "]"));
+		const char *instance_name;
+		if (model == ExecutionModelMeshEXT)
+			instance_name = "gl_MeshVerticesEXT"; // Per primitive is never synthesized.
 		else
-			end_scope_decl(join(to_name(block_var->self), "[]"));
+			instance_name = storage == StorageClassInput ? "gl_in" : "gl_out";
+
+		if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
+			end_scope_decl(join(instance_name, "[", get_entry_point().output_vertices, "]"));
+		else
+			end_scope_decl(join(instance_name, "[]"));
 	}
 	else
 		end_scope_decl();
