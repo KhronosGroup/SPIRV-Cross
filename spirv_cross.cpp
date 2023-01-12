@@ -1468,6 +1468,58 @@ bool Compiler::get_binary_offset_for_decoration(VariableID id, spv::Decoration d
 	return true;
 }
 
+bool Compiler::block_is_noop(const SPIRBlock &block) const
+{
+	if (block.terminator != SPIRBlock::Direct)
+		return false;
+
+	auto &child = get<SPIRBlock>(block.next_block);
+
+	// If this block participates in PHI, the block isn't really noop.
+	for (auto &phi : block.phi_variables)
+		if (phi.parent == block.self || phi.parent == child.self)
+			return false;
+
+	for (auto &phi : child.phi_variables)
+		if (phi.parent == block.self)
+			return false;
+
+	// Verify all instructions have no semantic impact.
+	for (auto &i : block.ops)
+	{
+		auto op = static_cast<Op>(i.op);
+
+		switch (op)
+		{
+		// Non-Semantic instructions.
+		case OpLine:
+		case OpNoLine:
+			break;
+
+		case OpExtInst:
+		{
+			auto *ops = stream(i);
+			auto ext = get<SPIRExtension>(ops[2]).ext;
+
+			bool ext_is_nonsemantic_only =
+				ext == SPIRExtension::NonSemanticShaderDebugInfo ||
+				ext == SPIRExtension::SPV_debug_info ||
+				ext == SPIRExtension::NonSemanticGeneric;
+
+			if (!ext_is_nonsemantic_only)
+				return false;
+
+			break;
+		}
+
+		default:
+			return false;
+		}
+	}
+
+	return true;
+}
+
 bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method method) const
 {
 	// Tried and failed.
@@ -1525,7 +1577,7 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 	{
 		// Empty loop header that just sets up merge target
 		// and branches to loop body.
-		bool ret = block.terminator == SPIRBlock::Direct && block.merge == SPIRBlock::MergeLoop && block.ops.empty();
+		bool ret = block.terminator == SPIRBlock::Direct && block.merge == SPIRBlock::MergeLoop && block_is_noop(block);
 
 		if (!ret)
 			return false;
@@ -1551,19 +1603,8 @@ bool Compiler::block_is_loop_candidate(const SPIRBlock &block, SPIRBlock::Method
 		ret = child.terminator == SPIRBlock::Select && child.merge == SPIRBlock::MergeNone &&
 		      (positive_candidate || negative_candidate);
 
-		// If we have OpPhi which depends on branches which came from our own block,
-		// we need to flush phi variables in else block instead of a trivial break,
-		// so we cannot assume this is a for loop candidate.
 		if (ret)
 		{
-			for (auto &phi : block.phi_variables)
-				if (phi.parent == block.self || phi.parent == child.self)
-					return false;
-
-			for (auto &phi : child.phi_variables)
-				if (phi.parent == block.self)
-					return false;
-
 			auto *merge = maybe_get<SPIRBlock>(block.merge_block);
 			if (merge)
 				for (auto &phi : merge->phi_variables)
@@ -1588,15 +1629,10 @@ bool Compiler::execution_is_noop(const SPIRBlock &from, const SPIRBlock &to) con
 		if (start->self == to.self)
 			return true;
 
-		if (!start->ops.empty())
+		if (!block_is_noop(*start))
 			return false;
 
 		auto &next = get<SPIRBlock>(start->next_block);
-		// Flushing phi variables does not count as noop.
-		for (auto &phi : next.phi_variables)
-			if (phi.parent == start->self)
-				return false;
-
 		start = &next;
 	}
 }
