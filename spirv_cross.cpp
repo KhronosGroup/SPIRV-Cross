@@ -1481,17 +1481,25 @@ bool Compiler::block_is_noop(const SPIRBlock &block) const
 		switch (op)
 		{
 		// Non-Semantic instructions.
-		case OpNop:
-		case OpSourceContinued:
-		case OpSource:
-		case OpSourceExtension:
-		case OpName:
-		case OpMemberName:
-		case OpString:
 		case OpLine:
 		case OpNoLine:
-		case OpModuleProcessed:
 			break;
+
+		case OpExtInst:
+		{
+			auto *ops = stream(i);
+			auto ext = get<SPIRExtension>(ops[2]).ext;
+
+			bool ext_is_nonsemantic_only =
+				ext == SPIRExtension::NonSemanticShaderDebugInfo ||
+				ext == SPIRExtension::SPV_debug_info ||
+				ext == SPIRExtension::NonSemanticGeneric;
+
+			if (!ext_is_nonsemantic_only)
+				return false;
+
+			break;
+		}
 
 		default:
 			return false;
