@@ -148,12 +148,12 @@ fragment void main0(constant uint* spvSwizzleConstants [[buffer(30)]], texture1d
     c = spvTextureSwizzle(tex2d.sample(tex2dSamp, float2(0.0)), tex2dSwzl);
     c = spvTextureSwizzle(tex3d.sample(tex3dSamp, float3(0.0)), tex3dSwzl);
     c = spvTextureSwizzle(texCube.sample(texCubeSamp, float3(0.0)), texCubeSwzl);
-    c = spvTextureSwizzle(tex2dArray.sample(tex2dArraySamp, float3(0.0).xy, uint(round(float3(0.0).z))), tex2dArraySwzl);
-    c = spvTextureSwizzle(texCubeArray.sample(texCubeArraySamp, float4(0.0).xyz, uint(round(float4(0.0).w))), texCubeArraySwzl);
+    c = spvTextureSwizzle(tex2dArray.sample(tex2dArraySamp, float3(0.0).xy, uint(rint(float3(0.0).z))), tex2dArraySwzl);
+    c = spvTextureSwizzle(texCubeArray.sample(texCubeArraySamp, float4(0.0).xyz, uint(rint(float4(0.0).w))), texCubeArraySwzl);
     c.x = spvTextureSwizzle(depth2d.sample_compare(depth2dSamp, float3(0.0, 0.0, 1.0).xy, 1.0), depth2dSwzl);
     c.x = spvTextureSwizzle(depthCube.sample_compare(depthCubeSamp, float4(0.0, 0.0, 0.0, 1.0).xyz, 1.0), depthCubeSwzl);
-    c.x = spvTextureSwizzle(depth2dArray.sample_compare(depth2dArraySamp, float4(0.0, 0.0, 0.0, 1.0).xy, uint(round(float4(0.0, 0.0, 0.0, 1.0).z)), 1.0), depth2dArraySwzl);
-    c.x = spvTextureSwizzle(depthCubeArray.sample_compare(depthCubeArraySamp, float4(0.0).xyz, uint(round(float4(0.0).w)), 1.0), depthCubeArraySwzl);
+    c.x = spvTextureSwizzle(depth2dArray.sample_compare(depth2dArraySamp, float4(0.0, 0.0, 0.0, 1.0).xy, uint(rint(float4(0.0, 0.0, 0.0, 1.0).z)), 1.0), depth2dArraySwzl);
+    c.x = spvTextureSwizzle(depthCubeArray.sample_compare(depthCubeArraySamp, float4(0.0).xyz, uint(rint(float4(0.0).w)), 1.0), depthCubeArraySwzl);
     c = spvTextureSwizzle(tex1d.sample(tex1dSamp, float2(0.0, 1.0).x / float2(0.0, 1.0).y), tex1dSwzl);
     c = spvTextureSwizzle(tex2d.sample(tex2dSamp, float3(0.0, 0.0, 1.0).xy / float3(0.0, 0.0, 1.0).z), tex2dSwzl);
     c = spvTextureSwizzle(tex3d.sample(tex3dSamp, float4(0.0, 0.0, 0.0, 1.0).xyz / float4(0.0, 0.0, 0.0, 1.0).w), tex3dSwzl);
@@ -164,8 +164,8 @@ fragment void main0(constant uint* spvSwizzleConstants [[buffer(30)]], texture1d
     c = spvTextureSwizzle(tex2d.sample(tex2dSamp, float2(0.0), level(0.0)), tex2dSwzl);
     c = spvTextureSwizzle(tex3d.sample(tex3dSamp, float3(0.0), level(0.0)), tex3dSwzl);
     c = spvTextureSwizzle(texCube.sample(texCubeSamp, float3(0.0), level(0.0)), texCubeSwzl);
-    c = spvTextureSwizzle(tex2dArray.sample(tex2dArraySamp, float3(0.0).xy, uint(round(float3(0.0).z)), level(0.0)), tex2dArraySwzl);
-    c = spvTextureSwizzle(texCubeArray.sample(texCubeArraySamp, float4(0.0).xyz, uint(round(float4(0.0).w)), level(0.0)), texCubeArraySwzl);
+    c = spvTextureSwizzle(tex2dArray.sample(tex2dArraySamp, float3(0.0).xy, uint(rint(float3(0.0).z)), level(0.0)), tex2dArraySwzl);
+    c = spvTextureSwizzle(texCubeArray.sample(texCubeArraySamp, float4(0.0).xyz, uint(rint(float4(0.0).w)), level(0.0)), texCubeArraySwzl);
     c.x = spvTextureSwizzle(depth2d.sample_compare(depth2dSamp, float3(0.0, 0.0, 1.0).xy, 1.0, level(0.0)), depth2dSwzl);
     c = spvTextureSwizzle(tex1d.sample(tex1dSamp, float2(0.0, 1.0).x / float2(0.0, 1.0).y), tex1dSwzl);
     c = spvTextureSwizzle(tex2d.sample(tex2dSamp, float3(0.0, 0.0, 1.0).xy / float3(0.0, 0.0, 1.0).z, level(0.0)), tex2dSwzl);
@@ -180,11 +180,11 @@ fragment void main0(constant uint* spvSwizzleConstants [[buffer(30)]], texture1d
     c = texBuffer.read(spvTexelBufferCoord(0));
     c = spvGatherSwizzle(tex2d, tex2dSamp, tex2dSwzl, component::x, float2(0.0), int2(0));
     c = spvGatherSwizzle(texCube, texCubeSamp, texCubeSwzl, component::y, float3(0.0));
-    c = spvGatherSwizzle(tex2dArray, tex2dArraySamp, tex2dArraySwzl, component::z, float3(0.0).xy, uint(round(float3(0.0).z)), int2(0));
-    c = spvGatherSwizzle(texCubeArray, texCubeArraySamp, texCubeArraySwzl, component::w, float4(0.0).xyz, uint(round(float4(0.0).w)));
+    c = spvGatherSwizzle(tex2dArray, tex2dArraySamp, tex2dArraySwzl, component::z, float3(0.0).xy, uint(rint(float3(0.0).z)), int2(0));
+    c = spvGatherSwizzle(texCubeArray, texCubeArraySamp, texCubeArraySwzl, component::w, float4(0.0).xyz, uint(rint(float4(0.0).w)));
     c = spvGatherCompareSwizzle(depth2d, depth2dSamp, depth2dSwzl, float2(0.0), 1.0);
     c = spvGatherCompareSwizzle(depthCube, depthCubeSamp, depthCubeSwzl, float3(0.0), 1.0);
-    c = spvGatherCompareSwizzle(depth2dArray, depth2dArraySamp, depth2dArraySwzl, float3(0.0).xy, uint(round(float3(0.0).z)), 1.0);
-    c = spvGatherCompareSwizzle(depthCubeArray, depthCubeArraySamp, depthCubeArraySwzl, float4(0.0).xyz, uint(round(float4(0.0).w)), 1.0);
+    c = spvGatherCompareSwizzle(depth2dArray, depth2dArraySamp, depth2dArraySwzl, float3(0.0).xy, uint(rint(float3(0.0).z)), 1.0);
+    c = spvGatherCompareSwizzle(depthCubeArray, depthCubeArraySamp, depthCubeArraySwzl, float4(0.0).xyz, uint(rint(float4(0.0).w)), 1.0);
 }
 

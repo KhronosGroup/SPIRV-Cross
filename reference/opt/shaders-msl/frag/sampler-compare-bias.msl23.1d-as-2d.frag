@@ -16,7 +16,7 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], depth2d_array<float> uTex [[texture(0)]], sampler uShadow [[sampler(0)]])
 {
     main0_out out = {};
-    out.FragColor = uTex.sample_compare(uShadow, float2(in.vUV.x, 0.5), uint(round(in.vUV.y)), in.vUV.z, bias(1.0));
+    out.FragColor = uTex.sample_compare(uShadow, float2(in.vUV.x, 0.5), uint(rint(in.vUV.y)), in.vUV.z, bias(1.0));
     return out;
 }
 

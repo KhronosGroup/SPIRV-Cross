@@ -18,7 +18,7 @@ fragment main0_out main0(main0_in in [[stage_in]], texture2d_array<float> tex [[
     main0_out out = {};
     gl_FragCoord.xy += get_sample_position(gl_SampleID) - 0.5;
     float3 _26 = float3(gl_FragCoord.xy, in.foo);
-    out.FragColor = tex.sample(texSmplr, _26.xy, uint(round(_26.z)));
+    out.FragColor = tex.sample(texSmplr, _26.xy, uint(rint(_26.z)));
     return out;
 }
 

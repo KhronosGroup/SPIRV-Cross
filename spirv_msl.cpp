@@ -11002,7 +11002,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 // If the texture coordinates are floating point, invokes MSL round() function to round them.
 string CompilerMSL::round_fp_tex_coords(string tex_coords, bool coord_is_fp)
 {
-	return coord_is_fp ? ("round(" + tex_coords + ")") : tex_coords;
+	return coord_is_fp ? ("rint(" + tex_coords + ")") : tex_coords;
 }
 
 // Returns a string to use in an image sampling function argument.
