@@ -2713,30 +2713,26 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 		{
 			add_resource_name(var.self);
 
-			// Tessellation control and evaluation shaders must have either gl_MaxPatchVertices or unsized arrays for input arrays.
+			// Legacy GLSL did not support int attributes, we automatically
+			// declare them as float and cast them on load/store
+			SPIRType newtype = type;
+			if (is_legacy() && var.storage == StorageClassInput && type.basetype == SPIRType::Int)
+				newtype.basetype = SPIRType::Float;
+
+			// Tessellation control and evaluation shaders must have either
+			// gl_MaxPatchVertices or unsized arrays for input arrays.
 			// Opt for unsized as it's the more "correct" variant to use.
-			bool control_point_input_array = type.storage == StorageClassInput && !type.array.empty() &&
-			                                 !has_decoration(var.self, DecorationPatch) &&
-			                                 (get_entry_point().model == ExecutionModelTessellationControl ||
-			                                  get_entry_point().model == ExecutionModelTessellationEvaluation);
-
-			uint32_t old_array_size = 0;
-			bool old_array_size_literal = true;
-
-			if (control_point_input_array)
+			if (type.storage == StorageClassInput && !type.array.empty() &&
+			    !has_decoration(var.self, DecorationPatch) &&
+			    (get_entry_point().model == ExecutionModelTessellationControl ||
+			     get_entry_point().model == ExecutionModelTessellationEvaluation))
 			{
-				swap(type.array.back(), old_array_size);
-				swap(type.array_size_literal.back(), old_array_size_literal);
+				newtype.array.back() = 0;
+				newtype.array_size_literal.back() = true;
 			}
 
 			statement(layout_for_variable(var), to_qualifiers_glsl(var.self),
-			          variable_decl(type, to_name(var.self), var.self), ";");
-
-			if (control_point_input_array)
-			{
-				swap(type.array.back(), old_array_size);
-				swap(type.array_size_literal.back(), old_array_size_literal);
-			}
+			          variable_decl(newtype, to_name(var.self), var.self), ";");
 		}
 	}
 }
@@ -16654,7 +16650,12 @@ void CompilerGLSL::cast_from_variable_load(uint32_t source_id, std::string &expr
 
 	// Only interested in standalone builtin variables.
 	if (!has_decoration(source_id, DecorationBuiltIn))
+	{
+		// Except for int attributes in legacy GLSL, which are cast from float.
+		if (is_legacy() && expr_type.basetype == SPIRType::Int && var && var->storage == StorageClassInput)
+			expr = join(type_to_glsl(expr_type), "(", expr, ")");
 		return;
+	}
 
 	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, DecorationBuiltIn));
 	auto expected_type = expr_type.basetype;
