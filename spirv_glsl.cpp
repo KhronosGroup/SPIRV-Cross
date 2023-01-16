@@ -1249,7 +1249,15 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 	if (flags.get(DecorationFlat))
 		res += "flat ";
 	if (flags.get(DecorationNoPerspective))
+	{
+		if (options.es)
+		{
+			if (options.version < 300)
+				SPIRV_CROSS_THROW("noperspective requires ESSL 300.");
+			require_extension_internal("GL_NV_shader_noperspective_interpolation");
+		}
 		res += "noperspective ";
+	}
 	if (flags.get(DecorationCentroid))
 		res += "centroid ";
 	if (flags.get(DecorationPatch))
