@@ -7863,8 +7863,22 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		break;
 
 	case GLSLstd450Trunc:
-		emit_unary_func_op(result_type, id, args[0], "trunc");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "trunc");
+		else
+		{
+			// Implement by value-casting to int and back.
+			bool forward = should_forward(args[0]);
+			auto op0 = to_unpacked_expression(args[0]);
+			auto &op0_type = expression_type(args[0]);
+			auto via_type = op0_type;
+			via_type.basetype = SPIRType::Int;
+			auto expr = join(type_to_glsl(op0_type), "(", type_to_glsl(via_type), "(", op0, "))");
+			emit_op(result_type, id, expr, forward);
+			inherit_expression_dependencies(id, args[0]);
+		}
 		break;
+
 	case GLSLstd450SAbs:
 		emit_unary_func_op_cast(result_type, id, args[0], "abs", int_type, int_type);
 		break;
@@ -7906,18 +7920,47 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		else
 			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], "fma");
 		break;
+
 	case GLSLstd450Modf:
 		register_call_out_argument(args[1]);
-		forced_temporaries.insert(id);
-		emit_binary_func_op(result_type, id, args[0], args[1], "modf");
+		if (!is_legacy())
+		{
+			forced_temporaries.insert(id);
+			emit_binary_func_op(result_type, id, args[0], args[1], "modf");
+		}
+		else
+		{
+			//NB. legacy GLSL doesn't have trunc() either, so we do a value cast
+			auto &op1_type = expression_type(args[1]);
+			auto via_type = op1_type;
+			via_type.basetype = SPIRType::Int;
+			statement(to_expression(args[1]), " = ",
+			          type_to_glsl(op1_type), "(", type_to_glsl(via_type),
+			          "(", to_expression(args[0]), "));");
+			emit_binary_op(result_type, id, args[0], args[1], "-");
+		}
 		break;
 
 	case GLSLstd450ModfStruct:
 	{
 		auto &type = get<SPIRType>(result_type);
 		emit_uninitialized_temporary_expression(result_type, id);
-		statement(to_expression(id), ".", to_member_name(type, 0), " = ", "modf(", to_expression(args[0]), ", ",
-		          to_expression(id), ".", to_member_name(type, 1), ");");
+		if (!is_legacy())
+		{
+			statement(to_expression(id), ".", to_member_name(type, 0), " = ", "modf(", to_expression(args[0]), ", ",
+			          to_expression(id), ".", to_member_name(type, 1), ");");
+		}
+		else
+		{
+			//NB. legacy GLSL doesn't have trunc() either, so we do a value cast
+			auto &op0_type = expression_type(args[0]);
+			auto via_type = op0_type;
+			via_type.basetype = SPIRType::Int;
+			statement(to_expression(id), ".", to_member_name(type, 1), " = ", type_to_glsl(op0_type),
+			          "(", type_to_glsl(via_type), "(", to_expression(args[0]), "));");
+			statement(to_expression(id), ".", to_member_name(type, 0), " = ", to_enclosed_expression(args[0]), " - ",
+			          to_expression(id), ".", to_member_name(type, 1), ";");
+		}
 		break;
 	}
 
@@ -8221,8 +8264,22 @@ void CompilerGLSL::emit_nminmax_op(uint32_t result_type, uint32_t id, uint32_t o
 	ir.meta[tmp_id] = ir.meta[id];
 	ir.meta[mixed_first_id] = ir.meta[id];
 
-	emit_unary_func_op(btype_id, left_nan_id, op0, "isnan");
-	emit_unary_func_op(btype_id, right_nan_id, op1, "isnan");
+	if (!is_legacy())
+	{
+		emit_unary_func_op(btype_id, left_nan_id, op0, "isnan");
+		emit_unary_func_op(btype_id, right_nan_id, op1, "isnan");
+	}
+	else if (expression_type(op0).vecsize > 1)
+	{
+		// If the number doesn't equal itself, it must be NaN
+		emit_binary_func_op(btype_id, left_nan_id, op0, op0, "notEqual");
+		emit_binary_func_op(btype_id, right_nan_id, op1, op1, "notEqual");
+	}
+	else
+	{
+		emit_binary_op(btype_id, left_nan_id, op0, op0, "!=");
+		emit_binary_op(btype_id, right_nan_id, op1, op1, "!=");
+	}
 	emit_binary_func_op(result_type, tmp_id, op0, op1, op == GLSLstd450NMin ? "min" : "max");
 	emit_mix_op(result_type, mixed_first_id, tmp_id, op1, left_nan_id);
 	emit_mix_op(result_type, id, mixed_first_id, op0, right_nan_id);
@@ -11841,11 +11898,57 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	// ALU
 	case OpIsNan:
-		GLSL_UFOP(isnan);
+		if (!is_legacy())
+			GLSL_UFOP(isnan);
+		else
+		{
+			// Check if the number doesn't equal itself
+			auto &type = get<SPIRType>(ops[0]);
+			if (type.vecsize > 1)
+				emit_binary_func_op(ops[0], ops[1], ops[2], ops[2], "notEqual");
+			else
+				emit_binary_op(ops[0], ops[1], ops[2], ops[2], "!=");
+		}
 		break;
 
 	case OpIsInf:
-		GLSL_UFOP(isinf);
+		if (!is_legacy())
+			GLSL_UFOP(isinf);
+		else
+		{
+			// inf * 2 == inf by IEEE 754 rules, note this also applies to 0.0
+			// This is more reliable than checking if product with zero is NaN
+			uint32_t result_type = ops[0];
+			uint32_t result_id = ops[1];
+			uint32_t operand = ops[2];
+
+			auto &type = get<SPIRType>(result_type);
+			std::string expr;
+			if (type.vecsize > 1)
+			{
+				expr = type_to_glsl_constructor(type);
+				expr += '(';
+				for (uint32_t i = 0; i < type.vecsize; i++)
+				{
+					auto comp = to_extract_component_expression(operand, i);
+					expr += join(comp, " != 0.0 && 2.0 * ", comp, " == ", comp);
+
+					if (i + 1 < type.vecsize)
+						expr += ", ";
+				}
+				expr += ')';
+			}
+			else
+			{
+				// Register an extra read to force writing out a temporary
+				auto oper = to_enclosed_expression(operand);
+				track_expression_read(operand);
+				expr += join(oper, " != 0.0 && 2.0 * ", oper, " == ", oper);
+			}
+			emit_op(result_type, result_id, expr, should_forward(operand));
+
+			inherit_expression_dependencies(result_id, operand);
+		}
 		break;
 
 	case OpSNegate:
@@ -12140,10 +12243,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpFRem:
 	{
-		if (is_legacy())
-			SPIRV_CROSS_THROW("OpFRem requires trunc() and is only supported on non-legacy targets. A workaround is "
-			                  "needed for legacy.");
-
 		uint32_t result_type = ops[0];
 		uint32_t result_id = ops[1];
 		uint32_t op0 = ops[2];
@@ -12151,8 +12250,22 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// Needs special handling.
 		bool forward = should_forward(op0) && should_forward(op1);
-		auto expr = join(to_enclosed_expression(op0), " - ", to_enclosed_expression(op1), " * ", "trunc(",
-		                 to_enclosed_expression(op0), " / ", to_enclosed_expression(op1), ")");
+		std::string expr;
+		if (!is_legacy())
+		{
+			expr = join(to_enclosed_expression(op0), " - ", to_enclosed_expression(op1), " * ", "trunc(",
+			            to_enclosed_expression(op0), " / ", to_enclosed_expression(op1), ")");
+		}
+		else
+		{
+			// Legacy GLSL has no trunc, emulate by casting to int and back
+			auto &op0_type = expression_type(op0);
+			auto via_type = op0_type;
+			via_type.basetype = SPIRType::Int;
+			expr = join(to_enclosed_expression(op0), " - ", to_enclosed_expression(op1), " * ",
+			            type_to_glsl(op0_type), "(", type_to_glsl(via_type),  "(",
+			            to_enclosed_expression(op0), " / ", to_enclosed_expression(op1), "))");
+		}
 
 		emit_op(result_type, result_id, expr, forward);
 		inherit_expression_dependencies(result_id, op0);

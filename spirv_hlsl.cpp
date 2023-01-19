@@ -4124,6 +4124,10 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_unary_func_op(result_type, id, args[0], "round");
 		break;
 
+	case GLSLstd450Trunc:
+		emit_unary_func_op(result_type, id, args[0], "trunc");
+		break;
+
 	case GLSLstd450Acosh:
 	case GLSLstd450Asinh:
 	case GLSLstd450Atanh:
