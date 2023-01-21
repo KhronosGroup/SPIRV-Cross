@@ -9,6 +9,11 @@ uniform Buffer
 
 layout(location = 0) in vec4 Position;
 
+layout(location = 1) out mat4 OutputMat1;
+layout(location = 5) out mat4 OutputMat2;
+layout(location = 9) out mat4 OutputMat3;
+layout(location = 13) out mat4 OutputMat4;
+
 void main()
 {
 	vec4 c0 = M * (MVPRowMajor * Position);
@@ -21,11 +26,17 @@ void main()
 	vec4 c6 = Position * transpose(MVPRowMajor);
 	vec4 c7 = Position * transpose(MVPColMajor);
 
-	// Multiplying by scalar forces resolution of the transposition
+	// Multiplying by scalar does not affect transposition
 	vec4 c8 = (MVPRowMajor * 2.0) * Position;
 	vec4 c9 = (transpose(MVPColMajor) * 2.0) * Position;
 	vec4 c10 = Position * (MVPRowMajor * 2.0);
 	vec4 c11 = Position * (transpose(MVPColMajor) * 2.0);
+
+	// Outputting a matrix will trigger an actual transposition
+	OutputMat1 = MVPRowMajor;
+	OutputMat2 = MVPColMajor;
+	OutputMat3 = transpose(MVPRowMajor);
+	OutputMat4 = transpose(MVPColMajor);
 
 	gl_Position = c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10 + c11;
 }

@@ -11916,8 +11916,29 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFMul:
 	case OpMatrixTimesScalar:
+	{
+		auto *a = maybe_get<SPIRExpression>(ops[2]);
+
+		// If the matrix need transpose, just mark the result as needing so.
+		if (a && a->need_transpose)
+		{
+			a->need_transpose = false;
+			auto expr = join(enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), " * ",
+			                 to_enclosed_unpacked_expression(ops[3]));
+			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
+			auto &e = emit_op(ops[0], ops[1], expr, forward);
+			e.need_transpose = true;
+			a->need_transpose = true;
+			inherit_expression_dependencies(ops[1], ops[2]);
+			inherit_expression_dependencies(ops[1], ops[3]);
+		}
+		else
+			GLSL_BOP(*);
+		break;
+	}
+
+	case OpFMul:
 	case OpVectorTimesScalar:
 		GLSL_BOP(*);
 		break;
