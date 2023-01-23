@@ -8966,17 +8966,21 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_DrawIDARB";
 
 	case BuiltInSampleId:
-		if (options.es && options.version < 320)
+		if (is_legacy())
+			SPIRV_CROSS_THROW("Sample variables not supported in legacy GLSL.");
+		else if (options.es && options.version < 320)
 			require_extension_internal("GL_OES_sample_variables");
-		if (!options.es && options.version < 400)
-			SPIRV_CROSS_THROW("gl_SampleID not supported before GLSL 400.");
+		else if (!options.es && options.version < 400)
+			require_extension_internal("GL_ARB_sample_shading");
 		return "gl_SampleID";
 
 	case BuiltInSampleMask:
-		if (options.es && options.version < 320)
+		if (is_legacy())
+			SPIRV_CROSS_THROW("Sample variables not supported in legacy GLSL.");
+		else if (options.es && options.version < 320)
 			require_extension_internal("GL_OES_sample_variables");
-		if (!options.es && options.version < 400)
-			SPIRV_CROSS_THROW("gl_SampleMask/gl_SampleMaskIn not supported before GLSL 400.");
+		else if (!options.es && options.version < 400)
+			require_extension_internal("GL_ARB_sample_shading");
 
 		if (storage == StorageClassInput)
 			return "gl_SampleMaskIn";
@@ -8984,10 +8988,12 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			return "gl_SampleMask";
 
 	case BuiltInSamplePosition:
-		if (options.es && options.version < 320)
+		if (is_legacy())
+			SPIRV_CROSS_THROW("Sample variables not supported in legacy GLSL.");
+		else if (options.es && options.version < 320)
 			require_extension_internal("GL_OES_sample_variables");
-		if (!options.es && options.version < 400)
-			SPIRV_CROSS_THROW("gl_SamplePosition not supported before GLSL 400.");
+		else if (!options.es && options.version < 400)
+			require_extension_internal("GL_ARB_sample_shading");
 		return "gl_SamplePosition";
 
 	case BuiltInViewIndex:
