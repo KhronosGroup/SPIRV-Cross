@@ -1256,6 +1256,8 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 				SPIRV_CROSS_THROW("noperspective requires ESSL 300.");
 			require_extension_internal("GL_NV_shader_noperspective_interpolation");
 		}
+		else if (is_legacy_desktop())
+			require_extension_internal("GL_EXT_gpu_shader4");
 		res += "noperspective ";
 	}
 	if (flags.get(DecorationCentroid))
@@ -1263,7 +1265,16 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 	if (flags.get(DecorationPatch))
 		res += "patch ";
 	if (flags.get(DecorationSample))
+	{
+		if (options.es)
+		{
+			if (options.version < 300)
+				SPIRV_CROSS_THROW("sample requires ESSL 300.");
+			else if (options.version < 320)
+				require_extension_internal("GL_OES_shader_multisample_interpolation");
+		}
 		res += "sample ";
+	}
 	if (flags.get(DecorationInvariant))
 		res += "invariant ";
 	if (flags.get(DecorationPerPrimitiveEXT))
@@ -6695,6 +6706,9 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 			require_extension_internal("GL_EXT_shadow_samplers");
 		else
 			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
+
+		if (imgtype.image.dim == spv::DimCube)
+			return "shadowCubeNV";
 	}
 
 	if (op == "textureSize")
@@ -8797,9 +8811,17 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInPointSize:
 		return "gl_PointSize";
 	case BuiltInClipDistance:
+	{
+		if (options.es)
+			require_extension_internal("GL_EXT_clip_cull_distance");
 		return "gl_ClipDistance";
+	}
 	case BuiltInCullDistance:
+	{
+		if (options.es)
+			require_extension_internal("GL_EXT_clip_cull_distance");
 		return "gl_CullDistance";
+	}
 	case BuiltInVertexId:
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cannot implement gl_VertexID in Vulkan GLSL. This shader was created "
@@ -12757,7 +12779,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			op = "textureQueryLOD";
 		}
 		else if (options.es)
-			SPIRV_CROSS_THROW("textureQueryLod not supported in ES profile.");
+		{
+			if (options.version < 300)
+				SPIRV_CROSS_THROW("textureQueryLod not supported in legacy ES");
+			require_extension_internal("GL_EXT_texture_query_lod");
+			op = "textureQueryLOD";
+		}
 		else
 			op = "textureQueryLod";
 
@@ -12802,6 +12829,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
+
+		if (options.es)
+			SPIRV_CROSS_THROW("textureSamples and imageSamples not supported in ES profile.");
+		else if (options.version < 450)
+			require_extension_internal("GL_ARB_texture_query_samples");
 
 		string expr;
 		if (type.image.sampled == 2)
@@ -14535,6 +14567,17 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 	    is_depth_image(type, id))
 	{
 		res += "Shadow";
+
+		if (type.image.dim == DimCube && is_legacy())
+		{
+			if (!options.es)
+				require_extension_internal("GL_EXT_gpu_shader4");
+			else
+			{
+				require_extension_internal("GL_NV_shadow_samplers_cube");
+				res += "NV";
+			}
+		}
 	}
 
 	return res;
@@ -14614,7 +14657,20 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	}
 
 	if (type.basetype == SPIRType::UInt && is_legacy())
-		SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy targets.");
+	{
+		if (options.es)
+			SPIRV_CROSS_THROW("Unsigned integers are not supported on legacy ESSL.");
+		else
+			require_extension_internal("GL_EXT_gpu_shader4");
+	}
+
+	if (type.basetype == SPIRType::AtomicCounter)
+	{
+		if (options.es && options.version < 310)
+			SPIRV_CROSS_THROW("At least ESSL 3.10 required for atomic counters.");
+		else if (!options.es && options.version < 420)
+			require_extension_internal("GL_ARB_shader_atomic_counters");
+	}
 
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
 	{
