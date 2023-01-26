@@ -10,6 +10,10 @@ struct Buffer
 uniform Buffer _13;
 
 attribute vec4 Position;
+varying mat4 OutputMat1;
+varying mat4 OutputMat2;
+varying mat4 OutputMat3;
+varying mat4 OutputMat4;
 
 highp mat4 spvWorkaroundRowMajor(highp mat4 wrap) { return wrap; }
 mediump mat4 spvWorkaroundRowMajorMP(mediump mat4 wrap) { return wrap; }
@@ -23,8 +27,12 @@ void main()
 {
     mat4 _55 = _13.MVPRowMajor;
     mat4 _61 = spvWorkaroundRowMajor(_13.MVPColMajor);
-    mat4 _80 = spvTranspose(_13.MVPRowMajor) * 2.0;
-    mat4 _87 = spvTranspose(_61) * 2.0;
-    gl_Position = (((((((((((spvWorkaroundRowMajor(_13.M) * (Position * _13.MVPRowMajor)) + (spvWorkaroundRowMajor(_13.M) * (spvWorkaroundRowMajor(_13.MVPColMajor) * Position))) + (spvWorkaroundRowMajor(_13.M) * (_13.MVPRowMajor * Position))) + (spvWorkaroundRowMajor(_13.M) * (Position * spvWorkaroundRowMajor(_13.MVPColMajor)))) + (_55 * Position)) + (Position * _61)) + (Position * _55)) + (_61 * Position)) + (_80 * Position)) + (_87 * Position)) + (Position * _80)) + (Position * _87);
+    mat4 _80 = _13.MVPRowMajor * 2.0;
+    mat4 _87 = _61 * 2.0;
+    OutputMat1 = spvTranspose(_13.MVPRowMajor);
+    OutputMat2 = spvWorkaroundRowMajor(_13.MVPColMajor);
+    OutputMat3 = _55;
+    OutputMat4 = spvTranspose(_61);
+    gl_Position = (((((((((((spvWorkaroundRowMajor(_13.M) * (Position * _13.MVPRowMajor)) + (spvWorkaroundRowMajor(_13.M) * (spvWorkaroundRowMajor(_13.MVPColMajor) * Position))) + (spvWorkaroundRowMajor(_13.M) * (_13.MVPRowMajor * Position))) + (spvWorkaroundRowMajor(_13.M) * (Position * spvWorkaroundRowMajor(_13.MVPColMajor)))) + (_55 * Position)) + (Position * _61)) + (Position * _55)) + (_61 * Position)) + (Position * _80)) + (Position * _87)) + (_80 * Position)) + (_87 * Position);
 }
 
