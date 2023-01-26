@@ -12,12 +12,8 @@
 void main()
 {
     uvec2 _11 = clockRealtime2x32EXT();
-    uvec2 a = _11;
     uint64_t _15 = clockRealtimeEXT();
-    uint64_t b = _15;
     uvec2 _18 = clock2x32ARB();
-    uvec2 c = _18;
     uint64_t _20 = clockARB();
-    uint64_t d = _20;
 }
 
