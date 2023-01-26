@@ -5,6 +5,7 @@ uniform Buffer
 	layout(row_major) mat4 MVPRowMajor;
 	layout(column_major) mat4 MVPColMajor;
 	mat4 M;
+	mediump mat4 MRelaxed;
 };
 
 layout(location = 0) in vec4 Position;
@@ -13,6 +14,10 @@ layout(location = 1) out mat4 OutputMat1;
 layout(location = 5) out mat4 OutputMat2;
 layout(location = 9) out mat4 OutputMat3;
 layout(location = 13) out mat4 OutputMat4;
+layout(location = 17) out highp mat4 OutputMat5;
+layout(location = 21) out highp mat4 OutputMat6;
+layout(location = 25) out mediump mat4 OutputMat7;
+layout(location = 29) out mediump mat4 OutputMat8;
 
 void main()
 {
@@ -37,6 +42,12 @@ void main()
 	OutputMat2 = MVPColMajor;
 	OutputMat3 = transpose(MVPRowMajor);
 	OutputMat4 = transpose(MVPColMajor);
+
+	// Preserve precision of input, ignore precision of output
+	OutputMat5 = transpose(M);
+	OutputMat6 = transpose(MRelaxed);
+	OutputMat7 = transpose(M);
+	OutputMat8 = transpose(MRelaxed);
 
 	gl_Position = c0 + c1 + c2 + c3 + c4 + c5 + c6 + c7 + c8 + c9 + c10 + c11;
 }
