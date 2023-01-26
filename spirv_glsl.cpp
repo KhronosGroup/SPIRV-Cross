@@ -13904,6 +13904,49 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("SetMeshOutputsEXT(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ");");
 		break;
 
+	case OpReadClockKHR:
+	{
+		auto &type = get<SPIRType>(ops[0]);
+		Scope scope = static_cast<Scope>(get<SPIRConstant>(ops[2]).m.c[0].r[0].u32);
+		if (scope == ScopeDevice)
+		{
+			require_extension_internal("GL_EXT_shader_realtime_clock");
+			if (type.basetype == SPIRType::BaseType::UInt64)
+			{
+				emit_op(ops[0], ops[1], "clockRealtimeEXT()", true);
+			}
+			else if (type.basetype == SPIRType::BaseType::UInt && type.vecsize == 2)
+			{
+				emit_op(ops[0], ops[1], "clockRealtime2x32EXT()", true);
+			}
+			else
+			{
+				SPIRV_CROSS_THROW("Unsupported result type for OpReadClockKHR opcode.");
+			}
+		}
+		else if (scope == ScopeSubgroup)
+		{
+			require_extension_internal("GL_ARB_shader_clock");
+			if (type.basetype == SPIRType::BaseType::UInt64)
+			{
+				emit_op(ops[0], ops[1], "clockARB()", true);
+			}
+			else if (type.basetype == SPIRType::BaseType::UInt && type.vecsize == 2)
+			{
+				emit_op(ops[0], ops[1], "clock2x32ARB()", true);
+			}
+			else
+			{
+				SPIRV_CROSS_THROW("Unsupported result type for OpReadClockKHR opcode.");
+			}
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Unsupported scope for OpReadClockKHR opcode.");
+		}
+		break;
+	}
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;
