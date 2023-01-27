@@ -1275,7 +1275,7 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 		}
 		res += "sample ";
 	}
-	if (flags.get(DecorationInvariant))
+	if (flags.get(DecorationInvariant) && (options.es || options.version >= 120))
 		res += "invariant ";
 	if (flags.get(DecorationPerPrimitiveEXT))
 	    res += "perprimitiveEXT ";
@@ -3526,7 +3526,7 @@ void CompilerGLSL::emit_resources()
 			statement("");
 	}
 
-	if (position_invariant)
+	if (position_invariant && (options.es || options.version >= 120))
 	{
 		statement("invariant gl_Position;");
 		statement("");
