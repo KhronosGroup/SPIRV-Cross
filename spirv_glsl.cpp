@@ -8021,22 +8021,77 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		emit_unary_func_op(result_type, id, args[0], "atan");
 		break;
 	case GLSLstd450Sinh:
-		emit_unary_func_op(result_type, id, args[0], "sinh");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "sinh");
+		else
+		{
+			bool forward = should_forward(args[0]);
+			auto expr = join("(exp(", to_expression(args[0]), ") - exp(-", to_enclosed_expression(args[0]), ")) * 0.5");
+			emit_op(result_type, id, expr, forward);
+			inherit_expression_dependencies(id, args[0]);
+		}
 		break;
 	case GLSLstd450Cosh:
-		emit_unary_func_op(result_type, id, args[0], "cosh");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "cosh");
+		else
+		{
+			bool forward = should_forward(args[0]);
+			auto expr = join("(exp(", to_expression(args[0]), ") + exp(-", to_enclosed_expression(args[0]), ")) * 0.5");
+			emit_op(result_type, id, expr, forward);
+			inherit_expression_dependencies(id, args[0]);
+		}
 		break;
 	case GLSLstd450Tanh:
-		emit_unary_func_op(result_type, id, args[0], "tanh");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "tanh");
+		else
+		{
+			// Create temporaries to store the result of exp(arg) and exp(-arg).
+			uint32_t &ids = extra_sub_expressions[id];
+			if (!ids)
+			{
+				ids = ir.increase_bound_by(2);
+
+				// Inherit precision qualifier (legacy has no NoContraction).
+				if (has_decoration(id, DecorationRelaxedPrecision))
+				{
+					set_decoration(ids, DecorationRelaxedPrecision);
+					set_decoration(ids + 1, DecorationRelaxedPrecision);
+				}
+			}
+			uint32_t epos_id = ids;
+			uint32_t eneg_id = ids + 1;
+
+			emit_op(result_type, epos_id, join("exp(", to_expression(args[0]), ")"), false);
+			emit_op(result_type, eneg_id, join("exp(-", to_enclosed_expression(args[0]), ")"), false);
+			inherit_expression_dependencies(epos_id, args[0]);
+			inherit_expression_dependencies(eneg_id, args[0]);
+
+			auto expr = join("(", to_enclosed_expression(epos_id), " - ", to_enclosed_expression(eneg_id), ") / "
+			                 "(", to_enclosed_expression(epos_id), " + ", to_enclosed_expression(eneg_id), ")");
+			emit_op(result_type, id, expr, true);
+			inherit_expression_dependencies(id, epos_id);
+			inherit_expression_dependencies(id, eneg_id);
+		}
 		break;
 	case GLSLstd450Asinh:
-		emit_unary_func_op(result_type, id, args[0], "asinh");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "asinh");
+		else
+			emit_emulated_ahyper_op(result_type, id, args[0], GLSLstd450Asinh);
 		break;
 	case GLSLstd450Acosh:
-		emit_unary_func_op(result_type, id, args[0], "acosh");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "acosh");
+		else
+			emit_emulated_ahyper_op(result_type, id, args[0], GLSLstd450Acosh);
 		break;
 	case GLSLstd450Atanh:
-		emit_unary_func_op(result_type, id, args[0], "atanh");
+		if (!is_legacy())
+			emit_unary_func_op(result_type, id, args[0], "atanh");
+		else
+			emit_emulated_ahyper_op(result_type, id, args[0], GLSLstd450Atanh);
 		break;
 	case GLSLstd450Atan2:
 		emit_binary_func_op(result_type, id, args[0], args[1], "atan");
@@ -8283,6 +8338,39 @@ void CompilerGLSL::emit_nminmax_op(uint32_t result_type, uint32_t id, uint32_t o
 	emit_binary_func_op(result_type, tmp_id, op0, op1, op == GLSLstd450NMin ? "min" : "max");
 	emit_mix_op(result_type, mixed_first_id, tmp_id, op1, left_nan_id);
 	emit_mix_op(result_type, id, mixed_first_id, op0, right_nan_id);
+}
+
+void CompilerGLSL::emit_emulated_ahyper_op(uint32_t result_type, uint32_t id, uint32_t op0, GLSLstd450 op)
+{
+	const char *one = backend.float_literal_suffix ? "1.0f" : "1.0";
+	std::string expr;
+	bool forward = should_forward(op0);
+
+	switch (op)
+	{
+	case GLSLstd450Asinh:
+		expr = join("log(", to_enclosed_expression(op0), " + sqrt(",
+		            to_enclosed_expression(op0), " * ", to_enclosed_expression(op0), " + ", one, "))");
+		emit_op(result_type, id, expr, forward);
+		break;
+
+	case GLSLstd450Acosh:
+		expr = join("log(", to_enclosed_expression(op0), " + sqrt(",
+		            to_enclosed_expression(op0), " * ", to_enclosed_expression(op0), " - ", one, "))");
+		break;
+
+	case GLSLstd450Atanh:
+		expr = join("log((", one, " + ", to_enclosed_expression(op0), ") / "
+		            "(", one, " - ", to_enclosed_expression(op0), ")) * 0.5",
+		            backend.float_literal_suffix ? "f" : "");
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Invalid op.");
+	}
+
+	emit_op(result_type, id, expr, forward);
+	inherit_expression_dependencies(id, op0);
 }
 
 void CompilerGLSL::emit_spv_amd_shader_ballot_op(uint32_t result_type, uint32_t id, uint32_t eop, const uint32_t *args,
