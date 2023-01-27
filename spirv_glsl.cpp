@@ -4456,7 +4456,7 @@ void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
 
 	if (polyfills & PolyfillDeterminant2x2)
 	{
-		statement("float spvDeterminant", suffix, "(", qual, "mat2 m)");
+		statement(qual, "float spvDeterminant", suffix, "(", qual, "mat2 m)");
 		begin_scope();
 		statement("return m[0][0] * m[1][1] - m[0][1] * m[1][0];");
 		end_scope();
@@ -4465,7 +4465,7 @@ void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
 
 	if (polyfills & PolyfillDeterminant3x3)
 	{
-		statement("float spvDeterminant", suffix, "(", qual, "mat3 m)");
+		statement(qual, "float spvDeterminant", suffix, "(", qual, "mat3 m)");
 		begin_scope();
 		statement("return dot(m[0], vec3(m[1][1] * m[2][2] - m[1][2] * m[2][1], "
 		                                "m[1][2] * m[2][0] - m[1][0] * m[2][2], "
@@ -4476,7 +4476,7 @@ void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
 
 	if (polyfills & PolyfillDeterminant4x4)
 	{
-		statement("float spvDeterminant", suffix, "(", qual, "mat4 m)");
+		statement(qual, "float spvDeterminant", suffix, "(", qual, "mat4 m)");
 		begin_scope();
 		statement("return dot(m[0], vec4("
 		          "m[2][1] * m[3][2] * m[1][3] - m[3][1] * m[2][2] * m[1][3] + m[3][1] * m[1][2] * m[2][3] - m[1][1] * m[3][2] * m[2][3] - m[2][1] * m[1][2] * m[3][3] + m[1][1] * m[2][2] * m[3][3], "
