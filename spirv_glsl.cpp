@@ -636,6 +636,17 @@ void CompilerGLSL::find_static_extensions()
 			barycentric_is_nv = true;
 }
 
+void CompilerGLSL::require_polyfill(Polyfill polyfill, bool relaxed)
+{
+	uint32_t &polyfills = (relaxed && options.es) ? required_polyfills_relaxed : required_polyfills;
+
+	if ((polyfills & polyfill) == 0)
+	{
+		polyfills |= polyfill;
+		force_recompile();
+	}
+}
+
 void CompilerGLSL::ray_tracing_khr_fixup_locations()
 {
 	uint32_t location = 0;
@@ -700,6 +711,11 @@ string CompilerGLSL::compile()
 		emit_header();
 		emit_resources();
 		emit_extension_workarounds(get_execution_model());
+
+		if (required_polyfills != 0)
+			emit_polyfills(required_polyfills, false);
+		if (options.es && required_polyfills_relaxed != 0)
+			emit_polyfills(required_polyfills_relaxed, true);
 
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
 
@@ -4401,31 +4417,132 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		}
 		statement("");
 	}
+}
 
-	if (requires_transpose_2x2)
+void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
+{
+	const char *qual = "";
+	const char *suffix = (options.es && relaxed) ? "MP" : "";
+	if (options.es)
+		qual = relaxed ? "mediump " : "highp ";
+
+	if (polyfills & PolyfillTranspose2x2)
 	{
-		statement("mat2 spvTranspose(mat2 m)");
+		statement(qual, "mat2 spvTranspose", suffix, "(", qual, "mat2 m)");
 		begin_scope();
 		statement("return mat2(m[0][0], m[1][0], m[0][1], m[1][1]);");
 		end_scope();
 		statement("");
 	}
 
-	if (requires_transpose_3x3)
+	if (polyfills & PolyfillTranspose3x3)
 	{
-		statement("mat3 spvTranspose(mat3 m)");
+		statement(qual, "mat3 spvTranspose", suffix, "(", qual, "mat3 m)");
 		begin_scope();
 		statement("return mat3(m[0][0], m[1][0], m[2][0], m[0][1], m[1][1], m[2][1], m[0][2], m[1][2], m[2][2]);");
 		end_scope();
 		statement("");
 	}
 
-	if (requires_transpose_4x4)
+	if (polyfills & PolyfillTranspose4x4)
 	{
-		statement("mat4 spvTranspose(mat4 m)");
+		statement(qual, "mat4 spvTranspose", suffix, "(", qual, "mat4 m)");
 		begin_scope();
 		statement("return mat4(m[0][0], m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1], m[0][2], "
 		          "m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3], m[3][3]);");
+		end_scope();
+		statement("");
+	}
+
+	if (polyfills & PolyfillDeterminant2x2)
+	{
+		statement("float spvDeterminant", suffix, "(", qual, "mat2 m)");
+		begin_scope();
+		statement("return m[0][0] * m[1][1] - m[0][1] * m[1][0];");
+		end_scope();
+		statement("");
+	}
+
+	if (polyfills & PolyfillDeterminant3x3)
+	{
+		statement("float spvDeterminant", suffix, "(", qual, "mat3 m)");
+		begin_scope();
+		statement("return dot(m[0], vec3(m[1][1] * m[2][2] - m[1][2] * m[2][1], "
+		                                "m[1][2] * m[2][0] - m[1][0] * m[2][2], "
+		                                "m[1][0] * m[2][1] - m[1][1] * m[2][0]));");
+		end_scope();
+		statement("");
+	}
+
+	if (polyfills & PolyfillDeterminant4x4)
+	{
+		statement("float spvDeterminant", suffix, "(", qual, "mat4 m)");
+		begin_scope();
+		statement("return dot(m[0], vec4("
+		          "m[2][1] * m[3][2] * m[1][3] - m[3][1] * m[2][2] * m[1][3] + m[3][1] * m[1][2] * m[2][3] - m[1][1] * m[3][2] * m[2][3] - m[2][1] * m[1][2] * m[3][3] + m[1][1] * m[2][2] * m[3][3], "
+		          "m[3][0] * m[2][2] * m[1][3] - m[2][0] * m[3][2] * m[1][3] - m[3][0] * m[1][2] * m[2][3] + m[1][0] * m[3][2] * m[2][3] + m[2][0] * m[1][2] * m[3][3] - m[1][0] * m[2][2] * m[3][3], "
+		          "m[2][0] * m[3][1] * m[1][3] - m[3][0] * m[2][1] * m[1][3] + m[3][0] * m[1][1] * m[2][3] - m[1][0] * m[3][1] * m[2][3] - m[2][0] * m[1][1] * m[3][3] + m[1][0] * m[2][1] * m[3][3], "
+		          "m[3][0] * m[2][1] * m[1][2] - m[2][0] * m[3][1] * m[1][2] - m[3][0] * m[1][1] * m[2][2] + m[1][0] * m[3][1] * m[2][2] + m[2][0] * m[1][1] * m[3][2] - m[1][0] * m[2][1] * m[3][2]));");
+		end_scope();
+		statement("");
+	}
+
+	if (polyfills & PolyfillMatrixInverse2x2)
+	{
+		statement(qual, "mat2 spvInverse", suffix, "(", qual, "mat2 m)");
+		begin_scope();
+		statement("return mat2(m[1][1], -m[0][1], -m[1][0], m[0][0]) "
+		          "* (1.0 / (m[0][0] * m[1][1] - m[1][0] * m[0][1]));");
+		end_scope();
+		statement("");
+	}
+
+	if (polyfills & PolyfillMatrixInverse3x3)
+	{
+		statement(qual, "mat3 spvInverse", suffix, "(", qual, "mat3 m)");
+		begin_scope();
+		statement(qual, "vec3 t = vec3(m[1][1] * m[2][2] - m[1][2] * m[2][1], m[1][2] * m[2][0] - m[1][0] * m[2][2], m[1][0] * m[2][1] - m[1][1] * m[2][0]);");
+		statement("return mat3(t[0], "
+		                      "m[0][2] * m[2][1] - m[0][1] * m[2][2], "
+		                      "m[0][1] * m[1][2] - m[0][2] * m[1][1], "
+		                      "t[1], "
+		                      "m[0][0] * m[2][2] - m[0][2] * m[2][0], "
+		                      "m[0][2] * m[1][0] - m[0][0] * m[1][2], "
+		                      "t[2], "
+		                      "m[0][1] * m[2][0] - m[0][0] * m[2][1], "
+		                      "m[0][0] * m[1][1] - m[0][1] * m[1][0]) "
+		                      "* (1.0 / dot(m[0], t));");
+		end_scope();
+		statement("");
+	}
+
+	if (polyfills & PolyfillMatrixInverse4x4)
+	{
+		statement(qual, "mat4 spvInverse", suffix, "(", qual, "mat4 m)");
+		begin_scope();
+		statement(qual, "vec4 t = vec4("
+		          "m[2][1] * m[3][2] * m[1][3] - m[3][1] * m[2][2] * m[1][3] + m[3][1] * m[1][2] * m[2][3] - m[1][1] * m[3][2] * m[2][3] - m[2][1] * m[1][2] * m[3][3] + m[1][1] * m[2][2] * m[3][3], "
+		          "m[3][0] * m[2][2] * m[1][3] - m[2][0] * m[3][2] * m[1][3] - m[3][0] * m[1][2] * m[2][3] + m[1][0] * m[3][2] * m[2][3] + m[2][0] * m[1][2] * m[3][3] - m[1][0] * m[2][2] * m[3][3], "
+		          "m[2][0] * m[3][1] * m[1][3] - m[3][0] * m[2][1] * m[1][3] + m[3][0] * m[1][1] * m[2][3] - m[1][0] * m[3][1] * m[2][3] - m[2][0] * m[1][1] * m[3][3] + m[1][0] * m[2][1] * m[3][3], "
+		          "m[3][0] * m[2][1] * m[1][2] - m[2][0] * m[3][1] * m[1][2] - m[3][0] * m[1][1] * m[2][2] + m[1][0] * m[3][1] * m[2][2] + m[2][0] * m[1][1] * m[3][2] - m[1][0] * m[2][1] * m[3][2]);");
+		statement("return mat4("
+		          "t[0], "
+		          "m[3][1] * m[2][2] * m[0][3] - m[2][1] * m[3][2] * m[0][3] - m[3][1] * m[0][2] * m[2][3] + m[0][1] * m[3][2] * m[2][3] + m[2][1] * m[0][2] * m[3][3] - m[0][1] * m[2][2] * m[3][3], "
+		          "m[1][1] * m[3][2] * m[0][3] - m[3][1] * m[1][2] * m[0][3] + m[3][1] * m[0][2] * m[1][3] - m[0][1] * m[3][2] * m[1][3] - m[1][1] * m[0][2] * m[3][3] + m[0][1] * m[1][2] * m[3][3], "
+		          "m[2][1] * m[1][2] * m[0][3] - m[1][1] * m[2][2] * m[0][3] - m[2][1] * m[0][2] * m[1][3] + m[0][1] * m[2][2] * m[1][3] + m[1][1] * m[0][2] * m[2][3] - m[0][1] * m[1][2] * m[2][3], "
+		          "t[1], "
+		          "m[2][0] * m[3][2] * m[0][3] - m[3][0] * m[2][2] * m[0][3] + m[3][0] * m[0][2] * m[2][3] - m[0][0] * m[3][2] * m[2][3] - m[2][0] * m[0][2] * m[3][3] + m[0][0] * m[2][2] * m[3][3], "
+		          "m[3][0] * m[1][2] * m[0][3] - m[1][0] * m[3][2] * m[0][3] - m[3][0] * m[0][2] * m[1][3] + m[0][0] * m[3][2] * m[1][3] + m[1][0] * m[0][2] * m[3][3] - m[0][0] * m[1][2] * m[3][3], "
+		          "m[1][0] * m[2][2] * m[0][3] - m[2][0] * m[1][2] * m[0][3] + m[2][0] * m[0][2] * m[1][3] - m[0][0] * m[2][2] * m[1][3] - m[1][0] * m[0][2] * m[2][3] + m[0][0] * m[1][2] * m[2][3], "
+		          "t[2], "
+		          "m[3][0] * m[2][1] * m[0][3] - m[2][0] * m[3][1] * m[0][3] - m[3][0] * m[0][1] * m[2][3] + m[0][0] * m[3][1] * m[2][3] + m[2][0] * m[0][1] * m[3][3] - m[0][0] * m[2][1] * m[3][3], "
+		          "m[1][0] * m[3][1] * m[0][3] - m[3][0] * m[1][1] * m[0][3] + m[3][0] * m[0][1] * m[1][3] - m[0][0] * m[3][1] * m[1][3] - m[1][0] * m[0][1] * m[3][3] + m[0][0] * m[1][1] * m[3][3], "
+		          "m[2][0] * m[1][1] * m[0][3] - m[1][0] * m[2][1] * m[0][3] - m[2][0] * m[0][1] * m[1][3] + m[0][0] * m[2][1] * m[1][3] + m[1][0] * m[0][1] * m[2][3] - m[0][0] * m[1][1] * m[2][3], "
+		          "t[3], "
+		          "m[2][0] * m[3][1] * m[0][2] - m[3][0] * m[2][1] * m[0][2] + m[3][0] * m[0][1] * m[2][2] - m[0][0] * m[3][1] * m[2][2] - m[2][0] * m[0][1] * m[3][2] + m[0][0] * m[2][1] * m[3][2], "
+		          "m[3][0] * m[1][1] * m[0][2] - m[1][0] * m[3][1] * m[0][2] - m[3][0] * m[0][1] * m[1][2] + m[0][0] * m[3][1] * m[1][2] + m[1][0] * m[0][1] * m[3][2] - m[0][0] * m[1][1] * m[3][2], "
+		          "m[1][0] * m[2][1] * m[0][2] - m[2][0] * m[1][1] * m[0][2] + m[2][0] * m[0][1] * m[1][2] - m[0][0] * m[2][1] * m[1][2] - m[1][0] * m[0][1] * m[2][2] + m[0][0] * m[1][1] * m[2][2]) "
+		          "* (1.0 / dot(m[0], t));");
 		end_scope();
 		statement("");
 	}
@@ -4864,8 +4981,9 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 			// when consuming an access chain expression.
 			uint32_t physical_type_id = get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 			bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
+			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
 			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), physical_type_id,
-			                                is_packed);
+			                                is_packed, relaxed);
 		}
 		else if (flattened_structs.count(id))
 		{
@@ -8122,11 +8240,74 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 
 	// Matrix math
 	case GLSLstd450Determinant:
-		emit_unary_func_op(result_type, id, args[0], "determinant");
+	{
+		// No need to transpose - it doesn't affect the determinant
+		auto *e = maybe_get<SPIRExpression>(args[0]);
+		bool old_transpose = e && e->need_transpose;
+		if (old_transpose)
+			e->need_transpose = false;
+
+		if (options.version < 150) // also matches ES 100
+		{
+			auto &type = expression_type(args[0]);
+			assert(type.vecsize >= 2 && type.vecsize <= 4);
+			assert(type.vecsize == type.columns);
+
+			// ARB_gpu_shader_fp64 needs GLSL 150, other types are not valid
+			if (type.basetype != SPIRType::Float)
+				SPIRV_CROSS_THROW("Unsupported type for matrix determinant");
+
+			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			require_polyfill(static_cast<Polyfill>(PolyfillDeterminant2x2 << (type.vecsize - 2)),
+			                 relaxed);
+			emit_unary_func_op(result_type, id, args[0],
+			                   (options.es && relaxed) ? "spvDeterminantMP" : "spvDeterminant");
+		}
+		else
+			emit_unary_func_op(result_type, id, args[0], "determinant");
+
+		if (old_transpose)
+			e->need_transpose = true;
 		break;
+	}
+
 	case GLSLstd450MatrixInverse:
-		emit_unary_func_op(result_type, id, args[0], "inverse");
+	{
+		// The inverse of the transpose is the same as the transpose of
+		// the inverse, so we can just flip need_transpose of the result.
+		auto *a = maybe_get<SPIRExpression>(args[0]);
+		bool old_transpose = a && a->need_transpose;
+		if (old_transpose)
+			a->need_transpose = false;
+
+		const char *func = "inverse";
+		if (options.version < 140) // also matches ES 100
+		{
+			auto &type = get<SPIRType>(result_type);
+			assert(type.vecsize >= 2 && type.vecsize <= 4);
+			assert(type.vecsize == type.columns);
+
+			// ARB_gpu_shader_fp64 needs GLSL 150, other types are invalid
+			if (type.basetype != SPIRType::Float)
+				SPIRV_CROSS_THROW("Unsupported type for matrix inverse");
+
+			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			require_polyfill(static_cast<Polyfill>(PolyfillMatrixInverse2x2 << (type.vecsize - 2)),
+			                 relaxed);
+			func = (options.es && relaxed) ? "spvInverseMP" : "spvInverse";
+		}
+
+		bool forward = should_forward(args[0]);
+		auto &e = emit_op(result_type, id, join(func, "(", to_unpacked_expression(args[0]), ")"), forward);
+		inherit_expression_dependencies(id, args[0]);
+
+		if (old_transpose)
+		{
+			e.need_transpose = true;
+			a->need_transpose = true;
+		}
 		break;
+	}
 
 	// Lerping
 	case GLSLstd450FMix:
@@ -9954,10 +10135,13 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 		// The access chain terminates at the struct, so we need to find matrix strides and row-major information
 		// ahead of time.
 		bool need_transpose = false;
+		bool relaxed = false;
 		uint32_t matrix_stride = 0;
 		if (member_type.columns > 1)
 		{
-			need_transpose = combined_decoration_for_member(target_type, i).get(DecorationRowMajor);
+			auto decorations = combined_decoration_for_member(target_type, i);
+			need_transpose = decorations.get(DecorationRowMajor);
+			relaxed = decorations.get(DecorationRelaxedPrecision);
 			matrix_stride = type_struct_member_matrix_stride(target_type, i);
 		}
 
@@ -9966,7 +10150,7 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 
 		// Cannot forward transpositions, so resolve them here.
 		if (need_transpose)
-			expr += convert_row_major_matrix(tmp, member_type, 0, false);
+			expr += convert_row_major_matrix(tmp, member_type, 0, false, relaxed);
 		else
 			expr += tmp;
 	}
@@ -12163,7 +12347,31 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpOuterProduct:
-		GLSL_BFOP(outerProduct);
+		if (options.version < 120) // Matches GLSL 1.10 / ESSL 1.00
+		{
+			uint32_t result_type = ops[0];
+			uint32_t id = ops[1];
+			uint32_t a = ops[2];
+			uint32_t b = ops[3];
+
+			auto &type = get<SPIRType>(result_type);
+			string expr = type_to_glsl_constructor(type);
+			expr += "(";
+			for (uint32_t col = 0; col < type.columns; col++)
+			{
+				expr += to_enclosed_expression(a);
+				expr += " * ";
+				expr += to_extract_component_expression(b, col);
+				if (col + 1 < type.columns)
+					expr += ", ";
+			}
+			expr += ")";
+			emit_op(result_type, id, expr, should_forward(a) && should_forward(b));
+			inherit_expression_dependencies(id, a);
+			inherit_expression_dependencies(id, b);
+		}
+		else
+			GLSL_BFOP(outerProduct);
 		break;
 
 	case OpDot:
@@ -14273,7 +14481,7 @@ bool CompilerGLSL::member_is_packed_physical_type(const SPIRType &type, uint32_t
 // Base implementation uses the standard library transpose() function.
 // Subclasses may override to use a different function.
 string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &exp_type, uint32_t /* physical_type_id */,
-                                              bool /*is_packed*/)
+                                              bool /*is_packed*/, bool relaxed)
 {
 	strip_enclosed_expression(exp_str);
 	if (!is_matrix(exp_type))
@@ -14303,32 +14511,14 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 		// GLSL 110, ES 100 do not have transpose(), so emulate it.  Note that
 		// these GLSL versions do not support non-square matrices.
 		if (exp_type.vecsize == 2 && exp_type.columns == 2)
-		{
-			if (!requires_transpose_2x2)
-			{
-				requires_transpose_2x2 = true;
-				force_recompile();
-			}
-		}
+			require_polyfill(PolyfillTranspose2x2, relaxed);
 		else if (exp_type.vecsize == 3 && exp_type.columns == 3)
-		{
-			if (!requires_transpose_3x3)
-			{
-				requires_transpose_3x3 = true;
-				force_recompile();
-			}
-		}
+			require_polyfill(PolyfillTranspose3x3, relaxed);
 		else if (exp_type.vecsize == 4 && exp_type.columns == 4)
-		{
-			if (!requires_transpose_4x4)
-			{
-				requires_transpose_4x4 = true;
-				force_recompile();
-			}
-		}
+			require_polyfill(PolyfillTranspose4x4, relaxed);
 		else
 			SPIRV_CROSS_THROW("Non-square matrices are not supported in legacy GLSL, cannot transpose.");
-		return join("spvTranspose(", exp_str, ")");
+		return join("spvTranspose", (options.es && relaxed) ? "MP" : "", "(", exp_str, ")");
 	}
 	else
 		return join("transpose(", exp_str, ")");
