@@ -13,7 +13,7 @@ fragment main0_out main0(texture2d_array<float> tex [[texture(0)]], sampler texS
     main0_out out = {};
     gl_FragCoord.xy += get_sample_position(gl_SampleID) - 0.5;
     float3 _28 = float3(gl_FragCoord.xy, float(gl_SampleID));
-    out.FragColor = tex.sample(texSmplr, _28.xy, uint(round(_28.z)));
+    out.FragColor = tex.sample(texSmplr, _28.xy, uint(rint(_28.z)));
     return out;
 }
 

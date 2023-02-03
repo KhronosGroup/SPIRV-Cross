@@ -16,7 +16,7 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], texturecube<float> cubeSampler [[texture(0)]], texturecube_array<float> cubeArraySampler [[texture(1)]], texture2d_array<float> texArraySampler [[texture(2)]], sampler cubeSamplerSmplr [[sampler(0)]], sampler cubeArraySamplerSmplr [[sampler(1)]], sampler texArraySamplerSmplr [[sampler(2)]])
 {
     main0_out out = {};
-    out.FragColor = (cubeSampler.sample(cubeSamplerSmplr, in.vUV.xyz) + cubeArraySampler.sample(cubeArraySamplerSmplr, in.vUV.xyz, uint(round(in.vUV.w)))) + texArraySampler.sample(texArraySamplerSmplr, in.vUV.xyz.xy, uint(round(in.vUV.xyz.z)));
+    out.FragColor = (cubeSampler.sample(cubeSamplerSmplr, in.vUV.xyz) + cubeArraySampler.sample(cubeArraySamplerSmplr, in.vUV.xyz, uint(rint(in.vUV.w)))) + texArraySampler.sample(texArraySamplerSmplr, in.vUV.xyz.xy, uint(rint(in.vUV.xyz.z)));
     return out;
 }
 

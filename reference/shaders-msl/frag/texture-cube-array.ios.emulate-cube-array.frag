@@ -53,8 +53,8 @@ fragment main0_out main0(main0_in in [[stage_in]], texturecube<float> cubeSample
 {
     main0_out out = {};
     float4 a = cubeSampler.sample(cubeSamplerSmplr, in.vUV.xyz);
-    float4 b = cubeArraySampler.sample(cubeArraySamplerSmplr, spvCubemapTo2DArrayFace(in.vUV.xyz).xy, uint(spvCubemapTo2DArrayFace(in.vUV.xyz).z) + (uint(round(in.vUV.w)) * 6u));
-    float4 c = texArraySampler.sample(texArraySamplerSmplr, in.vUV.xyz.xy, uint(round(in.vUV.xyz.z)));
+    float4 b = cubeArraySampler.sample(cubeArraySamplerSmplr, spvCubemapTo2DArrayFace(in.vUV.xyz).xy, uint(spvCubemapTo2DArrayFace(in.vUV.xyz).z) + (uint(rint(in.vUV.w)) * 6u));
+    float4 c = texArraySampler.sample(texArraySamplerSmplr, in.vUV.xyz.xy, uint(rint(in.vUV.xyz.z)));
     out.FragColor = (a + b) + c;
     return out;
 }
