@@ -1856,6 +1856,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			case OpAtomicIIncrement:
 			case OpAtomicIDecrement:
 			case OpAtomicIAdd:
+			case OpAtomicFAddEXT:
 			case OpAtomicISub:
 			case OpAtomicSMin:
 			case OpAtomicUMin:
@@ -8593,6 +8594,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpAtomicIAdd:
+	case OpAtomicFAddEXT:
 		MSL_AFMO(add);
 		break;
 
@@ -16300,6 +16302,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpAtomicIIncrement:
 	case OpAtomicIDecrement:
 	case OpAtomicIAdd:
+	case OpAtomicFAddEXT:
 	case OpAtomicISub:
 	case OpAtomicSMin:
 	case OpAtomicUMin:
@@ -16505,6 +16508,7 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpAtomicIIncrement:
 	case OpAtomicIDecrement:
 	case OpAtomicIAdd:
+	case OpAtomicFAddEXT:
 	case OpAtomicISub:
 	case OpAtomicSMin:
 	case OpAtomicUMin:
