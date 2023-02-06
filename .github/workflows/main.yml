@@ -53,7 +53,7 @@ jobs:
       - uses: actions/upload-artifact@v3
         with:
           name: binaries
-          path: output
+          path: build/output
       - name: Test SPIRV-Cross
         shell: bash
         working-directory: ${{github.workspace}}/build
