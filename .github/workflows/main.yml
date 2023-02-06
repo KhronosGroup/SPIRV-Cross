@@ -50,6 +50,10 @@ jobs:
           cmake --build . --config Release
           cmake --build . --config Release --target install
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: binaries
+          path: output
       - name: Test SPIRV-Cross
         shell: bash
         working-directory: ${{github.workspace}}/build
