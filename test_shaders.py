@@ -110,17 +110,30 @@ def print_msl_compiler_version():
         pass
 
 def msl_compiler_supports_version(version):
-    try:
-        subprocess.check_call(['xcrun', '--sdk', 'macosx', 'metal', '-x', 'metal', '-std=macos-metal' + version, '-'],
+    if float(version) >= 3.0:
+        try:
+            subprocess.check_call(['xcrun', '--sdk', 'macosx', 'metal', '-x', 'metal', '-std=metal' + version, '-'],
                 stdin = subprocess.DEVNULL, stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-        print('Current SDK supports MSL {0}. Enabling validation for MSL {0} shaders.'.format(version))
-        return True
-    except OSError as e:
-        print('Failed to check if MSL {} is not supported. It probably is not.'.format(version))
-        return False
-    except subprocess.CalledProcessError:
-        print('Current SDK does NOT support MSL {0}. Disabling validation for MSL {0} shaders.'.format(version))
-        return False
+            print('Current SDK supports MSL {0}. Enabling validation for MSL {0} shaders.'.format(version))
+            return True
+        except OSError as e:
+            print('Failed to check if MSL {} is not supported. It probably is not.'.format(version))
+            return False
+        except subprocess.CalledProcessError:
+            print('Current SDK does NOT support MSL {0}. Disabling validation for MSL {0} shaders.'.format(version))
+            return False
+    else:
+        try:
+            subprocess.check_call(['xcrun', '--sdk', 'macosx', 'metal', '-x', 'metal', '-std=macos-metal' + version, '-'],
+                stdin = subprocess.DEVNULL, stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
+            print('Current SDK supports MSL {0}. Enabling validation for MSL {0} shaders.'.format(version))
+            return True
+        except OSError as e:
+            print('Failed to check if MSL {} is not supported. It probably is not.'.format(version))
+            return False
+        except subprocess.CalledProcessError:
+            print('Current SDK does NOT support MSL {0}. Disabling validation for MSL {0} shaders.'.format(version))
+            return False
 
 def path_to_msl_standard(shader):
     if '.ios.' in shader:
@@ -1023,11 +1036,13 @@ def main():
     args.msl22 = False
     args.msl23 = False
     args.msl24 = False
+    args.msl30 = False
     if args.msl:
         print_msl_compiler_version()
         args.msl22 = msl_compiler_supports_version('2.2')
         args.msl23 = msl_compiler_supports_version('2.3')
         args.msl24 = msl_compiler_supports_version('2.4')
+        args.msl30 = msl_compiler_supports_version('3.0')
 
     backend = 'glsl'
     if (args.msl or args.metal):
