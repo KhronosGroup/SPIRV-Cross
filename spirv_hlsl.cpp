@@ -6243,7 +6243,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	case OpRayQueryGenerateIntersectionKHR:
 	{
 		flush_variable_declaration(ops[0]);
-		statement(to_expression(ops[0]), ".CommitProceduralPrimitiveHit(", ops[1], ");");
+		statement(to_expression(ops[0]), ".CommitProceduralPrimitiveHit(", to_expression(ops[1]), ");");
 		break;
 	}
 	case OpRayQueryConfirmIntersectionKHR:
