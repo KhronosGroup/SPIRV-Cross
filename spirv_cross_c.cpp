@@ -2535,7 +2535,7 @@ spvc_type_id spvc_constant_get_type(spvc_constant constant)
 	return constant->constant_type;
 }
 
-void spvc_constant_set_scalar_fp16(spvc_constant constant, unsigned column, unsigned row, float value)
+void spvc_constant_set_scalar_fp16(spvc_constant constant, unsigned column, unsigned row, unsigned short value)
 {
 	constant->m.c[column].r[row].f32 = value;
 }
@@ -2560,22 +2560,22 @@ void spvc_constant_set_scalar_i32(spvc_constant constant, unsigned column, unsig
 	constant->m.c[column].r[row].i32 = value;
 }
 
-void spvc_constant_set_scalar_u16(spvc_constant constant, unsigned column, unsigned row, unsigned value)
+void spvc_constant_set_scalar_u16(spvc_constant constant, unsigned column, unsigned row, unsigned short value)
 {
 	constant->m.c[column].r[row].u32 = uint32_t(value);
 }
 
-void spvc_constant_set_scalar_i16(spvc_constant constant, unsigned column, unsigned row, int value)
+void spvc_constant_set_scalar_i16(spvc_constant constant, unsigned column, unsigned row, signed short value)
 {
 	constant->m.c[column].r[row].u32 = uint32_t(value);
 }
 
-void spvc_constant_set_scalar_u8(spvc_constant constant, unsigned column, unsigned row, unsigned value)
+void spvc_constant_set_scalar_u8(spvc_constant constant, unsigned column, unsigned row, unsigned char value)
 {
 	constant->m.c[column].r[row].u32 = uint32_t(value);
 }
 
-void spvc_constant_set_scalar_i8(spvc_constant constant, unsigned column, unsigned row, int value)
+void spvc_constant_set_scalar_i8(spvc_constant constant, unsigned column, unsigned row, signed char value)
 {
 	constant->m.c[column].r[row].u32 = uint32_t(value);
 }
