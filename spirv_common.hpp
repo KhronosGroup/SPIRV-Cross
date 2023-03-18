@@ -842,12 +842,6 @@ struct SPIRBlock : IVariant
 	BlockID false_block = 0;
 	BlockID default_block = 0;
 
-	// If terminator is EmitMeshTasksEXT.
-	struct
-	{
-		ID payload;
-	} mesh = {};
-
 	SmallVector<Instruction> ops;
 
 	struct Phi

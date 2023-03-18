@@ -1133,7 +1133,6 @@ void Parser::parse(const Instruction &instruction)
 		current_block->ops.push_back(instruction);
 
 		current_block->terminator = SPIRBlock::EmitMeshTasks;
-		current_block->mesh.payload = length >= 4 ? ops[3] : 0;
 		current_block = nullptr;
 		// Currently glslang is bugged and does not treat EmitMeshTasksEXT as a terminator.
 		ignore_trailing_block_opcodes = true;

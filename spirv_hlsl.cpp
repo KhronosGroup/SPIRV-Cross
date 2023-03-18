@@ -1635,8 +1635,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = this->get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-				 (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
-			   interface_variable_exists_in_entry_point(var.self))
+			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
 			{
 				// Builtin variables are handled separately.
 				emit_interface_block_globally(var);
@@ -3209,9 +3209,9 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex ||
 	    execution.model == ExecutionModelFragment ||
-			execution.model == ExecutionModelGLCompute ||
-			execution.model == ExecutionModelMeshEXT ||
-			execution.model == ExecutionModelTaskEXT)
+	    execution.model == ExecutionModelGLCompute ||
+	    execution.model == ExecutionModelMeshEXT ||
+	    execution.model == ExecutionModelTaskEXT)
 	{
 		// For mesh shaders, we receive special arguments that we must pass down as function arguments.
 		// HLSL does not support proper reference types for passing these IO blocks,
@@ -6363,10 +6363,10 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpEmitMeshTasksEXT:
 	{
-		if (instruction.length==4)
+		if (instruction.length == 4)
 		{
 			statement("DispatchMesh(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ", ",
-					to_unpacked_expression(ops[2]), ", ", to_unpacked_expression(ops[3]), ");");
+			    to_unpacked_expression(ops[2]), ", ", to_unpacked_expression(ops[3]), ");");
 		}
 		else
 		{
