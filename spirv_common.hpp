@@ -845,7 +845,6 @@ struct SPIRBlock : IVariant
 	// If terminator is EmitMeshTasksEXT.
 	struct
 	{
-		ID groups[3];
 		ID payload;
 	} mesh = {};
 

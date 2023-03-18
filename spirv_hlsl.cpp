@@ -1635,7 +1635,7 @@ void CompilerHLSL::emit_resources()
 			auto &type = this->get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			   (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
+				 (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
 			   interface_variable_exists_in_entry_point(var.self))
 			{
 				// Builtin variables are handled separately.
@@ -1808,8 +1808,10 @@ void CompilerHLSL::emit_resources()
 		if (is_hidden_variable(var, true))
 			continue;
 
-		if (var.storage != StorageClassOutput &&
-		    var.storage != StorageClassTaskPayloadWorkgroupEXT)
+		if (var.storage == StorageClassTaskPayloadWorkgroupEXT && is_mesh_shader)
+			continue;
+
+		if (var.storage != StorageClassOutput)
 		{
 			if (!variable_is_lut(var))
 			{
@@ -1819,6 +1821,7 @@ void CompilerHLSL::emit_resources()
 				switch (var.storage)
 				{
 				case StorageClassWorkgroup:
+				case StorageClassTaskPayloadWorkgroupEXT:
 					storage = "groupshared";
 					break;
 
@@ -2818,6 +2821,8 @@ string CompilerHLSL::get_inner_entry_point_name() const
 		return "comp_main";
 	else if (execution.model == ExecutionModelMeshEXT)
 		return "mesh_main";
+	else if (execution.model == ExecutionModelTaskEXT)
+		return "task_main";
 	else
 		SPIRV_CROSS_THROW("Unsupported execution model.");
 }
@@ -2931,8 +2936,8 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	switch (execution.model)
 	{
+	case spv::ExecutionModelTaskEXT:
 	case ExecutionModelMeshEXT:
-	case ExecutionModelMeshNV:
 	case ExecutionModelGLCompute:
 	{
 		if (execution.model == ExecutionModelMeshEXT)
@@ -3204,8 +3209,9 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex ||
 	    execution.model == ExecutionModelFragment ||
-	    execution.model == ExecutionModelGLCompute ||
-	    execution.model == ExecutionModelMeshEXT)
+			execution.model == ExecutionModelGLCompute ||
+			execution.model == ExecutionModelMeshEXT ||
+			execution.model == ExecutionModelTaskEXT)
 	{
 		// For mesh shaders, we receive special arguments that we must pass down as function arguments.
 		// HLSL does not support proper reference types for passing these IO blocks,
@@ -6353,6 +6359,19 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	case OpSetMeshOutputsEXT:
 	{
 		statement("SetMeshOutputCounts(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ");");
+		break;
+	}
+	case OpEmitMeshTasksEXT:
+	{
+		if (instruction.length==4)
+		{
+			statement("DispatchMesh(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ", ",
+					to_unpacked_expression(ops[2]), ", ", to_unpacked_expression(ops[3]), ");");
+		}
+		else
+		{
+			SPIRV_CROSS_THROW("Amplification shader in HLSL must have payload");
+		}
 		break;
 	}
 
