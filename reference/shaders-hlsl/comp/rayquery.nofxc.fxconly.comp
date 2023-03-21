@@ -109,7 +109,7 @@ void comp_main()
                         doSomething();
                     }
                     float t = 0.5f;
-                    rayQuery.CommitProceduralPrimitiveHit(145);
+                    rayQuery.CommitProceduralPrimitiveHit(t);
                     rayQuery.Abort();
                     break;
                 }

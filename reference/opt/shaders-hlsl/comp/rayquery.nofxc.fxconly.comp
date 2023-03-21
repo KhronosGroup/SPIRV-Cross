@@ -96,7 +96,7 @@ void comp_main()
                         _17.Store(0, 0u);
                         _17.Store(4, 0u);
                     }
-                    rayQuery.CommitProceduralPrimitiveHit(144);
+                    rayQuery.CommitProceduralPrimitiveHit(0.5f);
                     rayQuery.Abort();
                     _398 = _136;
                     _387 = transpose(_136);
