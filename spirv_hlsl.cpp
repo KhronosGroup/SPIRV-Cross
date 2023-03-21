@@ -1635,8 +1635,8 @@ void CompilerHLSL::emit_resources()
 			auto &type = this->get<SPIRType>(var.basetype);
 
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
-			    interface_variable_exists_in_entry_point(var.self))
+			   (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
+			   interface_variable_exists_in_entry_point(var.self))
 			{
 				// Builtin variables are handled separately.
 				emit_interface_block_globally(var);
