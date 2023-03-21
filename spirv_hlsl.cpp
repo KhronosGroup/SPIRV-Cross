@@ -2576,6 +2576,19 @@ void CompilerHLSL::emit_rayquery_function(const char *commited, const char *cand
 	emit_op(ops[0], ops[1], join(to_expression(ops[2]), is_commited ? commited : candidate), false);
 }
 
+void CompilerHLSL::emit_mesh_tasks(SPIRBlock &block)
+{
+	if (block.mesh.payload != 0)
+	{
+		statement("DispatchMesh(", to_unpacked_expression(block.mesh.groups[0]), ", ", to_unpacked_expression(block.mesh.groups[1]), ", ",
+		    to_unpacked_expression(block.mesh.groups[2]), ", ", to_unpacked_expression(block.mesh.payload), ");");
+	}
+	else
+	{
+		SPIRV_CROSS_THROW("Amplification shader in HLSL must have payload");
+	}
+}
+
 void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
@@ -2936,7 +2949,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 
 	switch (execution.model)
 	{
-	case spv::ExecutionModelTaskEXT:
+	case ExecutionModelTaskEXT:
 	case ExecutionModelMeshEXT:
 	case ExecutionModelGLCompute:
 	{
@@ -6361,20 +6374,6 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 		statement("SetMeshOutputCounts(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ");");
 		break;
 	}
-	case OpEmitMeshTasksEXT:
-	{
-		if (instruction.length == 4)
-		{
-			statement("DispatchMesh(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ", ",
-			    to_unpacked_expression(ops[2]), ", ", to_unpacked_expression(ops[3]), ");");
-		}
-		else
-		{
-			SPIRV_CROSS_THROW("Amplification shader in HLSL must have payload");
-		}
-		break;
-	}
-
 	default:
 		CompilerGLSL::emit_instruction(instruction);
 		break;
