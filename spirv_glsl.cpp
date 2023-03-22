@@ -6280,6 +6280,14 @@ void CompilerGLSL::emit_unary_op_cast(uint32_t result_type, uint32_t result_id, 
 	inherit_expression_dependencies(result_id, op0);
 }
 
+void CompilerGLSL::emit_mesh_tasks(SPIRBlock &block)
+{
+	statement("EmitMeshTasksEXT(",
+	          to_unpacked_expression(block.mesh.groups[0]), ", ",
+	          to_unpacked_expression(block.mesh.groups[1]), ", ",
+	          to_unpacked_expression(block.mesh.groups[2]), ");");
+}
+
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
 	// Various FP arithmetic opcodes such as add, sub, mul will hit this.
@@ -16873,10 +16881,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 
 	case SPIRBlock::EmitMeshTasks:
-		statement("EmitMeshTasksEXT(",
-		          to_unpacked_expression(block.mesh.groups[0]), ", ",
-		          to_unpacked_expression(block.mesh.groups[1]), ", ",
-		          to_unpacked_expression(block.mesh.groups[2]), ");");
+		emit_mesh_tasks(block);
 		break;
 
 	default:
