@@ -2537,7 +2537,7 @@ spvc_type_id spvc_constant_get_type(spvc_constant constant)
 
 void spvc_constant_set_scalar_fp16(spvc_constant constant, unsigned column, unsigned row, unsigned short value)
 {
-	constant->m.c[column].r[row].f32 = value;
+	constant->m.c[column].r[row].u32 = value;
 }
 
 void spvc_constant_set_scalar_fp32(spvc_constant constant, unsigned column, unsigned row, float value)
