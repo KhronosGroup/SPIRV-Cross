@@ -17281,6 +17281,7 @@ void CompilerMSL::analyze_argument_buffers()
 			if (msl_options.pad_argument_buffer_resources)
 			{
 				if (!resource.descriptor_alias)
+				{
 					while (resource.index > next_arg_buff_index)
 					{
 						auto &rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
@@ -17318,6 +17319,7 @@ void CompilerMSL::analyze_argument_buffers()
 							break;
 						}
 					}
+				}
 
 				// Adjust the number of slots consumed by current member itself.
 				// If actual member is an array, allow runtime array resolution as well.
