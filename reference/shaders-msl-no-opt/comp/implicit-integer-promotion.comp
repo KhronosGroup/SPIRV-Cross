@@ -16,78 +16,78 @@ struct BUF0
 };
 
 static inline __attribute__((always_inline))
-void test_u16(device BUF0& v_24)
+void test_u16(device BUF0& _24)
 {
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] + ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] - ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] * ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] / ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] % ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] << ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] >> ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(~((device ushort*)&v_24.u16)[0u]));
-    v_24.f16 += as_type<half>(ushort(-((device ushort*)&v_24.u16)[0u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] ^ ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] & ((device ushort*)&v_24.u16)[1u]));
-    v_24.f16 += as_type<half>(ushort(((device ushort*)&v_24.u16)[0u] | ((device ushort*)&v_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] + ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] - ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] * ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] / ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] % ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] << ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] >> ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(~((device ushort*)&_24.u16)[0u]));
+    _24.f16 += as_type<half>(ushort(-((device ushort*)&_24.u16)[0u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] ^ ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] & ((device ushort*)&_24.u16)[1u]));
+    _24.f16 += as_type<half>(ushort(((device ushort*)&_24.u16)[0u] | ((device ushort*)&_24.u16)[1u]));
 }
 
 static inline __attribute__((always_inline))
-void test_i16(device BUF0& v_24)
+void test_i16(device BUF0& _24)
 {
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] + ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] - ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] * ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] / ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] % ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] << ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] >> ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(~((device short*)&v_24.i16)[0u]));
-    v_24.f16 += as_type<half>(short(-((device short*)&v_24.i16)[0u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] ^ ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] & ((device short*)&v_24.i16)[1u]));
-    v_24.f16 += as_type<half>(short(((device short*)&v_24.i16)[0u] | ((device short*)&v_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] + ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] - ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] * ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] / ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] % ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] << ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] >> ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(~((device short*)&_24.i16)[0u]));
+    _24.f16 += as_type<half>(short(-((device short*)&_24.i16)[0u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] ^ ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] & ((device short*)&_24.i16)[1u]));
+    _24.f16 += as_type<half>(short(((device short*)&_24.i16)[0u] | ((device short*)&_24.i16)[1u]));
 }
 
 static inline __attribute__((always_inline))
-void test_u16s(device BUF0& v_24)
+void test_u16s(device BUF0& _24)
 {
-    v_24.f16s += as_type<half2>(v_24.u16s.xy + v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy - v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy * v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy / v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy % v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy << v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy >> v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(~v_24.u16s.xy);
-    v_24.f16s += as_type<half2>(-v_24.u16s.xy);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy ^ v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy & v_24.u16s.zw);
-    v_24.f16s += as_type<half2>(v_24.u16s.xy | v_24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy + _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy - _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy * _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy / _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy % _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy << _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy >> _24.u16s.zw);
+    _24.f16s += as_type<half2>(~_24.u16s.xy);
+    _24.f16s += as_type<half2>(-_24.u16s.xy);
+    _24.f16s += as_type<half2>(_24.u16s.xy ^ _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy & _24.u16s.zw);
+    _24.f16s += as_type<half2>(_24.u16s.xy | _24.u16s.zw);
 }
 
 static inline __attribute__((always_inline))
-void test_i16s(device BUF0& v_24)
+void test_i16s(device BUF0& _24)
 {
-    v_24.f16s += as_type<half2>(v_24.i16s.xy + v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy - v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy * v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy / v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy % v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy << v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy >> v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(~v_24.i16s.xy);
-    v_24.f16s += as_type<half2>(-v_24.i16s.xy);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy ^ v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy & v_24.i16s.zw);
-    v_24.f16s += as_type<half2>(v_24.i16s.xy | v_24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy + _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy - _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy * _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy / _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy % _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy << _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy >> _24.i16s.zw);
+    _24.f16s += as_type<half2>(~_24.i16s.xy);
+    _24.f16s += as_type<half2>(-_24.i16s.xy);
+    _24.f16s += as_type<half2>(_24.i16s.xy ^ _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy & _24.i16s.zw);
+    _24.f16s += as_type<half2>(_24.i16s.xy | _24.i16s.zw);
 }
 
-kernel void main0(device BUF0& v_24 [[buffer(0)]])
+kernel void main0(device BUF0& _24 [[buffer(0)]])
 {
-    test_u16(v_24);
-    test_i16(v_24);
-    test_u16s(v_24);
-    test_i16s(v_24);
+    test_u16(_24);
+    test_i16(_24);
+    test_u16s(_24);
+    test_i16s(_24);
 }
 

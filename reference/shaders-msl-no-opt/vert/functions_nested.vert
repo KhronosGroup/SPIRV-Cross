@@ -42,13 +42,13 @@ struct main0_out
 };
 
 static inline __attribute__((always_inline))
-attr_desc fetch_desc(thread const int& location, constant VertexBuffer& v_227)
+attr_desc fetch_desc(thread const int& location, constant VertexBuffer& _227)
 {
-    int attribute_flags = v_227.input_attributes[location].w;
+    int attribute_flags = _227.input_attributes[location].w;
     attr_desc result;
-    result.type = v_227.input_attributes[location].x;
-    result.attribute_size = v_227.input_attributes[location].y;
-    result.starting_offset = v_227.input_attributes[location].z;
+    result.type = _227.input_attributes[location].x;
+    result.attribute_size = _227.input_attributes[location].y;
+    result.starting_offset = _227.input_attributes[location].z;
     result.stride = attribute_flags & 255;
     result.swap_bytes = (attribute_flags >> 8) & 1;
     result.is_volatile = (attribute_flags >> 9) & 1;
@@ -135,11 +135,11 @@ float4 fetch_attr(thread const attr_desc& desc, thread const int& vertex_id, tex
 }
 
 static inline __attribute__((always_inline))
-float4 read_location(thread const int& location, constant VertexBuffer& v_227, thread uint& gl_VertexIndex, texture2d<uint> buff_in_2, texture2d<uint> buff_in_1)
+float4 read_location(thread const int& location, constant VertexBuffer& _227, thread uint& gl_VertexIndex, texture2d<uint> buff_in_2, texture2d<uint> buff_in_1)
 {
     int param = location;
-    attr_desc desc = fetch_desc(param, v_227);
-    int vertex_id = int(gl_VertexIndex) - int(v_227.vertex_base_index);
+    attr_desc desc = fetch_desc(param, _227);
+    int vertex_id = int(gl_VertexIndex) - int(_227.vertex_base_index);
     if (desc.is_volatile != 0)
     {
         attr_desc param_1 = desc;
@@ -155,30 +155,30 @@ float4 read_location(thread const int& location, constant VertexBuffer& v_227, t
 }
 
 static inline __attribute__((always_inline))
-void vs_adjust(thread float4& dst_reg0, thread float4& dst_reg1, thread float4& dst_reg7, constant VertexBuffer& v_227, thread uint& gl_VertexIndex, texture2d<uint> buff_in_2, texture2d<uint> buff_in_1, constant VertexConstantsBuffer& v_309)
+void vs_adjust(thread float4& dst_reg0, thread float4& dst_reg1, thread float4& dst_reg7, constant VertexBuffer& _227, thread uint& gl_VertexIndex, texture2d<uint> buff_in_2, texture2d<uint> buff_in_1, constant VertexConstantsBuffer& _309)
 {
     int param = 3;
-    float4 in_diff_color = read_location(param, v_227, gl_VertexIndex, buff_in_2, buff_in_1);
+    float4 in_diff_color = read_location(param, _227, gl_VertexIndex, buff_in_2, buff_in_1);
     int param_1 = 0;
-    float4 in_pos = read_location(param_1, v_227, gl_VertexIndex, buff_in_2, buff_in_1);
+    float4 in_pos = read_location(param_1, _227, gl_VertexIndex, buff_in_2, buff_in_1);
     int param_2 = 8;
-    float4 in_tc0 = read_location(param_2, v_227, gl_VertexIndex, buff_in_2, buff_in_1);
-    dst_reg1 = in_diff_color * v_309.vc[13];
+    float4 in_tc0 = read_location(param_2, _227, gl_VertexIndex, buff_in_2, buff_in_1);
+    dst_reg1 = in_diff_color * _309.vc[13];
     float4 tmp0;
-    tmp0.x = float4(dot(float4(in_pos.xyz, 1.0), v_309.vc[4])).x;
-    tmp0.y = float4(dot(float4(in_pos.xyz, 1.0), v_309.vc[5])).y;
-    tmp0.z = float4(dot(float4(in_pos.xyz, 1.0), v_309.vc[6])).z;
+    tmp0.x = float4(dot(float4(in_pos.xyz, 1.0), _309.vc[4])).x;
+    tmp0.y = float4(dot(float4(in_pos.xyz, 1.0), _309.vc[5])).y;
+    tmp0.z = float4(dot(float4(in_pos.xyz, 1.0), _309.vc[6])).z;
     float4 tmp1;
     tmp1.x = in_tc0.xy.x;
     tmp1.y = in_tc0.xy.y;
-    tmp1.z = v_309.vc[15].x;
-    dst_reg7.y = float4(dot(float4(tmp1.xyz, 1.0), v_309.vc[8])).y;
-    dst_reg7.x = float4(dot(float4(tmp1.xyz, 1.0), v_309.vc[7])).x;
-    dst_reg0.y = float4(dot(float4(tmp0.xyz, 1.0), v_309.vc[1])).y;
-    dst_reg0.x = float4(dot(float4(tmp0.xyz, 1.0), v_309.vc[0])).x;
+    tmp1.z = _309.vc[15].x;
+    dst_reg7.y = float4(dot(float4(tmp1.xyz, 1.0), _309.vc[8])).y;
+    dst_reg7.x = float4(dot(float4(tmp1.xyz, 1.0), _309.vc[7])).x;
+    dst_reg0.y = float4(dot(float4(tmp0.xyz, 1.0), _309.vc[1])).y;
+    dst_reg0.x = float4(dot(float4(tmp0.xyz, 1.0), _309.vc[0])).x;
 }
 
-vertex main0_out main0(constant VertexBuffer& v_227 [[buffer(0)]], constant VertexConstantsBuffer& v_309 [[buffer(1)]], texture2d<uint> buff_in_2 [[texture(0)]], texture2d<uint> buff_in_1 [[texture(1)]], uint gl_VertexIndex [[vertex_id]])
+vertex main0_out main0(constant VertexBuffer& _227 [[buffer(0)]], constant VertexConstantsBuffer& _309 [[buffer(1)]], texture2d<uint> buff_in_2 [[texture(0)]], texture2d<uint> buff_in_1 [[texture(1)]], uint gl_VertexIndex [[vertex_id]])
 {
     main0_out out = {};
     float4 dst_reg0 = float4(0.0, 0.0, 0.0, 1.0);
@@ -187,14 +187,14 @@ vertex main0_out main0(constant VertexBuffer& v_227 [[buffer(0)]], constant Vert
     float4 param = dst_reg0;
     float4 param_1 = dst_reg1;
     float4 param_2 = dst_reg7;
-    vs_adjust(param, param_1, param_2, v_227, gl_VertexIndex, buff_in_2, buff_in_1, v_309);
+    vs_adjust(param, param_1, param_2, _227, gl_VertexIndex, buff_in_2, buff_in_1, _309);
     dst_reg0 = param;
     dst_reg1 = param_1;
     dst_reg7 = param_2;
     out.gl_Position = dst_reg0;
     out.back_color = dst_reg1;
     out.tc0 = dst_reg7;
-    out.gl_Position *= v_227.scale_offset_mat;
+    out.gl_Position *= _227.scale_offset_mat;
     return out;
 }
 
