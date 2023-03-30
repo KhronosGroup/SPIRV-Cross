@@ -645,6 +645,7 @@ struct CLIArguments
 	bool msl_pad_fragment_output = false;
 	bool msl_domain_lower_left = false;
 	bool msl_argument_buffers = false;
+	SmallVector<MSLResourceBinding> msl_resource_bindings;
 	uint32_t msl_argument_buffers_tier = 0;		// Tier 1
 	bool msl_texture_buffer_native = false;
 	bool msl_framebuffer_fetch = false;
@@ -860,6 +861,7 @@ static void print_help_msl()
 	                "\t[--msl-domain-lower-left]:\n\t\tUse a lower-left tessellation domain.\n"
 	                "\t[--msl-argument-buffers]:\n\t\tEmit Metal argument buffers instead of discrete resource bindings.\n"
 	                "\t\tRequires MSL 2.0 to be enabled.\n"
+	                "\t[--msl-argument-buffer-pad <stage> <base type> <set index> <binding> <count>]:\n\t\tSpecify resource binding types used to pad argument buffer entries used by other stages.\n"
 	                "\t[--msl-argument-buffer-tier]:\n\t\tWhen using Metal argument buffers, indicate the Metal argument buffer tier level supported by the Metal platform.\n"
 	                "\t\tUses same values as Metal MTLArgumentBuffersTier enumeration (0 = Tier1, 1 = Tier2).\n"
 	                "\t\tSetting this value also enables msl-argument-buffers.\n"
@@ -1143,6 +1145,52 @@ static ExecutionModel stage_to_execution_model(const std::string &stage)
 		SPIRV_CROSS_THROW("Invalid stage.");
 }
 
+static SPIRType::BaseType str_to_spir_base_type(const std::string &base_type)
+{
+	if (base_type == "Void")
+		return SPIRType::BaseType::Void;
+	else if (base_type == "Boolean")
+		return SPIRType::BaseType::Boolean;
+	else if (base_type == "SByte")
+		return SPIRType::BaseType::SByte;
+	else if (base_type == "UByte")
+		return SPIRType::BaseType::UByte;
+	else if (base_type == "Short")
+		return SPIRType::BaseType::Short;
+	else if (base_type == "UShort")
+		return SPIRType::BaseType::UShort;
+	else if (base_type == "Int")
+		return SPIRType::BaseType::Int;
+	else if (base_type == "UInt")
+		return SPIRType::BaseType::UInt;
+	else if (base_type == "Int64")
+		return SPIRType::BaseType::Int64;
+	else if (base_type == "UInt64")
+		return SPIRType::BaseType::UInt64;
+	else if (base_type == "AtomicCounter")
+		return SPIRType::BaseType::AtomicCounter;
+	else if (base_type == "Half")
+		return SPIRType::BaseType::Half;
+	else if (base_type == "Float")
+		return SPIRType::BaseType::Float;
+	else if (base_type == "Double")
+		return SPIRType::BaseType::Double;
+	else if (base_type == "Struct")
+		return SPIRType::BaseType::Struct;
+	else if (base_type == "Image")
+		return SPIRType::BaseType::Image;
+	else if (base_type == "SampledImage")
+		return SPIRType::BaseType::SampledImage;
+	else if (base_type == "Sampler")
+		return SPIRType::BaseType::Sampler;
+	else if (base_type == "AccelerationStructure")
+		return SPIRType::BaseType::AccelerationStructure;
+	else if (base_type == "RayQuery")
+		return SPIRType::BaseType::RayQuery;
+	else
+		SPIRV_CROSS_THROW("Invalid base type.");
+}
+
 static HLSLBindingFlags hlsl_resource_type_to_flag(const std::string &arg)
 {
 	if (arg == "push")
@@ -1199,6 +1247,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.pad_fragment_output_components = args.msl_pad_fragment_output;
 		msl_opts.tess_domain_origin_lower_left = args.msl_domain_lower_left;
 		msl_opts.argument_buffers = args.msl_argument_buffers;
+		msl_opts.pad_argument_buffer_resources = !args.msl_resource_bindings.empty();
 		msl_opts.argument_buffers_tier = static_cast<CompilerMSL::Options::ArgumentBuffersTier>(args.msl_argument_buffers_tier);
 		msl_opts.texture_buffer_native = args.msl_texture_buffer_native;
 		msl_opts.multiview = args.msl_multiview;
@@ -1244,6 +1293,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			msl_comp->add_msl_shader_output(v);
 		if (args.msl_combined_sampler_suffix)
 			msl_comp->set_combined_sampler_suffix(args.msl_combined_sampler_suffix);
+		for (auto &v : args.msl_resource_bindings)
+			msl_comp->add_msl_resource_binding(v);
 	}
 	else if (args.hlsl)
 		compiler.reset(new CompilerHLSL(std::move(spirv_parser.get_parsed_ir())));
@@ -1632,6 +1683,18 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });
 	cbs.add("--msl-domain-lower-left", [&args](CLIParser &) { args.msl_domain_lower_left = true; });
 	cbs.add("--msl-argument-buffers", [&args](CLIParser &) { args.msl_argument_buffers = true; });
+	cbs.add("--msl-argument-buffer-pad",
+	        [&args](CLIParser &parser)
+	        {
+		        MSLResourceBinding rez_bind;
+		        rez_bind.stage = stage_to_execution_model(parser.next_string());
+		        rez_bind.basetype = str_to_spir_base_type(parser.next_string());
+		        rez_bind.desc_set = parser.next_uint();
+		        rez_bind.binding = parser.next_uint();
+		        rez_bind.count = parser.next_uint();
+		        args.msl_resource_bindings.push_back(std::move(rez_bind));
+		        args.msl_argument_buffers = true;
+	        });
 	cbs.add("--msl-argument-buffer-tier", [&args](CLIParser &parser) {
 		args.msl_argument_buffers_tier = parser.next_uint();
 		args.msl_argument_buffers = true;

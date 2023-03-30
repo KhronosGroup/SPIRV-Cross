@@ -1,0 +1,36 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct Buf16
+{
+    ushort u16s[1];
+};
+
+struct Buf32
+{
+    uint u32s[1];
+};
+
+struct Float32
+{
+    float f32s[1];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(64u, 1u, 1u);
+
+struct spvDescriptorSetBuffer0
+{
+    device Buf16* m_10 [[id(0)]];
+};
+
+kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]])
+{
+    device auto& _21 = (device Buf32&)(*spvDescriptorSet0.m_10);
+    device auto& _30 = (device Float32&)(*spvDescriptorSet0.m_10);
+    (*spvDescriptorSet0.m_10).u16s[0] = ushort(1u);
+    _21.u32s[2] = 2u;
+    _30.f32s[3] = 4.0;
+}
+

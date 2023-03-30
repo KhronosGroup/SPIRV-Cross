@@ -1,0 +1,26 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+
+layout(local_size_x = 64) in;
+
+layout(binding = 2) buffer Buf16
+{
+	uint16_t u16s[];
+};
+
+layout(binding = 2) buffer Buf32
+{
+	uint u32s[];
+};
+
+layout(binding = 2) buffer Float32
+{
+	float f32s[];
+};
+
+void main()
+{
+	u16s[0] = uint16_t(1);
+	u32s[2] = 2;
+	f32s[3] = 4.0;
+}
