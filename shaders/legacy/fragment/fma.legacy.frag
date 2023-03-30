@@ -8,4 +8,5 @@ layout(location = 0) out vec4 FragColor;
 void main()
 {
    FragColor = fma(vA, vB, vC);
+   FragColor = fma(vA, vB, vC) * fma(vB, vC, vA);
 }

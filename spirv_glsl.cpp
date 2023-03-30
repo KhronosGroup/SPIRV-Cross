@@ -4688,7 +4688,7 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 	expr.erase(begin(expr));
 }
 
-string CompilerGLSL::enclose_expression(const string &expr)
+bool CompilerGLSL::needs_enclose_expression(const std::string &expr)
 {
 	bool need_parens = false;
 
@@ -4722,10 +4722,15 @@ string CompilerGLSL::enclose_expression(const string &expr)
 		assert(paren_count == 0);
 	}
 
+	return need_parens;
+}
+
+string CompilerGLSL::enclose_expression(const string &expr)
+{
 	// If this expression contains any spaces which are not enclosed by parentheses,
 	// we need to enclose it so we can treat the whole string as an expression.
 	// This happens when two expressions have been part of a binary op earlier.
-	if (need_parens)
+	if (needs_enclose_expression(expr))
 		return join('(', expr, ')');
 	else
 		return expr;
@@ -10897,6 +10902,12 @@ bool CompilerGLSL::optimize_read_modify_write(const SPIRType &type, const string
 
 	char bop = rhs[op];
 	auto expr = rhs.substr(lhs.size() + 3);
+
+	// Avoids false positives where we get a = a * b + c.
+	// Normally, these expressions are always enclosed, but unexpected code paths may end up hitting this.
+	if (needs_enclose_expression(expr))
+		return false;
+
 	// Try to find increments and decrements. Makes it look neater as += 1, -= 1 is fairly rare to see in real code.
 	// Find some common patterns which are equivalent.
 	if ((bop == '+' || bop == '-') && (expr == "1" || expr == "uint(1)" || expr == "1u" || expr == "int(1u)"))
