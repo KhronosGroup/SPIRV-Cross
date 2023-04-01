@@ -30,6 +30,7 @@
 #include <limits>
 #include <locale.h>
 #include <utility>
+#include <array>
 
 #ifndef _WIN32
 #include <langinfo.h>
@@ -3992,6 +3993,109 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 	}
 }
 
+void CompilerGLSL::emit_subgroup_arithmetic_workaround(std::string func, Op op, GroupOperation group_op)
+{
+	std::string result;
+	switch (group_op)
+	{
+	case GroupOperationReduce:
+		result = "reduction";
+		break;
+
+	case GroupOperationExclusiveScan:
+		result = "excl_scan";
+		break;
+
+	case GroupOperationInclusiveScan:
+		result = "incl_scan";
+		break;
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported workaround for arithmetic group operation");
+	}
+
+	struct TypeInfo
+	{
+		std::string type;
+		std::string identity;
+	};
+
+	std::vector<TypeInfo> type_infos;
+	switch (op)
+	{
+	case OpGroupNonUniformIAdd:
+	{
+		type_infos.emplace_back(TypeInfo{ "uint", "0u" });
+		type_infos.emplace_back(TypeInfo{ "uvec2", "uvec2(0u)" });
+		type_infos.emplace_back(TypeInfo{ "uvec3", "uvec3(0u)" });
+		type_infos.emplace_back(TypeInfo{ "uvec4", "uvec4(0u)" });
+		type_infos.emplace_back(TypeInfo{ "int", "0" });
+		type_infos.emplace_back(TypeInfo{ "ivec2", "ivec2(0)" });
+		type_infos.emplace_back(TypeInfo{ "ivec3", "ivec3(0)" });
+		type_infos.emplace_back(TypeInfo{ "ivec4", "ivec4(0)" });
+		break;
+	}
+
+	default:
+		SPIRV_CROSS_THROW("Unsupported workaround for arithmetic group operation");
+	}
+
+	for (const TypeInfo& t : type_infos) {
+		statement(t.type, " ", func, "(", t.type, " v)");
+		begin_scope();
+		statement(t.type, " ", result, " = ", t.identity, ";");
+		statement("if (subgroupBallotBitCount(subgroupBallot(true)) == gl_SubgroupSize)");
+		begin_scope();
+		statement("uint total = gl_SubgroupSize / 2u;");
+		statement(result, " = v;");
+		statement("for (uint i = 1u; i <= total; i <<= 1u)");
+		begin_scope();
+		if (group_op == GroupOperationReduce)
+		{
+			statement(result, " += shuffleXorNV(", result, ", i, gl_SubgroupSize);");
+		}
+		else if (group_op == GroupOperationExclusiveScan || group_op == GroupOperationInclusiveScan)
+		{
+			statement("bool valid;");
+			statement(t.type, " s = shuffleUpNV(", result, ", i, gl_SubgroupSize, valid);");
+			statement(result, " += valid ? s : ", t.identity, ";");
+		}
+		end_scope();
+		if (group_op == GroupOperationExclusiveScan)
+		{
+			statement(result, " = shuffleUpNV(", result, ", 1u, gl_SubgroupSize);");
+			statement("if (subgroupElect())");
+			begin_scope();
+			statement(result, " = ", t.identity, ";");
+			end_scope();
+		}
+		end_scope();
+		statement("else");
+		begin_scope();
+		if (group_op == GroupOperationExclusiveScan)
+		{
+			statement("uint total = subgroupBallotBitCount(gl_SubgroupLtMask);");
+		}
+		else if (group_op == GroupOperationInclusiveScan)
+		{
+			statement("uint total = subgroupBallotBitCount(gl_SubgroupLeMask);");
+		}
+		statement("for (uint i = 0u; i < gl_SubgroupSize; ++i)");
+		begin_scope();
+		statement("bool valid;");
+		statement(t.type, " s = shuffleNV(v, i, gl_SubgroupSize, valid);");
+		if (group_op == GroupOperationExclusiveScan || group_op == GroupOperationInclusiveScan)
+		{
+			statement("valid = valid && (i < total);");
+		}
+		statement(result, " += valid ? s : ", t.identity, ";");
+		end_scope();
+		end_scope();
+		statement("return ", result, ";");
+		end_scope();
+	}
+}
+
 void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 {
 	static const char *workaround_types[] = { "int",   "ivec2", "ivec3", "ivec4", "uint",   "uvec2", "uvec3", "uvec4",
@@ -4395,6 +4499,38 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 			statement("#endif");
 			statement("");
 		}
+
+		auto arithmetic_feature_helper =
+		    [&](Supp::Feature feat, std::string func_name, spv::Op op, spv::GroupOperation group_op)
+		{
+			if (shader_subgroup_supporter.is_feature_requested(feat))
+			{
+				auto exts = Supp::get_candidates_for_feature(feat, result);
+				for (auto &e : exts)
+				{
+					const char *name = Supp::get_extension_name(e);
+					statement(&e == &exts.front() ? "#if" : "#elif", " defined(", name, ")");
+
+					switch (e)
+					{
+					case Supp::NV_shader_thread_shuffle:
+						emit_subgroup_arithmetic_workaround(func_name, op, group_op);
+						break;
+					default:
+						break;
+					}
+				}
+				statement("#endif");
+				statement("");
+			}
+		};
+
+		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddReduce, "subgroupAdd", OpGroupNonUniformIAdd,
+		                          GroupOperationReduce);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddExclusiveScan, "subgroupExclusiveAdd",
+		                          OpGroupNonUniformIAdd, GroupOperationExclusiveScan);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddInclusiveScan, "subgroupInclusiveAdd",
+		                          OpGroupNonUniformIAdd, GroupOperationInclusiveScan);
 	}
 
 	if (!workaround_ubo_load_overload_types.empty())
@@ -7095,7 +7231,7 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 	}
 }
 
-bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op)
+bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op, const uint32_t *ops)
 {
 	switch (op)
 	{
@@ -7114,6 +7250,15 @@ bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op)
 	case OpGroupNonUniformBallotBitExtract:
 	case OpGroupNonUniformInverseBallot:
 		return true;
+	case OpGroupNonUniformIAdd:
+	{
+		const GroupOperation operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce || operation == GroupOperationInclusiveScan ||
+		    operation == GroupOperationExclusiveScan)
+		{
+			return true;
+		}
+	}
 	default:
 		return false;
 	}
@@ -8711,7 +8856,7 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	const uint32_t *ops = stream(i);
 	auto op = static_cast<Op>(i.op);
 
-	if (!options.vulkan_semantics && !is_supported_subgroup_op_in_opengl(op))
+	if (!options.vulkan_semantics && !is_supported_subgroup_op_in_opengl(op, ops))
 		SPIRV_CROSS_THROW("This subgroup operation is only supported in Vulkan semantics.");
 
 	// If we need to do implicit bitcasts, make sure we do it with the correct type.
@@ -8779,11 +8924,30 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	}
 	break;
 
+	case OpGroupNonUniformIAdd:
+	{
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationReduce)
+		{
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticIAddReduce);
+			break;
+		}
+		else if (operation == GroupOperationExclusiveScan)
+		{
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticIAddExclusiveScan);
+			break;
+		}
+		else if (operation == GroupOperationInclusiveScan)
+		{
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticIAddInclusiveScan);
+			break;
+		}
+		// else fallthrough
+	}
 	case OpGroupNonUniformFAdd:
 	case OpGroupNonUniformFMul:
 	case OpGroupNonUniformFMin:
 	case OpGroupNonUniformFMax:
-	case OpGroupNonUniformIAdd:
 	case OpGroupNonUniformIMul:
 	case OpGroupNonUniformSMin:
 	case OpGroupNonUniformSMax:
@@ -17650,6 +17814,7 @@ const char *CompilerGLSL::ShaderSubgroupSupportHelper::get_extension_name(Candid
 	static const char *const retval[CandidateCount] = { "GL_KHR_shader_subgroup_ballot",
 		                                                "GL_KHR_shader_subgroup_basic",
 		                                                "GL_KHR_shader_subgroup_vote",
+		                                                "GL_KHR_shader_subgroup_arithmetic",
 		                                                "GL_NV_gpu_shader_5",
 		                                                "GL_NV_shader_thread_group",
 		                                                "GL_NV_shader_thread_shuffle",
@@ -17698,6 +17863,12 @@ CompilerGLSL::ShaderSubgroupSupportHelper::FeatureVector CompilerGLSL::ShaderSub
 		return { SubgroupMask };
 	case SubgroupBallotBitCount:
 		return { SubgroupBallot };
+	case SubgroupArithmeticIAddReduce:
+		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask };
+	case SubgroupArithmeticIAddExclusiveScan:
+		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask, SubgroupElect };
+	case SubgroupArithmeticIAddInclusiveScan:
+		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask };
 	default:
 		return {};
 	}
@@ -17711,11 +17882,13 @@ CompilerGLSL::ShaderSubgroupSupportHelper::FeatureMask CompilerGLSL::ShaderSubgr
 
 bool CompilerGLSL::ShaderSubgroupSupportHelper::can_feature_be_implemented_without_extensions(Feature feature)
 {
-	static const bool retval[FeatureCount] = { false, false, false, false, false, false,
-		                                       true, // SubgroupBalloFindLSB_MSB
-		                                       false, false, false, false,
-		                                       true, // SubgroupMemBarrier - replaced with workgroup memory barriers
-		                                       false, false, true,  false };
+	static const bool retval[FeatureCount] = {
+		false, false, false, false, false, false,
+		true, // SubgroupBalloFindLSB_MSB
+		false, false, false, false,
+		true, // SubgroupMemBarrier - replaced with workgroup memory barriers
+		false, false, true, false, false, false, false,
+	};
 
 	return retval[feature];
 }
@@ -17727,7 +17900,8 @@ CompilerGLSL::ShaderSubgroupSupportHelper::Candidate CompilerGLSL::ShaderSubgrou
 		KHR_shader_subgroup_ballot, KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic,
 		KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_vote,
 		KHR_shader_subgroup_vote,   KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic, KHR_shader_subgroup_basic,
-		KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot
+		KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot,
+		KHR_shader_subgroup_arithmetic, KHR_shader_subgroup_arithmetic, KHR_shader_subgroup_arithmetic,
 	};
 
 	return extensions[feature];
@@ -17823,6 +17997,10 @@ CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector CompilerGLSL::ShaderS
 		return { NV_shader_thread_group };
 	case SubgroupBallotBitCount:
 		return {};
+	case SubgroupArithmeticIAddReduce:
+	case SubgroupArithmeticIAddExclusiveScan:
+	case SubgroupArithmeticIAddInclusiveScan:
+		return { KHR_shader_subgroup_arithmetic, NV_shader_thread_shuffle };
 	default:
 		return {};
 	}
@@ -17847,6 +18025,7 @@ CompilerGLSL::ShaderSubgroupSupportHelper::Result::Result()
 	weights[KHR_shader_subgroup_ballot] = big_num;
 	weights[KHR_shader_subgroup_basic] = big_num;
 	weights[KHR_shader_subgroup_vote] = big_num;
+	weights[KHR_shader_subgroup_arithmetic] = big_num;
 }
 
 void CompilerGLSL::request_workaround_wrapper_overload(TypeID id)
