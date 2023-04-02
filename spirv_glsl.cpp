@@ -4036,6 +4036,20 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(std::string func, Op op, 
 		break;
 	}
 
+	case OpGroupNonUniformFAdd:
+	{
+		type_infos.emplace_back(TypeInfo{ "float", "0.0f" });
+		type_infos.emplace_back(TypeInfo{ "vec2", "vec2(0.0f)" });
+		type_infos.emplace_back(TypeInfo{ "vec3", "vec3(0.0f)" });
+		type_infos.emplace_back(TypeInfo{ "vec4", "vec4(0.0f)" });
+		// ARB_gpu_shader_fp64 is required in GL4.0 which in turn is required by NV_thread_shuffle
+		type_infos.emplace_back(TypeInfo{ "double", "0.0LF" });
+		type_infos.emplace_back(TypeInfo{ "dvec2", "dvec2(0.0LF)" });
+		type_infos.emplace_back(TypeInfo{ "dvec3", "dvec3(0.0LF)" });
+		type_infos.emplace_back(TypeInfo{ "dvec4", "dvec4(0.0LF)" });
+		break;
+	}
+
 	default:
 		SPIRV_CROSS_THROW("Unsupported workaround for arithmetic group operation");
 	}
@@ -4531,6 +4545,12 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		                          OpGroupNonUniformIAdd, GroupOperationExclusiveScan);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddInclusiveScan, "subgroupInclusiveAdd",
 		                          OpGroupNonUniformIAdd, GroupOperationInclusiveScan);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddReduce, "subgroupAdd", OpGroupNonUniformFAdd,
+		                          GroupOperationReduce);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddExclusiveScan, "subgroupExclusiveAdd",
+		                          OpGroupNonUniformFAdd, GroupOperationExclusiveScan);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddInclusiveScan, "subgroupInclusiveAdd",
+		                          OpGroupNonUniformFAdd, GroupOperationInclusiveScan);
 	}
 
 	if (!workaround_ubo_load_overload_types.empty())
@@ -7251,6 +7271,7 @@ bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op, const uint32_t
 	case OpGroupNonUniformInverseBallot:
 		return true;
 	case OpGroupNonUniformIAdd:
+	case OpGroupNonUniformFAdd:
 	{
 		const GroupOperation operation = static_cast<GroupOperation>(ops[3]);
 		if (operation == GroupOperationReduce || operation == GroupOperationInclusiveScan ||
@@ -8927,24 +8948,51 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	case OpGroupNonUniformIAdd:
 	{
 		auto operation = static_cast<GroupOperation>(ops[3]);
-		if (operation == GroupOperationReduce)
+		if (operation == GroupOperationClusteredReduce)
+		{
+			require_extension_internal("GL_KHR_shader_subgroup_clustered");
+		}
+		else if (operation == GroupOperationReduce)
 		{
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticIAddReduce);
-			break;
 		}
 		else if (operation == GroupOperationExclusiveScan)
 		{
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticIAddExclusiveScan);
-			break;
 		}
 		else if (operation == GroupOperationInclusiveScan)
 		{
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticIAddInclusiveScan);
-			break;
 		}
-		// else fallthrough
+		else
+			SPIRV_CROSS_THROW("Invalid group operation.");
+		break;
 	}
+
 	case OpGroupNonUniformFAdd:
+	{
+		auto operation = static_cast<GroupOperation>(ops[3]);
+		if (operation == GroupOperationClusteredReduce)
+		{
+			require_extension_internal("GL_KHR_shader_subgroup_clustered");
+		}
+		else if (operation == GroupOperationReduce)
+		{
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticFAddReduce);
+		}
+		else if (operation == GroupOperationExclusiveScan)
+		{
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticFAddExclusiveScan);
+		}
+		else if (operation == GroupOperationInclusiveScan)
+		{
+			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmeticFAddInclusiveScan);
+		}
+		else
+			SPIRV_CROSS_THROW("Invalid group operation.");
+		break;
+	}
+
 	case OpGroupNonUniformFMul:
 	case OpGroupNonUniformFMin:
 	case OpGroupNonUniformFMax:
@@ -17864,11 +17912,13 @@ CompilerGLSL::ShaderSubgroupSupportHelper::FeatureVector CompilerGLSL::ShaderSub
 	case SubgroupBallotBitCount:
 		return { SubgroupBallot };
 	case SubgroupArithmeticIAddReduce:
+	case SubgroupArithmeticIAddInclusiveScan:
+	case SubgroupArithmeticFAddReduce:
+	case SubgroupArithmeticFAddInclusiveScan:
 		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask };
 	case SubgroupArithmeticIAddExclusiveScan:
+	case SubgroupArithmeticFAddExclusiveScan:
 		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask, SubgroupElect };
-	case SubgroupArithmeticIAddInclusiveScan:
-		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask };
 	default:
 		return {};
 	}
@@ -17887,7 +17937,7 @@ bool CompilerGLSL::ShaderSubgroupSupportHelper::can_feature_be_implemented_witho
 		true, // SubgroupBalloFindLSB_MSB
 		false, false, false, false,
 		true, // SubgroupMemBarrier - replaced with workgroup memory barriers
-		false, false, true, false, false, false, false,
+		false, false, true, false, false, false, false, false, false, false
 	};
 
 	return retval[feature];
@@ -17901,6 +17951,7 @@ CompilerGLSL::ShaderSubgroupSupportHelper::Candidate CompilerGLSL::ShaderSubgrou
 		KHR_shader_subgroup_basic,  KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_vote,
 		KHR_shader_subgroup_vote,   KHR_shader_subgroup_basic,  KHR_shader_subgroup_basic, KHR_shader_subgroup_basic,
 		KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot, KHR_shader_subgroup_ballot,
+		KHR_shader_subgroup_arithmetic, KHR_shader_subgroup_arithmetic, KHR_shader_subgroup_arithmetic,
 		KHR_shader_subgroup_arithmetic, KHR_shader_subgroup_arithmetic, KHR_shader_subgroup_arithmetic,
 	};
 
@@ -18000,6 +18051,9 @@ CompilerGLSL::ShaderSubgroupSupportHelper::CandidateVector CompilerGLSL::ShaderS
 	case SubgroupArithmeticIAddReduce:
 	case SubgroupArithmeticIAddExclusiveScan:
 	case SubgroupArithmeticIAddInclusiveScan:
+	case SubgroupArithmeticFAddReduce:
+	case SubgroupArithmeticFAddExclusiveScan:
+	case SubgroupArithmeticFAddInclusiveScan:
 		return { KHR_shader_subgroup_arithmetic, NV_shader_thread_shuffle };
 	default:
 		return {};
