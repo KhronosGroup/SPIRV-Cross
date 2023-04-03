@@ -4058,7 +4058,8 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(std::string func, Op op, 
 		statement(t.type, " ", func, "(", t.type, " v)");
 		begin_scope();
 		statement(t.type, " ", result, " = ", t.identity, ";");
-		statement("if (subgroupBallotBitCount(subgroupBallot(true)) == gl_SubgroupSize)");
+		statement("uvec4 active_threads = subgroupBallot(true);");
+		statement("if (subgroupBallotBitCount(active_threads) == gl_SubgroupSize)");
 		begin_scope();
 		statement("uint total = gl_SubgroupSize / 2u;");
 		statement(result, " = v;");
@@ -4096,8 +4097,8 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(std::string func, Op op, 
 		}
 		statement("for (uint i = 0u; i < gl_SubgroupSize; ++i)");
 		begin_scope();
-		statement("bool valid;");
-		statement(t.type, " s = shuffleNV(v, i, gl_SubgroupSize, valid);");
+		statement("bool valid = subgroupBallotBitExtract(active_threads, i);");
+		statement(t.type, " s = shuffleNV(v, i, gl_SubgroupSize);");
 		if (group_op == GroupOperationExclusiveScan || group_op == GroupOperationInclusiveScan)
 		{
 			statement("valid = valid && (i < total);");
@@ -17915,10 +17916,11 @@ CompilerGLSL::ShaderSubgroupSupportHelper::FeatureVector CompilerGLSL::ShaderSub
 	case SubgroupArithmeticIAddInclusiveScan:
 	case SubgroupArithmeticFAddReduce:
 	case SubgroupArithmeticFAddInclusiveScan:
-		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask };
+		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask, SubgroupBallotBitExtract };
 	case SubgroupArithmeticIAddExclusiveScan:
 	case SubgroupArithmeticFAddExclusiveScan:
-		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount, SubgroupMask, SubgroupElect };
+		return { SubgroupSize, SubgroupBallot, SubgroupBallotBitCount,
+			     SubgroupMask, SubgroupElect,  SubgroupBallotBitExtract };
 	default:
 		return {};
 	}
