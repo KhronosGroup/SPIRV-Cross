@@ -331,6 +331,12 @@ protected:
 			SubgroupArithmeticFAddReduce = 19,
 			SubgroupArithmeticFAddExclusiveScan = 20,
 			SubgroupArithmeticFAddInclusiveScan = 21,
+			SubgroupArithmeticIMulReduce = 22,
+			SubgroupArithmeticIMulExclusiveScan = 23,
+			SubgroupArithmeticIMulInclusiveScan = 24,
+			SubgroupArithmeticFMulReduce = 25,
+			SubgroupArithmeticFMulExclusiveScan = 26,
+			SubgroupArithmeticFMulInclusiveScan = 27,
 			FeatureCount
 		};
 
