@@ -3526,7 +3526,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 			{
 				if (gather)
 				{
-					SPIRV_CROSS_THROW("GatherCmp does not exist in HLSL.");
+					texop += ".GatherCmp";
 				}
 				else if (lod || grad_x || grad_y)
 				{
