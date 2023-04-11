@@ -16,15 +16,15 @@ struct main0_out
 };
 
 static inline __attribute__((always_inline))
-float4 read_from_function(const device SSBO& v_13)
+float4 read_from_function(const device SSBO& _13)
 {
-    return v_13.v;
+    return _13.v;
 }
 
-fragment main0_out main0(const device SSBO& v_13 [[buffer(0)]])
+fragment main0_out main0(const device SSBO& _13 [[buffer(0)]])
 {
     main0_out out = {};
-    out.FragColor = v_13.v + read_from_function(v_13);
+    out.FragColor = _13.v + read_from_function(_13);
     return out;
 }
 

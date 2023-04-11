@@ -16,22 +16,22 @@ struct SSBO0
 };
 
 static inline __attribute__((always_inline))
-void callee2(device SSBO1& v_14, thread float4& gl_FragCoord)
+void callee2(device SSBO1& _14, thread float4& gl_FragCoord)
 {
     int _25 = int(gl_FragCoord.x);
-    v_14.values1[_25]++;
+    _14.values1[_25]++;
 }
 
 static inline __attribute__((always_inline))
-void callee(device SSBO1& v_14, thread float4& gl_FragCoord, device SSBO0& v_35)
+void callee(device SSBO1& _14, thread float4& gl_FragCoord, device SSBO0& _35)
 {
     int _38 = int(gl_FragCoord.x);
-    v_35.values0[_38]++;
-    callee2(v_14, gl_FragCoord);
+    _35.values0[_38]++;
+    callee2(_14, gl_FragCoord);
 }
 
-fragment void main0(device SSBO1& v_14 [[buffer(0), raster_order_group(0)]], device SSBO0& v_35 [[buffer(1), raster_order_group(0)]], float4 gl_FragCoord [[position]])
+fragment void main0(device SSBO1& _14 [[buffer(0), raster_order_group(0)]], device SSBO0& _35 [[buffer(1), raster_order_group(0)]], float4 gl_FragCoord [[position]])
 {
-    callee(v_14, gl_FragCoord, v_35);
+    callee(_14, gl_FragCoord, _35);
 }
 
