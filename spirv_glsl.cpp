@@ -4688,7 +4688,7 @@ void CompilerGLSL::strip_enclosed_expression(string &expr)
 	expr.erase(begin(expr));
 }
 
-string CompilerGLSL::enclose_expression(const string &expr)
+bool CompilerGLSL::needs_enclose_expression(const std::string &expr)
 {
 	bool need_parens = false;
 
@@ -4722,10 +4722,15 @@ string CompilerGLSL::enclose_expression(const string &expr)
 		assert(paren_count == 0);
 	}
 
+	return need_parens;
+}
+
+string CompilerGLSL::enclose_expression(const string &expr)
+{
 	// If this expression contains any spaces which are not enclosed by parentheses,
 	// we need to enclose it so we can treat the whole string as an expression.
 	// This happens when two expressions have been part of a binary op earlier.
-	if (need_parens)
+	if (needs_enclose_expression(expr))
 		return join('(', expr, ')');
 	else
 		return expr;
@@ -6280,6 +6285,14 @@ void CompilerGLSL::emit_unary_op_cast(uint32_t result_type, uint32_t result_id, 
 	inherit_expression_dependencies(result_id, op0);
 }
 
+void CompilerGLSL::emit_mesh_tasks(SPIRBlock &block)
+{
+	statement("EmitMeshTasksEXT(",
+	          to_unpacked_expression(block.mesh.groups[0]), ", ",
+	          to_unpacked_expression(block.mesh.groups[1]), ", ",
+	          to_unpacked_expression(block.mesh.groups[2]), ");");
+}
+
 void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op)
 {
 	// Various FP arithmetic opcodes such as add, sub, mul will hit this.
@@ -6467,7 +6480,10 @@ void CompilerGLSL::emit_unary_func_op(uint32_t result_type, uint32_t result_id, 
 void CompilerGLSL::emit_binary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1,
                                        const char *op)
 {
-	bool forward = should_forward(op0) && should_forward(op1);
+	// Opaque types (e.g. OpTypeSampledImage) must always be forwarded in GLSL
+	const auto &type = get_type(result_type);
+	bool must_forward = type_is_opaque_value(type);
+	bool forward = must_forward || (should_forward(op0) && should_forward(op1));
 	emit_op(result_type, result_id, join(op, "(", to_unpacked_expression(op0), ", ", to_unpacked_expression(op1), ")"),
 	        forward);
 	inherit_expression_dependencies(result_id, op0);
@@ -10886,6 +10902,12 @@ bool CompilerGLSL::optimize_read_modify_write(const SPIRType &type, const string
 
 	char bop = rhs[op];
 	auto expr = rhs.substr(lhs.size() + 3);
+
+	// Avoids false positives where we get a = a * b + c.
+	// Normally, these expressions are always enclosed, but unexpected code paths may end up hitting this.
+	if (needs_enclose_expression(expr))
+		return false;
+
 	// Try to find increments and decrements. Makes it look neater as += 1, -= 1 is fairly rare to see in real code.
 	// Find some common patterns which are equivalent.
 	if ((bop == '+' || bop == '-') && (expr == "1" || expr == "uint(1)" || expr == "1u" || expr == "int(1u)"))
@@ -16870,10 +16892,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		break;
 
 	case SPIRBlock::EmitMeshTasks:
-		statement("EmitMeshTasksEXT(",
-		          to_unpacked_expression(block.mesh.groups[0]), ", ",
-		          to_unpacked_expression(block.mesh.groups[1]), ", ",
-		          to_unpacked_expression(block.mesh.groups[2]), ");");
+		emit_mesh_tasks(block);
 		break;
 
 	default:

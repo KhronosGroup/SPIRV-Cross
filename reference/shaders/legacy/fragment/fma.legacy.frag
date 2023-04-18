@@ -9,5 +9,6 @@ varying highp vec4 vC;
 void main()
 {
     gl_FragData[0] = vA * vB + vC;
+    gl_FragData[0] = (vA * vB + vC) * (vB * vC + vA);
 }
 
