@@ -3993,7 +3993,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 	}
 }
 
-void CompilerGLSL::emit_subgroup_arithmetic_workaround(std::string func, Op op, GroupOperation group_op)
+void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, Op op, GroupOperation group_op)
 {
 	std::string result;
 	switch (group_op)
@@ -4092,7 +4092,8 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(std::string func, Op op, 
 		op_symbol = "*=";
 	}
 
-	for (const TypeInfo& t : type_infos) {
+	for (const TypeInfo &t : type_infos)
+	{
 		statement(t.type, " ", func, "(", t.type, " v)");
 		begin_scope();
 		statement(t.type, " ", result, " = ", t.identity, ";");
@@ -7338,6 +7339,10 @@ bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op, const uint32_t
 		    operation == GroupOperationExclusiveScan)
 		{
 			return true;
+		}
+		else
+		{
+			return false;
 		}
 	}
 	default:

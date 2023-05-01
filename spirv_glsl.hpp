@@ -639,7 +639,7 @@ protected:
 	void emit_struct(SPIRType &type);
 	void emit_resources();
 	void emit_extension_workarounds(spv::ExecutionModel model);
-	void emit_subgroup_arithmetic_workaround(std::string func, spv::Op op, spv::GroupOperation group_op);
+	void emit_subgroup_arithmetic_workaround(const std::string &func, spv::Op op, spv::GroupOperation group_op);
 	void emit_polyfills(uint32_t polyfills, bool relaxed);
 	void emit_buffer_block_native(const SPIRVariable &var);
 	void emit_buffer_reference_block(uint32_t type_id, bool forward_declaration);
