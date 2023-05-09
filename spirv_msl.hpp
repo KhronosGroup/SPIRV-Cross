@@ -287,6 +287,8 @@ static const uint32_t kArgumentBufferBinding = ~(3u);
 
 static const uint32_t kMaxArgumentBuffers = 8;
 
+static const uint32_t kMaxXfbBuffers = 4;
+
 // The arbitrary maximum for the nesting of array of array copies.
 static const uint32_t kArrayCopyMultidimMax = 6;
 
@@ -496,6 +498,27 @@ public:
 		// so it can be enabled only when the bug is present.
 		bool sample_dref_lod_array_as_grad = false;
 
+		// Known primitive types. Largely uses the same values as VkPrimitiveTopology.
+		enum class PrimitiveType
+		{
+			Dynamic = -1,
+			PointList,
+			LineList,
+			LineStrip,
+			TriangleList,
+			TriangleStrip,
+			TriangleFan,
+			LineListWithAdjacency,
+			LineStripWithAdjacency,
+			TriangleListWithAdjacency,
+			TriangleStripWithAdjacency,
+			// 10 reserved for patch list
+		};
+
+		// Indicates the kind of input primitive. Only needed for vertex shaders that have the
+		// Xfb execution mode set; used to control storage of transformed vertices.
+		PrimitiveType xfb_primitive_type = PrimitiveType::Dynamic;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -544,6 +567,15 @@ public:
 		return is_rasterization_disabled && (get_entry_point().model == spv::ExecutionModelVertex ||
 		                                     get_entry_point().model == spv::ExecutionModelTessellationControl ||
 		                                     get_entry_point().model == spv::ExecutionModelTessellationEvaluation);
+	}
+
+	// Provide feedback to calling API to allow runtime to bind buffers
+	// for transform feedback if a vertex pipeline shader requires it.
+	bool needs_transform_feedback() const
+	{
+		auto &execution = get_entry_point();
+		return execution.flags.get(spv::ExecutionModeXfb) && (execution.model == spv::ExecutionModelVertex ||
+		                                                      execution.model == spv::ExecutionModelTessellationEvaluation);
 	}
 
 	// Provide feedback to calling API to allow it to pass an auxiliary
@@ -1183,6 +1215,10 @@ protected:
 	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
 
+	VariableID xfb_buffers[kMaxXfbBuffers];
+	VariableID xfb_locals[kMaxXfbBuffers];
+	uint32_t xfb_strides[kMaxXfbBuffers];
+
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
 
@@ -1201,6 +1237,8 @@ protected:
 	void add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
 	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, uint32_t count);
+
+	void analyze_xfb_buffers();
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,

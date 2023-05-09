@@ -17569,6 +17569,149 @@ void CompilerMSL::activate_argument_buffer_resources()
 	});
 }
 
+void CompilerMSL::analyze_xfb_buffers()
+{
+	// Gather all used outputs and sort them out into transform feedback buffers.
+
+	struct XfbOutput
+	{
+		SPIRVariable *var;
+		string name;
+		uint32_t member_index;
+		uint32_t offset;
+		bool block;
+	};
+	SmallVector<XfbOutput> xfb_outputs[kMaxXfbBuffers];
+
+	for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+	{
+		xfb_buffers[i] = 0;
+		xfb_locals[i] = 0;
+		xfb_strides[i] = 0;
+	}
+
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &var) {
+		auto &type = get_variable_data_type(var);
+		if (var.storage != StorageClassOutput || is_hidden_variable(var) ||
+		    (!has_decoration(self, DecorationXfbBuffer) && !has_decoration(type.self, DecorationBlock)))
+			return;
+
+		uint32_t xfb_buffer_num, xfb_stride;
+		if (has_decoration(self, DecorationXfbBuffer))
+		{
+			xfb_buffer_num = get_decoration(self, DecorationXfbBuffer);
+			xfb_stride = get_decoration(self, DecorationXfbStride);
+
+			if (xfb_buffer_num >= kMaxXfbBuffers)
+				SPIRV_CROSS_THROW("Shader uses more than 4 transform feedback buffers.");
+
+			// According to the spec, individual outputs or blocks are decorated with
+			// XfbStride to indicate the stride between two successive vertices in the buffer,
+			// but all XfbStrides for a given XfbBuffer must agree.
+			xfb_strides[xfb_buffer_num] = xfb_stride;
+		}
+
+		if (type.basetype == SPIRType::Struct)
+		{
+			for (uint32_t i = 0; i < type.member_types.size(); ++i)
+			{
+				// According to Vulkan VUID 04716:
+				// "Only variables or block members in the output interface
+				//  decorated with Offset can be captured for transform
+				//  feedback..."
+				if (!has_member_decoration(type.self, i, DecorationOffset))
+					continue;
+				uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
+				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
+				xfb_outputs[mbr_xfb_buffer_num].emplace_back({&var, to_member_name(type, i), i, xfb_offset, true});
+				if (has_member_decoration(type.self, i, DecorationXfbStride))
+					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
+			}
+		}
+		else
+		{
+			if (!has_decoration(type.self, DecorationOffset))
+				return;
+			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
+			xfb_outputs[xfb_buffer_num].emplace_back({&var, to_name(self), 0, xfb_offset, false});
+		}
+	});
+
+	for (uint32_t xfb_buffer = 0; xfb_buffer < kMaxXfbBuffers; xfb_buffer++)
+	{
+		auto &outputs = xfb_outputs[xfb_buffer];
+		if (outputs.empty())
+			continue;
+
+		uint32_t next_id = ir.increase_bound_by(5);
+		uint32_t local_var_id = next_id + 1;
+		uint32_t type_id = next_id + 2;
+		uint32_t ptr_type_id = next_id + 3;
+		uint32_t local_ptr_type_id = next_id + 4;
+		xfb_buffers[xfb_buffer] = next_id;
+		xfb_locals[xfb_buffer] = local_var_id;
+
+		auto &buffer_type = set<SPIRType>(type_id);
+		buffer_type.basetype = SPIRType::Struct;
+		buffer_type.storage = StorageClassStorageBuffer;
+		// Need to mark the type as a Block to enable this.
+		set_decoration(type_id, DecorationBlock);
+		set_name(type_id, join("spvXfbBuffer", xfb_buffer));
+
+		auto &ptr_type = set<SPIRType>(ptr_type_id);
+		ptr_type = buffer_type;
+		ptr_type.pointer = true;
+		ptr_type.pointer_depth++;
+		ptr_type.parent_type = type_id;
+
+		auto &local_ptr_type = set<SPIRType>(local_ptr_type_id);
+		local_ptr_type = ptr_type;
+		local_ptr_type.storage = StorageClassFunction;
+
+		set<SPIRVariable>(local_var_id, local_ptr_type_id, StorageClassFunction);
+		set_name(local_var_id, join("spvXfbOutput", xfb_buffer));
+
+		uint32_t buffer_variable_id = next_id;
+		set<SPIRVariable>(buffer_variable_id, ptr_type_id, StorageClassUniform);
+		set_name(buffer_variable_id, join("spvXfb", xfb_buffer));
+
+		// Members must be emitted in Offset order.
+		stable_sort(begin(outputs), end(outputs), [&](const XfbOutput &lhs, const XfbOutput &rhs) -> bool {
+			return lhs.offset < rhs.offset;
+		});
+
+		uint32_t member_index = 0;
+		for (auto &output : outputs)
+		{
+			auto &var = *output.var;
+			auto &type = get_variable_data_type(var);
+
+			string mbr_name = ensure_valid_name(output.name, "m");
+			set_member_name(buffer_type.self, member_index, mbr_name);
+
+			if (!output.is_block)
+			{
+				// Drop pointer information when we emit the outputs into a struct.
+				buffer_type.member_types.push_back(get_variable_data_type_id(var));
+				set_qualified_name(var.self, join(to_name(local_var_id), ".", mbr_name));
+			}
+			else
+			{
+				// FIXME: Implement this!
+			}
+
+			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
+			                               var.self);
+			member_index++;
+
+			// FIXME: Still to do:
+			// - Add locals to entry point
+			// - Add buffer arguments to entry point
+			// - Make sure Xfb-captured outputs aren't in "normal" capture_output_to_buffer
+		}
+	}
+}
+
 bool CompilerMSL::using_builtin_array() const
 {
 	return msl_options.force_native_arrays || is_using_builtin_array;
