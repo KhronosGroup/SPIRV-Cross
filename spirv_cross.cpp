@@ -5459,6 +5459,11 @@ bool Compiler::type_is_top_level_physical_pointer(const SPIRType &type) const
 	       type.pointer_depth > get<SPIRType>(type.parent_type).pointer_depth;
 }
 
+bool Compiler::type_is_top_level_array(const SPIRType &type) const
+{
+	return !type.array.empty() && type.array.size() > get<SPIRType>(type.parent_type).array.size();
+}
+
 bool Compiler::flush_phi_required(BlockID from, BlockID to) const
 {
 	auto &child = get<SPIRBlock>(to);
