@@ -7752,7 +7752,7 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
 {
 	auto &type = expression_type(ptr);
-	if (type.array.empty())
+	if (!type_is_top_level_array(get_pointee_type(type)))
 		return false;
 
 	if (!backend.array_is_value_type)
