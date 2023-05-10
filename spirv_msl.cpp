@@ -17623,7 +17623,7 @@ void CompilerMSL::analyze_xfb_buffers()
 					continue;
 				uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
 				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
-				xfb_outputs[mbr_xfb_buffer_num].emplace_back({&var, to_member_name(type, i), i, xfb_offset, true});
+				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, to_member_name(type, i), i, xfb_offset, true});
 				if (has_member_decoration(type.self, i, DecorationXfbStride))
 					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
 			}
@@ -17633,7 +17633,7 @@ void CompilerMSL::analyze_xfb_buffers()
 			if (!has_decoration(type.self, DecorationOffset))
 				return;
 			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
-			xfb_outputs[xfb_buffer_num].emplace_back({&var, to_name(self), 0, xfb_offset, false});
+			xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({&var, to_name(self), 0, xfb_offset, false});
 		}
 	});
 
@@ -17689,7 +17689,7 @@ void CompilerMSL::analyze_xfb_buffers()
 			string mbr_name = ensure_valid_name(output.name, "m");
 			set_member_name(buffer_type.self, member_index, mbr_name);
 
-			if (!output.is_block)
+			if (!output.block)
 			{
 				// Drop pointer information when we emit the outputs into a struct.
 				buffer_type.member_types.push_back(get_variable_data_type_id(var));
