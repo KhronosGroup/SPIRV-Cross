@@ -1,7 +1,13 @@
+static int uninit_int = 0;
+static int4 uninit_vector = int4(0, 0, 0, 0);
+static float4x4 uninit_matrix = float4x4(0.0f.xxxx, 0.0f.xxxx, 0.0f.xxxx, 0.0f.xxxx);
+
 struct Foo
 {
     int a;
 };
+
+static Foo uninit_foo = { 0 };
 
 static float4 vColor;
 static float4 FragColor;
@@ -15,11 +21,6 @@ struct SPIRV_Cross_Output
 {
     float4 FragColor : SV_Target0;
 };
-
-static int uninit_int = 0;
-static int4 uninit_vector = int4(0, 0, 0, 0);
-static float4x4 uninit_matrix = float4x4(0.0f.xxxx, 0.0f.xxxx, 0.0f.xxxx, 0.0f.xxxx);
-static Foo uninit_foo = { 0 };
 
 void frag_main()
 {

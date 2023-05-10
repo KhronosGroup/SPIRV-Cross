@@ -12,6 +12,8 @@
 #define SPIRV_CROSS_LOOP
 #endif
 
+int _231;
+
 layout(binding = 0, std140) uniform Foo
 {
     layout(row_major) mat4 lightVP[64];
@@ -21,8 +23,6 @@ layout(binding = 0, std140) uniform Foo
 
 layout(location = 0) in vec3 fragWorld;
 layout(location = 0) out int _entryPointOutput;
-
-int _231;
 
 mat4 spvWorkaroundRowMajor(mat4 wrap) { return wrap; }
 

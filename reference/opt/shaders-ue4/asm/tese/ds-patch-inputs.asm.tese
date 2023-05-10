@@ -204,7 +204,7 @@ struct main0_patchIn
     }
     float _209 = abs(dot(float3(ShadowDepthPass.ShadowDepthPass_ViewMatrix[0].z, ShadowDepthPass.ShadowDepthPass_ViewMatrix[1].z, ShadowDepthPass.ShadowDepthPass_ViewMatrix[2].z), _182.xyz));
     float4 _234 = _200;
-    _234.z = fma(_200.z, ShadowDepthPass.ShadowDepthPass_ShadowParams.w, fma(ShadowDepthPass.ShadowDepthPass_ShadowParams.y, fast::clamp((abs(_209) > 0.0) ? (sqrt(fast::clamp(1.0 - (_209 * _209), 0.0, 1.0)) / _209) : ShadowDepthPass.ShadowDepthPass_ShadowParams.z, 0.0, ShadowDepthPass.ShadowDepthPass_ShadowParams.z), ShadowDepthPass.ShadowDepthPass_ShadowParams.x)) * _200.w;
+    _234.z = fma(_200.z, ShadowDepthPass.ShadowDepthPass_ShadowParams.w, fma(ShadowDepthPass.ShadowDepthPass_ShadowParams.y, fast::clamp((abs(_209) > 0.0) ? (sqrt(fast::clamp(fma(-_209, _209, 1.0), 0.0, 1.0)) / _209) : ShadowDepthPass.ShadowDepthPass_ShadowParams.z, 0.0, ShadowDepthPass.ShadowDepthPass_ShadowParams.z), ShadowDepthPass.ShadowDepthPass_ShadowParams.x)) * _200.w;
     out.out_var_TEXCOORD10_centroid = float4(_179.x, _179.y, _179.z, _90.w);
     out.out_var_TEXCOORD11_centroid = _182;
     out.out_var_TEXCOORD6 = 0.0;

@@ -321,6 +321,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('1')
         msl_args.append('any16')
         msl_args.append('2')
+    if '.raw-tess-in.' in shader:
+        msl_args.append('--msl-raw-buffer-tese-input')
     if '.for-tess.' in shader:
         msl_args.append('--msl-vertex-for-tessellation')
     if '.fixed-sample-mask.' in shader:
@@ -340,6 +342,10 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('32')
     if '.force-sample.' in shader:
         msl_args.append('--msl-force-sample-rate-shading')
+    if '.discard-checks.' in shader:
+        msl_args.append('--msl-check-discarded-frag-stores')
+    if '.lod-as-grad.' in shader:
+        msl_args.append('--msl-sample-dref-lod-array-as-grad')
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
     if '.mask-location-0.' in shader:
@@ -382,6 +388,10 @@ def shader_model_hlsl(shader):
             return '-Tps_5_1'
     elif '.comp' in shader:
         return '-Tcs_5_1'
+    elif '.mesh' in shader:
+        return '-Tms_6_5'
+    elif '.task' in shader:
+        return '-Tas_6_5'
     else:
         return None
 
@@ -405,6 +415,8 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
     if '.nonuniformresource.' in shader:
         test_glslang = False
     if '.fxconly.' in shader:
+        test_glslang = False
+    if '.task' in shader or '.mesh' in shader:
         test_glslang = False
 
     hlsl_args = [paths.glslang, '--amb', '-e', 'main', '-D', '--target-env', 'vulkan1.1', '-V', shader]
@@ -563,7 +575,12 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fo
     if spirv:
         subprocess.check_call(spirv_cmd)
     else:
-        subprocess.check_call([paths.glslang, '--amb', '--target-env', glslang_env, '-V', '-o', spirv_path, shader])
+        glslang_cmd = [paths.glslang, '--amb', '--target-env', glslang_env, '-V', '-o', spirv_path, shader]
+        if '.g.' in shader:
+            glslang_cmd.append('-g')
+        if '.gV.' in shader:
+            glslang_cmd.append('-gV')
+        subprocess.check_call(glslang_cmd)
 
     if opt and (not invalid_spirv):
         subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])

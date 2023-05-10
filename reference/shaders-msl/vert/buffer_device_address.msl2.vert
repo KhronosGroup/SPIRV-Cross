@@ -32,7 +32,7 @@ vertex main0_out main0(constant Registers& registers [[buffer(0)]], uint gl_Inst
 {
     main0_out out = {};
     int slice = int(gl_InstanceIndex);
-    const device Position* positions = registers.references->buffers[slice];
+    const device Position* __restrict positions = registers.references->buffers[slice];
     float2 pos = positions->positions[int(gl_VertexIndex)] * 2.5;
     pos += ((float2(float(slice % 8), float(slice / 8)) - float2(3.5)) * 3.0);
     out.gl_Position = registers.view_projection * float4(pos, 0.0, 1.0);

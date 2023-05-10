@@ -1,10 +1,10 @@
+static float3x4 _362;
+static float4x3 _364;
+
 RWByteAddressBuffer _17 : register(u0);
 uniform RaytracingAccelerationStructure rtas : register(t1);
 
 static RayQuery<RAY_FLAG_NONE> rayQuery;
-
-static float3x4 _362;
-static float4x3 _364;
 
 void comp_main()
 {

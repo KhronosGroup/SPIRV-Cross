@@ -409,7 +409,7 @@ struct main0_patchIn
     out_var_TEXCOORD0 = _234;
     out.out_var_PRIMITIVE_ID = patchIn.gl_in[0u].in_var_PRIMITIVE_ID;
     out.out_var_TEXCOORD6 = _281.z;
-    out.out_var_TEXCOORD8 = fma(ShadowDepthPass.ShadowDepthPass_ShadowParams.y, fast::clamp((abs(_290) > 0.0) ? (sqrt(fast::clamp(1.0 - (_290 * _290), 0.0, 1.0)) / _290) : ShadowDepthPass.ShadowDepthPass_ShadowParams.z, 0.0, ShadowDepthPass.ShadowDepthPass_ShadowParams.z), ShadowDepthPass.ShadowDepthPass_ShadowParams.x);
+    out.out_var_TEXCOORD8 = fma(ShadowDepthPass.ShadowDepthPass_ShadowParams.y, fast::clamp((abs(_290) > 0.0) ? (sqrt(fast::clamp(fma(-_290, _290, 1.0), 0.0, 1.0)) / _290) : ShadowDepthPass.ShadowDepthPass_ShadowParams.z, 0.0, ShadowDepthPass.ShadowDepthPass_ShadowParams.z), ShadowDepthPass.ShadowDepthPass_ShadowParams.x);
     out.out_var_TEXCOORD7 = _264.xyz;
     out.gl_Position = _281;
     out.out_var_TEXCOORD0_0 = out_var_TEXCOORD0[0];

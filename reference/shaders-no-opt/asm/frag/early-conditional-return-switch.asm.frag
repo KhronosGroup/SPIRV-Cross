@@ -1,5 +1,7 @@
 #version 450
 
+vec4 _32;
+
 layout(binding = 0, std140) uniform type_gCBuffarrayIndex
 {
     uint gArrayIndex;
@@ -11,8 +13,6 @@ uniform sampler2D SPIRV_Cross_Combinedg_textureArray2SPIRV_Cross_DummySampler;
 uniform sampler2D SPIRV_Cross_Combinedg_textureArray3SPIRV_Cross_DummySampler;
 
 layout(location = 0) out vec4 out_var_SV_TARGET;
-
-vec4 _32;
 
 void main()
 {
