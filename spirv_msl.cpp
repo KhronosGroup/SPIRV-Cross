@@ -1476,7 +1476,7 @@ string CompilerMSL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 
-	capture_output_to_buffer = msl_options.capture_output_to_buffer;
+	capture_output_to_buffer = msl_options.capture_output_to_buffer || needs_transform_feedback();
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
 
 	// Initialize array here rather than constructor, MSVC 2013 workaround.
@@ -13712,6 +13712,26 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			});
 		}
 	});
+
+	// Transform feedback
+	if (needs_transform_feedback())
+	{
+		entry_point.fixup_hooks_out.push_back([=]() {
+			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+			{
+				if (xfb_buffers[i] == 0) continue;
+				// First, update the amount of data written to the buffer. (TODO)
+				// Now, write the data out.
+				switch (msl_options.xfb_primitive_type)
+				{
+				case PrimitiveType::PointList:
+					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
+				default:
+					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+				}
+			}
+		});
+	}
 }
 
 // Returns the Metal index of the resource of the specified type as used by the specified variable.
