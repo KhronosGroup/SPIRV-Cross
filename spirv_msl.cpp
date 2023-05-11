@@ -14550,7 +14550,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 	string type_name;
 
 	// Pointer?
-	if (type.pointer)
+	if (type_is_top_level_pointer(type) || type_is_array_of_pointers(type))
 	{
 		assert(type.pointer_depth > 0);
 
@@ -14578,7 +14578,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 			// the C-style nesting works right.
 			// FIXME: This is somewhat of a hack.
 			bool old_is_using_builtin_array = is_using_builtin_array;
-			if (type.storage == StorageClassPhysicalStorageBuffer)
+			if (type_is_top_level_physical_pointer(type))
 				is_using_builtin_array = false;
 
 			type_name = join(type_address_space, " ", type_to_glsl(*p_parent_type, id));
