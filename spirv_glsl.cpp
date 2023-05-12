@@ -1522,7 +1522,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 {
 	// If using PhysicalStorageBufferEXT storage class, this is a pointer,
 	// and is 64-bit.
-	if (type.storage == StorageClassPhysicalStorageBufferEXT)
+	if (type_is_top_level_physical_pointer(type))
 	{
 		if (!type.pointer)
 			SPIRV_CROSS_THROW("Types in PhysicalStorageBufferEXT must be pointers.");
@@ -1537,8 +1537,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 		else
 			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64EXT must be used for PhysicalStorageBufferEXT.");
 	}
-
-	if (!type.array.empty())
+	else if (type_is_top_level_array(type))
 	{
 		uint32_t minimum_alignment = 1;
 		if (packing_is_vec4_padded(packing))
@@ -1644,7 +1643,19 @@ uint32_t CompilerGLSL::type_to_packed_array_stride(const SPIRType &type, const B
 
 uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &flags, BufferPackingStandard packing)
 {
-	if (!type.array.empty())
+	// If using PhysicalStorageBufferEXT storage class, this is a pointer,
+	// and is 64-bit.
+	if (type_is_top_level_physical_pointer(type))
+	{
+		if (!type.pointer)
+			SPIRV_CROSS_THROW("Types in PhysicalStorageBufferEXT must be pointers.");
+
+		if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+			return 8;
+		else
+			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64EXT must be used for PhysicalStorageBufferEXT.");
+	}
+	else if (type_is_top_level_array(type))
 	{
 		uint32_t packed_size = to_array_size_literal(type) * type_to_packed_array_stride(type, flags, packing);
 
@@ -1654,19 +1665,6 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 			packed_size -= (4 - type.vecsize) * (type.width / 8);
 
 		return packed_size;
-	}
-
-	// If using PhysicalStorageBufferEXT storage class, this is a pointer,
-	// and is 64-bit.
-	if (type.storage == StorageClassPhysicalStorageBufferEXT)
-	{
-		if (!type.pointer)
-			SPIRV_CROSS_THROW("Types in PhysicalStorageBufferEXT must be pointers.");
-
-		if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
-			return 8;
-		else
-			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64EXT must be used for PhysicalStorageBufferEXT.");
 	}
 
 	uint32_t size = 0;
@@ -1835,8 +1833,9 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 			}
 
 			// Verify array stride rules.
-			if (!memb_type.array.empty() && type_to_packed_array_stride(memb_type, member_flags, packing) !=
-			                                    type_struct_member_array_stride(type, i))
+			if (type_is_top_level_array(memb_type) &&
+			    type_to_packed_array_stride(memb_type, member_flags, packing) !=
+			    type_struct_member_array_stride(type, i))
 			{
 				if (failed_validation_index)
 					*failed_validation_index = i;
@@ -7753,7 +7752,7 @@ bool CompilerGLSL::expression_is_constant_null(uint32_t id) const
 bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
 {
 	auto &type = expression_type(ptr);
-	if (type.array.empty())
+	if (!type_is_top_level_array(get_pointee_type(type)))
 		return false;
 
 	if (!backend.array_is_value_type)
