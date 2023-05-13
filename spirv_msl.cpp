@@ -13716,7 +13716,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	// Transform feedback
 	if (needs_transform_feedback())
 	{
-		entry_point.fixup_hooks_out.push_back([=]() {
+		entry_func.fixup_hooks_out.push_back([=]() {
 			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
 			{
 				if (xfb_buffers[i] == 0) continue;
@@ -13724,7 +13724,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// Now, write the data out.
 				switch (msl_options.xfb_primitive_type)
 				{
-				case PrimitiveType::PointList:
+				case Options::PrimitiveType::PointList:
 					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
