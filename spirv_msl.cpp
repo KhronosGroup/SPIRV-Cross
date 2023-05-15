@@ -7352,6 +7352,11 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	// attribute, and use its initializer to initialize all the spec constants with
 	// that ID.
 	std::unordered_map<uint32_t, ConstantID> unique_func_constants;
+	for (const auto &spec_constant : get_specialization_constants())
+	{
+		if (!unique_func_constants.count(spec_constant.constant_id))
+			unique_func_constants.insert(make_pair(spec_constant.constant_id, spec_constant.id));
+	}
 
 	for (auto &id_ : ir.ids_for_constant_undef_or_type)
 	{
