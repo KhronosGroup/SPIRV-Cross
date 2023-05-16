@@ -1476,6 +1476,7 @@ string CompilerMSL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 
+	analyze_xfb_buffers();
 	capture_output_to_buffer = msl_options.capture_output_to_buffer || needs_transform_feedback();
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
 
@@ -13731,6 +13732,10 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				{
 				case Options::PrimitiveType::PointList:
 					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
+					break;
+				case Options::PrimitiveType::Dynamic:
+					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
+					break;
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 				}
