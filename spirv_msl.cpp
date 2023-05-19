@@ -13735,8 +13735,6 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				case Options::PrimitiveType::PointList:
 					size_data_write_points += 1;
 					break;
-				case Options::PrimitiveType::Dynamic:
-					break;
 				case Options::PrimitiveType::LineList:
 				case Options::PrimitiveType::LineStrip:
 					size_data_write_lines += 2;
@@ -13746,6 +13744,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				case Options::PrimitiveType::TriangleFan:
 					size_data_write_triangles += 3;
 					break;
+				case Options::PrimitiveType::Dynamic:
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 					break;
@@ -13763,12 +13762,10 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
 					break;
 				}
-				case Options::PrimitiveType::Dynamic:
-					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
-					break;
 				case Options::PrimitiveType::LineList:
 					statement(to_name(xfb_buffers[i]), "[FIXME] = " , to_expression(xfb_locals[i]), ";");
 					statement(to_name(xfb_buffers[i]), "[FIXME + 1] = " , to_expression(xfb_locals[i]), ";");
+				case Options::PrimitiveType::Dynamic:
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 				}
