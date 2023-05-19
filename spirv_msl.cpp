@@ -13723,19 +13723,52 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	if (needs_transform_feedback())
 	{
 		entry_func.fixup_hooks_out.push_back([=]() {
+			size_t size_data_write_points = 0;
+			size_t size_data_write_lines = 0;
+			size_t size_data_write_triangles = 0;
+
+		    for (uint32_t i = 0; i < kMaxXfbBuffers; ++i) {
+				if (xfb_buffers[i] == 0) continue;
+				// First, update the amount of data written to the buffer.
+				switch (msl_options.xfb_primitive_type)
+				{
+				case Options::PrimitiveType::PointList:
+					size_data_write_points += 1;
+					break;
+				case Options::PrimitiveType::Dynamic:
+					break;
+				case Options::PrimitiveType::LineList:
+				case Options::PrimitiveType::LineStrip:
+					size_data_write_lines += 2;
+					break;
+				case Options::PrimitiveType::TriangleList:
+				case Options::PrimitiveType::TriangleStrip:
+				case Options::PrimitiveType::TriangleFan:
+					size_data_write_triangles += 3;
+					break;
+				default:
+					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+					break;
+				}
+
+			}
 			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
 			{
 				if (xfb_buffers[i] == 0) continue;
-				// First, update the amount of data written to the buffer. (TODO)
 				// Now, write the data out.
 				switch (msl_options.xfb_primitive_type)
 				{
 				case Options::PrimitiveType::PointList:
+				{
 					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
 					break;
+				}
 				case Options::PrimitiveType::Dynamic:
 					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
 					break;
+				case Options::PrimitiveType::LineList:
+					statement(to_name(xfb_buffers[i]), "[FIXME] = " , to_expression(xfb_locals[i]), ";");
+					statement(to_name(xfb_buffers[i]), "[FIXME + 1] = " , to_expression(xfb_locals[i]), ";");
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 				}
