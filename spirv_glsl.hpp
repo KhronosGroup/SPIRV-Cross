@@ -258,6 +258,10 @@ public:
 	// require_extension("GL_KHR_my_extension");
 	void require_extension(const std::string &ext);
 
+	// Returns the list of required extensions. After compilation this will contains any other 
+	// extensions that the compiler used automatically, in addition to the user specified ones.
+	const SmallVector<std::string> &get_required_extensions() const;
+
 	// Legacy GLSL compatibility method.
 	// Takes a uniform or push constant variable and flattens it into a (i|u)vec4 array[N]; array instead.
 	// For this to work, all types in the block must be the same basic type, e.g. mixing vec2 and vec4 is fine, but
