@@ -242,9 +242,12 @@ set(spirv-cross-util-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_util.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_util.hpp)
 
-if (SPIRV_CROSS_STATIC)
-	set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
+set(spirv-cross-abi-major 0)
+set(spirv-cross-abi-minor 56)
+set(spirv-cross-abi-patch 0)
+set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
 
+if (SPIRV_CROSS_STATIC)
 	if (NOT SPIRV_CROSS_SKIP_INSTALL)
 		configure_file(
 			${CMAKE_CURRENT_SOURCE_DIR}/pkg-config/spirv-cross-c.pc.in
@@ -340,13 +343,7 @@ if (SPIRV_CROSS_STATIC)
 	endif()
 endif()
 
-set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 56)
-set(spirv-cross-abi-patch 0)
-
 if (SPIRV_CROSS_SHARED)
-	set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
-
 	if (NOT SPIRV_CROSS_SKIP_INSTALL)
 		configure_file(
 			${CMAKE_CURRENT_SOURCE_DIR}/pkg-config/spirv-cross-c-shared.pc.in
