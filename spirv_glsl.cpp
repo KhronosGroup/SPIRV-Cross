@@ -5102,8 +5102,17 @@ string CompilerGLSL::to_extract_constant_composite_expression(uint32_t result_ty
 	return constant_expression(tmp);
 }
 
-string CompilerGLSL::to_rerolled_array_expression(const string &base_expr, const SPIRType &type)
+string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
+                                                  const string &base_expr, const SPIRType &type)
 {
+	bool remapped_boolean = parent_type.basetype == SPIRType::Struct &&
+	                        type.basetype == SPIRType::Boolean &&
+	                        backend.boolean_in_struct_remapped_type != SPIRType::Boolean;
+
+	SPIRType tmp_type = type;
+	if (remapped_boolean)
+		tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+
 	uint32_t size = to_array_size_literal(type);
 	auto &parent = get<SPIRType>(type.parent_type);
 	string expr = "{ ";
@@ -5111,10 +5120,14 @@ string CompilerGLSL::to_rerolled_array_expression(const string &base_expr, const
 	for (uint32_t i = 0; i < size; i++)
 	{
 		auto subexpr = join(base_expr, "[", convert_to_string(i), "]");
-		if (parent.array.empty())
+		if (!type_is_top_level_array(parent))
+		{
+			if (remapped_boolean)
+				subexpr = join(type_to_glsl(tmp_type), "(", subexpr, ")");
 			expr += subexpr;
+		}
 		else
-			expr += to_rerolled_array_expression(subexpr, parent);
+			expr += to_rerolled_array_expression(parent_type, subexpr, parent);
 
 		if (i + 1 < size)
 			expr += ", ";
@@ -5124,13 +5137,26 @@ string CompilerGLSL::to_rerolled_array_expression(const string &base_expr, const
 	return expr;
 }
 
-string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool block_like_type)
+string CompilerGLSL::to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type)
 {
 	auto &type = expression_type(id);
 
-	bool reroll_array = !type.array.empty() &&
-	                    (!backend.array_is_value_type ||
-	                     (block_like_type && !backend.array_is_value_type_in_buffer_blocks));
+	bool reroll_array = false;
+	bool remapped_boolean = parent_type.basetype == SPIRType::Struct &&
+	                        type.basetype == SPIRType::Boolean &&
+	                        backend.boolean_in_struct_remapped_type != SPIRType::Boolean;
+
+	if (type_is_top_level_array(type))
+	{
+		reroll_array = !backend.array_is_value_type ||
+		               (block_like_type && !backend.array_is_value_type_in_buffer_blocks);
+
+		if (remapped_boolean)
+		{
+			// Forced to reroll if we have to change bool[] to short[].
+			reroll_array = true;
+		}
+	}
 
 	if (reroll_array)
 	{
@@ -5144,10 +5170,20 @@ string CompilerGLSL::to_composite_constructor_expression(uint32_t id, bool block
 
 		// We're only triggering one read of the array expression, but this is fine since arrays have to be declared
 		// as temporaries anyways.
-		return to_rerolled_array_expression(to_enclosed_expression(id), type);
+		return to_rerolled_array_expression(parent_type, to_enclosed_expression(id), type);
 	}
 	else
-		return to_unpacked_expression(id);
+	{
+		auto expr = to_unpacked_expression(id);
+		if (remapped_boolean)
+		{
+			auto tmp_type = type;
+			tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+			expr = join(type_to_glsl(tmp_type), "(", expr, ")");
+		}
+
+		return expr;
+	}
 }
 
 string CompilerGLSL::to_non_uniform_aware_expression(uint32_t id)
@@ -11107,7 +11143,7 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 
 			bool uses_buffer_offset =
 			    type.basetype == SPIRType::Struct && has_member_decoration(type.self, i, DecorationOffset);
-			subop = to_composite_constructor_expression(elems[i], uses_buffer_offset);
+			subop = to_composite_constructor_expression(type, elems[i], uses_buffer_offset);
 		}
 
 		base = e ? e->base_expression : ID(0);

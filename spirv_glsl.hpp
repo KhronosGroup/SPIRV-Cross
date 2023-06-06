@@ -604,6 +604,7 @@ protected:
 		const char *uint16_t_literal_suffix = "us";
 		const char *nonuniform_qualifier = "nonuniformEXT";
 		const char *boolean_mix_function = "mix";
+		SPIRType::BaseType boolean_in_struct_remapped_type = SPIRType::Boolean;
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
 		bool unsized_array_supported = true;
@@ -772,8 +773,8 @@ protected:
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist);
 	std::string to_non_uniform_aware_expression(uint32_t id);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
-	std::string to_composite_constructor_expression(uint32_t id, bool block_like_type);
-	std::string to_rerolled_array_expression(const std::string &expr, const SPIRType &type);
+	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
+	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
