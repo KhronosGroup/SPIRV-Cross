@@ -7,6 +7,7 @@
 #include <spirv_cross_c.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #define SPVC_CHECKED_CALL(x) do { \
 	if ((x) != SPVC_SUCCESS) { \
@@ -175,6 +176,20 @@ int main(int argc, char **argv)
 	SPVC_CHECKED_CALL(spvc_compiler_create_compiler_options(compiler_glsl, &options));
 	SPVC_CHECKED_CALL(spvc_compiler_install_compiler_options(compiler_glsl, options));
 
+#define NUM_EXTS 2
+	const char *expected_exts[NUM_EXTS] =
+	{
+		"EXT_first",
+		"EXT_second"
+	};
+
+	int ext_idx = 0;
+	while (ext_idx < NUM_EXTS)
+	{
+		SPVC_CHECKED_CALL(spvc_compiler_require_extension(compiler_glsl, expected_exts[ext_idx]));
+		ext_idx += 1;
+	}
+
 	SPVC_CHECKED_CALL(spvc_compiler_create_shader_resources(compiler_none, &resources));
 	dump_resources(compiler_none, resources);
 	compile(compiler_glsl, "GLSL");
@@ -183,6 +198,25 @@ int main(int argc, char **argv)
 	compile(compiler_json, "JSON");
 	compile(compiler_cpp, "CPP");
 
+	int num_exts = spvc_compiler_get_num_required_extensions(compiler_glsl);
+	if (num_exts != NUM_EXTS)
+	{
+		fprintf(stderr, "num_exts mismatch!\n");
+		return 1;
+	}
+
+	ext_idx = 0;
+	while (ext_idx < num_exts)
+	{
+		const char *ext = spvc_compiler_get_required_extension(compiler_glsl, ext_idx);
+		if (strcmp(ext, expected_exts[ext_idx]) != 0)
+		{
+			fprintf(stderr, "extension mismatch (%s != %s)!\n", ext, expected_exts[ext_idx]);
+			return 1;
+		}
+		ext_idx += 1;
+	}
+	
 	spvc_context_destroy(context);
 	free(buffer);
 	return 0;

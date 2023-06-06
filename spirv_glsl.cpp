@@ -15565,6 +15565,11 @@ void CompilerGLSL::require_extension(const std::string &ext)
 		forced_extensions.push_back(ext);
 }
 
+const SmallVector<std::string> &CompilerGLSL::get_required_extensions() const
+{
+	return forced_extensions;
+}
+
 void CompilerGLSL::require_extension_internal(const string &ext)
 {
 	if (backend.supports_extensions && !has_extension(ext))
