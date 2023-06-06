@@ -7376,11 +7376,6 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 				string sc_type_name = type_to_glsl(type);
 				add_resource_name(c.self);
 				string sc_name = to_name(c.self);
-				uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
-				if (!unique_func_constants.count(constant_id))
-					unique_func_constants.insert(make_pair(constant_id, c.self));
-				SPIRType::BaseType sc_tmp_type = expression_type(unique_func_constants[constant_id]).basetype;
-				string sc_tmp_name = to_name(unique_func_constants[constant_id]) + "_tmp";
 
 				// Function constants are only supported in MSL 1.2 and later.
 				// If we don't support it just declare the "default" directly.
@@ -7391,6 +7386,11 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 				    !c.is_used_as_array_length)
 				{
 					// Only scalar, non-composite values can be function constants.
+					uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
+					if (!unique_func_constants.count(constant_id))
+						unique_func_constants.insert(make_pair(constant_id, c.self));
+					SPIRType::BaseType sc_tmp_type = expression_type(unique_func_constants[constant_id]).basetype;
+					string sc_tmp_name = to_name(unique_func_constants[constant_id]) + "_tmp";
 					if (unique_func_constants[constant_id] == c.self)
 						statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(", constant_id,
 						          ")]];");
