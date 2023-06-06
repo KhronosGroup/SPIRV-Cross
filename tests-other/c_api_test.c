@@ -176,14 +176,16 @@ int main(int argc, char **argv)
 	SPVC_CHECKED_CALL(spvc_compiler_create_compiler_options(compiler_glsl, &options));
 	SPVC_CHECKED_CALL(spvc_compiler_install_compiler_options(compiler_glsl, options));
 
-	const int NUM_EXTS = 2;
-	const char* expected_exts[NUM_EXTS] = {
+	static const int NUM_EXTS = 2;
+	const char *expected_exts[NUM_EXTS] =
+	{
 		"EXT_first",
 		"EXT_second"
 	};
 
 	int ext_idx = 0;
-	while(ext_idx < NUM_EXTS) {
+	while (ext_idx < NUM_EXTS)
+	{
 		SPVC_CHECKED_CALL(spvc_compiler_require_extension(compiler_glsl, expected_exts[ext_idx]));
 		ext_idx += 1;
 	}
@@ -204,9 +206,11 @@ int main(int argc, char **argv)
 	}
 
 	ext_idx = 0;
-	while(ext_idx < num_exts) {
-		const char* ext = spvc_compiler_get_required_extension(compiler_glsl, ext_idx);
-		if(strcmp(ext, expected_exts[ext_idx]) != 0) {
+	while (ext_idx < num_exts)
+	{
+		const char *ext = spvc_compiler_get_required_extension(compiler_glsl, ext_idx);
+		if (strcmp(ext, expected_exts[ext_idx]) != 0)
+		{
 			fprintf(stderr, "extension mismatch (%s != %s)!\n", ext, expected_exts[ext_idx]);
 			return 1;
 		}

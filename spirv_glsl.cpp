@@ -15565,7 +15565,8 @@ void CompilerGLSL::require_extension(const std::string &ext)
 		forced_extensions.push_back(ext);
 }
 
-const SmallVector<std::string> &CompilerGLSL::get_required_extensions() const {
+const SmallVector<std::string> &CompilerGLSL::get_required_extensions() const
+{
 	return forced_extensions;
 }
 
