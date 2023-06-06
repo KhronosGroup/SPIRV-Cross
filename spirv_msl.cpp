@@ -9470,7 +9470,7 @@ static bool storage_class_array_is_thread(StorageClass storage)
 	}
 }
 
-void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+bool CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t rhs_id,
 								  StorageClass lhs_storage, StorageClass rhs_storage)
 {
 	// Allow Metal to use the array<T> template to make arrays a value type.
@@ -9509,7 +9509,8 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t r
 	// Avoid spvCopy* wrapper functions; Otherwise, spvUnsafeArray<> template cannot be used with that storage qualifier.
 	if (lhs_is_array_template && rhs_is_array_template && !using_builtin_array())
 	{
-		statement(lhs, " = ", to_expression(rhs_id), ";");
+		// Fall back to normal copy path.
+		return false;
 	}
 	else
 	{
@@ -9586,6 +9587,8 @@ void CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t r
 		else
 			statement("spvArrayCopy", tag, type.array.size(), "(", lhs, ", ", to_expression(rhs_id), ");");
 	}
+
+	return true;
 }
 
 uint32_t CompilerMSL::get_physical_tess_level_array_size(spv::BuiltIn builtin) const
@@ -9649,7 +9652,9 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 
 	auto lhs_storage = get_expression_effective_storage_class(id_lhs);
 	auto rhs_storage = get_expression_effective_storage_class(id_rhs);
-	emit_array_copy(to_expression(id_lhs), id_lhs, id_rhs, lhs_storage, rhs_storage);
+	if (!emit_array_copy(to_expression(id_lhs), id_lhs, id_rhs, lhs_storage, rhs_storage))
+		return false;
+
 	register_write(id_lhs);
 
 	return true;
@@ -16911,24 +16916,37 @@ void CompilerMSL::cast_to_variable_store(uint32_t target_id, std::string &expr, 
 	auto *target_expr = maybe_get<SPIRExpression>(target_id);
 	auto *var = maybe_get_backing_variable(target_id);
 	const SPIRType *var_type = nullptr, *phys_type = nullptr;
+
 	if (uint32_t phys_id = get_extended_decoration(target_id, SPIRVCrossDecorationPhysicalTypeID))
 		phys_type = &get<SPIRType>(phys_id);
 	else
 		phys_type = &expr_type;
+
 	if (var)
 	{
 		target_id = var->self;
 		var_type = &get_variable_data_type(*var);
 	}
 
-	// Type fixups for workgroup variables if they are booleans.
-	if (var && (var->storage == StorageClassWorkgroup || var_type->basetype == SPIRType::Struct) &&
-	    expr_type.basetype == SPIRType::Boolean)
+	bool rewrite_boolean_store =
+		expr_type.basetype == SPIRType::Boolean &&
+		(var && (var->storage == StorageClassWorkgroup || var_type->basetype == SPIRType::Struct));
+
+	// Type fixups for workgroup variables or struct members if they are booleans.
+	if (rewrite_boolean_store)
 	{
-		auto short_type = expr_type;
-		short_type.basetype = SPIRType::Short;
-		expr = join(type_to_glsl(short_type), "(", expr, ")");
+		if (type_is_top_level_array(expr_type))
+		{
+			expr = to_rerolled_array_expression(*var_type, expr, expr_type);
+		}
+		else
+		{
+			auto short_type = expr_type;
+			short_type.basetype = SPIRType::Short;
+			expr = join(type_to_glsl(short_type), "(", expr, ")");
+		}
 	}
+
 	// Type fixups for workgroup variables if they are matrices.
 	// Don't do fixup for packed types; those are handled specially.
 	// FIXME: Maybe use a type like spvStorageMatrix for packed matrices?

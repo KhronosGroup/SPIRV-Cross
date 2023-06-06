@@ -5109,9 +5109,12 @@ string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
 	                        type.basetype == SPIRType::Boolean &&
 	                        backend.boolean_in_struct_remapped_type != SPIRType::Boolean;
 
-	SPIRType tmp_type = type;
+	SPIRType tmp_type;
 	if (remapped_boolean)
+	{
+		tmp_type = get<SPIRType>(type.parent_type);
 		tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+	}
 
 	uint32_t size = to_array_size_literal(type);
 	auto &parent = get<SPIRType>(type.parent_type);
@@ -17374,9 +17377,10 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }
 
-void CompilerGLSL::emit_array_copy(const string &lhs, uint32_t, uint32_t rhs_id, StorageClass, StorageClass)
+bool CompilerGLSL::emit_array_copy(const string &lhs, uint32_t, uint32_t rhs_id, StorageClass, StorageClass)
 {
 	statement(lhs, " = ", to_expression(rhs_id), ";");
+	return true;
 }
 
 bool CompilerGLSL::unroll_array_to_complex_store(uint32_t target_id, uint32_t source_id)
