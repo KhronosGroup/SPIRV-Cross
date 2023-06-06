@@ -176,7 +176,7 @@ int main(int argc, char **argv)
 	SPVC_CHECKED_CALL(spvc_compiler_create_compiler_options(compiler_glsl, &options));
 	SPVC_CHECKED_CALL(spvc_compiler_install_compiler_options(compiler_glsl, options));
 
-	static const int NUM_EXTS = 2;
+#define NUM_EXTS 2
 	const char *expected_exts[NUM_EXTS] =
 	{
 		"EXT_first",
