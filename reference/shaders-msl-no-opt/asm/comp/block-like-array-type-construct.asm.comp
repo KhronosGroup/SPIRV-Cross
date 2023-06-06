@@ -70,8 +70,7 @@ kernel void main0()
     foo[1] = 2.0;
     foo[2] = 3.0;
     foo[3] = 4.0;
-    spvUnsafeArray<float, 4> foo2;
-    foo2 = foo;
+    spvUnsafeArray<float, 4> foo2 = foo;
     _10 _37 = _10{ { foo[0], foo[1], foo[2], foo[3] }, { foo2[0], foo2[1], foo2[2], foo2[3] } };
 }
 

@@ -5115,6 +5115,13 @@ string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
 		tmp_type = get<SPIRType>(type.parent_type);
 		tmp_type.basetype = backend.boolean_in_struct_remapped_type;
 	}
+	else if (type.basetype == SPIRType::Boolean && backend.boolean_in_struct_remapped_type != SPIRType::Boolean)
+	{
+		// It's possible that we have an r-value expression that was OpLoaded from a struct.
+		// We have to reroll this and explicitly cast the input to bool, because the r-value is short.
+		tmp_type = get<SPIRType>(type.parent_type);
+		remapped_boolean = true;
+	}
 
 	uint32_t size = to_array_size_literal(type);
 	auto &parent = get<SPIRType>(type.parent_type);
@@ -11776,7 +11783,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(to_expression(id), id, ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
+			emit_array_copy(nullptr, id, ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -17377,8 +17384,14 @@ uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
 }
 
-bool CompilerGLSL::emit_array_copy(const string &lhs, uint32_t, uint32_t rhs_id, StorageClass, StorageClass)
+bool CompilerGLSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id, StorageClass, StorageClass)
 {
+	string lhs;
+	if (expr)
+		lhs = expr;
+	else
+		lhs = to_expression(lhs_id);
+
 	statement(lhs, " = ", to_expression(rhs_id), ";");
 	return true;
 }

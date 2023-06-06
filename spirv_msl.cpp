@@ -9470,7 +9470,7 @@ static bool storage_class_array_is_thread(StorageClass storage)
 	}
 }
 
-bool CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
 								  StorageClass lhs_storage, StorageClass rhs_storage)
 {
 	// Allow Metal to use the array<T> template to make arrays a value type.
@@ -9514,6 +9514,16 @@ bool CompilerMSL::emit_array_copy(const string &lhs, uint32_t lhs_id, uint32_t r
 	}
 	else
 	{
+		// Ensure the LHS variable has been declared
+		if (lhs_var)
+			flush_variable_declaration(lhs_var->self);
+
+		string lhs;
+		if (expr)
+			lhs = expr;
+		else
+			lhs = to_expression(lhs_id);
+
 		// Assignment from an array initializer is fine.
 		auto &type = expression_type(rhs_id);
 		auto *var = maybe_get_backing_variable(rhs_id);
@@ -9645,14 +9655,9 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 		}
 	}
 
-	// Ensure the LHS variable has been declared
-	auto *p_v_lhs = maybe_get_backing_variable(id_lhs);
-	if (p_v_lhs)
-		flush_variable_declaration(p_v_lhs->self);
-
 	auto lhs_storage = get_expression_effective_storage_class(id_lhs);
 	auto rhs_storage = get_expression_effective_storage_class(id_rhs);
-	if (!emit_array_copy(to_expression(id_lhs), id_lhs, id_rhs, lhs_storage, rhs_storage))
+	if (!emit_array_copy(nullptr, id_lhs, id_rhs, lhs_storage, rhs_storage))
 		return false;
 
 	register_write(id_lhs);
@@ -16790,20 +16795,31 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 	auto *source_expr = maybe_get<SPIRExpression>(source_id);
 	auto *var = maybe_get_backing_variable(source_id);
 	const SPIRType *var_type = nullptr, *phys_type = nullptr;
+
 	if (uint32_t phys_id = get_extended_decoration(source_id, SPIRVCrossDecorationPhysicalTypeID))
 		phys_type = &get<SPIRType>(phys_id);
 	else
 		phys_type = &expr_type;
+
 	if (var)
 	{
 		source_id = var->self;
 		var_type = &get_variable_data_type(*var);
 	}
 
+	bool rewrite_boolean_load =
+	    expr_type.basetype == SPIRType::Boolean &&
+	    (var && (var->storage == StorageClassWorkgroup || var_type->basetype == SPIRType::Struct));
+
 	// Type fixups for workgroup variables if they are booleans.
-	if (var && (var->storage == StorageClassWorkgroup || var_type->basetype == SPIRType::Struct) &&
-	    expr_type.basetype == SPIRType::Boolean)
-		expr = join(type_to_glsl(expr_type), "(", expr, ")");
+	if (rewrite_boolean_load)
+	{
+		if (type_is_top_level_array(expr_type))
+			expr = to_rerolled_array_expression(expr_type, expr, expr_type);
+		else
+			expr = join(type_to_glsl(expr_type), "(", expr, ")");
+	}
+
 	// Type fixups for workgroup variables if they are matrices.
 	// Don't do fixup for packed types; those are handled specially.
 	// FIXME: Maybe use a type like spvStorageMatrix for packed matrices?
