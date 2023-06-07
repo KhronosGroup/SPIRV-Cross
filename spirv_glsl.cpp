@@ -5707,7 +5707,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 {
 	auto &type = get<SPIRType>(c.constant_type);
 
-	if (type.pointer)
+	if (type_is_top_level_pointer(type))
 	{
 		return backend.null_pointer_literal;
 	}
@@ -5722,17 +5722,18 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 		// with Offset = 0, using no ArrayStride on the enclosed array type.
 		// A particular CTS test hits this scenario.
 		bool array_type_decays = inside_block_like_struct_scope &&
-		                         !type.array.empty() && !backend.array_is_value_type_in_buffer_blocks;
+		                         type_is_top_level_array(type) &&
+		                         !backend.array_is_value_type_in_buffer_blocks;
 
 		// Allow Metal to use the array<T> template to make arrays a value type
 		bool needs_trailing_tracket = false;
 		if (backend.use_initializer_list && backend.use_typed_initializer_list && type.basetype == SPIRType::Struct &&
-		    type.array.empty())
+		    !type_is_top_level_array(type))
 		{
 			res = type_to_glsl_constructor(type) + "{ ";
 		}
 		else if (backend.use_initializer_list && backend.use_typed_initializer_list && backend.array_is_value_type &&
-		         !type.array.empty() && !array_type_decays)
+		         type_is_top_level_array(type) && !array_type_decays)
 		{
 			res = type_to_glsl_constructor(type) + "({ ";
 			needs_trailing_tracket = true;
@@ -5764,7 +5765,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 					res += to_name(elem);
 				else
 				{
-					if (type.array.empty() && type.basetype == SPIRType::Struct)
+					if (!type_is_top_level_array(type) && type.basetype == SPIRType::Struct)
 					{
 						// When we get down to emitting struct members, override the block-like information.
 						// For constants, we can freely mix and match block-like state.
@@ -5794,11 +5795,11 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 		if (backend.supports_empty_struct)
 			return "{ }";
 		else if (backend.use_typed_initializer_list)
-			return join(type_to_glsl(get<SPIRType>(c.constant_type)), "{ 0 }");
+			return join(type_to_glsl(type), "{ 0 }");
 		else if (backend.use_initializer_list)
 			return "{ 0 }";
 		else
-			return join(type_to_glsl(get<SPIRType>(c.constant_type)), "(0)");
+			return join(type_to_glsl(type), "(0)");
 	}
 	else if (c.columns() == 1)
 	{
@@ -5806,7 +5807,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 	}
 	else
 	{
-		string res = type_to_glsl(get<SPIRType>(c.constant_type)) + "(";
+		string res = type_to_glsl(type) + "(";
 		for (uint32_t col = 0; col < c.columns(); col++)
 		{
 			if (c.specialization_constant_id(col) != 0)
