@@ -147,8 +147,7 @@ kernel void main0(main0_in in [[stage_in]], constant type_Primitive& Primitive [
     spvUnsafeArray<float4, 3> _91 = spvUnsafeArray<float4, 3>({ gl_in[0].in_var_TEXCOORD11_centroid, gl_in[1].in_var_TEXCOORD11_centroid, gl_in[2].in_var_TEXCOORD11_centroid });
     spvUnsafeArray<float4, 3> _104 = spvUnsafeArray<float4, 3>({ gl_in[0].in_var_VS_To_DS_Position, gl_in[1].in_var_VS_To_DS_Position, gl_in[2].in_var_VS_To_DS_Position });
     spvUnsafeArray<FBasePassVSToDS, 3> _111 = spvUnsafeArray<FBasePassVSToDS, 3>({ FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _90[0], _91[0] } }, FBasePassInterpolantsVSToDS{ { } }, _104[0] }, FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _90[1], _91[1] } }, FBasePassInterpolantsVSToDS{ { } }, _104[1] }, FBasePassVSToDS{ FVertexFactoryInterpolantsVSToDS{ FVertexFactoryInterpolantsVSToPS{ _90[2], _91[2] } }, FBasePassInterpolantsVSToDS{ { } }, _104[2] } });
-    spvUnsafeArray<FBasePassVSToDS, 3> param_var_I;
-    param_var_I = _111;
+    spvUnsafeArray<FBasePassVSToDS, 3> param_var_I = _111;
     float3 _128 = Primitive.Primitive_NonUniformScale.xyz * float3x3(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0.xyz, cross(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz, param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0.xyz) * float3(param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.w), param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2.xyz);
     gl_out[gl_InvocationID].out_var_TEXCOORD10_centroid = param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld0;
     gl_out[gl_InvocationID].out_var_TEXCOORD11_centroid = param_var_I[gl_InvocationID].FactoryInterpolants.InterpolantsVSToPS.TangentToWorld2;

@@ -59,8 +59,7 @@ constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 kernel void main0(device SSBO0& _16 [[buffer(0)]], device SSBO1& _32 [[buffer(1)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
 {
     spvUnsafeArray<float4, 2> _37 = spvUnsafeArray<float4, 2>({ _16.as[gl_GlobalInvocationID.x], _32.bs[gl_GlobalInvocationID.x] });
-    spvUnsafeArray<float4, 2> values;
-    values = _37;
+    spvUnsafeArray<float4, 2> values = _37;
     _16.as[0] = values[gl_LocalInvocationIndex];
     _32.bs[1] = float4(40.0);
 }

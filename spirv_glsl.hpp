@@ -430,7 +430,9 @@ protected:
 	                                const std::string &qualifier = "", uint32_t base_offset = 0);
 	virtual void emit_struct_padding_target(const SPIRType &type);
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0);
-	std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false);
+	std::string constant_expression(const SPIRConstant &c,
+	                                bool inside_block_like_struct_scope = false,
+	                                bool inside_struct_scope = false);
 	virtual std::string constant_op_expression(const SPIRConstantOp &cop);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
 	virtual void emit_fixup();
@@ -608,6 +610,7 @@ protected:
 		const char *uint16_t_literal_suffix = "us";
 		const char *nonuniform_qualifier = "nonuniformEXT";
 		const char *boolean_mix_function = "mix";
+		SPIRType::BaseType boolean_in_struct_remapped_type = SPIRType::Boolean;
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
 		bool unsized_array_supported = true;
@@ -776,8 +779,8 @@ protected:
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist);
 	std::string to_non_uniform_aware_expression(uint32_t id);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
-	std::string to_composite_constructor_expression(uint32_t id, bool block_like_type);
-	std::string to_rerolled_array_expression(const std::string &expr, const SPIRType &type);
+	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
+	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
@@ -810,7 +813,7 @@ protected:
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(VariableID image_id, VariableID samp_id);
 	virtual bool skip_argument(uint32_t id) const;
-	virtual void emit_array_copy(const std::string &lhs, uint32_t lhs_id, uint32_t rhs_id,
+	virtual bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
 	                             spv::StorageClass lhs_storage, spv::StorageClass rhs_storage);
 	virtual void emit_block_hints(const SPIRBlock &block);
 	virtual std::string to_initializer_expression(const SPIRVariable &var);

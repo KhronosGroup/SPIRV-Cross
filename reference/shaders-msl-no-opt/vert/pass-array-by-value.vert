@@ -60,10 +60,8 @@ struct main0_in
 static inline __attribute__((always_inline))
 float4 consume_constant_arrays2(spvUnsafeArray<float4, 4> positions, spvUnsafeArray<float4, 4> positions2, thread int& Index1, thread int& Index2)
 {
-    spvUnsafeArray<float4, 4> indexable;
-    indexable = positions;
-    spvUnsafeArray<float4, 4> indexable_1;
-    indexable_1 = positions2;
+    spvUnsafeArray<float4, 4> indexable = positions;
+    spvUnsafeArray<float4, 4> indexable_1 = positions2;
     return indexable[Index1] + indexable_1[Index2];
 }
 

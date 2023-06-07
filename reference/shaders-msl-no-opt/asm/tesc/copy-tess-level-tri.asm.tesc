@@ -59,10 +59,8 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_25[0]);
     spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_25[1]);
     spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2] = half(_25[2]);
-    spvUnsafeArray<float, 2> inner;
-    inner = spvUnsafeArray<float, 2>({ float(spvTessLevel[gl_PrimitiveID].insideTessellationFactor), 0.0 });
-    spvUnsafeArray<float, 4> outer;
-    outer = spvUnsafeArray<float, 4>({ float(spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0]), float(spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1]), float(spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2]), 0.0 });
+    spvUnsafeArray<float, 2> inner = spvUnsafeArray<float, 2>({ float(spvTessLevel[gl_PrimitiveID].insideTessellationFactor), 0.0 });
+    spvUnsafeArray<float, 4> outer = spvUnsafeArray<float, 4>({ float(spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0]), float(spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1]), float(spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[2]), 0.0 });
     gl_out[gl_InvocationID].gl_Position = float4(1.0);
 }
 
