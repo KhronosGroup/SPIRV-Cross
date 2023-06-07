@@ -11282,8 +11282,15 @@ void CompilerGLSL::emit_block_instructions(SPIRBlock &block)
 	if (backend.requires_relaxed_precision_analysis)
 	{
 		// If PHI variables are consumed in unexpected precision contexts, copy them here.
-		for (auto &phi : block.phi_variables)
+		for (size_t i = 0, n = block.phi_variables.size(); i < n; i++)
 		{
+			auto &phi = block.phi_variables[i];
+
+			// Ensure we only copy once. We know a-priori that this array will lay out
+			// the same function variables together.
+			if (i && block.phi_variables[i - 1].function_variable == phi.function_variable)
+				continue;
+
 			auto itr = temporary_to_mirror_precision_alias.find(phi.function_variable);
 			if (itr != temporary_to_mirror_precision_alias.end())
 			{
@@ -16646,6 +16653,24 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	if (block.merge == SPIRBlock::MergeLoop)
 		add_loop_level();
+
+	// If we're emitting PHI variables with precision aliases, we have to emit them as hoisted temporaries.
+	for (auto var_id : block.dominated_variables)
+	{
+		auto &var = get<SPIRVariable>(var_id);
+		if (var.phi_variable)
+		{
+			auto mirrored_precision_itr = temporary_to_mirror_precision_alias.find(var_id);
+			if (mirrored_precision_itr != temporary_to_mirror_precision_alias.end() &&
+			    find_if(block.declare_temporary.begin(), block.declare_temporary.end(),
+			            [mirrored_precision_itr](const std::pair<TypeID, VariableID> &p) {
+			              return p.second == mirrored_precision_itr->second;
+			            }) == block.declare_temporary.end())
+			{
+				block.declare_temporary.push_back({ var.basetype, mirrored_precision_itr->second });
+			}
+		}
+	}
 
 	emit_hoisted_temporaries(block.declare_temporary);
 

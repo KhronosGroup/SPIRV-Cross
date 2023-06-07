@@ -16,6 +16,8 @@ layout(location = 0) in vec4 V4;
 
 void main()
 {
+    highp float hp_copy_phi_mp;
+    float mp_copy_phi_hp;
     vec4 V4_value0 = V4;
     highp vec4 hp_copy_V4_value0 = V4_value0;
     float V1_value0 = V4.x;
@@ -46,8 +48,8 @@ void main()
     highp float phi_hp;
     phi_mp = _21;
     phi_hp = _49;
-    highp float hp_copy_phi_mp = phi_mp;
-    float mp_copy_phi_hp = phi_hp;
+    hp_copy_phi_mp = phi_mp;
+    mp_copy_phi_hp = phi_hp;
     FragColor2 = vec4(phi_mp + phi_mp, hp_copy_phi_mp + hp_copy_phi_mp, mp_copy_phi_hp + mp_copy_phi_hp, phi_hp + phi_hp);
 }
 
