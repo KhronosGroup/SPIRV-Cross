@@ -93,6 +93,6 @@ fragment void main0()
     spvUnsafeArray<bool3, 2> c2 = { bool3(t2.c[0]), bool3(t2.c[1]) };
     spvUnsafeArray<bool4, 2> d2 = { bool4(t2.d[0]), bool4(t2.d[1]) };
     t = Test{ short(true), short2(bool2(true, false)), short3(bool3(true)), short4(bool4(false)) };
-    t2 = Test2{ spvUnsafeArray<bool, 2>({ short(true), short(true) }), spvUnsafeArray<bool2, 2>({ short2(bool2(true)), short2(bool2(false)) }), spvUnsafeArray<bool3, 2>({ short3(bool3(true)), short3(bool3(false)) }), spvUnsafeArray<bool4, 2>({ short4(bool4(true)), short4(bool4(false)) }), Test{ short(true), short2(bool2(true, false)), short3(bool3(true)), short4(bool4(false)) } };
+    t2 = Test2{ spvUnsafeArray<short, 2>({ short(true), short(true) }), spvUnsafeArray<short2, 2>({ short2(bool2(true)), short2(bool2(false)) }), spvUnsafeArray<short3, 2>({ short3(bool3(true)), short3(bool3(false)) }), spvUnsafeArray<short4, 2>({ short4(bool4(true)), short4(bool4(false)) }), Test{ short(true), short2(bool2(true, false)), short3(bool3(true)), short4(bool4(false)) } };
 }
 

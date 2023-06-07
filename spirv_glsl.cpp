@@ -5737,7 +5737,19 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		else if (backend.use_initializer_list && backend.use_typed_initializer_list && backend.array_is_value_type &&
 		         type_is_top_level_array(type) && !array_type_decays)
 		{
-			res = type_to_glsl_constructor(type) + "({ ";
+			const auto *p_type = &type;
+			SPIRType tmp_type;
+
+			if (inside_struct_scope &&
+			    backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
+			    type.basetype == SPIRType::Boolean)
+			{
+				tmp_type = type;
+				tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+				p_type = &tmp_type;
+			}
+
+			res = type_to_glsl_constructor(*p_type) + "({ ";
 			needs_trailing_tracket = true;
 		}
 		else if (backend.use_initializer_list)
