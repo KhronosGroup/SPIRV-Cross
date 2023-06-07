@@ -5703,7 +5703,9 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	}
 }
 
-string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope)
+string CompilerGLSL::constant_expression(const SPIRConstant &c,
+                                         bool inside_block_like_struct_scope,
+                                         bool inside_struct_scope)
 {
 	auto &type = get<SPIRType>(c.constant_type);
 
@@ -5773,7 +5775,10 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 						    has_member_decoration(type.self, subconstant_index, DecorationOffset);
 					}
 
-					res += constant_expression(subc, inside_block_like_struct_scope);
+					if (type.basetype == SPIRType::Struct)
+						inside_struct_scope = true;
+
+					res += constant_expression(subc, inside_block_like_struct_scope, inside_struct_scope);
 				}
 			}
 
@@ -5803,7 +5808,18 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 	}
 	else if (c.columns() == 1)
 	{
-		return constant_expression_vector(c, 0);
+		auto res = constant_expression_vector(c, 0);
+
+		if (inside_struct_scope &&
+		    backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
+		    type.basetype == SPIRType::Boolean)
+		{
+			SPIRType tmp_type = type;
+			tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+			res = join(type_to_glsl(tmp_type), "(", res, ")");
+		}
+
+		return res;
 	}
 	else
 	{
@@ -5819,6 +5835,16 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c, bool inside_bloc
 				res += ", ";
 		}
 		res += ")";
+
+		if (inside_struct_scope &&
+		    backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
+		    type.basetype == SPIRType::Boolean)
+		{
+			SPIRType tmp_type = type;
+			tmp_type.basetype = backend.boolean_in_struct_remapped_type;
+			res = join(type_to_glsl(tmp_type), "(", res, ")");
+		}
+
 		return res;
 	}
 }

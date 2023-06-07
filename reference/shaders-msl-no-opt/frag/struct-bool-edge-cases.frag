@@ -72,7 +72,7 @@ constant spvUnsafeArray<bool4, 2> _89 = spvUnsafeArray<bool4, 2>({ bool4(true), 
 
 fragment void main0()
 {
-    spvUnsafeArray<Test, 2> _95 = spvUnsafeArray<Test, 2>({ Test{ true, bool2(true, false), bool3(true), bool4(false) }, Test{ false, bool2(false, true), bool3(false), bool4(true) } });
+    spvUnsafeArray<Test, 2> _95 = spvUnsafeArray<Test, 2>({ Test{ short(true), short2(bool2(true, false)), short3(bool3(true)), short4(bool4(false)) }, Test{ short(false), short2(bool2(false, true)), short3(bool3(false)), short4(bool4(true)) } });
     
     Test t;
     t.a = short(true);
@@ -92,7 +92,7 @@ fragment void main0()
     spvUnsafeArray<bool2, 2> b2 = { bool2(t2.b[0]), bool2(t2.b[1]) };
     spvUnsafeArray<bool3, 2> c2 = { bool3(t2.c[0]), bool3(t2.c[1]) };
     spvUnsafeArray<bool4, 2> d2 = { bool4(t2.d[0]), bool4(t2.d[1]) };
-    t = Test{ true, bool2(true, false), bool3(true), bool4(false) };
-    t2 = Test2{ spvUnsafeArray<bool, 2>({ true, true }), spvUnsafeArray<bool2, 2>({ bool2(true), bool2(false) }), spvUnsafeArray<bool3, 2>({ bool3(true), bool3(false) }), spvUnsafeArray<bool4, 2>({ bool4(true), bool4(false) }), Test{ true, bool2(true, false), bool3(true), bool4(false) } };
+    t = Test{ short(true), short2(bool2(true, false)), short3(bool3(true)), short4(bool4(false)) };
+    t2 = Test2{ spvUnsafeArray<bool, 2>({ short(true), short(true) }), spvUnsafeArray<bool2, 2>({ short2(bool2(true)), short2(bool2(false)) }), spvUnsafeArray<bool3, 2>({ short3(bool3(true)), short3(bool3(false)) }), spvUnsafeArray<bool4, 2>({ short4(bool4(true)), short4(bool4(false)) }), Test{ short(true), short2(bool2(true, false)), short3(bool3(true)), short4(bool4(false)) } };
 }
 
