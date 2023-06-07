@@ -851,6 +851,7 @@ const char *spvc_compiler_get_required_extension(spvc_compiler compiler, size_t 
 	else
 		return nullptr;
 #else
+	(void)index;
 	compiler->context->report_error("Enabled extensions can only be queried on GLSL backend.");
 	return nullptr;
 #endif
