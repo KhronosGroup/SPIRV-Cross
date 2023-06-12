@@ -397,6 +397,7 @@ protected:
 	};
 	TemporaryCopy handle_instruction_precision(const Instruction &instr);
 	void emit_block_instructions(SPIRBlock &block);
+	void emit_block_instructions_with_masked_debug(SPIRBlock &block);
 
 	// For relax_nan_checks.
 	GLSLstd450 get_remapped_glsl_op(GLSLstd450 std450_op) const;
@@ -545,6 +546,7 @@ protected:
 	SmallVector<std::string> *redirect_statement = nullptr;
 	const SPIRBlock *current_continue_block = nullptr;
 	bool block_temporary_hoisting = false;
+	bool block_debug_directives = false;
 
 	void begin_scope();
 	void end_scope();
