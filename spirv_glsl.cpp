@@ -16426,6 +16426,17 @@ bool CompilerGLSL::for_loop_initializers_are_same_type(const SPIRBlock &block)
 	return true;
 }
 
+void CompilerGLSL::emit_block_instructions_with_masked_debug(SPIRBlock &block)
+{
+	// Have to block debug instructions such as OpLine here, since it will be treated as a statement otherwise,
+	// which breaks loop optimizations.
+	// Any line directive would be declared outside the loop body, which would just be confusing either way.
+	bool old_block_debug_directives = block_debug_directives;
+	block_debug_directives = true;
+	emit_block_instructions(block);
+	block_debug_directives = old_block_debug_directives;
+}
+
 bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method method)
 {
 	SPIRBlock::ContinueBlockType continue_type = continue_block_type(get<SPIRBlock>(block.continue_block));
@@ -16436,7 +16447,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
 		// We can then take the condition expression and create a for (; cond ; ) { body; } structure instead.
-		emit_block_instructions(block);
+		emit_block_instructions_with_masked_debug(block);
 
 		bool condition_is_temporary = forced_temporaries.find(block.condition) == end(forced_temporaries);
 
@@ -16516,7 +16527,7 @@ bool CompilerGLSL::attempt_emit_loop_header(SPIRBlock &block, SPIRBlock::Method 
 		// If we're trying to create a true for loop,
 		// we need to make sure that all opcodes before branch statement do not actually emit any code.
 		// We can then take the condition expression and create a for (; cond ; ) { body; } structure instead.
-		emit_block_instructions(child);
+		emit_block_instructions_with_masked_debug(child);
 
 		bool condition_is_temporary = forced_temporaries.find(child.condition) == end(forced_temporaries);
 
@@ -17893,6 +17904,11 @@ void CompilerGLSL::emit_line_directive(uint32_t file_id, uint32_t line_literal)
 	// If we are redirecting statements, ignore the line directive.
 	// Common case here is continue blocks.
 	if (redirect_statement)
+		return;
+
+	// If we're emitting code in a sensitive context such as condition blocks in for loops, don't emit
+	// any line directives, because it's not possible.
+	if (block_debug_directives)
 		return;
 
 	if (options.emit_line_directives)
