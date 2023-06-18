@@ -517,6 +517,8 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--relax-nan-checks')
     if '.structured.' in shader:
         hlsl_args.append('--hlsl-preserve-structured-buffers')
+    if '.flip-vert-y.' in shader:
+        hlsl_args.append('--flip-vert-y')
 
     subprocess.check_call(hlsl_args)
 
