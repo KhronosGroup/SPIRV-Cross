@@ -1476,7 +1476,6 @@ string CompilerMSL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 
-	analyze_xfb_buffers();
 	capture_output_to_buffer = msl_options.capture_output_to_buffer || needs_transform_feedback();
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
 
@@ -1512,6 +1511,7 @@ string CompilerMSL::compile()
 	}
 
 	fixup_image_load_store_access();
+	analyze_xfb_buffers();
 
 	set_enabled_interface_variables(get_active_interface_variables());
 	if (msl_options.force_active_argument_buffer_resources)
@@ -13745,6 +13745,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					size_data_write_triangles += 3;
 					break;
 				case Options::PrimitiveType::Dynamic:
+					break;
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 					break;
@@ -13759,13 +13760,19 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				{
 				case Options::PrimitiveType::PointList:
 				{
-					statement(to_name(xfb_buffers[i]), "[FIXME] = ", to_expression(xfb_locals[i]), ";");
+					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_points), "] = ", to_expression(xfb_locals[i]), ";");
 					break;
 				}
 				case Options::PrimitiveType::LineList:
-					statement(to_name(xfb_buffers[i]), "[FIXME] = " , to_expression(xfb_locals[i]), ";");
-					statement(to_name(xfb_buffers[i]), "[FIXME + 1] = " , to_expression(xfb_locals[i]), ";");
+				case Options::PrimitiveType::LineStrip:
+					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_lines) , "] = " , to_expression(xfb_locals[i]), ";");
+				case Options::PrimitiveType::TriangleList:
+				case Options::PrimitiveType::TriangleStrip:
+				case Options::PrimitiveType::TriangleFan:
+					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_triangles), "] = ", to_expression(xfb_locals[i]), ";");
+					break;
 				case Options::PrimitiveType::Dynamic:
+					break;
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 				}
@@ -17652,8 +17659,11 @@ void CompilerMSL::analyze_xfb_buffers()
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &var) {
 		auto &type = get_variable_data_type(var);
-		if (var.storage != StorageClassOutput || is_hidden_variable(var) ||
-		    (!has_decoration(self, DecorationXfbBuffer) && !has_decoration(type.self, DecorationBlock)))
+		if(var.storage != StorageClassOutput)
+			return;
+		if(is_hidden_variable(var))
+			return;
+		if (!has_decoration(self, DecorationXfbBuffer))
 			return;
 
 		uint32_t xfb_buffer_num, xfb_stride;
@@ -17686,6 +17696,11 @@ void CompilerMSL::analyze_xfb_buffers()
 				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, to_member_name(type, i), i, xfb_offset, true});
 				if (has_member_decoration(type.self, i, DecorationXfbStride))
 					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
+				else
+				{
+					bool test = has_member_decoration(type.parent_type, i, DecorationXfbStride);
+					break;
+				}
 			}
 		}
 		else
@@ -17757,7 +17772,7 @@ void CompilerMSL::analyze_xfb_buffers()
 			}
 			else
 			{
-				// FIXME: Implement this!
+				buffer_type.member_types.push_back(get_variable_data_type_id(var));
 			}
 
 			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
