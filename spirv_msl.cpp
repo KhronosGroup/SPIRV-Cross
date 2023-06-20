@@ -13766,6 +13766,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				case Options::PrimitiveType::LineList:
 				case Options::PrimitiveType::LineStrip:
 					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_lines) , "] = " , to_expression(xfb_locals[i]), ";");
+					break;
 				case Options::PrimitiveType::TriangleList:
 				case Options::PrimitiveType::TriangleStrip:
 				case Options::PrimitiveType::TriangleFan:
@@ -17666,7 +17667,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		if (!has_decoration(self, DecorationXfbBuffer))
 			return;
 
-		uint32_t xfb_buffer_num, xfb_stride;
+		uint32_t xfb_buffer_num = 0, xfb_stride;
 		if (has_decoration(self, DecorationXfbBuffer))
 		{
 			xfb_buffer_num = get_decoration(self, DecorationXfbBuffer);
@@ -17698,7 +17699,11 @@ void CompilerMSL::analyze_xfb_buffers()
 					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
 				else
 				{
-					bool test = has_member_decoration(type.parent_type, i, DecorationXfbStride);
+					bool hasTransformFeedback = has_member_decoration(type.parent_type, i, DecorationXfbStride);
+					if(hasTransformFeedback) {
+						auto &execution = get_entry_point();
+						execution.flags.set(spv::ExecutionModeXfb);
+					}
 					break;
 				}
 			}
@@ -17759,7 +17764,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		for (auto &output : outputs)
 		{
 			auto &var = *output.var;
-			auto &type = get_variable_data_type(var);
+//			auto &type = get_variable_data_type(var);
 
 			string mbr_name = ensure_valid_name(output.name, "m");
 			set_member_name(buffer_type.self, member_index, mbr_name);
