@@ -78,8 +78,7 @@ kernel void main0(device SSBO& _53 [[buffer(0)]], uint3 gl_WorkGroupID [[threadg
 {
     spvUnsafeArray<Data, 2> data = spvUnsafeArray<Data, 2>({ Data{ 1.0, 2.0 }, Data{ 3.0, 4.0 } });
     spvUnsafeArray<Data, 2> _31 = spvUnsafeArray<Data, 2>({ Data{ X, 2.0 }, Data{ 3.0, 5.0 } });
-    spvUnsafeArray<Data, 2> data2;
-    data2 = _31;
+    spvUnsafeArray<Data, 2> data2 = _31;
     Data param = data[gl_LocalInvocationID.x];
     Data param_1 = data2[gl_LocalInvocationID.x];
     Data _73 = combine(param, param_1);

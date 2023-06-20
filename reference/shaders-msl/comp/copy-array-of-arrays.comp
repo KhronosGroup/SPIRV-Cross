@@ -60,8 +60,7 @@ constant spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> _21 = sp
 
 kernel void main0(device BUF& o [[buffer(0)]])
 {
-    spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> c;
-    c = _21;
+    spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> c = _21;
     o.a = int(c[1][1][1]);
     spvUnsafeArray<float, 2> _43 = spvUnsafeArray<float, 2>({ o.b, o.c });
     spvUnsafeArray<float, 2> _48 = spvUnsafeArray<float, 2>({ o.b, o.b });
@@ -70,10 +69,8 @@ kernel void main0(device BUF& o [[buffer(0)]])
     spvUnsafeArray<float, 2> _59 = spvUnsafeArray<float, 2>({ o.c, o.b });
     spvUnsafeArray<spvUnsafeArray<float, 2>, 2> _60 = spvUnsafeArray<spvUnsafeArray<float, 2>, 2>({ _54, _59 });
     spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> _61 = spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2>({ _49, _60 });
-    spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> d;
-    d = _61;
-    spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> e;
-    e = d;
+    spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> d = _61;
+    spvUnsafeArray<spvUnsafeArray<spvUnsafeArray<float, 2>, 2>, 2> e = d;
     o.b = e[1][0][1];
 }
 

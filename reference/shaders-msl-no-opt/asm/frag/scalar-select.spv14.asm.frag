@@ -65,8 +65,7 @@ fragment main0_out main0()
     out.FragColor = select(float4(0.0, 0.0, 0.0, 1.0), float4(1.0, 1.0, 0.0, 1.0), bool4(false, true, false, true));
     out.FragColor = float4(bool4(false, true, false, true));
     _15 _32 = false ? (_15{ 0.0 }) : (_15{ 1.0 });
-    spvUnsafeArray<float, 2> _33;
-    _33 = true ? _29 : _30;
+    spvUnsafeArray<float, 2> _33 = true ? _29 : _30;
     return out;
 }
 
