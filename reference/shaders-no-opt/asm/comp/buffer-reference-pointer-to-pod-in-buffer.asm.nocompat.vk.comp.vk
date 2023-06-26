@@ -10,10 +10,10 @@ layout(buffer_reference, buffer_reference_align = 8) buffer uvec4Pointer
 layout(push_constant, std430) uniform Push
 {
     uvec4Pointer ptr;
-} _4;
+} _6;
 
 void main()
 {
-    _4.ptr.value = uvec4(1u, 2u, 3u, 4u);
+    _6.ptr.value = uvec4(1u, 2u, 3u, 4u);
 }
 
