@@ -15199,19 +15199,20 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 	uint32_t id = ops[op_idx++];
 
 	Scope scope;
-	switch (op) {
-		case OpSubgroupBallotKHR:
-		case OpSubgroupFirstInvocationKHR:
-		case OpSubgroupReadInvocationKHR:
-		case OpSubgroupAllKHR:
-		case OpSubgroupAnyKHR:
-		case OpSubgroupAllEqualKHR:
-			// These earlier instructions don't have the scope operand.
-			scope = ScopeSubgroup;
-			break;
-		default:
-			scope = static_cast<Scope>(evaluate_constant_u32(ops[op_idx++]));
-			break;
+	switch (op)
+	{
+	case OpSubgroupBallotKHR:
+	case OpSubgroupFirstInvocationKHR:
+	case OpSubgroupReadInvocationKHR:
+	case OpSubgroupAllKHR:
+	case OpSubgroupAnyKHR:
+	case OpSubgroupAllEqualKHR:
+		// These earlier instructions don't have the scope operand.
+		scope = ScopeSubgroup;
+		break;
+	default:
+		scope = static_cast<Scope>(evaluate_constant_u32(ops[op_idx++]));
+		break;
 	}
 	if (scope != ScopeSubgroup)
 		SPIRV_CROSS_THROW("Only subgroup scope is supported.");
@@ -15227,7 +15228,7 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 
 	case OpGroupNonUniformBroadcast:
 	case OpSubgroupReadInvocationKHR:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvSubgroupBroadcast");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupBroadcast");
 		break;
 
 	case OpGroupNonUniformBroadcastFirst:
@@ -15245,7 +15246,7 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 		break;
 
 	case OpGroupNonUniformBallotBitExtract:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvSubgroupBallotBitExtract");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupBallotBitExtract");
 		break;
 
 	case OpGroupNonUniformBallotFindLSB:
@@ -15279,19 +15280,19 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 	}
 
 	case OpGroupNonUniformShuffle:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvSubgroupShuffle");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupShuffle");
 		break;
 
 	case OpGroupNonUniformShuffleXor:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvSubgroupShuffleXor");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupShuffleXor");
 		break;
 
 	case OpGroupNonUniformShuffleUp:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvSubgroupShuffleUp");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupShuffleUp");
 		break;
 
 	case OpGroupNonUniformShuffleDown:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvSubgroupShuffleDown");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupShuffleDown");
 		break;
 
 	case OpGroupNonUniformAll:
@@ -15329,7 +15330,7 @@ case OpGroupNonUniform##op: \
 		else if (operation == GroupOperationClusteredReduce) \
 		{ \
 			/* Only cluster sizes of 4 are supported. */ \
-			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx+1]); \
+			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx + 1]); \
 			if (cluster_size != 4) \
 				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
 			emit_unary_func_op(result_type, id, ops[op_idx], "quad_" #msl_op); \
@@ -15358,7 +15359,7 @@ case OpGroupNonUniform##op: \
 		else if (operation == GroupOperationClusteredReduce) \
 		{ \
 			/* Only cluster sizes of 4 are supported. */ \
-			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx+1]); \
+			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx + 1]); \
 			if (cluster_size != 4) \
 				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
 			emit_unary_func_op(result_type, id, ops[op_idx], "quad_" #msl_op); \
@@ -15381,7 +15382,7 @@ case OpGroupNonUniform##op: \
 		else if (operation == GroupOperationClusteredReduce) \
 		{ \
 			/* Only cluster sizes of 4 are supported. */ \
-			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx+1]); \
+			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx + 1]); \
 			if (cluster_size != 4) \
 				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
 			emit_unary_func_op_cast(result_type, id, ops[op_idx], "quad_" #msl_op, type, type); \
@@ -15408,11 +15409,11 @@ case OpGroupNonUniform##op: \
 #undef MSL_GROUP_OP_CAST
 
 	case OpGroupNonUniformQuadSwap:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvQuadSwap");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvQuadSwap");
 		break;
 
 	case OpGroupNonUniformQuadBroadcast:
-		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx+1], "spvQuadBroadcast");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvQuadBroadcast");
 		break;
 
 	default:
