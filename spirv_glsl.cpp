@@ -9857,6 +9857,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool relaxed_precision = has_decoration(base, DecorationRelaxedPrecision);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
+	bool access_meshlet_position_y = false;
+
+	if (auto *base_expr = maybe_get<SPIRExpression>(base))
+	{
+		access_meshlet_position_y = base_expr->access_meshlet_position_y;
+	}
 
 	// If we are translating access to a structured buffer, the first subscript '._m0' must be hidden
 	bool hide_first_subscript = count > 1 && is_user_type_structured(base);
@@ -10064,6 +10070,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					}
 					else
 						expr = builtin_to_glsl(builtin, type->storage);
+
+					if (builtin == BuiltInPosition && get_execution_model() == ExecutionModelMeshEXT)
+					{
+						access_meshlet_position_y = true;
+					}
 				}
 				else
 				{
@@ -10208,6 +10219,21 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				                                       is_packed);
 			}
 
+			if (access_meshlet_position_y)
+			{
+				uint32_t id = 0;
+				if (is_literal)
+				{
+					id = index;
+				}
+				else
+				{
+					auto &c = get<SPIRConstant>(index);
+					id = c.scalar();
+				}
+				access_meshlet_position_y = (id == 1);
+			}
+
 			expr += deferred_index;
 			row_major_matrix_needs_conversion = false;
 
@@ -10234,6 +10260,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		meta->storage_is_invariant = is_invariant;
 		meta->storage_physical_type = physical_type;
 		meta->relaxed_precision = relaxed_precision;
+		meta->access_meshlet_position_y = access_meshlet_position_y;
 	}
 
 	return expr;
@@ -11799,6 +11826,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		expr.loaded_from = backing_variable ? backing_variable->self : ID(ops[2]);
 		expr.need_transpose = meta.need_transpose;
 		expr.access_chain = true;
+		expr.access_meshlet_position_y = meta.access_meshlet_position_y;
 
 		// Mark the result as being packed. Some platforms handled packed vectors differently than non-packed.
 		if (meta.storage_is_packed)
