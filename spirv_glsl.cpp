@@ -10120,6 +10120,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				append_index(index, is_literal);
 			}
 
+			if (var && has_decoration(var->self, DecorationBuiltIn) &&
+			    get_decoration(var->self, DecorationBuiltIn) == BuiltInPosition &&
+			    get_execution_model() == ExecutionModelMeshEXT)
+			{
+				access_meshlet_position_y = true;
+			}
+
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
 
