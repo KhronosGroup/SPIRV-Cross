@@ -10313,17 +10313,22 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			if (access_meshlet_position_y)
 			{
-				uint32_t id = 0;
 				if (is_literal)
 				{
-					id = index;
+					access_meshlet_position_y = index == 1;
 				}
 				else
 				{
-					auto &c = get<SPIRConstant>(index);
-					id = c.scalar();
+					const auto *c = maybe_get<SPIRConstant>(index);
+					if (c)
+						access_meshlet_position_y = c->scalar() == 1;
+					else
+					{
+						// We don't know, but we have to assume no.
+						// Flip Y in mesh shaders is an opt-in horrible hack, so we'll have to assume shaders try to behave.
+						access_meshlet_position_y = false;
+					}
 				}
-				access_meshlet_position_y = (id == 1);
 			}
 
 			expr += deferred_index;
