@@ -20,9 +20,9 @@ jobs:
 
     runs-on: "${{ matrix.platform }}"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.x'
 
@@ -50,6 +50,10 @@ jobs:
           cmake --build . --config Release
           cmake --build . --config Release --target install
 
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.platform }}-binaries
+          path: build/output
       - name: Test SPIRV-Cross
         shell: bash
         working-directory: ${{github.workspace}}/build
@@ -60,7 +64,7 @@ jobs:
     container: khronosgroup/docker-images:asciidoctor-spec
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # REUSE license checker
       - name: license-check

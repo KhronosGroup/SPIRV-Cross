@@ -47,22 +47,22 @@ kernel void main0(device foo& buf [[buffer(0)]], constant bar& cb [[buffer(1)]],
     device int* sbuf2 = select_buffer_null(buf, cb);
     threadgroup int* stgsm = select_tgsm(cb, tgsm);
     threadgroup int* cur = stgsm;
-    device int* _73;
-    _73 = &buf.a[0u];
-    threadgroup int* _76;
-    int _77;
+    device int* _78;
+    _78 = &buf.a[0u];
+    threadgroup int* _81;
+    int _82;
     for (;;)
     {
-        _76 = cur;
-        _77 = *_73;
-        if (_77 != 0)
+        _81 = cur;
+        _82 = *_78;
+        if (_82 != 0)
         {
-            int _81 = *_76;
-            int _82 = _77 + _81;
-            *_73 = _82;
-            *_76 = _82;
-            cur = &_76[1u];
-            _73 = &_73[1u];
+            int _86 = *_81;
+            int _87 = _82 + _86;
+            *_78 = _87;
+            *_81 = _87;
+            cur = &_81[1u];
+            _78 = &_78[1u];
             continue;
         }
         else

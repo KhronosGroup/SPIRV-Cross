@@ -211,7 +211,7 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         spirv_env = 'vulkan1.1'
         glslang_env = 'vulkan1.1'
 
-    spirv_cmd = [paths.spirv_as, '--target-env', spirv_env, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--preserve-numeric-ids', '--target-env', spirv_env, '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -482,7 +482,7 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         spirv_env = 'vulkan1.1'
         glslang_env = 'vulkan1.1'
 
-    spirv_cmd = [paths.spirv_as, '--target-env', spirv_env, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--preserve-numeric-ids', '--target-env', spirv_env, '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -515,6 +515,10 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
         hlsl_args.append('--hlsl-flatten-matrix-vertex-input-semantics')
     if '.relax-nan.' in shader:
         hlsl_args.append('--relax-nan-checks')
+    if '.structured.' in shader:
+        hlsl_args.append('--hlsl-preserve-structured-buffers')
+    if '.flip-vert-y.' in shader:
+        hlsl_args.append('--flip-vert-y')
 
     subprocess.check_call(hlsl_args)
 
@@ -529,7 +533,7 @@ def cross_compile_reflect(shader, spirv, opt, iterations, paths):
     spirv_path = create_temporary()
     reflect_path = create_temporary(os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--preserve-numeric-ids', '--target-env', 'vulkan1.1', '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 
@@ -574,7 +578,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fo
     if vulkan or spirv:
         vulkan_glsl_path = create_temporary('vk' + os.path.basename(shader))
 
-    spirv_cmd = [paths.spirv_as, '--target-env', spirv_env, '-o', spirv_path, shader]
+    spirv_cmd = [paths.spirv_as, '--preserve-numeric-ids', '--target-env', spirv_env, '-o', spirv_path, shader]
     if '.preserve.' in shader:
         spirv_cmd.append('--preserve-numeric-ids')
 

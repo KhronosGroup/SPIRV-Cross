@@ -12,14 +12,14 @@ layout(buffer_reference, buffer_reference_align = 4) buffer uintPointer
     uint value;
 };
 
-layout(push_constant, std430) uniform _4_12
+layout(push_constant, std430) uniform _6_13
 {
     uint64_t _m0;
-} _12;
+} _13;
 
 void main()
 {
-    uintPointer _3 = uintPointer(_12._m0);
-    _3.value = 20u;
+    uintPointer _4 = uintPointer(_13._m0);
+    _4.value = 20u;
 }
 

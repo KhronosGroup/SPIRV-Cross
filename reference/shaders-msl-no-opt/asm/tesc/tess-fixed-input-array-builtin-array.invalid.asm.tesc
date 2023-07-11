@@ -120,8 +120,7 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     p[2].pos = gl_in[2].gl_Position;
     p[2].uv = gl_in[2].p_uv;
     uint i = gl_InvocationID;
-    spvUnsafeArray<VertexOutput, 3> param;
-    param = p;
+    spvUnsafeArray<VertexOutput, 3> param = p;
     uint param_1 = i;
     HSOut flattenTemp = _hs_main(param, param_1);
     gl_out[gl_InvocationID].gl_Position = flattenTemp.pos;
@@ -129,8 +128,7 @@ kernel void main0(main0_in in [[stage_in]], uint gl_InvocationID [[thread_index_
     threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
     if (int(gl_InvocationID) == 0)
     {
-        spvUnsafeArray<VertexOutput, 3> param_2;
-        param_2 = p;
+        spvUnsafeArray<VertexOutput, 3> param_2 = p;
         HSConstantOut _patchConstantResult = PatchHS(param_2);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[0] = half(_patchConstantResult.EdgeTess[0]);
         spvTessLevel[gl_PrimitiveID].edgeTessellationFactor[1] = half(_patchConstantResult.EdgeTess[1]);

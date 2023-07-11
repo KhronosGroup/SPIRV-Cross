@@ -277,10 +277,8 @@ struct main0_patchIn
     float4 _113 = float4(gl_TessCoord.y);
     float4 _116 = float4(gl_TessCoord.z);
     float4 _118 = ((_97[0] * _111) + (_97[1] * _113)) + (_97[2] * _116);
-    spvUnsafeArray<float4, 1> _72;
-    _72 = _79[0];
-    spvUnsafeArray<float4, 1> _71;
-    _71 = _79[1];
+    spvUnsafeArray<float4, 1> _72 = _79[0];
+    spvUnsafeArray<float4, 1> _71 = _79[1];
     float3 _120 = float3(gl_TessCoord.x);
     float3 _123 = float3(gl_TessCoord.y);
     spvUnsafeArray<float4, 1> _73;
@@ -290,10 +288,8 @@ struct main0_patchIn
         _133++;
         continue;
     }
-    spvUnsafeArray<float4, 1> _75;
-    _75 = _73;
-    spvUnsafeArray<float4, 1> _74;
-    _74 = _79[2];
+    spvUnsafeArray<float4, 1> _75 = _73;
+    spvUnsafeArray<float4, 1> _74 = _79[2];
     float3 _155 = float3(gl_TessCoord.z);
     float3 _157 = ((_77[0].xyz * _120) + (_77[1].xyz * _123)).xyz + (_77[2].xyz * _155);
     spvUnsafeArray<float4, 1> _76;
