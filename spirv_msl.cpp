@@ -15000,7 +15000,7 @@ std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
 		if (array_size == 0)
 			array_size = get_resource_array_size(id);
 
-		if (array_size == 0 && !msl_options.argument_buffers)
+		if (array_size == 0)
 		{
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
@@ -15050,7 +15050,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		if (array_size == 0)
 			array_size = get_resource_array_size(id);
 
-		if (array_size == 0 && !msl_options.argument_buffers)
+		if (array_size == 0)
 		{
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
