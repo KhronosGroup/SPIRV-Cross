@@ -13101,7 +13101,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				uint32_t array_size = to_array_size_literal(type);
 
 				is_using_builtin_array = true;
-				if (array_size == 0)
+				if (is_runtime_size_array(type))
 				{
 					if (!ep_args.empty())
 						ep_args += ", ";
@@ -13202,9 +13202,21 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			break;
 		}
 		case SPIRType::AccelerationStructure:
-			ep_args += ", " + type_to_glsl(type, var_id) + " " + r.name;
-			ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+		{
+			if (is_runtime_size_array(type))
+			{
+				const auto &parent_type = get<SPIRType>(type.parent_type);
+				ep_args += ", const device spvDescriptor<" + type_to_glsl(parent_type) + ">* " +
+				           to_restrict(var_id, true) + r.name;
+				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			}
+			else
+			{
+				ep_args += ", " + type_to_glsl(type, var_id) + " " + r.name;
+				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			}
 			break;
+		}
 		default:
 			if (!ep_args.empty())
 				ep_args += ", ";
@@ -14053,11 +14065,14 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else if (is_runtime_size_array(type))
 	{
 		const auto *parent_type = &get<SPIRType>(type.parent_type);
-		decl = join(cv_qualifier, type_to_glsl(*parent_type, arg.id));
-		if (type_is_image)
-			decl = "spvDescriptor<" + decl + ">*";
+		// decl = join(cv_qualifier, decl);
+		auto type_name = type_to_glsl(*parent_type, arg.id);
+		if (type.basetype == SPIRType::AccelerationStructure)
+			decl = join("spvDescriptor<", type_name, ">*");
+		else if (type_is_image)
+			decl = join("spvDescriptor<", cv_qualifier, type_name, ">*");
 		else
-			decl = "spvDescriptor<" + address_space + " " + decl + "*>*";
+			decl = join("spvDescriptor<", address_space, " ", type_name, "*>*");
 		address_space = "const device";
 	}
 	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))

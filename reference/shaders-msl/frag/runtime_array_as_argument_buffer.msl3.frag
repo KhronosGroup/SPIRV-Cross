@@ -31,10 +31,22 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-void implicit_texture(const device spvDescriptor<texture2d<float>>* textures, const device spvDescriptor<sampler>* texturesSmplr, thread uint& inputId)
+void implicit_combined_texture(const device spvDescriptor<texture2d<float>>* smp_textures, const device spvDescriptor<sampler>* smp_texturesSmplr, thread uint& inputId)
 {
-    uint _30 = inputId;
-    float4 d = textures[_30].value.sample(texturesSmplr[_30].value, float2(0.0), level(0.0));
+    uint _48 = inputId;
+    float4 d = smp_textures[_48].value.sample(smp_texturesSmplr[_48].value, float2(0.0), level(0.0));
+    if (d.w > 0.5)
+    {
+        discard_fragment();
+    }
+}
+
+static inline __attribute__((always_inline))
+void implicit_texture(thread uint& inputId, const device spvDescriptor<texture2d<float>>* textures, const device spvDescriptor<sampler>* smp)
+{
+    uint _70 = inputId;
+    uint _79 = inputId + 8u;
+    float4 d = textures[_70].value.sample(smp[_79].value, float2(0.0), level(0.0));
     if (d.w > 0.5)
     {
         discard_fragment();
@@ -44,8 +56,8 @@ void implicit_texture(const device spvDescriptor<texture2d<float>>* textures, co
 static inline __attribute__((always_inline))
 void implicit_ssbo(thread uint& inputId, const device spvDescriptor<const device Ssbo*>* ssbo)
 {
-    uint _52 = inputId;
-    if (ssbo[_52]->val == 2u)
+    uint _95 = inputId;
+    if (ssbo[_95]->val == 2u)
     {
         discard_fragment();
     }
@@ -54,15 +66,26 @@ void implicit_ssbo(thread uint& inputId, const device spvDescriptor<const device
 static inline __attribute__((always_inline))
 void implicit_ubo(thread uint& inputId, const device spvDescriptor<constant Ubo*>* ubo)
 {
-    uint _68 = inputId;
-    if (ubo[_68]->val == 2u)
+    uint _111 = inputId;
+    if (ubo[_111]->val == 2u)
     {
         discard_fragment();
     }
 }
 
 static inline __attribute__((always_inline))
-void explicit_texture(texture2d<float> tex, sampler texSmplr)
+void implicit_image(thread uint& inputId, const device spvDescriptor<texture2d<float>>* images)
+{
+    uint _124 = inputId;
+    float4 d = images[_124].value.read(uint2(int2(0)));
+    if (d.w > 0.5)
+    {
+        discard_fragment();
+    }
+}
+
+static inline __attribute__((always_inline))
+void explicit_comb_texture(texture2d<float> tex, sampler texSmplr)
 {
     float4 d = tex.sample(texSmplr, float2(0.0), level(0.0));
     if (d.w > 0.5)
@@ -71,12 +94,39 @@ void explicit_texture(texture2d<float> tex, sampler texSmplr)
     }
 }
 
-fragment void main0(main0_in in [[stage_in]], const device spvDescriptor<const device Ssbo*>* ssbo [[buffer(2)]], const device spvDescriptor<constant Ubo*>* ubo [[buffer(3)]], const device spvDescriptor<texture2d<float>>* textures [[buffer(0)]], const device spvDescriptor<sampler>* texturesSmplr [[buffer(1)]])
+static inline __attribute__((always_inline))
+void explicit_texture(texture2d<float> tex, sampler smp)
 {
-    implicit_texture(textures, texturesSmplr, in.inputId);
+    float4 d = tex.sample(smp, float2(0.0), level(0.0));
+    if (d.w > 0.5)
+    {
+        discard_fragment();
+    }
+}
+
+static inline __attribute__((always_inline))
+void explicit_image(texture2d<float> tex)
+{
+    float4 d = tex.read(uint2(int2(0)));
+    if (d.w > 0.5)
+    {
+        discard_fragment();
+    }
+}
+
+fragment void main0(main0_in in [[stage_in]], const device spvDescriptor<const device Ssbo*>* ssbo [[buffer(4)]], const device spvDescriptor<constant Ubo*>* ubo [[buffer(5)]], const device spvDescriptor<texture2d<float>>* smp_textures [[buffer(0)]], const device spvDescriptor<texture2d<float>>* textures [[buffer(2)]], const device spvDescriptor<texture2d<float>>* images [[buffer(6)]], const device spvDescriptor<sampler>* smp_texturesSmplr [[buffer(1)]], const device spvDescriptor<sampler>* smp [[buffer(3)]])
+{
+    implicit_combined_texture(smp_textures, smp_texturesSmplr, in.inputId);
+    implicit_texture(in.inputId, textures, smp);
     implicit_ssbo(in.inputId, ssbo);
     implicit_ubo(in.inputId, ubo);
-    uint _89 = in.inputId;
-    explicit_texture(textures[_89].value, texturesSmplr[_89].value);
+    implicit_image(in.inputId, images);
+    uint _171 = in.inputId;
+    explicit_comb_texture(smp_textures[_171].value, smp_texturesSmplr[_171].value);
+    uint _175 = in.inputId;
+    uint _177 = in.inputId;
+    explicit_texture(textures[_175].value, smp[_177].value);
+    uint _182 = in.inputId;
+    explicit_image(images[_182].value);
 }
 

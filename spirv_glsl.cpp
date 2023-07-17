@@ -10120,7 +10120,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				append_index(index, is_literal);
 			}
 
-			if ((type->basetype == SPIRType::SampledImage || type->basetype == SPIRType::Image) &&
+			if ((type->basetype == SPIRType::SampledImage || type->basetype == SPIRType::Image ||
+			     type->basetype == SPIRType::Sampler || type->basetype == SPIRType::AccelerationStructure) &&
 			    to_array_size_literal(*type) == 0)
 			{
 				// Dereference bindless array
