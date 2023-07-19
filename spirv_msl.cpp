@@ -14026,6 +14026,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
+	bool type_is_tlas = type.basetype == SPIRType::AccelerationStructure;
 
 	// For opaque types we handle const later due to descriptor address spaces.
 	const char *cv_qualifier = (constref && !type_is_image) ? "const " : "";
@@ -14206,7 +14207,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			}
 		}
 	}
-	else if (!type_is_image && (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
+	else if (!type_is_image && !type_is_tlas &&
+	         (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
 	{
 		// If this is going to be a reference to a variable pointer, the address space
 		// for the reference has to go before the '&', but after the '*'.
@@ -14226,7 +14228,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += to_restrict(name_id, true);
 		decl += to_expression(name_id);
 	}
-	else if (type_is_image)
+	else if (type_is_image || type_is_tlas)
 	{
 		if (is_runtime_size_array(type))
 		{
