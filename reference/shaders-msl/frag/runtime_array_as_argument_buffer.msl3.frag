@@ -13,6 +13,10 @@ struct spvDescriptor
     {
         return value;
     }
+    const device T& operator * () const device
+    {
+        return value;
+    }
 };
 
 struct Ssbo

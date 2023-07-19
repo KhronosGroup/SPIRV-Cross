@@ -10120,14 +10120,6 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				append_index(index, is_literal);
 			}
 
-			if ((type->basetype == SPIRType::SampledImage || type->basetype == SPIRType::Image ||
-			     type->basetype == SPIRType::Sampler || type->basetype == SPIRType::AccelerationStructure) &&
-			    to_array_size_literal(*type) == 0)
-			{
-				// Dereference bindless array
-				expr += ".value";
-			}
-
 			if (var && has_decoration(var->self, DecorationBuiltIn) &&
 			    get_decoration(var->self, DecorationBuiltIn) == BuiltInPosition &&
 			    get_execution_model() == ExecutionModelMeshEXT)

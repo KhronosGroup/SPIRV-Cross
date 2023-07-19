@@ -7226,6 +7226,10 @@ void CompilerMSL::emit_custom_functions()
 			begin_scope();
 			statement("return value;");
 			end_scope();
+			statement("const device T& operator * () const device");
+			begin_scope();
+			statement("return value;");
+			end_scope();
 			end_scope_decl();
 			statement("");
 			break;
@@ -8333,6 +8337,14 @@ void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *ty
 			expr += ".x";
 
 		expr = join("((", type_to_glsl(*type), ")", expr, ")");
+	}
+
+	if (type != nullptr && is_runtime_size_array(*type) &&
+	    (type->basetype == SPIRType::Image || type->basetype == SPIRType::Sampler ||
+	     type->basetype == SPIRType::SampledImage || type->basetype == SPIRType::AccelerationStructure))
+	{
+		// expr = "*" + expr;
+		expr += ".value";
 	}
 }
 
@@ -13103,6 +13115,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				is_using_builtin_array = true;
 				if (is_runtime_size_array(type))
 				{
+					add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 					if (!ep_args.empty())
 						ep_args += ", ";
 					ep_args += "const device spvDescriptor<" + get_argument_address_space(var) + " " +
@@ -13205,6 +13218,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		{
 			if (is_runtime_size_array(type))
 			{
+				add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 				const auto &parent_type = get<SPIRType>(type.parent_type);
 				ep_args += ", const device spvDescriptor<" + type_to_glsl(parent_type) + ">* " +
 				           to_restrict(var_id, true) + r.name;
