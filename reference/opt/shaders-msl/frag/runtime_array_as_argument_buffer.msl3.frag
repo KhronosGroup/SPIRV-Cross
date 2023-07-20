@@ -37,6 +37,13 @@ template<typename T>
 struct spvDescriptor
 {
     T value;
+};
+
+template<typename T>
+struct spvBufferDescriptor
+{
+    T value;
+    int length;
     const device T& operator -> () const device
     {
         return value;
@@ -50,6 +57,7 @@ struct spvDescriptor
 struct Ssbo
 {
     uint val;
+    uint data[1];
 };
 
 struct Ubo
@@ -62,47 +70,51 @@ struct main0_in
     uint inputId [[user(locn0)]];
 };
 
-fragment void main0(main0_in in [[stage_in]], const device spvDescriptor<const device Ssbo*>* ssbo [[buffer(4)]], const device spvDescriptor<constant Ubo*>* ubo [[buffer(5)]], const device spvDescriptor<texture2d<float>>* smp_textures [[buffer(0)]], const device spvDescriptor<texture2d<float>>* textures [[buffer(2)]], const device spvDescriptor<texture2d<float>>* images [[buffer(6)]], const device spvDescriptor<sampler>* smp_texturesSmplr [[buffer(1)]], const device spvDescriptor<sampler>* smp [[buffer(3)]], const device spvDescriptor<raytracing::acceleration_structure<raytracing::instancing>>* tlas [[buffer(7)]])
+fragment void main0(main0_in in [[stage_in]], const device spvBufferDescriptor<const device Ssbo*>* ssbo [[buffer(4)]], const device spvBufferDescriptor<constant Ubo*>* ubo [[buffer(5)]], const device spvDescriptor<texture2d<float>>* smp_textures [[buffer(0)]], const device spvDescriptor<texture2d<float>>* textures [[buffer(2)]], const device spvDescriptor<texture2d<float>>* images [[buffer(6)]], const device spvDescriptor<sampler>* smp_texturesSmplr [[buffer(1)]], const device spvDescriptor<sampler>* smp [[buffer(3)]], const device spvDescriptor<raytracing::acceleration_structure<raytracing::instancing>>* tlas [[buffer(7)]])
 {
-    uint _220 = in.inputId;
+    uint _231 = in.inputId;
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery;
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery_1;
-    if (smp_textures[_220].value.sample(smp_texturesSmplr[_220].value, float2(0.0), level(0.0)).w > 0.5)
+    if (smp_textures[_231].value.sample(smp_texturesSmplr[_231].value, float2(0.0), level(0.0)).w > 0.5)
     {
         discard_fragment();
     }
-    uint _238 = in.inputId + 8u;
-    if (textures[_220].value.sample(smp[_238].value, float2(0.0), level(0.0)).w > 0.5)
+    uint _249 = in.inputId + 8u;
+    if (textures[_231].value.sample(smp[_249].value, float2(0.0), level(0.0)).w > 0.5)
     {
         discard_fragment();
     }
-    if (ssbo[_220]->val == 2u)
+    if (ssbo[_231]->val == 2u)
     {
         discard_fragment();
     }
-    if (ubo[_220]->val == 2u)
+    if (int((ssbo[123].length - 4) / 4) == 25)
     {
         discard_fragment();
     }
-    if (images[_220].value.read(uint2(int2(0))).w > 0.5)
+    if (ubo[_231]->val == 2u)
+    {
+        discard_fragment();
+    }
+    if (images[_231].value.read(uint2(int2(0))).w > 0.5)
     {
         discard_fragment();
     }
     rayQuery.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[in.inputId].value, spvMakeIntersectionParams(0u));
-    bool _284 = rayQuery.next();
-    if (smp_textures[_220].value.sample(smp_texturesSmplr[_220].value, float2(0.0), level(0.0)).w > 0.5)
+    bool _301 = rayQuery.next();
+    if (smp_textures[_231].value.sample(smp_texturesSmplr[_231].value, float2(0.0), level(0.0)).w > 0.5)
     {
         discard_fragment();
     }
-    if (textures[_220].value.sample(smp[_220].value, float2(0.0), level(0.0)).w > 0.5)
+    if (textures[_231].value.sample(smp[_231].value, float2(0.0), level(0.0)).w > 0.5)
     {
         discard_fragment();
     }
-    if (images[_220].value.read(uint2(int2(0))).w > 0.5)
+    if (images[_231].value.read(uint2(int2(0))).w > 0.5)
     {
         discard_fragment();
     }
     rayQuery_1.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[in.inputId].value, spvMakeIntersectionParams(0u));
-    bool _319 = rayQuery_1.next();
+    bool _336 = rayQuery_1.next();
 }
 
