@@ -797,6 +797,7 @@ protected:
 		SPVFuncImplDynamicImageSampler,
 		SPVFuncImplRayQueryIntersectionParams,
 		SPVFuncImplVariableDescriptor,
+		SPVFuncImplVariableSizedDescriptor,
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too

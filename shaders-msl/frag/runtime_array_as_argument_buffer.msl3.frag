@@ -10,7 +10,7 @@ layout(location = 0) in  flat uint inputId;
 layout(binding = 0) uniform sampler2D smp_textures[];
 layout(binding = 1) uniform sampler smp[];
 layout(binding = 2) uniform texture2D textures[];
-layout(binding = 3, std430) readonly buffer Ssbo { uint val; } ssbo[];
+layout(binding = 3, std430) readonly buffer Ssbo { uint val; uint data[]; } ssbo[];
 layout(binding = 4, std140) uniform Ubo { uint val; } ubo[];
 layout(binding = 5) uniform image2D images[];
 layout(binding = 6) uniform accelerationStructureEXT tlas[];
@@ -29,6 +29,8 @@ void implicit_texture() {
 
 void implicit_ssbo() {
   if(ssbo[nonuniformEXT(inputId)].val==2)
+    discard;
+  if(ssbo[123].data.length()==25)
     discard;
   }
 

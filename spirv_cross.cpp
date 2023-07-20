@@ -630,7 +630,7 @@ bool Compiler::is_array(const SPIRType &type) const
 	return !type.array.empty();
 }
 
-bool Compiler::is_runtime_size_array(const SPIRType &type) const
+bool Compiler::is_runtime_size_array(const SPIRType &type)
 {
 	if (type.array.empty())
 		return false;

@@ -7222,6 +7222,16 @@ void CompilerMSL::emit_custom_functions()
 			statement("struct spvDescriptor");
 			begin_scope();
 			statement("T value;");
+			end_scope_decl();
+			statement("");
+			break;
+
+		case SPVFuncImplVariableSizedDescriptor:
+			statement("template<typename T>");
+			statement("struct spvBufferDescriptor");
+			begin_scope();
+			statement("T value;");
+			statement("int length;");
 			statement("const device T& operator -> () const device");
 			begin_scope();
 			statement("return value;");
@@ -9186,6 +9196,16 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t offset = type_struct_member_offset(type, ops[3]);
 		uint32_t stride = type_struct_member_array_stride(type, ops[3]);
 
+		if (auto var = maybe_get_backing_variable(ops[2]))
+		{
+			auto &var_type = get<SPIRType>(var->basetype);
+			if (is_runtime_size_array(var_type))
+			{
+				auto expr = join("(", to_expression(ops[2]), ".length - ", offset, ") / ", stride);
+				emit_op(ops[0], ops[1], expr, true);
+				break;
+			}
+		}
 		auto expr = join("(", to_buffer_size_expression(ops[2]), " - ", offset, ") / ", stride);
 		emit_op(ops[0], ops[1], expr, true);
 		break;
@@ -13115,10 +13135,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				is_using_builtin_array = true;
 				if (is_runtime_size_array(type))
 				{
-					add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
+					add_spv_func_and_recompile(SPVFuncImplVariableSizedDescriptor);
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += "const device spvDescriptor<" + get_argument_address_space(var) + " " +
+					ep_args += "const device spvBufferDescriptor<" + get_argument_address_space(var) + " " +
 					           type_to_glsl(type) + "*>* " + to_restrict(var_id, true) + r.name;
 					ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
 					if (interlocked_resources.count(var_id))
@@ -13315,25 +13335,27 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		{
 			if (buffer_requires_array_length(var.self))
 			{
-				entry_func.fixup_hooks_in.push_back([this, &type, &var, var_id]() {
-					bool is_array_type = !type.array.empty();
+				entry_func.fixup_hooks_in.push_back(
+				    [this, &type, &var, var_id]()
+				    {
+					    bool is_array_type = !type.array.empty() && !is_runtime_size_array(type);
 
-					uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
-					if (descriptor_set_is_argument_buffer(desc_set))
-					{
-						statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
-						          is_array_type ? " = &" : " = ", to_name(argument_buffer_ids[desc_set]),
-						          ".spvBufferSizeConstants", "[",
-						          convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
-					}
-					else
-					{
-						// If we have an array of images, we need to be able to index into it, so take a pointer instead.
-						statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
-						          is_array_type ? " = &" : " = ", to_name(buffer_size_buffer_id), "[",
-						          convert_to_string(get_metal_resource_index(var, type.basetype)), "];");
-					}
-				});
+					    uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+					    if (descriptor_set_is_argument_buffer(desc_set))
+					    {
+						    statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
+						              is_array_type ? " = &" : " = ", to_name(argument_buffer_ids[desc_set]),
+						              ".spvBufferSizeConstants", "[",
+						              convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
+					    }
+					    else
+					    {
+						    // If we have an array of images, we need to be able to index into it, so take a pointer instead.
+						    statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
+						              is_array_type ? " = &" : " = ", to_name(buffer_size_buffer_id), "[",
+						              convert_to_string(get_metal_resource_index(var, type.basetype)), "];");
+					    }
+				    });
 			}
 		}
 	});
@@ -14087,7 +14109,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		else if (type_is_image)
 			decl = join("spvDescriptor<", cv_qualifier, type_name, ">*");
 		else
-			decl = join("spvDescriptor<", address_space, " ", type_name, "*>*");
+			decl = join("spvBufferDescriptor<", address_space, " ", type_name, "*>*");
 		address_space = "const device";
 	}
 	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))
@@ -16572,8 +16594,12 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpArrayLength:
 	{
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
-		if (var)
-			compiler.buffers_requiring_array_length.insert(var->self);
+		if (var != nullptr)
+		{
+			auto &type = compiler.get<SPIRType>(var->basetype);
+			if (!is_runtime_size_array(type))
+				compiler.buffers_requiring_array_length.insert(var->self);
+		}
 		break;
 	}
 
