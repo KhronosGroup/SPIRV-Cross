@@ -232,8 +232,8 @@ bool CompilerMSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
 void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
-	bool need_vertex_params = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex &&
-	                          !msl_options.vertex_for_tessellation;
+	bool need_vertex_params =
+	    capture_output_to_buffer && get_execution_model() == ExecutionModelVertex && !vertex_shader_is_kernel();
 	bool need_tesc_params = is_tesc_shader();
 	bool need_tese_params = is_tese_shader() && msl_options.raw_buffer_tese_input;
 	bool need_subgroup_mask =
@@ -248,7 +248,7 @@ void CompilerMSL::build_implicit_builtins()
 	bool need_dispatch_base =
 	    msl_options.dispatch_base && get_execution_model() == ExecutionModelGLCompute &&
 	    (active_input_builtins.get(BuiltInWorkgroupId) || active_input_builtins.get(BuiltInGlobalInvocationId));
-	bool need_grid_params = get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation;
+	bool need_grid_params = vertex_shader_is_kernel();
 	bool need_vertex_base_params =
 	    need_grid_params &&
 	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
@@ -1622,7 +1622,7 @@ void CompilerMSL::preprocess_op_codes()
 
 	// Tessellation control shaders are run as compute functions in Metal, and so
 	// must capture their output to a buffer.
-	if (is_tesc_shader() || (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation))
+	if (is_tesc_shader() || vertex_shader_is_kernel())
 	{
 		is_rasterization_disabled = true;
 		capture_output_to_buffer = true;
@@ -4004,7 +4004,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 						// The first member of the indirect buffer is always the number of vertices
 						// to draw.
 						// We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice
-						if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
+						if (vertex_shader_is_kernel())
 						{
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
 							          " = ", output_buffer_var_name, "[", to_expression(builtin_invocation_id_id),
@@ -11823,7 +11823,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			case BuiltInInstanceId:
 			case BuiltInInstanceIndex:
 			case BuiltInBaseInstance:
-				if (msl_options.vertex_for_tessellation)
+				if (vertex_shader_is_kernel())
 					return "";
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
@@ -11846,7 +11846,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	}
 
 	// Vertex and tessellation evaluation function outputs
-	if (((execution.model == ExecutionModelVertex && !msl_options.vertex_for_tessellation) || is_tese_shader()) &&
+	if (((execution.model == ExecutionModelVertex && !vertex_shader_is_kernel()) || is_tese_shader()) &&
 	    type.storage == StorageClassOutput)
 	{
 		if (is_builtin)
@@ -11889,7 +11889,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			return join(" [[", loc_qual, "]]");
 	}
 
-	if (execution.model == ExecutionModelVertex && msl_options.vertex_for_tessellation && type.storage == StorageClassOutput)
+	if (vertex_shader_is_kernel() && type.storage == StorageClassOutput)
 	{
 		// For this type of shader, we always arrange for it to capture its
 		// output to a buffer. For this reason, qualifiers are irrelevant here.
@@ -12303,7 +12303,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	case ExecutionModelVertex:
 		if (msl_options.vertex_for_tessellation && !msl_options.supports_msl_version(1, 2))
 			SPIRV_CROSS_THROW("Tessellation requires Metal 1.2.");
-		entry_type = msl_options.vertex_for_tessellation ? "kernel" : "vertex";
+		entry_type = vertex_shader_is_kernel() ? "kernel" : "vertex";
 		break;
 	case ExecutionModelTessellationEvaluation:
 		if (!msl_options.supports_msl_version(1, 2))
@@ -12533,7 +12533,7 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 	case BuiltInInstanceId:
 	case BuiltInInstanceIndex:
 	case BuiltInBaseInstance:
-		return get_execution_model() != ExecutionModelVertex || !msl_options.vertex_for_tessellation;
+		return !vertex_shader_is_kernel();
 	// Tess. control function in
 	case BuiltInPosition:
 	case BuiltInPointSize:
@@ -12705,8 +12705,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args +=
 			    join("constant uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
-		else if (stage_out_var_id &&
-		         !(get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation))
+		else if (stage_out_var_id && !vertex_shader_is_kernel())
 		{
 			if (!ep_args.empty())
 				ep_args += ", ";
@@ -12714,7 +12713,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			    join("device uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
 
-		if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation &&
+		if (vertex_shader_is_kernel() &&
 		    (active_input_builtins.get(BuiltInVertexIndex) || active_input_builtins.get(BuiltInVertexId)) &&
 		    msl_options.vertex_index_type != Options::IndexType::None)
 		{
@@ -13215,7 +13214,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	// Vertex shaders shouldn't have the problems with barriers in non-uniform control flow that
 	// tessellation control shaders do, so early returns should be OK. We may need to revisit this
 	// if it ever becomes possible to use barriers from a vertex shader.
-	if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
+	if (vertex_shader_is_kernel())
 	{
 		entry_func.fixup_hooks_in.push_back([this]() {
 			statement("if (any(", to_expression(builtin_invocation_id_id),
@@ -13699,7 +13698,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			case BuiltInVertexId:
 			case BuiltInVertexIndex:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -13723,7 +13722,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			case BuiltInBaseVertex:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -13734,7 +13733,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			case BuiltInInstanceId:
 			case BuiltInInstanceIndex:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -13747,7 +13746,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			case BuiltInBaseInstance:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -15929,8 +15928,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			return "thread_index_in_simdgroup";
 		}
 		else if (execution.model == ExecutionModelKernel || execution.model == ExecutionModelGLCompute ||
-		         execution.model == ExecutionModelTessellationControl ||
-		         (execution.model == ExecutionModelVertex && msl_options.vertex_for_tessellation))
+		         execution.model == ExecutionModelTessellationControl || vertex_shader_is_kernel())
 		{
 			// We are generating a Metal kernel function.
 			if (!msl_options.supports_msl_version(2))

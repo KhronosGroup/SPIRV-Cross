@@ -578,6 +578,12 @@ public:
 		                                                      execution.model == spv::ExecutionModelTessellationEvaluation);
 	}
 
+	bool vertex_shader_is_kernel() const
+	{
+		return get_execution_model() == spv::ExecutionModelVertex &&
+		       (msl_options.vertex_for_tessellation || needs_transform_feedback());
+	}
+
 	// Provide feedback to calling API to allow it to pass an auxiliary
 	// swizzle buffer if the shader needs it.
 	bool needs_swizzle_buffer() const
