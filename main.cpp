@@ -676,6 +676,7 @@ struct CLIArguments
 	bool msl_manual_helper_invocation_updates = true;
 	bool msl_check_discarded_frag_stores = false;
 	bool msl_sample_dref_lod_array_as_grad = false;
+	bool msl_runtime_array_rich_descriptor = false;
 	const char *msl_combined_sampler_suffix = nullptr;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
@@ -1230,6 +1231,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.check_discarded_frag_stores = args.msl_check_discarded_frag_stores;
 		msl_opts.sample_dref_lod_array_as_grad = args.msl_sample_dref_lod_array_as_grad;
 		msl_opts.ios_support_base_vertex_instance = true;
+		msl_opts.runtime_array_rich_descriptor = args.msl_runtime_array_rich_descriptor;
 		msl_comp->set_msl_options(msl_opts);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
@@ -1636,10 +1638,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-pad-fragment-output", [&args](CLIParser &) { args.msl_pad_fragment_output = true; });
 	cbs.add("--msl-domain-lower-left", [&args](CLIParser &) { args.msl_domain_lower_left = true; });
 	cbs.add("--msl-argument-buffers", [&args](CLIParser &) { args.msl_argument_buffers = true; });
-	cbs.add("--msl-argument-buffer-tier", [&args](CLIParser &parser) {
-		args.msl_argument_buffers_tier = parser.next_uint();
-		args.msl_argument_buffers = true;
-	});
+	cbs.add("--msl-argument-buffer-tier",
+	        [&args](CLIParser &parser) { args.msl_argument_buffers_tier = parser.next_uint(); });
 	cbs.add("--msl-discrete-descriptor-set",
 	        [&args](CLIParser &parser) { args.msl_discrete_descriptor_sets.push_back(parser.next_uint()); });
 	cbs.add("--msl-device-argument-buffer",
@@ -1789,6 +1789,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
 		args.msl_combined_sampler_suffix = parser.next_string();
 	});
+	cbs.add("--msl-runtime-array-rich-decriptor",
+	        [&args](CLIParser &) { args.msl_runtime_array_rich_descriptor = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();

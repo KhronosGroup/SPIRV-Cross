@@ -1354,35 +1354,19 @@ void CompilerMSL::emit_entry_point_declarations()
 		}
 	}
 
-	// Emit buffer arrays here.
-	for (uint32_t array_id : buffer_arrays_discrete)
-	{
-		const auto &var = get<SPIRVariable>(array_id);
-		const auto &type = get_variable_data_type(var);
-		if (is_runtime_size_array(type))
-			continue;
-		const auto &buffer_type = get_variable_element_type(var);
-		string name = to_name(array_id);
-		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id, true),
-		          name, "[] =");
-		begin_scope();
-		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
-			statement(name, "_", i, ",");
-		end_scope_decl();
-		statement_no_indent("");
-	}
-	// Discrete descriptors are processed in entry point emission every compiler iteration.
-	buffer_arrays_discrete.clear();
-
 	bool has_runtime_array_declaration = false;
 	for (SPIRVariable *arg : entry_point_bindings)
 	{
 		const auto &var = *arg;
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
-		string name = to_name(var.self);
+		const string name = to_name(var.self);
 		if (is_runtime_size_array(type))
 		{
+			if (msl_options.argument_buffers_tier < Options::ArgumentBuffersTier::Tier2)
+			{
+				SPIRV_CROSS_THROW("Unsized array of descriptors requires argument buffer tier 2");
+			}
 			switch (type.basetype)
 			{
 			case SPIRType::Image:
@@ -1402,6 +1386,17 @@ void CompilerMSL::emit_entry_point_declarations()
 				break;
 			}
 			has_runtime_array_declaration = true;
+		}
+		else if (!type.array.empty() && type.basetype == SPIRType::Struct)
+		{
+			// Emit only buffer arrays here.
+			statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ",
+			          to_restrict(var.self, true), name, "[] =");
+			begin_scope();
+			for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
+				statement(name, "_", i, ",");
+			end_scope_decl();
+			statement_no_indent("");
 		}
 	}
 
@@ -7295,23 +7290,26 @@ void CompilerMSL::emit_custom_functions()
 			end_scope_decl();
 			statement("");
 
-			statement("template<typename T>");
-			statement("struct spvDescriptorArray<device T*>");
-			begin_scope();
-			statement("spvDescriptorArray(const device spvBufferDescriptor<device T*>* ptr) : ptr(ptr)");
-			begin_scope();
-			end_scope();
-			statement("const device T* operator [] (size_t i) const");
-			begin_scope();
-			statement("return ptr[i].value;");
-			end_scope();
-			statement("const int length(int i) const");
-			begin_scope();
-			statement("return ptr[i].length;");
-			end_scope();
-			statement("const device spvBufferDescriptor<device T*>* ptr;");
-			end_scope_decl();
-			statement("");
+			if (msl_options.runtime_array_rich_descriptor)
+			{
+				statement("template<typename T>");
+				statement("struct spvDescriptorArray<device T*>");
+				begin_scope();
+				statement("spvDescriptorArray(const device spvBufferDescriptor<device T*>* ptr) : ptr(ptr)");
+				begin_scope();
+				end_scope();
+				statement("const device T* operator [] (size_t i) const");
+				begin_scope();
+				statement("return ptr[i].value;");
+				end_scope();
+				statement("const int length(int i) const");
+				begin_scope();
+				statement("return ptr[i].length;");
+				end_scope();
+				statement("const device spvBufferDescriptor<device T*>* ptr;");
+				end_scope_decl();
+				statement("");
+			}
 			break;
 
 		default:
@@ -11670,6 +11668,8 @@ string CompilerMSL::to_buffer_size_expression(uint32_t id)
 			auto &var_type = get<SPIRType>(var->basetype);
 			if (is_runtime_size_array(var_type))
 			{
+				if (!msl_options.runtime_array_rich_descriptor)
+					SPIRV_CROSS_THROW("OpArrayLength requires rich descriptor format");
 				return buffer_expr + ".length(" + array_expr.substr(1, array_expr.size() - 2) + ")";
 			}
 		}
@@ -13196,17 +13196,16 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				uint32_t array_size = to_array_size_literal(type);
 
 				is_using_builtin_array = true;
-				buffer_arrays_discrete.push_back(var_id);
 				if (is_runtime_size_array(type))
 				{
-					add_spv_func_and_recompile(SPVFuncImplVariableSizedDescriptor);
 					add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
-
 					if (!ep_args.empty())
 						ep_args += ", ";
 					const bool ssbo = has_decoration(type.self, DecorationBufferBlock);
-					if (var.storage == spv::StorageClassStorageBuffer || ssbo)
+					if ((var.storage == spv::StorageClassStorageBuffer || ssbo) &&
+					    msl_options.runtime_array_rich_descriptor)
 					{
+						add_spv_func_and_recompile(SPVFuncImplVariableSizedDescriptor);
 						ep_args += "const device spvBufferDescriptor<" + get_argument_address_space(var) + " " +
 						           type_to_glsl(type) + "*>* ";
 					}
