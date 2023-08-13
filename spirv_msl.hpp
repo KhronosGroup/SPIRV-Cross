@@ -798,6 +798,7 @@ protected:
 		SPVFuncImplRayQueryIntersectionParams,
 		SPVFuncImplVariableDescriptor,
 		SPVFuncImplVariableSizedDescriptor,
+		SPVFuncImplVariableDescriptorArray,
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
@@ -1185,6 +1186,8 @@ protected:
 	SmallVector<uint32_t> buffer_aliases_discrete;
 	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
+
+	SmallVector<SPIRVariable *> entry_point_bindings;
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;

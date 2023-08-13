@@ -1359,10 +1359,12 @@ void CompilerMSL::emit_entry_point_declarations()
 	{
 		const auto &var = get<SPIRVariable>(array_id);
 		const auto &type = get_variable_data_type(var);
+		if (is_runtime_size_array(type))
+			continue;
 		const auto &buffer_type = get_variable_element_type(var);
 		string name = to_name(array_id);
-		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id, true), name,
-		          "[] =");
+		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id, true),
+		          name, "[] =");
 		begin_scope();
 		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
 			statement(name, "_", i, ",");
@@ -1371,6 +1373,40 @@ void CompilerMSL::emit_entry_point_declarations()
 	}
 	// Discrete descriptors are processed in entry point emission every compiler iteration.
 	buffer_arrays_discrete.clear();
+
+	bool has_runtime_array_declaration = false;
+	for (SPIRVariable *arg : entry_point_bindings)
+	{
+		const auto &var = *arg;
+		const auto &type = get_variable_data_type(var);
+		const auto &buffer_type = get_variable_element_type(var);
+		string name = to_name(var.self);
+		if (is_runtime_size_array(type))
+		{
+			switch (type.basetype)
+			{
+			case SPIRType::Image:
+			case SPIRType::Sampler:
+			case SPIRType::AccelerationStructure:
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", name, "_};");
+				break;
+			case SPIRType::SampledImage:
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", name, "_};");
+				statement("spvDescriptorArray<sampler> ", name, "Smplr {", name, "Smplr_};");
+				break;
+			case SPIRType::Struct:
+				statement("spvDescriptorArray<", get_argument_address_space(var), " ", type_to_glsl(buffer_type), "*> ",
+				          name, " {", name, "_};");
+				break;
+			default:
+				break;
+			}
+			has_runtime_array_declaration = true;
+		}
+	}
+
+	if (has_runtime_array_declaration)
+		statement_no_indent("");
 
 	// Emit buffer aliases here.
 	for (auto &var_id : buffer_aliases_discrete)
@@ -7244,6 +7280,40 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplVariableDescriptorArray:
+			statement("template<typename T>");
+			statement("struct spvDescriptorArray");
+			begin_scope();
+			statement("spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(ptr)");
+			begin_scope();
+			end_scope();
+			statement("const device T& operator [] (size_t i) const");
+			begin_scope();
+			statement("return ptr[i].value;");
+			end_scope();
+			statement("const device spvDescriptor<T>* ptr;");
+			end_scope_decl();
+			statement("");
+
+			statement("template<typename T>");
+			statement("struct spvDescriptorArray<device T*>");
+			begin_scope();
+			statement("spvDescriptorArray(const device spvBufferDescriptor<device T*>* ptr) : ptr(ptr)");
+			begin_scope();
+			end_scope();
+			statement("const device T* operator [] (size_t i) const");
+			begin_scope();
+			statement("return ptr[i].value;");
+			end_scope();
+			statement("const int length(int i) const");
+			begin_scope();
+			statement("return ptr[i].length;");
+			end_scope();
+			statement("const device spvBufferDescriptor<device T*>* ptr;");
+			end_scope_decl();
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -8348,14 +8418,6 @@ void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *ty
 
 		expr = join("((", type_to_glsl(*type), ")", expr, ")");
 	}
-
-	if (type != nullptr && is_runtime_size_array(*type) &&
-	    (type->basetype == SPIRType::Image || type->basetype == SPIRType::Sampler ||
-	     type->basetype == SPIRType::SampledImage || type->basetype == SPIRType::AccelerationStructure))
-	{
-		// expr = "*" + expr;
-		expr += ".value";
-	}
 }
 
 // Override for MSL-specific syntax instructions
@@ -9196,16 +9258,6 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t offset = type_struct_member_offset(type, ops[3]);
 		uint32_t stride = type_struct_member_array_stride(type, ops[3]);
 
-		if (auto var = maybe_get_backing_variable(ops[2]))
-		{
-			auto &var_type = get<SPIRType>(var->basetype);
-			if (is_runtime_size_array(var_type))
-			{
-				auto expr = join("(", to_expression(ops[2]), ".length - ", offset, ") / ", stride);
-				emit_op(ops[0], ops[1], expr, true);
-				break;
-			}
-		}
 		auto expr = join("(", to_buffer_size_expression(ops[2]), " - ", offset, ") / ", stride);
 		emit_op(ops[0], ops[1], expr, true);
 		break;
@@ -11613,6 +11665,14 @@ string CompilerMSL::to_buffer_size_expression(uint32_t id)
 	{
 		auto buffer_expr = expr.substr(0, index);
 		auto array_expr = expr.substr(index);
+		if (auto var = maybe_get_backing_variable(id))
+		{
+			auto &var_type = get<SPIRType>(var->basetype);
+			if (is_runtime_size_array(var_type))
+			{
+				return buffer_expr + ".length(" + array_expr.substr(1, array_expr.size() - 2) + ")";
+			}
+		}
 		return buffer_expr + buffer_size_name_suffix + array_expr;
 	}
 }
@@ -12989,6 +13049,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 	SmallVector<Resource> resources;
 
+	entry_point_bindings.clear();
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
@@ -13056,6 +13117,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (constexpr_sampler && constexpr_sampler->ycbcr_conversion_enable)
 					plane_count = constexpr_sampler->planes;
 
+				entry_point_bindings.push_back(&var);
 				for (uint32_t i = 0; i < plane_count; i++)
 					resources.push_back({ &var, descriptor_alias, to_name(var_id), SPIRType::Image,
 					                      get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
@@ -13076,15 +13138,16 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (!descriptor_alias)
 					resource_index = get_metal_resource_index(var, type.basetype);
 
+				entry_point_bindings.push_back(&var);
 				resources.push_back({ &var, descriptor_alias, to_name(var_id), type.basetype,
 				                      resource_index, 0, secondary_index });
 			}
 		}
 	});
 
-	stable_sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
-		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
-	});
+	stable_sort(resources.begin(), resources.end(),
+	            [](const Resource &lhs, const Resource &rhs)
+	            { return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index); });
 
 	for (auto &r : resources)
 	{
@@ -13133,13 +13196,26 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				uint32_t array_size = to_array_size_literal(type);
 
 				is_using_builtin_array = true;
+				buffer_arrays_discrete.push_back(var_id);
 				if (is_runtime_size_array(type))
 				{
 					add_spv_func_and_recompile(SPVFuncImplVariableSizedDescriptor);
+					add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
+
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += "const device spvBufferDescriptor<" + get_argument_address_space(var) + " " +
-					           type_to_glsl(type) + "*>* " + to_restrict(var_id, true) + r.name;
+					const bool ssbo = has_decoration(type.self, DecorationBufferBlock);
+					if (var.storage == spv::StorageClassStorageBuffer || ssbo)
+					{
+						ep_args += "const device spvBufferDescriptor<" + get_argument_address_space(var) + " " +
+						           type_to_glsl(type) + "*>* ";
+					}
+					else
+					{
+						ep_args += "const device spvDescriptor<" + get_argument_address_space(var) + " " +
+						           type_to_glsl(type) + "*>* ";
+					}
+					ep_args += to_restrict(var_id, true) + r.name + "_";
 					ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
 					if (interlocked_resources.count(var_id))
 						ep_args += ", raster_order_group(0)";
@@ -13147,7 +13223,6 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				}
 				else
 				{
-					buffer_arrays_discrete.push_back(var_id);
 					for (uint32_t i = 0; i < array_size; ++i)
 					{
 						if (!ep_args.empty())
@@ -13181,7 +13256,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			ep_args += sampler_type(type, var_id) + " " + r.name;
 			if (is_runtime_size_array(type))
 			{
-				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+				ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")]]";
 			}
 			else
 			{
@@ -13193,6 +13268,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			if (!ep_args.empty())
 				ep_args += ", ";
 
+			//
 			// Use Metal's native frame-buffer fetch API for subpass inputs.
 			const auto &basetype = get<SPIRType>(var.basetype);
 			if (!type_is_msl_framebuffer_fetch(basetype))
@@ -13203,7 +13279,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 				if (is_runtime_size_array(type))
 				{
-					ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
+					ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")";
 				}
 				else
 				{
@@ -13241,7 +13317,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 				const auto &parent_type = get<SPIRType>(type.parent_type);
 				ep_args += ", const device spvDescriptor<" + type_to_glsl(parent_type) + ">* " +
-				           to_restrict(var_id, true) + r.name;
+				           to_restrict(var_id, true) + r.name + "_";
 				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
 			}
 			else
@@ -14102,15 +14178,14 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else if (is_runtime_size_array(type))
 	{
 		const auto *parent_type = &get<SPIRType>(type.parent_type);
-		// decl = join(cv_qualifier, decl);
 		auto type_name = type_to_glsl(*parent_type, arg.id);
 		if (type.basetype == SPIRType::AccelerationStructure)
-			decl = join("spvDescriptor<", type_name, ">*");
+			decl = join("spvDescriptorArray<", type_name, ">");
 		else if (type_is_image)
-			decl = join("spvDescriptor<", cv_qualifier, type_name, ">*");
+			decl = join("spvDescriptorArray<", cv_qualifier, type_name, ">");
 		else
-			decl = join("spvBufferDescriptor<", address_space, " ", type_name, "*>*");
-		address_space = "const device";
+			decl = join("spvDescriptorArray<", address_space, " ", type_name, "*>");
+		address_space = "const";
 	}
 	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))
 	{
@@ -15041,8 +15116,11 @@ std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
 		if (array_size == 0)
 		{
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
+			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
 			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
-			return join("const device spvDescriptor<", sampler_type(parent, id), ">*");
+			if (processing_entry_point)
+				return join("const device spvDescriptor<", sampler_type(parent, id), ">*");
+			return join("const spvDescriptorArray<", sampler_type(parent, id), ">");
 		}
 
 		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
@@ -15091,6 +15169,7 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 		if (array_size == 0)
 		{
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
+			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
 			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 			return join("const device spvDescriptor<", image_type_glsl(parent, id), ">*");
 		}
