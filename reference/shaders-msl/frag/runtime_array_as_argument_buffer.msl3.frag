@@ -54,6 +54,36 @@ struct spvBufferDescriptor
     }
 };
 
+template<typename T>
+struct spvDescriptorArray
+{
+    spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(ptr)
+    {
+    }
+    const device T& operator [] (size_t i) const
+    {
+        return ptr[i].value;
+    }
+    const device spvDescriptor<T>* ptr;
+};
+
+template<typename T>
+struct spvDescriptorArray<device T*>
+{
+    spvDescriptorArray(const device spvBufferDescriptor<device T*>* ptr) : ptr(ptr)
+    {
+    }
+    const device T* operator [] (size_t i) const
+    {
+        return ptr[i].value;
+    }
+    const int length(int i) const
+    {
+        return ptr[i].length;
+    }
+    const device spvBufferDescriptor<device T*>* ptr;
+};
+
 struct Ssbo
 {
     uint val;
@@ -71,10 +101,10 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-void implicit_combined_texture(const device spvDescriptor<texture2d<float>>* smp_textures, const device spvDescriptor<sampler>* smp_texturesSmplr, thread uint& inputId)
+void implicit_combined_texture(const spvDescriptorArray<texture2d<float>> smp_textures, const spvDescriptorArray<sampler> smp_texturesSmplr, thread uint& inputId)
 {
     uint _56 = inputId;
-    float4 d = smp_textures[_56].value.sample(smp_texturesSmplr[_56].value, float2(0.0), level(0.0));
+    float4 d = smp_textures[_56].sample(smp_texturesSmplr[_56], float2(0.0), level(0.0));
     if (d.w > 0.5)
     {
         discard_fragment();
@@ -82,11 +112,11 @@ void implicit_combined_texture(const device spvDescriptor<texture2d<float>>* smp
 }
 
 static inline __attribute__((always_inline))
-void implicit_texture(thread uint& inputId, const device spvDescriptor<texture2d<float>>* textures, const device spvDescriptor<sampler>* smp)
+void implicit_texture(thread uint& inputId, const spvDescriptorArray<texture2d<float>> textures, const spvDescriptorArray<sampler> smp)
 {
     uint _78 = inputId;
     uint _87 = inputId + 8u;
-    float4 d = textures[_78].value.sample(smp[_87].value, float2(0.0), level(0.0));
+    float4 d = textures[_78].sample(smp[_87], float2(0.0), level(0.0));
     if (d.w > 0.5)
     {
         discard_fragment();
@@ -94,21 +124,21 @@ void implicit_texture(thread uint& inputId, const device spvDescriptor<texture2d
 }
 
 static inline __attribute__((always_inline))
-void implicit_ssbo(thread uint& inputId, const device spvBufferDescriptor<const device Ssbo*>* ssbo)
+void implicit_ssbo(thread uint& inputId, const spvDescriptorArray<const device Ssbo*> ssbo)
 {
     uint _104 = inputId;
     if (ssbo[_104]->val == 2u)
     {
         discard_fragment();
     }
-    if (int((ssbo[123].length - 4) / 4) == 25)
+    if (int((ssbo.length(123) - 4) / 4) == 25)
     {
         discard_fragment();
     }
 }
 
 static inline __attribute__((always_inline))
-void implicit_ubo(thread uint& inputId, const device spvBufferDescriptor<constant Ubo*>* ubo)
+void implicit_ubo(thread uint& inputId, const spvDescriptorArray<constant Ubo*> ubo)
 {
     uint _130 = inputId;
     if (ubo[_130]->val == 2u)
@@ -118,10 +148,10 @@ void implicit_ubo(thread uint& inputId, const device spvBufferDescriptor<constan
 }
 
 static inline __attribute__((always_inline))
-void implicit_image(thread uint& inputId, const device spvDescriptor<texture2d<float>>* images)
+void implicit_image(thread uint& inputId, const spvDescriptorArray<texture2d<float>> images)
 {
     uint _143 = inputId;
-    float4 d = images[_143].value.read(uint2(int2(0)));
+    float4 d = images[_143].read(uint2(int2(0)));
     if (d.w > 0.5)
     {
         discard_fragment();
@@ -129,9 +159,9 @@ void implicit_image(thread uint& inputId, const device spvDescriptor<texture2d<f
 }
 
 static inline __attribute__((always_inline))
-void implicit_tlas(thread uint& inputId, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& rayQuery, const device spvDescriptor<raytracing::acceleration_structure<raytracing::instancing>>* tlas)
+void implicit_tlas(thread uint& inputId, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& rayQuery, const spvDescriptorArray<raytracing::acceleration_structure<raytracing::instancing>> tlas)
 {
-    rayQuery.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[inputId].value, spvMakeIntersectionParams(0u));
+    rayQuery.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[inputId], spvMakeIntersectionParams(0u));
     bool _171 = rayQuery.next();
 }
 
@@ -172,8 +202,17 @@ void explicit_tlas(const raytracing::acceleration_structure<raytracing::instanci
     bool _203 = rayQuery_1.next();
 }
 
-fragment void main0(main0_in in [[stage_in]], const device spvBufferDescriptor<const device Ssbo*>* ssbo [[buffer(4)]], const device spvBufferDescriptor<constant Ubo*>* ubo [[buffer(5)]], const device spvDescriptor<texture2d<float>>* smp_textures [[buffer(0)]], const device spvDescriptor<texture2d<float>>* textures [[buffer(2)]], const device spvDescriptor<texture2d<float>>* images [[buffer(6)]], const device spvDescriptor<sampler>* smp_texturesSmplr [[buffer(1)]], const device spvDescriptor<sampler>* smp [[buffer(3)]], const device spvDescriptor<raytracing::acceleration_structure<raytracing::instancing>>* tlas [[buffer(7)]])
+fragment void main0(main0_in in [[stage_in]], const device spvBufferDescriptor<const device Ssbo*>* ssbo_ [[buffer(4)]], const device spvDescriptor<constant Ubo*>* ubo_ [[buffer(5)]], const device spvDescriptor<texture2d<float>>* smp_textures_ [[buffer(0)]], const device spvDescriptor<texture2d<float>>* textures_ [[buffer(2)]], const device spvDescriptor<texture2d<float>>* images_ [[buffer(6)]], const device spvDescriptor<sampler>* smp_texturesSmplr_ [[buffer(1)]], const device spvDescriptor<sampler>* smp_ [[buffer(3)]], const device spvDescriptor<raytracing::acceleration_structure<raytracing::instancing>>* tlas_ [[buffer(7)]])
 {
+    spvDescriptorArray<texture2d<float>> smp_textures {smp_textures_};
+    spvDescriptorArray<sampler> smp_texturesSmplr {smp_texturesSmplr_};
+    spvDescriptorArray<texture2d<float>> textures {textures_};
+    spvDescriptorArray<sampler> smp {smp_};
+    spvDescriptorArray<const device Ssbo*> ssbo {ssbo_};
+    spvDescriptorArray<constant Ubo*> ubo {ubo_};
+    spvDescriptorArray<texture2d<float>> images {images_};
+    spvDescriptorArray<raytracing::acceleration_structure<raytracing::instancing>> tlas {tlas_};
+
     implicit_combined_texture(smp_textures, smp_texturesSmplr, in.inputId);
     implicit_texture(in.inputId, textures, smp);
     implicit_ssbo(in.inputId, ssbo);
@@ -182,13 +221,13 @@ fragment void main0(main0_in in [[stage_in]], const device spvBufferDescriptor<c
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery;
     implicit_tlas(in.inputId, rayQuery, tlas);
     uint _211 = in.inputId;
-    explicit_comb_texture(smp_textures[_211].value, smp_texturesSmplr[_211].value);
+    explicit_comb_texture(smp_textures[_211], smp_texturesSmplr[_211]);
     uint _215 = in.inputId;
     uint _217 = in.inputId;
-    explicit_texture(textures[_215].value, smp[_217].value);
+    explicit_texture(textures[_215], smp[_217]);
     uint _222 = in.inputId;
-    explicit_image(images[_222].value);
+    explicit_image(images[_222]);
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery_1;
-    explicit_tlas(tlas[in.inputId].value, rayQuery_1);
+    explicit_tlas(tlas[in.inputId], rayQuery_1);
 }
 
