@@ -8686,7 +8686,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		}
 
 		// Metal requires explicit fences to break up RAW hazards, even within the same shader invocation
-		if (p_var && !has_decoration(p_var->self, DecorationNonWritable))
+		if (msl_options.readwrite_texture_fences && p_var && !has_decoration(p_var->self, DecorationNonWritable))
 			statement(to_expression(img_id), ".fence();");
 
 		emit_texture_op(instruction, false);

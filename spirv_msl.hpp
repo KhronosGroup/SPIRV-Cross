@@ -496,6 +496,12 @@ public:
 		// so it can be enabled only when the bug is present.
 		bool sample_dref_lod_array_as_grad = false;
 
+		// MSL doesn't guarantee coherence between writes and subsequent reads of read_write textures.
+		// This inserts fences before each read of a read_write texture to ensure coherency.
+		// If you're sure you never rely on this, you can set this to false for a possible performance improvement.
+		// Note: Only Apple's GPU compiler takes advantage of the lack of coherency, so make sure to test on Apple GPUs if you disable this.
+		bool readwrite_texture_fences = true;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
