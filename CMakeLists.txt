@@ -228,6 +228,7 @@ set(spirv-cross-cpp-sources
 
 set(spirv-cross-msl-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl_vertex_loader.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.hpp)
 
 set(spirv-cross-hlsl-sources

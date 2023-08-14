@@ -237,8 +237,9 @@ bool CompilerMSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
 void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
-	bool need_vertex_params = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex &&
-	                          !msl_options.vertex_for_tessellation;
+	bool need_vertex_params = get_using_shader_vertex_loader() ||
+	                          (capture_output_to_buffer && get_execution_model() == ExecutionModelVertex &&
+	                           !msl_options.vertex_for_tessellation);
 	bool need_tesc_params = is_tesc_shader();
 	bool need_tese_params = is_tese_shader() && msl_options.raw_buffer_tese_input;
 	bool need_subgroup_mask =
@@ -258,7 +259,8 @@ void CompilerMSL::build_implicit_builtins()
 	    need_grid_params &&
 	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
 	     active_input_builtins.get(BuiltInBaseVertex) || active_input_builtins.get(BuiltInInstanceId) ||
-	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
+	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance) ||
+	     need_vertex_params);
 	bool need_local_invocation_index = msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId);
 	bool need_workgroup_size = msl_options.emulate_subgroups && active_input_builtins.get(BuiltInNumSubgroups);
 
@@ -1585,6 +1587,9 @@ string CompilerMSL::compile()
 	// Metal vertex functions that define no output must disable rasterization and return void.
 	if (!stage_out_var_id)
 		is_rasterization_disabled = true;
+
+	if (get_using_shader_vertex_loader())
+		prepare_shader_vertex_loader();
 
 	// Convert the use of global variables to recursively-passed function parameters
 	localize_global_variables();
@@ -7336,6 +7341,82 @@ void CompilerMSL::emit_custom_functions()
 			}
 			break;
 
+		case SPVFuncImplLoadVertexRG4:
+			statement("static ushort2 spvLoadVertexRG4(uchar value)");
+			begin_scope();
+			statement("return ushort2(value >> 4, value & 0xf);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGBA4LE:
+			statement("static ushort4 spvLoadVertexRGBA4LE(ushort value)");
+			begin_scope();
+			statement("return ushort4(value & 0xf, extract_bits(value, 4, 4), extract_bits(value, 8, 4), value >> 12);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGBA4BE:
+			statement("static ushort4 spvLoadVertexRGBA4BE(ushort value)");
+			begin_scope();
+			statement("return ushort4(value >> 12, extract_bits(value, 8, 4), extract_bits(value, 4, 4), value & 0xf);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGB5A1LE:
+			statement("static ushort4 spvLoadVertexRGB5A1LE(ushort value)");
+			begin_scope();
+			statement("return ushort4(value & 0x1f, extract_bits(value, 5, 5), extract_bits(value, 10, 5), value >> 15);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGB5A1BE:
+			statement("static ushort4 spvLoadVertexRGB5A1BE(ushort value)");
+			begin_scope();
+			statement("return ushort4(value >> 11, extract_bits(value, 6, 5), extract_bits(value, 1, 5), value & 1);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGB10A2UInt:
+			statement("static uint4 spvLoadVertexRGB10A2UInt(uint value)");
+			begin_scope();
+			statement("return uint4(value & 0x3ff, extract_bits(value, 10, 10), extract_bits(value, 20, 10), value >> 30);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGB10A2SInt:
+			statement("static int4 spvLoadVertexRGB10A2SInt(int value)");
+			begin_scope();
+			statement("return int4((value << 22) >> 22, ((value << 12) >> 22), ((value << 2) >> 22), value >> 30);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRG11B10Half:
+			statement("static half3 spvLoadVertexRG11B10Half(uint value)");
+			begin_scope();
+			statement("ushort3 res = ushort3((value << 4) & 0x7ff0, (value >> 7) & 0x7ff0, (value >> 17) & 0x7fe0);");
+			statement("return as_type<half3>(res);");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGB9E5Half:
+			statement("static half3 spvLoadVertexRGB9E5Half(uint value)");
+			begin_scope();
+			statement("short exponent = short(value >> 27) - (15 + 9);");
+			statement("ushort3 mantissa = ushort3(value & 0x1ff, extract_bits(value, 9, 9), extract_bits(value, 18, 9));");
+			statement("return half3(mantissa) * exp2(half(exponent));");
+			end_scope();
+			break;
+
+		case SPVFuncImplLoadVertexRGB9E5Float:
+			statement("static float3 spvLoadVertexRGB9E5Float(uint value)");
+			begin_scope();
+			// Apple GPUs' exp2 gives slightly inaccurate results on negative integers
+			statement("float exponent = exp2(float(value >> 27)) * exp2(float(-(15 + 9)));");
+			statement("uint3 mantissa = uint3(value & 0x1ff, extract_bits(value, 9, 9), extract_bits(value, 18, 9));");
+			statement("return float3(mantissa) * exponent;");
+			end_scope();
+			break;
+
 		default:
 			break;
 		}
@@ -7437,6 +7518,90 @@ void CompilerMSL::emit_resources()
 	emit_interface_block(patch_stage_out_var_id);
 	emit_interface_block(stage_in_var_id);
 	emit_interface_block(patch_stage_in_var_id);
+	if (get_using_shader_vertex_loader())
+		emit_shader_vertex_loader();
+}
+
+void CompilerMSL::prepare_shader_vertex_loader()
+{
+	if (!stage_in_var_id)
+		return;
+	SPIRVariable &var = get<SPIRVariable>(stage_in_var_id);
+	SPIRType &type = get<SPIRType>(var.basetype);
+	const Meta &type_meta = ir.meta[var.basetype];
+	assert(type_meta.members.size() == type.member_types.size());
+
+	vertex_loader_writer.init(vertex_attributes, vertex_bindings);
+	for (size_t i = 0; i < type_meta.members.size(); i++)
+	{
+		const Meta::Decoration &meta = type_meta.members[i];
+		vertex_loader_writer.load(meta, get<SPIRType>(type.member_types[i]));
+		SPVFuncImpl fn = vertex_loader_writer.get_function_for_loading_vertex(meta.location, msl_options.use_pixel_type_loads);
+		if (fn != SPVFuncImplNone)
+			spv_function_implementations.insert(fn);
+	}
+
+	std::string load;
+
+	for (uint32_t i = 0; i < MSLVertexLoaderWriter::MaxBindings; i++)
+	{
+		const MSLVertexLoaderWriter::Binding &binding = vertex_loader_writer.get_binding(i);
+		if (!binding.used)
+			continue;
+		if (!load.empty())
+			load.append(", ");
+		load.append("spvVertexBuffer");
+		load.append(std::to_string(i));
+		if (binding.stride == 0)
+		{
+			load.append("[0]");
+		}
+		else
+		{
+			const char *base;
+			const char *index;
+			switch (binding.rate)
+			{
+			case MSL_VERTEX_INPUT_RATE_VERTEX:
+				base = "gl_BaseVertex";
+				index = "gl_VertexIndex";
+				break;
+			case MSL_VERTEX_INPUT_RATE_INSTANCE:
+				base = "gl_BaseInstance";
+				index = "gl_InstanceIndex";
+				break;
+			default:
+				SPIRV_CROSS_THROW("Unrecognized vertex binding rate");
+			}
+			load.push_back('[');
+			if (binding.divisor <= 1)
+			{
+				load.append(binding.divisor == 0 ? base : index);
+			}
+			else
+			{
+				load.append(base);
+				load.append(" + (");
+				load.append(index);
+				load.append(" - ");
+				load.append(base);
+				load.append(") / ");
+				load.append(std::to_string(binding.divisor));
+			}
+			load.push_back(']');
+		}
+	}
+
+	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+	entry_func.add_fixup_hook_in([this, load]{
+		statement(get_name(this->get<SPIRVariable>(stage_in_var_id).basetype), " ", get_name(stage_in_var_id), " = spvLoadVertex(", load, ");");
+	}, SPIRFunction::FixupInPriority::VertexLoad);
+}
+
+void CompilerMSL::emit_shader_vertex_loader()
+{
+	if (stage_in_var_id)
+		vertex_loader_writer.generate(*this, get<SPIRVariable>(stage_in_var_id).basetype);
 }
 
 // Emit declarations for the specialization Metal function constants
@@ -12642,7 +12807,26 @@ string CompilerMSL::entry_point_arg_stage_in()
 	else
 		stage_in_id = stage_in_var_id;
 
-	if (stage_in_id)
+	if (stage_in_id && get_using_shader_vertex_loader())
+	{
+		for (uint32_t i = 0; i < MSLVertexLoaderWriter::MaxBindings; i++)
+		{
+			if (!vertex_loader_writer.get_binding(i).used)
+				continue;
+
+			if (!decl.empty())
+				decl.append(", ");
+			std::string istr = std::to_string(i);
+			decl.append("device const spvVertexData");
+			decl.append(istr);
+			decl.append("* spvVertexBuffer");
+			decl.append(istr);
+			decl.append(" [[buffer(");
+			decl.append(istr);
+			decl.append(")]]");
+		}
+	}
+	else if (stage_in_id)
 	{
 		auto &var = get<SPIRVariable>(stage_in_id);
 		auto &type = get_variable_data_type(var);

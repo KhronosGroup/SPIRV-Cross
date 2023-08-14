@@ -211,6 +211,232 @@ enum MSLSamplerYCbCrRange
 	MSL_SAMPLER_YCBCR_RANGE_INT_MAX = 0x7fffffff
 };
 
+/// Same as `VkVertexInputRate` for local use
+enum MSLVertexInputRate : uint32_t
+{
+	MSL_VERTEX_INPUT_RATE_VERTEX = 0,
+	MSL_VERTEX_INPUT_RATE_INSTANCE = 1,
+};
+
+/// Same as `VkFormat` for local use
+enum MSLFormat : uint32_t
+{
+	MSL_FORMAT_UNDEFINED = 0,
+	MSL_FORMAT_R4G4_UNORM_PACK8 = 1,
+	MSL_FORMAT_R4G4B4A4_UNORM_PACK16 = 2,
+	MSL_FORMAT_B4G4R4A4_UNORM_PACK16 = 3,
+	MSL_FORMAT_R5G6B5_UNORM_PACK16 = 4,
+	MSL_FORMAT_B5G6R5_UNORM_PACK16 = 5,
+	MSL_FORMAT_R5G5B5A1_UNORM_PACK16 = 6,
+	MSL_FORMAT_B5G5R5A1_UNORM_PACK16 = 7,
+	MSL_FORMAT_A1R5G5B5_UNORM_PACK16 = 8,
+	MSL_FORMAT_R8_UNORM = 9,
+	MSL_FORMAT_R8_SNORM = 10,
+	MSL_FORMAT_R8_USCALED = 11,
+	MSL_FORMAT_R8_SSCALED = 12,
+	MSL_FORMAT_R8_UINT = 13,
+	MSL_FORMAT_R8_SINT = 14,
+	MSL_FORMAT_R8_SRGB = 15,
+	MSL_FORMAT_R8G8_UNORM = 16,
+	MSL_FORMAT_R8G8_SNORM = 17,
+	MSL_FORMAT_R8G8_USCALED = 18,
+	MSL_FORMAT_R8G8_SSCALED = 19,
+	MSL_FORMAT_R8G8_UINT = 20,
+	MSL_FORMAT_R8G8_SINT = 21,
+	MSL_FORMAT_R8G8_SRGB = 22,
+	MSL_FORMAT_R8G8B8_UNORM = 23,
+	MSL_FORMAT_R8G8B8_SNORM = 24,
+	MSL_FORMAT_R8G8B8_USCALED = 25,
+	MSL_FORMAT_R8G8B8_SSCALED = 26,
+	MSL_FORMAT_R8G8B8_UINT = 27,
+	MSL_FORMAT_R8G8B8_SINT = 28,
+	MSL_FORMAT_R8G8B8_SRGB = 29,
+	MSL_FORMAT_B8G8R8_UNORM = 30,
+	MSL_FORMAT_B8G8R8_SNORM = 31,
+	MSL_FORMAT_B8G8R8_USCALED = 32,
+	MSL_FORMAT_B8G8R8_SSCALED = 33,
+	MSL_FORMAT_B8G8R8_UINT = 34,
+	MSL_FORMAT_B8G8R8_SINT = 35,
+	MSL_FORMAT_B8G8R8_SRGB = 36,
+	MSL_FORMAT_R8G8B8A8_UNORM = 37,
+	MSL_FORMAT_R8G8B8A8_SNORM = 38,
+	MSL_FORMAT_R8G8B8A8_USCALED = 39,
+	MSL_FORMAT_R8G8B8A8_SSCALED = 40,
+	MSL_FORMAT_R8G8B8A8_UINT = 41,
+	MSL_FORMAT_R8G8B8A8_SINT = 42,
+	MSL_FORMAT_R8G8B8A8_SRGB = 43,
+	MSL_FORMAT_B8G8R8A8_UNORM = 44,
+	MSL_FORMAT_B8G8R8A8_SNORM = 45,
+	MSL_FORMAT_B8G8R8A8_USCALED = 46,
+	MSL_FORMAT_B8G8R8A8_SSCALED = 47,
+	MSL_FORMAT_B8G8R8A8_UINT = 48,
+	MSL_FORMAT_B8G8R8A8_SINT = 49,
+	MSL_FORMAT_B8G8R8A8_SRGB = 50,
+	MSL_FORMAT_A8B8G8R8_UNORM_PACK32 = 51,
+	MSL_FORMAT_A8B8G8R8_SNORM_PACK32 = 52,
+	MSL_FORMAT_A8B8G8R8_USCALED_PACK32 = 53,
+	MSL_FORMAT_A8B8G8R8_SSCALED_PACK32 = 54,
+	MSL_FORMAT_A8B8G8R8_UINT_PACK32 = 55,
+	MSL_FORMAT_A8B8G8R8_SINT_PACK32 = 56,
+	MSL_FORMAT_A8B8G8R8_SRGB_PACK32 = 57,
+	MSL_FORMAT_A2R10G10B10_UNORM_PACK32 = 58,
+	MSL_FORMAT_A2R10G10B10_SNORM_PACK32 = 59,
+	MSL_FORMAT_A2R10G10B10_USCALED_PACK32 = 60,
+	MSL_FORMAT_A2R10G10B10_SSCALED_PACK32 = 61,
+	MSL_FORMAT_A2R10G10B10_UINT_PACK32 = 62,
+	MSL_FORMAT_A2R10G10B10_SINT_PACK32 = 63,
+	MSL_FORMAT_A2B10G10R10_UNORM_PACK32 = 64,
+	MSL_FORMAT_A2B10G10R10_SNORM_PACK32 = 65,
+	MSL_FORMAT_A2B10G10R10_USCALED_PACK32 = 66,
+	MSL_FORMAT_A2B10G10R10_SSCALED_PACK32 = 67,
+	MSL_FORMAT_A2B10G10R10_UINT_PACK32 = 68,
+	MSL_FORMAT_A2B10G10R10_SINT_PACK32 = 69,
+	MSL_FORMAT_R16_UNORM = 70,
+	MSL_FORMAT_R16_SNORM = 71,
+	MSL_FORMAT_R16_USCALED = 72,
+	MSL_FORMAT_R16_SSCALED = 73,
+	MSL_FORMAT_R16_UINT = 74,
+	MSL_FORMAT_R16_SINT = 75,
+	MSL_FORMAT_R16_SFLOAT = 76,
+	MSL_FORMAT_R16G16_UNORM = 77,
+	MSL_FORMAT_R16G16_SNORM = 78,
+	MSL_FORMAT_R16G16_USCALED = 79,
+	MSL_FORMAT_R16G16_SSCALED = 80,
+	MSL_FORMAT_R16G16_UINT = 81,
+	MSL_FORMAT_R16G16_SINT = 82,
+	MSL_FORMAT_R16G16_SFLOAT = 83,
+	MSL_FORMAT_R16G16B16_UNORM = 84,
+	MSL_FORMAT_R16G16B16_SNORM = 85,
+	MSL_FORMAT_R16G16B16_USCALED = 86,
+	MSL_FORMAT_R16G16B16_SSCALED = 87,
+	MSL_FORMAT_R16G16B16_UINT = 88,
+	MSL_FORMAT_R16G16B16_SINT = 89,
+	MSL_FORMAT_R16G16B16_SFLOAT = 90,
+	MSL_FORMAT_R16G16B16A16_UNORM = 91,
+	MSL_FORMAT_R16G16B16A16_SNORM = 92,
+	MSL_FORMAT_R16G16B16A16_USCALED = 93,
+	MSL_FORMAT_R16G16B16A16_SSCALED = 94,
+	MSL_FORMAT_R16G16B16A16_UINT = 95,
+	MSL_FORMAT_R16G16B16A16_SINT = 96,
+	MSL_FORMAT_R16G16B16A16_SFLOAT = 97,
+	MSL_FORMAT_R32_UINT = 98,
+	MSL_FORMAT_R32_SINT = 99,
+	MSL_FORMAT_R32_SFLOAT = 100,
+	MSL_FORMAT_R32G32_UINT = 101,
+	MSL_FORMAT_R32G32_SINT = 102,
+	MSL_FORMAT_R32G32_SFLOAT = 103,
+	MSL_FORMAT_R32G32B32_UINT = 104,
+	MSL_FORMAT_R32G32B32_SINT = 105,
+	MSL_FORMAT_R32G32B32_SFLOAT = 106,
+	MSL_FORMAT_R32G32B32A32_UINT = 107,
+	MSL_FORMAT_R32G32B32A32_SINT = 108,
+	MSL_FORMAT_R32G32B32A32_SFLOAT = 109,
+	MSL_FORMAT_R64_UINT = 110,
+	MSL_FORMAT_R64_SINT = 111,
+	MSL_FORMAT_R64_SFLOAT = 112,
+	MSL_FORMAT_R64G64_UINT = 113,
+	MSL_FORMAT_R64G64_SINT = 114,
+	MSL_FORMAT_R64G64_SFLOAT = 115,
+	MSL_FORMAT_R64G64B64_UINT = 116,
+	MSL_FORMAT_R64G64B64_SINT = 117,
+	MSL_FORMAT_R64G64B64_SFLOAT = 118,
+	MSL_FORMAT_R64G64B64A64_UINT = 119,
+	MSL_FORMAT_R64G64B64A64_SINT = 120,
+	MSL_FORMAT_R64G64B64A64_SFLOAT = 121,
+	MSL_FORMAT_B10G11R11_UFLOAT_PACK32 = 122,
+	MSL_FORMAT_E5B9G9R9_UFLOAT_PACK32 = 123,
+	MSL_FORMAT_G16B16G16R16_422_UNORM = 1000156027,
+	MSL_FORMAT_B16G16R16G16_422_UNORM = 1000156028,
+	MSL_FORMAT_A4R4G4B4_UNORM_PACK16 = 1000340000,
+	MSL_FORMAT_A4B4G4R4_UNORM_PACK16 = 1000340001,
+	MSL_FORMAT_R16G16_S10_5_NV = 1000464000,
+	MSL_FORMAT_A1B5G5R5_UNORM_PACK16_KHR = 1000470000,
+	MSL_FORMAT_A8_UNORM_KHR = 1000470001,
+};
+
+/// Describes the packing of an MSLFormat, as well as how it will be unpacked
+/// (Unpack endianness is picked to always put A in the fourth channel, with the exception of `NoAlpha`, which is unpacked little endian so we can use Metal's unpack functions, which are all little endian)
+/// (Endianness here refers to the order of elements in memory, not individual bytes)
+enum class MSLFormatPacking : uint16_t
+{
+	Invalid,   ///< Invalid value, used to signal unsupported types
+	EvenAHigh, ///< Evenly split sizes, alpha is in high bits (e.g. `A8B8G8R8_PACK32`, `R8G8B8A8`), unpacked little endian
+	EvenALow,  ///< Evenly split sizes, alpha is in low bits (e.g. `R4G4B4A4_PACK16`), unpacked big endian
+	NoAlpha,   ///< Three packed values, weighted towards G and R (e.g. `R5G6B5_PACK16`, `B10G11R11_PACK32`), unpacked little endian
+	AlphaHigh, ///< Packed ARGB (e.g. `A1R5G5B5_PACK16`, `A2B10G10R10_PACK32`), unpacked little endian
+	AlphaLow,  ///< Packed RGBA (e.g. `R5G5B5A1_PACK16`), unpacked big endian
+};
+
+/// Describes the details of an MSLFormat necessary for easily generating vertex loading code
+union MSLFormatInfo
+{
+	struct
+	{
+		uint16_t log2_align : 2; ///< log2(minimum msl alignment)
+		uint16_t num_elems : 3;
+		MSLFormatPacking packing : 3;
+		uint16_t is_float : 1;
+		uint16_t is_signed : 1;
+		uint16_t is_normalized : 1;
+		uint16_t is_packed : 1; ///< Is packed in MSL
+		uint16_t vk_packed : 1; ///< Is packed in Vulkan but not MSL
+		uint16_t is_bgr : 1;
+		uint16_t is_srgb : 1;
+		uint16_t _pad : 1;
+	};
+	uint16_t bits;
+
+	constexpr MSLFormatInfo(uint16_t log2_align_, uint16_t num_elems_, MSLFormatPacking packing_, bool is_float_,
+	                        bool is_signed_, bool is_normalized_, bool is_packed_, bool vk_packed_, bool is_bgr_,
+	                        bool is_srgb_)
+	    : log2_align(log2_align_)
+	    , num_elems(num_elems_)
+	    , packing(packing_)
+	    , is_float(is_float_)
+	    , is_signed(is_signed_)
+	    , is_normalized(is_normalized_)
+	    , is_packed(is_packed_)
+	    , vk_packed(vk_packed_)
+	    , is_bgr(is_bgr_)
+	    , is_srgb(is_srgb_)
+	    , _pad(0)
+	{
+	}
+	constexpr MSLFormatInfo()
+	    : bits(0)
+	{
+	}
+	constexpr uint32_t align() const
+	{
+		return 1 << log2_align;
+	}
+	constexpr uint32_t vk_align_log2() const
+	{
+		return vk_packed ? log2_align + 2 : log2_align;
+	}
+	constexpr uint32_t vk_align() const
+	{
+		return 1 << vk_align_log2();
+	}
+	constexpr uint32_t size() const
+	{
+		return is_packed ? align() : align() * num_elems;
+	}
+	uint16_t raw_value() const
+	{
+		static_assert(sizeof(MSLFormatInfo) == sizeof(bits), "Size check");
+		return bits;
+	}
+	bool operator==(const MSLFormatInfo &other) const
+	{
+		return raw_value() == other.raw_value();
+	}
+	bool is_supported() const
+	{
+		return raw_value() != 0;
+	}
+};
+
 struct MSLConstexprSampler
 {
 	MSLSamplerCoord coord = MSL_SAMPLER_COORD_NORMALIZED;
@@ -289,6 +515,22 @@ static const uint32_t kMaxArgumentBuffers = 8;
 
 // The arbitrary maximum for the nesting of array of array copies.
 static const uint32_t kArrayCopyMultidimMax = 6;
+
+struct MSLVertexBinding
+{
+	uint32_t binding = 0;
+	uint32_t stride = 0;
+	MSLVertexInputRate rate = MSL_VERTEX_INPUT_RATE_VERTEX;
+	uint32_t divisor = 1;
+};
+
+struct MSLVertexAttribute
+{
+	uint32_t location = 0;
+	uint32_t binding = 0;
+	MSLFormat format = MSL_FORMAT_UNDEFINED;
+	uint32_t offset = 0;
+};
 
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
@@ -470,6 +712,11 @@ public:
 		// handling for the gl_VertexIndex builtin. We may as well, then, create three
 		// different shaders for these three scenarios.
 		IndexType vertex_index_type = IndexType::None;
+
+		// Allows shaders to load from types like `rgb9e5<float3>` or `rgba16unorm<float4>`
+		// (Supported on Apple GPUs, I'm guessing the cutoff is Apple4 but Apple doesn't document it...)
+		// Compiles to dedicated load-and-expand instructions, which are more efficient than expanding with the ALU.
+		bool use_pixel_type_loads = false;
 
 		// If set, a dummy [[sample_id]] input is added to a fragment shader if none is present.
 		// This will force the shader to run at sample rate, assuming Metal does not optimize
@@ -732,6 +979,25 @@ public:
 	void set_combined_sampler_suffix(const char *suffix);
 	const char *get_combined_sampler_suffix() const;
 
+	/// Add a binding for in-shader vertex loading
+	void add_shader_vertex_loader_binding(const MSLVertexBinding& binding) { vertex_bindings.push_back(binding); }
+	/// Enable in-shader vertex loading and add an attribute
+	void add_shader_vertex_loader_attribute(const MSLVertexAttribute& attribute) { vertex_attributes.push_back(attribute); }
+	/// Disable in-shader vertex loading
+	void reset_shader_vertex_loader() { vertex_bindings.clear(); vertex_attributes.clear(); }
+	/// Get whether or not in-shader vertex loading is enabled
+	bool get_using_shader_vertex_loader() const { return get_execution_model() == spv::ExecutionModelVertex && !vertex_attributes.empty(); }
+	/// Get the list of vertex bindings used by shader vertex loading
+	const VectorView<MSLVertexBinding> &get_vertex_bindings() const { return vertex_bindings; }
+	/// Get the list of vertex bindings used by shader vertex loading
+	VectorView<MSLVertexBinding> &get_vertex_bindings() { return vertex_bindings; }
+	/// Get the list of vertex attributes used by shader vertex loading
+	const VectorView<MSLVertexAttribute> &get_vertex_attributes() const { return vertex_attributes; }
+	/// Get the list of vertex attributes used by shader vertex loading
+	VectorView<MSLVertexAttribute> &get_vertex_attributes() { return vertex_attributes; }
+
+	static const MSLFormatInfo& get_format_info(MSLFormat format);
+
 protected:
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
@@ -815,6 +1081,58 @@ protected:
 		SPVFuncImplVariableDescriptor,
 		SPVFuncImplVariableSizedDescriptor,
 		SPVFuncImplVariableDescriptorArray,
+		SPVFuncImplLoadVertexRG4,
+		SPVFuncImplLoadVertexRGBA4LE,
+		SPVFuncImplLoadVertexRGBA4BE,
+		SPVFuncImplLoadVertexRGB5A1LE,
+		SPVFuncImplLoadVertexRGB5A1BE,
+		SPVFuncImplLoadVertexRGB10A2UInt,
+		SPVFuncImplLoadVertexRGB10A2SInt,
+		SPVFuncImplLoadVertexRG11B10Half,
+		SPVFuncImplLoadVertexRGB9E5Half,
+		SPVFuncImplLoadVertexRGB9E5Float,
+	};
+
+	/// Helper for writing shader vertex loaders
+	class MSLVertexLoaderWriter
+	{
+	public:
+		constexpr static uint32_t MaxAttributes = 31;
+		constexpr static uint32_t MaxBindings = 31;
+
+		struct Attribute
+		{
+			uint32_t binding;
+			MSLFormat format;
+			uint32_t offset;
+			const Meta::Decoration *meta;
+			const SPIRType *load_type;
+		};
+		struct Binding
+		{
+			uint32_t stride;
+			uint32_t struct_size;
+			MSLVertexInputRate rate;
+			uint32_t divisor;
+			uint8_t align;
+			bool valid;
+			bool used;
+		};
+
+	private:
+		Attribute attributes[MaxAttributes];
+		Binding bindings[MaxBindings];
+		class Impl;
+
+	public:
+		/// Initialize the vertex loader writer
+		void init(const VectorView<MSLVertexAttribute> &in_attributes, const VectorView<MSLVertexBinding> &in_bindings);
+		/// Initializes a used attribute
+		void load(const Meta::Decoration &meta, const SPIRType &type);
+		SPVFuncImpl get_function_for_loading_vertex(uint32_t attribute, bool has_pixel_type_loads);
+		void generate(CompilerMSL &out, TypeID main_struct);
+		const Binding &get_binding(uint32_t idx) const { return bindings[idx]; }
+		const Attribute &get_attribute(uint32_t idx) const { return attributes[idx]; }
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
@@ -964,6 +1282,8 @@ protected:
 	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t component,
 	                                   uint32_t num_components, bool strip_array);
 
+	void prepare_shader_vertex_loader();
+	void emit_shader_vertex_loader();
 	void emit_custom_templates();
 	void emit_custom_functions();
 	void emit_resources();
@@ -1129,6 +1449,9 @@ protected:
 	std::set<std::string> pragma_lines;
 	std::set<std::string> typedef_lines;
 	SmallVector<uint32_t> vars_needing_early_declaration;
+	SmallVector<MSLVertexBinding> vertex_bindings;
+	SmallVector<MSLVertexAttribute> vertex_attributes;
+	MSLVertexLoaderWriter vertex_loader_writer;
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
 	std::unordered_map<StageSetBinding, uint32_t, InternalHasher> resource_arg_buff_idx_to_binding_number;
