@@ -11674,7 +11674,10 @@ string CompilerMSL::to_buffer_size_expression(uint32_t id)
 			{
 				if (!msl_options.runtime_array_rich_descriptor)
 					SPIRV_CROSS_THROW("OpArrayLength requires rich descriptor format");
-				return buffer_expr + ".length(" + array_expr.substr(1, array_expr.size() - 2) + ")";
+
+				auto last_pos = array_expr.find_last_of(']');
+				if (last_pos != std::string::npos)
+					return buffer_expr + ".length(" + array_expr.substr(1, last_pos - 1) + ")";
 			}
 		}
 		return buffer_expr + buffer_size_name_suffix + array_expr;
@@ -13258,13 +13261,9 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				ep_args += ", ";
 			ep_args += sampler_type(type, var_id) + " " + r.name;
 			if (is_runtime_size_array(type))
-			{
 				ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")]]";
-			}
 			else
-			{
 				ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
-			}
 			break;
 		case SPIRType::Image:
 		{
@@ -13280,13 +13279,9 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					ep_args += join(plane_name_suffix, r.plane);
 
 				if (is_runtime_size_array(type))
-				{
 					ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")";
-				}
 				else
-				{
 					ep_args += " [[texture(" + convert_to_string(r.index) + ")";
-				}
 
 				if (interlocked_resources.count(var_id))
 					ep_args += ", raster_order_group(0)";

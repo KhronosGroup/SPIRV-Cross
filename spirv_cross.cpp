@@ -635,9 +635,7 @@ bool Compiler::is_runtime_size_array(const SPIRType &type)
 	if (type.array.empty())
 		return false;
 	assert(type.array.size() == type.array_size_literal.size());
-	if (type.array_size_literal[type.array.size() - 1])
-		return type.array[type.array.size() - 1] == 0;
-	return false;
+	return type.array_size_literal.back() && type.array.back() == 0;
 }
 
 ShaderResources Compiler::get_shader_resources() const

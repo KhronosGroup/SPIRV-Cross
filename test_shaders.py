@@ -358,7 +358,7 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
     if '.rich-descriptor.' in shader:
-        msl_args.append('--msl-runtime-array-rich-decriptor')
+        msl_args.append('--msl-runtime-array-rich-descriptor')
     if '.mask-location-0.' in shader:
         msl_args.append('--mask-stage-output-location')
         msl_args.append('0')

@@ -865,7 +865,8 @@ static void print_help_msl()
 	                "\t\tRequires MSL 2.0 to be enabled.\n"
 	                "\t[--msl-argument-buffer-tier]:\n\t\tWhen using Metal argument buffers, indicate the Metal argument buffer tier level supported by the Metal platform.\n"
 	                "\t\tUses same values as Metal MTLArgumentBuffersTier enumeration (0 = Tier1, 1 = Tier2).\n"
-	                "\t\tSetting this value also enables msl-argument-buffers.\n"
+	                "\t\tNOTE: Setting this value no longer enables msl-argument-buffers implicitly.\n"
+	                "\t[--msl-runtime-array-rich-descriptor]:\n\t\tWhen declaring a runtime array of SSBOs, declare an array of {ptr, len} pairs to support OpArrayLength.\n"
 	                "\t[--msl-texture-buffer-native]:\n\t\tEnable native support for texel buffers. Otherwise, it is emulated as a normal texture.\n"
 	                "\t[--msl-framebuffer-fetch]:\n\t\tImplement subpass inputs with frame buffer fetch.\n"
 	                "\t\tEmits [[color(N)]] inputs in fragment stage.\n"
@@ -1789,7 +1790,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
 		args.msl_combined_sampler_suffix = parser.next_string();
 	});
-	cbs.add("--msl-runtime-array-rich-decriptor",
+	cbs.add("--msl-runtime-array-rich-descriptor",
 	        [&args](CLIParser &) { args.msl_runtime_array_rich_descriptor = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
