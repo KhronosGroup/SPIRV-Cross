@@ -44,7 +44,7 @@ struct main0_in
 };
 
 static inline __attribute__((always_inline))
-uint doRay(thread const float3& rayOrigin, thread const float3& rayDirection, thread const float& rayDistance, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& rayQuery, thread const raytracing::acceleration_structure<raytracing::instancing>& topLevelAS)
+uint doRay(thread const float3& rayOrigin, thread const float3& rayDirection, thread const float& rayDistance, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& rayQuery, const raytracing::acceleration_structure<raytracing::instancing> topLevelAS)
 {
     rayQuery.reset(ray(rayOrigin, rayDirection, 0.001000000047497451305389404296875, rayDistance), topLevelAS, spvMakeIntersectionParams(4u));
     for (;;)
