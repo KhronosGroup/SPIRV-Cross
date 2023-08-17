@@ -1295,7 +1295,10 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 	if (flags.get(DecorationInvariant) && (options.es || options.version >= 120))
 		res += "invariant ";
 	if (flags.get(DecorationPerPrimitiveEXT))
-	    res += "perprimitiveEXT ";
+	{
+		res += "perprimitiveEXT ";
+		require_extension_internal("GL_EXT_mesh_shader");
+	}
 
 	if (flags.get(DecorationExplicitInterpAMD))
 	{
