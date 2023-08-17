@@ -1489,6 +1489,10 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 		return "rg8i";
 	case ImageFormatR16i:
 		return "r16i";
+	case ImageFormatR64i:
+		return "r64i";
+	case ImageFormatR64ui:
+		return "r64ui";
 	default:
 	case ImageFormatUnknown:
 		return nullptr;
@@ -15348,6 +15352,14 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 	switch (imagetype.basetype)
 	{
+	case SPIRType::Int64:
+		res = "i64";
+		require_extension_internal("GL_EXT_shader_image_int64");
+		break;
+	case SPIRType::UInt64:
+		res = "u64";
+		require_extension_internal("GL_EXT_shader_image_int64");
+		break;
 	case SPIRType::Int:
 	case SPIRType::Short:
 	case SPIRType::SByte:
