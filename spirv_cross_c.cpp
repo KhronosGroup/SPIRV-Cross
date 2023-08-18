@@ -742,6 +742,14 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_SAMPLE_DREF_LOD_ARRAY_AS_GRAD:
 		options->msl.sample_dref_lod_array_as_grad = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_MSL_XFB_COUNTER_BUFFER_INDEX_BASE:
+		options->msl.xfb_counter_buffer_index_base = value;
+		break;
+
+	case SPVC_COMPILER_OPTION_MSL_XFB_OUTPUT_BUFFER_INDEX_BASE:
+		options->msl.xfb_output_buffer_index_base = value;
+		break;
 #endif
 
 	default:

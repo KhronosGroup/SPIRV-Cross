@@ -12735,6 +12735,21 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			}
 		}
 
+		// Shaders with transform feedback get two additional buffers for
+		// each transform feedback buffer declared: a counter of data written,
+		// and the transform feedback data buffer proper.
+		if (needs_transform_feedback())
+		{
+			for (uint32_t xfb_buffer = 0; xfb_buffer < kMaxXfbBuffers; xfb_buffer++)
+			{
+				if (!xfb_buffers[xfb_buffer])
+					continue;
+				if (!ep_args.empty())
+					ep_args += ", ";
+				ep_args += join("device uint& spvXfbCounter", xfb_buffer, " [[buffer(", msl_options.xfb_counter_buffer_index_base + xfb_buffer, ")]], ");
+				ep_args += join(variable_decl(get_type_from_variable(xfb_buffers[xfb_buffer]), to_name(xfb_buffers[xfb_buffer])), " [[buffer(", msl_options.xfb_output_buffer_index_base + xfb_buffer, ")]]");
+			}
+		}
 		// Tessellation control shaders get three additional parameters:
 		// a buffer to hold the per-patch data, a buffer to hold the per-patch
 		// tessellation levels, and a block of workgroup memory to hold the
@@ -17904,7 +17919,6 @@ void CompilerMSL::analyze_xfb_buffers()
 
 			// FIXME: Still to do:
 			// - Add locals to entry point
-			// - Add buffer arguments to entry point
 			// - Make sure Xfb-captured outputs aren't in "normal" capture_output_to_buffer
 		}
 	}

@@ -321,6 +321,8 @@ public:
 		uint32_t shader_input_buffer_index = 22;
 		uint32_t shader_index_buffer_index = 21;
 		uint32_t shader_patch_input_buffer_index = 20;
+		uint32_t xfb_counter_buffer_index_base = 16;
+		uint32_t xfb_output_buffer_index_base = 12;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
