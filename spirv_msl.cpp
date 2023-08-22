@@ -17795,9 +17795,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		auto &type = get_variable_data_type(var);
 		if(var.storage != StorageClassOutput)
 			return;
-		if(is_hidden_variable(var))
-			return;
-		if (!has_decoration(self, DecorationXfbBuffer))
+		if(is_hidden_variable(var, true))
 			return;
 
 		uint32_t xfb_buffer_num = 0, xfb_stride;
@@ -17829,11 +17827,16 @@ void CompilerMSL::analyze_xfb_buffers()
 				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
 				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, to_member_name(type, i), i, xfb_offset, true});
 				if (has_member_decoration(type.self, i, DecorationXfbStride))
+				{
 					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
+				}
 				else
 				{
+					// XXX What's this for??? The validation rules for SPIR-V require
+					// this to be set if any of the transform feedback decorations are used!
 					bool hasTransformFeedback = has_member_decoration(type.parent_type, i, DecorationXfbStride);
-					if(hasTransformFeedback) {
+					if (hasTransformFeedback)
+					{
 						auto &execution = get_entry_point();
 						execution.flags.set(spv::ExecutionModeXfb);
 					}
@@ -17843,7 +17846,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		}
 		else
 		{
-			if (!has_decoration(type.self, DecorationOffset))
+			if (!has_decoration(self, DecorationOffset))
 				return;
 			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
 			xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({&var, to_name(self), 0, xfb_offset, false});
@@ -17897,7 +17900,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		for (auto &output : outputs)
 		{
 			auto &var = *output.var;
-//			auto &type = get_variable_data_type(var);
+			auto &type = get_variable_data_type(var);
 
 			string mbr_name = ensure_valid_name(output.name, "m");
 			set_member_name(buffer_type.self, member_index, mbr_name);
@@ -17910,7 +17913,7 @@ void CompilerMSL::analyze_xfb_buffers()
 			}
 			else
 			{
-				buffer_type.member_types.push_back(get_variable_data_type_id(var));
+				buffer_type.member_types.push_back(type.member_types[member_index]);
 			}
 
 			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
