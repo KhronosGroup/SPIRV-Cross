@@ -17825,7 +17825,13 @@ void CompilerMSL::analyze_xfb_buffers()
 					continue;
 				uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
 				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
-				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, to_member_name(type, i), i, xfb_offset, true});
+				string name;
+				if (has_member_decoration(type.self, i, DecorationBuiltIn))
+					// Force this to have the proper name.
+					name = builtin_to_glsl(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), StorageClassOutput);
+				else
+					name = to_member_name(type, i);
+				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, name, i, xfb_offset, true});
 				if (has_member_decoration(type.self, i, DecorationXfbStride))
 				{
 					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
@@ -17849,7 +17855,13 @@ void CompilerMSL::analyze_xfb_buffers()
 			if (!has_decoration(self, DecorationOffset))
 				return;
 			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
-			xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({&var, to_name(self), 0, xfb_offset, false});
+			string name;
+			if (has_decoration(self, DecorationBuiltIn))
+				// Force this to have the proper name.
+				name = builtin_to_glsl(BuiltIn(get_decoration(self, DecorationBuiltIn)), StorageClassOutput);
+			else
+				name = to_name(self);
+			xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({&var, name, 0, xfb_offset, false});
 		}
 	});
 
