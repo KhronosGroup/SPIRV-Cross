@@ -12740,7 +12740,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				else
 					ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
 
-				ep_args += " [[" + builtin_qualifier(bi_type);
+				ep_args += string(" [[") + builtin_qualifier(bi_type);
 				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
 				{
 					if (!msl_options.supports_msl_version(2))
@@ -16222,8 +16222,8 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 	// Handle HLSL-style 0-based vertex/instance index.
 	builtin_declaration = true;
 	bi_arg += builtin_type_decl(builtin);
-	bi_arg += " " + builtin_to_glsl(builtin, StorageClassInput);
-	bi_arg += " [[" + builtin_qualifier(builtin) + "]]";
+	bi_arg += string(" ") + builtin_to_glsl(builtin, StorageClassInput);
+	bi_arg += string(" [[") + builtin_qualifier(builtin) + string("]]");
 	builtin_declaration = false;
 
 	return bi_arg;
