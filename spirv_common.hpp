@@ -1001,7 +1001,9 @@ struct SPIRFunction : IVariant
 	// Force ordering for fixups that rely on other fixups
 	enum class FixupInPriority
 	{
-		Default = 0, ///< The default ordering for fixups with no dependencies
+		Default = 0,    ///< The default ordering for fixups with no dependencies
+		VertexLoad,     ///< Custom vertex loading
+		PostVertexLoad, ///< Anything that relies on vertex attributes
 		Count
 	};
 

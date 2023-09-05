@@ -2437,7 +2437,7 @@ bool CompilerMSL::add_component_variable_to_interface_block(spv::StorageClass st
 					statement(to_name(var.self), " = ", ib_var_ref, ".m_location_", location,
 					          vector_swizzle(type_components, start_component), ";");
 				}
-			});
+			}, SPIRFunction::FixupInPriority::PostVertexLoad);
 		}
 		else
 		{
@@ -2842,7 +2842,7 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 					{
 						statement(to_name(var.self), "[", i, "] = ", ib_var_ref, ".", mbr_name, ";");
 					}
-				});
+				}, SPIRFunction::FixupInPriority::PostVertexLoad);
 				break;
 
 			case StorageClassOutput:

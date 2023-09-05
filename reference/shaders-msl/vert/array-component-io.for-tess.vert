@@ -71,6 +71,8 @@ kernel void main0(main0_in in [[stage_in]], uint3 gl_GlobalInvocationID [[thread
     spvUnsafeArray<float, 3> InC = {};
     float InD = {};
     device main0_out& out = spvOut[gl_GlobalInvocationID.y * spvStageInputSize.x + gl_GlobalInvocationID.x];
+    if (any(gl_GlobalInvocationID >= spvStageInputSize))
+        return;
     InA[0] = in.m_location_1.x;
     InA[1] = in.m_location_2.x;
     InB[0] = in.m_location_1.zw;
@@ -79,8 +81,6 @@ kernel void main0(main0_in in [[stage_in]], uint3 gl_GlobalInvocationID [[thread
     InC[1] = in.m_location_1.y;
     InC[2] = in.m_location_2.y;
     InD = in.m_location_0.w;
-    if (any(gl_GlobalInvocationID >= spvStageInputSize))
-        return;
     out.gl_Position = in.Pos;
     A = InA;
     B = InB;
