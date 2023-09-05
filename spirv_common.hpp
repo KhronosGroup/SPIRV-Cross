@@ -998,11 +998,25 @@ struct SPIRFunction : IVariant
 	// Intentionally not a small vector, this one is rare, and std::function can be large.
 	Vector<std::function<void()>> fixup_hooks_out;
 
+	// Force ordering for fixups that rely on other fixups
+	enum class FixupInPriority
+	{
+		Default = 0, ///< The default ordering for fixups with no dependencies
+		Count
+	};
+
 	// Hooks to be run when the function begins.
 	// Mostly used for populating internal data structures from flattened structures.
 	// Need to defer this, because they might rely on things which change during compilation.
 	// Intentionally not a small vector, this one is rare, and std::function can be large.
-	Vector<std::function<void()>> fixup_hooks_in;
+	Vector<std::pair<std::function<void()>, FixupInPriority>> fixup_hooks_in;
+
+	// Add a fixup hook to be run when the function begins
+	// If the fixup has ordering requirements relative to other fixups, specify that with priority
+	void add_fixup_hook_in(std::function<void()> fn, FixupInPriority priority = FixupInPriority::Default)
+	{
+		fixup_hooks_in.emplace_back(std::move(fn), priority);
+	}
 
 	// On function entry, make sure to copy a constant array into thread addr space to work around
 	// the case where we are passing a constant array by value to a function on backends which do not

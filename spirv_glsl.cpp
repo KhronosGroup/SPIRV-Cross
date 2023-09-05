@@ -3940,7 +3940,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 
 			for (uint32_t j = 0; j < iteration_count; j++)
 			{
-				entry_func.fixup_hooks_in.push_back([=, &var]() {
+				entry_func.add_fixup_hook_in([=, &var]() {
 					AccessChainMeta meta;
 					auto &c = this->get<SPIRConstant>(var.initializer);
 
@@ -3995,7 +3995,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 		auto lut_name = join("_", var.self, "_init");
 		statement("const ", type_to_glsl(type), " ", lut_name, type_to_array_glsl(type),
 		          " = ", to_expression(var.initializer), ";");
-		entry_func.fixup_hooks_in.push_back([&, lut_name]() {
+		entry_func.add_fixup_hook_in([&, lut_name]() {
 			statement(to_expression(var.self), "[gl_InvocationID] = ", lut_name, "[gl_InvocationID];");
 		});
 	}
@@ -4003,7 +4003,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 	         BuiltIn(get_decoration(var.self, DecorationBuiltIn)) == BuiltInSampleMask)
 	{
 		// We cannot copy the array since gl_SampleMask is unsized in GLSL. Unroll time! <_<
-		entry_func.fixup_hooks_in.push_back([&] {
+		entry_func.add_fixup_hook_in([&] {
 			auto &c = this->get<SPIRConstant>(var.initializer);
 			uint32_t num_constants = uint32_t(c.subconstants.size());
 			for (uint32_t i = 0; i < num_constants; i++)
@@ -4019,7 +4019,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 		auto lut_name = join("_", var.self, "_init");
 		statement("const ", type_to_glsl(type), " ", lut_name,
 		          type_to_array_glsl(type), " = ", to_expression(var.initializer), ";");
-		entry_func.fixup_hooks_in.push_back([&, lut_name, is_patch]() {
+		entry_func.add_fixup_hook_in([&, lut_name, is_patch]() {
 			if (is_patch)
 			{
 				statement("if (gl_InvocationID == 0)");
@@ -16084,8 +16084,20 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		sort(begin(block.dominated_variables), end(block.dominated_variables));
 	}
 
-	for (auto &line : current_function->fixup_hooks_in)
-		line();
+	SPIRFunction::FixupInPriority priority_current;
+	SPIRFunction::FixupInPriority priority_next = SPIRFunction::FixupInPriority::Default;
+	do
+	{
+		priority_current = priority_next;
+		priority_next = SPIRFunction::FixupInPriority::Count;
+		for (auto &line : current_function->fixup_hooks_in)
+		{
+			if (line.second == priority_current)
+				line.first();
+			else if (line.second > priority_current && line.second < priority_next)
+				priority_next = line.second;
+		}
+	} while (priority_next != SPIRFunction::FixupInPriority::Count);
 
 	emit_block_chain(entry_block);
 
@@ -18152,7 +18164,7 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 			SPIRV_CROSS_THROW("Cannot use GL_EXT_shader_framebuffer_fetch with arrays of color outputs.");
 
 		auto &func = get<SPIRFunction>(get_entry_point().self);
-		func.fixup_hooks_in.push_back([=]() {
+		func.add_fixup_hook_in([=]() {
 			if (is_legacy())
 			{
 				statement(to_expression(subpass_var->self), " = ", "gl_LastFragData[",
