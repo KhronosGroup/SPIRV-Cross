@@ -7290,7 +7290,8 @@ void CompilerMSL::emit_custom_functions()
 			end_scope_decl();
 			statement("");
 
-			if (msl_options.runtime_array_rich_descriptor)
+			if (msl_options.runtime_array_rich_descriptor &&
+			    spv_function_implementations.count(SPVFuncImplVariableSizedDescriptor) != 0)
 			{
 				statement("template<typename T>");
 				statement("struct spvDescriptorArray<device T*>");
