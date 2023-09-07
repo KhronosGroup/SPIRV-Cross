@@ -672,6 +672,7 @@ struct CLIArguments
 	bool msl_ios_use_simdgroup_functions = false;
 	bool msl_emulate_subgroups = false;
 	uint32_t msl_fixed_subgroup_size = 0;
+	CompilerMSL::Options::IndexType msl_vertex_index_type = CompilerMSL::Options::IndexType::None;
 	bool msl_force_sample_rate_shading = false;
 	bool msl_manual_helper_invocation_updates = true;
 	bool msl_check_discarded_frag_stores = false;
@@ -1229,6 +1230,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.ios_use_simdgroup_functions = args.msl_ios_use_simdgroup_functions;
 		msl_opts.emulate_subgroups = args.msl_emulate_subgroups;
 		msl_opts.fixed_subgroup_size = args.msl_fixed_subgroup_size;
+		msl_opts.vertex_index_type = args.msl_vertex_index_type;
 		msl_opts.force_sample_rate_shading = args.msl_force_sample_rate_shading;
 		msl_opts.manual_helper_invocation_updates = args.msl_manual_helper_invocation_updates;
 		msl_opts.check_discarded_frag_stores = args.msl_check_discarded_frag_stores;
@@ -1784,6 +1786,18 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-emulate-subgroups", [&args](CLIParser &) { args.msl_emulate_subgroups = true; });
 	cbs.add("--msl-fixed-subgroup-size",
 	        [&args](CLIParser &parser) { args.msl_fixed_subgroup_size = parser.next_uint(); });
+	cbs.add("--msl-vertex-index-type", [&args](CLIParser &parser) {
+		std::string str = parser.next_string();
+		std::transform(str.begin(), str.end(), str.begin(), std::tolower);
+		if (str == "none")
+			args.msl_vertex_index_type = CompilerMSL::Options::IndexType::None;
+		else if (str == "uint16")
+			args.msl_vertex_index_type = CompilerMSL::Options::IndexType::UInt16;
+		else if (str == "uint32")
+			args.msl_vertex_index_type = CompilerMSL::Options::IndexType::UInt32;
+		else
+			THROW("Bad index type");
+	});
 	cbs.add("--msl-force-sample-rate-shading", [&args](CLIParser &) { args.msl_force_sample_rate_shading = true; });
 	cbs.add("--msl-no-manual-helper-invocation-updates",
 	        [&args](CLIParser &) { args.msl_manual_helper_invocation_updates = false; });
