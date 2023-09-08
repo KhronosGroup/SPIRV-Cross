@@ -1224,6 +1224,7 @@ protected:
 	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
 
+	VariableID xfb_counters[kMaxXfbBuffers];
 	VariableID xfb_buffers[kMaxXfbBuffers];
 	VariableID xfb_locals[kMaxXfbBuffers];
 	uint32_t xfb_strides[kMaxXfbBuffers];

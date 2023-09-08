@@ -12746,7 +12746,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 					continue;
 				if (!ep_args.empty())
 					ep_args += ", ";
-				ep_args += join("device uint& spvXfbCounter", xfb_buffer, " [[buffer(", msl_options.xfb_counter_buffer_index_base + xfb_buffer, ")]], ");
+				ep_args += join(variable_decl(get_type_from_variable(xfb_counters[xfb_buffer]), to_name(xfb_counters[xfb_buffer])), " [[buffer(", msl_options.xfb_counter_buffer_index_base + xfb_buffer, ")]], ");
 				ep_args += join(variable_decl(get_type_from_variable(xfb_buffers[xfb_buffer]), to_name(xfb_buffers[xfb_buffer])), " [[buffer(", msl_options.xfb_output_buffer_index_base + xfb_buffer, ")]]");
 			}
 		}
@@ -17786,6 +17786,7 @@ void CompilerMSL::analyze_xfb_buffers()
 
 	for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
 	{
+		xfb_counters[i] = 0;
 		xfb_buffers[i] = 0;
 		xfb_locals[i] = 0;
 		xfb_strides[i] = 0;
@@ -17871,13 +17872,31 @@ void CompilerMSL::analyze_xfb_buffers()
 		if (outputs.empty())
 			continue;
 
-		uint32_t next_id = ir.increase_bound_by(5);
+		uint32_t next_id = ir.increase_bound_by(8);
+		uint32_t buffer_var_id = next_id;
 		uint32_t local_var_id = next_id + 1;
 		uint32_t type_id = next_id + 2;
 		uint32_t ptr_type_id = next_id + 3;
 		uint32_t local_ptr_type_id = next_id + 4;
-		xfb_buffers[xfb_buffer] = next_id;
+		uint32_t counter_var_id = next_id + 5;
+		uint32_t counter_type_id = next_id + 6;
+		uint32_t counter_ptr_type_id = next_id + 7;
+		xfb_counters[xfb_buffer] = counter_var_id;
+		xfb_buffers[xfb_buffer] = buffer_var_id;
 		xfb_locals[xfb_buffer] = local_var_id;
+
+		auto &counter_type = set<SPIRType>(counter_type_id);
+		counter_type.basetype = SPIRType::AtomicCounter;
+		counter_type.storage = StorageClassStorageBuffer;
+
+		auto &counter_ptr_type = set<SPIRType>(counter_ptr_type_id);
+		counter_ptr_type = counter_type;
+		counter_ptr_type.pointer = true;
+		counter_ptr_type.pointer_depth++;
+		counter_ptr_type.parent_type = counter_type_id;
+
+		set<SPIRVariable>(counter_var_id, counter_ptr_type_id, StorageClassUniform);
+		set_name(counter_var_id, join("spvXfbCounter", xfb_buffer));
 
 		auto &buffer_type = set<SPIRType>(type_id);
 		buffer_type.basetype = SPIRType::Struct;
@@ -17899,9 +17918,8 @@ void CompilerMSL::analyze_xfb_buffers()
 		set<SPIRVariable>(local_var_id, local_ptr_type_id, StorageClassFunction);
 		set_name(local_var_id, join("spvXfbOutput", xfb_buffer));
 
-		uint32_t buffer_variable_id = next_id;
-		set<SPIRVariable>(buffer_variable_id, ptr_type_id, StorageClassUniform);
-		set_name(buffer_variable_id, join("spvXfb", xfb_buffer));
+		set<SPIRVariable>(buffer_var_id, ptr_type_id, StorageClassUniform);
+		set_name(buffer_var_id, join("spvXfb", xfb_buffer));
 
 		// Members must be emitted in Offset order.
 		stable_sort(begin(outputs), end(outputs), [&](const XfbOutput &lhs, const XfbOutput &rhs) -> bool {
