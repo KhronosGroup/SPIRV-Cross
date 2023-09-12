@@ -900,23 +900,23 @@ static void print_help_msl()
 	                "\t[--msl-enable-frag-output-mask <mask>]:\n\t\tOnly selectively enable fragment outputs. Useful if pipeline does not enable fragment output for certain locations, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-no-clip-distance-user-varying]:\n\t\tDo not emit user varyings to emulate gl_ClipDistance in fragment shaders.\n"
 	                "\t[--msl-add-shader-input <index> <format> <size> <rate>]:\n\t\tSpecify the format of the shader input at <index>.\n"
-	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
-	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader. <rate> can be 'vertex', "
+	                "\t\t<format> can be 'i32', 'i16', 'i8', 'u32', 'u16', 'u8', 'float', 'half', or 'other',\n\t\tto indicate a 32/16/8-bit integer (i) or unsigned integer (u), floating point, half-precision floating point, "
+	                "or other-typed variable.\n\t\t'any16' or 'any32' can also be used to specify opaque 16-bit or 32-bit value.\n\t\t<size> is the vector length of the variable, which must be greater than or equal to that declared in the shader. <rate> can be 'vertex', "
 	                "'primitive', or 'patch' to indicate a per-vertex, per-primitive, or per-patch variable.\n"
 	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-add-shader-output <index> <format> <size> <rate>]:\n\t\tSpecify the format of the shader output at <index>.\n"
-	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
-	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader. <rate> can be 'vertex', "
+	                "\t\t<format> can be 'i32', 'i16', 'i8', 'u32', 'u16', 'u8', 'float', 'half', or 'other',\n\t\tto indicate a 32/16/8-bit integer (i) or unsigned integer (u), floating point, half-precision floating point, "
+	                "or other-typed variable.\n\t\t'any16' or 'any32' can also be used to specify opaque 16-bit or 32-bit value.\n\t\t<size> is the vector length of the variable, which must be greater than or equal to that declared in the shader. <rate> can be 'vertex', "
 	                "'primitive', or 'patch' to indicate a per-vertex, per-primitive, or per-patch variable.\n"
 	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-shader-input <index> <format> <size>]:\n\t\tSpecify the format of the shader input at <index>.\n"
-	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
-	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
-	                "\t\tEquivalent to --msl-add-shader-input with a rate of 'vertex'.\n"
+	                "\t\t<format> can be 'i32', 'i16', 'i8', 'u32', 'u16', 'u8', 'float', 'half', or 'other',\n\t\tto indicate a 32/16/8-bit integer (i) or unsigned integer (u), floating point, half-precision floating point, "
+	                "or other-typed variable.\n\t\t'any16' or 'any32' can also be used to specify opaque 16-bit or 32-bit value.\n\t\t<size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
+	                "\n\t\tEquivalent to --msl-add-shader-input with a rate of 'vertex'.\n"
 	                "\t[--msl-shader-output <index> <format> <size>]:\n\t\tSpecify the format of the shader output at <index>.\n"
-	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
-	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
-	                "\t\tEquivalent to --msl-add-shader-output with a rate of 'vertex'.\n"
+	                "\t\t<format> can be 'i32', 'i16', 'i8', 'u32', 'u16', 'u8', 'float', 'half', or 'other',\n\t\tto indicate a 32/16/8-bit integer (i) or unsigned integer (u), floating point, half-precision floating point, "
+	                "or other-typed variable.\n\t\t'any16' or 'any32' can also be used to specify opaque 16-bit or 32-bit value.\n\t\t<size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
+	                "\n\t\tEquivalent to --msl-add-shader-output with a rate of 'vertex'.\n"
 	                "\t[--msl-raw-buffer-tese-input]:\n\t\tUse raw buffers for tessellation evaluation input.\n"
 	                "\t\tThis allows the use of nested structures and arrays.\n"
 	                "\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
@@ -1554,6 +1554,34 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	return ret;
 }
 
+static MSLShaderVariableFormat parse_format(const char *text)
+{
+	MSLShaderVariableFormat format;
+	if (strcmp(text, "i8") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_INT8;
+	else if (strcmp(text, "i16") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_INT16;
+	else if (strcmp(text, "i32") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_INT32;
+	else if (strcmp(text, "u8") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
+	else if (strcmp(text, "u16") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
+	else if (strcmp(text, "u32") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_UINT32;
+	else if (strcmp(text, "float") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_FLOAT;
+	else if (strcmp(text, "half") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_HALF;
+	else if (strcmp(text, "any16") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
+	else if (strcmp(text, "any32") == 0)
+		format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
+	else
+		format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+	return format;
+}
+
 static int main_inner(int argc, char *argv[])
 {
 	CLIArguments args;
@@ -1685,16 +1713,7 @@ static int main_inner(int argc, char *argv[])
 		// Make sure next_uint() is called in-order.
 		input.location = parser.next_uint();
 		const char *format = parser.next_value_string("other");
-		if (strcmp(format, "any32") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
-		else if (strcmp(format, "any16") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
-		else if (strcmp(format, "u16") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
-		else if (strcmp(format, "u8") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
-		else
-			input.format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		input.format = parse_format(format);
 		input.vecsize = parser.next_uint();
 		const char *rate = parser.next_value_string("vertex");
 		if (strcmp(rate, "primitive") == 0)
@@ -1710,16 +1729,7 @@ static int main_inner(int argc, char *argv[])
 		// Make sure next_uint() is called in-order.
 		output.location = parser.next_uint();
 		const char *format = parser.next_value_string("other");
-		if (strcmp(format, "any32") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
-		else if (strcmp(format, "any16") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
-		else if (strcmp(format, "u16") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
-		else if (strcmp(format, "u8") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
-		else
-			output.format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		output.format = parse_format(format);
 		output.vecsize = parser.next_uint();
 		const char *rate = parser.next_value_string("vertex");
 		if (strcmp(rate, "primitive") == 0)
@@ -1735,16 +1745,7 @@ static int main_inner(int argc, char *argv[])
 		// Make sure next_uint() is called in-order.
 		input.location = parser.next_uint();
 		const char *format = parser.next_value_string("other");
-		if (strcmp(format, "any32") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
-		else if (strcmp(format, "any16") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
-		else if (strcmp(format, "u16") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
-		else if (strcmp(format, "u8") == 0)
-			input.format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
-		else
-			input.format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		input.format = parse_format(format);
 		input.vecsize = parser.next_uint();
 		args.msl_shader_inputs.push_back(input);
 	});
@@ -1753,16 +1754,7 @@ static int main_inner(int argc, char *argv[])
 		// Make sure next_uint() is called in-order.
 		output.location = parser.next_uint();
 		const char *format = parser.next_value_string("other");
-		if (strcmp(format, "any32") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_ANY32;
-		else if (strcmp(format, "any16") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_ANY16;
-		else if (strcmp(format, "u16") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_UINT16;
-		else if (strcmp(format, "u8") == 0)
-			output.format = MSL_SHADER_VARIABLE_FORMAT_UINT8;
-		else
-			output.format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		output.format = parse_format(format);
 		output.vecsize = parser.next_uint();
 		args.msl_shader_outputs.push_back(output);
 	});
