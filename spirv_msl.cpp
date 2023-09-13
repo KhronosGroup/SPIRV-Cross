@@ -13791,13 +13791,156 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	if (needs_transform_feedback())
 	{
 		entry_func.fixup_hooks_out.push_back([=]() {
-			size_t size_data_write_points = 0;
-			size_t size_data_write_lines = 0;
-			size_t size_data_write_triangles = 0;
-
-		    for (uint32_t i = 0; i < kMaxXfbBuffers; ++i) {
+			string index_expr;
+			switch (msl_options.xfb_primitive_type)
+			{
+			case Options::PrimitiveType::PointList:
+			case Options::PrimitiveType::LineList:
+			case Options::PrimitiveType::TriangleList:
+				index_expr = join(to_expression(builtin_invocation_id_id), ".y * ",
+				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				                  to_expression(builtin_invocation_id_id), ".x");
+				break;
+			case Options::PrimitiveType::LineStrip:
+				// Calculation of the index expression is also complicated a bit because of this.
+				// Some worked examples:
+				// Vertex ordinal	XFB indices
+				// 0				   0
+				// 1				1, 2
+				// 2				3, 4
+				// 3				5, 6
+				// 4				7
+				// FIXME: This doesn't account for primitive restart!
+				// 0				   0
+				// 1				1, 2
+				// 2				3, 4
+				// 3				5
+				// 4				<restart>
+				// 5				n/a
+				// 6				<restart>
+				// 7				   6
+				// 8				7, 8
+				// 9				9, 10
+				// 10				11
+				index_expr = join("2 * (", to_expression(builtin_invocation_id_id), ".y * ",
+				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				                  to_expression(builtin_invocation_id_id), ".x)");
+				break;
+			case Options::PrimitiveType::TriangleStrip:
+				// Vertex ordinal	XFB indices
+				// 0				      0
+				// 1				   1, 3
+				// 2				2, 4, 6
+				// 3				5, 7, 9
+				// 4				8, 10
+				// 5				11
+				// FIXME: This doesn't account for primitive restart!
+				// 0				      0
+				// 1				   1, 3
+				// 2				2, 4, 6
+				// 3				5, 7, 9
+				// 4				8, 10
+				// 5				11
+				// 6				<restart>
+				// 7				        12
+				// 8				    13, 15
+				// 9				14, 16, 18
+				// 10				17, 19, 21
+				// 11				20, 22
+				// 12				23
+				// ----
+				// 0				      0
+				// 1				   1
+				// 2				2
+				// 3				<restart>
+				// 4				      3
+				// 5				   4, 6
+				// 6				5, 7
+				// 7				8
+				// ----
+				// 0				      0
+				// 1				   1, 3
+				// 2				2, 4, 6
+				// 3				5, 7
+				// 4				8
+				// 5				<restart>
+				// 6				n/a
+				// 7				n/a
+				// 8				<restart>
+				// 9				        9
+				// 10				    10, 12
+				// 11				11, 13, 15
+				// 12				14, 16
+				// 13				17
+				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
+				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				                  to_expression(builtin_invocation_id_id), ".x)");
+			case Options::PrimitiveType::TriangleFan:
+				// FIXME: Primitive restart
+				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
+				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				                  to_expression(builtin_invocation_id_id), ".x) - 2");
+			case Options::PrimitiveType::Dynamic:
+				SPIRV_CROSS_THROW("Dynamic primitive type is not yet supported.");
+			}
+			// First, write the data out.
+			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+			{
 				if (xfb_buffers[i] == 0) continue;
-				// First, update the amount of data written to the buffer.
+				statement("uint spvInitOffset", i, " = atomic_load_explicit(", to_name(xfb_counters[i]), ", memory_order_relaxed);");
+				statement(to_name(xfb_buffers[i]), " = reinterpret_cast<", type_to_glsl(get_type_from_variable(xfb_buffers[i])), ">(reinterpret_cast<device char*>(", to_name(xfb_buffers[i]), ") + spvInitOffset", i, ");");
+				switch (msl_options.xfb_primitive_type)
+				{
+				case Options::PrimitiveType::PointList:
+					// This is straightforward enough. Just make sure we don't overstep the data buffer (FIXME).
+					statement(to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+					break;
+				case Options::PrimitiveType::LineList:
+					// This is a little trickier, because we don't want to write an incomplete primitive.
+					// Therefore, we must write only if we're an odd vertex, or we're not the last one.
+					// FIXME: Bounds check the buffer, too.
+					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id) ".x < ", to_expression(builtin_stage_input_size), ".x - 1)");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
+				case Options::PrimitiveType::TriangleList:
+					// This is similar to the previous case, except here the boundary condition is
+					// if global_id.x % 3 == 2 or we're not one of the last two.
+					// FIXME: Bounds check the buffer, too.
+					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3 == 2) || ", to_expression(builtin_invocation_id_id) ".x + 2 < ", to_expression(builtin_stage_input_size), ".x)");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+				case Options::PrimitiveType::LineStrip:
+					// This is more complicated. We have to write out each individual line segment.
+					// So if we're not the first or the last, we have to write twice.
+					// On top of that, we also have to handle primitive restart. (FIXME)
+					// FIXME: Bounds check the buffer, too.
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = " , to_expression(xfb_locals[i]), ";");
+					break;
+				case Options::PrimitiveType::TriangleStrip:
+					// This is even worse. We still have to write twice if we're not first or last,
+					// but now if there's fewer than two vertices in this strip, we can't write at all.
+					// Again, primitive restart is a factor here. (FIXME)
+					// FIXME: Bounds check the buffer, too.
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = ", to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2] = ", to_expression(xfb_locals[i]), ";");
+					break;
+				case Options::PrimitiveType::TriangleFan:
+					// This is the worst case of all. It's similar to the strip case, except now
+					// we have to write the fan base vertex for *every* triangle. (FIXME)
+					// Again, primitive restart is a factor here. (FIXME)
+					// FIXME: Bounds check the buffer, too.
+					// TODO TODO TODO
+					statement(to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+					break;
+				case Options::PrimitiveType::Dynamic:
+				default:
+					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+				}
+			}
+			statement("threadgroup_barrier(mem_device);");
+			// Now update the amount of data written to the buffer.
+			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i) {
+				if (xfb_buffers[i] == 0) continue;
 				switch (msl_options.xfb_primitive_type)
 				{
 				case Options::PrimitiveType::PointList:
@@ -13819,32 +13962,6 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					break;
 				}
 
-			}
-			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
-			{
-				if (xfb_buffers[i] == 0) continue;
-				// Now, write the data out.
-				switch (msl_options.xfb_primitive_type)
-				{
-				case Options::PrimitiveType::PointList:
-				{
-					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_points), "] = ", to_expression(xfb_locals[i]), ";");
-					break;
-				}
-				case Options::PrimitiveType::LineList:
-				case Options::PrimitiveType::LineStrip:
-					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_lines) , "] = " , to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::TriangleList:
-				case Options::PrimitiveType::TriangleStrip:
-				case Options::PrimitiveType::TriangleFan:
-					statement(to_name(xfb_buffers[i]), "[", to_string(size_data_write_triangles), "] = ", to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::Dynamic:
-					break;
-				default:
-					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
-				}
 			}
 		});
 	}
