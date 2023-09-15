@@ -13877,6 +13877,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				                  to_expression(builtin_invocation_id_id), ".x)");
 			case Options::PrimitiveType::TriangleFan:
 				// FIXME: Primitive restart
+				// FIXME: This is wrong. The index expression here is different
+				// for the fan base vs. the others.
 				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
 				                  to_expression(builtin_stage_input_size_id), ".x + ",
 				                  to_expression(builtin_invocation_id_id), ".x) - 2");
@@ -13912,16 +13914,21 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// So if we're not the first or the last, we have to write twice.
 					// On top of that, we also have to handle primitive restart. (FIXME)
 					// FIXME: Bounds check the buffer, too.
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = " , to_expression(xfb_locals[i]), ";");
 					break;
 				case Options::PrimitiveType::TriangleStrip:
-					// This is even worse. We still have to write twice if we're not first or last,
-					// but now if there's fewer than two vertices in this strip, we can't write at all.
+					// This is even worse. We have to write three times if we're not first or last,
+					// and now if there's fewer than two vertices in this strip, we can't write at all.
 					// Again, primitive restart is a factor here. (FIXME)
 					// FIXME: Bounds check the buffer, too.
+					statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = ", to_expression(xfb_locals[i]), ";");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2] = ", to_expression(xfb_locals[i]), ";");
 					break;
 				case Options::PrimitiveType::TriangleFan:
