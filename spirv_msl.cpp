@@ -13830,24 +13830,24 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// Vertex ordinal	XFB indices
 				// 0				      0
 				// 1				   1, 3
-				// 2				2, 4, 6
-				// 3				5, 7, 9
-				// 4				8, 10
-				// 5				11
+				// 2				2, 5, 6
+				// 3				4, 7, 9
+				// 4				8, 11
+				// 5				10
 				// FIXME: This doesn't account for primitive restart!
 				// 0				      0
 				// 1				   1, 3
-				// 2				2, 4, 6
-				// 3				5, 7, 9
-				// 4				8, 10
-				// 5				11
+				// 2				2, 5, 6
+				// 3				4, 7, 9
+				// 4				8, 11
+				// 5				10
 				// 6				<restart>
 				// 7				        12
 				// 8				    13, 15
-				// 9				14, 16, 18
-				// 10				17, 19, 21
-				// 11				20, 22
-				// 12				23
+				// 9				14, 17, 18
+				// 10				16, 19, 21
+				// 11				20, 23
+				// 12				22
 				// ----
 				// 0				      0
 				// 1				   1
@@ -13855,13 +13855,13 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 3				<restart>
 				// 4				      3
 				// 5				   4, 6
-				// 6				5, 7
-				// 7				8
+				// 6				5, 8
+				// 7				7
 				// ----
 				// 0				      0
 				// 1				   1, 3
-				// 2				2, 4, 6
-				// 3				5, 7
+				// 2				2, 5, 6
+				// 3				4, 7
 				// 4				8
 				// 5				<restart>
 				// 6				n/a
@@ -13869,16 +13869,60 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 8				<restart>
 				// 9				        9
 				// 10				    10, 12
-				// 11				11, 13, 15
-				// 12				14, 16
+				// 11				11, 14, 15
+				// 12				13, 16
 				// 13				17
 				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
 				                  to_expression(builtin_stage_input_size_id), ".x + ",
 				                  to_expression(builtin_invocation_id_id), ".x)");
 			case Options::PrimitiveType::TriangleFan:
-				// FIXME: Primitive restart
-				// FIXME: This is wrong. The index expression here is different
-				// for the fan base vs. the others.
+				// The index expression in this case is different for the fan base.
+				// This is for the other vertices. It is very similar to the line strip case.
+				// Vertex ordinal	XFB indices
+				// 0				0, 3, 6, 9
+				// 1				   1
+				// 2				2, 4
+				// 3				5, 7
+				// 4				8, 10
+				// 5				11
+				// FIXME: This doesn't account for primitive restart!
+				// 0				0, 3, 6, 9
+				// 1				   1
+				// 2				2, 4
+				// 3				5, 7
+				// 4				8, 10
+				// 5				11
+				// 6				<restart>
+				// 7				12, 15, 18, 21
+				// 8				    13
+				// 9				14, 16
+				// 10				17, 19
+				// 11				20, 22
+				// 12				23
+				// ----
+				// 0				0
+				// 1				   1
+				// 2				2
+				// 3				<restart>
+				// 4				3, 6
+				// 5				   4
+				// 6				5, 7
+				// 7				8
+				// ----
+				// 0				0, 3, 6
+				// 1				   1
+				// 2				2, 4
+				// 3				5, 7
+				// 4				8
+				// 5				<restart>
+				// 6				n/a
+				// 7				n/a
+				// 8				<restart>
+				// 9				9, 12, 15
+				// 10				    10
+				// 11				11, 13
+				// 12				14, 16
+				// 13				17
 				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
 				                  to_expression(builtin_stage_input_size_id), ".x + ",
 				                  to_expression(builtin_invocation_id_id), ".x) - 2");
@@ -13927,9 +13971,9 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = ", to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1 - (", to_expression(builtin_invocation_id_id), ".x & 1)] = ", to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2] = ", to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 4 - (", to_expression(builtin_invocation_id_id), ".x & 1)] = ", to_expression(xfb_locals[i]), ";");
 					break;
 				case Options::PrimitiveType::TriangleFan:
 					// This is the worst case of all. It's similar to the strip case, except now
