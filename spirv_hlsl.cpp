@@ -2695,7 +2695,7 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 			for (auto &member : type.member_types)
 			{
 				add_member_name(type, i);
-				auto backup_name = get_member_name(type.self, i);
+				const auto &backup_name = get_member_name(type.self, i);
 				auto member_name = to_member_name(type, i);
 				member_name = join(to_name(var.self), "_", member_name);
 				ParsedIR::sanitize_underscores(member_name);
@@ -2782,7 +2782,7 @@ void CompilerHLSL::emit_push_constant_block(const SPIRVariable &var)
 					const auto &member = type.member_types[i];
 
 					add_member_name(type, constant_index);
-					auto backup_name = get_member_name(type.self, i);
+					const auto &backup_name = get_member_name(type.self, i);
 					auto member_name = to_member_name(type, i);
 					member_name = join(to_name(var.self), "_", member_name);
 					ParsedIR::sanitize_underscores(member_name);

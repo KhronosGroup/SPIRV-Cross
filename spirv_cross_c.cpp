@@ -2149,7 +2149,7 @@ const char *spvc_compiler_get_cleansed_entry_point_name(spvc_compiler compiler, 
 {
 	SPVC_BEGIN_SAFE_SCOPE
 	{
-		auto cleansed_name =
+		const auto &cleansed_name =
 		    compiler->compiler->get_cleansed_entry_point_name(name, static_cast<spv::ExecutionModel>(model));
 		return compiler->context->allocate_name(cleansed_name);
 	}

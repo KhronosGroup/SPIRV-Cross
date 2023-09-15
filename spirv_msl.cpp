@@ -7514,7 +7514,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 					// Only scalar, non-composite values can be function constants.
 					uint32_t constant_id = get_decoration(c.self, DecorationSpecId);
 					if (!unique_func_constants.count(constant_id))
-						unique_func_constants.insert(make_pair(constant_id, c.self));
+						unique_func_constants.emplace(constant_id, c.self);
 					SPIRType::BaseType sc_tmp_type = expression_type(unique_func_constants[constant_id]).basetype;
 					string sc_tmp_name = to_name(unique_func_constants[constant_id]) + "_tmp";
 					if (unique_func_constants[constant_id] == c.self)
@@ -14392,7 +14392,7 @@ string CompilerMSL::append_member_name(const string &qualifier, const SPIRType &
 
 	// Strip any underscore prefix from member name
 	string mbr_name = to_member_name(type, index);
-	size_t startPos = mbr_name.find_first_not_of("_");
+	size_t startPos = mbr_name.find_first_not_of('_');
 	mbr_name = (startPos != string::npos) ? mbr_name.substr(startPos) : "";
 	return join(qualifier, "_", mbr_name);
 }

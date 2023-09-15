@@ -2583,7 +2583,6 @@ void CompilerGLSL::emit_flattened_io_block_member(const std::string &basename, c
 
 	// Pass in the varying qualifier here so it will appear in the correct declaration order.
 	// Replace member name while emitting it so it encodes both struct name and member name.
-	auto backup_name = get_member_name(parent_type->self, last_index);
 	auto member_name = to_member_name(*parent_type, last_index);
 	set_member_name(parent_type->self, last_index, flattened_name);
 	emit_struct_member(*parent_type, member_type_id, last_index, qual);
@@ -16162,7 +16161,7 @@ void CompilerGLSL::branch_to_continue(BlockID from, BlockID to)
 	if (to_block.complex_continue)
 	{
 		// Just emit the whole block chain as is.
-		auto usage_counts = expression_usage_counts;
+		const auto &usage_counts = expression_usage_counts;
 
 		emit_block_chain(to_block);
 
