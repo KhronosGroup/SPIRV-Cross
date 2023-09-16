@@ -13801,12 +13801,12 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			case Options::PrimitiveType::LineList:
 				index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
-				                  to_expression(builtin_stage_input_size_id), ".x & ~1) + ",
+				                  to_expression(builtin_stage_input_size_id), ".x & ~1u) + ",
 				                  to_expression(builtin_invocation_id_id), ".x");
 				break;
 			case Options::PrimitiveType::TriangleList:
 				index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
-				                  to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3) + ",
+				                  to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3u) + ",
 				                  to_expression(builtin_invocation_id_id), ".x");
 				break;
 			case Options::PrimitiveType::LineStrip:
@@ -13831,7 +13831,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 9				9, 10
 				// 10				11
 				index_expr = join("2 * ", to_expression(builtin_invocation_id_id), ".y * (",
-				                  to_expression(builtin_stage_input_size_id), ".x - 1) + 2 * ",
+				                  to_expression(builtin_stage_input_size_id), ".x - 1u) + 2 * ",
 				                  to_expression(builtin_invocation_id_id), ".x");
 				break;
 			case Options::PrimitiveType::TriangleStrip:
@@ -13881,7 +13881,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 12				13, 16
 				// 13				17
 				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
-				                  to_expression(builtin_stage_input_size_id), ".x, 2) + 3 * ",
+				                  to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
 				                  to_expression(builtin_invocation_id_id), ".x)");
 			case Options::PrimitiveType::TriangleFan:
 				// The index expression in this case is different for the fan base.
@@ -13932,8 +13932,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 12				14, 16
 				// 13				17
 				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
-				                  to_expression(builtin_stage_input_size_id), ".x, 2) + 3 * ",
-				                  to_expression(builtin_invocation_id_id), ".x) - 2");
+				                  to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
+				                  to_expression(builtin_invocation_id_id), ".x) - 2u");
 			case Options::PrimitiveType::Dynamic:
 			default:
 				SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
@@ -13954,23 +13954,23 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// This is a little trickier, because we don't want to write an incomplete primitive.
 					// Therefore, we must write only if we're an odd vertex, or we're not the last one.
 					// FIXME: Bounds check the buffer, too.
-					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id), ".x < ", to_expression(builtin_stage_input_size_id), ".x - 1)");
+					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id), ".x < ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
 				case Options::PrimitiveType::TriangleList:
 					// This is similar to the previous case, except here the boundary condition is
 					// if global_id.x % 3 == 2 or we're not one of the last two.
 					// FIXME: Bounds check the buffer, too.
-					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3 == 2) || ", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
+					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3u == 2) || ", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
 				case Options::PrimitiveType::LineStrip:
 					// This is more complicated. We have to write out each individual line segment.
 					// So if we're not the first or the last, we have to write twice.
 					// On top of that, we also have to handle primitive restart. (FIXME)
 					// FIXME: Bounds check the buffer, too.
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1)");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0)");
-					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = " , to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1u] = " , to_expression(xfb_locals[i]), ";");
 					break;
 				case Options::PrimitiveType::TriangleStrip:
 					// This is even worse. We have to write three times if we're not first or last,
@@ -13979,10 +13979,10 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// FIXME: Bounds check the buffer, too.
 					statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1 - (", to_expression(builtin_invocation_id_id), ".x & 1)] = ", to_expression(xfb_locals[i]), ";");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1u - (", to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 4 - (", to_expression(builtin_invocation_id_id), ".x & 1)] = ", to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 4u - (", to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]), ";");
 					break;
 				case Options::PrimitiveType::TriangleFan:
 					// This is the worst case of all. It's similar to the strip case, except now
@@ -13991,16 +13991,16 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// FIXME: Bounds check the buffer, too.
 					statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
 					begin_scope();
-					statement("uint spvBaseIdx = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2);");
-					statement("for (uint i = 0; i < ", to_expression(builtin_stage_input_size_id), ".x - 2; ++i)");
+					statement("uint spvBaseIdx = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u);");
+					statement("for (uint i = 0; i < subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u); ++i)");
 					statement("    ", to_name(xfb_buffers[i]), "[spvBaseIdx + i] = ", to_name(xfb_locals[i]), ";");
 					end_scope();
 					statement("else");
 					begin_scope();
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1)");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x != 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2] = " , to_expression(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2u] = " , to_expression(xfb_locals[i]), ";");
 					end_scope();
 					break;
 				case Options::PrimitiveType::Dynamic:
@@ -14010,21 +14010,27 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			}
 			statement("threadgroup_barrier(mem_device);");
 			// Now update the amount of data written to the buffer.
+			statement("if (", to_expression(builtin_invocation_id_id), ".xy == 0)");
+			begin_scope();
 			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i) {
 				if (xfb_buffers[i] == 0) continue;
 				switch (msl_options.xfb_primitive_type)
 				{
 				case Options::PrimitiveType::PointList:
-					//size_data_write_points += 1;
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * ", to_expression(builtin_stage_input_size_id), ".x * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::LineList:
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * (", to_expression(builtin_stage_input_size_id), ".x & ~1u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					break;
 				case Options::PrimitiveType::LineStrip:
-					//size_data_write_lines += 2;
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 2 * (", to_expression(builtin_stage_input_size_id), ".x - 1u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::TriangleList:
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * (", to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					break;
 				case Options::PrimitiveType::TriangleStrip:
 				case Options::PrimitiveType::TriangleFan:
-					//size_data_write_triangles += 3;
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::Dynamic:
 					break;
@@ -14034,6 +14040,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				}
 
 			}
+			end_scope();
 		});
 	}
 }
