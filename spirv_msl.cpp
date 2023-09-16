@@ -13795,10 +13795,18 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			switch (msl_options.xfb_primitive_type)
 			{
 			case Options::PrimitiveType::PointList:
-			case Options::PrimitiveType::LineList:
-			case Options::PrimitiveType::TriangleList:
 				index_expr = join(to_expression(builtin_invocation_id_id), ".y * ",
 				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				                  to_expression(builtin_invocation_id_id), ".x");
+				break;
+			case Options::PrimitiveType::LineList:
+				index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
+				                  to_expression(builtin_stage_input_size_id), ".x & ~1) + ",
+				                  to_expression(builtin_invocation_id_id), ".x");
+				break;
+			case Options::PrimitiveType::TriangleList:
+				index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
+				                  to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3) + ",
 				                  to_expression(builtin_invocation_id_id), ".x");
 				break;
 			case Options::PrimitiveType::LineStrip:
@@ -13822,9 +13830,9 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 8				7, 8
 				// 9				9, 10
 				// 10				11
-				index_expr = join("2 * (", to_expression(builtin_invocation_id_id), ".y * ",
-				                  to_expression(builtin_stage_input_size_id), ".x + ",
-				                  to_expression(builtin_invocation_id_id), ".x)");
+				index_expr = join("2 * ", to_expression(builtin_invocation_id_id), ".y * (",
+				                  to_expression(builtin_stage_input_size_id), ".x - 1) + 2 * ",
+				                  to_expression(builtin_invocation_id_id), ".x");
 				break;
 			case Options::PrimitiveType::TriangleStrip:
 				// Vertex ordinal	XFB indices
@@ -13872,8 +13880,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 11				11, 14, 15
 				// 12				13, 16
 				// 13				17
-				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
-				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
+				                  to_expression(builtin_stage_input_size_id), ".x, 2) + 3 * ",
 				                  to_expression(builtin_invocation_id_id), ".x)");
 			case Options::PrimitiveType::TriangleFan:
 				// The index expression in this case is different for the fan base.
@@ -13923,8 +13931,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 11				11, 13
 				// 12				14, 16
 				// 13				17
-				index_expr = join("3 * (", to_expression(builtin_invocation_id_id), ".y * ",
-				                  to_expression(builtin_stage_input_size_id), ".x + ",
+				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
+				                  to_expression(builtin_stage_input_size_id), ".x, 2) + 3 * ",
 				                  to_expression(builtin_invocation_id_id), ".x) - 2");
 			case Options::PrimitiveType::Dynamic:
 			default:
@@ -13983,8 +13991,9 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// FIXME: Bounds check the buffer, too.
 					statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
 					begin_scope();
+					statement("uint spvBaseIdx = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2);");
 					statement("for (uint i = 0; i < ", to_expression(builtin_stage_input_size_id), ".x - 2; ++i)");
-					statement("    ", to_name(xfb_buffers[i]), "[i] = ", to_name(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[spvBaseIdx + i] = ", to_name(xfb_locals[i]), ";");
 					end_scope();
 					statement("else");
 					begin_scope();
