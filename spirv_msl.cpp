@@ -13977,11 +13977,21 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					break;
 				case Options::PrimitiveType::TriangleFan:
 					// This is the worst case of all. It's similar to the strip case, except now
-					// we have to write the fan base vertex for *every* triangle. (FIXME)
+					// we have to write the fan base vertex for *every* triangle.
 					// Again, primitive restart is a factor here. (FIXME)
 					// FIXME: Bounds check the buffer, too.
-					// TODO TODO TODO
-					statement(to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
+					begin_scope();
+					statement("for (uint i = 0; i < ", to_expression(builtin_stage_input_size), ".x - 2; ++i)");
+					statement("    ", to_name(xfb_buffers[i]), "[i] = ", to_name(xfb_locals[i]), ";");
+					end_scope();
+					statement("else");
+					begin_scope();
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != 1)");
+					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2] = " , to_expression(xfb_locals[i]), ";");
+					end_scope();
 					break;
 				case Options::PrimitiveType::Dynamic:
 				default:
