@@ -13927,7 +13927,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				                  to_expression(builtin_stage_input_size_id), ".x + ",
 				                  to_expression(builtin_invocation_id_id), ".x) - 2");
 			case Options::PrimitiveType::Dynamic:
-				SPIRV_CROSS_THROW("Dynamic primitive type is not yet supported.");
+			default:
+				SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 			}
 			// First, write the data out.
 			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
@@ -13945,20 +13946,20 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// This is a little trickier, because we don't want to write an incomplete primitive.
 					// Therefore, we must write only if we're an odd vertex, or we're not the last one.
 					// FIXME: Bounds check the buffer, too.
-					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id) ".x < ", to_expression(builtin_stage_input_size), ".x - 1)");
+					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id), ".x < ", to_expression(builtin_stage_input_size_id), ".x - 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
 				case Options::PrimitiveType::TriangleList:
 					// This is similar to the previous case, except here the boundary condition is
 					// if global_id.x % 3 == 2 or we're not one of the last two.
 					// FIXME: Bounds check the buffer, too.
-					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3 == 2) || ", to_expression(builtin_invocation_id_id) ".x + 2 < ", to_expression(builtin_stage_input_size), ".x)");
+					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3 == 2) || ", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
 				case Options::PrimitiveType::LineStrip:
 					// This is more complicated. We have to write out each individual line segment.
 					// So if we're not the first or the last, we have to write twice.
 					// On top of that, we also have to handle primitive restart. (FIXME)
 					// FIXME: Bounds check the buffer, too.
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1] = " , to_expression(xfb_locals[i]), ";");
@@ -13968,9 +13969,9 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// and now if there's fewer than two vertices in this strip, we can't write at all.
 					// Again, primitive restart is a factor here. (FIXME)
 					// FIXME: Bounds check the buffer, too.
-					statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size), ".x)");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 1 - (", to_expression(builtin_invocation_id_id), ".x & 1)] = ", to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 4 - (", to_expression(builtin_invocation_id_id), ".x & 1)] = ", to_expression(xfb_locals[i]), ";");
@@ -13982,12 +13983,12 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// FIXME: Bounds check the buffer, too.
 					statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
 					begin_scope();
-					statement("for (uint i = 0; i < ", to_expression(builtin_stage_input_size), ".x - 2; ++i)");
+					statement("for (uint i = 0; i < ", to_expression(builtin_stage_input_size_id), ".x - 2; ++i)");
 					statement("    ", to_name(xfb_buffers[i]), "[i] = ", to_name(xfb_locals[i]), ";");
 					end_scope();
 					statement("else");
 					begin_scope();
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size), ".x - 1)");
+					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
 					statement("if (", to_expression(builtin_invocation_id_id), ".x != 1)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, " - 2] = " , to_expression(xfb_locals[i]), ";");
@@ -14005,16 +14006,16 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				switch (msl_options.xfb_primitive_type)
 				{
 				case Options::PrimitiveType::PointList:
-					size_data_write_points += 1;
+					//size_data_write_points += 1;
 					break;
 				case Options::PrimitiveType::LineList:
 				case Options::PrimitiveType::LineStrip:
-					size_data_write_lines += 2;
+					//size_data_write_lines += 2;
 					break;
 				case Options::PrimitiveType::TriangleList:
 				case Options::PrimitiveType::TriangleStrip:
 				case Options::PrimitiveType::TriangleFan:
-					size_data_write_triangles += 3;
+					//size_data_write_triangles += 3;
 					break;
 				case Options::PrimitiveType::Dynamic:
 					break;
