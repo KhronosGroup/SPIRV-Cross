@@ -18115,6 +18115,8 @@ void CompilerMSL::analyze_xfb_buffers()
 
 		set<SPIRVariable>(local_var_id, local_ptr_type_id, StorageClassFunction);
 		set_name(local_var_id, join("spvXfbOutput", xfb_buffer));
+		get<SPIRFunction>(ir.default_entry_point).add_local_variable(local_var_id);
+		vars_needing_early_declaration.push_back(local_var_id);
 
 		set<SPIRVariable>(buffer_var_id, ptr_type_id, StorageClassUniform);
 		set_name(buffer_var_id, join("spvXfb", xfb_buffer));
@@ -18149,7 +18151,6 @@ void CompilerMSL::analyze_xfb_buffers()
 			member_index++;
 
 			// FIXME: Still to do:
-			// - Add locals to entry point
 			// - Make sure Xfb-captured outputs aren't in "normal" capture_output_to_buffer
 		}
 	}
