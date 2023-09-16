@@ -13997,7 +13997,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					begin_scope();
 					statement("uint spvBaseIdx = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u);");
 					statement("for (uint i = 0; i < subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u); ++i)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvBaseIdx + i] = ", to_name(xfb_locals[i]), ";");
+					statement("    ", to_name(xfb_buffers[i]), "[spvBaseIdx + 3 * i] = ", to_name(xfb_locals[i]), ";");
 					end_scope();
 					statement("else");
 					begin_scope();
