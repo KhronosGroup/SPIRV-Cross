@@ -13883,6 +13883,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
 				                  to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
 				                  to_expression(builtin_invocation_id_id), ".x)");
+				break;
 			case Options::PrimitiveType::TriangleFan:
 				// The index expression in this case is different for the fan base.
 				// This is for the other vertices. It is very similar to the line strip case.
@@ -13934,6 +13935,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
 				                  to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
 				                  to_expression(builtin_invocation_id_id), ".x) - 2u");
+				break;
 			case Options::PrimitiveType::Dynamic:
 			default:
 				SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
@@ -13956,12 +13958,14 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					// FIXME: Bounds check the buffer, too.
 					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id), ".x < ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = " , to_expression(xfb_locals[i]), ";");
+					break;
 				case Options::PrimitiveType::TriangleList:
 					// This is similar to the previous case, except here the boundary condition is
 					// if global_id.x % 3 == 2 or we're not one of the last two.
 					// FIXME: Bounds check the buffer, too.
 					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3u == 2) || ", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
 					statement("    ", to_name(xfb_buffers[i]), "[", index_expr, "] = ", to_expression(xfb_locals[i]), ";");
+					break;
 				case Options::PrimitiveType::LineStrip:
 					// This is more complicated. We have to write out each individual line segment.
 					// So if we're not the first or the last, we have to write twice.
@@ -14033,7 +14037,6 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::Dynamic:
-					break;
 				default:
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 					break;
