@@ -14021,20 +14021,20 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				switch (msl_options.xfb_primitive_type)
 				{
 				case Options::PrimitiveType::PointList:
-					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * ", to_expression(builtin_stage_input_size_id), ".x * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * ", to_expression(builtin_stage_input_size_id), ".x * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::LineList:
-					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * (", to_expression(builtin_stage_input_size_id), ".x & ~1u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * (", to_expression(builtin_stage_input_size_id), ".x & ~1u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::LineStrip:
-					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 2 * (", to_expression(builtin_stage_input_size_id), ".x - 1u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 2 * (", to_expression(builtin_stage_input_size_id), ".x - 1u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::TriangleList:
-					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * (", to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * (", to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::TriangleStrip:
 				case Options::PrimitiveType::TriangleFan:
-					statement("atomic_store_explicit(", to_name(xfb_counters[i]), "spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
+					statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ", to_expression(builtin_stage_input_size_id), ".y, memory_order_relaxed);");
 					break;
 				case Options::PrimitiveType::Dynamic:
 				default:
