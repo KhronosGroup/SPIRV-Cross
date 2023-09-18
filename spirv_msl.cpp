@@ -3792,6 +3792,26 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		if (bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance)
 			hidden = false;
 
+		// Don't add captured transform feedback outputs.
+		if (needs_transform_feedback() && storage == StorageClassOutput)
+		{
+			if (is_block)
+			{
+				uint32_t mbr_cnt = uint32_t(type.member_types.size());
+				bool all_captured = true;
+				for (uint32_t i = 0; i < mbr_cnt; i++)
+				{
+					bool active = !is_builtin || has_active_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), storage);
+					all_captured = all_captured && (has_member_decoration(type.self, i, DecorationOffset) || !active);
+				}
+				hidden = hidden || all_captured;
+			}
+			else if (has_decoration(var_id, DecorationOffset))
+			{
+				hidden = true;
+			}
+		}
+
 		// It's not enough to simply avoid marking fragment outputs if the pipeline won't
 		// accept them. We can't put them in the struct at all, or otherwise the compiler
 		// complains that the outputs weren't explicitly marked.
@@ -15898,6 +15918,8 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInLayer:
 		if (is_tesc_shader())
 			break;
+		if (needs_transform_feedback() && xfb_captured_builtins.count(builtin))
+			return join(to_name(xfb_locals[xfb_captured_builtins[builtin]]), ".", CompilerGLSL::builtin_to_glsl(builtin, storage));
 		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
 		    !is_stage_output_builtin_masked(builtin))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
@@ -17971,6 +17993,7 @@ void CompilerMSL::activate_argument_buffer_resources()
 void CompilerMSL::analyze_xfb_buffers()
 {
 	// Gather all used outputs and sort them out into transform feedback buffers.
+	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	struct XfbOutput
 	{
@@ -18012,7 +18035,7 @@ void CompilerMSL::analyze_xfb_buffers()
 			xfb_strides[xfb_buffer_num] = xfb_stride;
 		}
 
-		if (type.basetype == SPIRType::Struct)
+		if (type.basetype == SPIRType::Struct && has_decoration(type.self, DecorationBlock))
 		{
 			for (uint32_t i = 0; i < type.member_types.size(); ++i)
 			{
@@ -18026,10 +18049,17 @@ void CompilerMSL::analyze_xfb_buffers()
 				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
 				string name;
 				if (has_member_decoration(type.self, i, DecorationBuiltIn))
+				{
 					// Force this to have the proper name.
-					name = builtin_to_glsl(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), StorageClassOutput);
+					BuiltIn bi_type = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+					name = builtin_to_glsl(bi_type, StorageClassOutput);
+					// Make sure it's referenced properly.
+					xfb_captured_builtins.insert(make_pair(bi_type, mbr_xfb_buffer_num));
+				}
 				else
+				{
 					name = to_member_name(type, i);
+				}
 				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, name, i, xfb_offset, true});
 				if (has_member_decoration(type.self, i, DecorationXfbStride))
 				{
@@ -18056,10 +18086,17 @@ void CompilerMSL::analyze_xfb_buffers()
 			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
 			string name;
 			if (has_decoration(self, DecorationBuiltIn))
+			{
 				// Force this to have the proper name.
-				name = builtin_to_glsl(BuiltIn(get_decoration(self, DecorationBuiltIn)), StorageClassOutput);
+				BuiltIn bi_type = BuiltIn(get_decoration(self, DecorationBuiltIn));
+				name = builtin_to_glsl(bi_type, StorageClassOutput);
+				// Make sure it's referenced properly.
+				xfb_captured_builtins.insert(make_pair(bi_type, xfb_buffer_num));
+			}
 			else
+			{
 				name = to_name(self);
+			}
 			xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({&var, name, 0, xfb_offset, false});
 		}
 	});
@@ -18115,7 +18152,7 @@ void CompilerMSL::analyze_xfb_buffers()
 
 		set<SPIRVariable>(local_var_id, local_ptr_type_id, StorageClassFunction);
 		set_name(local_var_id, join("spvXfbOutput", xfb_buffer));
-		get<SPIRFunction>(ir.default_entry_point).add_local_variable(local_var_id);
+		entry_func.add_local_variable(local_var_id);
 		vars_needing_early_declaration.push_back(local_var_id);
 
 		set<SPIRVariable>(buffer_var_id, ptr_type_id, StorageClassUniform);
@@ -18144,14 +18181,23 @@ void CompilerMSL::analyze_xfb_buffers()
 			else
 			{
 				buffer_type.member_types.push_back(type.member_types[member_index]);
+				string qual_var_name = join(to_name(local_var_id), ".", mbr_name);
+				if (is_member_builtin(type, member_index, nullptr))
+				{
+					set_member_qualified_name(type.self, member_index, qual_var_name);
+				}
+				else
+				{
+					// n.b. Must come BEFORE the big one that writes out the XFB buffers!
+					entry_func.fixup_hooks_out.push_back([=]() {
+						statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(type, member_index), ";");
+					});
+				}
 			}
 
 			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
 			                               var.self);
 			member_index++;
-
-			// FIXME: Still to do:
-			// - Make sure Xfb-captured outputs aren't in "normal" capture_output_to_buffer
 		}
 	}
 }
