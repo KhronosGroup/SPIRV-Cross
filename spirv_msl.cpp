@@ -14032,9 +14032,9 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
 				}
 			}
-			statement("threadgroup_barrier(mem_device);");
+			statement("threadgroup_barrier(mem_flags::mem_device);");
 			// Now update the amount of data written to the buffer.
-			statement("if (", to_expression(builtin_invocation_id_id), ".xy == 0)");
+			statement("if (all(", to_expression(builtin_invocation_id_id), ".xy == 0))");
 			begin_scope();
 			switch (msl_options.xfb_primitive_type)
 			{
