@@ -576,8 +576,9 @@ public:
 	bool needs_transform_feedback() const
 	{
 		auto &execution = get_entry_point();
-		return execution.flags.get(spv::ExecutionModeXfb) && (execution.model == spv::ExecutionModelVertex ||
-		                                                      execution.model == spv::ExecutionModelTessellationEvaluation);
+		return execution.flags.get(spv::ExecutionModeXfb) &&
+		       (execution.model == spv::ExecutionModelVertex ||
+		        execution.model == spv::ExecutionModelTessellationEvaluation);
 	}
 
 	bool vertex_shader_is_kernel() const

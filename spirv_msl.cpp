@@ -3810,7 +3810,9 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				bool all_captured = true;
 				for (uint32_t i = 0; i < mbr_cnt; i++)
 				{
-					bool active = !is_builtin || has_active_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), storage);
+					bool active =
+					    !is_builtin ||
+					    has_active_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), storage);
 					all_captured = all_captured && (has_member_decoration(type.self, i, DecorationOffset) || !active);
 				}
 				hidden = hidden || all_captured;
@@ -12786,8 +12788,12 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 					continue;
 				if (!ep_args.empty())
 					ep_args += ", ";
-				ep_args += join(variable_decl(get_type_from_variable(xfb_counters[xfb_buffer]), to_name(xfb_counters[xfb_buffer])), " [[buffer(", msl_options.xfb_counter_buffer_index_base + xfb_buffer, ")]], ");
-				ep_args += join(variable_decl(get_type_from_variable(xfb_buffers[xfb_buffer]), to_name(xfb_buffers[xfb_buffer])), " [[buffer(", msl_options.xfb_output_buffer_index_base + xfb_buffer, ")]]");
+				ep_args += join(
+				    variable_decl(get_type_from_variable(xfb_counters[xfb_buffer]), to_name(xfb_counters[xfb_buffer])),
+				    " [[buffer(", msl_options.xfb_counter_buffer_index_base + xfb_buffer, ")]], ");
+				ep_args += join(
+				    variable_decl(get_type_from_variable(xfb_buffers[xfb_buffer]), to_name(xfb_buffers[xfb_buffer])),
+				    " [[buffer(", msl_options.xfb_output_buffer_index_base + xfb_buffer, ")]]");
 			}
 		}
 		// Tessellation control shaders get three additional parameters:
@@ -13830,261 +13836,299 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	// Transform feedback
 	if (needs_transform_feedback())
 	{
-		entry_func.fixup_hooks_out.push_back([=]() {
-			string index_expr;
-			switch (msl_options.xfb_primitive_type)
-			{
-			case Options::PrimitiveType::PointList:
-				index_expr = join(to_expression(builtin_invocation_id_id), ".y * ",
-				                  to_expression(builtin_stage_input_size_id), ".x + ",
-				                  to_expression(builtin_invocation_id_id), ".x");
-				break;
-			case Options::PrimitiveType::LineList:
-				index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
-				                  to_expression(builtin_stage_input_size_id), ".x & ~1u) + ",
-				                  to_expression(builtin_invocation_id_id), ".x");
-				break;
-			case Options::PrimitiveType::TriangleList:
-				index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
-				                  to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3u) + ",
-				                  to_expression(builtin_invocation_id_id), ".x");
-				break;
-			case Options::PrimitiveType::LineStrip:
-				// Calculation of the index expression is also complicated a bit because of this.
-				// Some worked examples:
-				// Vertex ordinal	XFB indices
-				// 0				   0
-				// 1				1, 2
-				// 2				3, 4
-				// 3				5, 6
-				// 4				7
-				// FIXME: This doesn't account for primitive restart!
-				// 0				   0
-				// 1				1, 2
-				// 2				3, 4
-				// 3				5
-				// 4				<restart>
-				// 5				n/a
-				// 6				<restart>
-				// 7				   6
-				// 8				7, 8
-				// 9				9, 10
-				// 10				11
-				index_expr = join("2 * ", to_expression(builtin_invocation_id_id), ".y * (",
-				                  to_expression(builtin_stage_input_size_id), ".x - 1u) + 2 * ",
-				                  to_expression(builtin_invocation_id_id), ".x");
-				break;
-			case Options::PrimitiveType::TriangleStrip:
-				// Vertex ordinal	XFB indices
-				// 0				      0
-				// 1				   1, 3
-				// 2				2, 5, 6
-				// 3				4, 7, 9
-				// 4				8, 11
-				// 5				10
-				// FIXME: This doesn't account for primitive restart!
-				// 0				      0
-				// 1				   1, 3
-				// 2				2, 5, 6
-				// 3				4, 7, 9
-				// 4				8, 11
-				// 5				10
-				// 6				<restart>
-				// 7				        12
-				// 8				    13, 15
-				// 9				14, 17, 18
-				// 10				16, 19, 21
-				// 11				20, 23
-				// 12				22
-				// ----
-				// 0				      0
-				// 1				   1
-				// 2				2
-				// 3				<restart>
-				// 4				      3
-				// 5				   4, 6
-				// 6				5, 8
-				// 7				7
-				// ----
-				// 0				      0
-				// 1				   1, 3
-				// 2				2, 5, 6
-				// 3				4, 7
-				// 4				8
-				// 5				<restart>
-				// 6				n/a
-				// 7				n/a
-				// 8				<restart>
-				// 9				        9
-				// 10				    10, 12
-				// 11				11, 14, 15
-				// 12				13, 16
-				// 13				17
-				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
-				                  to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
-				                  to_expression(builtin_invocation_id_id), ".x");
-				break;
-			case Options::PrimitiveType::TriangleFan:
-				// The index expression in this case is different for the fan base.
-				// This is for the other vertices. It is very similar to the line strip case.
-				// Vertex ordinal	XFB indices
-				// 0				0, 3, 6, 9
-				// 1				   1
-				// 2				2, 4
-				// 3				5, 7
-				// 4				8, 10
-				// 5				11
-				// FIXME: This doesn't account for primitive restart!
-				// 0				0, 3, 6, 9
-				// 1				   1
-				// 2				2, 4
-				// 3				5, 7
-				// 4				8, 10
-				// 5				11
-				// 6				<restart>
-				// 7				12, 15, 18, 21
-				// 8				    13
-				// 9				14, 16
-				// 10				17, 19
-				// 11				20, 22
-				// 12				23
-				// ----
-				// 0				0
-				// 1				   1
-				// 2				2
-				// 3				<restart>
-				// 4				3, 6
-				// 5				   4
-				// 6				5, 7
-				// 7				8
-				// ----
-				// 0				0, 3, 6
-				// 1				   1
-				// 2				2, 4
-				// 3				5, 7
-				// 4				8
-				// 5				<restart>
-				// 6				n/a
-				// 7				n/a
-				// 8				<restart>
-				// 9				9, 12, 15
-				// 10				    10
-				// 11				11, 13
-				// 12				14, 16
-				// 13				17
-				statement("uint spvXfbBaseIndex = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
-				          to_expression(builtin_stage_input_size_id), ".x, 2u);");
-				index_expr = join("spvXfbBaseIndex + 3 * ", to_expression(builtin_invocation_id_id), ".x - 2u");
-				break;
-			case Options::PrimitiveType::Dynamic:
-			default:
-				SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
-			}
-			statement("uint spvXfbIndex = ", index_expr, ";");
-			// First, write the data out.
-			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
-			{
-				if (xfb_buffers[i] == 0) continue;
-				statement("uint spvInitOffset", i, " = atomic_load_explicit(", to_name(xfb_counters[i]), ", memory_order_relaxed);");
-				statement(to_name(xfb_buffers[i]), " = reinterpret_cast<", type_to_glsl(get_type_from_variable(xfb_buffers[i])), ">(reinterpret_cast<device char*>(", to_name(xfb_buffers[i]), ") + spvInitOffset", i, ");");
-				switch (msl_options.xfb_primitive_type)
-				{
-				case Options::PrimitiveType::PointList:
-					// This is straightforward enough. Just make sure we don't overstep the data buffer (FIXME).
-					statement(to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::LineList:
-					// This is a little trickier, because we don't want to write an incomplete primitive.
-					// Therefore, we must write only if we're an odd vertex, or we're not the last one.
-					// FIXME: Bounds check the buffer, too.
-					statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ", to_expression(builtin_invocation_id_id), ".x < ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = " , to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::TriangleList:
-					// This is similar to the previous case, except here the boundary condition is
-					// if global_id.x % 3 == 2 or we're not one of the last two.
-					// FIXME: Bounds check the buffer, too.
-					statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3u == 2) || ", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::LineStrip:
-					// This is more complicated. We have to write out each individual line segment.
-					// So if we're not the first or the last, we have to write twice.
-					// On top of that, we also have to handle primitive restart. (FIXME)
-					// FIXME: Bounds check the buffer, too.
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = " , to_expression(xfb_locals[i]), ";");
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 1u] = " , to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::TriangleStrip:
-					// This is even worse. We have to write three times if we're not first or last,
-					// and now if there's fewer than two vertices in this strip, we can't write at all.
-					// Again, primitive restart is a factor here. (FIXME)
-					// FIXME: Bounds check the buffer, too.
-					statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ", to_expression(builtin_stage_input_size_id), ".x)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]), ";");
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 1u - (", to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]), ";");
-					statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 4u - (", to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]), ";");
-					break;
-				case Options::PrimitiveType::TriangleFan:
-					// This is the worst case of all. It's similar to the strip case, except now
-					// we have to write the fan base vertex for *every* triangle.
-					// Again, primitive restart is a factor here. (FIXME)
-					// FIXME: Bounds check the buffer, too.
-					statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
-					begin_scope();
-					statement("for (uint i = 0; i < subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u); ++i)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbBaseIndex + 3 * i] = ", to_name(xfb_locals[i]), ";");
-					end_scope();
-					statement("else");
-					begin_scope();
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = " , to_expression(xfb_locals[i]), ";");
-					statement("if (", to_expression(builtin_invocation_id_id), ".x != 1)");
-					statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 2u] = " , to_expression(xfb_locals[i]), ";");
-					end_scope();
-					break;
-				case Options::PrimitiveType::Dynamic:
-				default:
-					SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
-				}
-			}
-			statement("threadgroup_barrier(mem_flags::mem_device);");
-			// Now update the amount of data written to the buffer.
-			statement("if (all(", to_expression(builtin_invocation_id_id), ".xy == 0))");
-			begin_scope();
-			switch (msl_options.xfb_primitive_type)
-			{
-			case Options::PrimitiveType::PointList:
-				statement("uint spvWritten = ", to_expression(builtin_stage_input_size_id), ".x * ", to_expression(builtin_stage_input_size_id), ".y;");
-				break;
-			case Options::PrimitiveType::LineList:
-				statement("uint spvWritten = (", to_expression(builtin_stage_input_size_id), ".x & ~1u) * ", to_expression(builtin_stage_input_size_id), ".y;");
-				break;
-			case Options::PrimitiveType::LineStrip:
-				statement("uint spvWritten = 2 * (", to_expression(builtin_stage_input_size_id), ".x - 1u) * ", to_expression(builtin_stage_input_size_id), ".y;");
-				break;
-			case Options::PrimitiveType::TriangleList:
-				statement("uint spvWritten = (", to_expression(builtin_stage_input_size_id), ".x - ", to_expression(builtin_stage_input_size_id), ".x % 3u) * ", to_expression(builtin_stage_input_size_id), ".y;");
-				break;
-			case Options::PrimitiveType::TriangleStrip:
-			case Options::PrimitiveType::TriangleFan:
-				statement("uint spvWritten = 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ", to_expression(builtin_stage_input_size_id), ".y;");
-				break;
-			case Options::PrimitiveType::Dynamic:
-			default:
-				SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
-				break;
-			}
-			for (uint32_t i = 0; i < kMaxXfbBuffers; ++i) {
-				if (xfb_buffers[i] == 0) continue;
-				statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*", to_name(xfb_buffers[i]), ") * spvWritten, memory_order_relaxed);");
-			}
-			end_scope();
-		});
+		entry_func.fixup_hooks_out.push_back(
+		    [=]()
+		    {
+			    string index_expr;
+			    switch (msl_options.xfb_primitive_type)
+			    {
+			    case Options::PrimitiveType::PointList:
+				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * ",
+				                      to_expression(builtin_stage_input_size_id), ".x + ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::LineList:
+				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
+				                      to_expression(builtin_stage_input_size_id), ".x & ~1u) + ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::TriangleList:
+				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
+				                      to_expression(builtin_stage_input_size_id), ".x - ",
+				                      to_expression(builtin_stage_input_size_id), ".x % 3u) + ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::LineStrip:
+				    // Calculation of the index expression is also complicated a bit because of this.
+				    // Some worked examples:
+				    // Vertex ordinal	XFB indices
+				    // 0				   0
+				    // 1				1, 2
+				    // 2				3, 4
+				    // 3				5, 6
+				    // 4				7
+				    // FIXME: This doesn't account for primitive restart!
+				    // 0				   0
+				    // 1				1, 2
+				    // 2				3, 4
+				    // 3				5
+				    // 4				<restart>
+				    // 5				n/a
+				    // 6				<restart>
+				    // 7				   6
+				    // 8				7, 8
+				    // 9				9, 10
+				    // 10				11
+				    index_expr = join("2 * ", to_expression(builtin_invocation_id_id), ".y * (",
+				                      to_expression(builtin_stage_input_size_id), ".x - 1u) + 2 * ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::TriangleStrip:
+				    // Vertex ordinal	XFB indices
+				    // 0				      0
+				    // 1				   1, 3
+				    // 2				2, 5, 6
+				    // 3				4, 7, 9
+				    // 4				8, 11
+				    // 5				10
+				    // FIXME: This doesn't account for primitive restart!
+				    // 0				      0
+				    // 1				   1, 3
+				    // 2				2, 5, 6
+				    // 3				4, 7, 9
+				    // 4				8, 11
+				    // 5				10
+				    // 6				<restart>
+				    // 7				        12
+				    // 8				    13, 15
+				    // 9				14, 17, 18
+				    // 10				16, 19, 21
+				    // 11				20, 23
+				    // 12				22
+				    // ----
+				    // 0				      0
+				    // 1				   1
+				    // 2				2
+				    // 3				<restart>
+				    // 4				      3
+				    // 5				   4, 6
+				    // 6				5, 8
+				    // 7				7
+				    // ----
+				    // 0				      0
+				    // 1				   1, 3
+				    // 2				2, 5, 6
+				    // 3				4, 7
+				    // 4				8
+				    // 5				<restart>
+				    // 6				n/a
+				    // 7				n/a
+				    // 8				<restart>
+				    // 9				        9
+				    // 10				    10, 12
+				    // 11				11, 14, 15
+				    // 12				13, 16
+				    // 13				17
+				    index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
+				                      to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::TriangleFan:
+				    // The index expression in this case is different for the fan base.
+				    // This is for the other vertices. It is very similar to the line strip case.
+				    // Vertex ordinal	XFB indices
+				    // 0				0, 3, 6, 9
+				    // 1				   1
+				    // 2				2, 4
+				    // 3				5, 7
+				    // 4				8, 10
+				    // 5				11
+				    // FIXME: This doesn't account for primitive restart!
+				    // 0				0, 3, 6, 9
+				    // 1				   1
+				    // 2				2, 4
+				    // 3				5, 7
+				    // 4				8, 10
+				    // 5				11
+				    // 6				<restart>
+				    // 7				12, 15, 18, 21
+				    // 8				    13
+				    // 9				14, 16
+				    // 10				17, 19
+				    // 11				20, 22
+				    // 12				23
+				    // ----
+				    // 0				0
+				    // 1				   1
+				    // 2				2
+				    // 3				<restart>
+				    // 4				3, 6
+				    // 5				   4
+				    // 6				5, 7
+				    // 7				8
+				    // ----
+				    // 0				0, 3, 6
+				    // 1				   1
+				    // 2				2, 4
+				    // 3				5, 7
+				    // 4				8
+				    // 5				<restart>
+				    // 6				n/a
+				    // 7				n/a
+				    // 8				<restart>
+				    // 9				9, 12, 15
+				    // 10				    10
+				    // 11				11, 13
+				    // 12				14, 16
+				    // 13				17
+				    statement("uint spvXfbBaseIndex = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
+				              to_expression(builtin_stage_input_size_id), ".x, 2u);");
+				    index_expr = join("spvXfbBaseIndex + 3 * ", to_expression(builtin_invocation_id_id), ".x - 2u");
+				    break;
+			    case Options::PrimitiveType::Dynamic:
+			    default:
+				    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+			    }
+			    statement("uint spvXfbIndex = ", index_expr, ";");
+			    // First, write the data out.
+			    for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+			    {
+				    if (xfb_buffers[i] == 0)
+					    continue;
+				    statement("uint spvInitOffset", i, " = atomic_load_explicit(", to_name(xfb_counters[i]),
+				              ", memory_order_relaxed);");
+				    statement(to_name(xfb_buffers[i]), " = reinterpret_cast<",
+				              type_to_glsl(get_type_from_variable(xfb_buffers[i])), ">(reinterpret_cast<device char*>(",
+				              to_name(xfb_buffers[i]), ") + spvInitOffset", i, ");");
+				    switch (msl_options.xfb_primitive_type)
+				    {
+				    case Options::PrimitiveType::PointList:
+					    // This is straightforward enough. Just make sure we don't overstep the data buffer (FIXME).
+					    statement(to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]), ";");
+					    break;
+				    case Options::PrimitiveType::LineList:
+					    // This is a little trickier, because we don't want to write an incomplete primitive.
+					    // Therefore, we must write only if we're an odd vertex, or we're not the last one.
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ",
+					              to_expression(builtin_invocation_id_id), ".x < ",
+					              to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    break;
+				    case Options::PrimitiveType::TriangleList:
+					    // This is similar to the previous case, except here the boundary condition is
+					    // if global_id.x % 3 == 2 or we're not one of the last two.
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3u == 2) || ",
+					              to_expression(builtin_invocation_id_id), ".x + 2 < ",
+					              to_expression(builtin_stage_input_size_id), ".x)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    break;
+				    case Options::PrimitiveType::LineStrip:
+					    // This is more complicated. We have to write out each individual line segment.
+					    // So if we're not the first or the last, we have to write twice.
+					    // On top of that, we also have to handle primitive restart. (FIXME)
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if (", to_expression(builtin_invocation_id_id),
+					              ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x != 0)");
+					    statement("    ", to_name(xfb_buffers[i]),
+					              "[spvXfbIndex - 1u] = ", to_expression(xfb_locals[i]), ";");
+					    break;
+				    case Options::PrimitiveType::TriangleStrip:
+					    // This is even worse. We have to write three times if we're not first or last,
+					    // and now if there's fewer than two vertices in this strip, we can't write at all.
+					    // Again, primitive restart is a factor here. (FIXME)
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ",
+					              to_expression(builtin_stage_input_size_id), ".x)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ",
+					              to_expression(builtin_invocation_id_id),
+					              ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 1u - (",
+					              to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 4u - (",
+					              to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    break;
+				    case Options::PrimitiveType::TriangleFan:
+					    // This is the worst case of all. It's similar to the strip case, except now
+					    // we have to write the fan base vertex for *every* triangle.
+					    // Again, primitive restart is a factor here. (FIXME)
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
+					    begin_scope();
+					    statement("for (uint i = 0; i < subsat(", to_expression(builtin_stage_input_size_id),
+					              ".x, 2u); ++i)");
+					    statement("    ", to_name(xfb_buffers[i]),
+					              "[spvXfbBaseIndex + 3 * i] = ", to_name(xfb_locals[i]), ";");
+					    end_scope();
+					    statement("else");
+					    begin_scope();
+					    statement("if (", to_expression(builtin_invocation_id_id),
+					              ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x != 1)");
+					    statement("    ", to_name(xfb_buffers[i]),
+					              "[spvXfbIndex - 2u] = ", to_expression(xfb_locals[i]), ";");
+					    end_scope();
+					    break;
+				    case Options::PrimitiveType::Dynamic:
+				    default:
+					    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+				    }
+			    }
+			    statement("threadgroup_barrier(mem_flags::mem_device);");
+			    // Now update the amount of data written to the buffer.
+			    statement("if (all(", to_expression(builtin_invocation_id_id), ".xy == 0))");
+			    begin_scope();
+			    switch (msl_options.xfb_primitive_type)
+			    {
+			    case Options::PrimitiveType::PointList:
+				    statement("uint spvWritten = ", to_expression(builtin_stage_input_size_id), ".x * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::LineList:
+				    statement("uint spvWritten = (", to_expression(builtin_stage_input_size_id), ".x & ~1u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::LineStrip:
+				    statement("uint spvWritten = 2 * (", to_expression(builtin_stage_input_size_id), ".x - 1u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::TriangleList:
+				    statement("uint spvWritten = (", to_expression(builtin_stage_input_size_id), ".x - ",
+				              to_expression(builtin_stage_input_size_id), ".x % 3u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::TriangleStrip:
+			    case Options::PrimitiveType::TriangleFan:
+				    statement("uint spvWritten = 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::Dynamic:
+			    default:
+				    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+				    break;
+			    }
+			    for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+			    {
+				    if (xfb_buffers[i] == 0)
+					    continue;
+				    statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*",
+				              to_name(xfb_buffers[i]), ") * spvWritten, memory_order_relaxed);");
+			    }
+			    end_scope();
+		    });
 	}
 }
 
@@ -15939,8 +15983,10 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInLayer:
 		if (is_tesc_shader())
 			break;
-		if (needs_transform_feedback() && xfb_captured_builtins.count(builtin) && current_function && (current_function->self == ir.default_entry_point)) 
-			return join(to_name(xfb_locals[xfb_captured_builtins[builtin]]), ".", CompilerGLSL::builtin_to_glsl(builtin, storage));
+		if (needs_transform_feedback() && xfb_captured_builtins.count(builtin) && current_function &&
+		    (current_function->self == ir.default_entry_point))
+			return join(to_name(xfb_locals[xfb_captured_builtins[builtin]]), ".",
+			            CompilerGLSL::builtin_to_glsl(builtin, storage));
 		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
 		    !is_stage_output_builtin_masked(builtin))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
@@ -18034,95 +18080,99 @@ void CompilerMSL::analyze_xfb_buffers()
 		xfb_strides[i] = 0;
 	}
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t self, SPIRVariable &var) {
-		auto &type = get_variable_data_type(var);
-		if(var.storage != StorageClassOutput)
-			return;
-		if(is_hidden_variable(var, true))
-			return;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t self, SPIRVariable &var)
+	    {
+		    auto &type = get_variable_data_type(var);
+		    if (var.storage != StorageClassOutput)
+			    return;
+		    if (is_hidden_variable(var, true))
+			    return;
 
-		uint32_t xfb_buffer_num = 0, xfb_stride;
-		if (has_decoration(self, DecorationXfbBuffer))
-		{
-			xfb_buffer_num = get_decoration(self, DecorationXfbBuffer);
-			xfb_stride = get_decoration(self, DecorationXfbStride);
+		    uint32_t xfb_buffer_num = 0, xfb_stride;
+		    if (has_decoration(self, DecorationXfbBuffer))
+		    {
+			    xfb_buffer_num = get_decoration(self, DecorationXfbBuffer);
+			    xfb_stride = get_decoration(self, DecorationXfbStride);
 
-			if (xfb_buffer_num >= kMaxXfbBuffers)
-				SPIRV_CROSS_THROW("Shader uses more than 4 transform feedback buffers.");
+			    if (xfb_buffer_num >= kMaxXfbBuffers)
+				    SPIRV_CROSS_THROW("Shader uses more than 4 transform feedback buffers.");
 
-			// According to the spec, individual outputs or blocks are decorated with
-			// XfbStride to indicate the stride between two successive vertices in the buffer,
-			// but all XfbStrides for a given XfbBuffer must agree.
-			xfb_strides[xfb_buffer_num] = xfb_stride;
-		}
+			    // According to the spec, individual outputs or blocks are decorated with
+			    // XfbStride to indicate the stride between two successive vertices in the buffer,
+			    // but all XfbStrides for a given XfbBuffer must agree.
+			    xfb_strides[xfb_buffer_num] = xfb_stride;
+		    }
 
-		if (type.basetype == SPIRType::Struct && has_decoration(type.self, DecorationBlock))
-		{
-			for (uint32_t i = 0; i < type.member_types.size(); ++i)
-			{
-				// According to Vulkan VUID 04716:
-				// "Only variables or block members in the output interface
-				//  decorated with Offset can be captured for transform
-				//  feedback..."
-				if (!has_member_decoration(type.self, i, DecorationOffset))
-					continue;
-				xfb_captured_outputs.insert(self);
-				uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
-				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
-				string name;
-				if (has_member_decoration(type.self, i, DecorationBuiltIn))
-				{
-					// Force this to have the proper name.
-					BuiltIn bi_type = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
-					name = builtin_to_glsl(bi_type, StorageClassOutput);
-					// Make sure it's referenced properly.
-					xfb_captured_builtins.insert(make_pair(bi_type, mbr_xfb_buffer_num));
-				}
-				else
-				{
-					name = to_member_name(type, i);
-				}
-				xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({&var, name, i, xfb_offset, true});
-				if (has_member_decoration(type.self, i, DecorationXfbStride))
-				{
-					xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
-				}
-				else
-				{
-					// XXX What's this for??? The validation rules for SPIR-V require
-					// this to be set if any of the transform feedback decorations are used!
-					bool hasTransformFeedback = has_member_decoration(type.parent_type, i, DecorationXfbStride);
-					if (hasTransformFeedback)
-					{
-						auto &execution = get_entry_point();
-						execution.flags.set(spv::ExecutionModeXfb);
-					}
-					break;
-				}
-			}
-		}
-		else
-		{
-			if (!has_decoration(self, DecorationOffset))
-				return;
-			xfb_captured_outputs.insert(self);
-			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
-			string name;
-			if (has_decoration(self, DecorationBuiltIn))
-			{
-				// Force this to have the proper name.
-				BuiltIn bi_type = BuiltIn(get_decoration(self, DecorationBuiltIn));
-				name = builtin_to_glsl(bi_type, StorageClassOutput);
-				// Make sure it's referenced properly.
-				xfb_captured_builtins.insert(make_pair(bi_type, xfb_buffer_num));
-			}
-			else
-			{
-				name = to_name(self);
-			}
-			xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({&var, name, 0, xfb_offset, false});
-		}
-	});
+		    if (type.basetype == SPIRType::Struct && has_decoration(type.self, DecorationBlock))
+		    {
+			    for (uint32_t i = 0; i < type.member_types.size(); ++i)
+			    {
+				    // According to Vulkan VUID 04716:
+				    // "Only variables or block members in the output interface
+				    //  decorated with Offset can be captured for transform
+				    //  feedback..."
+				    if (!has_member_decoration(type.self, i, DecorationOffset))
+					    continue;
+				    xfb_captured_outputs.insert(self);
+				    uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
+				    uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ?
+				                                      get_member_decoration(type.self, i, DecorationXfbBuffer) :
+				                                      xfb_buffer_num;
+				    string name;
+				    if (has_member_decoration(type.self, i, DecorationBuiltIn))
+				    {
+					    // Force this to have the proper name.
+					    BuiltIn bi_type = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+					    name = builtin_to_glsl(bi_type, StorageClassOutput);
+					    // Make sure it's referenced properly.
+					    xfb_captured_builtins.insert(make_pair(bi_type, mbr_xfb_buffer_num));
+				    }
+				    else
+				    {
+					    name = to_member_name(type, i);
+				    }
+				    xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({ &var, name, i, xfb_offset, true });
+				    if (has_member_decoration(type.self, i, DecorationXfbStride))
+				    {
+					    xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
+				    }
+				    else
+				    {
+					    // XXX What's this for??? The validation rules for SPIR-V require
+					    // this to be set if any of the transform feedback decorations are used!
+					    bool hasTransformFeedback = has_member_decoration(type.parent_type, i, DecorationXfbStride);
+					    if (hasTransformFeedback)
+					    {
+						    auto &execution = get_entry_point();
+						    execution.flags.set(spv::ExecutionModeXfb);
+					    }
+					    break;
+				    }
+			    }
+		    }
+		    else
+		    {
+			    if (!has_decoration(self, DecorationOffset))
+				    return;
+			    xfb_captured_outputs.insert(self);
+			    uint32_t xfb_offset = get_decoration(self, DecorationOffset);
+			    string name;
+			    if (has_decoration(self, DecorationBuiltIn))
+			    {
+				    // Force this to have the proper name.
+				    BuiltIn bi_type = BuiltIn(get_decoration(self, DecorationBuiltIn));
+				    name = builtin_to_glsl(bi_type, StorageClassOutput);
+				    // Make sure it's referenced properly.
+				    xfb_captured_builtins.insert(make_pair(bi_type, xfb_buffer_num));
+			    }
+			    else
+			    {
+				    name = to_name(self);
+			    }
+			    xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({ &var, name, 0, xfb_offset, false });
+		    }
+	    });
 
 	for (uint32_t xfb_buffer = 0; xfb_buffer < kMaxXfbBuffers; xfb_buffer++)
 	{
@@ -18206,9 +18256,11 @@ void CompilerMSL::analyze_xfb_buffers()
 				if (!is_member_builtin(type, output.member_index, nullptr))
 				{
 					// n.b. Must come BEFORE the big one that writes out the XFB buffers!
-					entry_func.fixup_hooks_out.push_back([=]() {
-						statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(type, member_index), ";");
-					});
+					entry_func.fixup_hooks_out.push_back(
+					    [=]() {
+						    statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(type, member_index),
+						              ";");
+					    });
 				}
 			}
 
@@ -18231,15 +18283,16 @@ void CompilerMSL::analyze_xfb_buffers()
 			const auto &member_type = get<SPIRType>(buffer_type.member_types[i]);
 			uint32_t var_id = get_extended_member_decoration(type_id, i, SPIRVCrossDecorationInterfaceOrigID);
 			const auto &var = get<SPIRVariable>(var_id);
-			if (member_type.basetype != SPIRType::Struct && (packed_buffer || has_extended_member_decoration(type_id, i, SPIRVCrossDecorationPhysicalTypePacked)))
+			if (member_type.basetype != SPIRType::Struct &&
+			    (packed_buffer || has_extended_member_decoration(type_id, i, SPIRVCrossDecorationPhysicalTypePacked)))
 			{
 				if (is_builtin_variable(var))
 				{
 					if (outputs[i].block)
-						xfb_packed_builtins.insert(BuiltIn(get_member_decoration(get_variable_data_type_id(var), outputs[i].member_index, DecorationBuiltIn)));
+						xfb_packed_builtins.insert(BuiltIn(get_member_decoration(
+						    get_variable_data_type_id(var), outputs[i].member_index, DecorationBuiltIn)));
 					else
 						xfb_packed_builtins.insert(BuiltIn(get_decoration(var_id, DecorationBuiltIn)));
-
 				}
 				else
 				{

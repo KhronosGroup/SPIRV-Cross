@@ -677,8 +677,7 @@ struct CLIArguments
 	bool msl_check_discarded_frag_stores = false;
 	bool msl_sample_dref_lod_array_as_grad = false;
 	const char *msl_combined_sampler_suffix = nullptr;
-	CompilerMSL::Options::PrimitiveType msl_xfb_primitive_type =
-	    CompilerMSL::Options::PrimitiveType::Dynamic;
+	CompilerMSL::Options::PrimitiveType msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::Dynamic;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	bool glsl_force_flattened_io_blocks = false;
@@ -1796,23 +1795,25 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
 		args.msl_combined_sampler_suffix = parser.next_string();
 	});
-	cbs.add("--msl-xfb-primitive-type", [&args](CLIParser &parser) {
-		const char *type = parser.next_value_string("dynamic");
-		if (strcmp(type, "dynamic") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::Dynamic;
-		else if (strcmp(type, "point-list") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::PointList;
-		else if (strcmp(type, "line-list") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::LineList;
-		else if (strcmp(type, "line-strip") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::LineStrip;
-		else if (strcmp(type, "triangle-list") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleList;
-		else if (strcmp(type, "triangle-strip") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleStrip;
-		else if (strcmp(type, "triangle-fan") == 0)
-			args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleFan;
-	});
+	cbs.add("--msl-xfb-primitive-type",
+	        [&args](CLIParser &parser)
+	        {
+		        const char *type = parser.next_value_string("dynamic");
+		        if (strcmp(type, "dynamic") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::Dynamic;
+		        else if (strcmp(type, "point-list") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::PointList;
+		        else if (strcmp(type, "line-list") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::LineList;
+		        else if (strcmp(type, "line-strip") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::LineStrip;
+		        else if (strcmp(type, "triangle-list") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleList;
+		        else if (strcmp(type, "triangle-strip") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleStrip;
+		        else if (strcmp(type, "triangle-fan") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleFan;
+	        });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
