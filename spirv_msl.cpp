@@ -13922,7 +13922,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 13				17
 				index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
 				                  to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
-				                  to_expression(builtin_invocation_id_id), ".x)");
+				                  to_expression(builtin_invocation_id_id), ".x");
 				break;
 			case Options::PrimitiveType::TriangleFan:
 				// The index expression in this case is different for the fan base.
@@ -13974,7 +13974,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				// 13				17
 				statement("uint spvXfbBaseIndex = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
 				          to_expression(builtin_stage_input_size_id), ".x, 2u);");
-				index_expr = join("spvXfbBaseIndex + 3 * ", to_expression(builtin_invocation_id_id), ".x) - 2u");
+				index_expr = join("spvXfbBaseIndex + 3 * ", to_expression(builtin_invocation_id_id), ".x - 2u");
 				break;
 			case Options::PrimitiveType::Dynamic:
 			default:
