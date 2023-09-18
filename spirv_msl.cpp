@@ -18176,11 +18176,13 @@ void CompilerMSL::analyze_xfb_buffers()
 			{
 				// Drop pointer information when we emit the outputs into a struct.
 				buffer_type.member_types.push_back(get_variable_data_type_id(var));
+				set_member_decoration(type_id, buffer_type.member_types.size() - 1, DecorationOffset, get_decoration(var.self, DecorationOffset));
 				set_qualified_name(var.self, join(to_name(local_var_id), ".", mbr_name));
 			}
 			else
 			{
 				buffer_type.member_types.push_back(type.member_types[member_index]);
+				set_member_decoration(type_id, buffer_type.member_types.size() - 1, DecorationOffset, get_member_decoration(type.self, member_index, DecorationOffset));
 				string qual_var_name = join(to_name(local_var_id), ".", mbr_name);
 				if (is_member_builtin(type, member_index, nullptr))
 				{
@@ -18199,6 +18201,17 @@ void CompilerMSL::analyze_xfb_buffers()
 			                               var.self);
 			member_index++;
 		}
+
+		// Because we have custom offsets and stride, the buffer struct needs repacking.
+		set_extended_decoration(type_id, SPIRVCrossDecorationBufferBlockRepacked);
+		// If the declared stride is not a multiple of the struct's natural alignment,
+		// then the struct needs to be packed.
+		bool packed_buffer = xfb_strides[xfb_buffer] % get_declared_type_alignment_msl(buffer_type, false, false) != 0;
+		if (packed_buffer)
+			mark_struct_members_packed(buffer_type);
+		// Make sure struct is padded to declared stride, so indexing works properly.
+		if (xfb_strides[xfb_buffer] > get_declared_struct_size_msl(buffer_type, packed_buffer))
+			set_extended_decoration(type_id, SPIRVCrossDecorationPaddingTarget, xfb_strides[xfb_buffer]);
 	}
 }
 
