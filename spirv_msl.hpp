@@ -1229,6 +1229,9 @@ protected:
 	VariableID xfb_locals[kMaxXfbBuffers];
 	uint32_t xfb_strides[kMaxXfbBuffers];
 	std::unordered_map<spv::BuiltIn, uint32_t> xfb_captured_builtins;
+	std::unordered_set<VariableID> xfb_captured_outputs;
+	std::unordered_set<VariableID> xfb_packed_outputs;
+	std::unordered_set<spv::BuiltIn> xfb_packed_builtins;
 
 	// Must be ordered since array is in a specific order.
 	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;

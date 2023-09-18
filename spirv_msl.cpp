@@ -15939,7 +15939,7 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInLayer:
 		if (is_tesc_shader())
 			break;
-		if (needs_transform_feedback() && xfb_captured_builtins.count(builtin))
+		if (needs_transform_feedback() && xfb_captured_builtins.count(builtin) && current_function && (current_function->self == ir.default_entry_point)) 
 			return join(to_name(xfb_locals[xfb_captured_builtins[builtin]]), ".", CompilerGLSL::builtin_to_glsl(builtin, storage));
 		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
 		    !is_stage_output_builtin_masked(builtin))
