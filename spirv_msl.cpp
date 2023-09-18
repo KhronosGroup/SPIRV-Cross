@@ -18203,7 +18203,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		}
 
 		// Because we have custom offsets and stride, the buffer struct needs repacking.
-		set_extended_decoration(type_id, SPIRVCrossDecorationBufferBlockRepacked);
+		mark_as_packable(buffer_type);
 		// If the declared stride is not a multiple of the struct's natural alignment,
 		// then the struct needs to be packed.
 		bool packed_buffer = xfb_strides[xfb_buffer] % get_declared_type_alignment_msl(buffer_type, false, false) != 0;
