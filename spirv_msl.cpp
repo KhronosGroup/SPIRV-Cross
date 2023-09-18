@@ -18165,11 +18165,6 @@ void CompilerMSL::analyze_xfb_buffers()
 		set<SPIRVariable>(buffer_var_id, ptr_type_id, StorageClassUniform);
 		set_name(buffer_var_id, join("spvXfb", xfb_buffer));
 
-		// Members must be emitted in Offset order.
-		stable_sort(begin(outputs), end(outputs), [&](const XfbOutput &lhs, const XfbOutput &rhs) -> bool {
-			return lhs.offset < rhs.offset;
-		});
-
 		uint32_t member_index = 0;
 		for (auto &output : outputs)
 		{
@@ -18183,19 +18178,15 @@ void CompilerMSL::analyze_xfb_buffers()
 			{
 				// Drop pointer information when we emit the outputs into a struct.
 				buffer_type.member_types.push_back(get_variable_data_type_id(var));
-				set_member_decoration(type_id, buffer_type.member_types.size() - 1, DecorationOffset, get_decoration(var.self, DecorationOffset));
+				set_member_decoration(type_id, member_index, DecorationOffset, output.offset);
 				set_qualified_name(var.self, join(to_name(local_var_id), ".", mbr_name));
 			}
 			else
 			{
-				buffer_type.member_types.push_back(type.member_types[member_index]);
-				set_member_decoration(type_id, buffer_type.member_types.size() - 1, DecorationOffset, get_member_decoration(type.self, member_index, DecorationOffset));
+				buffer_type.member_types.push_back(type.member_types[output.member_index]);
+				set_member_decoration(type_id, member_index, DecorationOffset, output.offset);
 				string qual_var_name = join(to_name(local_var_id), ".", mbr_name);
-				if (is_member_builtin(type, member_index, nullptr))
-				{
-					set_member_qualified_name(type.self, member_index, qual_var_name);
-				}
-				else
+				if (!is_member_builtin(type, member_index, nullptr))
 				{
 					// n.b. Must come BEFORE the big one that writes out the XFB buffers!
 					entry_func.fixup_hooks_out.push_back([=]() {
