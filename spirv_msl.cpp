@@ -2134,7 +2134,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 						func.add_parameter(mbr_type_id, var_id, true);
 						set<SPIRVariable>(var_id, ptr_type_id, StorageClassFunction);
+						if (xfb_captured_outputs.count(arg_id))
+							xfb_captured_outputs.insert(var_id);
 						ir.meta[var_id].decoration = ir.meta[type_id].members[mbr_idx];
+						if (xfb_packed_builtins.count(builtin))
+							set_extended_decoration(var_id, SPIRVCrossDecorationPhysicalTypePacked);
 					}
 					mbr_idx++;
 				}
@@ -2144,9 +2148,13 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t next_id = ir.increase_bound_by(1);
 				func.add_parameter(type_id, next_id, true);
 				set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
+				if (xfb_captured_outputs.count(arg_id))
+					xfb_captured_outputs.insert(next_id);
 
 				// Ensure the new variable has all the same meta info
 				ir.meta[next_id] = ir.meta[arg_id];
+				if (xfb_packed_outputs.count(arg_id))
+					set_extended_decoration(next_id, SPIRVCrossDecorationPhysicalTypePacked);
 			}
 		}
 	}
@@ -12383,6 +12391,11 @@ bool CompilerMSL::uses_explicit_early_fragment_test()
 // In MSL, address space qualifiers are required for all pointer or reference variables
 string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 {
+	// If this is for a captured transform feedback output, then use the thread address space.
+	// This is a terrible kluge, but since we reused the original pointer type in constructing
+	// fake parameters for globals, we have to do this here.
+	if (xfb_captured_outputs.count(argument.self))
+		return "thread";
 	const auto &type = get<SPIRType>(argument.basetype);
 	return get_type_address_space(type, argument.self, true);
 }
@@ -14272,6 +14285,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// For opaque types we handle const later due to descriptor address spaces.
 	const char *cv_qualifier = (constref && !type_is_image) ? "const " : "";
+	const char *pack_pfx = has_extended_decoration(var.self, SPIRVCrossDecorationPhysicalTypePacked) ? "packed_" : "";
 	string decl;
 
 	// If this is a combined image-sampler for a 2D image with floating-point type,
@@ -14315,9 +14329,9 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			is_using_builtin_array = true;
 
 		if (is_using_builtin_array)
-			decl = join(cv_qualifier, builtin_type_decl(builtin_type, arg.id));
+			decl = join(cv_qualifier, pack_pfx, builtin_type_decl(builtin_type, arg.id));
 		else
-			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
+			decl = join(cv_qualifier, pack_pfx, type_to_glsl(type, arg.id));
 	}
 	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))
 	{
@@ -14340,7 +14354,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += join(" ", cv_qualifier);
 		}
 		else
-			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
+			decl = join(cv_qualifier, pack_pfx, type_to_glsl(type, arg.id));
 	}
 
 	if (!builtin && !is_pointer &&
@@ -18052,6 +18066,7 @@ void CompilerMSL::analyze_xfb_buffers()
 				//  feedback..."
 				if (!has_member_decoration(type.self, i, DecorationOffset))
 					continue;
+				xfb_captured_outputs.insert(self);
 				uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
 				uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ? get_member_decoration(type.self, i, DecorationXfbBuffer) : xfb_buffer_num;
 				string name;
@@ -18090,6 +18105,7 @@ void CompilerMSL::analyze_xfb_buffers()
 		{
 			if (!has_decoration(self, DecorationOffset))
 				return;
+			xfb_captured_outputs.insert(self);
 			uint32_t xfb_offset = get_decoration(self, DecorationOffset);
 			string name;
 			if (has_decoration(self, DecorationBuiltIn))
@@ -18177,7 +18193,8 @@ void CompilerMSL::analyze_xfb_buffers()
 			if (!output.block)
 			{
 				// Drop pointer information when we emit the outputs into a struct.
-				buffer_type.member_types.push_back(get_variable_data_type_id(var));
+				const auto &var_type = get_variable_data_type(var);
+				buffer_type.member_types.push_back(var_type.self);
 				set_member_decoration(type_id, member_index, DecorationOffset, output.offset);
 				set_qualified_name(var.self, join(to_name(local_var_id), ".", mbr_name));
 			}
@@ -18186,7 +18203,7 @@ void CompilerMSL::analyze_xfb_buffers()
 				buffer_type.member_types.push_back(type.member_types[output.member_index]);
 				set_member_decoration(type_id, member_index, DecorationOffset, output.offset);
 				string qual_var_name = join(to_name(local_var_id), ".", mbr_name);
-				if (!is_member_builtin(type, member_index, nullptr))
+				if (!is_member_builtin(type, output.member_index, nullptr))
 				{
 					// n.b. Must come BEFORE the big one that writes out the XFB buffers!
 					entry_func.fixup_hooks_out.push_back([=]() {
@@ -18207,6 +18224,29 @@ void CompilerMSL::analyze_xfb_buffers()
 		bool packed_buffer = xfb_strides[xfb_buffer] % get_declared_type_alignment_msl(buffer_type, false, false) != 0;
 		if (packed_buffer)
 			mark_struct_members_packed(buffer_type);
+		// If the block or any members are packed, we have to make sure that this is
+		// propagated to implicit parameters as well.
+		for (uint32_t i = 0; i < buffer_type.member_types.size(); ++i)
+		{
+			const auto &member_type = get<SPIRType>(buffer_type.member_types[i]);
+			uint32_t var_id = get_extended_member_decoration(type_id, i, SPIRVCrossDecorationInterfaceOrigID);
+			const auto &var = get<SPIRVariable>(var_id);
+			if (member_type.basetype != SPIRType::Struct && (packed_buffer || has_extended_member_decoration(type_id, i, SPIRVCrossDecorationPhysicalTypePacked)))
+			{
+				if (is_builtin_variable(var))
+				{
+					if (outputs[i].block)
+						xfb_packed_builtins.insert(BuiltIn(get_member_decoration(get_variable_data_type_id(var), outputs[i].member_index, DecorationBuiltIn)));
+					else
+						xfb_packed_builtins.insert(BuiltIn(get_decoration(var_id, DecorationBuiltIn)));
+
+				}
+				else
+				{
+					xfb_packed_outputs.insert(var_id);
+				}
+			}
+		}
 		// Make sure struct is padded to declared stride, so indexing works properly.
 		if (xfb_strides[xfb_buffer] > get_declared_struct_size_msl(buffer_type, packed_buffer))
 			set_extended_decoration(type_id, SPIRVCrossDecorationPaddingTarget, xfb_strides[xfb_buffer]);
