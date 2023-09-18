@@ -3806,6 +3806,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 					all_captured = all_captured && (has_member_decoration(type.self, i, DecorationOffset) || !active);
 				}
 				hidden = hidden || all_captured;
+				// We still rely on the block being declared as a variable. Make sure that happens.
+				if (all_captured && !is_builtin)
+				{
+					get<SPIRFunction>(ir.default_entry_point).add_local_variable(var_id);
+					vars_needing_early_declaration.push_back(var_id);
+				}
 			}
 			else if (has_decoration(var_id, DecorationOffset))
 			{
