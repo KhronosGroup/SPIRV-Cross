@@ -3850,7 +3850,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				// We still rely on the block being declared as a variable. Make sure that happens.
 				if (all_captured && !is_builtin)
 				{
-					get<SPIRFunction>(ir.default_entry_point).add_local_variable(var_id);
+					auto &entry_point = get<SPIRFunction>(ir.default_entry_point);
+					entry_point.add_local_variable(var_id);
 					vars_needing_early_declaration.push_back(var_id);
 				}
 			}
