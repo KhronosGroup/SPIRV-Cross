@@ -28,6 +28,7 @@
 #include <map>
 #include <set>
 #include <stddef.h>
+#include <functional>
 #include <unordered_map>
 #include <unordered_set>
 
