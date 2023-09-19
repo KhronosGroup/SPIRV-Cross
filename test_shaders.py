@@ -246,6 +246,9 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-domain-lower-left')
     if '.argument.' in shader:
         msl_args.append('--msl-argument-buffers')
+    if '.argument-tier-1.' in shader:
+        msl_args.append('--msl-argument-buffer-tier')
+        msl_args.append('1')
     if '.texture-buffer-native.' in shader:
         msl_args.append('--msl-texture-buffer-native')
     if '.framebuffer-fetch.' in shader:
@@ -354,6 +357,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-sample-dref-lod-array-as-grad')
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
+    if '.rich-descriptor.' in shader:
+        msl_args.append('--msl-runtime-array-rich-descriptor')
     if '.mask-location-0.' in shader:
         msl_args.append('--mask-stage-output-location')
         msl_args.append('0')
