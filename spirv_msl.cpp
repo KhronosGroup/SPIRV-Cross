@@ -1354,23 +1354,54 @@ void CompilerMSL::emit_entry_point_declarations()
 		}
 	}
 
-	// Emit buffer arrays here.
-	for (uint32_t array_id : buffer_arrays_discrete)
+	bool has_runtime_array_declaration = false;
+	for (SPIRVariable *arg : entry_point_bindings)
 	{
-		const auto &var = get<SPIRVariable>(array_id);
+		const auto &var = *arg;
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
-		string name = to_name(array_id);
-		statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ", to_restrict(array_id, true), name,
-		          "[] =");
-		begin_scope();
-		for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
-			statement(name, "_", i, ",");
-		end_scope_decl();
-		statement_no_indent("");
+		const string name = to_name(var.self);
+		if (is_runtime_size_array(type))
+		{
+			if (msl_options.argument_buffers_tier < Options::ArgumentBuffersTier::Tier2)
+			{
+				SPIRV_CROSS_THROW("Unsized array of descriptors requires argument buffer tier 2");
+			}
+			switch (type.basetype)
+			{
+			case SPIRType::Image:
+			case SPIRType::Sampler:
+			case SPIRType::AccelerationStructure:
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", name, "_};");
+				break;
+			case SPIRType::SampledImage:
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", name, "_};");
+				statement("spvDescriptorArray<sampler> ", name, "Smplr {", name, "Smplr_};");
+				break;
+			case SPIRType::Struct:
+				statement("spvDescriptorArray<", get_argument_address_space(var), " ", type_to_glsl(buffer_type), "*> ",
+				          name, " {", name, "_};");
+				break;
+			default:
+				break;
+			}
+			has_runtime_array_declaration = true;
+		}
+		else if (!type.array.empty() && type.basetype == SPIRType::Struct)
+		{
+			// Emit only buffer arrays here.
+			statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ",
+			          to_restrict(var.self, true), name, "[] =");
+			begin_scope();
+			for (uint32_t i = 0; i < to_array_size_literal(type); ++i)
+				statement(name, "_", i, ",");
+			end_scope_decl();
+			statement_no_indent("");
+		}
 	}
-	// Discrete descriptors are processed in entry point emission every compiler iteration.
-	buffer_arrays_discrete.clear();
+
+	if (has_runtime_array_declaration)
+		statement_no_indent("");
 
 	// Emit buffer aliases here.
 	for (auto &var_id : buffer_aliases_discrete)
@@ -7255,6 +7286,71 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplVariableDescriptor:
+			statement("template<typename T>");
+			statement("struct spvDescriptor");
+			begin_scope();
+			statement("T value;");
+			end_scope_decl();
+			statement("");
+			break;
+
+		case SPVFuncImplVariableSizedDescriptor:
+			statement("template<typename T>");
+			statement("struct spvBufferDescriptor");
+			begin_scope();
+			statement("T value;");
+			statement("int length;");
+			statement("const device T& operator -> () const device");
+			begin_scope();
+			statement("return value;");
+			end_scope();
+			statement("const device T& operator * () const device");
+			begin_scope();
+			statement("return value;");
+			end_scope();
+			end_scope_decl();
+			statement("");
+			break;
+
+		case SPVFuncImplVariableDescriptorArray:
+			statement("template<typename T>");
+			statement("struct spvDescriptorArray");
+			begin_scope();
+			statement("spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(ptr)");
+			begin_scope();
+			end_scope();
+			statement("const device T& operator [] (size_t i) const");
+			begin_scope();
+			statement("return ptr[i].value;");
+			end_scope();
+			statement("const device spvDescriptor<T>* ptr;");
+			end_scope_decl();
+			statement("");
+
+			if (msl_options.runtime_array_rich_descriptor &&
+			    spv_function_implementations.count(SPVFuncImplVariableSizedDescriptor) != 0)
+			{
+				statement("template<typename T>");
+				statement("struct spvDescriptorArray<device T*>");
+				begin_scope();
+				statement("spvDescriptorArray(const device spvBufferDescriptor<device T*>* ptr) : ptr(ptr)");
+				begin_scope();
+				end_scope();
+				statement("const device T* operator [] (size_t i) const");
+				begin_scope();
+				statement("return ptr[i].value;");
+				end_scope();
+				statement("const int length(int i) const");
+				begin_scope();
+				statement("return ptr[i].length;");
+				end_scope();
+				statement("const device spvBufferDescriptor<device T*>* ptr;");
+				end_scope_decl();
+				statement("");
+			}
+			break;
+
 		default:
 			break;
 		}
@@ -8718,15 +8814,19 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		// Mark that this shader reads from this image
 		uint32_t img_id = ops[2];
 		auto &type = expression_type(img_id);
+		auto *p_var = maybe_get_backing_variable(img_id);
 		if (type.image.dim != DimSubpassData)
 		{
-			auto *p_var = maybe_get_backing_variable(img_id);
 			if (p_var && has_decoration(p_var->self, DecorationNonReadable))
 			{
 				unset_decoration(p_var->self, DecorationNonReadable);
 				force_recompile();
 			}
 		}
+
+		// Metal requires explicit fences to break up RAW hazards, even within the same shader invocation
+		if (msl_options.readwrite_texture_fences && p_var && !has_decoration(p_var->self, DecorationNonWritable))
+			statement(to_expression(img_id), ".fence();");
 
 		emit_texture_op(instruction, false);
 		break;
@@ -10423,7 +10523,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 			// Manufacture automatic sampler arg for SampledImage texture
 			if (arg_type.image.dim != DimBuffer)
 			{
-				if (arg_type.array.empty())
+				if (arg_type.array.empty() || is_runtime_size_array(arg_type))
 				{
 					decl += join(", ", sampler_type(arg_type, arg.id), " ", to_sampler_expression(name_id));
 				}
@@ -11611,6 +11711,19 @@ string CompilerMSL::to_buffer_size_expression(uint32_t id)
 	{
 		auto buffer_expr = expr.substr(0, index);
 		auto array_expr = expr.substr(index);
+		if (auto var = maybe_get_backing_variable(id))
+		{
+			auto &var_type = get<SPIRType>(var->basetype);
+			if (is_runtime_size_array(var_type))
+			{
+				if (!msl_options.runtime_array_rich_descriptor)
+					SPIRV_CROSS_THROW("OpArrayLength requires rich descriptor format");
+
+				auto last_pos = array_expr.find_last_of(']');
+				if (last_pos != std::string::npos)
+					return buffer_expr + ".length(" + array_expr.substr(1, last_pos - 1) + ")";
+			}
+		}
 		return buffer_expr + buffer_size_name_suffix + array_expr;
 	}
 }
@@ -12676,7 +12789,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 				else
 					ep_args += builtin_type_decl(bi_type, var_id) + " " + to_expression(var_id);
 
-				ep_args += " [[" + builtin_qualifier(bi_type);
+				ep_args += string(" [[") + builtin_qualifier(bi_type);
 				if (bi_type == BuiltInSampleMask && get_entry_point().flags.get(ExecutionModePostDepthCoverage))
 				{
 					if (!msl_options.supports_msl_version(2))
@@ -13010,6 +13123,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 	SmallVector<Resource> resources;
 
+	entry_point_bindings.clear();
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t var_id, SPIRVariable &var) {
 		if ((var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer) &&
@@ -13039,10 +13153,6 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					    (resource.var->storage == StorageClassUniform ||
 					     resource.var->storage == StorageClassStorageBuffer))
 					{
-						// Possible, but horrible to implement, ignore for now.
-						if (!type.array.empty())
-							SPIRV_CROSS_THROW("Aliasing arrayed discrete descriptors is currently not supported.");
-
 						descriptor_alias = resource.var;
 						// Self-reference marks that we should declare the resource,
 						// and it's being used as an alias (so we can emit void* instead).
@@ -13081,6 +13191,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (constexpr_sampler && constexpr_sampler->ycbcr_conversion_enable)
 					plane_count = constexpr_sampler->planes;
 
+				entry_point_bindings.push_back(&var);
 				for (uint32_t i = 0; i < plane_count; i++)
 					resources.push_back({ &var, descriptor_alias, to_name(var_id), SPIRType::Image,
 					                      get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
@@ -13101,15 +13212,16 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (!descriptor_alias)
 					resource_index = get_metal_resource_index(var, type.basetype);
 
+				entry_point_bindings.push_back(&var);
 				resources.push_back({ &var, descriptor_alias, to_name(var_id), type.basetype,
 				                      resource_index, 0, secondary_index });
 			}
 		}
 	});
 
-	stable_sort(resources.begin(), resources.end(), [](const Resource &lhs, const Resource &rhs) {
-		return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index);
-	});
+	stable_sort(resources.begin(), resources.end(),
+	            [](const Resource &lhs, const Resource &rhs)
+	            { return tie(lhs.basetype, lhs.index) < tie(rhs.basetype, rhs.index); });
 
 	for (auto &r : resources)
 	{
@@ -13157,22 +13269,44 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				// later.
 				uint32_t array_size = to_array_size_literal(type);
 
-				if (array_size == 0)
-					SPIRV_CROSS_THROW("Unsized arrays of buffers are not supported in MSL.");
-
-				// Allow Metal to use the array<T> template to make arrays a value type
 				is_using_builtin_array = true;
-				buffer_arrays_discrete.push_back(var_id);
-				for (uint32_t i = 0; i < array_size; ++i)
+				if (is_runtime_size_array(type))
 				{
+					add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " + to_restrict(var_id, true) +
-					           r.name + "_" + convert_to_string(i);
-					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")";
+					const bool ssbo = has_decoration(type.self, DecorationBufferBlock);
+					if ((var.storage == spv::StorageClassStorageBuffer || ssbo) &&
+					    msl_options.runtime_array_rich_descriptor)
+					{
+						add_spv_func_and_recompile(SPVFuncImplVariableSizedDescriptor);
+						ep_args += "const device spvBufferDescriptor<" + get_argument_address_space(var) + " " +
+						           type_to_glsl(type) + "*>* ";
+					}
+					else
+					{
+						ep_args += "const device spvDescriptor<" + get_argument_address_space(var) + " " +
+						           type_to_glsl(type) + "*>* ";
+					}
+					ep_args += to_restrict(var_id, true) + r.name + "_";
+					ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
 					if (interlocked_resources.count(var_id))
 						ep_args += ", raster_order_group(0)";
 					ep_args += "]]";
+				}
+				else
+				{
+					for (uint32_t i = 0; i < array_size; ++i)
+					{
+						if (!ep_args.empty())
+							ep_args += ", ";
+						ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " +
+						           to_restrict(var_id, true) + r.name + "_" + convert_to_string(i);
+						ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")";
+						if (interlocked_resources.count(var_id))
+							ep_args += ", raster_order_group(0)";
+						ep_args += "]]";
+					}
 				}
 				is_using_builtin_array = false;
 			}
@@ -13193,7 +13327,10 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			if (!ep_args.empty())
 				ep_args += ", ";
 			ep_args += sampler_type(type, var_id) + " " + r.name;
-			ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
+			if (is_runtime_size_array(type))
+				ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")]]";
+			else
+				ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
 			break;
 		case SPIRType::Image:
 		{
@@ -13207,7 +13344,12 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				ep_args += image_type_glsl(type, var_id) + " " + r.name;
 				if (r.plane > 0)
 					ep_args += join(plane_name_suffix, r.plane);
-				ep_args += " [[texture(" + convert_to_string(r.index) + ")";
+
+				if (is_runtime_size_array(type))
+					ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")";
+				else
+					ep_args += " [[texture(" + convert_to_string(r.index) + ")";
+
 				if (interlocked_resources.count(var_id))
 					ep_args += ", raster_order_group(0)";
 				ep_args += "]]";
@@ -13233,9 +13375,22 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			break;
 		}
 		case SPIRType::AccelerationStructure:
-			ep_args += ", " + type_to_glsl(type, var_id) + " " + r.name;
-			ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+		{
+			if (is_runtime_size_array(type))
+			{
+				add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
+				const auto &parent_type = get<SPIRType>(type.parent_type);
+				ep_args += ", const device spvDescriptor<" + type_to_glsl(parent_type) + ">* " +
+				           to_restrict(var_id, true) + r.name + "_";
+				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			}
+			else
+			{
+				ep_args += ", " + type_to_glsl(type, var_id) + " " + r.name;
+				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
+			}
 			break;
+		}
 		default:
 			if (!ep_args.empty())
 				ep_args += ", ";
@@ -13320,25 +13475,27 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		{
 			if (buffer_requires_array_length(var.self))
 			{
-				entry_func.fixup_hooks_in.push_back([this, &type, &var, var_id]() {
-					bool is_array_type = !type.array.empty();
+				entry_func.fixup_hooks_in.push_back(
+				    [this, &type, &var, var_id]()
+				    {
+					    bool is_array_type = !type.array.empty() && !is_runtime_size_array(type);
 
-					uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
-					if (descriptor_set_is_argument_buffer(desc_set))
-					{
-						statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
-						          is_array_type ? " = &" : " = ", to_name(argument_buffer_ids[desc_set]),
-						          ".spvBufferSizeConstants", "[",
-						          convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
-					}
-					else
-					{
-						// If we have an array of images, we need to be able to index into it, so take a pointer instead.
-						statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
-						          is_array_type ? " = &" : " = ", to_name(buffer_size_buffer_id), "[",
-						          convert_to_string(get_metal_resource_index(var, type.basetype)), "];");
-					}
-				});
+					    uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
+					    if (descriptor_set_is_argument_buffer(desc_set))
+					    {
+						    statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
+						              is_array_type ? " = &" : " = ", to_name(argument_buffer_ids[desc_set]),
+						              ".spvBufferSizeConstants", "[",
+						              convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
+					    }
+					    else
+					    {
+						    // If we have an array of images, we need to be able to index into it, so take a pointer instead.
+						    statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
+						              is_array_type ? " = &" : " = ", to_name(buffer_size_buffer_id), "[",
+						              convert_to_string(get_metal_resource_index(var, type.basetype)), "];");
+					    }
+				    });
 			}
 		}
 	});
@@ -14211,8 +14368,6 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	for (uint32_t i = 0; i < uint32_t(type.array.size()); i++)
 		binding_stride *= to_array_size_literal(type, i);
 
-	assert(binding_stride != 0);
-
 	// If a binding has not been specified, revert to incrementing resource indices.
 	uint32_t resource_index;
 
@@ -14224,6 +14379,11 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	}
 	else
 	{
+		if (is_runtime_size_array(type))
+		{
+			basetype = SPIRType::Struct;
+			binding_stride = 1;
+		}
 		// Allocate from plain bindings which are allocated per resource type.
 		switch (basetype)
 		{
@@ -14326,6 +14486,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	bool type_is_image = type.basetype == SPIRType::Image || type.basetype == SPIRType::SampledImage ||
 	                     type.basetype == SPIRType::Sampler;
+	bool type_is_tlas = type.basetype == SPIRType::AccelerationStructure;
 
 	// For opaque types we handle const later due to descriptor address spaces.
 	const char *cv_qualifier = (constref && !type_is_image) ? "const " : "";
@@ -14377,6 +14538,18 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		else
 			decl = join(cv_qualifier, pack_pfx, type_to_glsl(type, arg.id));
 	}
+	else if (is_runtime_size_array(type))
+	{
+		const auto *parent_type = &get<SPIRType>(type.parent_type);
+		auto type_name = type_to_glsl(*parent_type, arg.id);
+		if (type.basetype == SPIRType::AccelerationStructure)
+			decl = join("spvDescriptorArray<", type_name, ">");
+		else if (type_is_image)
+			decl = join("spvDescriptorArray<", cv_qualifier, type_name, ">");
+		else
+			decl = join("spvDescriptorArray<", address_space, " ", type_name, "*>");
+		address_space = "const";
+	}
 	else if ((type_storage == StorageClassUniform || type_storage == StorageClassStorageBuffer) && is_array(type))
 	{
 		is_using_builtin_array = true;
@@ -14398,7 +14571,9 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += join(" ", cv_qualifier);
 		}
 		else
+		{
 			decl = join(cv_qualifier, pack_pfx, type_to_glsl(type, arg.id));
+		}
 	}
 
 	if (!builtin && !is_pointer &&
@@ -14465,6 +14640,10 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += join("[", array_size, "]");
 			}
 		}
+		else if (is_runtime_size_array(type))
+		{
+			decl += " " + to_expression(name_id);
+		}
 		else
 		{
 			auto array_size_decl = type_to_array_glsl(type);
@@ -14488,7 +14667,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			}
 		}
 	}
-	else if (!type_is_image && (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
+	else if (!type_is_image && !type_is_tlas &&
+	         (!pull_model_inputs.count(var.basevariable) || type.basetype == SPIRType::Struct))
 	{
 		// If this is going to be a reference to a variable pointer, the address space
 		// for the reference has to go before the '&', but after the '*'.
@@ -14508,9 +14688,13 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		decl += to_restrict(name_id, true);
 		decl += to_expression(name_id);
 	}
-	else if (type_is_image)
+	else if (type_is_image || type_is_tlas)
 	{
-		if (type.array.empty())
+		if (is_runtime_size_array(type))
+		{
+			decl = address_space + " " + decl + " " + to_expression(name_id);
+		}
+		else if (type.array.empty())
 		{
 			// For non-arrayed types we can just pass opaque descriptors by value.
 			// This fixes problems if descriptors are passed by value from argument buffers and plain descriptors
@@ -14935,7 +15119,8 @@ string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uin
 	{
 		// Only allow -> dereference for block types. This is so we get expressions like
 		// buffer[i]->first_member.second_member, rather than buffer[i]->first->second.
-		bool is_block = has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
+		const bool is_block =
+		    has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
 
 		bool is_buffer_variable =
 		    is_block && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer);
@@ -15292,7 +15477,14 @@ std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
 			array_size = get_resource_array_size(id);
 
 		if (array_size == 0)
-			SPIRV_CROSS_THROW("Unsized array of samplers is not supported in MSL.");
+		{
+			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
+			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
+			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
+			if (processing_entry_point)
+				return join("const device spvDescriptor<", sampler_type(parent, id), ">*");
+			return join("const spvDescriptorArray<", sampler_type(parent, id), ">");
+		}
 
 		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		return join("array<", sampler_type(parent, id), ", ", array_size, ">");
@@ -15338,7 +15530,12 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 			array_size = get_resource_array_size(id);
 
 		if (array_size == 0)
-			SPIRV_CROSS_THROW("Unsized array of images is not supported in MSL.");
+		{
+			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
+			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
+			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
+			return join("const device spvDescriptor<", image_type_glsl(parent, id), ">*");
+		}
 
 		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		return join("array<", image_type_glsl(parent, id), ", ", array_size, ">");
@@ -16394,8 +16591,8 @@ string CompilerMSL::built_in_func_arg(BuiltIn builtin, bool prefix_comma)
 	// Handle HLSL-style 0-based vertex/instance index.
 	builtin_declaration = true;
 	bi_arg += builtin_type_decl(builtin);
-	bi_arg += " " + builtin_to_glsl(builtin, StorageClassInput);
-	bi_arg += " [[" + builtin_qualifier(builtin) + "]]";
+	bi_arg += string(" ") + builtin_to_glsl(builtin, StorageClassInput);
+	bi_arg += string(" [[") + builtin_qualifier(builtin) + string("]]");
 	builtin_declaration = false;
 
 	return bi_arg;
@@ -16842,8 +17039,12 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpArrayLength:
 	{
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
-		if (var)
-			compiler.buffers_requiring_array_length.insert(var->self);
+		if (var != nullptr)
+		{
+			auto &type = compiler.get<SPIRType>(var->basetype);
+			if (!is_runtime_size_array(type))
+				compiler.buffers_requiring_array_length.insert(var->self);
+		}
 		break;
 	}
 
@@ -17768,11 +17969,11 @@ void CompilerMSL::analyze_argument_buffers()
 			// member_index and next_arg_buff_index are incremented when padding members are added.
 			if (msl_options.pad_argument_buffer_resources)
 			{
+				auto &rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
 				if (!resource.descriptor_alias)
 				{
 					while (resource.index > next_arg_buff_index)
 					{
-						auto &rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
 						switch (rez_bind.basetype)
 						{
 						case SPIRType::Void:
@@ -17810,12 +18011,9 @@ void CompilerMSL::analyze_argument_buffers()
 				}
 
 				// Adjust the number of slots consumed by current member itself.
-				// If actual member is an array, allow runtime array resolution as well.
-				uint32_t elem_cnt = type.array.empty() ? 1 : to_array_size_literal(type);
-				if (elem_cnt == 0)
-					elem_cnt = get_resource_array_size(var.self);
-
-				next_arg_buff_index += elem_cnt;
+				// Use the count value from the app, instead of the shader, in case the
+				// shader is only accesing part, or even one element, of the array.
+				next_arg_buff_index += rez_bind.count;
 			}
 
 			string mbr_name = ensure_valid_name(resource.name, "m");
@@ -17967,8 +18165,7 @@ void CompilerMSL::add_argument_buffer_padding_buffer_type(SPIRType &struct_type,
 		argument_buffer_padding_buffer_type_id = ptr_type_id;
 	}
 
-	for (uint32_t rez_idx = 0; rez_idx < rez_bind.count; rez_idx++)
-		add_argument_buffer_padding_type(argument_buffer_padding_buffer_type_id, struct_type, mbr_idx, arg_buff_index, 1);
+	add_argument_buffer_padding_type(argument_buffer_padding_buffer_type_id, struct_type, mbr_idx, arg_buff_index, rez_bind.count);
 }
 
 // Adds an argument buffer padding argument image type as a member of the struct type at the member index.
