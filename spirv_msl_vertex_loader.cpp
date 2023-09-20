@@ -1457,7 +1457,12 @@ public:
 					{
 						if (align <= size + 2)
 							load_packed = true;
-						if (align == size + 1 && size <= 2)
+						// FB13188413: AMD compiler miscompiles as_type<uchar4>(packed_ushort2), so avoid that
+						// Reproducing case:
+						// kernel void test(uint pos [[thread_position_in_grid]], device uint4* out, device const packed_ushort2* in) {
+						//     out[pos] = uint4(as_type<uchar4>(in[pos])); // Top half is zero on AMD
+						// }
+						if (align == size + 1 && align == 2)
 							// Many GPUs are better at loading uints than smaller sizes so load a larger type
 							load_type = Storage::Simple(2, size + 1, false, false);
 					}
