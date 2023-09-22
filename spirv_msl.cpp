@@ -12293,8 +12293,17 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	else
 		decl_type = type_to_glsl(*declared_type, orig_id, true);
 
-	auto result = join(pack_pfx, decl_type, " ", qualifier,
-	                   to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
+	string result;
+	if (!has_extended_member_decoration(type.self, index, SPIRVCrossDecorationOverlappingBinding))
+	{
+		result = join(pack_pfx, decl_type, " ", qualifier,
+		               to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
+	}
+	else
+	{
+		result = join("// Overlapping binding: ", pack_pfx, decl_type, " ", qualifier,
+		               to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
+	}
 
 	is_using_builtin_array = false;
 	return result;
@@ -17872,6 +17881,7 @@ void CompilerMSL::analyze_argument_buffers()
 		SPIRType::BaseType basetype;
 		uint32_t index;
 		uint32_t plane;
+		uint32_t overlapping_var_id;
 	};
 	SmallVector<Resource> resources_in_set[kMaxArgumentBuffers];
 	SmallVector<uint32_t> inline_block_vars;
@@ -17946,14 +17956,14 @@ void CompilerMSL::analyze_argument_buffers()
 				{
 					uint32_t image_resource_index = get_metal_resource_index(var, SPIRType::Image, i);
 					resources_in_set[desc_set].push_back(
-					    { &var, descriptor_alias, to_name(var_id), SPIRType::Image, image_resource_index, i });
+					    { &var, descriptor_alias, to_name(var_id), SPIRType::Image, image_resource_index, i, 0 });
 				}
 
 				if (type.image.dim != DimBuffer && !constexpr_sampler)
 				{
 					uint32_t sampler_resource_index = get_metal_resource_index(var, SPIRType::Sampler);
 					resources_in_set[desc_set].push_back(
-					    { &var, descriptor_alias, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0 });
+					    { &var, descriptor_alias, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0, 0 });
 				}
 			}
 			else if (inline_uniform_blocks.count(SetBindingPair{ desc_set, binding }))
@@ -17971,14 +17981,14 @@ void CompilerMSL::analyze_argument_buffers()
 					resource_index = get_metal_resource_index(var, type.basetype);
 
 				resources_in_set[desc_set].push_back(
-					{ &var, descriptor_alias, to_name(var_id), type.basetype, resource_index, 0 });
+					{ &var, descriptor_alias, to_name(var_id), type.basetype, resource_index, 0, 0 });
 
 				// Emulate texture2D atomic operations
 				if (atomic_image_vars_emulated.count(var.self))
 				{
 					uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 					resources_in_set[desc_set].push_back(
-						{ &var, descriptor_alias, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0 });
+						{ &var, descriptor_alias, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0, 0 });
 				}
 			}
 
@@ -18026,7 +18036,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kSwizzleBufferBinding);
 				resources_in_set[desc_set].push_back(
-				    { &var, nullptr, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
+				    { &var, nullptr, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0, 0 });
 			}
 
 			if (set_needs_buffer_sizes[desc_set])
@@ -18037,7 +18047,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kBufferSizeBufferBinding);
 				resources_in_set[desc_set].push_back(
-				    { &var, nullptr, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0 });
+				    { &var, nullptr, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0, 0 });
 			}
 		}
 	}
@@ -18049,7 +18059,7 @@ void CompilerMSL::analyze_argument_buffers()
 		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 		add_resource_name(var_id);
 		resources_in_set[desc_set].push_back(
-		    { &var, nullptr, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0 });
+		    { &var, nullptr, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0, 0 });
 	}
 
 	for (uint32_t desc_set = 0; desc_set < kMaxArgumentBuffers; desc_set++)
@@ -18097,6 +18107,21 @@ void CompilerMSL::analyze_argument_buffers()
 		stable_sort(begin(resources), end(resources), [&](const Resource &lhs, const Resource &rhs) -> bool {
 			return tie(lhs.index, lhs.basetype) < tie(rhs.index, rhs.basetype);
 		});
+
+		for (size_t i = 0; i < resources.size()-1; ++i) {
+			auto &r1 = resources[i];
+			auto &r2 = resources[i+1];
+
+			if (r1.index == r2.index)
+			{
+				if (r1.overlapping_var_id)
+					r2.overlapping_var_id = r1.overlapping_var_id;
+				else
+					r2.overlapping_var_id = r1.var->self;
+
+				set_extended_decoration(r2.var->self, SPIRVCrossDecorationOverlappingBinding, r2.overlapping_var_id);
+			}
+		}
 
 		uint32_t member_index = 0;
 		uint32_t next_arg_buff_index = 0;
@@ -18197,8 +18222,19 @@ void CompilerMSL::analyze_argument_buffers()
 				{
 					// Drop pointer information when we emit the resources into a struct.
 					buffer_type.member_types.push_back(get_variable_data_type_id(var));
-					if (resource.plane == 0)
+					if (has_extended_decoration(var.self, SPIRVCrossDecorationOverlappingBinding))
+					{
+						auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+						entry_func.fixup_hooks_in.push_back([=]()
+						{
+							auto name = join("(*(", type_to_glsl(get<SPIRType>(var.basetype), var.self, false), "*)&", to_name(resource.overlapping_var_id, false), ")");
+							set_qualified_name(var.self, name);
+						});
+					}
+					else if (resource.plane == 0)
+					{
 						set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
+					}
 				}
 				else if (buffers_requiring_dynamic_offset.count(pair))
 				{
@@ -18262,6 +18298,8 @@ void CompilerMSL::analyze_argument_buffers()
 			                               resource.index);
 			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
 			                               var.self);
+			if (has_extended_decoration(var.self, SPIRVCrossDecorationOverlappingBinding))
+				set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationOverlappingBinding);
 			member_index++;
 		}
 	}
