@@ -345,7 +345,8 @@ static uint8_t get_align_log2(uint32_t value, uint8_t max)
 }
 
 void CompilerMSL::MSLVertexLoaderWriter::init(const VectorView<MSLVertexAttribute> &in_attributes,
-                                              const VectorView<MSLVertexBinding> &in_bindings)
+                                              const VectorView<MSLVertexBinding> &in_bindings,
+                                              bool dynamic_stride)
 {
 	memset(attributes, 0, sizeof(attributes));
 	memset(bindings, 0, sizeof(bindings));
@@ -361,8 +362,9 @@ void CompilerMSL::MSLVertexLoaderWriter::init(const VectorView<MSLVertexAttribut
 	{
 		if (binding.binding >= MaxBindings)
 			continue;
-		bindings[binding.binding].stride = binding.stride;
-		bindings[binding.binding].struct_size = binding.stride;
+		uint32_t stride = dynamic_stride ? 0 : binding.stride;
+		bindings[binding.binding].stride = stride;
+		bindings[binding.binding].struct_size = stride;
 		bindings[binding.binding].rate = binding.rate;
 		bindings[binding.binding].divisor = binding.divisor;
 		bindings[binding.binding].valid = true;

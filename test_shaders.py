@@ -384,6 +384,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.extend(['--msl-vertex-index-type', 'uint16'])
     if '.pixel-loads.' in shader:
         msl_args.append('--msl-use-pixel-type-loads')
+    if '.dynamic-stride.' in shader:
+        msl_args.append('--msl-dynamic-vertex-stride')
     if '.vertex-loader.' in shader:
         # Some vertex bindings for testing
         msl_args.extend(['--msl-vertex-binding', '0', '8', 'instance', '1'])

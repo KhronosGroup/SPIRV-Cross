@@ -561,6 +561,7 @@ public:
 		uint32_t shader_input_buffer_index = 22;
 		uint32_t shader_index_buffer_index = 21;
 		uint32_t shader_patch_input_buffer_index = 20;
+		uint32_t vertex_loader_dynamic_stride_buffer_index = 19;
 		uint32_t shader_input_wg_index = 0;
 		uint32_t device_index = 0;
 		uint32_t enable_frag_output_mask = 0xffffffff;
@@ -712,6 +713,9 @@ public:
 		// handling for the gl_VertexIndex builtin. We may as well, then, create three
 		// different shaders for these three scenarios.
 		IndexType vertex_index_type = IndexType::None;
+
+		// Enable use of dynamic stride for shader vertex loader
+		bool vertex_loader_dynamic_stride = false;
 
 		// Allows shaders to load from types like `rgb9e5<float3>` or `rgba16unorm<float4>`
 		// (Supported on Apple GPUs, I'm guessing the cutoff is Apple4 but Apple doesn't document it...)
@@ -1126,7 +1130,7 @@ protected:
 
 	public:
 		/// Initialize the vertex loader writer
-		void init(const VectorView<MSLVertexAttribute> &in_attributes, const VectorView<MSLVertexBinding> &in_bindings);
+		void init(const VectorView<MSLVertexAttribute> &in_attributes, const VectorView<MSLVertexBinding> &in_bindings, bool dynamic_stride);
 		/// Initializes a used attribute
 		void load(const Meta::Decoration &meta, const SPIRType &type);
 		SPVFuncImpl get_function_for_loading_vertex(uint32_t attribute, bool has_pixel_type_loads);

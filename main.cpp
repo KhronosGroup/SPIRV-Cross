@@ -674,6 +674,7 @@ struct CLIArguments
 	uint32_t msl_fixed_subgroup_size = 0;
 	CompilerMSL::Options::IndexType msl_vertex_index_type = CompilerMSL::Options::IndexType::None;
 	bool msl_use_pixel_type_loads = false;
+	bool msl_dynamic_vertex_stride = false;
 	bool msl_force_sample_rate_shading = false;
 	bool msl_manual_helper_invocation_updates = true;
 	bool msl_check_discarded_frag_stores = false;
@@ -952,6 +953,7 @@ static void print_help_msl()
 	                "\t\tIntended for Vulkan Portability implementations where VK_EXT_subgroup_size_control is not supported or disabled.\n"
 	                "\t\tIf 0, assume variable subgroup size as actually exposed by Metal.\n"
 	                "\t[--msl-use-pixel-type-loads]:\n\t\tEnable use of MSL pixel-type loads (e.g. rgb9e5<float3>).\n"
+	                "\t[--msl-dynamic-vertex-stride]:\n\t\tEnable dynamic strides in shader vertex loader.\n"
 	                "\t[--msl-force-sample-rate-shading]:\n\t\tForce fragment shaders to run per sample.\n"
 	                "\t\tThis adds a [[sample_id]] parameter if none is already present.\n"
 	                "\t[--msl-no-manual-helper-invocation-updates]:\n\t\tDo not manually update the HelperInvocation builtin when a fragment is discarded.\n"
@@ -1237,6 +1239,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.emulate_subgroups = args.msl_emulate_subgroups;
 		msl_opts.fixed_subgroup_size = args.msl_fixed_subgroup_size;
 		msl_opts.vertex_index_type = args.msl_vertex_index_type;
+		msl_opts.vertex_loader_dynamic_stride = args.msl_dynamic_vertex_stride;
 		msl_opts.use_pixel_type_loads = args.msl_use_pixel_type_loads;
 		msl_opts.force_sample_rate_shading = args.msl_force_sample_rate_shading;
 		msl_opts.manual_helper_invocation_updates = args.msl_manual_helper_invocation_updates;
@@ -1983,6 +1986,7 @@ static int main_inner(int argc, char *argv[])
 			THROW("Bad index type");
 	});
 	cbs.add("--msl-use-pixel-type-loads", [&args](CLIParser &) { args.msl_use_pixel_type_loads = true; });
+	cbs.add("--msl-dynamic-vertex-stride", [&args](CLIParser &) { args.msl_dynamic_vertex_stride = true; });
 	cbs.add("--msl-force-sample-rate-shading", [&args](CLIParser &) { args.msl_force_sample_rate_shading = true; });
 	cbs.add("--msl-no-manual-helper-invocation-updates",
 	        [&args](CLIParser &) { args.msl_manual_helper_invocation_updates = false; });

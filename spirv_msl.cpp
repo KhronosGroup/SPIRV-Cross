@@ -7531,7 +7531,7 @@ void CompilerMSL::prepare_shader_vertex_loader()
 	const Meta &type_meta = ir.meta[var.basetype];
 	assert(type_meta.members.size() == type.member_types.size());
 
-	vertex_loader_writer.init(vertex_attributes, vertex_bindings);
+	vertex_loader_writer.init(vertex_attributes, vertex_bindings, msl_options.vertex_loader_dynamic_stride);
 	for (size_t i = 0; i < type_meta.members.size(); i++)
 	{
 		const Meta::Decoration &meta = type_meta.members[i];
@@ -7550,9 +7550,16 @@ void CompilerMSL::prepare_shader_vertex_loader()
 			continue;
 		if (!load.empty())
 			load.append(", ");
+		std::string istr = std::to_string(i);
+		if (msl_options.vertex_loader_dynamic_stride)
+		{
+			load.append("*reinterpret_cast<device const spvVertexData");
+			load.append(istr);
+			load.append("*>(");
+		}
 		load.append("spvVertexBuffer");
-		load.append(std::to_string(i));
-		if (binding.stride == 0)
+		load.append(istr);
+		if (binding.stride == 0 && !msl_options.vertex_loader_dynamic_stride)
 		{
 			load.append("[0]");
 		}
@@ -7573,13 +7580,24 @@ void CompilerMSL::prepare_shader_vertex_loader()
 			default:
 				SPIRV_CROSS_THROW("Unrecognized vertex binding rate");
 			}
-			load.push_back('[');
+			if (msl_options.vertex_loader_dynamic_stride)
+			{
+				load.append(" + spvVertexStrides[");
+				load.append(istr);
+				load.append("] * ");
+			}
+			else
+			{
+				load.push_back('[');
+			}
 			if (binding.divisor <= 1)
 			{
 				load.append(binding.divisor == 0 ? base : index);
 			}
 			else
 			{
+				if (msl_options.vertex_loader_dynamic_stride)
+					load.push_back('(');
 				load.append(base);
 				load.append(" + (");
 				load.append(index);
@@ -7587,8 +7605,10 @@ void CompilerMSL::prepare_shader_vertex_loader()
 				load.append(base);
 				load.append(") / ");
 				load.append(std::to_string(binding.divisor));
+				if (msl_options.vertex_loader_dynamic_stride)
+					load.push_back(')');
 			}
-			load.push_back(']');
+			load.push_back(msl_options.vertex_loader_dynamic_stride ? ')' : ']');
 		}
 	}
 
@@ -12817,8 +12837,15 @@ string CompilerMSL::entry_point_arg_stage_in()
 			if (!decl.empty())
 				decl.append(", ");
 			std::string istr = std::to_string(i);
-			decl.append("device const spvVertexData");
-			decl.append(istr);
+			if (msl_options.vertex_loader_dynamic_stride)
+			{
+				decl.append("device const uchar");
+			}
+			else
+			{
+				decl.append("device const spvVertexData");
+				decl.append(istr);
+			}
 			decl.append("* spvVertexBuffer");
 			decl.append(istr);
 			decl.append(" [[buffer(");
@@ -13003,6 +13030,15 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 
 	if (needs_base_instance_arg == TriState::Yes)
 		ep_args += built_in_func_arg(BuiltInBaseInstance, !ep_args.empty());
+
+	if (get_using_shader_vertex_loader() && msl_options.vertex_loader_dynamic_stride)
+	{
+		if (!ep_args.empty())
+			ep_args.append(", ");
+		ep_args.append("const device uint* spvVertexStrides [[buffer(");
+		ep_args.append(std::to_string(msl_options.vertex_loader_dynamic_stride_buffer_index));
+		ep_args.append(")]]");
+	}
 
 	if (capture_output_to_buffer)
 	{
