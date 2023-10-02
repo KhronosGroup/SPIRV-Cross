@@ -4696,7 +4696,12 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 void CompilerHLSL::write_access_chain_array(const SPIRAccessChain &chain, uint32_t value,
                                             const SmallVector<uint32_t> &composite_chain)
 {
-	auto &type = get<SPIRType>(chain.basetype);
+	auto *ptype = &get<SPIRType>(chain.basetype);
+	while (ptype->pointer)
+	{
+		ptype = &get<SPIRType>(ptype->basetype);
+	}
+	auto &type = *ptype;
 
 	// Need to use a reserved identifier here since it might shadow an identifier in the access chain input or other loops.
 	auto ident = get_unique_identifier();
