@@ -7541,27 +7541,37 @@ void CompilerMSL::prepare_shader_vertex_loader()
 			spv_function_implementations.insert(fn);
 	}
 
-	std::string load;
+	SmallVector<std::string> lines;
+	lines.push_back(get_name(get<SPIRVariable>(stage_in_var_id).basetype));
+	lines.back().push_back(' ');
+	lines.back().append(get_name(stage_in_var_id));
+	lines.back().append(" = spvLoadVertex(");
+	size_t indent_len = lines.back().size();
+	std::string *line = nullptr;
 
 	for (uint32_t i = 0; i < MSLVertexLoaderWriter::MaxBindings; i++)
 	{
 		const MSLVertexLoaderWriter::Binding &binding = vertex_loader_writer.get_binding(i);
 		if (!binding.used)
 			continue;
-		if (!load.empty())
-			load.append(", ");
+		if (line)
+		{
+			line->push_back(',');
+			lines.emplace_back(indent_len, ' ');
+		}
+		line = &lines.back();
 		std::string istr = std::to_string(i);
 		if (msl_options.vertex_loader_dynamic_stride)
 		{
-			load.append("*reinterpret_cast<device const spvVertexData");
-			load.append(istr);
-			load.append("*>(");
+			line->append("*reinterpret_cast<device const spvVertexData");
+			line->append(istr);
+			line->append("*>(");
 		}
-		load.append("spvVertexBuffer");
-		load.append(istr);
+		line->append("spvVertexBuffer");
+		line->append(istr);
 		if (binding.stride == 0 && !msl_options.vertex_loader_dynamic_stride)
 		{
-			load.append("[0]");
+			line->append("[0]");
 		}
 		else
 		{
@@ -7582,39 +7592,41 @@ void CompilerMSL::prepare_shader_vertex_loader()
 			}
 			if (msl_options.vertex_loader_dynamic_stride)
 			{
-				load.append(" + spvVertexStrides[");
-				load.append(istr);
-				load.append("] * ");
+				line->append(" + spvVertexStrides[");
+				line->append(istr);
+				line->append("] * ");
 			}
 			else
 			{
-				load.push_back('[');
+				line->push_back('[');
 			}
 			if (binding.divisor <= 1)
 			{
-				load.append(binding.divisor == 0 ? base : index);
+				line->append(binding.divisor == 0 ? base : index);
 			}
 			else
 			{
 				if (msl_options.vertex_loader_dynamic_stride)
-					load.push_back('(');
-				load.append(base);
-				load.append(" + (");
-				load.append(index);
-				load.append(" - ");
-				load.append(base);
-				load.append(") / ");
-				load.append(std::to_string(binding.divisor));
+					line->push_back('(');
+				line->append(base);
+				line->append(" + (");
+				line->append(index);
+				line->append(" - ");
+				line->append(base);
+				line->append(") / ");
+				line->append(std::to_string(binding.divisor));
 				if (msl_options.vertex_loader_dynamic_stride)
-					load.push_back(')');
+					line->push_back(')');
 			}
-			load.push_back(msl_options.vertex_loader_dynamic_stride ? ')' : ']');
+			line->push_back(msl_options.vertex_loader_dynamic_stride ? ')' : ']');
 		}
 	}
+	lines.back().append(");");
 
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
-	entry_func.add_fixup_hook_in([this, load]{
-		statement(get_name(this->get<SPIRVariable>(stage_in_var_id).basetype), " ", get_name(stage_in_var_id), " = spvLoadVertex(", load, ");");
+	entry_func.add_fixup_hook_in([this, lines]{
+		for (const std::string& l : lines)
+			statement(l);
 	}, SPIRFunction::FixupInPriority::VertexLoad);
 }
 

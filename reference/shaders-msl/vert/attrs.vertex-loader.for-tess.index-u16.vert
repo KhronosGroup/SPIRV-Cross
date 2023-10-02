@@ -88,7 +88,10 @@ kernel void main0(device const spvVertexData0* spvVertexBuffer0 [[buffer(0)]], d
     uint gl_BaseVertex = spvDispatchBase.x;
     uint gl_InstanceIndex = gl_GlobalInvocationID.y + spvDispatchBase.y;
     uint gl_BaseInstance = spvDispatchBase.y;
-    main0_in in = spvLoadVertex(spvVertexBuffer0[gl_InstanceIndex], spvVertexBuffer1[gl_VertexIndex], spvVertexBuffer2[gl_BaseInstance], spvVertexBuffer3[gl_BaseInstance + (gl_InstanceIndex - gl_BaseInstance) / 4]);
+    main0_in in = spvLoadVertex(spvVertexBuffer0[gl_InstanceIndex],
+                                spvVertexBuffer1[gl_VertexIndex],
+                                spvVertexBuffer2[gl_BaseInstance],
+                                spvVertexBuffer3[gl_BaseInstance + (gl_InstanceIndex - gl_BaseInstance) / 4]);
     out.gl_Position = ((((((in.a0 + in.a1) + in.a3) + in.a4) + in.a5) + in.a6) + float4(float(in.a7))) + in.a8;
 }
 

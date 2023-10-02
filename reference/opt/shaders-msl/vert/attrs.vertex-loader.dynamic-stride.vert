@@ -80,7 +80,10 @@ main0_in spvLoadVertex(const device spvVertexData0& data0, const device spvVerte
 vertex main0_out main0(device const uchar* spvVertexBuffer0 [[buffer(0)]], device const uchar* spvVertexBuffer1 [[buffer(1)]], device const uchar* spvVertexBuffer2 [[buffer(2)]], device const uchar* spvVertexBuffer3 [[buffer(3)]], uint gl_VertexIndex [[vertex_id]], uint gl_BaseVertex [[base_vertex]], uint gl_InstanceIndex [[instance_id]], uint gl_BaseInstance [[base_instance]], const device uint* spvVertexStrides [[buffer(19)]])
 {
     main0_out out = {};
-    main0_in in = spvLoadVertex(*reinterpret_cast<device const spvVertexData0*>(spvVertexBuffer0 + spvVertexStrides[0] * gl_InstanceIndex), *reinterpret_cast<device const spvVertexData1*>(spvVertexBuffer1 + spvVertexStrides[1] * gl_VertexIndex), *reinterpret_cast<device const spvVertexData2*>(spvVertexBuffer2 + spvVertexStrides[2] * gl_BaseInstance), *reinterpret_cast<device const spvVertexData3*>(spvVertexBuffer3 + spvVertexStrides[3] * (gl_BaseInstance + (gl_InstanceIndex - gl_BaseInstance) / 4)));
+    main0_in in = spvLoadVertex(*reinterpret_cast<device const spvVertexData0*>(spvVertexBuffer0 + spvVertexStrides[0] * gl_InstanceIndex),
+                                *reinterpret_cast<device const spvVertexData1*>(spvVertexBuffer1 + spvVertexStrides[1] * gl_VertexIndex),
+                                *reinterpret_cast<device const spvVertexData2*>(spvVertexBuffer2 + spvVertexStrides[2] * gl_BaseInstance),
+                                *reinterpret_cast<device const spvVertexData3*>(spvVertexBuffer3 + spvVertexStrides[3] * (gl_BaseInstance + (gl_InstanceIndex - gl_BaseInstance) / 4)));
     out.gl_Position = ((((((in.a0 + in.a1) + in.a3) + in.a4) + in.a5) + in.a6) + float4(float(in.a7))) + in.a8;
     return out;
 }
