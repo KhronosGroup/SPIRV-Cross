@@ -26,12 +26,21 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Cache glslang / SPIRV-Tools
+        id: cache-externals
+        uses: actions/cache@v3
+        with:
+          path: external/*-build/output
+          key: ${{ matrix.platform }} externals ${{ hashFiles('checkout_glslang_spirv_tools.sh', 'build_glslang_spirv_tools.sh') }}
+
       - name: Pull glslang / SPIRV-Tools
+        if: steps.cache-externals.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{github.workspace}}
         run: ./checkout_glslang_spirv_tools.sh
 
       - name: Build glslang / SPIRV-Tools
+        if: steps.cache-externals.outputs.cache-hit != 'true'
         shell: bash
         working-directory: ${{github.workspace}}
         run: ./build_glslang_spirv_tools.sh Release
