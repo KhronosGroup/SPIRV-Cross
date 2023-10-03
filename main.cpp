@@ -664,6 +664,7 @@ struct CLIArguments
 	bool msl_raw_buffer_tese_input = false;
 	bool msl_multi_patch_workgroup = false;
 	bool msl_vertex_for_tessellation = false;
+	bool msl_for_mesh_pipeline = false;
 	uint32_t msl_additional_fixed_sample_mask = 0xffffffff;
 	bool msl_arrayed_subpass_input = false;
 	uint32_t msl_r32ui_linear_texture_alignment = 4;
@@ -910,6 +911,7 @@ static void print_help_msl()
 	                "'primitive', or 'patch' to indicate a per-vertex, per-primitive, or per-patch variable.\n"
 	                "\t\tUseful if shader stage interfaces don't match up, as pipeline creation might otherwise fail.\n"
 	                "\t[--msl-shader-input <index> <format> <size>]:\n\t\tSpecify the format of the shader input at <index>.\n"
+	                "\t[--msl-shader-attribute <index> <format> <size> <offset> <stride> <binding>]:\n\t\tSpecify the vertex attribute at <index>.\n"
 	                "\t\t<format> can be 'i32', 'i16', 'i8', 'u32', 'u16', 'u8', 'float', 'half', or 'other',\n\t\tto indicate a 32/16/8-bit integer (i) or unsigned integer (u), floating point, half-precision floating point, "
 	                "or other-typed variable.\n\t\t'any16' or 'any32' can also be used to specify opaque 16-bit or 32-bit value.\n\t\t<size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
 	                "\n\t\tEquivalent to --msl-add-shader-input with a rate of 'vertex'.\n"
@@ -926,6 +928,7 @@ static void print_help_msl()
 	                "\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
 	                "\t[--msl-vertex-for-tessellation]:\n\t\tWhen handling a vertex shader, marks it as one that will be used with a new-style tessellation control shader.\n"
 	                "\t\tThe vertex shader is output to MSL as a compute kernel which outputs vertices to the buffer in the order they are received, rather than in index order as with --msl-capture-output normally.\n"
+	                "\t[--msl-for-mesh-pipeline]:\n\t\tWhen handling a vertex shader, marks it as one that will be used in a mesh pipeline in conjunction with a geometry shader.\n"
 	                "\t[--msl-additional-fixed-sample-mask <mask>]:\n"
 	                "\t\tSet an additional fixed sample mask. If the shader outputs a sample mask, then the final sample mask will be a bitwise AND of the two.\n"
 	                "\t[--msl-arrayed-subpass-input]:\n\t\tAssume that images of dimension SubpassData have multiple layers. Layered input attachments are accessed relative to BuiltInLayer.\n"
@@ -1219,6 +1222,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.raw_buffer_tese_input = args.msl_raw_buffer_tese_input;
 		msl_opts.multi_patch_workgroup = args.msl_multi_patch_workgroup;
 		msl_opts.vertex_for_tessellation = args.msl_vertex_for_tessellation;
+		msl_opts.for_mesh_pipeline = args.msl_for_mesh_pipeline;
 		msl_opts.additional_fixed_sample_mask = args.msl_additional_fixed_sample_mask;
 		msl_opts.arrayed_subpass_input = args.msl_arrayed_subpass_input;
 		msl_opts.r32ui_linear_texture_alignment = args.msl_r32ui_linear_texture_alignment;
@@ -1740,6 +1744,20 @@ static int main_inner(int argc, char *argv[])
 			output.rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
 		args.msl_shader_outputs.push_back(output);
 	});
+	cbs.add("--msl-shader-attribute", [&args](CLIParser &parser) {
+		MSLShaderInterfaceVariable input;
+		// Make sure next_uint() is called in-order.
+		input.location = parser.next_uint();
+		const char *format = parser.next_value_string("other");
+		input.format = parse_format(format);
+		input.vecsize = parser.next_uint();
+
+		input.offset = parser.next_uint();
+		input.stride = parser.next_uint();
+		input.binding = parser.next_uint();
+
+		args.msl_shader_inputs.push_back(input);
+	});
 	cbs.add("--msl-shader-input", [&args](CLIParser &parser) {
 		MSLShaderInterfaceVariable input;
 		// Make sure next_uint() is called in-order.
@@ -1761,6 +1779,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-raw-buffer-tese-input", [&args](CLIParser &) { args.msl_raw_buffer_tese_input = true; });
 	cbs.add("--msl-multi-patch-workgroup", [&args](CLIParser &) { args.msl_multi_patch_workgroup = true; });
 	cbs.add("--msl-vertex-for-tessellation", [&args](CLIParser &) { args.msl_vertex_for_tessellation = true; });
+	cbs.add("--msl-for-mesh-pipeline", [&args](CLIParser &) { args.msl_for_mesh_pipeline = true; });
 	cbs.add("--msl-additional-fixed-sample-mask",
 	        [&args](CLIParser &parser) { args.msl_additional_fixed_sample_mask = parser.next_hex_uint(); });
 	cbs.add("--msl-arrayed-subpass-input", [&args](CLIParser &) { args.msl_arrayed_subpass_input = true; });
