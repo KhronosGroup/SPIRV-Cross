@@ -342,6 +342,24 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-vertex-for-tessellation')
     if '.for-mesh.' in shader:
         msl_args.append('--msl-for-mesh-pipeline')
+        # Need to specify some attributes.
+        msl_args.append('--msl-shader-attribute')
+        msl_args.append('0')
+        msl_args.append('float')
+        msl_args.append('4')
+
+        msl_args.append('0')
+        msl_args.append('16')
+        msl_args.append('30')
+
+        msl_args.append('--msl-shader-attribute')
+        msl_args.append('1')
+        msl_args.append('float')
+        msl_args.append('3')
+
+        msl_args.append('0')
+        msl_args.append('12')
+        msl_args.append('29')
     if '.fixed-sample-mask.' in shader:
         msl_args.append('--msl-additional-fixed-sample-mask')
         msl_args.append('0x00000022')
