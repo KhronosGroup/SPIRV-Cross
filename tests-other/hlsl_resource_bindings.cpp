@@ -16,7 +16,16 @@
 static std::vector<SpvId> read_file(const char *path)
 {
 	long len;
+
+#ifdef _MSC_VER
+	FILE *file;
+	if (fopen_s(&file, path, "rb") == 0)
+	{
+		return;
+	}
+#else
 	FILE *file = fopen(path, "rb");
+#endif
 
 	if (!file)
 		return {};

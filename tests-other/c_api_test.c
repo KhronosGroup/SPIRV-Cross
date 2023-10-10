@@ -183,7 +183,7 @@ int main(int argc, char **argv)
 		"EXT_second"
 	};
 
-	int ext_idx = 0;
+	size_t ext_idx = 0;
 	while (ext_idx < NUM_EXTS)
 	{
 		SPVC_CHECKED_CALL(spvc_compiler_require_extension(compiler_glsl, expected_exts[ext_idx]));
@@ -198,7 +198,7 @@ int main(int argc, char **argv)
 	compile(compiler_json, "JSON");
 	compile(compiler_cpp, "CPP");
 
-	int num_exts = spvc_compiler_get_num_required_extensions(compiler_glsl);
+	size_t num_exts = spvc_compiler_get_num_required_extensions(compiler_glsl);
 	if (num_exts != NUM_EXTS)
 	{
 		fprintf(stderr, "num_exts mismatch!\n");
