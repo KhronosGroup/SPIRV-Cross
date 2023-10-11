@@ -553,7 +553,7 @@ void CompilerGLSL::find_static_extensions()
 			SPIRV_CROSS_THROW("GL_EXT_buffer_reference requires ESSL 320.");
 		else if (!options.es && options.version < 450)
 			SPIRV_CROSS_THROW("GL_EXT_buffer_reference requires GLSL 450.");
-		require_extension_internal("GL_EXT_buffer_reference");
+		require_extension_internal("GL_EXT_buffer_reference2");
 	}
 	else if (ir.addressing_model != AddressingModelLogical)
 	{
