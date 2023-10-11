@@ -2465,6 +2465,10 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 		i++;
 	}
 
+	// Don't declare empty blocks in GLSL, this is not allowed.
+	if (type_is_empty(type) && !backend.supports_empty_struct)
+		statement("int empty_struct_member;");
+
 	// var.self can be used as a backup name for the block name,
 	// so we need to make sure we don't disturb the name here on a recompile.
 	// It will need to be reset if we have to recompile.
