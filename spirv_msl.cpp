@@ -10336,6 +10336,11 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		break;
 	}
 
+	case GLSLstd450Pow:
+		// powr makes x < 0.0 undefined, just like SPIR-V.
+		emit_binary_func_op(result_type, id, args[0], args[1], "powr");
+		break;
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
