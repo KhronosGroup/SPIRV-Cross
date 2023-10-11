@@ -124,6 +124,8 @@ def msl_compiler_supports_version(version):
 
 def path_to_msl_standard(shader):
     if '.ios.' in shader:
+        if '.msl31.' in shader:
+            return '-std=metal3.1'
         if '.msl3.' in shader:
             return '-std=metal3.0'
         elif '.msl2.' in shader:
@@ -143,6 +145,8 @@ def path_to_msl_standard(shader):
         else:
             return '-std=ios-metal1.2'
     else:
+        if '.msl31.' in shader:
+            return '-std=metal3.1'
         if '.msl3.' in shader:
             return '-std=metal3.0'
         elif '.msl2.' in shader:
@@ -161,6 +165,8 @@ def path_to_msl_standard(shader):
             return '-std=macos-metal1.2'
 
 def path_to_msl_standard_cli(shader):
+    if '.msl31.' in shader:
+        return '30100'
     if '.msl3.' in shader:
         return '30000'
     elif '.msl2.' in shader:
@@ -334,6 +340,26 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-raw-buffer-tese-input')
     if '.for-tess.' in shader:
         msl_args.append('--msl-vertex-for-tessellation')
+    if '.for-mesh.' in shader:
+        msl_args.append('--msl-for-mesh-pipeline')
+        # Need to specify some attributes.
+        msl_args.append('--msl-shader-attribute')
+        msl_args.append('0')
+        msl_args.append('float')
+        msl_args.append('4')
+
+        msl_args.append('0')
+        msl_args.append('16')
+        msl_args.append('30')
+
+        msl_args.append('--msl-shader-attribute')
+        msl_args.append('1')
+        msl_args.append('float')
+        msl_args.append('3')
+
+        msl_args.append('0')
+        msl_args.append('12')
+        msl_args.append('29')
     if '.fixed-sample-mask.' in shader:
         msl_args.append('--msl-additional-fixed-sample-mask')
         msl_args.append('0x00000022')
@@ -874,7 +900,7 @@ def test_shader_msl(stats, shader, args, paths):
     # used as input to an invocation of spirv-cross to debug from Xcode directly.
     # To do so, build spriv-cross using `make DEBUG=1`, then run the spriv-cross
     # executable from Xcode using args: `--msl --entry main --output msl_path spirv_path`.
-#    print('SPRIV shader: ' + spirv)
+    print('SPRIV shader: ' + spirv)
 
     shader_is_msl22 = 'msl22' in joined_path
     shader_is_msl23 = 'msl23' in joined_path
@@ -1033,12 +1059,14 @@ def main():
     args.msl23 = False
     args.msl24 = False
     args.msl30 = False
+    args.msl31 = False
     if args.msl:
         print_msl_compiler_version()
         args.msl22 = msl_compiler_supports_version('-std=macos-metal2.2')
         args.msl23 = msl_compiler_supports_version('-std=macos-metal2.3')
         args.msl24 = msl_compiler_supports_version('-std=macos-metal2.4')
         args.msl30 = msl_compiler_supports_version('-std=metal3.0')
+        args.msl31 = msl_compiler_supports_version('-std=metal3.1')
 
     backend = 'glsl'
     if (args.msl or args.metal):
