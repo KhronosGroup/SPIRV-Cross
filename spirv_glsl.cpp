@@ -2807,6 +2807,9 @@ string CompilerGLSL::constant_value_macro_name(uint32_t id)
 void CompilerGLSL::emit_specialization_constant_op(const SPIRConstantOp &constant)
 {
 	auto &type = get<SPIRType>(constant.basetype);
+	// This will break. It is bogus and should not be legal.
+	if (type_is_top_level_block(type))
+		return;
 	add_resource_name(constant.self);
 	auto name = to_name(constant.self);
 	statement("const ", variable_decl(type, name), " = ", constant_op_expression(constant), ";");
@@ -2835,6 +2838,10 @@ int CompilerGLSL::get_constant_mapping_to_workgroup_component(const SPIRConstant
 void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 {
 	auto &type = get<SPIRType>(constant.constant_type);
+
+	// This will break. It is bogus and should not be legal.
+	if (type_is_top_level_block(type))
+		return;
 
 	SpecializationConstant wg_x, wg_y, wg_z;
 	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
@@ -3585,6 +3592,10 @@ void CompilerGLSL::emit_resources()
 		{
 			auto &id = ir.ids[id_];
 
+			// Skip declaring any bogus constants or undefs which use block types.
+			// We don't declare block types directly, so this will never work.
+			// Should not be legal SPIR-V, so this is considered a workaround.
+
 			if (id.get_type() == TypeConstant)
 			{
 				auto &c = id.get<SPIRConstant>();
@@ -3640,6 +3651,10 @@ void CompilerGLSL::emit_resources()
 				auto &type = this->get<SPIRType>(undef.basetype);
 				// OpUndef can be void for some reason ...
 				if (type.basetype == SPIRType::Void)
+					return;
+
+				// This will break. It is bogus and should not be legal.
+				if (type_is_top_level_block(type))
 					return;
 
 				string initializer;

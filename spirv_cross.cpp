@@ -1048,20 +1048,25 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 	return res;
 }
 
-bool Compiler::type_is_block_like(const SPIRType &type) const
+bool Compiler::type_is_top_level_block(const spirv_cross::SPIRType &type) const
 {
 	if (type.basetype != SPIRType::Struct)
 		return false;
+	return has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
+}
 
-	if (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock))
-	{
+bool Compiler::type_is_block_like(const SPIRType &type) const
+{
+	if (type_is_top_level_block(type))
 		return true;
-	}
 
-	// Block-like types may have Offset decorations.
-	for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
-		if (has_member_decoration(type.self, i, DecorationOffset))
-			return true;
+	if (type.basetype == SPIRType::Struct)
+	{
+		// Block-like types may have Offset decorations.
+		for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+			if (has_member_decoration(type.self, i, DecorationOffset))
+				return true;
+	}
 
 	return false;
 }
