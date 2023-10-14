@@ -1048,7 +1048,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 	return res;
 }
 
-bool Compiler::type_is_top_level_block(const spirv_cross::SPIRType &type) const
+bool Compiler::type_is_top_level_block(const SPIRType &type) const
 {
 	if (type.basetype != SPIRType::Struct)
 		return false;
