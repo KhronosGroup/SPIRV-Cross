@@ -1145,6 +1145,8 @@ protected:
 	bool has_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration) const;
 	void unset_extended_member_decoration(uint32_t type, uint32_t index, ExtendedDecorations decoration);
 
+	bool check_internal_recursion(const SPIRType &type, std::unordered_set<uint32_t> &checked_ids);
+	bool type_contains_recursion(const SPIRType &type);
 	bool type_is_array_of_pointers(const SPIRType &type) const;
 	bool type_is_top_level_physical_pointer(const SPIRType &type) const;
 	bool type_is_top_level_pointer(const SPIRType &type) const;
