@@ -13453,17 +13453,16 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		}
 
 		if (msl_options.replace_recursive_inputs && type_contains_recursion(type) &&
-			(var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
-			 var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer))
+		    (var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
+		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer))
 		{
 			recursive_inputs.insert(type.self);
-			entry_func.fixup_hooks_in.push_back( [this, &type, &var, var_id]()
-				{
-					auto addr_space = get_argument_address_space(var);
-					auto var_name = to_name(var_id);
-					statement(addr_space, " auto& ", to_restrict(var_id, true), var_name,
-							  " = *(", addr_space, " ", type_to_glsl(type), "*)", var_name, "_vp;");
-				});
+			entry_func.fixup_hooks_in.push_back([this, &type, &var, var_id]() {
+				auto addr_space = get_argument_address_space(var);
+				auto var_name = to_name(var_id);
+				statement(addr_space, " auto& ", to_restrict(var_id, true), var_name,
+				          " = *(", addr_space, " ", type_to_glsl(type), "*)", var_name, "_vp;");
+			});
 		}
 	});
 
