@@ -5465,6 +5465,36 @@ void Compiler::analyze_interlocked_resource_usage()
 	}
 }
 
+// Helper function
+bool Compiler::check_internal_recursion(const SPIRType &type, std::unordered_set<uint32_t> &checked_ids)
+{
+	if (type.basetype != SPIRType::Struct)
+		return false;
+
+	if (checked_ids.count(type.self))
+		return true;
+
+	// Recurse into struct members
+	bool is_recursive = false;
+	checked_ids.insert(type.self);
+	uint32_t mbr_cnt = uint32_t(type.member_types.size());
+	for (uint32_t mbr_idx = 0; !is_recursive && mbr_idx < mbr_cnt; mbr_idx++)
+	{
+		uint32_t mbr_type_id = type.member_types[mbr_idx];
+		auto &mbr_type = get<SPIRType>(mbr_type_id);
+		is_recursive |= check_internal_recursion(mbr_type, checked_ids);
+	}
+	checked_ids.erase(type.self);
+	return is_recursive;
+}
+
+// Return whether the struct type contains a structural recursion nested somewhere within its content.
+bool Compiler::type_contains_recursion(const SPIRType &type)
+{
+	std::unordered_set<uint32_t> checked_ids;
+	return check_internal_recursion(type, checked_ids);
+}
+
 bool Compiler::type_is_array_of_pointers(const SPIRType &type) const
 {
 	if (!type_is_top_level_array(type))
