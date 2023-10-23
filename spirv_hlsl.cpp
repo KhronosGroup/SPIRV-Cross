@@ -1288,7 +1288,8 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 
 		case BuiltInSampleMask:
-			type = "int";
+			type = "uint";
+			array_size = 1;
 			break;
 
 		case BuiltInPrimitiveId:
@@ -1322,7 +1323,10 @@ void CompilerHLSL::emit_builtin_variables()
 		// declared the input variable and we need to add the output one now.
 		if (builtin == BuiltInSampleMask && storage == StorageClassInput && this->active_output_builtins.get(i))
 		{
-			statement("static ", type, " ", this->builtin_to_glsl(builtin, StorageClassOutput), init_expr, ";");
+			if (array_size)
+				statement("static ", type, " ", this->builtin_to_glsl(builtin, StorageClassOutput), "[", array_size, "]", init_expr, ";");
+			else
+				statement("static ", type, " ", this->builtin_to_glsl(builtin, StorageClassOutput), init_expr, ";");
 		}
 	});
 
@@ -1534,6 +1538,17 @@ void CompilerHLSL::replace_illegal_names()
 
 	CompilerGLSL::replace_illegal_names(keywords);
 	CompilerGLSL::replace_illegal_names();
+}
+
+SPIRType::BaseType CompilerHLSL::get_builtin_basetype(BuiltIn builtin, SPIRType::BaseType default_type)
+{
+	switch (builtin)
+	{
+	case BuiltInSampleMask:
+		return SPIRType::UInt;
+	default:
+		return CompilerGLSL::get_builtin_basetype(builtin, default_type);
+	}
 }
 
 void CompilerHLSL::emit_resources()
@@ -3121,6 +3136,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 			statement(builtin, " = int(stage_input.", builtin, ");");
 			break;
 
+		case BuiltInSampleMask:
+			statement(builtin, "[0] = stage_input.", builtin, ";");
+			break;
+
 		case BuiltInNumWorkgroups:
 		case BuiltInPointCoord:
 		case BuiltInSubgroupSize:
@@ -3293,6 +3312,10 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				for (uint32_t cull = 0; cull < cull_distance_count; cull++)
 					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[",
 					          cull, "];");
+				break;
+
+			case BuiltInSampleMask:
+				statement("stage_output.gl_SampleMask = gl_SampleMask[0];");
 				break;
 
 			default:
@@ -6749,11 +6772,6 @@ void CompilerHLSL::set_hlsl_force_storage_buffer_as_uav(uint32_t desc_set, uint3
 {
 	SetBindingPair pair = { desc_set, binding };
 	force_uav_buffer_bindings.insert(pair);
-}
-
-bool CompilerHLSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
-{
-	return (builtin == BuiltInSampleMask);
 }
 
 bool CompilerHLSL::is_user_type_structured(uint32_t id) const
