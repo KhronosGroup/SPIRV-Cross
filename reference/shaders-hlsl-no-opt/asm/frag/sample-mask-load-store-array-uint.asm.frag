@@ -1,7 +1,5 @@
-static int gl_SampleMaskIn[1];
-static int gl_SampleMask[1];
-static float4 FragColor;
-
+static uint gl_SampleMaskIn[1];
+static uint gl_SampleMask[1];
 struct SPIRV_Cross_Input
 {
     uint gl_SampleMaskIn : SV_Coverage;
@@ -9,14 +7,13 @@ struct SPIRV_Cross_Input
 
 struct SPIRV_Cross_Output
 {
-    float4 FragColor : SV_Target0;
     uint gl_SampleMask : SV_Coverage;
 };
 
 void frag_main()
 {
-    FragColor = 1.0f.xxxx;
-    gl_SampleMask[0] = gl_SampleMaskIn[0];
+    uint copy_sample_mask[1] = gl_SampleMaskIn;
+    gl_SampleMask = copy_sample_mask;
 }
 
 SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
@@ -25,6 +22,5 @@ SPIRV_Cross_Output main(SPIRV_Cross_Input stage_input)
     frag_main();
     SPIRV_Cross_Output stage_output;
     stage_output.gl_SampleMask = gl_SampleMask[0];
-    stage_output.FragColor = FragColor;
     return stage_output;
 }

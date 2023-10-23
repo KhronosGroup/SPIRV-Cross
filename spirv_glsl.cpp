@@ -10158,10 +10158,11 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!pending_array_enclose)
 					expr += "]";
 			}
-			// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
-			// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
-			else if (!builtin_translates_to_nonarray(BuiltIn(get_decoration(base, DecorationBuiltIn))))
+			else if (index_is_literal || !builtin_translates_to_nonarray(BuiltIn(get_decoration(base, DecorationBuiltIn))))
 			{
+				// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
+				// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
+				// For literal indices we are working on composites, so we ignore this since we have already converted to proper array.
 				append_index(index, is_literal);
 			}
 
@@ -17737,6 +17738,25 @@ void CompilerGLSL::cast_from_variable_load(uint32_t source_id, std::string &expr
 		expr = bitcast_expression(expr_type, expected_type, expr);
 }
 
+SPIRType::BaseType CompilerGLSL::get_builtin_basetype(BuiltIn builtin, SPIRType::BaseType default_type)
+{
+	// TODO: Fill in for more builtins.
+	switch (builtin)
+	{
+	case BuiltInLayer:
+	case BuiltInPrimitiveId:
+	case BuiltInViewportIndex:
+	case BuiltInFragStencilRefEXT:
+	case BuiltInSampleMask:
+	case BuiltInPrimitiveShadingRateKHR:
+	case BuiltInShadingRateKHR:
+		return SPIRType::Int;
+
+	default:
+		return default_type;
+	}
+}
+
 void CompilerGLSL::cast_to_variable_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type)
 {
 	auto *var = maybe_get_backing_variable(target_id);
@@ -17748,24 +17768,7 @@ void CompilerGLSL::cast_to_variable_store(uint32_t target_id, std::string &expr,
 		return;
 
 	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
-	auto expected_type = expr_type.basetype;
-
-	// TODO: Fill in for more builtins.
-	switch (builtin)
-	{
-	case BuiltInLayer:
-	case BuiltInPrimitiveId:
-	case BuiltInViewportIndex:
-	case BuiltInFragStencilRefEXT:
-	case BuiltInSampleMask:
-	case BuiltInPrimitiveShadingRateKHR:
-	case BuiltInShadingRateKHR:
-		expected_type = SPIRType::Int;
-		break;
-
-	default:
-		break;
-	}
+	auto expected_type = get_builtin_basetype(builtin, expr_type.basetype);
 
 	if (expected_type != expr_type.basetype)
 	{
