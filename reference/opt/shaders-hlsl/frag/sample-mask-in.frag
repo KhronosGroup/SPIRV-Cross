@@ -1,5 +1,5 @@
 static int gl_SampleID;
-static uint gl_SampleMaskIn[1];
+static int gl_SampleMaskIn[1];
 static float4 FragColor;
 
 struct SPIRV_Cross_Input

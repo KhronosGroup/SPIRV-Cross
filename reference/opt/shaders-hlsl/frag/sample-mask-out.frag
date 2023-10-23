@@ -1,4 +1,4 @@
-static uint gl_SampleMask[1];
+static int gl_SampleMask[1];
 static float4 FragColor;
 
 struct SPIRV_Cross_Output
@@ -10,7 +10,7 @@ struct SPIRV_Cross_Output
 void frag_main()
 {
     FragColor = 1.0f.xxxx;
-    gl_SampleMask[0] = uint(0);
+    gl_SampleMask[0] = 0;
 }
 
 SPIRV_Cross_Output main()

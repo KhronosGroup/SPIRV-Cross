@@ -1149,29 +1149,48 @@ void CompilerHLSL::emit_builtin_variables()
 	builtins.merge_or(active_output_builtins);
 
 	std::unordered_map<uint32_t, ID> builtin_to_initializer;
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		if (!is_builtin_variable(var) || var.storage != StorageClassOutput || !var.initializer)
-			return;
 
-		auto *c = this->maybe_get<SPIRConstant>(var.initializer);
-		if (!c)
+	// We need to declare sample mask with the same type that module declares it.
+	// Sample mask is somewhat special in that SPIR-V has an array, and we can copy that array, so we need to
+	// match sign.
+	SPIRType::BaseType sample_mask_in_basetype = SPIRType::Void;
+	SPIRType::BaseType sample_mask_out_basetype = SPIRType::Void;
+
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		if (!is_builtin_variable(var))
 			return;
 
 		auto &type = this->get<SPIRType>(var.basetype);
-		if (type.basetype == SPIRType::Struct)
+		auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+
+		if (var.storage == StorageClassInput && builtin == BuiltInSampleMask)
+			sample_mask_in_basetype = type.basetype;
+		else if (var.storage == StorageClassOutput && builtin == BuiltInSampleMask)
+			sample_mask_out_basetype = type.basetype;
+
+		if (var.initializer && var.storage == StorageClassOutput)
 		{
-			uint32_t member_count = uint32_t(type.member_types.size());
-			for (uint32_t i = 0; i < member_count; i++)
+			auto *c = this->maybe_get<SPIRConstant>(var.initializer);
+			if (!c)
+				return;
+
+			if (type.basetype == SPIRType::Struct)
 			{
-				if (has_member_decoration(type.self, i, DecorationBuiltIn))
+				uint32_t member_count = uint32_t(type.member_types.size());
+				for (uint32_t i = 0; i < member_count; i++)
 				{
-					builtin_to_initializer[get_member_decoration(type.self, i, DecorationBuiltIn)] =
-						c->subconstants[i];
+					if (has_member_decoration(type.self, i, DecorationBuiltIn))
+					{
+						builtin_to_initializer[get_member_decoration(type.self, i, DecorationBuiltIn)] =
+								c->subconstants[i];
+					}
 				}
 			}
+			else if (has_decoration(var.self, DecorationBuiltIn))
+			{
+				builtin_to_initializer[builtin] = var.initializer;
+			}
 		}
-		else if (has_decoration(var.self, DecorationBuiltIn))
-			builtin_to_initializer[get_decoration(var.self, DecorationBuiltIn)] = var.initializer;
 	});
 
 	// Emit global variables for the interface variables which are statically used by the shader.
@@ -1288,7 +1307,10 @@ void CompilerHLSL::emit_builtin_variables()
 			break;
 
 		case BuiltInSampleMask:
-			type = "uint";
+			if (active_input_builtins.get(BuiltInSampleMask))
+				type = sample_mask_in_basetype == SPIRType::UInt ? "uint" : "int";
+			else
+				type = sample_mask_out_basetype == SPIRType::UInt ? "uint" : "int";
 			array_size = 1;
 			break;
 
@@ -1323,6 +1345,7 @@ void CompilerHLSL::emit_builtin_variables()
 		// declared the input variable and we need to add the output one now.
 		if (builtin == BuiltInSampleMask && storage == StorageClassInput && this->active_output_builtins.get(i))
 		{
+			type = sample_mask_out_basetype == SPIRType::UInt ? "uint" : "int";
 			if (array_size)
 				statement("static ", type, " ", this->builtin_to_glsl(builtin, StorageClassOutput), "[", array_size, "]", init_expr, ";");
 			else
@@ -1545,7 +1568,8 @@ SPIRType::BaseType CompilerHLSL::get_builtin_basetype(BuiltIn builtin, SPIRType:
 	switch (builtin)
 	{
 	case BuiltInSampleMask:
-		return SPIRType::UInt;
+		// We declare sample mask array with module type, so always use default_type here.
+		return default_type;
 	default:
 		return CompilerGLSL::get_builtin_basetype(builtin, default_type);
 	}
