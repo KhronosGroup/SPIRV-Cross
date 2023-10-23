@@ -4911,9 +4911,18 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 
 	bool transpose = lhs_e && lhs_e->need_transpose;
 
-	// No physical type remapping, and no packed type, so can just emit a store directly.
-	if (!lhs_remapped_type && !lhs_packed_type)
+	if (has_decoration(lhs_expression, DecorationBuiltIn) &&
+	    BuiltIn(get_decoration(lhs_expression, DecorationBuiltIn)) == BuiltInSampleMask &&
+	    type_is_top_level_array(type))
 	{
+		// Storing an array to SampleMask, have to remove the array-ness before storing.
+		statement(to_expression(lhs_expression), " = ", to_enclosed_unpacked_expression(rhs_expression), "[0];");
+		register_write(lhs_expression);
+	}
+	else if (!lhs_remapped_type && !lhs_packed_type)
+	{
+		// No physical type remapping, and no packed type, so can just emit a store directly.
+
 		// We might not be dealing with remapped physical types or packed types,
 		// but we might be doing a clean store to a row-major matrix.
 		// In this case, we just flip transpose states, and emit the store, a transpose must be in the RHS expression, if any.
@@ -17178,6 +17187,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 	case BuiltInInstanceIndex:
 	case BuiltInBaseInstance:
 	case BuiltInBaseVertex:
+	case BuiltInSampleMask:
 		expected_type = SPIRType::UInt;
 		expected_width = 32;
 		break;
@@ -17195,9 +17205,17 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 		break;
 	}
 
-	if (expected_type != expr_type.basetype)
+	if (type_is_top_level_array(expr_type) && builtin == BuiltInSampleMask)
 	{
-		if (!expr_type.array.empty() && (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter))
+		// Needs special handling.
+		auto wrap_expr = join(type_to_glsl(expr_type), "({ ");
+		wrap_expr += join(type_to_glsl(get<SPIRType>(expr_type.parent_type)), "(", expr, ")");
+		wrap_expr += " })";
+		expr = std::move(wrap_expr);
+	}
+	else if (expected_type != expr_type.basetype)
+	{
+		if (type_is_top_level_array(expr_type) && (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter))
 		{
 			// Triggers when loading TessLevel directly as an array.
 			// Need explicit padding + cast.

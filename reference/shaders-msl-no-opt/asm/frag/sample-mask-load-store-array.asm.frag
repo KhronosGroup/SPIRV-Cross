@@ -52,8 +52,8 @@ struct main0_out
 fragment main0_out main0(uint gl_SampleMaskIn [[sample_mask]])
 {
     main0_out out = {};
-    spvUnsafeArray<int, 1> copy_sample_mask = gl_SampleMaskIn;
-    out.gl_SampleMask = copy_sample_mask;
+    spvUnsafeArray<int, 1> copy_sample_mask = spvUnsafeArray<int, 1>({ int(gl_SampleMaskIn) });
+    out.gl_SampleMask = copy_sample_mask[0];
     return out;
 }
 
