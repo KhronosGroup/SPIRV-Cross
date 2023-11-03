@@ -61,7 +61,7 @@ uint proceeFn(thread raytracing::intersection_query<raytracing::instancing, rayt
     return _50;
 }
 
-fragment void main0(, raytracing::acceleration_structure<raytracing::instancing> topLevelAS [[buffer(0)]])
+fragment void main0(raytracing::acceleration_structure<raytracing::instancing> topLevelAS [[buffer(0)]])
 {
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery;
     initFn(rayQuery, topLevelAS);

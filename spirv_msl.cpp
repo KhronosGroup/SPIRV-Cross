@@ -189,6 +189,11 @@ bool CompilerMSL::is_msl_resource_binding_used(ExecutionModel model, uint32_t de
 	return itr != end(resource_bindings) && itr->second.second;
 }
 
+bool CompilerMSL::is_var_runtime_size_array(const SPIRVariable &var) const
+{
+	return is_runtime_size_array(get_variable_data_type(var)) && get_resource_array_size(var.self) == 0;
+}
+
 // Returns the size of the array of resources used by the variable with the specified id.
 // The returned value is retrieved from the resource binding added using add_msl_resource_binding().
 uint32_t CompilerMSL::get_resource_array_size(uint32_t id) const
@@ -1361,7 +1366,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
 		const string name = to_name(var.self);
-		if (is_runtime_size_array(type))
+		if (is_var_runtime_size_array(var))
 		{
 			if (msl_options.argument_buffers_tier < Options::ArgumentBuffersTier::Tier2)
 			{
@@ -10503,7 +10508,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 			// Manufacture automatic sampler arg for SampledImage texture
 			if (arg_type.image.dim != DimBuffer)
 			{
-				if (arg_type.array.empty() || is_runtime_size_array(arg_type))
+				if (arg_type.array.empty() || (var ? is_var_runtime_size_array(*var) : is_runtime_size_array(arg_type)))
 				{
 					decl += join(", ", sampler_type(arg_type, arg.id), " ", to_sampler_expression(name_id));
 				}
@@ -11693,8 +11698,7 @@ string CompilerMSL::to_buffer_size_expression(uint32_t id)
 		auto array_expr = expr.substr(index);
 		if (auto var = maybe_get_backing_variable(id))
 		{
-			auto &var_type = get<SPIRType>(var->basetype);
-			if (is_runtime_size_array(var_type))
+			if (is_var_runtime_size_array(*var))
 			{
 				if (!msl_options.runtime_array_rich_descriptor)
 					SPIRV_CROSS_THROW("OpArrayLength requires rich descriptor format");
@@ -13227,7 +13231,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				uint32_t array_size = to_array_size_literal(type);
 
 				is_using_builtin_array = true;
-				if (is_runtime_size_array(type))
+				if (is_var_runtime_size_array(var))
 				{
 					add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
 					if (!ep_args.empty())
@@ -13289,7 +13293,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			if (!ep_args.empty())
 				ep_args += ", ";
 			ep_args += sampler_type(type, var_id) + " " + r.name;
-			if (is_runtime_size_array(type))
+			if (is_var_runtime_size_array(var))
 				ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")]]";
 			else
 				ep_args += " [[sampler(" + convert_to_string(r.index) + ")]]";
@@ -13307,7 +13311,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				if (r.plane > 0)
 					ep_args += join(plane_name_suffix, r.plane);
 
-				if (is_runtime_size_array(type))
+				if (is_var_runtime_size_array(var))
 					ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")";
 				else
 					ep_args += " [[texture(" + convert_to_string(r.index) + ")";
@@ -13338,17 +13342,21 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		}
 		case SPIRType::AccelerationStructure:
 		{
-			if (is_runtime_size_array(type))
+			if (is_var_runtime_size_array(var))
 			{
 				add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 				const auto &parent_type = get<SPIRType>(type.parent_type);
-				ep_args += ", const device spvDescriptor<" + type_to_glsl(parent_type) + ">* " +
+				if (!ep_args.empty())
+					ep_args += ", ";
+				ep_args += "const device spvDescriptor<" + type_to_glsl(parent_type) + ">* " +
 				           to_restrict(var_id, true) + r.name + "_";
 				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
 			}
 			else
 			{
-				ep_args += ", " + type_to_glsl(type, var_id) + " " + r.name;
+				if (!ep_args.empty())
+					ep_args += ", ";
+				ep_args += type_to_glsl(type, var_id) + " " + r.name;
 				ep_args += " [[buffer(" + convert_to_string(r.index) + ")]]";
 			}
 			break;
@@ -13440,7 +13448,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				entry_func.fixup_hooks_in.push_back(
 				    [this, &type, &var, var_id]()
 				    {
-					    bool is_array_type = !type.array.empty() && !is_runtime_size_array(type);
+					    bool is_array_type = !type.array.empty() && !is_var_runtime_size_array(var);
 
 					    uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 					    if (descriptor_set_is_argument_buffer(desc_set))
@@ -14056,7 +14064,7 @@ uint32_t CompilerMSL::get_metal_resource_index(SPIRVariable &var, SPIRType::Base
 	}
 	else
 	{
-		if (is_runtime_size_array(type))
+		if (is_var_runtime_size_array(var))
 		{
 			basetype = SPIRType::Struct;
 			binding_stride = 1;
@@ -14214,7 +14222,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		else
 			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
 	}
-	else if (is_runtime_size_array(type))
+	else if (is_var_runtime_size_array(var))
 	{
 		const auto *parent_type = &get<SPIRType>(type.parent_type);
 		auto type_name = type_to_glsl(*parent_type, arg.id);
@@ -14316,7 +14324,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 				decl += join("[", array_size, "]");
 			}
 		}
-		else if (is_runtime_size_array(type))
+		else if (is_var_runtime_size_array(var))
 		{
 			decl += " " + to_expression(name_id);
 		}
@@ -14366,7 +14374,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	}
 	else if (type_is_image || type_is_tlas)
 	{
-		if (is_runtime_size_array(type))
+		if (is_var_runtime_size_array(var))
 		{
 			decl = address_space + " " + decl + " " + to_expression(name_id);
 		}
