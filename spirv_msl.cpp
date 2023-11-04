@@ -5066,7 +5066,8 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 	bool transpose = lhs_e && lhs_e->need_transpose;
 
 	// Meshlet indices
-	if (lhs_e != nullptr && lhs_e->loaded_from == builtin_mesh_primitive_indices_id)
+	if (lhs_e != nullptr && lhs_e->loaded_from == builtin_mesh_primitive_indices_id &&
+	    builtin_mesh_primitive_indices_id != 0)
 	{
 		auto &execution = get_entry_point();
 		auto str = to_expression(lhs_expression);
