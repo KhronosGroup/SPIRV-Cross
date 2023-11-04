@@ -1,0 +1,55 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+struct gl_MeshPerVertexEXT
+{
+    float4 gl_Position [[position]];
+    float gl_PointSize [[point_size]];
+};
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 1u, 1u);
+
+struct spvPerVertex
+{
+    float4 gl_Position [[position]];
+    float gl_PointSize [[point_size]];
+};
+
+using spvMesh_t = mesh<spvPerVertex, void, 2, 2, topology::point>;
+
+static inline __attribute__((always_inline))
+void _4(threadgroup gl_MeshPerVertexEXT (&gl_MeshVerticesEXT)[2], thread uint& gl_LocalInvocationIndex, spvMesh_t spvMesh, threadgroup uint& spv_primitive_count, thread uint3& gl_GlobalInvocationID)
+{
+    if (gl_LocalInvocationIndex == 0)
+    {
+        spv_primitive_count = 2u;
+    }
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = float4(1.0, 2.0, 3.0, 4.0);
+    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_PointSize = 8.0;
+    spvMesh.set_index(gl_LocalInvocationIndex, gl_GlobalInvocationID.y);
+}
+
+[[mesh]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], spvMesh_t spvMesh)
+{
+    threadgroup uint spv_primitive_count;
+    threadgroup gl_MeshPerVertexEXT gl_MeshVerticesEXT[2];
+    _4(gl_MeshVerticesEXT, gl_LocalInvocationIndex, spvMesh, spv_primitive_count, gl_GlobalInvocationID);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (spv_primitive_count == 0)
+    {
+        return;
+    }
+    spvMesh.set_primitive_count(spv_primitive_count);
+    {
+        const uint spvI = gl_LocalInvocationIndex;
+        spvPerVertex spvV = {};
+        spvV.gl_Position = gl_MeshVerticesEXT[spvI].gl_Position;
+        spvV.gl_PointSize = gl_MeshVerticesEXT[spvI].gl_PointSize;
+        spvMesh.set_vertex(spvI, spvV);
+    }
+}
+

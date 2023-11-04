@@ -567,7 +567,8 @@ struct SPIRType : IVariant
 		// Keep internal types at the end.
 		ControlPointArray,
 		Interpolant,
-		Char
+		Char,
+		Meshlet
 	};
 
 	// Scalar/vector/matrix support.
