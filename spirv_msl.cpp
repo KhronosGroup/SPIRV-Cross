@@ -5509,6 +5509,19 @@ void CompilerMSL::emit_custom_templates()
 			begin_scope();
 			statement("return elements[pos];");
 			end_scope();
+			if (get_execution_model() == spv::ExecutionModelMeshEXT ||
+			    get_execution_model() == spv::ExecutionModelTaskEXT)
+			{
+				statement("");
+				statement("object_data T& operator [] (size_t pos) object_data");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+				statement("constexpr const object_data T& operator [] (size_t pos) const object_data");
+				begin_scope();
+				statement("return elements[pos];");
+				end_scope();
+			}
 			end_scope_decl();
 			statement("");
 			break;
