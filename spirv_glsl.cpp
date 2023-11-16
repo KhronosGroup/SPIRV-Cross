@@ -15051,7 +15051,8 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset
 	{
 		auto &execution = get_entry_point();
 
-		if (type.basetype == SPIRType::UInt && is_legacy()) {
+		if (type.basetype == SPIRType::UInt && is_legacy())
+		{
 			// HACK: This is a bool. See comment in type_to_glsl().
 			qual += "lowp ";
 		}
