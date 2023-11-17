@@ -510,6 +510,13 @@ public:
 		// Note: Only Apple's GPU compiler takes advantage of the lack of coherency, so make sure to test on Apple GPUs if you disable this.
 		bool readwrite_texture_fences = true;
 
+		// Metal 3.1 introduced a Metal regression bug which causes infinite recursion during 
+		// Metal's analysis of an entry point input structure that is itself recursive. Enabling
+		// this option will replace the recursive input declaration with a alternate variable of
+		// type void*, and then cast to the correct type at the top of the entry point function.
+		// The bug has been reported to Apple, and will hopefully be fixed in future releases.
+		bool replace_recursive_inputs = false;
+
 		// Known primitive types. Largely uses the same values as VkPrimitiveTopology.
 		enum class PrimitiveType
 		{
@@ -1005,6 +1012,7 @@ protected:
 	void emit_specialization_constants_and_structs();
 	void emit_interface_block(uint32_t ib_var_id);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
+	bool is_var_runtime_size_array(const SPIRVariable &var) const;
 	uint32_t get_resource_array_size(uint32_t id) const;
 
 	void fix_up_shader_inputs_outputs();
@@ -1236,6 +1244,7 @@ protected:
 	SmallVector<uint32_t> buffer_aliases_discrete;
 	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
+	std::unordered_set<uint32_t> recursive_inputs;
 
 	VariableID xfb_counters[kMaxXfbBuffers];
 	VariableID xfb_buffers[kMaxXfbBuffers];
