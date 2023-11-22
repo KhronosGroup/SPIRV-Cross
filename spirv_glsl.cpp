@@ -5936,7 +5936,7 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 		type.basetype = SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
-		res = join(type_to_glsl(type), "(", convert_to_string(float_value, current_locale_radix_character), ")");
+		res = join(type_to_glsl(type), "(", format_float(float_value), ")");
 	}
 
 	return res;
@@ -6004,7 +6004,7 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 	}
 	else
 	{
-		res = convert_to_string(float_value, current_locale_radix_character);
+		res = format_float(float_value);
 		if (backend.float_literal_suffix)
 			res += "f";
 	}
@@ -6087,7 +6087,7 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 	}
 	else
 	{
-		res = convert_to_string(double_value, current_locale_radix_character);
+		res = format_double(double_value);
 		if (backend.double_literal_suffix)
 			res += "lf";
 	}
@@ -18643,3 +18643,22 @@ uint32_t CompilerGLSL::type_to_location_count(const SPIRType &type) const
 
 	return count;
 }
+
+std::string CompilerGLSL::format_float(float value) const
+{
+	if (float_formatter)
+		return float_formatter->format_float(value);
+
+	// default behavior
+	return convert_to_string(value, current_locale_radix_character);
+}
+
+std::string CompilerGLSL::format_double(double value) const
+{
+	if (float_formatter)
+		return float_formatter->format_double(value);
+
+	// default behavior
+	return convert_to_string(value, current_locale_radix_character);
+}
+
