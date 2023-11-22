@@ -4,6 +4,7 @@
 *.o
 *.d
 *.txt
+/build
 /test
 /spirv-cross
 /obj
