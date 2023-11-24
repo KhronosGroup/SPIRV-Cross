@@ -62,11 +62,11 @@ fragment main0_out main0(main0_in in [[stage_in]], constant uint* spvViewMask [[
 {
     main0_out out = {};
     spvUnsafeArray<float2, 4> vTex = {};
+    gl_ViewIndex += spvViewMask[0];
     vTex[0] = in.vTex_0;
     vTex[1] = in.vTex_1;
     vTex[2] = in.vTex_2;
     vTex[3] = in.vTex_3;
-    gl_ViewIndex += spvViewMask[0];
     out.FragColor = in.vColor * uTex.sample(uTexSmplr, vTex[int(gl_ViewIndex)]);
     return out;
 }

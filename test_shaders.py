@@ -380,6 +380,27 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('ClipDistance')
     if '.relax-nan.' in shader:
         msl_args.append('--relax-nan-checks')
+    if '.index-u16.' in shader:
+        msl_args.extend(['--msl-vertex-index-type', 'uint16'])
+    if '.pixel-loads.' in shader:
+        msl_args.append('--msl-use-pixel-type-loads')
+    if '.dynamic-stride.' in shader:
+        msl_args.append('--msl-dynamic-vertex-stride')
+    if '.vertex-loader.' in shader:
+        # Some vertex bindings for testing
+        msl_args.extend(['--msl-vertex-binding', '0', '8', 'instance', '1'])
+        msl_args.extend(['--msl-vertex-binding', '1', '16', 'vertex', '1'])
+        msl_args.extend(['--msl-vertex-binding', '2', '16', 'instance', '0'])
+        msl_args.extend(['--msl-vertex-binding', '3', '16', 'instance', '4'])
+        msl_args.extend(['--msl-vertex-attribute', '0', '0', 'a8b8g8r8_unorm_pack32', '0'])
+        msl_args.extend(['--msl-vertex-attribute', '1', '0', 'b8g8r8_uscaled', '5'])
+        msl_args.extend(['--msl-vertex-attribute', '2', '1', 'r16g16b16a16_sfloat', '0'])
+        msl_args.extend(['--msl-vertex-attribute', '3', '1', 'r16g16b16a16_snorm', '8'])
+        msl_args.extend(['--msl-vertex-attribute', '4', '2', 'a2b10g10r10_unorm_pack32', '0'])
+        msl_args.extend(['--msl-vertex-attribute', '5', '2', 'e5b9g9r9_ufloat_pack32', '4'])
+        msl_args.extend(['--msl-vertex-attribute', '6', '2', 'b10g11r11_ufloat_pack32', '8'])
+        msl_args.extend(['--msl-vertex-attribute', '7', '3', 'r32_uint', '32'])
+        msl_args.extend(['--msl-vertex-attribute', '8', '3', 'r8_unorm', '1'])
 
     subprocess.check_call(msl_args)
 

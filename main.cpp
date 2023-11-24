@@ -672,6 +672,9 @@ struct CLIArguments
 	bool msl_ios_use_simdgroup_functions = false;
 	bool msl_emulate_subgroups = false;
 	uint32_t msl_fixed_subgroup_size = 0;
+	CompilerMSL::Options::IndexType msl_vertex_index_type = CompilerMSL::Options::IndexType::None;
+	bool msl_use_pixel_type_loads = false;
+	bool msl_dynamic_vertex_stride = false;
 	bool msl_force_sample_rate_shading = false;
 	bool msl_manual_helper_invocation_updates = true;
 	bool msl_check_discarded_frag_stores = false;
@@ -697,6 +700,8 @@ struct CLIArguments
 	SmallVector<pair<uint32_t, uint32_t>> msl_inline_uniform_blocks;
 	SmallVector<MSLShaderInterfaceVariable> msl_shader_inputs;
 	SmallVector<MSLShaderInterfaceVariable> msl_shader_outputs;
+	SmallVector<MSLVertexBinding> msl_vertex_bindings;
+	SmallVector<MSLVertexAttribute> msl_vertex_attributes;
 	SmallVector<PLSArg> pls_in;
 	SmallVector<PLSArg> pls_out;
 	SmallVector<Remap> remaps;
@@ -919,6 +924,8 @@ static void print_help_msl()
 	                "\t\t<format> can be 'any32', 'any16', 'u16', 'u8', or 'other', to indicate a 32-bit opaque value, 16-bit opaque value, 16-bit unsigned integer, 8-bit unsigned integer, "
 	                "or other-typed variable. <size> is the vector length of the variable, which must be greater than or equal to that declared in the shader."
 	                "\t\tEquivalent to --msl-add-shader-output with a rate of 'vertex'.\n"
+	                "\t[--msl-vertex-binding <buffer> <stride> (vertex|instance) <divisor>]:\n\t\tAdd a vertex buffer for the shader vertex loader\n"
+	                "\t[--msl-vertex-attribute <location> <binding> <VkFormat> <offset>]:\n\t\tAdd a vertex attribute for the shader vertex loader\n"
 	                "\t[--msl-raw-buffer-tese-input]:\n\t\tUse raw buffers for tessellation evaluation input.\n"
 	                "\t\tThis allows the use of nested structures and arrays.\n"
 	                "\t\tIn a future version of SPIRV-Cross, this will become the default.\n"
@@ -945,6 +952,8 @@ static void print_help_msl()
 	                "\t[--msl-fixed-subgroup-size <size>]:\n\t\tAssign a constant <size> to the SubgroupSize builtin.\n"
 	                "\t\tIntended for Vulkan Portability implementations where VK_EXT_subgroup_size_control is not supported or disabled.\n"
 	                "\t\tIf 0, assume variable subgroup size as actually exposed by Metal.\n"
+	                "\t[--msl-use-pixel-type-loads]:\n\t\tEnable use of MSL pixel-type loads (e.g. rgb9e5<float3>).\n"
+	                "\t[--msl-dynamic-vertex-stride]:\n\t\tEnable dynamic strides in shader vertex loader.\n"
 	                "\t[--msl-force-sample-rate-shading]:\n\t\tForce fragment shaders to run per sample.\n"
 	                "\t\tThis adds a [[sample_id]] parameter if none is already present.\n"
 	                "\t[--msl-no-manual-helper-invocation-updates]:\n\t\tDo not manually update the HelperInvocation builtin when a fragment is discarded.\n"
@@ -1229,6 +1238,9 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.ios_use_simdgroup_functions = args.msl_ios_use_simdgroup_functions;
 		msl_opts.emulate_subgroups = args.msl_emulate_subgroups;
 		msl_opts.fixed_subgroup_size = args.msl_fixed_subgroup_size;
+		msl_opts.vertex_index_type = args.msl_vertex_index_type;
+		msl_opts.vertex_loader_dynamic_stride = args.msl_dynamic_vertex_stride;
+		msl_opts.use_pixel_type_loads = args.msl_use_pixel_type_loads;
 		msl_opts.force_sample_rate_shading = args.msl_force_sample_rate_shading;
 		msl_opts.manual_helper_invocation_updates = args.msl_manual_helper_invocation_updates;
 		msl_opts.check_discarded_frag_stores = args.msl_check_discarded_frag_stores;
@@ -1237,6 +1249,10 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.runtime_array_rich_descriptor = args.msl_runtime_array_rich_descriptor;
 		msl_opts.replace_recursive_inputs = args.msl_replace_recursive_inputs;
 		msl_comp->set_msl_options(msl_opts);
+		for (auto &v : args.msl_vertex_bindings)
+			msl_comp->add_shader_vertex_loader_binding(v);
+		for (auto &v : args.msl_vertex_attributes)
+			msl_comp->add_shader_vertex_loader_attribute(v);
 		for (auto &v : args.msl_discrete_descriptor_sets)
 			msl_comp->add_discrete_descriptor_set(v);
 		for (auto &v : args.msl_device_argument_buffers)
@@ -1769,6 +1785,179 @@ static int main_inner(int argc, char *argv[])
 		output.vecsize = parser.next_uint();
 		args.msl_shader_outputs.push_back(output);
 	});
+	cbs.add("--msl-vertex-binding", [&args](CLIParser &parser) {
+		MSLVertexBinding binding;
+		binding.binding = parser.next_uint();
+		binding.stride = parser.next_uint();
+		std::string rate = parser.next_string();
+		std::transform(rate.begin(), rate.end(), rate.begin(), [](uint8_t c){ return tolower(c); });
+		if (0 == rate.compare("vertex"))
+			binding.rate = MSL_VERTEX_INPUT_RATE_VERTEX;
+		else if (0 == rate.compare("instance"))
+			binding.rate = MSL_VERTEX_INPUT_RATE_INSTANCE;
+		else
+			THROW("Bad vertex binding input rate");
+		binding.divisor = parser.next_uint();
+		args.msl_vertex_bindings.push_back(binding);
+	});
+	cbs.add("--msl-vertex-attribute", [&args](CLIParser &parser) {
+		MSLVertexAttribute attribute;
+		attribute.location = parser.next_uint();
+		attribute.binding = parser.next_uint();
+		std::string format = parser.next_string();
+		attribute.offset = parser.next_uint();
+		std::transform(format.begin(), format.end(), format.begin(), [](uint8_t c){ return toupper(c); });
+		size_t format_beg = 0;
+		if (0 == format.compare(0, strlen("MSL_FORMAT_"), "MSL_FORMAT_"))
+			format_beg = strlen("MSL_FORMAT_");
+		if (0 == format.compare(0, strlen("VK_FORMAT_"), "VK_FORMAT_"))
+			format_beg = strlen("VK_FORMAT_");
+		static constexpr struct {
+			MSLFormat format;
+			const char* name;
+		} formats[] = {
+#define FORMAT(x) { MSL_FORMAT_##x, #x }
+			FORMAT(R4G4_UNORM_PACK8),
+			FORMAT(R4G4B4A4_UNORM_PACK16),
+			FORMAT(B4G4R4A4_UNORM_PACK16),
+			FORMAT(R5G6B5_UNORM_PACK16),
+			FORMAT(B5G6R5_UNORM_PACK16),
+			FORMAT(R5G5B5A1_UNORM_PACK16),
+			FORMAT(B5G5R5A1_UNORM_PACK16),
+			FORMAT(A1R5G5B5_UNORM_PACK16),
+			FORMAT(R8_UNORM),
+			FORMAT(R8_SNORM),
+			FORMAT(R8_USCALED),
+			FORMAT(R8_SSCALED),
+			FORMAT(R8_UINT),
+			FORMAT(R8_SINT),
+			FORMAT(R8_SRGB),
+			FORMAT(R8G8_UNORM),
+			FORMAT(R8G8_SNORM),
+			FORMAT(R8G8_USCALED),
+			FORMAT(R8G8_SSCALED),
+			FORMAT(R8G8_UINT),
+			FORMAT(R8G8_SINT),
+			FORMAT(R8G8_SRGB),
+			FORMAT(R8G8B8_UNORM),
+			FORMAT(R8G8B8_SNORM),
+			FORMAT(R8G8B8_USCALED),
+			FORMAT(R8G8B8_SSCALED),
+			FORMAT(R8G8B8_UINT),
+			FORMAT(R8G8B8_SINT),
+			FORMAT(R8G8B8_SRGB),
+			FORMAT(B8G8R8_UNORM),
+			FORMAT(B8G8R8_SNORM),
+			FORMAT(B8G8R8_USCALED),
+			FORMAT(B8G8R8_SSCALED),
+			FORMAT(B8G8R8_UINT),
+			FORMAT(B8G8R8_SINT),
+			FORMAT(B8G8R8_SRGB),
+			FORMAT(R8G8B8A8_UNORM),
+			FORMAT(R8G8B8A8_SNORM),
+			FORMAT(R8G8B8A8_USCALED),
+			FORMAT(R8G8B8A8_SSCALED),
+			FORMAT(R8G8B8A8_UINT),
+			FORMAT(R8G8B8A8_SINT),
+			FORMAT(R8G8B8A8_SRGB),
+			FORMAT(B8G8R8A8_UNORM),
+			FORMAT(B8G8R8A8_SNORM),
+			FORMAT(B8G8R8A8_USCALED),
+			FORMAT(B8G8R8A8_SSCALED),
+			FORMAT(B8G8R8A8_UINT),
+			FORMAT(B8G8R8A8_SINT),
+			FORMAT(B8G8R8A8_SRGB),
+			FORMAT(A8B8G8R8_UNORM_PACK32),
+			FORMAT(A8B8G8R8_SNORM_PACK32),
+			FORMAT(A8B8G8R8_USCALED_PACK32),
+			FORMAT(A8B8G8R8_SSCALED_PACK32),
+			FORMAT(A8B8G8R8_UINT_PACK32),
+			FORMAT(A8B8G8R8_SINT_PACK32),
+			FORMAT(A8B8G8R8_SRGB_PACK32),
+			FORMAT(A2R10G10B10_UNORM_PACK32),
+			FORMAT(A2R10G10B10_SNORM_PACK32),
+			FORMAT(A2R10G10B10_USCALED_PACK32),
+			FORMAT(A2R10G10B10_SSCALED_PACK32),
+			FORMAT(A2R10G10B10_UINT_PACK32),
+			FORMAT(A2R10G10B10_SINT_PACK32),
+			FORMAT(A2B10G10R10_UNORM_PACK32),
+			FORMAT(A2B10G10R10_SNORM_PACK32),
+			FORMAT(A2B10G10R10_USCALED_PACK32),
+			FORMAT(A2B10G10R10_SSCALED_PACK32),
+			FORMAT(A2B10G10R10_UINT_PACK32),
+			FORMAT(A2B10G10R10_SINT_PACK32),
+			FORMAT(R16_UNORM),
+			FORMAT(R16_SNORM),
+			FORMAT(R16_USCALED),
+			FORMAT(R16_SSCALED),
+			FORMAT(R16_UINT),
+			FORMAT(R16_SINT),
+			FORMAT(R16_SFLOAT),
+			FORMAT(R16G16_UNORM),
+			FORMAT(R16G16_SNORM),
+			FORMAT(R16G16_USCALED),
+			FORMAT(R16G16_SSCALED),
+			FORMAT(R16G16_UINT),
+			FORMAT(R16G16_SINT),
+			FORMAT(R16G16_SFLOAT),
+			FORMAT(R16G16B16_UNORM),
+			FORMAT(R16G16B16_SNORM),
+			FORMAT(R16G16B16_USCALED),
+			FORMAT(R16G16B16_SSCALED),
+			FORMAT(R16G16B16_UINT),
+			FORMAT(R16G16B16_SINT),
+			FORMAT(R16G16B16_SFLOAT),
+			FORMAT(R16G16B16A16_UNORM),
+			FORMAT(R16G16B16A16_SNORM),
+			FORMAT(R16G16B16A16_USCALED),
+			FORMAT(R16G16B16A16_SSCALED),
+			FORMAT(R16G16B16A16_UINT),
+			FORMAT(R16G16B16A16_SINT),
+			FORMAT(R16G16B16A16_SFLOAT),
+			FORMAT(R32_UINT),
+			FORMAT(R32_SINT),
+			FORMAT(R32_SFLOAT),
+			FORMAT(R32G32_UINT),
+			FORMAT(R32G32_SINT),
+			FORMAT(R32G32_SFLOAT),
+			FORMAT(R32G32B32_UINT),
+			FORMAT(R32G32B32_SINT),
+			FORMAT(R32G32B32_SFLOAT),
+			FORMAT(R32G32B32A32_UINT),
+			FORMAT(R32G32B32A32_SINT),
+			FORMAT(R32G32B32A32_SFLOAT),
+			FORMAT(R64_UINT),
+			FORMAT(R64_SINT),
+			FORMAT(R64_SFLOAT),
+			FORMAT(R64G64_UINT),
+			FORMAT(R64G64_SINT),
+			FORMAT(R64G64_SFLOAT),
+			FORMAT(R64G64B64_UINT),
+			FORMAT(R64G64B64_SINT),
+			FORMAT(R64G64B64_SFLOAT),
+			FORMAT(R64G64B64A64_UINT),
+			FORMAT(R64G64B64A64_SINT),
+			FORMAT(R64G64B64A64_SFLOAT),
+			FORMAT(B10G11R11_UFLOAT_PACK32),
+			FORMAT(E5B9G9R9_UFLOAT_PACK32),
+			FORMAT(G16B16G16R16_422_UNORM),
+			FORMAT(B16G16R16G16_422_UNORM),
+			FORMAT(A4R4G4B4_UNORM_PACK16),
+			FORMAT(A4B4G4R4_UNORM_PACK16),
+			FORMAT(R16G16_S10_5_NV),
+			FORMAT(A1B5G5R5_UNORM_PACK16_KHR),
+			FORMAT(A8_UNORM_KHR),
+#undef FORMAT
+		};
+		size_t fmt_idx = 0;
+		for (; fmt_idx < sizeof(formats) / sizeof(*formats); fmt_idx++)
+			if (0 == format.compare(format_beg, format.npos, formats[fmt_idx].name))
+				break;
+		if (fmt_idx == sizeof(formats) / sizeof(*formats))
+			THROW("Bad vertex attribute format");
+		attribute.format = formats[fmt_idx].format;
+		args.msl_vertex_attributes.push_back(attribute);
+	});
 	cbs.add("--msl-raw-buffer-tese-input", [&args](CLIParser &) { args.msl_raw_buffer_tese_input = true; });
 	cbs.add("--msl-multi-patch-workgroup", [&args](CLIParser &) { args.msl_multi_patch_workgroup = true; });
 	cbs.add("--msl-vertex-for-tessellation", [&args](CLIParser &) { args.msl_vertex_for_tessellation = true; });
@@ -1784,6 +1973,20 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--msl-emulate-subgroups", [&args](CLIParser &) { args.msl_emulate_subgroups = true; });
 	cbs.add("--msl-fixed-subgroup-size",
 	        [&args](CLIParser &parser) { args.msl_fixed_subgroup_size = parser.next_uint(); });
+	cbs.add("--msl-vertex-index-type", [&args](CLIParser &parser) {
+		std::string str = parser.next_string();
+		std::transform(str.begin(), str.end(), str.begin(), [](uint8_t c){ return tolower(c); });
+		if (str == "none")
+			args.msl_vertex_index_type = CompilerMSL::Options::IndexType::None;
+		else if (str == "uint16")
+			args.msl_vertex_index_type = CompilerMSL::Options::IndexType::UInt16;
+		else if (str == "uint32")
+			args.msl_vertex_index_type = CompilerMSL::Options::IndexType::UInt32;
+		else
+			THROW("Bad index type");
+	});
+	cbs.add("--msl-use-pixel-type-loads", [&args](CLIParser &) { args.msl_use_pixel_type_loads = true; });
+	cbs.add("--msl-dynamic-vertex-stride", [&args](CLIParser &) { args.msl_dynamic_vertex_stride = true; });
 	cbs.add("--msl-force-sample-rate-shading", [&args](CLIParser &) { args.msl_force_sample_rate_shading = true; });
 	cbs.add("--msl-no-manual-helper-invocation-updates",
 	        [&args](CLIParser &) { args.msl_manual_helper_invocation_updates = false; });

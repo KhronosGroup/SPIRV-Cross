@@ -117,8 +117,6 @@ fragment main0_out main0(main0_in in [[stage_in]], uint gl_SampleID [[sample_id]
     _13 s = {};
     spvUnsafeArray<float2, 2> b = {};
     spvUnsafeArray<float2, 2> c = {};
-    a[0] = in.a_0.interpolate_at_center();
-    a[1] = in.a_1.interpolate_at_center();
     s.x = in.s_x.interpolate_at_center();
     s.y = in.s_y.interpolate_at_centroid();
     s.z = in.s_z.interpolate_at_sample(gl_SampleID);
@@ -129,6 +127,8 @@ fragment main0_out main0(main0_in in [[stage_in]], uint gl_SampleID [[sample_id]
     s.w[0] = in.s_w_0.interpolate_at_center();
     s.w[1] = in.s_w_1.interpolate_at_center();
     s.w[2] = in.s_w_2.interpolate_at_center();
+    a[0] = in.a_0.interpolate_at_center();
+    a[1] = in.a_1.interpolate_at_center();
     b[0] = in.b_0.interpolate_at_centroid();
     b[1] = in.b_1.interpolate_at_centroid();
     c[0] = in.c_0.interpolate_at_sample(gl_SampleID);
