@@ -1039,7 +1039,7 @@ protected:
 	std::unordered_set<LocationComponentPair, InternalHasher> masked_output_locations;
 	std::unordered_set<uint32_t> masked_output_builtins;
 
-	FloatFormatter* float_formatter = nullptr;
+	FloatFormatter *float_formatter = nullptr;
 	std::string format_float(float value) const;
 	std::string format_double(double value) const;
 
