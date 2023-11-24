@@ -289,8 +289,8 @@ public:
 
 	// Allow to control how to format float literals in the output.
 	// Set to "nullptr" to use the default "convert_to_string" function.
-	// It needs to ensure that the pointer is valid before the compiler object destructs.
-	void set_float_formatter(FloatFormatter* formatter)
+	// This handle is not owned by SPIRV-Cross and must remain valid until compile() has been called.
+	void set_float_formatter(FloatFormatter *formatter)
 	{
 		float_formatter = formatter;
 	}
