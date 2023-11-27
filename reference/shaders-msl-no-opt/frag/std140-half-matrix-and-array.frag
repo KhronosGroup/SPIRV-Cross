@@ -5,39 +5,37 @@
 
 using namespace metal;
 
-struct half8 { alignas(16) half4 data; half4 padding_for_std140_fix_your_shader; };
-using half2x8 = half8[2];
-using half3x8 = half8[3];
-using half4x8 = half8[4];
-struct ushort8 { alignas(16) ushort4 data; ushort4 padding_for_std140_fix_your_shader; };
-struct short8 { alignas(16) short4 data; short4 padding_for_std140_fix_your_shader; };
+template <typename T>
+struct spvPaddedStd140 { alignas(16) T data; };
+template <typename T, int n>
+using spvPaddedStd140Matrix = spvPaddedStd140<T>[n];
 
 struct Foo
 {
-    half2x8 c22;
-    half2x8 c22arr[3];
-    half2x8 c23;
-    half2x8 c24;
-    half3x8 c32;
-    half3x8 c33;
-    half3x8 c34;
-    half4x8 c42;
-    half4x8 c43;
-    half4x8 c44;
-    half2x8 r22;
-    half2x8 r22arr[3];
-    half3x8 r23;
-    half4x8 r24;
-    half2x8 r32;
-    half3x8 r33;
-    half4x8 r34;
-    half2x8 r42;
-    half3x8 r43;
-    half4x8 r44;
-    half8 h1[6];
-    half8 h2[6];
-    half8 h3[6];
-    half8 h4[6];
+    spvPaddedStd140Matrix<half2, 2> c22;
+    spvPaddedStd140Matrix<half2, 2> c22arr[3];
+    spvPaddedStd140Matrix<half3, 2> c23;
+    spvPaddedStd140Matrix<half4, 2> c24;
+    spvPaddedStd140Matrix<half2, 3> c32;
+    spvPaddedStd140Matrix<half3, 3> c33;
+    spvPaddedStd140Matrix<half4, 3> c34;
+    spvPaddedStd140Matrix<half2, 4> c42;
+    spvPaddedStd140Matrix<half3, 4> c43;
+    spvPaddedStd140Matrix<half4, 4> c44;
+    spvPaddedStd140Matrix<half2, 2> r22;
+    spvPaddedStd140Matrix<half2, 2> r22arr[3];
+    spvPaddedStd140Matrix<half2, 3> r23;
+    spvPaddedStd140Matrix<half2, 4> r24;
+    spvPaddedStd140Matrix<half3, 2> r32;
+    spvPaddedStd140Matrix<half3, 3> r33;
+    spvPaddedStd140Matrix<half3, 4> r34;
+    spvPaddedStd140Matrix<half4, 2> r42;
+    spvPaddedStd140Matrix<half4, 3> r43;
+    spvPaddedStd140Matrix<half4, 4> r44;
+    spvPaddedStd140<half> h1[6];
+    spvPaddedStd140<half2> h2[6];
+    spvPaddedStd140<half3> h3[6];
+    spvPaddedStd140<half4> h4[6];
 };
 
 struct main0_out

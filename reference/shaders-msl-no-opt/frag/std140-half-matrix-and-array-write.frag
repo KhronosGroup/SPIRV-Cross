@@ -5,23 +5,21 @@
 
 using namespace metal;
 
-struct half8 { alignas(16) half4 data; half4 padding_for_std140_fix_your_shader; };
-using half2x8 = half8[2];
-using half3x8 = half8[3];
-using half4x8 = half8[4];
-struct ushort8 { alignas(16) ushort4 data; ushort4 padding_for_std140_fix_your_shader; };
-struct short8 { alignas(16) short4 data; short4 padding_for_std140_fix_your_shader; };
+template <typename T>
+struct spvPaddedStd140 { alignas(16) T data; };
+template <typename T, int n>
+using spvPaddedStd140Matrix = spvPaddedStd140<T>[n];
 
 struct Foo
 {
-    half2x8 c23;
-    half3x8 c32;
-    half3x8 r23;
-    half2x8 r32;
-    half8 h1[6];
-    half8 h2[6];
-    half8 h3[6];
-    half8 h4[6];
+    spvPaddedStd140Matrix<half3, 2> c23;
+    spvPaddedStd140Matrix<half2, 3> c32;
+    spvPaddedStd140Matrix<half2, 3> r23;
+    spvPaddedStd140Matrix<half3, 2> r32;
+    spvPaddedStd140<half> h1[6];
+    spvPaddedStd140<half2> h2[6];
+    spvPaddedStd140<half3> h3[6];
+    spvPaddedStd140<half4> h4[6];
 };
 
 struct main0_out

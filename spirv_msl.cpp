@@ -4781,7 +4781,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		if (elems_per_stride == 8)
 		{
 			if (mbr_type.width == 16)
-				add_spv_func_and_recompile(SPVFuncImplHalfStd140);
+				add_spv_func_and_recompile(SPVFuncImplPaddedStd140);
 			else
 				SPIRV_CROSS_THROW("Unexpected type in std140 wide array resolve.");
 		}
@@ -4824,7 +4824,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 		{
 			if (mbr_type.basetype != SPIRType::Half)
 				SPIRV_CROSS_THROW("Unexpected type in std140 wide matrix stride resolve.");
-			add_spv_func_and_recompile(SPVFuncImplHalfStd140);
+			add_spv_func_and_recompile(SPVFuncImplPaddedStd140);
 		}
 
 		bool row_major = has_member_decoration(ib_type.self, index, DecorationRowMajor);
@@ -7361,15 +7361,12 @@ void CompilerMSL::emit_custom_functions()
 			}
 			break;
 
-		case SPVFuncImplHalfStd140:
+		case SPVFuncImplPaddedStd140:
 			// .data is used in access chain.
-			statement("struct half8 { alignas(16) half4 data; half4 padding_for_std140_fix_your_shader; };");
-			// Physical type remapping is used to load/store full matrices anyway.
-			statement("using half2x8 = half8[2];");
-			statement("using half3x8 = half8[3];");
-			statement("using half4x8 = half8[4];");
-			statement("struct ushort8 { alignas(16) ushort4 data; ushort4 padding_for_std140_fix_your_shader; };");
-			statement("struct short8 { alignas(16) short4 data; short4 padding_for_std140_fix_your_shader; };");
+			statement("template <typename T>");
+			statement("struct spvPaddedStd140 { alignas(16) T data; };");
+			statement("template <typename T, int n>");
+			statement("using spvPaddedStd140Matrix = spvPaddedStd140<T>[n];");
 			statement("");
 			break;
 
@@ -11817,6 +11814,7 @@ void CompilerMSL::emit_fixup()
 string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_id, uint32_t index,
                                      const string &qualifier)
 {
+	uint32_t orig_member_type_id = member_type_id;
 	if (member_is_remapped_physical_type(type, index))
 		member_type_id = get_extended_member_decoration(type.self, index, SPIRVCrossDecorationPhysicalTypeID);
 	auto &physical_type = get<SPIRType>(member_type_id);
@@ -11928,7 +11926,24 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		array_type = type_to_array_glsl(physical_type);
 	}
 
-	auto result = join(pack_pfx, type_to_glsl(*declared_type, orig_id, true), " ", qualifier,
+	string decl_type;
+	if (declared_type->vecsize > 4)
+	{
+		auto orig_type = get<SPIRType>(orig_member_type_id);
+		if (is_matrix(orig_type) && row_major)
+			swap(orig_type.vecsize, orig_type.columns);
+		orig_type.columns = 1;
+		decl_type = type_to_glsl(orig_type, orig_id, true);
+
+		if (declared_type->columns > 1)
+			decl_type = join("spvPaddedStd140Matrix<", decl_type, ", ", declared_type->columns, ">");
+		else
+			decl_type = join("spvPaddedStd140<", decl_type, ">");
+	}
+	else
+		decl_type = type_to_glsl(*declared_type, orig_id, true);
+
+	auto result = join(pack_pfx, decl_type, " ", qualifier,
 	                   to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
 
 	is_using_builtin_array = false;
