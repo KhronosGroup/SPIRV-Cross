@@ -757,7 +757,7 @@ protected:
 	virtual bool access_chain_needs_stage_io_builtin_translation(uint32_t base);
 
 	virtual void check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type);
-	virtual void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
+	virtual bool prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
 	                                                    spv::StorageClass storage, bool &is_packed);
 
 	std::string access_chain(uint32_t base, const uint32_t *indices, uint32_t count, const SPIRType &target_type,
