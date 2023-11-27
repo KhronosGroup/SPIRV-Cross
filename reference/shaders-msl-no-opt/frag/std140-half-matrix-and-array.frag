@@ -46,16 +46,16 @@ struct main0_out
 fragment main0_out main0(constant Foo& u [[buffer(0)]])
 {
     main0_out out = {};
-    half2 c2 = u.c22[0].data.xy + u.c22[1].data.xy;
-    c2 = u.c22arr[2][0].data.xy + u.c22arr[2][1].data.xy;
-    half3 c3 = u.c23[0].data.xyz + u.c23[1].data.xyz;
-    half4 c4 = u.c24[0].data + u.c24[1].data;
-    c2 = (u.c32[0].data.xy + u.c32[1].data.xy) + u.c32[2].data.xy;
-    c3 = (u.c33[0].data.xyz + u.c33[1].data.xyz) + u.c33[2].data.xyz;
-    c4 = (u.c34[0].data + u.c34[1].data) + u.c34[2].data;
-    c2 = ((u.c42[0].data.xy + u.c42[1].data.xy) + u.c42[2].data.xy) + u.c42[3].data.xy;
-    c3 = ((u.c43[0].data.xyz + u.c43[1].data.xyz) + u.c43[2].data.xyz) + u.c43[3].data.xyz;
-    c4 = ((u.c44[0].data + u.c44[1].data) + u.c44[2].data) + u.c44[3].data;
+    half2 c2 = half2(u.c22[0].data) + half2(u.c22[1].data);
+    c2 = half2(u.c22arr[2][0].data) + half2(u.c22arr[2][1].data);
+    half3 c3 = half3(u.c23[0].data) + half3(u.c23[1].data);
+    half4 c4 = half4(u.c24[0].data) + half4(u.c24[1].data);
+    c2 = (half2(u.c32[0].data) + half2(u.c32[1].data)) + half2(u.c32[2].data);
+    c3 = (half3(u.c33[0].data) + half3(u.c33[1].data)) + half3(u.c33[2].data);
+    c4 = (half4(u.c34[0].data) + half4(u.c34[1].data)) + half4(u.c34[2].data);
+    c2 = ((half2(u.c42[0].data) + half2(u.c42[1].data)) + half2(u.c42[2].data)) + half2(u.c42[3].data);
+    c3 = ((half3(u.c43[0].data) + half3(u.c43[1].data)) + half3(u.c43[2].data)) + half3(u.c43[3].data);
+    c4 = ((half4(u.c44[0].data) + half4(u.c44[1].data)) + half4(u.c44[2].data)) + half4(u.c44[3].data);
     half c = ((u.c22[0].data.x + u.c22[0].data.y) + u.c22[1].data.x) + u.c22[1].data.y;
     c = ((u.c22arr[2][0].data.x + u.c22arr[2][0].data.y) + u.c22arr[2][1].data.x) + u.c22arr[2][1].data.y;
     half2x2 c22 = half2x2(u.c22[0].data.xy, u.c22[1].data.xy);
@@ -88,9 +88,9 @@ fragment main0_out main0(constant Foo& u [[buffer(0)]])
     half4x2 r42 = transpose(half2x4(u.r42[0].data, u.r42[1].data));
     half4x3 r43 = transpose(half3x4(u.r43[0].data, u.r43[1].data, u.r43[2].data));
     half4x4 r44 = transpose(half4x4(u.r44[0].data, u.r44[1].data, u.r44[2].data, u.r44[3].data));
-    half h1 = u.h1[5].data.x;
-    half2 h2 = u.h2[5].data.xy;
-    half3 h3 = u.h3[5].data.xyz;
+    half h1 = half(u.h1[5].data);
+    half2 h2 = half2(u.h2[5].data);
+    half3 h3 = half3(u.h3[5].data);
     half4 h4 = half4(u.h4[5].data);
     out.FragColor = float4(1.0);
     return out;
