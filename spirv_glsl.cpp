@@ -10176,6 +10176,16 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
 
+			// If the physical type has an unnatural vecsize,
+			// we must assume it's a faked struct where the .data member
+			// is used for the real payload.
+			if (physical_type && (is_vector(*type) || is_scalar(*type)))
+			{
+				auto &phys = get<SPIRType>(physical_type);
+				if (phys.vecsize > 4)
+					expr += ".data";
+			}
+
 			access_chain_is_arrayed = true;
 		}
 		// For structs, the index refers to a constant, which indexes into the members, possibly through a redirection mapping.
@@ -10261,6 +10271,16 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr += to_unpacked_expression(index, register_expression_read);
 			expr += "]";
 
+			// If the physical type has an unnatural vecsize,
+			// we must assume it's a faked struct where the .data member
+			// is used for the real payload.
+			if (physical_type)
+			{
+				auto &phys = get<SPIRType>(physical_type);
+				if (phys.vecsize > 4 || phys.columns > 4)
+					expr += ".data";
+			}
+
 			type_id = type->parent_type;
 			type = &get<SPIRType>(type_id);
 		}
@@ -10275,6 +10295,18 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (column_index != string::npos)
 				{
 					deferred_index = expr.substr(column_index);
+
+					auto end_deferred_index = deferred_index.find_last_of(']');
+					if (end_deferred_index != string::npos && end_deferred_index + 1 != deferred_index.size())
+					{
+						// If we have any data member fixups, it must be transposed so that it refers to this index.
+						// E.g. [0].data followed by [1] would be shuffled to [1][0].data which is wrong,
+						// and needs to be [1].data[0] instead.
+						end_deferred_index++;
+						deferred_index = deferred_index.substr(end_deferred_index) +
+						                 deferred_index.substr(0, end_deferred_index);
+					}
+
 					expr.resize(column_index);
 				}
 			}
@@ -10353,8 +10385,14 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			if (row_major_matrix_needs_conversion && !ignore_potential_sliced_writes)
 			{
-				prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
-				                                       is_packed);
+				if (prepare_access_chain_for_scalar_access(expr, get<SPIRType>(type->parent_type), effective_storage,
+				                                           is_packed))
+				{
+					// We're in a pointer context now, so just remove any member dereference.
+					auto first_index = deferred_index.find_first_of('[');
+					if (first_index != string::npos && first_index != 0)
+						deferred_index = deferred_index.substr(first_index);
+				}
 			}
 
 			if (access_meshlet_position_y)
@@ -10413,8 +10451,9 @@ void CompilerGLSL::check_physical_type_cast(std::string &, const SPIRType *, uin
 {
 }
 
-void CompilerGLSL::prepare_access_chain_for_scalar_access(std::string &, const SPIRType &, spv::StorageClass, bool &)
+bool CompilerGLSL::prepare_access_chain_for_scalar_access(std::string &, const SPIRType &, spv::StorageClass, bool &)
 {
+	return false;
 }
 
 string CompilerGLSL::to_flattened_struct_member(const string &basename, const SPIRType &type, uint32_t index)
@@ -14956,6 +14995,17 @@ string CompilerGLSL::convert_row_major_matrix(string exp_str, const SPIRType &ex
 
 		auto column_expr = exp_str.substr(column_index);
 		exp_str.resize(column_index);
+
+		auto end_deferred_index = column_expr.find_last_of(']');
+		if (end_deferred_index != string::npos && end_deferred_index + 1 != column_expr.size())
+		{
+			// If we have any data member fixups, it must be transposed so that it refers to this index.
+			// E.g. [0].data followed by [1] would be shuffled to [1][0].data which is wrong,
+			// and needs to be [1].data[0] instead.
+			end_deferred_index++;
+			column_expr = column_expr.substr(end_deferred_index) +
+			              column_expr.substr(0, end_deferred_index);
+		}
 
 		auto transposed_expr = type_to_glsl_constructor(exp_type) + "(";
 
