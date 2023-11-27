@@ -14602,6 +14602,7 @@ const std::unordered_set<std::string> &CompilerMSL::get_illegal_func_names()
 		"assert",
 		"fmin3",
 		"fmax3",
+		"divide",
 		"VARIABLE_TRACEPOINT",
 		"STATIC_DATA_TRACEPOINT",
 		"STATIC_DATA_TRACEPOINT_V",
