@@ -1209,7 +1209,7 @@ protected:
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<std::pair<uint32_t, uint32_t>> buffer_aliases_argument;
 	SmallVector<uint32_t> buffer_aliases_discrete;
-	std::unordered_set<uint32_t> atomic_image_vars; // Emulate texture2D atomic operations
+	std::unordered_set<uint32_t> atomic_image_vars_emulated; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
 	std::unordered_set<uint32_t> recursive_inputs;
 
@@ -1279,7 +1279,7 @@ protected:
 
 		CompilerMSL &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
-		std::unordered_map<uint32_t, uint32_t> image_pointers; // Emulate texture2D atomic operations
+		std::unordered_map<uint32_t, uint32_t> image_pointers_emulated; // Emulate texture2D atomic operations
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
 		bool uses_image_write = false;
