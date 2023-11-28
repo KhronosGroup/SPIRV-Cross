@@ -5725,6 +5725,31 @@ void CompilerMSL::emit_custom_functions()
 			break;
 		}
 
+		// Fix up gradient vectors when sampling a cube texture for Apple Silicon.
+		// h/t Alexey Knyazev (https://github.com/KhronosGroup/MoltenVK/issues/2068#issuecomment-1817799067) for the code.
+		case SPVFuncImplGradientCube:
+			statement("static inline gradientcube spvGradientCube(float3 P, float3 dPdx, float3 dPdy)");
+			begin_scope();
+			statement("// Major axis selection");
+			statement("float3 absP = abs(P);");
+			statement("bool xMajor = absP.x >= max(absP.y, absP.z);");
+			statement("bool yMajor = absP.y >= absP.z;");
+			statement("float3 Q = xMajor ? P.yzx : (yMajor ? P.xzy : P);");
+			statement("float3 dQdx = xMajor ? dPdx.yzx : (yMajor ? dPdx.xzy : dPdx);");
+			statement("float3 dQdy = xMajor ? dPdy.yzx : (yMajor ? dPdy.xzy : dPdy);");
+			statement_no_indent("");
+			statement("// Skip a couple of operations compared to usual projection");
+			statement("float4 d = float4(dQdx.xy, dQdy.xy) - (Q.xy / Q.z).xyxy * float4(dQdx.zz, dQdy.zz);");
+			statement_no_indent("");
+			statement("// Final swizzle to put the intermediate values into non-ignored components");
+			statement("// X major: X and Z");
+			statement("// Y major: X and Y");
+			statement("// Z major: Y and Z");
+			statement("return gradientcube(xMajor ? d.xxy : d.xyx, xMajor ? d.zzw : d.zwz);");
+			end_scope();
+			statement("");
+			break;
+
 		// "fadd" intrinsic support
 		case SPVFuncImplFAdd:
 			statement("template<typename T>");
@@ -11123,29 +11148,38 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			// rhoX = dP/dx * extent; rhoY = dP/dy * extent
 			// Therefore, dP/dx = dP/dy = exp2(lod)/extent.
 			// (Subtracting 0.5 before exponentiation gives better results.)
-			string grad_opt, extent;
+			string grad_opt, extent, grad_coord;
 			VariableID base_img = img;
 			if (auto *combined = maybe_get<SPIRCombinedImageSampler>(img))
 				base_img = combined->image;
 			switch (imgtype.image.dim)
 			{
 			case Dim1D:
-				grad_opt = "2d";
+				grad_opt = "gradient2d";
 				extent = join("float2(", to_expression(base_img), ".get_width(), 1.0)");
 				break;
 			case Dim2D:
-				grad_opt = "2d";
+				grad_opt = "gradient2d";
 				extent = join("float2(", to_expression(base_img), ".get_width(), ", to_expression(base_img), ".get_height())");
 				break;
 			case DimCube:
 				if (imgtype.image.arrayed && msl_options.emulate_cube_array)
 				{
-					grad_opt = "2d";
+					grad_opt = "gradient2d";
 					extent = join("float2(", to_expression(base_img), ".get_width())");
 				}
 				else
 				{
-					grad_opt = "cube";
+					if (msl_options.agx_manual_cube_grad_fixup)
+					{
+						add_spv_func_and_recompile(SPVFuncImplGradientCube);
+						grad_opt = "spvGradientCube";
+						grad_coord = tex_coords + ", ";
+					}
+					else
+					{
+						grad_opt = "gradientcube";
+					}
 					extent = join("float3(", to_expression(base_img), ".get_width())");
 				}
 				break;
@@ -11154,8 +11188,8 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 				extent = "float3(1.0)";
 				break;
 			}
-			farg_str += join(", gradient", grad_opt, "(exp2(", to_expression(lod), " - 0.5) / ", extent, ", exp2(",
-			                 to_expression(lod), " - 0.5) / ", extent, ")");
+			farg_str += join(", ", grad_opt, "(", grad_coord, "exp2(", to_expression(lod), " - 0.5) / ", extent,
+			                 ", exp2(", to_expression(lod), " - 0.5) / ", extent, ")");
 		}
 		else
 		{
@@ -11175,27 +11209,37 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 	{
 		forward = forward && should_forward(grad_x);
 		forward = forward && should_forward(grad_y);
-		string grad_opt;
+		string grad_opt, grad_coord;
 		switch (imgtype.image.dim)
 		{
 		case Dim1D:
 		case Dim2D:
-			grad_opt = "2d";
+			grad_opt = "gradient2d";
 			break;
 		case Dim3D:
-			grad_opt = "3d";
+			grad_opt = "gradient3d";
 			break;
 		case DimCube:
 			if (imgtype.image.arrayed && msl_options.emulate_cube_array)
-				grad_opt = "2d";
+			{
+				grad_opt = "gradient2d";
+			}
+			else if (msl_options.agx_manual_cube_grad_fixup)
+			{
+				add_spv_func_and_recompile(SPVFuncImplGradientCube);
+				grad_opt = "spvGradientCube";
+				grad_coord = tex_coords + ", ";
+			}
 			else
-				grad_opt = "cube";
+			{
+				grad_opt = "gradientcube";
+			}
 			break;
 		default:
 			grad_opt = "unsupported_gradient_dimension";
 			break;
 		}
-		farg_str += ", gradient" + grad_opt + "(" + to_expression(grad_x) + ", " + to_expression(grad_y) + ")";
+		farg_str += join(", ", grad_opt, "(", grad_coord, to_expression(grad_x), ", ", to_expression(grad_y), ")");
 	}
 
 	if (args.min_lod)

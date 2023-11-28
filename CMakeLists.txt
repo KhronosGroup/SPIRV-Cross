@@ -243,7 +243,7 @@ set(spirv-cross-util-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_util.hpp)
 
 set(spirv-cross-abi-major 0)
-set(spirv-cross-abi-minor 57)
+set(spirv-cross-abi-minor 58)
 set(spirv-cross-abi-patch 0)
 set(SPIRV_CROSS_VERSION ${spirv-cross-abi-major}.${spirv-cross-abi-minor}.${spirv-cross-abi-patch})
 
