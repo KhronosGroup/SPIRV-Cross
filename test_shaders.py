@@ -123,10 +123,12 @@ def msl_compiler_supports_version(version):
         return False
 
 def path_to_msl_standard(shader):
-    if '.ios.' in shader:
-        if '.msl3.' in shader:
-            return '-std=metal3.0'
-        elif '.msl2.' in shader:
+    if '.msl31.' in shader:
+        return '-std=metal3.1'
+    elif '.msl3.' in shader:
+        return '-std=metal3.0'
+    elif '.ios.' in shader:
+        if '.msl2.' in shader:
             return '-std=ios-metal2.0'
         elif '.msl21.' in shader:
             return '-std=ios-metal2.1'
@@ -143,9 +145,7 @@ def path_to_msl_standard(shader):
         else:
             return '-std=ios-metal1.2'
     else:
-        if '.msl3.' in shader:
-            return '-std=metal3.0'
-        elif '.msl2.' in shader:
+        if '.msl2.' in shader:
             return '-std=macos-metal2.0'
         elif '.msl21.' in shader:
             return '-std=macos-metal2.1'
@@ -161,7 +161,9 @@ def path_to_msl_standard(shader):
             return '-std=macos-metal1.2'
 
 def path_to_msl_standard_cli(shader):
-    if '.msl3.' in shader:
+    if '.msl31.' in shader:
+        return '30100'
+    elif '.msl3.' in shader:
         return '30000'
     elif '.msl2.' in shader:
         return '20000'
@@ -1037,12 +1039,14 @@ def main():
     args.msl23 = False
     args.msl24 = False
     args.msl30 = False
+    args.msl31 = False
     if args.msl:
         print_msl_compiler_version()
         args.msl22 = msl_compiler_supports_version('-std=macos-metal2.2')
         args.msl23 = msl_compiler_supports_version('-std=macos-metal2.3')
         args.msl24 = msl_compiler_supports_version('-std=macos-metal2.4')
         args.msl30 = msl_compiler_supports_version('-std=metal3.0')
+        args.msl31 = msl_compiler_supports_version('-std=metal3.1')
 
     backend = 'glsl'
     if (args.msl or args.metal):
