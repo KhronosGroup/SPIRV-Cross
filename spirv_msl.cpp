@@ -1921,8 +1921,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				// When using the pointer, we need to know which variable it is actually loaded from.
 				uint32_t base_id = ops[2];
 				auto *var = maybe_get_backing_variable(base_id);
-				if (var && atomic_image_vars.count(var->self))
+				if (var && atomic_image_vars_emulated.count(var->self))
 				{
+					if (!get<SPIRType>(var->basetype).array.empty())
+						SPIRV_CROSS_THROW("Cannot emulate array of storage images with atomics. Use MSL 3.1 for native support.");
+
 					if (global_var_ids.find(base_id) != global_var_ids.end())
 						added_arg_ids.insert(base_id);
 				}
@@ -8756,7 +8759,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[2];
 		uint32_t mem_sem = ops[4];
 		uint32_t val = ops[5];
-		emit_atomic_func_op(result_type, id, "atomic_exchange_explicit", opcode, mem_sem, mem_sem, false, ptr, val);
+		emit_atomic_func_op(result_type, id, "atomic_exchange", opcode, mem_sem, mem_sem, false, ptr, val);
 		break;
 	}
 
@@ -8769,7 +8772,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t mem_sem_fail = ops[5];
 		uint32_t val = ops[6];
 		uint32_t comp = ops[7];
-		emit_atomic_func_op(result_type, id, "atomic_compare_exchange_weak_explicit", opcode,
+		emit_atomic_func_op(result_type, id, "atomic_compare_exchange_weak", opcode,
 		                    mem_sem_pass, mem_sem_fail, true,
 		                    ptr, comp, true, false, val);
 		break;
@@ -8784,7 +8787,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t id = ops[1];
 		uint32_t ptr = ops[2];
 		uint32_t mem_sem = ops[4];
-		emit_atomic_func_op(result_type, id, "atomic_load_explicit", opcode, mem_sem, mem_sem, false, ptr, 0);
+		check_atomic_image(ptr);
+		emit_atomic_func_op(result_type, id, "atomic_load", opcode, mem_sem, mem_sem, false, ptr, 0);
 		break;
 	}
 
@@ -8795,7 +8799,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[0];
 		uint32_t mem_sem = ops[2];
 		uint32_t val = ops[3];
-		emit_atomic_func_op(result_type, id, "atomic_store_explicit", opcode, mem_sem, mem_sem, false, ptr, val);
+		check_atomic_image(ptr);
+		emit_atomic_func_op(result_type, id, "atomic_store", opcode, mem_sem, mem_sem, false, ptr, val);
 		break;
 	}
 
@@ -8807,7 +8812,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t ptr = ops[2];                                                                                   \
 		uint32_t mem_sem = ops[4];                                                                               \
 		uint32_t val = valsrc;                                                                                   \
-		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op "_explicit", opcode,                            \
+		emit_atomic_func_op(result_type, id, "atomic_fetch_" #op, opcode,                                        \
 		                    mem_sem, mem_sem, false, ptr, val,                                                   \
 		                    false, valconst);                                                                    \
 	} while (false)
@@ -8885,7 +8890,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	{
 		// When using the pointer, we need to know which variable it is actually loaded from.
 		auto *var = maybe_get_backing_variable(ops[2]);
-		if (var && atomic_image_vars.count(var->self))
+		if (var && atomic_image_vars_emulated.count(var->self))
 		{
 			uint32_t result_type = ops[0];
 			uint32_t id = ops[1];
@@ -8905,8 +8910,14 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		{
 			uint32_t result_type = ops[0];
 			uint32_t id = ops[1];
+
+			// Virtual expression. Split this up in the actual image atomic.
+			// In GLSL and HLSL we are able to resolve the dereference inline, but MSL has
+			// image.op(coord, ...) syntax.
 			auto &e =
-			    set<SPIRExpression>(id, join(to_expression(ops[2]), ", ", to_expression(ops[3])), result_type, true);
+				set<SPIRExpression>(id, join(to_expression(ops[2]), "@",
+				                             bitcast_expression(SPIRType::UInt, ops[3])),
+				                    result_type, true);
 
 			// When using the pointer, we need to know which variable it is actually loaded from.
 			e.loaded_from = var ? var->self : ID(0);
@@ -9915,6 +9926,12 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	else if (opcode == OpAtomicSMax || opcode == OpAtomicSMin)
 		expected_type = to_signed_basetype(type.width);
 
+	bool use_native_image_atomic;
+	if (msl_options.supports_msl_version(3, 1))
+		use_native_image_atomic = check_atomic_image(obj);
+	else
+		use_native_image_atomic = false;
+
 	if (type.width == 64)
 		SPIRV_CROSS_THROW("MSL currently does not support 64-bit atomics.");
 
@@ -9932,12 +9949,31 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	                     ((res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image) ||
 	                      var->storage == StorageClassStorageBuffer || var->storage == StorageClassUniform);
 
+	// Even compare exchange atomics are vec4 on metal for ... reasons :v
+	uint32_t vec4_temporary_id = 0;
+	if (use_native_image_atomic && is_atomic_compare_exchange_strong)
+	{
+		uint32_t &tmp_id = extra_sub_expressions[result_id];
+		if (!tmp_id)
+		{
+			tmp_id = ir.increase_bound_by(2);
+
+			auto vec4_type = get<SPIRType>(result_type);
+			vec4_type.vecsize = 4;
+			set<SPIRType>(tmp_id + 1, vec4_type);
+		}
+
+		vec4_temporary_id = tmp_id;
+	}
+
 	if (check_discard)
 	{
 		if (is_atomic_compare_exchange_strong)
 		{
 			// We're already emitting a CAS loop here; a conditional won't hurt.
 			emit_uninitialized_temporary_expression(result_type, result_id);
+			if (vec4_temporary_id)
+				emit_uninitialized_temporary_expression(vec4_temporary_id + 1, vec4_temporary_id);
 			statement("if (!", builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), ")");
 			begin_scope();
 		}
@@ -9945,131 +9981,132 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 			exp = join("(!", builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), " ? ");
 	}
 
-	exp += string(op) + "(";
-	exp += "(";
-	// Emulate texture2D atomic operations
-	if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
+	if (use_native_image_atomic)
 	{
-		exp += "device";
+		auto obj_expression = to_expression(obj);
+		auto split_index = obj_expression.find_first_of('@');
+
+		// Will only be false if we're in "force recompile later" mode.
+		if (split_index != string::npos)
+			exp += join(obj_expression.substr(0, split_index), ".", op, "(", obj_expression.substr(split_index + 1));
+		else
+			exp += obj_expression;
 	}
 	else
 	{
-		exp += get_argument_address_space(*var);
+		exp += string(op) + "_explicit(";
+		exp += "(";
+		// Emulate texture2D atomic operations
+		if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
+		{
+			exp += "device";
+		}
+		else
+		{
+			exp += get_argument_address_space(*var);
+		}
+
+		exp += " atomic_";
+		// For signed and unsigned min/max, we can signal this through the pointer type.
+		// There is no other way, since C++ does not have explicit signage for atomics.
+		exp += type_to_glsl(remapped_type);
+		exp += "*)";
+
+		exp += "&";
+		exp += to_enclosed_expression(obj);
 	}
-
-	exp += " atomic_";
-	// For signed and unsigned min/max, we can signal this through the pointer type.
-	// There is no other way, since C++ does not have explicit signage for atomics.
-	exp += type_to_glsl(remapped_type);
-	exp += "*)";
-
-	exp += "&";
-	exp += to_enclosed_expression(obj);
 
 	if (is_atomic_compare_exchange_strong)
 	{
-		assert(strcmp(op, "atomic_compare_exchange_weak_explicit") == 0);
+		assert(strcmp(op, "atomic_compare_exchange_weak") == 0);
 		assert(op2);
 		assert(has_mem_order_2);
 		exp += ", &";
-		exp += to_name(result_id);
+		exp += to_name(vec4_temporary_id ? vec4_temporary_id : result_id);
 		exp += ", ";
 		exp += to_expression(op2);
-		exp += ", ";
-		exp += get_memory_order(mem_order_1);
-		exp += ", ";
-		exp += get_memory_order(mem_order_2);
+
+		if (!use_native_image_atomic)
+		{
+			exp += ", ";
+			exp += get_memory_order(mem_order_1);
+			exp += ", ";
+			exp += get_memory_order(mem_order_2);
+		}
 		exp += ")";
 
 		// MSL only supports the weak atomic compare exchange, so emit a CAS loop here.
 		// The MSL function returns false if the atomic write fails OR the comparison test fails,
 		// so we must validate that it wasn't the comparison test that failed before continuing
 		// the CAS loop, otherwise it will loop infinitely, with the comparison test always failing.
-		// The function updates the comparitor value from the memory value, so the additional
+		// The function updates the comparator value from the memory value, so the additional
 		// comparison test evaluates the memory value against the expected value.
 		if (!check_discard)
+		{
 			emit_uninitialized_temporary_expression(result_type, result_id);
+			if (vec4_temporary_id)
+				emit_uninitialized_temporary_expression(vec4_temporary_id + 1, vec4_temporary_id);
+		}
+
 		statement("do");
 		begin_scope();
-		statement(to_name(result_id), " = ", to_expression(op1), ";");
-		end_scope_decl(join("while (!", exp, " && ", to_name(result_id), " == ", to_enclosed_expression(op1), ")"));
+
+		string scalar_expression;
+		if (vec4_temporary_id)
+			scalar_expression = join(to_expression(vec4_temporary_id), ".x");
+		else
+			scalar_expression = to_expression(result_id);
+
+		statement(scalar_expression, " = ", to_expression(op1), ";");
+		end_scope_decl(join("while (!", exp, " && ", scalar_expression, " == ", to_enclosed_expression(op1), ")"));
+		if (vec4_temporary_id)
+			statement(to_expression(result_id), " = ", scalar_expression, ";");
+
+		// Vulkan: (section 9.29: ...  and values returned by atomic instructions in helper invocations are undefined)
 		if (check_discard)
 		{
 			end_scope();
 			statement("else");
 			begin_scope();
-			exp = "atomic_load_explicit(";
-			exp += "(";
-			// Emulate texture2D atomic operations
-			if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
-				exp += "device";
-			else
-				exp += get_argument_address_space(*var);
-
-			exp += " atomic_";
-			exp += type_to_glsl(remapped_type);
-			exp += "*)";
-
-			exp += "&";
-			exp += to_enclosed_expression(obj);
-
-			if (has_mem_order_2)
-				exp += string(", ") + get_memory_order(mem_order_2);
-			else
-				exp += string(", ") + get_memory_order(mem_order_1);
-
-			exp += ")";
-
-			statement(to_name(result_id), " = ", exp, ";");
+			statement(to_expression(result_id), " = {};");
 			end_scope();
 		}
 	}
 	else
 	{
-		assert(strcmp(op, "atomic_compare_exchange_weak_explicit") != 0);
+		assert(strcmp(op, "atomic_compare_exchange_weak") != 0);
+
 		if (op1)
 		{
+			exp += ", ";
 			if (op1_is_literal)
-				exp += join(", ", op1);
+				exp += to_string(op1);
 			else
-				exp += ", " + bitcast_expression(expected_type, op1);
+				exp += bitcast_expression(expected_type, op1);
 		}
+
 		if (op2)
 			exp += ", " + to_expression(op2);
 
-		exp += string(", ") + get_memory_order(mem_order_1);
-		if (has_mem_order_2)
-			exp += string(", ") + get_memory_order(mem_order_2);
+		if (!use_native_image_atomic)
+		{
+			exp += string(", ") + get_memory_order(mem_order_1);
+			if (has_mem_order_2)
+				exp += string(", ") + get_memory_order(mem_order_2);
+		}
 
 		exp += ")";
 
+		// For some particular reason, atomics return vec4 in Metal ...
+		if (use_native_image_atomic)
+			exp += ".x";
+
+		// Vulkan: (section 9.29: ...  and values returned by atomic instructions in helper invocations are undefined)
 		if (check_discard)
 		{
 			exp += " : ";
-			if (strcmp(op, "atomic_store_explicit") != 0)
-			{
-				exp += "atomic_load_explicit(";
-				exp += "(";
-				// Emulate texture2D atomic operations
-				if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
-					exp += "device";
-				else
-					exp += get_argument_address_space(*var);
-
-				exp += " atomic_";
-				exp += type_to_glsl(remapped_type);
-				exp += "*)";
-
-				exp += "&";
-				exp += to_enclosed_expression(obj);
-
-				if (has_mem_order_2)
-					exp += string(", ") + get_memory_order(mem_order_2);
-				else
-					exp += string(", ") + get_memory_order(mem_order_1);
-
-				exp += ")";
-			}
+			if (strcmp(op, "atomic_store") != 0)
+				exp += join(type_to_glsl(get<SPIRType>(result_type)), "{}");
 			else
 				exp += "((void)0)";
 			exp += ")";
@@ -10078,7 +10115,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		if (expected_type != type.basetype)
 			exp = bitcast_expression(type, expected_type, exp);
 
-		if (strcmp(op, "atomic_store_explicit") != 0)
+		if (strcmp(op, "atomic_store") != 0)
 			emit_op(result_type, result_id, exp, false);
 		else
 			statement(exp, ";");
@@ -11708,7 +11745,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 
 	// Emulate texture2D atomic operations
 	auto *backing_var = maybe_get_backing_variable(var_id);
-	if (backing_var && atomic_image_vars.count(backing_var->self))
+	if (backing_var && atomic_image_vars_emulated.count(backing_var->self))
 	{
 		arg_str += ", " + to_expression(var_id) + "_atomic";
 	}
@@ -13244,7 +13281,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 
 			// Emulate texture2D atomic operations
 			uint32_t secondary_index = 0;
-			if (atomic_image_vars.count(var.self))
+			if (atomic_image_vars_emulated.count(var.self))
 			{
 				secondary_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 			}
@@ -13434,7 +13471,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			}
 
 			// Emulate texture2D atomic operations
-			if (atomic_image_vars.count(var.self))
+			if (atomic_image_vars_emulated.count(var.self))
 			{
 				ep_args += ", device atomic_" + type_to_glsl(get<SPIRType>(basetype.image.type), 0);
 				ep_args += "* " + r.name + "_atomic";
@@ -14512,7 +14549,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// Emulate texture2D atomic operations
 	auto *backing_var = maybe_get_backing_variable(name_id);
-	if (backing_var && atomic_image_vars.count(backing_var->self))
+	if (backing_var && atomic_image_vars_emulated.count(backing_var->self))
 	{
 		decl += ", device atomic_" + type_to_glsl(get<SPIRType>(var_type.image.type), 0);
 		decl += "* " + to_expression(name_id) + "_atomic";
@@ -16740,8 +16777,11 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	// Emulate texture2D atomic operations
 	case OpImageTexelPointer:
 	{
-		auto *var = compiler.maybe_get_backing_variable(args[2]);
-		image_pointers[args[1]] = var ? var->self : ID(0);
+		if (!compiler.msl_options.supports_msl_version(3, 1))
+		{
+			auto *var = compiler.maybe_get_backing_variable(args[2]);
+			image_pointers_emulated[args[1]] = var ? var->self : ID(0);
+		}
 		break;
 	}
 
@@ -16771,11 +16811,11 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpAtomicXor:
 	{
 		uses_atomics = true;
-		auto it = image_pointers.find(args[2]);
-		if (it != image_pointers.end())
+		auto it = image_pointers_emulated.find(args[2]);
+		if (it != image_pointers_emulated.end())
 		{
 			uses_image_write = true;
-			compiler.atomic_image_vars.insert(it->second);
+			compiler.atomic_image_vars_emulated.insert(it->second);
 		}
 		else
 			check_resource_write(args[2]);
@@ -16785,10 +16825,10 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpAtomicStore:
 	{
 		uses_atomics = true;
-		auto it = image_pointers.find(args[0]);
-		if (it != image_pointers.end())
+		auto it = image_pointers_emulated.find(args[0]);
+		if (it != image_pointers_emulated.end())
 		{
-			compiler.atomic_image_vars.insert(it->second);
+			compiler.atomic_image_vars_emulated.insert(it->second);
 			uses_image_write = true;
 		}
 		else
@@ -16799,10 +16839,10 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpAtomicLoad:
 	{
 		uses_atomics = true;
-		auto it = image_pointers.find(args[2]);
-		if (it != image_pointers.end())
+		auto it = image_pointers_emulated.find(args[2]);
+		if (it != image_pointers_emulated.end())
 		{
-			compiler.atomic_image_vars.insert(it->second);
+			compiler.atomic_image_vars_emulated.insert(it->second);
 		}
 		break;
 	}
@@ -16982,8 +17022,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpAtomicLoad:
 	case OpAtomicStore:
 	{
-		auto it = image_pointers.find(args[opcode == OpAtomicStore ? 0 : 2]);
-		if (it != image_pointers.end())
+		auto it = image_pointers_emulated.find(args[opcode == OpAtomicStore ? 0 : 2]);
+		if (it != image_pointers_emulated.end())
 		{
 			uint32_t tid = compiler.get<SPIRVariable>(it->second).basetype;
 			if (tid && compiler.get<SPIRType>(tid).image.dim == Dim2D)
@@ -17632,7 +17672,7 @@ void CompilerMSL::analyze_argument_buffers()
 					{ &var, descriptor_alias, to_name(var_id), type.basetype, resource_index, 0 });
 
 				// Emulate texture2D atomic operations
-				if (atomic_image_vars.count(var.self))
+				if (atomic_image_vars_emulated.count(var.self))
 				{
 					uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 					resources_in_set[desc_set].push_back(
@@ -17871,7 +17911,7 @@ void CompilerMSL::analyze_argument_buffers()
 					buffer_type.member_types.push_back(get_variable_data_type_id(var));
 					set_qualified_name(var.self, join(to_name(buffer_variable_id), ".", mbr_name));
 				}
-				else if (atomic_image_vars.count(var.self))
+				else if (atomic_image_vars_emulated.count(var.self))
 				{
 					// Emulate texture2D atomic operations.
 					// Don't set the qualified name: it's already set for this variable,

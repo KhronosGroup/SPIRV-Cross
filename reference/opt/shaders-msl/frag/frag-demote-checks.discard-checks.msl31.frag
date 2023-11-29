@@ -1,4 +1,3 @@
-#pragma clang diagnostic ignored "-Wmissing-prototypes"
 #pragma clang diagnostic ignored "-Wunused-variable"
 
 #include <metal_stdlib>
@@ -6,12 +5,6 @@
 #include <metal_atomic>
 
 using namespace metal;
-
-// The required alignment of a linear texture of R32Uint format.
-constant uint spvLinearTextureAlignmentOverride [[function_constant(65535)]];
-constant uint spvLinearTextureAlignment = is_function_constant_defined(spvLinearTextureAlignmentOverride) ? spvLinearTextureAlignmentOverride : 4;
-// Returns buffer coords corresponding to 2D texture coords for emulating 2D texture atomics
-#define spvImage2DAtomicCoord(tc, tex) (((((tex).get_width() +  spvLinearTextureAlignment / 4 - 1) & ~( spvLinearTextureAlignment / 4 - 1)) * (tc).y) + (tc).x)
 
 struct foo_t
 {
@@ -24,7 +17,7 @@ struct main0_out
     float4 fragColor [[color(0)]];
 };
 
-fragment main0_out main0(device foo_t& foo [[buffer(0)]], texture2d<uint, access::write> bar [[texture(0)]], device atomic_uint* bar_atomic [[buffer(1)]], float4 gl_FragCoord [[position]])
+fragment main0_out main0(device foo_t& foo [[buffer(0)]], texture2d<uint, access::read_write> bar [[texture(0)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
     bool gl_HelperInvocation = {};
@@ -41,18 +34,20 @@ fragment main0_out main0(device foo_t& foo [[buffer(0)]], texture2d<uint, access
     int2 _101 = int2(gl_FragCoord.xy);
     (gl_HelperInvocation ? ((void)0) : bar.write(uint4(1u), uint2(_101)));
     uint _103 = (!gl_HelperInvocation ? atomic_fetch_add_explicit((device atomic_uint*)&foo.y, 42u, memory_order_relaxed) : uint{});
-    uint _108 = (!gl_HelperInvocation ? atomic_fetch_or_explicit((device atomic_uint*)&bar_atomic[spvImage2DAtomicCoord(_101, bar)], 62u, memory_order_relaxed) : uint{});
+    uint _108 = (!gl_HelperInvocation ? bar.atomic_fetch_or(uint2(_101), 62u).x : uint{});
     uint _110 = (!gl_HelperInvocation ? atomic_fetch_and_explicit((device atomic_uint*)&foo.y, 65535u, memory_order_relaxed) : uint{});
     uint _112 = (!gl_HelperInvocation ? atomic_fetch_xor_explicit((device atomic_uint*)&foo.y, 4294967040u, memory_order_relaxed) : uint{});
     uint _114 = (!gl_HelperInvocation ? atomic_fetch_min_explicit((device atomic_uint*)&foo.y, 1u, memory_order_relaxed) : uint{});
-    uint _119 = (!gl_HelperInvocation ? atomic_fetch_max_explicit((device atomic_uint*)&bar_atomic[spvImage2DAtomicCoord(_101, bar)], 100u, memory_order_relaxed) : uint{});
+    uint _119 = (!gl_HelperInvocation ? bar.atomic_fetch_max(uint2(_101), 100u).x : uint{});
     uint _124;
+    uint4 _135;
     if (!gl_HelperInvocation)
     {
         do
         {
-            _124 = 100u;
-        } while (!atomic_compare_exchange_weak_explicit((device atomic_uint*)&bar_atomic[spvImage2DAtomicCoord(_101, bar)], &_124, 42u, memory_order_relaxed, memory_order_relaxed) && _124 == 100u);
+            _135.x = 100u;
+        } while (!bar.atomic_compare_exchange_weak(uint2(_101), &_135, 42u) && _135.x == 100u);
+        _124 = _135.x;
     }
     else
     {
