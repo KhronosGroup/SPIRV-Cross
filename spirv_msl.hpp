@@ -517,6 +517,13 @@ public:
 		// The bug has been reported to Apple, and will hopefully be fixed in future releases.
 		bool replace_recursive_inputs = false;
 
+		// If set, manual fixups of gradient vectors for cube texture lookups will be performed.
+		// All released Apple Silicon GPUs to date behave incorrectly when sampling a cube texture
+		// with explicit gradients. They will ignore one of the three partial derivatives based
+		// on the selected major axis, and expect the remaining derivatives to be partially
+		// transformed.
+		bool agx_manual_cube_grad_fixup = false;
+
 		// Known primitive types. Largely uses the same values as VkPrimitiveTopology.
 		enum class PrimitiveType
 		{
@@ -798,6 +805,7 @@ protected:
 		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
+		SPVFuncImplGradientCube,
 		SPVFuncImplFMul,
 		SPVFuncImplFAdd,
 		SPVFuncImplFSub,
@@ -857,6 +865,7 @@ protected:
 		SPVFuncImplVariableDescriptor,
 		SPVFuncImplVariableSizedDescriptor,
 		SPVFuncImplVariableDescriptorArray,
+		SPVFuncImplPaddedStd140
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
@@ -1139,7 +1148,7 @@ protected:
 	void analyze_sampled_image_usage();
 
 	bool access_chain_needs_stage_io_builtin_translation(uint32_t base) override;
-	void prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type, spv::StorageClass storage,
+	bool prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type, spv::StorageClass storage,
 	                                            bool &is_packed) override;
 	void fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t length);
 	void check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type) override;

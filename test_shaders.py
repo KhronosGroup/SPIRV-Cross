@@ -355,6 +355,8 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-check-discarded-frag-stores')
     if '.lod-as-grad.' in shader:
         msl_args.append('--msl-sample-dref-lod-array-as-grad')
+    if '.agx-cube-grad.' in shader:
+        msl_args.append('--msl-agx-manual-cube-grad-fixup')
     if '.decoration-binding.' in shader:
         msl_args.append('--msl-decoration-binding')
     if '.rich-descriptor.' in shader:
