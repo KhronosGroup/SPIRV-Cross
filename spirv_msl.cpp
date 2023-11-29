@@ -1923,6 +1923,9 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				auto *var = maybe_get_backing_variable(base_id);
 				if (var && atomic_image_vars_emulated.count(var->self))
 				{
+					if (!get<SPIRType>(var->basetype).array.empty())
+						SPIRV_CROSS_THROW("Cannot emulate array of storage images with atomics. Use MSL 3.1 for native support.");
+
 					if (global_var_ids.find(base_id) != global_var_ids.end())
 						added_arg_ids.insert(base_id);
 				}
