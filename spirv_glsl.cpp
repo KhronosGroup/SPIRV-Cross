@@ -223,7 +223,7 @@ static const char *to_pls_layout(PlsFormat format)
 	}
 }
 
-static SPIRType::BaseType pls_format_to_basetype(PlsFormat format)
+static std::tuple<spv::Op, SPIRType::BaseType> pls_format_to_basetype(PlsFormat format)
 {
 	switch (format)
 	{
@@ -234,17 +234,17 @@ static SPIRType::BaseType pls_format_to_basetype(PlsFormat format)
 	case PlsRGB10A2:
 	case PlsRGBA8:
 	case PlsRG16:
-		return SPIRType::Float;
+		return std::make_tuple(spv::OpTypeFloat, SPIRType::Float);
 
 	case PlsRGBA8I:
 	case PlsRG16I:
-		return SPIRType::Int;
+		return std::make_tuple(spv::OpTypeInt, SPIRType::Int);
 
 	case PlsRGB10A2UI:
 	case PlsRGBA8UI:
 	case PlsRG16UI:
 	case PlsR32UI:
-		return SPIRType::UInt;
+		return std::make_tuple(spv::OpTypeInt, SPIRType::UInt);
 	}
 }
 
@@ -2489,7 +2489,7 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 	SPIRType::BaseType basic_type;
 	if (get_common_basic_type(type, basic_type))
 	{
-		SPIRType tmp;
+		SPIRType tmp { spv::Op::OpTypeVector };
 		tmp.basetype = basic_type;
 		tmp.vecsize = 4;
 		if (basic_type != SPIRType::Float && basic_type != SPIRType::Int && basic_type != SPIRType::UInt)
@@ -3949,10 +3949,9 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 					if (is_control_point)
 					{
 						uint32_t ids = ir.increase_bound_by(3);
-						SPIRType uint_type;
+						auto& uint_type = set<SPIRType>(ids, spv::Op::OpTypeInt);
 						uint_type.basetype = SPIRType::UInt;
 						uint_type.width = 32;
-						set<SPIRType>(ids, uint_type);
 						set<SPIRExpression>(ids + 1, builtin_to_glsl(BuiltInInvocationId, StorageClassInput), ids, true);
 						set<SPIRConstant>(ids + 2, ids, i, false);
 						invocation_id = ids + 1;
@@ -5148,7 +5147,7 @@ string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
 	                        type.basetype == SPIRType::Boolean &&
 	                        backend.boolean_in_struct_remapped_type != SPIRType::Boolean;
 
-	SPIRType tmp_type;
+	SPIRType tmp_type { spv::Op::OpNop };
 	if (remapped_boolean)
 	{
 		tmp_type = get<SPIRType>(type.parent_type);
@@ -5777,7 +5776,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		         type_is_top_level_array(type) && !array_type_decays)
 		{
 			const auto *p_type = &type;
-			SPIRType tmp_type;
+			SPIRType tmp_type { spv::Op::OpNop };
 
 			if (inside_struct_scope &&
 			    backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
@@ -5916,7 +5915,7 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 	// of complicated workarounds, just value-cast to the half type always.
 	if (std::isnan(float_value) || std::isinf(float_value))
 	{
-		SPIRType type;
+		SPIRType type { spv::Op::OpTypeFloat };
 		type.basetype = SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
@@ -5932,7 +5931,7 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 	}
 	else
 	{
-		SPIRType type;
+		SPIRType type { spv::Op::OpTypeFloat };
 		type.basetype = SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
@@ -5952,8 +5951,8 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 		// Use special representation.
 		if (!is_legacy())
 		{
-			SPIRType out_type;
-			SPIRType in_type;
+			SPIRType out_type { spv::Op::OpTypeFloat };
+			SPIRType in_type { spv::Op::OpTypeInt };
 			out_type.basetype = SPIRType::Float;
 			in_type.basetype = SPIRType::UInt;
 			out_type.vecsize = 1;
@@ -6022,8 +6021,8 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 		// Use special representation.
 		if (!is_legacy())
 		{
-			SPIRType out_type;
-			SPIRType in_type;
+			SPIRType out_type { spv::Op::OpTypeFloat };
+			SPIRType in_type { spv::Op::OpTypeInt };
 			out_type.basetype = SPIRType::Double;
 			in_type.basetype = SPIRType::UInt64;
 			out_type.vecsize = 1;
@@ -6731,7 +6730,7 @@ SPIRType CompilerGLSL::binary_op_bitcast_helper(string &cast_op0, string &cast_o
 
 	// Create a fake type so we can bitcast to it.
 	// We only deal with regular arithmetic types here like int, uints and so on.
-	SPIRType expected_type;
+	SPIRType expected_type = type0.op;
 	expected_type.basetype = input_type;
 	expected_type.vecsize = type0.vecsize;
 	expected_type.columns = type0.columns;
@@ -7085,7 +7084,9 @@ void CompilerGLSL::emit_bitfield_insert_op(uint32_t result_type, uint32_t result
 	auto op2_expr = to_unpacked_expression(op2);
 	auto op3_expr = to_unpacked_expression(op3);
 
-	SPIRType target_type;
+	assert(offset_count_type == SPIRType::UInt || offset_count_type == SPIRType::Int);
+	SPIRType target_type { spv::Op::OpTypeInt };
+	target_type.width = 32;
 	target_type.vecsize = 1;
 	target_type.basetype = offset_count_type;
 
@@ -15340,9 +15341,16 @@ string CompilerGLSL::pls_decl(const PlsRemap &var)
 {
 	auto &variable = get<SPIRVariable>(var.id);
 
-	SPIRType type;
-	type.vecsize = pls_format_to_components(var.format);
-	type.basetype = pls_format_to_basetype(var.format);
+	auto op_and_basetype = pls_format_to_basetype(var.format);
+
+	SPIRType type { std::get<0>(op_and_basetype) };
+	type.basetype = std::get<1>(op_and_basetype);
+	auto vecsize = pls_format_to_components(var.format);
+	if (vecsize > 1)
+	{
+		type.op = OpTypeVector;
+		type.vecsize = vecsize;
+	}
 
 	return join(to_pls_layout(var.format), to_pls_qualifiers_glsl(variable), type_to_glsl(type), " ",
 	            to_name(variable.self));
@@ -17653,7 +17661,7 @@ bool CompilerGLSL::unroll_array_to_complex_store(uint32_t target_id, uint32_t so
 	else
 		array_expr = to_expression(type.array.back());
 
-	SPIRType target_type;
+	SPIRType target_type { spv::Op::OpTypeInt };
 	target_type.basetype = SPIRType::Int;
 
 	statement("for (int i = 0; i < int(", array_expr, "); i++)");
@@ -17718,7 +17726,7 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 			statement(new_expr, "[i] = gl_in[i].", expr, ";");
 		else if (is_sample_mask)
 		{
-			SPIRType target_type;
+			SPIRType target_type { spv::Op::OpTypeInt };
 			target_type.basetype = SPIRType::Int;
 			statement(new_expr, "[i] = ", bitcast_expression(target_type, type.basetype, join(expr, "[i]")), ";");
 		}

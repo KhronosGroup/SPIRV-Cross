@@ -548,6 +548,9 @@ struct SPIRType : IVariant
 		type = TypeType
 	};
 
+	spv::Op op = spv::Op::OpNop;
+	SPIRType(spv::Op op_) : op(op_) {}
+
 	enum BaseType
 	{
 		Unknown,

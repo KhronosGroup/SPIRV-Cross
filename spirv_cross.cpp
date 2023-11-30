@@ -2738,8 +2738,8 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		auto ptr_type_id = id + 1;
 		auto combined_id = id + 2;
 		auto &base = compiler.expression_type(image_id);
-		auto &type = compiler.set<SPIRType>(type_id);
-		auto &ptr_type = compiler.set<SPIRType>(ptr_type_id);
+		auto &type = compiler.set<SPIRType>(type_id, spv::Op::OpTypeSampledImage);
+		auto &ptr_type = compiler.set<SPIRType>(ptr_type_id, spv::Op::OpTypePointer);
 
 		type = base;
 		type.self = type_id;
@@ -2998,7 +2998,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 		{
 			// Have to invent the sampled image type.
 			sampled_type = compiler.ir.increase_bound_by(1);
-			auto &type = compiler.set<SPIRType>(sampled_type);
+			auto &type = compiler.set<SPIRType>(sampled_type, spv::Op::OpTypeSampledImage);
 			type = compiler.expression_type(args[2]);
 			type.self = sampled_type;
 			type.basetype = SPIRType::SampledImage;
@@ -3017,7 +3017,7 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 
 		// Make a new type, pointer to OpTypeSampledImage, so we can make a variable of this type.
 		// We will probably have this type lying around, but it doesn't hurt to make duplicates for internal purposes.
-		auto &type = compiler.set<SPIRType>(type_id);
+		auto &type = compiler.set<SPIRType>(type_id, spv::Op::OpTypePointer);
 		auto &base = compiler.get<SPIRType>(sampled_type);
 		type = base;
 		type.pointer = true;
@@ -3063,11 +3063,10 @@ VariableID Compiler::build_dummy_sampler_for_combined_images()
 		auto ptr_type_id = offset + 1;
 		auto var_id = offset + 2;
 
-		SPIRType sampler_type;
-		auto &sampler = set<SPIRType>(type_id);
+		auto &sampler = set<SPIRType>(type_id, spv::Op::OpTypeSampler);
 		sampler.basetype = SPIRType::Sampler;
 
-		auto &ptr_sampler = set<SPIRType>(ptr_type_id);
+		auto &ptr_sampler = set<SPIRType>(ptr_type_id, spv::Op::OpTypePointer);
 		ptr_sampler = sampler;
 		ptr_sampler.self = type_id;
 		ptr_sampler.storage = StorageClassUniformConstant;
