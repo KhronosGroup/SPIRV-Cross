@@ -571,6 +571,7 @@ void Parser::parse(const Instruction &instruction)
 		auto &vecbase = set<SPIRType>(id, op);
 
 		vecbase = base;
+		vecbase.op = op;
 		vecbase.vecsize = vecsize;
 		vecbase.self = id;
 		vecbase.parent_type = ops[1];
@@ -586,6 +587,7 @@ void Parser::parse(const Instruction &instruction)
 		auto &matrixbase = set<SPIRType>(id, op);
 
 		matrixbase = base;
+		matrixbase.op = op;
 		matrixbase.columns = colcount;
 		matrixbase.self = id;
 		matrixbase.parent_type = ops[1];
@@ -601,6 +603,7 @@ void Parser::parse(const Instruction &instruction)
 		auto &base = get<SPIRType>(tid);
 
 		arraybase = base;
+		arraybase.op = op;
 		arraybase.parent_type = tid;
 
 		uint32_t cid = ops[2];
@@ -632,6 +635,7 @@ void Parser::parse(const Instruction &instruction)
 			forward_pointer_fixups.push_back({ id, ops[1] });
 
 		arraybase = base;
+		arraybase.op = op;
 		arraybase.array.push_back(0);
 		arraybase.array_size_literal.push_back(true);
 		arraybase.parent_type = ops[1];
@@ -685,7 +689,10 @@ void Parser::parse(const Instruction &instruction)
 		auto &ptrbase = set<SPIRType>(id, op);
 
 		if (base)
+		{
 			ptrbase = *base;
+			ptrbase.op = op;
+		}
 
 		ptrbase.pointer = true;
 		ptrbase.pointer_depth++;

@@ -4160,11 +4160,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				continue;
 
 			// Create a fake variable to put at the location.
-			uint32_t offset = ir.increase_bound_by(4);
+			uint32_t offset = ir.increase_bound_by(5);
 			uint32_t type_id = offset;
-			uint32_t array_type_id = offset + 1;
-			uint32_t ptr_type_id = offset + 2;
-			uint32_t var_id = offset + 3;
+			uint32_t vec_type_id = offset + 1;
+			uint32_t array_type_id = offset + 2;
+			uint32_t ptr_type_id = offset + 3;
+			uint32_t var_id = offset + 4;
 
 			SPIRType type { spv::Op::OpTypeInt };
 			switch (input.second.format)
@@ -4180,14 +4181,22 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				type.width = 32;
 				break;
 			}
-			type.vecsize = input.second.vecsize;
 			set<SPIRType>(type_id, type);
+			if (input.second.vecsize > 1)
+			{
+				type.op = spv::Op::OpTypeVector;
+				type.vecsize = input.second.vecsize;
+				set<SPIRType>(vec_type_id, type);
+				type_id = vec_type_id;
+			}
 
+			type.op = spv::Op::OpTypeArray;
 			type.array.push_back(0);
 			type.array_size_literal.push_back(true);
 			type.parent_type = type_id;
 			set<SPIRType>(array_type_id, type);
 
+			type.op = spv::Op::OpTypePointer;
 			type.pointer = true;
 			type.pointer_depth++;
 			type.parent_type = array_type_id;
@@ -4218,11 +4227,12 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				continue;
 
 			// Create a fake variable to put at the location.
-			uint32_t offset = ir.increase_bound_by(4);
+			uint32_t offset = ir.increase_bound_by(5);
 			uint32_t type_id = offset;
-			uint32_t array_type_id = offset + 1;
-			uint32_t ptr_type_id = offset + 2;
-			uint32_t var_id = offset + 3;
+			uint32_t vec_type_id = offset + 1;
+			uint32_t array_type_id = offset + 2;
+			uint32_t ptr_type_id = offset + 3;
+			uint32_t var_id = offset + 4;
 
 			SPIRType type { spv::Op::OpTypeInt };
 			switch (output.second.format)
@@ -4238,17 +4248,25 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 				type.width = 32;
 				break;
 			}
-			type.vecsize = output.second.vecsize;
 			set<SPIRType>(type_id, type);
+			if (output.second.vecsize > 1)
+			{
+				type.op = spv::Op::OpTypeVector;
+				type.vecsize = output.second.vecsize;
+				set<SPIRType>(vec_type_id, type);
+				type_id = vec_type_id;
+			}
 
 			if (is_tesc_shader())
 			{
+				type.op = spv::Op::OpTypeArray;
 				type.array.push_back(0);
 				type.array_size_literal.push_back(true);
-				type.parent_type = type_id;
+				type.parent_type = vec_type_id;
 				set<SPIRType>(array_type_id, type);
 			}
 
+			type.op = spv::Op::OpTypePointer;
 			type.pointer = true;
 			type.pointer_depth++;
 			type.parent_type = is_tesc_shader() ? array_type_id : type_id;
@@ -4895,6 +4913,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 			{
 				type.columns = 1;
 				assert(type.array.empty());
+				type.op = spv::Op::OpTypeArray;
 				type.array.push_back(1);
 				type.array_size_literal.push_back(true);
 			}
@@ -4911,6 +4930,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 				type.vecsize = type.columns;
 				type.columns = 1;
 				assert(type.array.empty());
+				type.op = spv::Op::OpTypeArray;
 				type.array.push_back(1);
 				type.array_size_literal.push_back(true);
 			}
@@ -10809,7 +10829,7 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 
 string CompilerMSL::convert_to_f32(const string &expr, uint32_t components)
 {
-	SPIRType t { spv::Op::OpTypeFloat };
+	SPIRType t { components > 1 ? spv::Op::OpTypeVector : spv::Op::OpTypeFloat };
 	t.basetype = SPIRType::Float;
 	t.vecsize = components;
 	t.columns = 1;
@@ -18063,6 +18083,7 @@ void CompilerMSL::add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRTyp
 		uint32_t ary_type_id = ir.increase_bound_by(1);
 		auto &ary_type = set<SPIRType>(ary_type_id, spv::Op::OpTypeArray);
 		ary_type = get<SPIRType>(type_id);
+		ary_type.op = spv::Op::OpTypeArray;
 		ary_type.array.push_back(count);
 		ary_type.array_size_literal.push_back(true);
 		ary_type.parent_type = type_id;
