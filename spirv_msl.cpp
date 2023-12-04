@@ -665,6 +665,7 @@ void CompilerMSL::build_implicit_builtins()
 
 			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 			uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
@@ -994,6 +995,7 @@ void CompilerMSL::build_implicit_builtins()
 
 		SPIRType vec4_type_ptr { spv::Op::OpTypePointer };
 		vec4_type_ptr = vec4_type;
+		vec4_type_ptr.op = spv::Op::OpTypePointer;
 		vec4_type_ptr.pointer = true;
 		vec4_type_ptr.pointer_depth++;
 		vec4_type_ptr.parent_type = type_id;
