@@ -13679,14 +13679,31 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			case BuiltInPatchVertices:
 				if (is_tese_shader())
-					entry_func.fixup_hooks_in.push_back([=]() {
-						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
-						          to_expression(patch_stage_in_var_id), ".gl_in.size();");
-					});
+				{
+					if (msl_options.raw_buffer_tese_input)
+					{
+						entry_func.fixup_hooks_in.push_back(
+						    [=]() {
+							    statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+							              get_entry_point().output_vertices, ";");
+						    });
+					}
+					else
+					{
+						entry_func.fixup_hooks_in.push_back(
+						    [=]()
+						    {
+							    statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = ",
+							              to_expression(patch_stage_in_var_id), ".gl_in.size();");
+						    });
+					}
+				}
 				else
+				{
 					entry_func.fixup_hooks_in.push_back([=]() {
 						statement(builtin_type_decl(bi_type), " ", to_expression(var_id), " = spvIndirectParams[0];");
 					});
+				}
 				break;
 			case BuiltInTessCoord:
 				if (get_entry_point().flags.get(ExecutionModeQuads))
