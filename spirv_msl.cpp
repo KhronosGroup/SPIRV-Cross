@@ -14993,7 +14993,7 @@ string CompilerMSL::to_member_reference(uint32_t base, const SPIRType &type, uin
 
 		bool is_buffer_variable =
 		    is_block && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer);
-		declared_as_pointer = is_buffer_variable && is_array(get<SPIRType>(var->basetype));
+		declared_as_pointer = is_buffer_variable && is_array(get_pointee_type(var->basetype));
 	}
 
 	if (declared_as_pointer || (!ptr_chain_is_resolved && should_dereference(base)))
