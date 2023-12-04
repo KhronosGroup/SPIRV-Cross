@@ -627,18 +627,12 @@ bool Compiler::is_matrix(const SPIRType &type) const
 
 bool Compiler::is_array(const SPIRType &type) const
 {
-	if (type.op == OpTypeArray || type.op == OpTypeRuntimeArray) {
-		assert(!type.array.empty());
-		return true;
-	}
-	if (!type.array.empty())
-		return true; // put a breakpoint here to find problematic uses of is_array
-	return false;
+	return (type.op == OpTypeArray || type.op == OpTypeRuntimeArray);
 }
 
 bool Compiler::is_pointer(const SPIRType &type) const
 {
-	return type.pointer_depth > 0;
+	return type.op == OpTypePointer;
 }
 
 bool Compiler::is_runtime_size_array(const SPIRType &type)
