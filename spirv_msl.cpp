@@ -491,7 +491,7 @@ void CompilerMSL::build_implicit_builtins()
 				vec4_type_ptr.parent_type = type_id;
 				vec4_type_ptr.storage = StorageClassInput;
 				auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
-				ptr_type.self = type_id;
+				ptr_type.self = type_ptr_id;
 
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInFragCoord);
@@ -513,7 +513,7 @@ void CompilerMSL::build_implicit_builtins()
 				uint_type_ptr.parent_type = get_uint_type_id();
 				uint_type_ptr.storage = StorageClassInput;
 				auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-				ptr_type.self = get_uint_type_id();
+				ptr_type.self = type_ptr_id;
 
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInLayer);
@@ -535,7 +535,7 @@ void CompilerMSL::build_implicit_builtins()
 				uint_type_ptr.parent_type = get_uint_type_id();
 				uint_type_ptr.storage = StorageClassInput;
 				auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-				ptr_type.self = get_uint_type_id();
+				ptr_type.self = type_ptr_id;
 
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInViewIndex);
@@ -558,7 +558,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = get_uint_type_id();
+			ptr_type.self = type_ptr_id;
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleId);
@@ -578,7 +578,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = get_uint_type_id();
+			ptr_type.self = type_ptr_id;
 
 			if (need_vertex_params && !has_vertex_idx)
 			{
@@ -671,7 +671,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = get_uint_type_id();
+			ptr_type.self = type_ptr_id;
 
 			if ((need_tesc_params && msl_options.multi_patch_workgroup) || need_grid_params)
 			{
@@ -731,7 +731,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = get_uint_type_id();
+			ptr_type.self = type_ptr_id;
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupLocalInvocationId);
@@ -753,7 +753,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = get_uint_type_id();
+			ptr_type.self = type_ptr_id;
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupSize);
@@ -813,7 +813,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr_out.storage = StorageClassOutput;
 
 			auto &ptr_out_type = set<SPIRType>(offset, uint_type_ptr_out);
-			ptr_out_type.self = get_uint_type_id();
+			ptr_out_type.self = offset;
 			set<SPIRVariable>(var_id, offset, StorageClassOutput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleMask);
 			builtin_sample_mask_id = var_id;
@@ -842,7 +842,7 @@ void CompilerMSL::build_implicit_builtins()
 			bool_type_ptr_in.storage = StorageClassInput;
 
 			auto &ptr_in_type = set<SPIRType>(type_ptr_id, bool_type_ptr_in);
-			ptr_in_type.self = type_id;
+			ptr_in_type.self = type_ptr_id;
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInHelperInvocation);
 			builtin_helper_invocation_id = var_id;
@@ -864,7 +864,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.storage = StorageClassInput;
 
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = get_uint_type_id();
+			ptr_type.self = type_ptr_id;
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInLocalInvocationIndex);
 			builtin_local_invocation_index_id = var_id;
@@ -886,7 +886,7 @@ void CompilerMSL::build_implicit_builtins()
 			uint_type_ptr.storage = StorageClassInput;
 
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
+			ptr_type.self = type_ptr_id;
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInWorkgroupSize);
 			builtin_workgroup_size_id = var_id;
@@ -1001,7 +1001,7 @@ void CompilerMSL::build_implicit_builtins()
 		vec4_type_ptr.parent_type = type_id;
 		vec4_type_ptr.storage = StorageClassOutput;
 		auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
-		ptr_type.self = type_id;
+		ptr_type.self = type_ptr_id;
 
 		set<SPIRVariable>(var_id, type_ptr_id, StorageClassOutput);
 		set_decoration(var_id, DecorationBuiltIn, BuiltInPosition);
@@ -2173,7 +2173,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 						// Make sure we have an actual pointer type,
 						// so that we will get the appropriate address space when declaring these builtins.
 						auto &ptr = set<SPIRType>(ptr_type_id, get<SPIRType>(mbr_type_id));
-						ptr.self = mbr_type_id;
+						ptr.self = ptr_type_id;
 						ptr.storage = var.storage;
 						ptr.pointer = true;
 						ptr.pointer_depth++;
@@ -4197,6 +4197,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			type.array_size_literal.push_back(true);
 			type.parent_type = type_id;
 			set<SPIRType>(array_type_id, type);
+			type.self = array_type_id;
 
 			type.op = spv::Op::OpTypePointer;
 			type.pointer = true;
@@ -4204,7 +4205,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			type.parent_type = array_type_id;
 			type.storage = storage;
 			auto &ptr_type = set<SPIRType>(ptr_type_id, type);
-			ptr_type.self = array_type_id;
+			ptr_type.self = ptr_type_id;
 
 			auto &fake_var = set<SPIRVariable>(var_id, ptr_type_id, storage);
 			set_decoration(var_id, DecorationLocation, input.first.location);
@@ -17957,7 +17958,7 @@ void CompilerMSL::analyze_argument_buffers()
 					atomic_type.parent_type = atomic_type_id;
 					atomic_type.storage = StorageClassStorageBuffer;
 					auto &atomic_ptr_type = set<SPIRType>(type_ptr_id, atomic_type);
-					atomic_ptr_type.self = atomic_type_id;
+					atomic_ptr_type.self = type_ptr_id;
 
 					buffer_type.member_types.push_back(type_ptr_id);
 				}
