@@ -2333,9 +2333,25 @@ uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t locat
 
 uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t components, SPIRType::BaseType basetype)
 {
+	assert(components > 1);
 	uint32_t new_type_id = ir.increase_bound_by(1);
 	auto &old_type = get<SPIRType>(type_id);
+	SPIRType* old_ptr_t = nullptr;
+	SPIRType* old_array_t = nullptr;
+	if (is_pointer(old_type))
+	{
+		old_ptr_t = &old_type;
+		old_type = get_pointee_type(*old_ptr_t);
+	}
+	if (is_array(old_type))
+	{
+		old_array_t = &old_type;
+		old_type = get_type(old_array_t->parent_type);
+	}
+
 	auto *type = &set<SPIRType>(new_type_id, old_type);
+	assert(is_scalar(*type) || is_vector(*type));
+	type->op = spv::Op::OpTypeVector;
 	type->vecsize = components;
 	if (basetype != SPIRType::Unknown)
 		type->basetype = basetype;
@@ -2345,23 +2361,23 @@ uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t comp
 	type->array_size_literal.clear();
 	type->pointer = false;
 
-	if (is_array(old_type))
+	if (old_array_t)
 	{
 		uint32_t array_type_id = ir.increase_bound_by(1);
 		type = &set<SPIRType>(array_type_id, *type);
 		type->parent_type = new_type_id;
-		type->array = old_type.array;
-		type->array_size_literal = old_type.array_size_literal;
+		type->array = old_array_t->array;
+		type->array_size_literal = old_array_t->array_size_literal;
 		new_type_id = array_type_id;
 	}
 
-	if (old_type.pointer)
+	if (old_ptr_t)
 	{
 		uint32_t ptr_type_id = ir.increase_bound_by(1);
 		type = &set<SPIRType>(ptr_type_id, *type);
 		type->self = new_type_id;
 		type->parent_type = new_type_id;
-		type->storage = old_type.storage;
+		type->storage = old_ptr_t->storage;
 		type->pointer = true;
 		type->pointer_depth++;
 		new_type_id = ptr_type_id;
