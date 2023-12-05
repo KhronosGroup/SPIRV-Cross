@@ -9610,6 +9610,8 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_TessLevelInner";
 	case BuiltInTessCoord:
 		return "gl_TessCoord";
+	case BuiltInPatchVertices:
+		return "gl_PatchVerticesIn";
 	case BuiltInFragCoord:
 		return "gl_FragCoord";
 	case BuiltInPointCoord:
