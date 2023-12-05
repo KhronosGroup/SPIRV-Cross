@@ -88,8 +88,8 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     gl_out[gl_GlobalInvocationID.x % 4].gl_Position = _39[gl_GlobalInvocationID.x % 4].gl_Position;
     gl_out[gl_GlobalInvocationID.x % 4].gl_ClipDistance = _39[gl_GlobalInvocationID.x % 4].gl_ClipDistance;
     gl_out[gl_GlobalInvocationID.x % 4].gl_CullDistance = _39[gl_GlobalInvocationID.x % 4].gl_CullDistance;
-    threadgroup gl_PerVertex spvStoragegl_out_masked[8][4];
-    threadgroup gl_PerVertex (&gl_out_masked)[4] = spvStoragegl_out_masked[(gl_GlobalInvocationID.x / 4) % 8];
+    threadgroup spvUnsafeArray<gl_PerVertex, 4> spvStoragegl_out_masked[8];
+    threadgroup auto &gl_out_masked = spvStoragegl_out_masked[(gl_GlobalInvocationID.x / 4) % 8];
     gl_out_masked[gl_GlobalInvocationID.x % 4] = _39[gl_GlobalInvocationID.x % 4];
     device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     patchOut.p_v = float4(0.0);

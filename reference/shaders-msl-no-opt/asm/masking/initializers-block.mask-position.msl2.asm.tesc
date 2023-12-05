@@ -83,7 +83,7 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
     spvUnsafeArray<C, 4> _21 = spvUnsafeArray<C, 4>({ C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) } });
     spvUnsafeArray<gl_PerVertex, 4> _39 = spvUnsafeArray<gl_PerVertex, 4>({ gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) } });
     
-    threadgroup gl_PerVertex gl_out_masked[4];
+    threadgroup spvUnsafeArray<gl_PerVertex, 4> gl_out_masked;
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     gl_out[gl_InvocationID].c_v = _21[gl_InvocationID].v;
     gl_out[gl_InvocationID].gl_PointSize = _39[gl_InvocationID].gl_PointSize;

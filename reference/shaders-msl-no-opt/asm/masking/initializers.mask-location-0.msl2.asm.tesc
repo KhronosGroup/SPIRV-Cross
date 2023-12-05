@@ -73,7 +73,7 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
 {
     spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_gl_PerVertex, 4> _32 = spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_gl_PerVertex, 4>({ _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) } });
     
-    threadgroup float4 foo[4];
+    threadgroup spvUnsafeArray<float4, 4> foo;
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     foo[gl_InvocationID] = _17[gl_InvocationID];
     gl_out[gl_InvocationID].gl_Position = _32[gl_InvocationID]._RESERVED_IDENTIFIER_FIXUP_gl_Position;
