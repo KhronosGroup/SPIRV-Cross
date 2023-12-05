@@ -47,7 +47,7 @@ fragment main0_out main0(main0_in in [[stage_in]], raytracing::acceleration_stru
 {
     main0_out out = {};
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> rayQuery;
-    rayQuery.reset(ray(float3((in.inPos.xy * 4.0) - float2(2.0), 1.0), float3(0.0, 0.0, -1.0), 0.001000000047497451305389404296875, 2.0), topLevelAS, spvMakeIntersectionParams(4u));
+    rayQuery.reset(ray(float3((in.inPos.xy * 4.0) - float2(2.0), 1.0), float3(0.0, 0.0, -1.0), 0.001000000047497451305389404296875, 2.0), topLevelAS, 255u, spvMakeIntersectionParams(4u));
     for (;;)
     {
         bool _88 = rayQuery.next();
