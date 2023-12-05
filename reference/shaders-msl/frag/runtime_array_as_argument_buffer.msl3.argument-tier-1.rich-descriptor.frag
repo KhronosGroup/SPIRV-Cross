@@ -161,7 +161,7 @@ void implicit_image(thread uint& inputId, const spvDescriptorArray<texture2d<flo
 static inline __attribute__((always_inline))
 void implicit_tlas(thread uint& inputId, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& rayQuery, const spvDescriptorArray<raytracing::acceleration_structure<raytracing::instancing>> tlas)
 {
-    rayQuery.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[inputId], spvMakeIntersectionParams(0u));
+    rayQuery.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas[inputId], 255u, spvMakeIntersectionParams(0u));
     bool _171 = rayQuery.next();
 }
 
@@ -198,7 +198,7 @@ void explicit_image(texture2d<float> tex)
 static inline __attribute__((always_inline))
 void explicit_tlas(const raytracing::acceleration_structure<raytracing::instancing> tlas, thread raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>& rayQuery_1)
 {
-    rayQuery_1.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas, spvMakeIntersectionParams(0u));
+    rayQuery_1.reset(ray(float3(0.0), float3(1.0), 0.00999999977648258209228515625, 1.0), tlas, 255u, spvMakeIntersectionParams(0u));
     bool _203 = rayQuery_1.next();
 }
 

@@ -39,7 +39,7 @@ void initFn(thread raytracing::intersection_query<raytracing::instancing, raytra
     float3 rayOrigin = float3(0.0, 0.0, 1.0);
     float3 rayDirection = float3(0.0, 0.0, -1.0);
     float rayDistance = 2.0;
-    rayQuery.reset(ray(rayOrigin, rayDirection, 0.001000000047497451305389404296875, rayDistance), topLevelAS, spvMakeIntersectionParams(4u));
+    rayQuery.reset(ray(rayOrigin, rayDirection, 0.001000000047497451305389404296875, rayDistance), topLevelAS, 255u, spvMakeIntersectionParams(4u));
 }
 
 static inline __attribute__((always_inline))
