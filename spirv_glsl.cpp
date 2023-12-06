@@ -10027,7 +10027,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			// We are considered to have a pointer to array and one element shifts by one array at a time.
 			// If we use normal array indexing, we'll first decay to pointer, and lose the array-ness,
 			// so we have to take pointer to array explicitly.
-			expr = enclose_expression(address_of_expression(expr));
+			if (!should_dereference(base))
+				expr = enclose_expression(address_of_expression(expr));
 		}
 
 		if (ptr_chain && i == 0)
