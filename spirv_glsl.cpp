@@ -9963,6 +9963,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	// Start traversing type hierarchy at the proper non-pointer types,
 	// but keep type_id referencing the original pointer for use below.
 	uint32_t type_id = expression_type_id(base);
+	const auto *type = &get_pointee_type(type_id);
 
 	if (!backend.native_pointers)
 	{
@@ -9972,13 +9973,10 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		// Wrapped buffer reference pointer types will need to poke into the internal "value" member before
 		// continuing the access chain.
 		if (should_dereference(base))
-		{
-			auto &type = get<SPIRType>(type_id);
-			expr = dereference_expression(type, expr);
-		}
+			expr = dereference_expression(get<SPIRType>(type_id), expr);
 	}
-
-	const auto *type = &get_pointee_type(type_id);
+	else if (should_dereference(base) && type->basetype != SPIRType::Struct && !ptr_chain)
+		expr = dereference_expression(*type, expr);
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
