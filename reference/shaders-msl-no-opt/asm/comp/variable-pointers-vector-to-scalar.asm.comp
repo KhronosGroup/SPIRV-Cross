@@ -1,0 +1,14 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(64u, 1u, 1u);
+
+kernel void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
+{
+    threadgroup float2 test[64];
+    float _21 = float(gl_GlobalInvocationID.x);
+    ((threadgroup float*)&(*(true ? &test[1u] : &test[2u])))[1u] = _21;
+}
+
