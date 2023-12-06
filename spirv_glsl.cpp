@@ -9976,7 +9976,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			expr = dereference_expression(get<SPIRType>(type_id), expr);
 	}
 	else if (should_dereference(base) && type->basetype != SPIRType::Struct && !ptr_chain)
-		expr = dereference_expression(*type, expr);
+		expr = join("(", dereference_expression(*type, expr), ")");
 
 	bool access_chain_is_arrayed = expr.find_first_of('[') != string::npos;
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
