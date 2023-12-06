@@ -486,6 +486,7 @@ void CompilerMSL::build_implicit_builtins()
 
 				SPIRType vec4_type_ptr { spv::Op::OpTypePointer };
 				vec4_type_ptr = vec4_type;
+				vec4_type_ptr.op = spv::Op::OpTypePointer;
 				vec4_type_ptr.pointer = true;
 				vec4_type_ptr.pointer_depth++;
 				vec4_type_ptr.parent_type = type_id;
@@ -508,6 +509,7 @@ void CompilerMSL::build_implicit_builtins()
 				// Create gl_Layer.
 				SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 				uint_type_ptr = get_uint_type();
+				uint_type_ptr.op = spv::Op::OpTypePointer;
 				uint_type_ptr.pointer = true;
 				uint_type_ptr.pointer_depth++;
 				uint_type_ptr.parent_type = get_uint_type_id();
@@ -530,6 +532,7 @@ void CompilerMSL::build_implicit_builtins()
 				// Create gl_ViewIndex.
 				SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 				uint_type_ptr = get_uint_type();
+				uint_type_ptr.op = spv::Op::OpTypePointer;
 				uint_type_ptr.pointer = true;
 				uint_type_ptr.pointer_depth++;
 				uint_type_ptr.parent_type = get_uint_type_id();
@@ -553,6 +556,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_SampleID.
 			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 			uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
@@ -573,6 +577,7 @@ void CompilerMSL::build_implicit_builtins()
 
 			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 			uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
@@ -633,6 +638,7 @@ void CompilerMSL::build_implicit_builtins()
 				uint32_t type_ptr_out_id = ir.increase_bound_by(2);
 				SPIRType uint_type_ptr_out { spv::Op::OpTypePointer };
 				uint_type_ptr_out = get_uint_type();
+				uint_type_ptr.op = spv::Op::OpTypePointer;
 				uint_type_ptr_out.pointer = true;
 				uint_type_ptr_out.pointer_depth++;
 				uint_type_ptr_out.parent_type = get_uint_type_id();
@@ -726,6 +732,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_SubgroupInvocationID.
 			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 			uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
@@ -748,6 +755,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_SubgroupSize.
 			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 			uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
@@ -807,6 +815,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_SampleMask.
 			SPIRType uint_type_ptr_out { spv::Op::OpTypePointer };
 			uint_type_ptr_out = get_uint_type();
+			uint_type_ptr_out.op = spv::Op::OpTypePointer;
 			uint_type_ptr_out.pointer = true;
 			uint_type_ptr_out.pointer_depth++;
 			uint_type_ptr_out.parent_type = get_uint_type_id();
@@ -836,6 +845,7 @@ void CompilerMSL::build_implicit_builtins()
 
 			SPIRType bool_type_ptr_in { spv::Op::OpTypePointer };
 			bool_type_ptr_in = bool_type;
+			bool_type_ptr_in.op = spv::OpTypePointer;
 			bool_type_ptr_in.pointer = true;
 			bool_type_ptr_in.pointer_depth++;
 			bool_type_ptr_in.parent_type = type_id;
@@ -858,6 +868,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_LocalInvocationIndex.
 			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
 			uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
@@ -880,6 +891,7 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_WorkgroupSize.
 			uint32_t type_id = build_extended_vector_type(get_uint_type_id(), 3);
 			SPIRType uint_type_ptr = get<SPIRType>(type_id);
+			uint_type_ptr.op = spv::Op::OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = type_id;
@@ -1072,6 +1084,7 @@ uint32_t CompilerMSL::build_constant_uint_array_pointer()
 
 	// Create a buffer to hold extra data, including the swizzle constants.
 	SPIRType uint_type_pointer = get_uint_type();
+	uint_type_pointer.op = spv::Op::OpTypePointer;
 	uint_type_pointer.pointer = true;
 	uint_type_pointer.pointer_depth++;
 	uint_type_pointer.parent_type = get_uint_type_id();
@@ -4446,6 +4459,7 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 		uint32_t ptr_type_id = next_id++;
 		auto &ptr_type = set<SPIRType>(ptr_type_id, spv::OpTypePointer);
 		ptr_type = base_type;
+		ptr_type.op = spv::OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
 		ptr_type.storage = type.storage;
@@ -17824,6 +17838,7 @@ void CompilerMSL::analyze_argument_buffers()
 
 		auto &ptr_type = set<SPIRType>(ptr_type_id, spv::Op::OpTypePointer);
 		ptr_type = buffer_type;
+		ptr_type.op = spv::OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
 		ptr_type.parent_type = type_id;
@@ -18037,6 +18052,7 @@ void CompilerMSL::add_argument_buffer_padding_buffer_type(SPIRType &struct_type,
 		uint32_t ptr_type_id = buff_type_id + 1;
 		auto &ptr_type = set<SPIRType>(ptr_type_id, spv::Op::OpTypePointer);
 		ptr_type = buff_type;
+		ptr_type.op = spv::OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
 		ptr_type.parent_type = buff_type_id;
