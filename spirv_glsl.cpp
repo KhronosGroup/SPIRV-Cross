@@ -9914,16 +9914,21 @@ void CompilerGLSL::access_chain_internal_append_index(std::string &expr, uint32_
 	if (ptr_chain && access_chain_is_arrayed)
 	{
 		size_t split_pos = expr.find_last_of(']');
-		string expr_front = expr.substr(0, split_pos);
-		string expr_back = expr.substr(split_pos);
-		expr = expr_front + " + " +  enclose_expression(idx_expr) + expr_back;
+		size_t enclose_split = expr.find_last_of(')');
+
+		// If we have already enclosed the expression, don't try to be clever, it will break.
+		if (split_pos > enclose_split || enclose_split == string::npos)
+		{
+			string expr_front = expr.substr(0, split_pos);
+			string expr_back = expr.substr(split_pos);
+			expr = expr_front + " + " + enclose_expression(idx_expr) + expr_back;
+			return;
+		}
 	}
-	else
-	{
-		expr += "[";
-		expr += idx_expr;
-		expr += "]";
-	}
+
+	expr += "[";
+	expr += idx_expr;
+	expr += "]";
 }
 
 bool CompilerGLSL::access_chain_needs_stage_io_builtin_translation(uint32_t)
@@ -10014,9 +10019,20 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			index &= 0x7fffffffu;
 		}
 
-		// Pointer chains
+		bool ptr_chain_array_entry = ptr_chain && i == 0 && type_is_top_level_array(*type);
+
+		if (ptr_chain_array_entry)
+		{
+			// This is highly unusual code, since normally we'd use plain AccessChain, but it's still allowed.
+			// We are considered to have a pointer to array and one element shifts by one array at a time.
+			// If we use normal array indexing, we'll first decay to pointer, and lose the array-ness,
+			// so we have to take pointer to array explicitly.
+			expr = enclose_expression(address_of_expression(expr));
+		}
+
 		if (ptr_chain && i == 0)
 		{
+			// Pointer chains
 			// If we are flattening multidimensional arrays, only create opening bracket on first
 			// array index.
 			if (options.flatten_multidimensional_arrays)
@@ -10061,6 +10077,12 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 
 			access_chain_is_arrayed = true;
+
+			// Explicitly enclose the expression if this is one of the weird pointer-to-array cases.
+			// We don't want any future indexing to add to this array dereference.
+			// Enclosing the expression blocks that and avoids any shenanigans with operand priority.
+			if (ptr_chain_array_entry)
+				expr = join("(", expr, ")");
 		}
 		// Arrays
 		else if (!type->array.empty())
