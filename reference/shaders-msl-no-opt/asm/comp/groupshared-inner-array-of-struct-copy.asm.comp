@@ -44,24 +44,35 @@ struct spvUnsafeArray
     }
 };
 
-struct SSBO
+struct Data
 {
-    float4 values[1];
+    spvUnsafeArray<float3, 16> sourceData;
 };
 
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(4u, 1u, 1u);
-
-static inline __attribute__((always_inline))
-void in_function(threadgroup spvUnsafeArray<short4, 4>& foo, thread uint& gl_LocalInvocationIndex, device SSBO& _23, thread uint3& gl_GlobalInvocationID)
+kernel void main0(texture2d<float> g_inputTexture [[texture(0)]], texture2d<uint, access::write> g_output [[texture(1)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
 {
-    foo[gl_LocalInvocationIndex] = short4(_23.values[gl_GlobalInvocationID.x] != float4(10.0));
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    _23.values[gl_GlobalInvocationID.x] = select(float4(40.0), float4(30.0), bool4(foo[gl_LocalInvocationIndex ^ 3u]));
-}
-
-kernel void main0(device SSBO& _23 [[buffer(0)]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]])
-{
-    threadgroup spvUnsafeArray<short4, 4> foo;
-    in_function(foo, gl_LocalInvocationIndex, _23, gl_GlobalInvocationID);
+    threadgroup spvUnsafeArray<Data, 64> g_data;
+    uint _49;
+    _49 = 0u;
+    for (; _49 < 4u; _49++)
+    {
+        for (uint _56 = 0u; _56 < 4u; )
+        {
+            int3 _65 = int3(gl_GlobalInvocationID) + int3(int(_56), int(_49), 0);
+            g_data[gl_GlobalInvocationID.x].sourceData[(_49 * 4u) + _56] = g_inputTexture.read(uint2(_65.xy), _65.z).xyz;
+            _56++;
+            continue;
+        }
+    }
+    spvUnsafeArray<float3, 16> _45 = g_data[gl_GlobalInvocationID.x].sourceData;
+    uint _77;
+    _77 = 0u;
+    for (int _80 = 0; _80 < 16; )
+    {
+        _77 |= uint(fast::clamp(dot(_45[_80], float3(-1.0)), 0.0, 1.0));
+        _80++;
+        continue;
+    }
+    g_output.write(uint4(_77), uint2(gl_GlobalInvocationID.xy));
 }
 

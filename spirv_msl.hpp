@@ -857,9 +857,6 @@ protected:
 	std::string type_to_array_glsl(const SPIRType &type) override;
 	std::string constant_op_expression(const SPIRConstantOp &cop) override;
 
-	// Threadgroup arrays can't have a wrapper type
-	std::string variable_decl(const SPIRVariable &variable) override;
-
 	bool variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const override;
 
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)

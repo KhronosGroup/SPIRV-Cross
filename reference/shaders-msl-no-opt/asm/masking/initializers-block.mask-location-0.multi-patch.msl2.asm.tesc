@@ -70,8 +70,8 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     spvUnsafeArray<C, 4> _21 = spvUnsafeArray<C, 4>({ C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) } });
     
     device main0_out* gl_out = &spvOut[gl_GlobalInvocationID.x - gl_GlobalInvocationID.x % 4];
-    threadgroup C spvStoragec[8][4];
-    threadgroup C (&c)[4] = spvStoragec[(gl_GlobalInvocationID.x / 4) % 8];
+    threadgroup spvUnsafeArray<C, 4> spvStoragec[8];
+    threadgroup auto &c = spvStoragec[(gl_GlobalInvocationID.x / 4) % 8];
     c[gl_GlobalInvocationID.x % 4] = _21[gl_GlobalInvocationID.x % 4];
     device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     patchOut.p_v = float4(0.0);

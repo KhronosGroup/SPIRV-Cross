@@ -74,8 +74,8 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_gl_PerVertex, 4> _32 = spvUnsafeArray<_RESERVED_IDENTIFIER_FIXUP_gl_PerVertex, 4>({ _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) }, _RESERVED_IDENTIFIER_FIXUP_gl_PerVertex{ float4(0.0), 0.0, spvUnsafeArray<float, 1>({ 0.0 }), spvUnsafeArray<float, 1>({ 0.0 }) } });
     
     device main0_out* gl_out = &spvOut[gl_GlobalInvocationID.x - gl_GlobalInvocationID.x % 4];
-    threadgroup float4 spvStoragefoo[8][4];
-    threadgroup float4 (&foo)[4] = spvStoragefoo[(gl_GlobalInvocationID.x / 4) % 8];
+    threadgroup spvUnsafeArray<float4, 4> spvStoragefoo[8];
+    threadgroup auto &foo = spvStoragefoo[(gl_GlobalInvocationID.x / 4) % 8];
     foo[gl_GlobalInvocationID.x % 4] = _17[gl_GlobalInvocationID.x % 4];
     gl_out[gl_GlobalInvocationID.x % 4].gl_Position = _32[gl_GlobalInvocationID.x % 4]._RESERVED_IDENTIFIER_FIXUP_gl_Position;
     gl_out[gl_GlobalInvocationID.x % 4].gl_PointSize = _32[gl_GlobalInvocationID.x % 4]._RESERVED_IDENTIFIER_FIXUP_gl_PointSize;
