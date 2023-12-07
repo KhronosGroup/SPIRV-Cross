@@ -568,9 +568,8 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t vecsize = ops[2];
 
 		auto &base = get<SPIRType>(ops[1]);
-		auto &vecbase = set<SPIRType>(id, op);
+		auto &vecbase = set<SPIRType>(id, base);
 
-		vecbase = base;
 		vecbase.op = op;
 		vecbase.vecsize = vecsize;
 		vecbase.self = id;
@@ -584,9 +583,8 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t colcount = ops[2];
 
 		auto &base = get<SPIRType>(ops[1]);
-		auto &matrixbase = set<SPIRType>(id, op);
+		auto &matrixbase = set<SPIRType>(id, base);
 
-		matrixbase = base;
 		matrixbase.op = op;
 		matrixbase.columns = colcount;
 		matrixbase.self = id;
@@ -597,12 +595,10 @@ void Parser::parse(const Instruction &instruction)
 	case OpTypeArray:
 	{
 		uint32_t id = ops[0];
-		auto &arraybase = set<SPIRType>(id, op);
-
 		uint32_t tid = ops[1];
 		auto &base = get<SPIRType>(tid);
+		auto &arraybase = set<SPIRType>(id, base);
 
-		arraybase = base;
 		arraybase.op = op;
 		arraybase.parent_type = tid;
 
@@ -618,7 +614,9 @@ void Parser::parse(const Instruction &instruction)
 
 		arraybase.array_size_literal.push_back(literal);
 		arraybase.array.push_back(literal ? c->scalar() : cid);
-		// Do NOT set arraybase.self!
+
+		// .self resolves down to non-array/non-pointer type.
+		arraybase.self = base.self;
 		break;
 	}
 
@@ -627,19 +625,20 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t id = ops[0];
 
 		auto &base = get<SPIRType>(ops[1]);
-		auto &arraybase = set<SPIRType>(id, op);
+		auto &arraybase = set<SPIRType>(id, base);
 
 		// We're copying type information into Array types, so we'll need a fixup for any physical pointer
 		// references.
 		if (base.forward_pointer)
 			forward_pointer_fixups.push_back({ id, ops[1] });
 
-		arraybase = base;
 		arraybase.op = op;
 		arraybase.array.push_back(0);
 		arraybase.array_size_literal.push_back(true);
 		arraybase.parent_type = ops[1];
-		// Do NOT set arraybase.self!
+
+		// .self resolves down to non-array/non-pointer type.
+		arraybase.self = base.self;
 		break;
 	}
 
@@ -1032,7 +1031,7 @@ void Parser::parse(const Instruction &instruction)
 			{
 				uint32_t ids = ir.increase_bound_by(2);
 
-				auto& type = set<SPIRType>(ids, spv::Op::OpTypeInt);
+				auto &type = set<SPIRType>(ids, OpTypeInt);
 				type.basetype = SPIRType::Int;
 				type.width = 32;
 				auto &c = set<SPIRConstant>(ids + 1, ids);

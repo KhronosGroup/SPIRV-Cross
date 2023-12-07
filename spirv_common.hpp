@@ -549,7 +549,7 @@ struct SPIRType : IVariant
 	};
 
 	spv::Op op = spv::Op::OpNop;
-	SPIRType(spv::Op op_) : op(op_) {}
+	explicit SPIRType(spv::Op op_) : op(op_) {}
 
 	enum BaseType
 	{

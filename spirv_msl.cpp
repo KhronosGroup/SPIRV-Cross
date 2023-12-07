@@ -478,21 +478,20 @@ void CompilerMSL::build_implicit_builtins()
 				uint32_t var_id = offset + 2;
 
 				// Create gl_FragCoord.
-				SPIRType vec4_type { spv::Op::OpTypeVector };
+				SPIRType vec4_type { OpTypeVector };
 				vec4_type.basetype = SPIRType::Float;
 				vec4_type.width = 32;
 				vec4_type.vecsize = 4;
 				set<SPIRType>(type_id, vec4_type);
 
-				SPIRType vec4_type_ptr { spv::Op::OpTypePointer };
-				vec4_type_ptr = vec4_type;
-				vec4_type_ptr.op = spv::Op::OpTypePointer;
+				SPIRType vec4_type_ptr = vec4_type;
+				vec4_type_ptr.op = OpTypePointer;
 				vec4_type_ptr.pointer = true;
 				vec4_type_ptr.pointer_depth++;
 				vec4_type_ptr.parent_type = type_id;
 				vec4_type_ptr.storage = StorageClassInput;
 				auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
-				ptr_type.self = type_ptr_id;
+				ptr_type.self = type_id;
 
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInFragCoord);
@@ -507,15 +506,14 @@ void CompilerMSL::build_implicit_builtins()
 				uint32_t var_id = offset + 1;
 
 				// Create gl_Layer.
-				SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-				uint_type_ptr = get_uint_type();
-				uint_type_ptr.op = spv::Op::OpTypePointer;
+				SPIRType uint_type_ptr = get_uint_type();
+				uint_type_ptr.op = OpTypePointer;
 				uint_type_ptr.pointer = true;
 				uint_type_ptr.pointer_depth++;
 				uint_type_ptr.parent_type = get_uint_type_id();
 				uint_type_ptr.storage = StorageClassInput;
 				auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-				ptr_type.self = type_ptr_id;
+				ptr_type.self = get_uint_type_id();
 
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInLayer);
@@ -530,15 +528,14 @@ void CompilerMSL::build_implicit_builtins()
 				uint32_t var_id = offset + 1;
 
 				// Create gl_ViewIndex.
-				SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-				uint_type_ptr = get_uint_type();
-				uint_type_ptr.op = spv::Op::OpTypePointer;
+				SPIRType uint_type_ptr = get_uint_type();
+				uint_type_ptr.op = OpTypePointer;
 				uint_type_ptr.pointer = true;
 				uint_type_ptr.pointer_depth++;
 				uint_type_ptr.parent_type = get_uint_type_id();
 				uint_type_ptr.storage = StorageClassInput;
 				auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-				ptr_type.self = type_ptr_id;
+				ptr_type.self = get_uint_type_id();
 
 				set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 				set_decoration(var_id, DecorationBuiltIn, BuiltInViewIndex);
@@ -554,15 +551,14 @@ void CompilerMSL::build_implicit_builtins()
 			uint32_t var_id = offset + 1;
 
 			// Create gl_SampleID.
-			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-			uint_type_ptr = get_uint_type();
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = get_uint_type_id();
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleId);
@@ -575,15 +571,14 @@ void CompilerMSL::build_implicit_builtins()
 		{
 			uint32_t type_ptr_id = ir.increase_bound_by(1);
 
-			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-			uint_type_ptr = get_uint_type();
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = get_uint_type_id();
 
 			if (need_vertex_params && !has_vertex_idx)
 			{
@@ -636,9 +631,8 @@ void CompilerMSL::build_implicit_builtins()
 				// Note that we can't just abuse gl_ViewIndex for this purpose: it's an input, but
 				// gl_Layer is an output in vertex-pipeline shaders.
 				uint32_t type_ptr_out_id = ir.increase_bound_by(2);
-				SPIRType uint_type_ptr_out { spv::Op::OpTypePointer };
-				uint_type_ptr_out = get_uint_type();
-				uint_type_ptr.op = spv::Op::OpTypePointer;
+				SPIRType uint_type_ptr_out = get_uint_type();
+				uint_type_ptr.op = OpTypePointer;
 				uint_type_ptr_out.pointer = true;
 				uint_type_ptr_out.pointer_depth++;
 				uint_type_ptr_out.parent_type = get_uint_type_id();
@@ -669,15 +663,14 @@ void CompilerMSL::build_implicit_builtins()
 		{
 			uint32_t type_ptr_id = ir.increase_bound_by(1);
 
-			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-			uint_type_ptr = get_uint_type();
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = get_uint_type_id();
 
 			if ((need_tesc_params && msl_options.multi_patch_workgroup) || need_grid_params)
 			{
@@ -730,15 +723,14 @@ void CompilerMSL::build_implicit_builtins()
 			uint32_t var_id = offset + 1;
 
 			// Create gl_SubgroupInvocationID.
-			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-			uint_type_ptr = get_uint_type();
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = get_uint_type_id();
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupLocalInvocationId);
@@ -753,15 +745,14 @@ void CompilerMSL::build_implicit_builtins()
 			uint32_t var_id = offset + 1;
 
 			// Create gl_SubgroupSize.
-			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-			uint_type_ptr = get_uint_type();
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = get_uint_type_id();
 
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSubgroupSize);
@@ -813,16 +804,15 @@ void CompilerMSL::build_implicit_builtins()
 			uint32_t var_id = offset + 1;
 
 			// Create gl_SampleMask.
-			SPIRType uint_type_ptr_out { spv::Op::OpTypePointer };
-			uint_type_ptr_out = get_uint_type();
-			uint_type_ptr_out.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr_out = get_uint_type();
+			uint_type_ptr_out.op = OpTypePointer;
 			uint_type_ptr_out.pointer = true;
 			uint_type_ptr_out.pointer_depth++;
 			uint_type_ptr_out.parent_type = get_uint_type_id();
 			uint_type_ptr_out.storage = StorageClassOutput;
 
 			auto &ptr_out_type = set<SPIRType>(offset, uint_type_ptr_out);
-			ptr_out_type.self = offset;
+			ptr_out_type.self = get_uint_type_id();
 			set<SPIRVariable>(var_id, offset, StorageClassOutput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInSampleMask);
 			builtin_sample_mask_id = var_id;
@@ -837,14 +827,13 @@ void CompilerMSL::build_implicit_builtins()
 			uint32_t var_id = offset + 2;
 
 			// Create gl_HelperInvocation.
-			SPIRType bool_type { spv::Op::OpTypeBool };
+			SPIRType bool_type { OpTypeBool };
 			bool_type.basetype = SPIRType::Boolean;
 			bool_type.width = 8;
 			bool_type.vecsize = 1;
 			set<SPIRType>(type_id, bool_type);
 
-			SPIRType bool_type_ptr_in { spv::Op::OpTypePointer };
-			bool_type_ptr_in = bool_type;
+			SPIRType bool_type_ptr_in = bool_type;
 			bool_type_ptr_in.op = spv::OpTypePointer;
 			bool_type_ptr_in.pointer = true;
 			bool_type_ptr_in.pointer_depth++;
@@ -852,7 +841,7 @@ void CompilerMSL::build_implicit_builtins()
 			bool_type_ptr_in.storage = StorageClassInput;
 
 			auto &ptr_in_type = set<SPIRType>(type_ptr_id, bool_type_ptr_in);
-			ptr_in_type.self = type_ptr_id;
+			ptr_in_type.self = type_id;
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInHelperInvocation);
 			builtin_helper_invocation_id = var_id;
@@ -866,16 +855,15 @@ void CompilerMSL::build_implicit_builtins()
 			uint32_t var_id = offset + 1;
 
 			// Create gl_LocalInvocationIndex.
-			SPIRType uint_type_ptr { spv::Op::OpTypePointer };
-			uint_type_ptr = get_uint_type();
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			SPIRType uint_type_ptr = get_uint_type();
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = get_uint_type_id();
 			uint_type_ptr.storage = StorageClassInput;
 
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = get_uint_type_id();
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInLocalInvocationIndex);
 			builtin_local_invocation_index_id = var_id;
@@ -891,14 +879,14 @@ void CompilerMSL::build_implicit_builtins()
 			// Create gl_WorkgroupSize.
 			uint32_t type_id = build_extended_vector_type(get_uint_type_id(), 3);
 			SPIRType uint_type_ptr = get<SPIRType>(type_id);
-			uint_type_ptr.op = spv::Op::OpTypePointer;
+			uint_type_ptr.op = OpTypePointer;
 			uint_type_ptr.pointer = true;
 			uint_type_ptr.pointer_depth++;
 			uint_type_ptr.parent_type = type_id;
 			uint_type_ptr.storage = StorageClassInput;
 
 			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_ptr_id;
+			ptr_type.self = type_id;
 			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
 			set_decoration(var_id, DecorationBuiltIn, BuiltInWorkgroupSize);
 			builtin_workgroup_size_id = var_id;
@@ -999,21 +987,20 @@ void CompilerMSL::build_implicit_builtins()
 		uint32_t var_id = offset + 2;
 
 		// Create gl_Position.
-		SPIRType vec4_type { spv::Op::OpTypeVector };
+		SPIRType vec4_type { OpTypeVector };
 		vec4_type.basetype = SPIRType::Float;
 		vec4_type.width = 32;
 		vec4_type.vecsize = 4;
 		set<SPIRType>(type_id, vec4_type);
 
-		SPIRType vec4_type_ptr { spv::Op::OpTypePointer };
-		vec4_type_ptr = vec4_type;
-		vec4_type_ptr.op = spv::Op::OpTypePointer;
+		SPIRType vec4_type_ptr = vec4_type;
+		vec4_type_ptr.op = OpTypePointer;
 		vec4_type_ptr.pointer = true;
 		vec4_type_ptr.pointer_depth++;
 		vec4_type_ptr.parent_type = type_id;
 		vec4_type_ptr.storage = StorageClassOutput;
 		auto &ptr_type = set<SPIRType>(type_ptr_id, vec4_type_ptr);
-		ptr_type.self = type_ptr_id;
+		ptr_type.self = type_id;
 
 		set<SPIRVariable>(var_id, type_ptr_id, StorageClassOutput);
 		set_decoration(var_id, DecorationBuiltIn, BuiltInPosition);
@@ -1084,7 +1071,7 @@ uint32_t CompilerMSL::build_constant_uint_array_pointer()
 
 	// Create a buffer to hold extra data, including the swizzle constants.
 	SPIRType uint_type_pointer = get_uint_type();
-	uint_type_pointer.op = spv::Op::OpTypePointer;
+	uint_type_pointer.op = OpTypePointer;
 	uint_type_pointer.pointer = true;
 	uint_type_pointer.pointer_depth++;
 	uint_type_pointer.parent_type = get_uint_type_id();
@@ -1163,7 +1150,7 @@ uint32_t CompilerMSL::get_uint_type_id()
 
 	uint_type_id = ir.increase_bound_by(1);
 
-	SPIRType type { spv::Op::OpTypeInt };
+	SPIRType type { OpTypeInt };
 	type.basetype = SPIRType::UInt;
 	type.width = 32;
 	set<SPIRType>(uint_type_id, type);
@@ -2186,7 +2173,7 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 						// Make sure we have an actual pointer type,
 						// so that we will get the appropriate address space when declaring these builtins.
 						auto &ptr = set<SPIRType>(ptr_type_id, get<SPIRType>(mbr_type_id));
-						ptr.self = ptr_type_id;
+						ptr.self = mbr_type_id;
 						ptr.storage = var.storage;
 						ptr.pointer = true;
 						ptr.pointer_depth++;
@@ -2348,23 +2335,25 @@ uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t comp
 {
 	assert(components > 1);
 	uint32_t new_type_id = ir.increase_bound_by(1);
-	auto &old_type = get<SPIRType>(type_id);
-	SPIRType* old_ptr_t = nullptr;
-	SPIRType* old_array_t = nullptr;
-	if (is_pointer(old_type))
+	const auto *p_old_type = &get<SPIRType>(type_id);
+	const SPIRType *old_ptr_t = nullptr;
+	const SPIRType *old_array_t = nullptr;
+
+	if (is_pointer(*p_old_type))
 	{
-		old_ptr_t = &old_type;
-		old_type = get_pointee_type(*old_ptr_t);
-	}
-	if (is_array(old_type))
-	{
-		old_array_t = &old_type;
-		old_type = get_type(old_array_t->parent_type);
+		old_ptr_t = p_old_type;
+		p_old_type = &get_pointee_type(*old_ptr_t);
 	}
 
-	auto *type = &set<SPIRType>(new_type_id, old_type);
+	if (is_array(*p_old_type))
+	{
+		old_array_t = p_old_type;
+		p_old_type = &get_type(old_array_t->parent_type);
+	}
+
+	auto *type = &set<SPIRType>(new_type_id, *p_old_type);
 	assert(is_scalar(*type) || is_vector(*type));
-	type->op = spv::Op::OpTypeVector;
+	type->op = OpTypeVector;
 	type->vecsize = components;
 	if (basetype != SPIRType::Unknown)
 		type->basetype = basetype;
@@ -2378,6 +2367,7 @@ uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t comp
 	{
 		uint32_t array_type_id = ir.increase_bound_by(1);
 		type = &set<SPIRType>(array_type_id, *type);
+		type->op = OpTypeArray;
 		type->parent_type = new_type_id;
 		type->array = old_array_t->array;
 		type->array_size_literal = old_array_t->array_size_literal;
@@ -2388,7 +2378,7 @@ uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t comp
 	{
 		uint32_t ptr_type_id = ir.increase_bound_by(1);
 		type = &set<SPIRType>(ptr_type_id, *type);
-		type->self = new_type_id;
+		type->op = OpTypePointer;
 		type->parent_type = new_type_id;
 		type->storage = old_ptr_t->storage;
 		type->pointer = true;
@@ -3968,7 +3958,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	// declaraion is emitted, because it is cleared after each compilation pass.
 	uint32_t next_id = ir.increase_bound_by(3);
 	uint32_t ib_type_id = next_id++;
-	auto &ib_type = set<SPIRType>(ib_type_id, spv::Op::OpTypeStruct);
+	auto &ib_type = set<SPIRType>(ib_type_id, OpTypeStruct);
 	ib_type.basetype = SPIRType::Struct;
 	ib_type.storage = storage;
 	set_decoration(ib_type_id, DecorationBlock);
@@ -4198,7 +4188,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			uint32_t ptr_type_id = offset + 3;
 			uint32_t var_id = offset + 4;
 
-			SPIRType type { spv::Op::OpTypeInt };
+			SPIRType type { OpTypeInt };
 			switch (input.second.format)
 			{
 			case MSL_SHADER_VARIABLE_FORMAT_UINT16:
@@ -4215,26 +4205,26 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			set<SPIRType>(type_id, type);
 			if (input.second.vecsize > 1)
 			{
-				type.op = spv::Op::OpTypeVector;
+				type.op = OpTypeVector;
 				type.vecsize = input.second.vecsize;
 				set<SPIRType>(vec_type_id, type);
 				type_id = vec_type_id;
 			}
 
-			type.op = spv::Op::OpTypeArray;
+			type.op = OpTypeArray;
 			type.array.push_back(0);
 			type.array_size_literal.push_back(true);
 			type.parent_type = type_id;
 			set<SPIRType>(array_type_id, type);
-			type.self = array_type_id;
+			type.self = type_id;
 
-			type.op = spv::Op::OpTypePointer;
+			type.op = OpTypePointer;
 			type.pointer = true;
 			type.pointer_depth++;
 			type.parent_type = array_type_id;
 			type.storage = storage;
 			auto &ptr_type = set<SPIRType>(ptr_type_id, type);
-			ptr_type.self = ptr_type_id;
+			ptr_type.self = array_type_id;
 
 			auto &fake_var = set<SPIRVariable>(var_id, ptr_type_id, storage);
 			set_decoration(var_id, DecorationLocation, input.first.location);
@@ -4266,7 +4256,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			uint32_t ptr_type_id = offset + 3;
 			uint32_t var_id = offset + 4;
 
-			SPIRType type { spv::Op::OpTypeInt };
+			SPIRType type { OpTypeInt };
 			switch (output.second.format)
 			{
 			case MSL_SHADER_VARIABLE_FORMAT_UINT16:
@@ -4283,7 +4273,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 			set<SPIRType>(type_id, type);
 			if (output.second.vecsize > 1)
 			{
-				type.op = spv::Op::OpTypeVector;
+				type.op = OpTypeVector;
 				type.vecsize = output.second.vecsize;
 				set<SPIRType>(vec_type_id, type);
 				type_id = vec_type_id;
@@ -4291,14 +4281,14 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 
 			if (is_tesc_shader())
 			{
-				type.op = spv::Op::OpTypeArray;
+				type.op = OpTypeArray;
 				type.array.push_back(0);
 				type.array_size_literal.push_back(true);
-				type.parent_type = vec_type_id;
+				type.parent_type = type_id;
 				set<SPIRType>(array_type_id, type);
 			}
 
-			type.op = spv::Op::OpTypePointer;
+			type.op = OpTypePointer;
 			type.pointer = true;
 			type.pointer_depth++;
 			type.parent_type = is_tesc_shader() ? array_type_id : type_id;
@@ -4385,6 +4375,7 @@ uint32_t CompilerMSL::add_interface_block_pointer(uint32_t ib_var_id, StorageCla
 		// do the same with our struct here.
 		uint32_t ib_ptr_type_id = next_id++;
 		auto &ib_ptr_type = set<SPIRType>(ib_ptr_type_id, ib_type);
+		ib_ptr_type.op = OpTypePointer;
 		ib_ptr_type.parent_type = ib_ptr_type.type_alias = ib_type.self;
 		ib_ptr_type.pointer = true;
 		ib_ptr_type.pointer_depth++;
@@ -4438,27 +4429,24 @@ uint32_t CompilerMSL::add_interface_block_pointer(uint32_t ib_var_id, StorageCla
 // Otherwise, create a new type, and return it's ID.
 uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn builtin)
 {
-	auto& type = get<SPIRType>(type_id);
-	auto pointee_type = type;
-	if (is_pointer(type))
-		pointee_type = get<SPIRType>(type.parent_type);
+	auto &type = get<SPIRType>(type_id);
+	auto &pointee_type = get_pointee_type(type);
 
 	if ((builtin == BuiltInSampleMask && is_array(pointee_type)) ||
 	    ((builtin == BuiltInLayer || builtin == BuiltInViewportIndex || builtin == BuiltInFragStencilRefEXT) &&
 	     pointee_type.basetype != SPIRType::UInt))
 	{
-		uint32_t next_id = ir.increase_bound_by(type.pointer ? 2 : 1);
+		uint32_t next_id = ir.increase_bound_by(type_is_pointer(type) ? 2 : 1);
 		uint32_t base_type_id = next_id++;
-		auto &base_type = set<SPIRType>(base_type_id, spv::Op::OpTypeInt);
+		auto &base_type = set<SPIRType>(base_type_id, OpTypeInt);
 		base_type.basetype = SPIRType::UInt;
 		base_type.width = 32;
 
-		if (!type.pointer)
+		if (!type_is_pointer(type))
 			return base_type_id;
 
 		uint32_t ptr_type_id = next_id++;
-		auto &ptr_type = set<SPIRType>(ptr_type_id, spv::OpTypePointer);
-		ptr_type = base_type;
+		auto &ptr_type = set<SPIRType>(ptr_type_id, base_type);
 		ptr_type.op = spv::OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
@@ -4949,7 +4937,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 			{
 				type.columns = 1;
 				assert(type.array.empty());
-				type.op = spv::Op::OpTypeArray;
+				type.op = OpTypeArray;
 				type.array.push_back(1);
 				type.array_size_literal.push_back(true);
 			}
@@ -4966,7 +4954,7 @@ void CompilerMSL::ensure_member_packing_rules_msl(SPIRType &ib_type, uint32_t in
 				type.vecsize = type.columns;
 				type.columns = 1;
 				assert(type.array.empty());
-				type.op = spv::Op::OpTypeArray;
+				type.op = OpTypeArray;
 				type.array.push_back(1);
 				type.array_size_literal.push_back(true);
 			}
@@ -4991,7 +4979,7 @@ void CompilerMSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_exp
 
 	if (has_decoration(lhs_expression, DecorationBuiltIn) &&
 	    BuiltIn(get_decoration(lhs_expression, DecorationBuiltIn)) == BuiltInSampleMask &&
-	    type_is_top_level_array(type))
+	    is_array(type))
 	{
 		// Storing an array to SampleMask, have to remove the array-ness before storing.
 		statement(to_expression(lhs_expression), " = ", to_enclosed_unpacked_expression(rhs_expression), "[0];");
@@ -7507,7 +7495,7 @@ void CompilerMSL::declare_constant_arrays()
 		// FIXME: However, hoisting constants to main() means we need to pass down constant arrays to leaf functions if they are used there.
 		// If there are multiple functions in the module, drop this case to avoid breaking use cases which do not need to
 		// link into Metal libraries. This is hacky.
-		if (type_is_top_level_array(type) && (!fully_inlined || is_scalar(type) || is_vector(type)))
+		if (is_array(type) && (!fully_inlined || is_scalar(type) || is_vector(type)))
 		{
 			add_resource_name(c.self);
 			auto name = to_name(c.self);
@@ -7539,7 +7527,7 @@ void CompilerMSL::declare_complex_constant_arrays()
 			return;
 
 		auto &type = this->get<SPIRType>(c.constant_type);
-		if (type_is_top_level_array(type) && !(is_scalar(type) || is_vector(type)))
+		if (is_array(type) && !(is_scalar(type) || is_vector(type)))
 		{
 			add_resource_name(c.self);
 			auto name = to_name(c.self);
@@ -8278,7 +8266,7 @@ bool CompilerMSL::emit_tessellation_access_chain(const uint32_t *ops, uint32_t l
 
 			// We're not going to emit the actual member name, we let any further OpLoad take care of that.
 			// Tag the access chain with the member index we're referencing.
-			auto& result_pointee_type = get_pointee_type(result_ptr_type);
+			auto &result_pointee_type = get_pointee_type(result_ptr_type);
 			bool defer_access_chain = flatten_composites && (is_matrix(result_pointee_type) || is_array(result_pointee_type) ||
 			                                                 result_pointee_type.basetype == SPIRType::Struct);
 
@@ -9921,7 +9909,7 @@ bool CompilerMSL::maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs)
 {
 	// We only care about assignments of an entire array
 	auto &type = expression_type(id_lhs);
-	if (!type_is_top_level_array(get_pointee_type(type)))
+	if (!is_array(get_pointee_type(type)))
 		return false;
 
 	auto *var = maybe_get<SPIRVariable>(id_lhs);
@@ -10871,7 +10859,7 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 
 string CompilerMSL::convert_to_f32(const string &expr, uint32_t components)
 {
-	SPIRType t { components > 1 ? spv::Op::OpTypeVector : spv::Op::OpTypeFloat };
+	SPIRType t { components > 1 ? OpTypeVector : OpTypeFloat };
 	t.basetype = SPIRType::Float;
 	t.vecsize = components;
 	t.columns = 1;
@@ -11980,7 +11968,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	if (is_matrix(physical_type))
 		row_major = has_member_decoration(type.self, index, DecorationRowMajor);
 
-	SPIRType row_major_physical_type { spv::Op::OpTypeMatrix };
+	SPIRType row_major_physical_type { OpTypeMatrix };
 	const SPIRType *declared_type = &physical_type;
 
 	// If a struct is being declared with physical layout,
@@ -14375,7 +14363,6 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &type = get_variable_data_type(var);
 	auto &var_type = get<SPIRType>(arg.type);
 	StorageClass type_storage = var_type.storage;
-	bool is_pointer = var_type.pointer;
 
 	// If we need to modify the name of the variable, make sure we use the original variable.
 	// Our alias is just a shadow variable.
@@ -14383,7 +14370,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (arg.alias_global_variable && var.basevariable)
 		name_id = var.basevariable;
 
-	bool constref = !arg.alias_global_variable && is_pointer && arg.write_count == 0;
+	bool constref = !arg.alias_global_variable && is_pointer(var_type) && arg.write_count == 0;
 	// Framebuffer fetch is plain value, const looks out of place, but it is not wrong.
 	if (type_is_msl_framebuffer_fetch(type))
 		constref = false;
@@ -14481,7 +14468,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 	}
 
-	if (!builtin && !is_pointer &&
+	if (!builtin && !is_pointer(var_type) &&
 	    (type_storage == StorageClassFunction || type_storage == StorageClassGeneric))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
@@ -15060,7 +15047,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 	string type_name;
 
 	// Pointer?
-	if (type_is_top_level_pointer(type) || type_is_array_of_pointers(type))
+	if (is_pointer(type) || type_is_array_of_pointers(type))
 	{
 		assert(type.pointer_depth > 0);
 
@@ -15088,7 +15075,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 			// the C-style nesting works right.
 			// FIXME: This is somewhat of a hack.
 			bool old_is_using_builtin_array = is_using_builtin_array;
-			if (type_is_top_level_physical_pointer(type))
+			if (is_physical_pointer(type))
 				is_using_builtin_array = false;
 
 			type_name = join(type_address_space, " ", type_to_glsl(*p_parent_type, id));
@@ -16947,8 +16934,7 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		auto *var = compiler.maybe_get_backing_variable(args[2]);
 		if (var != nullptr)
 		{
-			auto &type = compiler.get<SPIRType>(var->basetype);
-			if (!is_runtime_size_array(type))
+			if (!compiler.is_var_runtime_size_array(*var))
 				compiler.buffers_requiring_array_length.insert(var->self);
 		}
 		break;
@@ -17361,7 +17347,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 	// Type fixups for workgroup variables if they are booleans.
 	if (rewrite_boolean_load)
 	{
-		if (type_is_top_level_array(expr_type))
+		if (is_array(expr_type))
 			expr = to_rerolled_array_expression(expr_type, expr, expr_type);
 		else
 			expr = join(type_to_glsl(expr_type), "(", expr, ")");
@@ -17438,7 +17424,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 		break;
 	}
 
-	if (type_is_top_level_array(expr_type) && builtin == BuiltInSampleMask)
+	if (is_array(expr_type) && builtin == BuiltInSampleMask)
 	{
 		// Needs special handling.
 		auto wrap_expr = join(type_to_glsl(expr_type), "({ ");
@@ -17448,7 +17434,7 @@ void CompilerMSL::cast_from_variable_load(uint32_t source_id, std::string &expr,
 	}
 	else if (expected_type != expr_type.basetype)
 	{
-		if (type_is_top_level_array(expr_type) && (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter))
+		if (is_array(expr_type) && (builtin == BuiltInTessLevelInner || builtin == BuiltInTessLevelOuter))
 		{
 			// Triggers when loading TessLevel directly as an array.
 			// Need explicit padding + cast.
@@ -17507,7 +17493,7 @@ void CompilerMSL::cast_to_variable_store(uint32_t target_id, std::string &expr, 
 	// Type fixups for workgroup variables or struct members if they are booleans.
 	if (rewrite_boolean_store)
 	{
-		if (type_is_top_level_array(expr_type))
+		if (is_array(expr_type))
 		{
 			expr = to_rerolled_array_expression(*var_type, expr, expr_type);
 		}
@@ -17786,6 +17772,7 @@ void CompilerMSL::analyze_argument_buffers()
 
 				// Create a buffer to hold extra data, including the swizzle constants.
 				SPIRType uint_type_pointer = get_uint_type();
+				uint_type_pointer.op = OpTypePointer;
 				uint_type_pointer.pointer = true;
 				uint_type_pointer.pointer_depth++;
 				uint_type_pointer.parent_type = get_uint_type_id();
@@ -17841,7 +17828,7 @@ void CompilerMSL::analyze_argument_buffers()
 		uint32_t ptr_type_id = next_id + 2;
 		argument_buffer_ids[desc_set] = next_id;
 
-		auto &buffer_type = set<SPIRType>(type_id, spv::Op::OpTypeStruct);
+		auto &buffer_type = set<SPIRType>(type_id, OpTypeStruct);
 
 		buffer_type.basetype = SPIRType::Struct;
 
@@ -17858,7 +17845,7 @@ void CompilerMSL::analyze_argument_buffers()
 
 		set_name(type_id, join("spvDescriptorSetBuffer", desc_set));
 
-		auto &ptr_type = set<SPIRType>(ptr_type_id, spv::Op::OpTypePointer);
+		auto &ptr_type = set<SPIRType>(ptr_type_id, OpTypePointer);
 		ptr_type = buffer_type;
 		ptr_type.op = spv::OpTypePointer;
 		ptr_type.pointer = true;
@@ -17943,14 +17930,14 @@ void CompilerMSL::analyze_argument_buffers()
 
 				bool type_is_array = !type.array.empty();
 				uint32_t sampler_type_id = ir.increase_bound_by(type_is_array ? 2 : 1);
-				auto &new_sampler_type = set<SPIRType>(sampler_type_id, spv::Op::OpTypeSampler);
+				auto &new_sampler_type = set<SPIRType>(sampler_type_id, OpTypeSampler);
 				new_sampler_type.basetype = SPIRType::Sampler;
 				new_sampler_type.storage = StorageClassUniformConstant;
 
 				if (type_is_array)
 				{
 					uint32_t sampler_type_array_id = sampler_type_id + 1;
-					auto &sampler_type_array = set<SPIRType>(sampler_type_array_id, spv::Op::OpTypeArray);
+					auto &sampler_type_array = set<SPIRType>(sampler_type_array_id, OpTypeArray);
 					sampler_type_array = new_sampler_type;
 					sampler_type_array.array = type.array;
 					sampler_type_array.array_size_literal = type.array_size_literal;
@@ -18001,18 +17988,19 @@ void CompilerMSL::analyze_argument_buffers()
 					uint32_t atomic_type_id = offset;
 					uint32_t type_ptr_id = offset + 1;
 
-					SPIRType atomic_type { spv::Op::OpTypeInt };
+					SPIRType atomic_type { OpTypeInt };
 					atomic_type.basetype = SPIRType::AtomicCounter;
 					atomic_type.width = 32;
 					atomic_type.vecsize = 1;
 					set<SPIRType>(atomic_type_id, atomic_type);
 
+					atomic_type.op = OpTypePointer;
 					atomic_type.pointer = true;
 					atomic_type.pointer_depth++;
 					atomic_type.parent_type = atomic_type_id;
 					atomic_type.storage = StorageClassStorageBuffer;
 					auto &atomic_ptr_type = set<SPIRType>(type_ptr_id, atomic_type);
-					atomic_ptr_type.self = type_ptr_id;
+					atomic_ptr_type.self = atomic_type_id;
 
 					buffer_type.member_types.push_back(type_ptr_id);
 				}
@@ -18067,12 +18055,12 @@ void CompilerMSL::add_argument_buffer_padding_buffer_type(SPIRType &struct_type,
 	if (!argument_buffer_padding_buffer_type_id)
 	{
 		uint32_t buff_type_id = ir.increase_bound_by(2);
-		auto &buff_type = set<SPIRType>(buff_type_id, spv::Op::OpNop);
+		auto &buff_type = set<SPIRType>(buff_type_id, OpNop);
 		buff_type.basetype = rez_bind.basetype;
 		buff_type.storage = StorageClassUniformConstant;
 
 		uint32_t ptr_type_id = buff_type_id + 1;
-		auto &ptr_type = set<SPIRType>(ptr_type_id, spv::Op::OpTypePointer);
+		auto &ptr_type = set<SPIRType>(ptr_type_id, OpTypePointer);
 		ptr_type = buff_type;
 		ptr_type.op = spv::OpTypePointer;
 		ptr_type.pointer = true;
@@ -18092,12 +18080,12 @@ void CompilerMSL::add_argument_buffer_padding_image_type(SPIRType &struct_type, 
 	if (!argument_buffer_padding_image_type_id)
 	{
 		uint32_t base_type_id = ir.increase_bound_by(2);
-		auto &base_type = set<SPIRType>(base_type_id, spv::Op::OpTypeFloat);
+		auto &base_type = set<SPIRType>(base_type_id, OpTypeFloat);
 		base_type.basetype = SPIRType::Float;
 		base_type.width = 32;
 
 		uint32_t img_type_id = base_type_id + 1;
-		auto &img_type = set<SPIRType>(img_type_id, spv::Op::OpTypeImage);
+		auto &img_type = set<SPIRType>(img_type_id, OpTypeImage);
 		img_type.basetype = SPIRType::Image;
 		img_type.storage = StorageClassUniformConstant;
 
@@ -18123,7 +18111,7 @@ void CompilerMSL::add_argument_buffer_padding_sampler_type(SPIRType &struct_type
 	if (!argument_buffer_padding_sampler_type_id)
 	{
 		uint32_t samp_type_id = ir.increase_bound_by(1);
-		auto &samp_type = set<SPIRType>(samp_type_id, spv::Op::OpTypeSampler);
+		auto &samp_type = set<SPIRType>(samp_type_id, OpTypeSampler);
 		samp_type.basetype = SPIRType::Sampler;
 		samp_type.storage = StorageClassUniformConstant;
 
@@ -18142,9 +18130,8 @@ void CompilerMSL::add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRTyp
 	if (count > 1)
 	{
 		uint32_t ary_type_id = ir.increase_bound_by(1);
-		auto &ary_type = set<SPIRType>(ary_type_id, spv::Op::OpTypeArray);
-		ary_type = get<SPIRType>(type_id);
-		ary_type.op = spv::Op::OpTypeArray;
+		auto &ary_type = set<SPIRType>(ary_type_id, get<SPIRType>(type_id));
+		ary_type.op = OpTypeArray;
 		ary_type.array.push_back(count);
 		ary_type.array_size_literal.push_back(true);
 		ary_type.parent_type = type_id;
