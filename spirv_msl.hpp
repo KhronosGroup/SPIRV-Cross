@@ -287,9 +287,6 @@ static const uint32_t kArgumentBufferBinding = ~(3u);
 
 static const uint32_t kMaxArgumentBuffers = 8;
 
-// The arbitrary maximum for the nesting of array of array copies.
-static const uint32_t kArrayCopyMultidimMax = 6;
-
 // Decompiles SPIR-V to Metal Shading Language
 class CompilerMSL : public CompilerGLSL
 {
@@ -752,15 +749,8 @@ protected:
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
 		SPVFuncImplSSign,
-		SPVFuncImplArrayCopyMultidimBase,
-		// Unfortunately, we cannot use recursive templates in the MSL compiler properly,
-		// so stamp out variants up to some arbitrary maximum.
-		SPVFuncImplArrayCopy = SPVFuncImplArrayCopyMultidimBase + 1,
-		SPVFuncImplArrayOfArrayCopy2Dim = SPVFuncImplArrayCopyMultidimBase + 2,
-		SPVFuncImplArrayOfArrayCopy3Dim = SPVFuncImplArrayCopyMultidimBase + 3,
-		SPVFuncImplArrayOfArrayCopy4Dim = SPVFuncImplArrayCopyMultidimBase + 4,
-		SPVFuncImplArrayOfArrayCopy5Dim = SPVFuncImplArrayCopyMultidimBase + 5,
-		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
+		SPVFuncImplArrayCopy,
+		SPVFuncImplArrayCopyMultidim,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplImage2DAtomicCoords, // Emulate texture2D atomic operations
 		SPVFuncImplGradientCube,
