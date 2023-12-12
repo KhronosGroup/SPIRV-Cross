@@ -1020,7 +1020,7 @@ protected:
         uint32_t secondary_index;
     };
     
-    SmallVector<Entry_Point_Resource> get_sorted_entry_point_args(bool add_name = true)
+    SmallVector<Entry_Point_Resource> get_sorted_entry_point_args(bool add_name = true);
 	std::string append_member_name(const std::string &qualifier, const SPIRType &type, uint32_t index);
 	std::string ensure_valid_name(std::string name, std::string pfx);
 	std::string to_sampler_expression(uint32_t id);
