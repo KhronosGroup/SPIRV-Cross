@@ -11157,7 +11157,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 
 	if (processing_entry_point)
 	{
-        auto &execution = get_entry_point()
+        auto &execution = get_entry_point();
         if (execution.model == ExecutionModelGeometry) {
             auto output_primitives = execution.output_primitives;
             if (!output_primitives) output_primitives = execution.output_vertices - 2;
