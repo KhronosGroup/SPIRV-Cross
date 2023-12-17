@@ -48,9 +48,9 @@ struct Params
 kernel void main0(constant Params& _18 [[buffer(1)]], raytracing::acceleration_structure<raytracing::instancing> AS0 [[buffer(0)]], raytracing::acceleration_structure<raytracing::instancing> AS1 [[buffer(2)]])
 {
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q;
-    q.reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS0, spvMakeIntersectionParams(_18.ray_flags));
+    q.reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS0, _18.cull_mask, spvMakeIntersectionParams(_18.ray_flags));
     raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data> q2[2];
-    q2[1].reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS1, spvMakeIntersectionParams(_18.ray_flags));
+    q2[1].reset(ray(_18.origin, _18.dir, _18.tmin, _18.tmax), AS1, _18.cull_mask, spvMakeIntersectionParams(_18.ray_flags));
     bool _63 = q.next();
     bool res = _63;
     q2[0].abort();

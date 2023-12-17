@@ -80,7 +80,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     gl_out[gl_GlobalInvocationID.x % 4].gl_CullDistance = _32[gl_GlobalInvocationID.x % 4]._RESERVED_IDENTIFIER_FIXUP_gl_CullDistance;
     device main0_patchOut& patchOut = spvPatchOut[gl_GlobalInvocationID.x / 4];
     threadgroup float4 spvStoragefoo_patch[8];
-    threadgroup float4 (&foo_patch) = spvStoragefoo_patch[(gl_GlobalInvocationID.x / 4) % 8];
+    threadgroup auto &foo_patch = spvStoragefoo_patch[(gl_GlobalInvocationID.x / 4) % 8];
     foo_patch = float4(0.0);
     uint gl_InvocationID = gl_GlobalInvocationID.x % 4;
     uint gl_PrimitiveID = min(gl_GlobalInvocationID.x / 4, spvIndirectParams[1] - 1);

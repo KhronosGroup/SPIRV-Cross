@@ -69,7 +69,7 @@ kernel void main0(uint gl_InvocationID [[thread_index_in_threadgroup]], uint gl_
 {
     spvUnsafeArray<C, 4> _21 = spvUnsafeArray<C, 4>({ C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) }, C{ float4(0.0) } });
     
-    threadgroup C c[4];
+    threadgroup spvUnsafeArray<C, 4> c;
     device main0_out* gl_out = &spvOut[gl_PrimitiveID * 4];
     c[gl_InvocationID] = _21[gl_InvocationID];
     device main0_patchOut& patchOut = spvPatchOut[gl_PrimitiveID];

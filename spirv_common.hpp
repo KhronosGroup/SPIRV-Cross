@@ -295,6 +295,20 @@ inline std::string convert_to_string(double t, char locale_radix_point)
 	return buf;
 }
 
+#if defined(__clang__) || defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
+class FloatFormatter
+{
+public:
+	virtual ~FloatFormatter() = default;
+	virtual std::string format_float(float value) = 0;
+	virtual std::string format_double(double value) = 0;
+};
+
 template <typename T>
 struct ValueSaver
 {
@@ -317,12 +331,6 @@ struct ValueSaver
 	T &current;
 	T saved;
 };
-
-#if defined(__clang__) || defined(__GNUC__)
-#pragma GCC diagnostic pop
-#elif defined(_MSC_VER)
-#pragma warning(pop)
-#endif
 
 struct Instruction
 {
@@ -540,6 +548,9 @@ struct SPIRType : IVariant
 		type = TypeType
 	};
 
+	spv::Op op = spv::Op::OpNop;
+	explicit SPIRType(spv::Op op_) : op(op_) {}
+
 	enum BaseType
 	{
 		Unknown,
@@ -611,7 +622,7 @@ struct SPIRType : IVariant
 		uint32_t sampled;
 		spv::ImageFormat format;
 		spv::AccessQualifier access;
-	} image;
+	} image = {};
 
 	// Structs can be declared multiple times if they are used as part of interface blocks.
 	// We want to detect this so that we only emit the struct definition once.
