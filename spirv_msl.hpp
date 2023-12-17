@@ -314,6 +314,7 @@ public:
 		uint32_t swizzle_buffer_index = 30;
 		uint32_t indirect_params_buffer_index = 29;
 		uint32_t shader_output_buffer_index = 28;
+		uint32_t tese_patch_vertex_counts_buffer_index = 27;
 		uint32_t shader_patch_output_buffer_index = 27;
 		uint32_t shader_tess_factor_buffer_index = 26;
 		uint32_t buffer_size_buffer_index = 25;
@@ -538,7 +539,7 @@ public:
 			LineStripWithAdjacency,
 			TriangleListWithAdjacency,
 			TriangleStripWithAdjacency,
-			// 10 reserved for patch list
+			PatchList,
 		};
 
 		// Indicates the kind of input primitive. Only needed for vertex shaders that have the
@@ -1129,10 +1130,12 @@ protected:
 	uint32_t builtin_stage_input_size_id = 0;
 	uint32_t builtin_local_invocation_index_id = 0;
 	uint32_t builtin_workgroup_size_id = 0;
+	uint32_t builtin_tess_coord_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
+	uint32_t patch_vertex_counts_buffer_id = 0;
 	uint32_t uint_type_id = 0;
 	uint32_t argument_buffer_padding_buffer_type_id = 0;
 	uint32_t argument_buffer_padding_image_type_id = 0;

@@ -938,6 +938,18 @@ void CompilerMSL::build_implicit_builtins()
 		dynamic_offsets_buffer_id = var_id;
 	}
 
+	if (is_tese_shader() && needs_transform_feedback())
+	{
+		uint32_t var_id = build_constant_uint_array_pointer();
+		set_name(var_id, "spvPatchVertexCounts");
+		// This should never match anything.
+		set_decoration(var_id, DecorationDescriptorSet, ~(6u));
+		set_decoration(var_id, DecorationBinding, msl_options.tese_patch_vertex_counts_buffer_index);
+		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary,
+		                        msl_options.tese_patch_vertex_counts_buffer_index);
+		patch_vertex_counts_buffer_id = var_id;
+	}
+
 	// If we're returning a struct from a vertex-like entry point, we must return a position attribute.
 	bool need_position = (get_execution_model() == ExecutionModelVertex || is_tese_shader()) &&
 	                     !capture_output_to_buffer && !get_is_rasterization_disabled() &&
@@ -1561,6 +1573,8 @@ string CompilerMSL::compile()
 		add_active_interface_variable(view_mask_buffer_id);
 	if (dynamic_offsets_buffer_id)
 		add_active_interface_variable(dynamic_offsets_buffer_id);
+	if (patch_vertex_counts_buffer_id)
+		add_active_interface_variable(patch_vertex_counts_buffer_id);
 	if (builtin_layer_id)
 		add_active_interface_variable(builtin_layer_id);
 	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
@@ -14152,7 +14166,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		    [=]()
 		    {
 			    string index_expr;
-			    switch (msl_options.xfb_primitive_type)
+			    auto prim_type = is_tese_shader() ? Options::PrimitiveType::PatchList : msl_options.xfb_primitive_type;
+			    switch (prim_type)
 			    {
 			    case Options::PrimitiveType::PointList:
 				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * ",
@@ -14297,6 +14312,22 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				              to_expression(builtin_stage_input_size_id), ".x, 2u);");
 				    index_expr = join("spvXfbBaseIndex + 3 * ", to_expression(builtin_invocation_id_id), ".x - 2u");
 				    break;
+				case Options::PrimitiveType::PatchList:
+					// This is particularly nasty, because a variable number of vertices may be generated
+					// from each patch. Therefore, we must maintain a count of vertices per patch and
+					// sum the entire array up to our patch to figure out the base. Yes, this will slow
+					// down the later patches.
+					// But wait, there's more! We also need to figure out which vertex and triangle in the
+					// patch this is, to identify where to write the transform feedback data. The only
+					// identifying information we have is the tessellation coordinates (barycentric for
+					// triangles, normalized for quads). Therefore, we have to perform some sort of
+					// mathematical transformation on the tessellation coordinate to derive an index, and
+					// what's more, we have to do it in a way that the resulting triangles' vertices are emitted
+					// in the buffer in winding order, and that each vertex is emitted once *per triangle*, as the
+					// spec requires.
+					statement("uint spvXfbBaseIndex = 0;");
+					statement("for (uint i = 0; i < ", to_expression(builtin_primitive_id_id), "; ++i)");
+					statement("    spvXfbBaseIndex += ", to_name(patch_vertex_counts_buffer_id), "[i];");
 			    case Options::PrimitiveType::Dynamic:
 			    default:
 				    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
