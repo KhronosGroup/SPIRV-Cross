@@ -977,7 +977,7 @@ protected:
 	void emit_interface_block(uint32_t ib_var_id);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	bool is_var_runtime_size_array(const SPIRVariable &var) const;
-	uint32_t get_resource_array_size(uint32_t id) const;
+	uint32_t get_resource_array_size(const SPIRType &type, uint32_t id) const;
 
 	void fix_up_shader_inputs_outputs();
 
