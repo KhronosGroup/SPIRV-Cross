@@ -1809,6 +1809,12 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 
 		uint32_t alignment = max(packed_alignment, pad_alignment);
 		offset = (offset + alignment - 1) & ~(alignment - 1);
+		if (offset <= (actual_offset & ~(alignment - 1)))
+		{
+			packed_size += actual_offset % alignment;
+			offset = actual_offset & ~(alignment - 1);
+			alignment = 1;
+		}
 
 		// The next member following a struct member is aligned to the base alignment of the struct that came before.
 		// GL 4.5 spec, 7.6.2.2.
