@@ -1797,10 +1797,13 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 		if (packing_is_hlsl(packing))
 		{
 			// If a member straddles across a vec4 boundary, alignment is actually vec4.
-			uint32_t begin_word = offset / 16;
-			uint32_t end_word = (offset + packed_size - 1) / 16;
+			uint32_t begin_word = actual_offset / 16;
+			uint32_t end_word = (actual_offset + packed_size - 1) / 16;
+
 			if (begin_word != end_word)
 				packed_alignment = max<uint32_t>(packed_alignment, 16u);
+			if (begin_word != (offset / 16))
+				offset = actual_offset;
 		}
 
 		// Field is not in the specified range anymore and we can ignore any further fields.
@@ -1809,12 +1812,6 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 
 		uint32_t alignment = max(packed_alignment, pad_alignment);
 		offset = (offset + alignment - 1) & ~(alignment - 1);
-		if (offset <= (actual_offset & ~(alignment - 1)))
-		{
-			packed_size += actual_offset % alignment;
-			offset = actual_offset & ~(alignment - 1);
-			alignment = 1;
-		}
 
 		// The next member following a struct member is aligned to the base alignment of the struct that came before.
 		// GL 4.5 spec, 7.6.2.2.
