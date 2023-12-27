@@ -12741,7 +12741,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		}
 	}
 
-	// Mesh function inputs
+	// Mesh function outputs
 	if (execution.model == ExecutionModelMeshEXT)
 	{
 		if (is_builtin)
@@ -12770,9 +12770,40 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			}
 		}
 
-		string loc_qual = member_location_attribute_qualifier(type, index);
-		if (!loc_qual.empty())
-			return join(" [[", loc_qual, "]]");
+		string quals;
+		quals = member_location_attribute_qualifier(type, index);
+		if (has_member_decoration(type.self, index, DecorationFlat))
+		{
+			if (!quals.empty())
+				quals += ", ";
+			quals += "flat";
+		}
+		else if (has_member_decoration(type.self, index, DecorationCentroid))
+		{
+			if (!quals.empty())
+				quals += ", ";
+			if (has_member_decoration(type.self, index, DecorationNoPerspective))
+				quals += "centroid_no_perspective";
+			else
+				quals += "centroid_perspective";
+		}
+		else if (has_member_decoration(type.self, index, DecorationSample))
+		{
+			if (!quals.empty())
+				quals += ", ";
+			if (has_member_decoration(type.self, index, DecorationNoPerspective))
+				quals += "sample_no_perspective";
+			else
+				quals += "sample_perspective";
+		}
+		else if (has_member_decoration(type.self, index, DecorationNoPerspective))
+		{
+			if (!quals.empty())
+				quals += ", ";
+			quals += "center_no_perspective";
+		}
+		if (!quals.empty())
+			return join(" [[", quals, "]]");
 		return "";
 	}
 
@@ -18768,11 +18799,10 @@ void CompilerMSL::emit_mesh_entry_point()
 
 void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
 {
+	// GLSL: Once this instruction is called, the workgroup must be terminated immediately, and the mesh shaders are launched.
+	// TODO: find relieble and clean of terminating shader.
 	statement("spvMpg.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
 	          to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
-	// GLSL: Once this instruction is called, the workgroup is terminated immediately, and the mesh shaders are launched.
-	// TODO: better way (relieble) of terminating shader.
-	statement("return;");
 }
 
 string CompilerMSL::additional_fixed_sample_mask_str() const
