@@ -22,6 +22,5 @@ void foo(object_data Payload& payload)
 {
     foo(payload);
     spvMpg.set_threadgroups_per_grid(uint3(1u, 2u, 3u));
-    return;
 }
 

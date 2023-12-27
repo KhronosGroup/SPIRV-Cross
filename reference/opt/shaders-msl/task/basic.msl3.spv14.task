@@ -14,6 +14,5 @@ constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 {
     payload.x = 0;
     spvMpg.set_threadgroups_per_grid(uint3(1u, 2u, 3u));
-    return;
 }
 
