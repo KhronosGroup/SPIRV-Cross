@@ -26,6 +26,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <functional>
 #include <string>
 #ifndef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 #include <stdexcept>

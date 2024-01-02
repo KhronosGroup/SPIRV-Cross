@@ -754,6 +754,13 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_MSL_AGX_MANUAL_CUBE_GRAD_FIXUP:
 		options->msl.agx_manual_cube_grad_fixup = value != 0;
 		break;
+            
+    case SPVC_COMPILER_OPTION_MSL_XFB_COUNTER_BUFFER_INDEX_BASE:
+        options->msl.xfb_counter_buffer_index_base = value;
+        break;
+    case SPVC_COMPILER_OPTION_MSL_XFB_OUTPUT_BUFFER_INDEX_BASE:
+        options->msl.xfb_output_buffer_index_base = value;
+        break;
 #endif
 
 	default:
