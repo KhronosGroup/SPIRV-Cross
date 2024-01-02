@@ -19303,7 +19303,7 @@ void CompilerMSL::analyze_xfb_buffers()
         xfb_buffers[xfb_buffer] = buffer_var_id;
         xfb_locals[xfb_buffer] = local_var_id;
         
-        auto &counter_type = set<SPIRType>(counter_type_id);
+        auto &counter_type = set<SPIRType>(counter_type_id, counter_ptr_type_id);
         counter_type.basetype = SPIRType::AtomicCounter;
         counter_type.storage = StorageClassStorageBuffer;
         
