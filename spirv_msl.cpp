@@ -19303,11 +19303,11 @@ void CompilerMSL::analyze_xfb_buffers()
         xfb_buffers[xfb_buffer] = buffer_var_id;
         xfb_locals[xfb_buffer] = local_var_id;
         
-        auto &counter_type = set<SPIRType>(counter_type_id, counter_ptr_type_id);
+        auto &counter_type = set<SPIRType>(counter_type_id, OpAtomicStore);
         counter_type.basetype = SPIRType::AtomicCounter;
         counter_type.storage = StorageClassStorageBuffer;
         
-        auto &counter_ptr_type = set<SPIRType>(counter_ptr_type_id);
+        auto &counter_ptr_type = set<SPIRType>(counter_ptr_type_id, OpTypePointer);
         counter_ptr_type = counter_type;
         counter_ptr_type.pointer = true;
         counter_ptr_type.pointer_depth++;
@@ -19316,20 +19316,20 @@ void CompilerMSL::analyze_xfb_buffers()
         set<SPIRVariable>(counter_var_id, counter_ptr_type_id, StorageClassUniform);
         set_name(counter_var_id, join("spvXfbCounter", xfb_buffer));
         
-        auto &buffer_type = set<SPIRType>(type_id);
+        auto &buffer_type = set<SPIRType>(type_id, OpTypeStruct);
         buffer_type.basetype = SPIRType::Struct;
         buffer_type.storage = StorageClassStorageBuffer;
         // Need to mark the type as a Block to enable this.
         set_decoration(type_id, DecorationBlock);
         set_name(type_id, join("spvXfbBuffer", xfb_buffer));
         
-        auto &ptr_type = set<SPIRType>(ptr_type_id);
+        auto &ptr_type = set<SPIRType>(ptr_type_id, OpTypePointer);
         ptr_type = buffer_type;
         ptr_type.pointer = true;
         ptr_type.pointer_depth++;
         ptr_type.parent_type = type_id;
         
-        auto &local_ptr_type = set<SPIRType>(local_ptr_type_id);
+        auto &local_ptr_type = set<SPIRType>(local_ptr_type_id, OpTypeStruct);
         local_ptr_type = ptr_type;
         local_ptr_type.storage = StorageClassFunction;
         
