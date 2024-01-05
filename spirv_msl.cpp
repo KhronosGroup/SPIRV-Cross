@@ -10665,7 +10665,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 			{
 				if (arg_type.array.empty() || (var ? is_var_runtime_size_array(*var) : is_runtime_size_array(arg_type)))
 				{
-					decl += join(", ", sampler_type(arg_type, arg.id), " ", to_sampler_expression(name_id));
+					decl += join(", ", sampler_type(arg_type, arg.id, false), " ", to_sampler_expression(name_id));
 				}
 				else
 				{
@@ -10673,7 +10673,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 							descriptor_address_space(name_id,
 							                         StorageClassUniformConstant,
 							                         "thread const");
-					decl += join(", ", sampler_address_space, " ", sampler_type(arg_type, name_id), "& ",
+					decl += join(", ", sampler_address_space, " ", sampler_type(arg_type, name_id, false), "& ",
 					             to_sampler_expression(name_id));
 				}
 			}
@@ -12061,6 +12061,12 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
+	}
+	else if (is_array(*declared_type) && get_resource_array_size(*declared_type, orig_id) == 0)
+	{
+		// Hack for declaring unsized array of resources. Need to declare dummy sized array by value inline.
+		// This can then be wrapped in spvDescriptorArray as usual.
+		array_type = "[1] /* unsized array hack */";
 	}
 
 	string decl_type;
@@ -13480,7 +13486,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		case SPIRType::Sampler:
 			if (!ep_args.empty())
 				ep_args += ", ";
-			ep_args += sampler_type(type, var_id) + " " + r.name;
+			ep_args += sampler_type(type, var_id, false) + " " + r.name;
 			if (is_var_runtime_size_array(var))
 				ep_args += "_ [[buffer(" + convert_to_string(r.index) + ")]]";
 			else
@@ -13495,7 +13501,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			const auto &basetype = get<SPIRType>(var.basetype);
 			if (!type_is_msl_framebuffer_fetch(basetype))
 			{
-				ep_args += image_type_glsl(type, var_id) + " " + r.name;
+				ep_args += image_type_glsl(type, var_id, false) + " " + r.name;
 				if (r.plane > 0)
 					ep_args += join(plane_name_suffix, r.plane);
 
@@ -13512,7 +13518,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			{
 				if (msl_options.is_macos() && !msl_options.supports_msl_version(2, 3))
 					SPIRV_CROSS_THROW("Framebuffer fetch on Mac is not supported before MSL 2.3.");
-				ep_args += image_type_glsl(type, var_id) + " " + r.name;
+				ep_args += image_type_glsl(type, var_id, false) + " " + r.name;
 				ep_args += " [[color(" + convert_to_string(r.index) + ")]]";
 			}
 
@@ -15107,10 +15113,10 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 
 	case SPIRType::Image:
 	case SPIRType::SampledImage:
-		return image_type_glsl(type, id);
+		return image_type_glsl(type, id, member);
 
 	case SPIRType::Sampler:
-		return sampler_type(type, id);
+		return sampler_type(type, id, member);
 
 	case SPIRType::Void:
 		return "void";
@@ -15326,7 +15332,7 @@ std::string CompilerMSL::variable_decl(const SPIRType &type, const std::string &
 	return CompilerGLSL::variable_decl(type, name, id);
 }
 
-std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
+std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id, bool member)
 {
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->basevariable)
@@ -15345,26 +15351,31 @@ std::string CompilerMSL::sampler_type(const SPIRType &type, uint32_t id)
 
 		// Arrays of samplers in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
 		// If we have a runtime array, it could be a variable-count descriptor set binding.
+		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		uint32_t array_size = get_resource_array_size(type, id);
+
 		if (array_size == 0)
 		{
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
-			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
-			if (processing_entry_point)
-				return join("const device spvDescriptor<", sampler_type(parent, id), ">*");
-			return join("const spvDescriptorArray<", sampler_type(parent, id), ">");
-		}
 
-		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
-		return join("array<", sampler_type(parent, id), ", ", array_size, ">");
+			const char *descriptor_wrapper = processing_entry_point ? "const device spvDescriptor" : "const spvDescriptorArray";
+			if (member)
+				descriptor_wrapper = "spvDescriptor";
+			return join(descriptor_wrapper, "<", sampler_type(parent, id, false), ">",
+			            processing_entry_point ? "*" : "");
+		}
+		else
+		{
+			return join("array<", sampler_type(parent, id, false), ", ", array_size, ">");
+		}
 	}
 	else
 		return "sampler";
 }
 
 // Returns an MSL string describing the SPIR-V image type
-string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
+string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool member)
 {
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->basevariable)
@@ -15395,17 +15406,23 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id)
 
 		// Arrays of images in MSL must be declared with a special array<T, N> syntax ala C++11 std::array.
 		// If we have a runtime array, it could be a variable-count descriptor set binding.
+		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
 		uint32_t array_size = get_resource_array_size(type, id);
+
 		if (array_size == 0)
 		{
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
-			auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
-			return join("const device spvDescriptor<", image_type_glsl(parent, id), ">*");
+			const char *descriptor_wrapper = processing_entry_point ? "const device spvDescriptor" : "const spvDescriptorArray";
+			if (member)
+				descriptor_wrapper = "spvDescriptor";
+			return join(descriptor_wrapper, "<", image_type_glsl(parent, id, false), ">",
+			            processing_entry_point ? "*" : "");
 		}
-
-		auto &parent = get<SPIRType>(get_pointee_type(type).parent_type);
-		return join("array<", image_type_glsl(parent, id), ", ", array_size, ">");
+		else
+		{
+			return join("array<", image_type_glsl(parent, id, false), ", ", array_size, ">");
+		}
 	}
 
 	string img_type_name;
