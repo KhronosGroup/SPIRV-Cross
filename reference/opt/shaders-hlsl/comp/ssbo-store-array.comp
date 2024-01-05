@@ -3,17 +3,17 @@ struct Data
     uint arr[3];
 };
 
-static uint _34;
+static uint _33;
 
 RWByteAddressBuffer _13 : register(u0);
 
 void comp_main()
 {
-    uint _33[3] = { _34, _34, _34 };
+    uint _32[3] = { _33, _33, _33 };
     [unroll]
     for (int _0ident = 0; _0ident < 3; _0ident++)
     {
-        _13.Store(_0ident * 4 + 0, _33[_0ident]);
+        _13.Store(_0ident * 4 + 0, _32[_0ident]);
     }
 }
 
