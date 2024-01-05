@@ -1379,15 +1379,23 @@ void CompilerMSL::emit_entry_point_declarations()
 			{
 				SPIRV_CROSS_THROW("Unsized array of descriptors requires argument buffer tier 2");
 			}
+
+			string resource_name;
+			if (descriptor_set_is_argument_buffer(get_decoration(var.self, DecorationDescriptorSet)))
+				resource_name = ir.meta[var.self].decoration.qualified_alias;
+			else
+				resource_name = name + "_";
+
 			switch (type.basetype)
 			{
 			case SPIRType::Image:
 			case SPIRType::Sampler:
 			case SPIRType::AccelerationStructure:
-				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", name, "_};");
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", resource_name, "};");
 				break;
 			case SPIRType::SampledImage:
-				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", name, "_};");
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", resource_name, "};");
+				// Unsupported with argument buffer for now.
 				statement("spvDescriptorArray<sampler> ", name, "Smplr {", name, "Smplr_};");
 				break;
 			case SPIRType::Struct:
@@ -13289,12 +13297,22 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 		    !is_hidden_variable(var))
 		{
 			auto &type = get_variable_data_type(var);
+			uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 
 			if (is_supported_argument_buffer_type(type) && var.storage != StorageClassPushConstant)
 			{
-				uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 				if (descriptor_set_is_argument_buffer(desc_set))
+				{
+					if (is_var_runtime_size_array(var))
+					{
+						// Runtime arrays need to be wrapped in spvDescriptorArray from argument buffer payload.
+						entry_point_bindings.push_back(&var);
+						// We'll wrap this, so to_name() will always use non-qualified name.
+						// We'll need the qualified name to create temporary variable instead.
+						ir.meta[var_id].decoration.qualified_alias_explicit_override = true;
+					}
 					return;
+				}
 			}
 
 			// Handle descriptor aliasing. We can handle aliasing of buffers by casting pointers,
@@ -14632,7 +14650,7 @@ string CompilerMSL::to_name(uint32_t id, bool allow_alias) const
 	if (current_function && (current_function->self == ir.default_entry_point))
 	{
 		auto *m = ir.find_meta(id);
-		if (m && !m->decoration.qualified_alias.empty())
+		if (m && !m->decoration.qualified_alias_explicit_override && !m->decoration.qualified_alias.empty())
 			return m->decoration.qualified_alias;
 	}
 	return Compiler::to_name(id, allow_alias);
@@ -15415,7 +15433,13 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 			add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
 			const char *descriptor_wrapper = processing_entry_point ? "const device spvDescriptor" : "const spvDescriptorArray";
 			if (member)
+			{
 				descriptor_wrapper = "spvDescriptor";
+				// This requires a specialized wrapper type that packs image and sampler side by side.
+				// It is possible in theory.
+				if (type.basetype == SPIRType::SampledImage)
+					SPIRV_CROSS_THROW("Argument buffer runtime array currently not supported for combined image sampler.");
+			}
 			return join(descriptor_wrapper, "<", image_type_glsl(parent, id, false), ">",
 			            processing_entry_point ? "*" : "");
 		}
@@ -17858,6 +17882,9 @@ void CompilerMSL::analyze_argument_buffers()
 		{
 			auto &var = *resource.var;
 			auto &type = get_variable_data_type(var);
+
+			if (is_var_runtime_size_array(var) && (argument_buffer_device_storage_mask & (1u << desc_set)) == 0)
+				SPIRV_CROSS_THROW("Runtime sized variables must be in device storage argument buffers.");
 
 			// If needed, synthesize and add padding members.
 			// member_index and next_arg_buff_index are incremented when padding members are added.
