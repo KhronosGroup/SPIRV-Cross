@@ -1797,8 +1797,20 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 		if (packing_is_hlsl(packing))
 		{
 			// If a member straddles across a vec4 boundary, alignment is actually vec4.
-			uint32_t begin_word = actual_offset / 16;
-			uint32_t end_word = (actual_offset + packed_size - 1) / 16;
+			uint32_t target_offset;
+
+			// If we intend to use explicit packing, we must check for improper straddle with that offset.
+			// In implicit packing, we must check with implicit offset, since the explicit offset
+			// might have already accounted for the straddle, and we'd miss the alignment promotion to vec4.
+			// This is important when packing sub-structs that don't support packoffset().
+			if (packing_has_flexible_offset(packing))
+				target_offset = actual_offset;
+			else
+				target_offset = offset;
+
+			uint32_t begin_word = target_offset / 16;
+			uint32_t end_word = (target_offset + packed_size - 1) / 16;
+
 			if (begin_word != end_word)
 				packed_alignment = max<uint32_t>(packed_alignment, 16u);
 		}
