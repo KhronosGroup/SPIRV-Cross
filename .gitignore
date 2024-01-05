@@ -21,5 +21,8 @@
 .vs/
 *.vcxproj.user
 
+# Mac OS X Finder
+.DS_Store
+
 !CMakeLists.txt
 !LICENSES/*.txt
