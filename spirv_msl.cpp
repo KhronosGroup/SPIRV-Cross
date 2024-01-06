@@ -7443,6 +7443,22 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplReduceAdd:
+			// Metal doesn't support __builtin_reduce_add or simd_reduce_add, so we need this.
+			// Metal also doesn't support the other vector builtins, which would have been useful to make this a single template.
+
+			statement("template <typename T>");
+			statement("T reduce_add(vec<T, 2> v) { return v.x + v.y; }");
+
+			statement("template <typename T>");
+			statement("T reduce_add(vec<T, 3> v) { return v.x + v.y + v.z; }");
+
+			statement("template <typename T>");
+			statement("T reduce_add(vec<T, 4> v) { return v.x + v.y + v.z + v.w; }");
+
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -9623,6 +9639,109 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		else
 			CompilerGLSL::emit_instruction(instruction);
 
+		break;
+	}
+
+	case OpSDot:
+	case OpUDot:
+	case OpSUDot:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t vec1 = ops[2];
+		uint32_t vec2 = ops[3];
+
+		auto& input_type1 = expression_type(vec1);
+
+		string vec1input, vec2input;
+		auto input_size = input_type1.vecsize;
+		if (instruction.length == 5)
+		{
+			if (ops[4] == PackedVectorFormatPackedVectorFormat4x8Bit)
+			{
+				string type = opcode == OpSDot || opcode == OpSUDot ? "char4" : "uchar4";
+				vec1input = join("as_type<", type, ">(", to_expression(vec1), ")");
+				type = opcode == OpSDot ? "char4" : "uchar4";
+				vec2input = join("as_type<", type, ">(", to_expression(vec2), ")");
+				input_size = 4;
+			}
+			else
+				SPIRV_CROSS_THROW("Packed vector formats other than 4x8Bit for integer dot product is not supported.");
+		}
+		else
+		{
+			vec1input = to_expression(vec1);
+			vec2input = to_expression(vec2);
+		}
+
+		auto& type = get<SPIRType>(result_type);
+		auto result_type_cast = join(type_to_glsl(type), input_size);
+
+		// When the opcode specifies signed integers, we always cast to the signed integer type, regardless of the output type.
+		string_view type_cast1(result_type_cast);
+		if (type_cast1[0] == 'u' && (opcode == OpSDot || opcode == OpSUDot))
+			type_cast1 = type_cast1.substr(1);
+
+		string_view type_cast2(result_type_cast);
+		if (type_cast2[0] == 'u' && opcode == OpSDot)
+			type_cast2 = type_cast2.substr(1);
+
+		string exp = join("reduce_add(", std::string(type_cast1), "(", vec1input, ") * ", std::string(type_cast2), "(", vec2input, "))");
+		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
+		inherit_expression_dependencies(id, vec1);
+		inherit_expression_dependencies(id, vec2);
+		break;
+	}
+
+	case OpSDotAccSat:
+	case OpUDotAccSat:
+	case OpSUDotAccSat:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t vec1 = ops[2];
+		uint32_t vec2 = ops[3];
+		uint32_t acc = ops[4];
+
+		auto& input_type1 = expression_type(vec1);
+		auto& input_type2 = expression_type(vec2);
+
+		string vec1input, vec2input;
+		auto input_size = input_type1.vecsize;
+		if (instruction.length == 6)
+		{
+			if (ops[5] == PackedVectorFormatPackedVectorFormat4x8Bit)
+			{
+				string type = opcode == OpSDotAccSat || opcode == OpSUDotAccSat ? "char4" : "uchar4";
+				vec1input = join("as_type<", type, ">(", to_expression(vec1), ")");
+				type = opcode == OpSDotAccSat ? "char4" : "uchar4";
+				vec2input = join("as_type<", type, ">(", to_expression(vec2), ")");
+				input_size = 4;
+			}
+			else
+				SPIRV_CROSS_THROW("Packed vector formats other than 4x8Bit for integer dot product is not supported.");
+		}
+		else
+		{
+			vec1input = to_expression(vec1);
+			vec2input = to_expression(vec2);
+		}
+
+		auto& type = get<SPIRType>(result_type);
+		auto result_type_cast = join(type_to_glsl(type), input_size);
+
+		string_view type_cast1(result_type_cast);
+		if (type_cast1[0] == 'u' && (opcode == OpSDotAccSat || opcode == OpSUDotAccSat))
+			type_cast1 = type_cast1.substr(1);
+
+		string_view type_cast2(result_type_cast);
+		if (type_cast2[0] == 'u' && opcode == OpSDotAccSat)
+			type_cast2 = type_cast2.substr(1);
+
+		string exp = join("addsat(reduce_add(", std::string(type_cast1), "(", vec1input, ") * ", std::string(type_cast2), "(", vec2input, ")), ", to_expression(acc), ")");
+		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
+		inherit_expression_dependencies(id, vec1);
+		inherit_expression_dependencies(id, vec2);
 		break;
 	}
 
@@ -17195,6 +17314,14 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 
 	case OpGroupNonUniformQuadSwap:
 		return SPVFuncImplQuadSwap;
+
+	case OpSDot:
+	case OpUDot:
+	case OpSUDot:
+	case OpSDotAccSat:
+	case OpUDotAccSat:
+	case OpSUDotAccSat:
+		return SPVFuncImplReduceAdd;
 
 	default:
 		break;

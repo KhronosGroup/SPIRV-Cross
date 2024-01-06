@@ -1,0 +1,44 @@
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+template <typename T>
+T reduce_add(vec<T, 2> v) { return v.x + v.y; }
+template <typename T>
+T reduce_add(vec<T, 3> v) { return v.x + v.y + v.z; }
+template <typename T>
+T reduce_add(vec<T, 4> v) { return v.x + v.y + v.z + v.w; }
+
+struct InOut
+{
+    uint4 x;
+    uint4 y;
+    int result;
+};
+
+struct InOut2
+{
+    uint x;
+    uint y;
+    uint result;
+};
+
+struct InOut3
+{
+    ushort4 x;
+    ushort4 y;
+    int acc;
+    int result;
+};
+
+kernel void main0(device InOut& comp [[buffer(0)]], device void* spvBufferAliasSet0Binding1 [[buffer(1)]])
+{
+    device auto& comp2 = *(device InOut2*)spvBufferAliasSet0Binding1;
+    device auto& comp3 = *(device InOut3*)spvBufferAliasSet0Binding1;
+    comp.result = reduce_add(int4(comp.x) * int4(comp.y));
+    comp2.result = uint(reduce_add(uchar4(as_type<uchar4>(comp2.x)) * uchar4(as_type<uchar4>(comp2.y))));
+    comp3.result = addsat(reduce_add(int4(comp3.x) * int4(comp3.y)), comp3.acc);
+}

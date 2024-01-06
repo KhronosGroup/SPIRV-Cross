@@ -823,7 +823,8 @@ protected:
 		SPVFuncImplVariableDescriptor,
 		SPVFuncImplVariableSizedDescriptor,
 		SPVFuncImplVariableDescriptorArray,
-		SPVFuncImplPaddedStd140
+		SPVFuncImplPaddedStd140,
+		SPVFuncImplReduceAdd
 	};
 
 	// If the underlying resource has been used for comparison then duplicate loads of that resource must be too
