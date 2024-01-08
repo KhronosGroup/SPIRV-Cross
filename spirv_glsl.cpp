@@ -14159,20 +14159,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		string expr;
 		switch (opcode)
 		{
-			case OpImageSampleWeightedQCOM:
-				expr = std::move("textureWeightedQCOM");
-				break;
-			case OpImageBoxFilterQCOM:
-				expr = std::move("textureBoxFilterQCOM");
-				break;
-			case OpImageBlockMatchSSDQCOM:
-				expr = std::move("textureBlockMatchSSDQCOM");
-				break;
-			case OpImageBlockMatchSADQCOM:
-				expr = std::move("textureBlockMatchSADQCOM");
-				break;
-			default:
-				SPIRV_CROSS_THROW("Invalid opcode for QCOM_image_processing.");
+		case OpImageSampleWeightedQCOM:
+			expr = "textureWeightedQCOM";
+			break;
+		case OpImageBoxFilterQCOM:
+			expr = "textureBoxFilterQCOM";
+			break;
+		case OpImageBlockMatchSSDQCOM:
+			expr = "textureBlockMatchSSDQCOM";
+			break;
+		case OpImageBlockMatchSADQCOM:
+			expr = "textureBlockMatchSADQCOM";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Invalid opcode for QCOM_image_processing.");
 		}
 		expr += "(";
 
@@ -14182,27 +14182,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		switch (opcode)
 		{
-			case OpImageSampleWeightedQCOM:
-				expr += ", " + to_non_uniform_aware_expression(ops[4]);
-				break;
-			case OpImageBoxFilterQCOM:
-				expr += ", " + to_expression(ops[4]);
-				break;
-			case OpImageBlockMatchSSDQCOM:
-			case OpImageBlockMatchSADQCOM:
-				expr += ", " + to_non_uniform_aware_expression(ops[4]);
-				expr += ", " + to_expression(ops[5]);
-				expr += ", " + to_expression(ops[6]);
-				break;
-			default:
-				SPIRV_CROSS_THROW("Invalid opcode for QCOM_image_processing.");
+		case OpImageSampleWeightedQCOM:
+			expr += ", " + to_non_uniform_aware_expression(ops[4]);
+			break;
+		case OpImageBoxFilterQCOM:
+			expr += ", " + to_expression(ops[4]);
+			break;
+		case OpImageBlockMatchSSDQCOM:
+		case OpImageBlockMatchSADQCOM:
+			expr += ", " + to_non_uniform_aware_expression(ops[4]);
+			expr += ", " + to_expression(ops[5]);
+			expr += ", " + to_expression(ops[6]);
+			break;
+		default:
+			SPIRV_CROSS_THROW("Invalid opcode for QCOM_image_processing.");
 		}
 
 		expr += ")";
 		emit_op(result_type_id, id, expr, forward);
 
 		inherit_expression_dependencies(id, ops[3]);
-		if (opcode == OpImageBlockMatchSSDQCOM || opcode == OpImageBlockMatchSADQCOM )
+		if (opcode == OpImageBlockMatchSSDQCOM || opcode == OpImageBlockMatchSADQCOM)
 			inherit_expression_dependencies(id, ops[5]);
 
 		break;
