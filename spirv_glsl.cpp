@@ -15543,7 +15543,7 @@ string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
 	}
 }
 
-string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id)
+string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*member*/)
 {
 	auto &imagetype = get<SPIRType>(type.image.type);
 	string res;
