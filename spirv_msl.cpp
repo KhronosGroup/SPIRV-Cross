@@ -1400,7 +1400,7 @@ void CompilerMSL::emit_entry_point_declarations()
 				break;
 			case SPIRType::Struct:
 				statement("spvDescriptorArray<", get_argument_address_space(var), " ", type_to_glsl(buffer_type), "*> ",
-				          name, " {", name, "_};");
+				          name, " {", resource_name, "};");
 				break;
 			default:
 				break;
@@ -12070,11 +12070,19 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 			is_using_builtin_array = true;
 		array_type = type_to_array_glsl(physical_type);
 	}
-	else if (is_array(*declared_type) && get_resource_array_size(*declared_type, orig_id) == 0)
+
+	if (orig_id)
 	{
-		// Hack for declaring unsized array of resources. Need to declare dummy sized array by value inline.
-		// This can then be wrapped in spvDescriptorArray as usual.
-		array_type = "[1] /* unsized array hack */";
+		auto *data_type = declared_type;
+		if (is_pointer(*data_type))
+			data_type = &get_pointee_type(*data_type);
+
+		if (is_array(*data_type) && get_resource_array_size(*data_type, orig_id) == 0)
+		{
+			// Hack for declaring unsized array of resources. Need to declare dummy sized array by value inline.
+			// This can then be wrapped in spvDescriptorArray as usual.
+			array_type = "[1] /* unsized array hack */";
+		}
 	}
 
 	string decl_type;
@@ -14524,11 +14532,15 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		if (!address_space.empty())
 			decl = join(address_space, " ", decl);
 
-		const char *argument_buffer_space = descriptor_address_space(name_id, type_storage, nullptr);
-		if (argument_buffer_space)
+		// spvDescriptorArray absorbs the address space inside the template.
+		if (!is_var_runtime_size_array(var))
 		{
-			decl += " ";
-			decl += argument_buffer_space;
+			const char *argument_buffer_space = descriptor_address_space(name_id, type_storage, nullptr);
+			if (argument_buffer_space)
+			{
+				decl += " ";
+				decl += argument_buffer_space;
+			}
 		}
 
 		// Special case, need to override the array size here if we're using tess level as an argument.
@@ -15072,6 +15084,26 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 
 		auto type_address_space = get_type_address_space(type, id);
 		const auto *p_parent_type = &get<SPIRType>(type.parent_type);
+
+		// If we're wrapping buffer descriptors in a spvDescriptorArray, we'll have to handle it as a special case.
+		if (member && id)
+		{
+			auto &var = get<SPIRVariable>(id);
+			if (is_var_runtime_size_array(var) && is_runtime_size_array(*p_parent_type))
+			{
+				const bool ssbo = has_decoration(p_parent_type->self, DecorationBufferBlock);
+				bool buffer_desc =
+						(var.storage == StorageClassStorageBuffer || ssbo) &&
+						msl_options.runtime_array_rich_descriptor;
+
+				const char *wrapper_type = buffer_desc ? "spvBufferDescriptor" : "spvDescriptor";
+				add_spv_func_and_recompile(SPVFuncImplVariableDescriptorArray);
+				add_spv_func_and_recompile(buffer_desc ? SPVFuncImplVariableSizedDescriptor : SPVFuncImplVariableDescriptor);
+
+				type_name = join(wrapper_type, "<", type_address_space, " ", type_to_glsl(*p_parent_type, id), " *>");
+				return type_name;
+			}
+		}
 
 		// Work around C pointer qualifier rules. If glsl_type is a pointer type as well
 		// we'll need to emit the address space to the right.
