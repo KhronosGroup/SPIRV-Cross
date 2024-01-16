@@ -34,11 +34,14 @@ struct InOut3
     int result;
 };
 
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
 kernel void main0(device InOut& comp [[buffer(0)]], device void* spvBufferAliasSet0Binding1 [[buffer(1)]])
 {
     device auto& comp2 = *(device InOut2*)spvBufferAliasSet0Binding1;
     device auto& comp3 = *(device InOut3*)spvBufferAliasSet0Binding1;
     comp.result = reduce_add(int4(comp.x) * int4(comp.y));
     comp2.result = uint(reduce_add(uchar4(as_type<uchar4>(comp2.x)) * uchar4(as_type<uchar4>(comp2.y))));
-    comp3.result = addsat(reduce_add(int4(comp3.x) * int4(comp3.y)), comp3.acc);
+    comp3.result = int4(addsat(reduce_add(int4(comp3.x) * int4(comp3.y)), comp3.acc));
 }
+
