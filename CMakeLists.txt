@@ -19,7 +19,7 @@
 #  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
 #
 
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.6)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -465,7 +465,19 @@ if (SPIRV_CROSS_CLI)
 		#  - Update the reference files
 		#  - Get cycle counts from malisc
 		#  - Keep failing outputs
-		find_package(PythonInterp)
+		if (${CMAKE_VERSION} VERSION_GREATER "3.12")
+			find_package(Python3)
+			if (${PYTHON3_FOUND})
+				set(PYTHONINTERP_FOUND ON)
+				set(PYTHON_VERSION_MAJOR 3)
+				set(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
+			else()
+				set(PYTHONINTERP_FOUND OFF)
+			endif()
+		else()
+			find_package(PythonInterp)
+		endif()
+
 		find_program(spirv-cross-glslang NAMES glslangValidator
 				PATHS ${CMAKE_CURRENT_SOURCE_DIR}/external/glslang-build/output/bin
 				NO_DEFAULT_PATH)
