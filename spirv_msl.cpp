@@ -9651,7 +9651,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t vec1 = ops[2];
 		uint32_t vec2 = ops[3];
 
-		auto& input_type1 = expression_type(vec1);
+		auto &input_type1 = expression_type(vec1);
 
 		string vec1input, vec2input;
 		auto input_size = input_type1.vecsize;
@@ -9674,15 +9674,15 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			vec2input = to_expression(vec2);
 		}
 
-		auto& type = get<SPIRType>(result_type);
+		auto &type = get<SPIRType>(result_type);
 		auto result_type_cast = join(type_to_glsl(type), input_size);
 
 		// When the opcode specifies signed integers, we always cast to the signed integer type, regardless of the output type.
-		string_view type_cast1(result_type_cast);
+		string type_cast1 = result_type_cast;
 		if (type_cast1[0] == 'u' && (opcode == OpSDot || opcode == OpSUDot))
 			type_cast1 = type_cast1.substr(1);
 
-		string_view type_cast2(result_type_cast);
+		string type_cast2 = result_type_cast;
 		if (type_cast2[0] == 'u' && opcode == OpSDot)
 			type_cast2 = type_cast2.substr(1);
 
@@ -9703,8 +9703,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t vec2 = ops[3];
 		uint32_t acc = ops[4];
 
-		auto& input_type1 = expression_type(vec1);
-		auto& input_type2 = expression_type(vec2);
+		auto &input_type1 = expression_type(vec1);
+		auto &input_type2 = expression_type(vec2);
 
 		string vec1input, vec2input;
 		auto input_size = input_type1.vecsize;
@@ -9727,10 +9727,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			vec2input = to_expression(vec2);
 		}
 
-		auto& type = get<SPIRType>(result_type);
+		auto &type = get<SPIRType>(result_type);
 		auto result_type_cast = join(type_to_glsl(type), input_size);
 
-		string_view type_cast1(result_type_cast);
+		string type_cast1 = result_type_cast;
 		if (type_cast1[0] == 'u' && (opcode == OpSDotAccSat || opcode == OpSUDotAccSat))
 			type_cast1 = type_cast1.substr(1);
 
@@ -9738,7 +9738,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (type_cast2[0] == 'u' && opcode == OpSDotAccSat)
 			type_cast2 = type_cast2.substr(1);
 
-		string exp = join("addsat(reduce_add(", std::string(type_cast1), "(", vec1input, ") * ", std::string(type_cast2), "(", vec2input, ")), ", to_expression(acc), ")");
+		string exp = join(result_type_cast, "(addsat(reduce_add(", std::string(type_cast1), "(", vec1input, ") * ", std::string(type_cast2), "(", vec2input, ")), ", to_expression(acc), "))");
 		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
 		inherit_expression_dependencies(id, vec1);
 		inherit_expression_dependencies(id, vec2);
