@@ -9734,7 +9734,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (type_cast1[0] == 'u' && (opcode == OpSDotAccSat || opcode == OpSUDotAccSat))
 			type_cast1 = type_cast1.substr(1);
 
-		string_view type_cast2(result_type_cast);
+		string type_cast2 = result_type_cast;
 		if (type_cast2[0] == 'u' && opcode == OpSDotAccSat)
 			type_cast2 = type_cast2.substr(1);
 
