@@ -9667,6 +9667,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t vec2 = ops[3];
 
 		auto &input_type1 = expression_type(vec1);
+		auto &input_type2 = expression_type(vec2);
 
 		string vec1input, vec2input;
 		auto input_size = input_type1.vecsize;
@@ -9685,23 +9686,31 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			vec1input = to_expression(vec1);
-			vec2input = to_expression(vec2);
+			// Inputs are sign or zero-extended to their target width.
+			SPIRType::BaseType vec1_expected_type =
+					opcode != OpUDot ?
+					to_signed_basetype(input_type1.width) :
+					to_unsigned_basetype(input_type1.width);
+
+			SPIRType::BaseType vec2_expected_type =
+					opcode != OpSDot ?
+					to_unsigned_basetype(input_type2.width) :
+					to_signed_basetype(input_type2.width);
+
+			vec1input = bitcast_expression(vec1_expected_type, vec1);
+			vec2input = bitcast_expression(vec2_expected_type, vec2);
 		}
 
 		auto &type = get<SPIRType>(result_type);
+
+		// We'll get the appropriate sign-extend or zero-extend, no matter which type we cast to here.
+		// The addition in reduce_add is sign-invariant.
 		auto result_type_cast = join(type_to_glsl(type), input_size);
 
-		// When the opcode specifies signed integers, we always cast to the signed integer type, regardless of the output type.
-		string type_cast1 = result_type_cast;
-		if (type_cast1[0] == 'u' && (opcode == OpSDot || opcode == OpSUDot))
-			type_cast1 = type_cast1.substr(1);
+		string exp = join("reduce_add(",
+		                  result_type_cast, "(", vec1input, ") * ",
+		                  result_type_cast, "(", vec2input, "))");
 
-		string type_cast2 = result_type_cast;
-		if (type_cast2[0] == 'u' && opcode == OpSDot)
-			type_cast2 = type_cast2.substr(1);
-
-		string exp = join("reduce_add(", std::string(type_cast1), "(", vec1input, ") * ", std::string(type_cast2), "(", vec2input, "))");
 		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
 		inherit_expression_dependencies(id, vec1);
 		inherit_expression_dependencies(id, vec2);
@@ -9718,10 +9727,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t vec2 = ops[3];
 		uint32_t acc = ops[4];
 
-		auto &input_type1 = expression_type(vec1);
+		auto input_type1 = expression_type(vec1);
+		auto input_type2 = expression_type(vec2);
 
 		string vec1input, vec2input;
-		auto input_size = input_type1.vecsize;
 		if (instruction.length == 6)
 		{
 			if (ops[5] == PackedVectorFormatPackedVectorFormat4x8Bit)
@@ -9730,29 +9739,44 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 				vec1input = join("as_type<", type, ">(", to_expression(vec1), ")");
 				type = opcode == OpSDotAccSat ? "char4" : "uchar4";
 				vec2input = join("as_type<", type, ">(", to_expression(vec2), ")");
-				input_size = 4;
+				input_type1.vecsize = 4;
+				input_type2.vecsize = 4;
 			}
 			else
 				SPIRV_CROSS_THROW("Packed vector formats other than 4x8Bit for integer dot product is not supported.");
 		}
 		else
 		{
-			vec1input = to_expression(vec1);
-			vec2input = to_expression(vec2);
+			// Inputs are sign or zero-extended to their target width.
+			SPIRType::BaseType vec1_expected_type =
+					opcode != OpUDotAccSat ?
+					to_signed_basetype(input_type1.width) :
+					to_unsigned_basetype(input_type1.width);
+
+			SPIRType::BaseType vec2_expected_type =
+					opcode != OpSDotAccSat ?
+					to_unsigned_basetype(input_type2.width) :
+					to_signed_basetype(input_type2.width);
+
+			vec1input = bitcast_expression(vec1_expected_type, vec1);
+			vec2input = bitcast_expression(vec2_expected_type, vec2);
 		}
 
 		auto &type = get<SPIRType>(result_type);
-		auto result_type_cast = join(type_to_glsl(type), input_size);
 
-		string type_cast1 = result_type_cast;
-		if (type_cast1[0] == 'u' && (opcode == OpSDotAccSat || opcode == OpSUDotAccSat))
-			type_cast1 = type_cast1.substr(1);
+		SPIRType::BaseType pre_saturate_type =
+				opcode != OpUDotAccSat ?
+				to_signed_basetype(type.width) :
+				to_unsigned_basetype(type.width);
 
-		string type_cast2 = result_type_cast;
-		if (type_cast2[0] == 'u' && opcode == OpSDotAccSat)
-			type_cast2 = type_cast2.substr(1);
+		input_type1.basetype = pre_saturate_type;
+		input_type2.basetype = pre_saturate_type;
 
-		string exp = join(result_type_cast, "(addsat(reduce_add(", std::string(type_cast1), "(", vec1input, ") * ", std::string(type_cast2), "(", vec2input, ")), ", to_expression(acc), "))");
+		string exp = join(type_to_glsl(type), "(addsat(reduce_add(",
+		                  type_to_glsl(input_type1), "(", vec1input, ") * ",
+		                  type_to_glsl(input_type2), "(", vec2input, ")), ",
+						  bitcast_expression(pre_saturate_type, acc), "))");
+
 		emit_op(result_type, id, exp, should_forward(vec1) && should_forward(vec2));
 		inherit_expression_dependencies(id, vec1);
 		inherit_expression_dependencies(id, vec2);
