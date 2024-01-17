@@ -2587,8 +2587,8 @@ void CompilerGLSL::emit_flattened_io_block_member(const std::string &basename, c
 
 	// Pass in the varying qualifier here so it will appear in the correct declaration order.
 	// Replace member name while emitting it so it encodes both struct name and member name.
-	auto backup_name = get_member_name(parent_type->self, last_index);
-	auto member_name = to_member_name(*parent_type, last_index);
+	const auto &backup_name = get_member_name(parent_type->self, last_index);
+	const auto &member_name = to_member_name(*parent_type, last_index);
 	set_member_name(parent_type->self, last_index, flattened_name);
 	emit_struct_member(*parent_type, member_type_id, last_index, qual);
 	// Restore member name.
