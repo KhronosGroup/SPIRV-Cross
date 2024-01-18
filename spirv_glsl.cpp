@@ -2145,11 +2145,11 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
 	if (can_use_buffer_blocks && (ubo_block || emulated_ubo))
 	{
-		attr.push_back(buffer_to_packing_standard(type, false));
+		attr.push_back(buffer_to_packing_standard(type, false, true));
 	}
 	else if (can_use_buffer_blocks && (push_constant_block || ssbo_block))
 	{
-		attr.push_back(buffer_to_packing_standard(type, true));
+		attr.push_back(buffer_to_packing_standard(type, true, true));
 	}
 
 	// For images, the type itself adds a layout qualifer.
@@ -2170,7 +2170,9 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	return res;
 }
 
-string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool support_std430_without_scalar_layout)
+string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type,
+                                                bool support_std430_without_scalar_layout,
+                                                bool support_enhanced_layouts)
 {
 	if (support_std430_without_scalar_layout && buffer_is_packing_standard(type, BufferPackingStd430))
 		return "std430";
@@ -2182,6 +2184,7 @@ string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool suppo
 		return "scalar";
 	}
 	else if (support_std430_without_scalar_layout &&
+	         support_enhanced_layouts &&
 	         buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
 	{
 		if (options.es && !options.vulkan_semantics)
@@ -2193,7 +2196,8 @@ string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool suppo
 		set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 		return "std430";
 	}
-	else if (buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
+	else if (support_enhanced_layouts &&
+	         buffer_is_packing_standard(type, BufferPackingStd140EnhancedLayout))
 	{
 		// Fallback time. We might be able to use the ARB_enhanced_layouts to deal with this difference,
 		// however, we can only use layout(offset) on the block itself, not any substructs, so the substructs better be the appropriate layout.
@@ -2207,7 +2211,9 @@ string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool suppo
 		set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 		return "std140";
 	}
-	else if (options.vulkan_semantics && buffer_is_packing_standard(type, BufferPackingScalarEnhancedLayout))
+	else if (options.vulkan_semantics &&
+	         support_enhanced_layouts &&
+	         buffer_is_packing_standard(type, BufferPackingScalarEnhancedLayout))
 	{
 		set_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset);
 		require_extension_internal("GL_EXT_scalar_block_layout");
@@ -2221,6 +2227,7 @@ string CompilerGLSL::buffer_to_packing_standard(const SPIRType &type, bool suppo
 		return "std430";
 	}
 	else if (!support_std430_without_scalar_layout && options.vulkan_semantics &&
+	         support_enhanced_layouts &&
 	         buffer_is_packing_standard(type, BufferPackingStd430EnhancedLayout))
 	{
 		// UBOs can support std430 with GL_EXT_scalar_block_layout.
@@ -2352,10 +2359,10 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 		// Ensure we emit the correct name when emitting non-forward pointer type.
 		ir.meta[type.self].decoration.alias = buffer_name;
 	}
-	else if (type.basetype != SPIRType::Struct)
-		buffer_name = type_to_glsl(type);
 	else
-		buffer_name = to_name(type.self, false);
+	{
+		buffer_name = type_to_glsl(type);
+	}
 
 	if (!forward_declaration)
 	{
@@ -2364,13 +2371,13 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 		if (itr != physical_storage_type_to_alignment.end())
 			alignment = itr->second.alignment;
 
-		if (type.basetype == SPIRType::Struct)
+		if (is_physical_pointer_to_buffer_block(type))
 		{
 			SmallVector<std::string> attributes;
 			attributes.push_back("buffer_reference");
 			if (alignment)
 				attributes.push_back(join("buffer_reference_align = ", alignment));
-			attributes.push_back(buffer_to_packing_standard(type, true));
+			attributes.push_back(buffer_to_packing_standard(type, true, true));
 
 			auto flags = ir.get_buffer_block_type_flags(type);
 			string decorations;
@@ -2385,14 +2392,24 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 
 			statement("layout(", merge(attributes), ")", decorations, " buffer ", buffer_name);
 		}
-		else if (alignment)
-			statement("layout(buffer_reference, buffer_reference_align = ", alignment, ") buffer ", buffer_name);
 		else
-			statement("layout(buffer_reference) buffer ", buffer_name);
+		{
+			string packing_standard;
+			if (type.basetype == SPIRType::Struct)
+			{
+				// The non-block type is embedded in a block, so we cannot use enhanced layouts :(
+				packing_standard = buffer_to_packing_standard(type, true, false) + ", ";
+			}
+
+			if (alignment)
+				statement("layout(", packing_standard, "buffer_reference, buffer_reference_align = ", alignment, ") buffer ", buffer_name);
+			else
+				statement("layout(", packing_standard, "buffer_reference) buffer ", buffer_name);
+		}
 
 		begin_scope();
 
-		if (type.basetype == SPIRType::Struct)
+		if (is_physical_pointer_to_buffer_block(type))
 		{
 			type.member_name_cache.clear();
 
@@ -3706,30 +3723,20 @@ void CompilerGLSL::emit_resources()
 	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
 	{
 		for (auto type : physical_storage_non_block_pointer_types)
-		{
 			emit_buffer_reference_block(type, false);
-		}
 
 		// Output buffer reference blocks.
 		// Do this in two stages, one with forward declaration,
 		// and one without. Buffer reference blocks can reference themselves
 		// to support things like linked lists.
-		ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
-			if (type.basetype == SPIRType::Struct && type.pointer &&
-			    type.pointer_depth == 1 && !type_is_array_of_pointers(type) &&
-			    type.storage == StorageClassPhysicalStorageBufferEXT)
-			{
-				emit_buffer_reference_block(self, true);
-			}
+		ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type) {
+			if (is_physical_pointer_to_buffer_block(type))
+				emit_buffer_reference_block(id, true);
 		});
 
-		ir.for_each_typed_id<SPIRType>([&](uint32_t self, SPIRType &type) {
-			if (type.basetype == SPIRType::Struct &&
-			    type.pointer && type.pointer_depth == 1 && !type_is_array_of_pointers(type) &&
-			    type.storage == StorageClassPhysicalStorageBufferEXT)
-			{
-				emit_buffer_reference_block(self, false);
-			}
+		ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type) {
+			if (is_physical_pointer_to_buffer_block(type))
+				emit_buffer_reference_block(id, false);
 		});
 	}
 
@@ -5011,11 +5018,8 @@ string CompilerGLSL::dereference_expression(const SPIRType &expr_type, const std
 		return expr.substr(1);
 	else if (backend.native_pointers)
 		return join('*', expr);
-	else if (expr_type.storage == StorageClassPhysicalStorageBufferEXT && expr_type.basetype != SPIRType::Struct &&
-	         expr_type.pointer_depth == 1)
-	{
+	else if (is_physical_pointer(expr_type) && !is_physical_pointer_to_buffer_block(expr_type))
 		return join(enclose_expression(expr), ".value");
-	}
 	else
 		return expr;
 }
@@ -15695,17 +15699,22 @@ string CompilerGLSL::type_to_glsl_constructor(const SPIRType &type)
 // depend on a specific object's use of that type.
 string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 {
-	if (type.pointer && type.storage == StorageClassPhysicalStorageBufferEXT && type.basetype != SPIRType::Struct)
+	if (is_physical_pointer(type) && !is_physical_pointer_to_buffer_block(type))
 	{
 		// Need to create a magic type name which compacts the entire type information.
-		string name = type_to_glsl(get_pointee_type(type));
-		for (size_t i = 0; i < type.array.size(); i++)
+		auto *parent = &get_pointee_type(type);
+		string name = type_to_glsl(*parent);
+
+		while (is_array(*parent))
 		{
-			if (type.array_size_literal[i])
-				name += join(type.array[i], "_");
+			if (parent->array_size_literal.back())
+				name += join(type.array.back(), "_");
 			else
-				name += join("id", type.array[i], "_");
+				name += join("id", type.array.back(), "_");
+
+			parent = &get<SPIRType>(parent->parent_type);
 		}
+
 		name += "Pointer";
 		return name;
 	}
