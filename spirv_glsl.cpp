@@ -2326,7 +2326,7 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 	auto &type = get<SPIRType>(type_id);
 	string buffer_name;
 
-	if (forward_declaration)
+	if (forward_declaration && is_physical_pointer_to_buffer_block(type))
 	{
 		// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
 		// Allow aliased name since we might be declaring the block twice. Once with buffer reference (forward declared) and one proper declaration.
@@ -3722,17 +3722,30 @@ void CompilerGLSL::emit_resources()
 
 	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
 	{
-		for (auto type : physical_storage_non_block_pointer_types)
-			emit_buffer_reference_block(type, false);
-
 		// Output buffer reference blocks.
 		// Do this in two stages, one with forward declaration,
 		// and one without. Buffer reference blocks can reference themselves
 		// to support things like linked lists.
 		ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type) {
-			if (is_physical_pointer_to_buffer_block(type))
-				emit_buffer_reference_block(id, true);
+			if (is_physical_pointer(type))
+			{
+				bool emit_type = true;
+				if (!is_physical_pointer_to_buffer_block(type))
+				{
+					// Only forward-declare if we intend to emit it in the non_block_pointer types.
+					// Otherwise, these are just "benign" pointer types that exist as a result of access chains.
+					emit_type = std::find(physical_storage_non_block_pointer_types.begin(),
+					                      physical_storage_non_block_pointer_types.end(),
+					                      id) != physical_storage_non_block_pointer_types.end();
+				}
+
+				if (emit_type)
+					emit_buffer_reference_block(id, true);
+			}
 		});
+
+		for (auto type : physical_storage_non_block_pointer_types)
+			emit_buffer_reference_block(type, false);
 
 		ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type) {
 			if (is_physical_pointer_to_buffer_block(type))

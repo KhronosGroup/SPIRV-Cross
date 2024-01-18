@@ -8,7 +8,8 @@ struct Foo
     uint b;
 };
 
-layout(std430, buffer_reference, buffer_reference_align = 16) buffer FooPointer
+layout(buffer_reference) buffer FooPointer;
+layout(std430, buffer_reference, buffer_reference_align = 8) buffer FooPointer
 {
     Foo value;
 };

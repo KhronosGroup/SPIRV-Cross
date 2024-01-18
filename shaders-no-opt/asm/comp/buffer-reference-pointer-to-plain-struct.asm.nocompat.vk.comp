@@ -54,6 +54,6 @@
          %22 = OpAccessChain %_ptr_StorageBuffer__ptr_PhysicalStorageBuffer_Foo %_ %int_1
          %23 = OpLoad %_ptr_PhysicalStorageBuffer_Foo %22
          %26 = OpAccessChain %_ptr_PhysicalStorageBuffer_uint %23 %int_0
-               OpStore %26 %uint_1 Aligned 16
+               OpStore %26 %uint_1 Aligned 8
                OpReturn
                OpFunctionEnd
