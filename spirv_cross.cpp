@@ -5031,7 +5031,7 @@ void Compiler::PhysicalStorageBufferPointerHandler::mark_aligned_access(uint32_t
 bool Compiler::PhysicalStorageBufferPointerHandler::type_is_bda_block_entry(uint32_t type_id) const
 {
 	auto &type = compiler.get<SPIRType>(type_id);
-	return compiler.is_physical_pointer(type) && type.pointer_depth == 1;
+	return compiler.is_physical_pointer(type);
 }
 
 uint32_t Compiler::PhysicalStorageBufferPointerHandler::get_minimum_scalar_alignment(const SPIRType &type) const
