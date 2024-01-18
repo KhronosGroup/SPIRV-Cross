@@ -1768,7 +1768,9 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	for (uint32_t i = 0; i < type.member_types.size(); i++)
 	{
 		auto &memb_type = get<SPIRType>(type.member_types[i]);
-		auto member_flags = ir.meta[type.self].members[i].decoration_flags;
+
+		auto *type_meta = ir.find_meta(type.self);
+		auto member_flags = type_meta ? type_meta->members[i].decoration_flags : Bitset{};
 
 		// Verify alignment rules.
 		uint32_t packed_alignment = type_to_packed_alignment(memb_type, member_flags, packing);
@@ -2399,6 +2401,14 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 			{
 				// The non-block type is embedded in a block, so we cannot use enhanced layouts :(
 				packing_standard = buffer_to_packing_standard(type, true, false) + ", ";
+			}
+			else if (is_array(get_pointee_type(type)))
+			{
+				SPIRType wrap_type{OpTypeStruct};
+				wrap_type.self = ir.increase_bound_by(1);
+				wrap_type.member_types.push_back(get_pointee_type_id(type_id));
+				ir.set_member_decoration(wrap_type.self, 0, DecorationOffset, 0);
+				packing_standard = buffer_to_packing_standard(wrap_type, true, false) + ", ";
 			}
 
 			if (alignment)
@@ -15718,6 +15728,10 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		auto *parent = &get_pointee_type(type);
 		string name = type_to_glsl(*parent);
 
+		uint32_t array_stride = get_decoration(type.parent_type, DecorationArrayStride);
+
+		// Resolve all array dimensions in one go since once we lose the pointer type,
+		// array information is left to to_array_type_glsl. The base type loses array information.
 		while (is_array(*parent))
 		{
 			if (parent->array_size_literal.back())
@@ -15725,6 +15739,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			else
 				name += join("id", type.array.back(), "_");
 
+			name += "stride_" + std::to_string(array_stride);
+
+			array_stride = get_decoration(parent->parent_type, DecorationArrayStride);
 			parent = &get<SPIRType>(parent->parent_type);
 		}
 
