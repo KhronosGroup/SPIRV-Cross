@@ -89,14 +89,14 @@ private:
 	}
 
 	template <typename T, typename... Ts>
-	inline void statement_inner(T &&t, Ts &&... ts)
+	inline void statement_inner(T &&t, Ts &&...ts)
 	{
 		buffer << std::forward<T>(t);
 		statement_inner(std::forward<Ts>(ts)...);
 	}
 
 	template <typename... Ts>
-	inline void statement(Ts &&... ts)
+	inline void statement(Ts &&...ts)
 	{
 		statement_indent();
 		statement_inner(std::forward<Ts>(ts)...);
@@ -104,7 +104,7 @@ private:
 	}
 
 	template <typename... Ts>
-	void statement_no_return(Ts &&... ts)
+	void statement_no_return(Ts &&...ts)
 	{
 		statement_indent();
 		statement_inner(std::forward<Ts>(ts)...);
@@ -513,11 +513,11 @@ void CompilerReflection::emit_entry_points()
 
 				json_stream->emit_json_key_array("workgroup_size");
 				json_stream->emit_json_array_value(spec_x.id != ID(0) ? spec_x.constant_id :
-				                                                        spv_entry.workgroup_size.x);
+                                                                        spv_entry.workgroup_size.x);
 				json_stream->emit_json_array_value(spec_y.id != ID(0) ? spec_y.constant_id :
-				                                                        spv_entry.workgroup_size.y);
+                                                                        spv_entry.workgroup_size.y);
 				json_stream->emit_json_array_value(spec_z.id != ID(0) ? spec_z.constant_id :
-				                                                        spv_entry.workgroup_size.z);
+                                                                        spv_entry.workgroup_size.z);
 				json_stream->end_json_array();
 
 				json_stream->emit_json_key_array("workgroup_size_is_spec_constant_id");
@@ -636,7 +636,8 @@ void CompilerReflection::emit_resources(const char *tag, const SmallVector<Resou
 		if (mask.get(DecorationWeightTextureQCOM))
 			json_stream->emit_json_key_value("WeightTextureQCOM", get_decoration(res.id, DecorationWeightTextureQCOM));
 		if (mask.get(DecorationBlockMatchTextureQCOM))
-			json_stream->emit_json_key_value("BlockMatchTextureQCOM", get_decoration(res.id, DecorationBlockMatchTextureQCOM));
+			json_stream->emit_json_key_value("BlockMatchTextureQCOM",
+			                                 get_decoration(res.id, DecorationBlockMatchTextureQCOM));
 
 		// For images, the type itself adds a layout qualifer.
 		// Only emit the format for storage images.

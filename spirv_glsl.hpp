@@ -258,7 +258,7 @@ public:
 	// require_extension("GL_KHR_my_extension");
 	void require_extension(const std::string &ext);
 
-	// Returns the list of required extensions. After compilation this will contains any other 
+	// Returns the list of required extensions. After compilation this will contains any other
 	// extensions that the compiler used automatically, in addition to the user specified ones.
 	const SmallVector<std::string> &get_required_extensions() const;
 
@@ -439,8 +439,7 @@ protected:
 	                                const std::string &qualifier = "", uint32_t base_offset = 0);
 	virtual void emit_struct_padding_target(const SPIRType &type);
 	virtual std::string image_type_glsl(const SPIRType &type, uint32_t id = 0, bool member = false);
-	std::string constant_expression(const SPIRConstant &c,
-	                                bool inside_block_like_struct_scope = false,
+	std::string constant_expression(const SPIRConstant &c, bool inside_block_like_struct_scope = false,
 	                                bool inside_struct_scope = false);
 	virtual std::string constant_op_expression(const SPIRConstantOp &cop);
 	virtual std::string constant_expression_vector(const SPIRConstant &c, uint32_t vector);
@@ -507,7 +506,7 @@ protected:
 	}
 
 	template <typename T, typename... Ts>
-	inline void statement_inner(T &&t, Ts &&... ts)
+	inline void statement_inner(T &&t, Ts &&...ts)
 	{
 		buffer << std::forward<T>(t);
 		statement_count++;
@@ -515,7 +514,7 @@ protected:
 	}
 
 	template <typename... Ts>
-	inline void statement(Ts &&... ts)
+	inline void statement(Ts &&...ts)
 	{
 		if (is_forcing_recompilation())
 		{
@@ -540,7 +539,7 @@ protected:
 	}
 
 	template <typename... Ts>
-	inline void statement_no_indent(Ts &&... ts)
+	inline void statement_no_indent(Ts &&...ts)
 	{
 		auto old_indent = indent;
 		indent = 0;
@@ -582,8 +581,7 @@ protected:
 	bool member_is_remapped_physical_type(const SPIRType &type, uint32_t index) const;
 	bool member_is_packed_physical_type(const SPIRType &type, uint32_t index) const;
 	virtual std::string convert_row_major_matrix(std::string exp_str, const SPIRType &exp_type,
-	                                             uint32_t physical_type_id, bool is_packed,
-	                                             bool relaxed = false);
+	                                             uint32_t physical_type_id, bool is_packed, bool relaxed = false);
 
 	std::unordered_set<std::string> local_variable_names;
 	std::unordered_set<std::string> resource_names;
@@ -705,7 +703,8 @@ protected:
 	                          const char *op);
 	void emit_binary_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
-	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2, const char *op);
+	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, uint32_t op2,
+	                         const char *op);
 
 	void emit_unary_func_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, const char *op,
 	                             SPIRType::BaseType input_type, SPIRType::BaseType expected_result_type);
@@ -728,7 +727,8 @@ protected:
 	void emit_unrolled_binary_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
 	                             bool negate, SPIRType::BaseType expected_type);
 	void emit_binary_op_cast(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op,
-	                         SPIRType::BaseType input_type, bool skip_cast_if_equal_type, bool implicit_integer_promotion);
+	                         SPIRType::BaseType input_type, bool skip_cast_if_equal_type,
+	                         bool implicit_integer_promotion);
 
 	SPIRType binary_op_bitcast_helper(std::string &cast_op0, std::string &cast_op1, SPIRType::BaseType &input_type,
 	                                  uint32_t op0, uint32_t op1, bool skip_cast_if_equal_type);
@@ -790,7 +790,8 @@ protected:
 	std::string to_non_uniform_aware_expression(uint32_t id);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
-	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);
+	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr,
+	                                         const SPIRType &type);
 	std::string to_enclosed_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_unpacked_row_major_matrix_expression(uint32_t id);
@@ -807,7 +808,8 @@ protected:
 	std::string address_of_expression(const std::string &expr);
 	void strip_enclosed_expression(std::string &expr);
 	std::string to_member_name(const SPIRType &type, uint32_t index);
-	virtual std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain_is_resolved);
+	virtual std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index,
+	                                        bool ptr_chain_is_resolved);
 	std::string to_multi_member_reference(const SPIRType &type, const SmallVector<uint32_t> &indices);
 	std::string type_to_glsl_constructor(const SPIRType &type);
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
@@ -823,8 +825,8 @@ protected:
 	std::string layout_for_variable(const SPIRVariable &variable);
 	std::string to_combined_image_sampler(VariableID image_id, VariableID samp_id);
 	virtual bool skip_argument(uint32_t id) const;
-	virtual bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
-	                             spv::StorageClass lhs_storage, spv::StorageClass rhs_storage);
+	virtual bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id, spv::StorageClass lhs_storage,
+	                             spv::StorageClass rhs_storage);
 	virtual void emit_block_hints(const SPIRBlock &block);
 	virtual std::string to_initializer_expression(const SPIRVariable &var);
 	virtual std::string to_zero_initialized_expression(uint32_t type_id);
@@ -833,8 +835,7 @@ protected:
 	bool buffer_is_packing_standard(const SPIRType &type, BufferPackingStandard packing,
 	                                uint32_t *failed_index = nullptr, uint32_t start_offset = 0,
 	                                uint32_t end_offset = ~(0u));
-	std::string buffer_to_packing_standard(const SPIRType &type,
-	                                       bool support_std430_without_scalar_layout,
+	std::string buffer_to_packing_standard(const SPIRType &type, bool support_std430_without_scalar_layout,
 	                                       bool support_enhanced_layouts);
 
 	uint32_t type_to_packed_base_size(const SPIRType &type, BufferPackingStandard packing);

@@ -60,7 +60,7 @@ void join_helper(StringStream<> &stream, T &&t)
 }
 
 template <typename T, typename... Ts>
-void join_helper(StringStream<> &stream, T &&t, Ts &&... ts)
+void join_helper(StringStream<> &stream, T &&t, Ts &&...ts)
 {
 	stream << std::forward<T>(t);
 	join_helper(stream, std::forward<Ts>(ts)...);
@@ -188,7 +188,7 @@ private:
 
 // Helper template to avoid lots of nasty string temporary munging.
 template <typename... Ts>
-std::string join(Ts &&... ts)
+std::string join(Ts &&...ts)
 {
 	StringStream<> stream;
 	inner::join_helper(stream, std::forward<Ts>(ts)...);
@@ -454,8 +454,8 @@ struct IVariant
 
 protected:
 	IVariant() = default;
-	IVariant(const IVariant&) = default;
-	IVariant &operator=(const IVariant&) = default;
+	IVariant(const IVariant &) = default;
+	IVariant &operator=(const IVariant &) = default;
 };
 
 #define SPIRV_CROSS_DECLARE_CLONE(T)                                \
@@ -549,7 +549,10 @@ struct SPIRType : IVariant
 	};
 
 	spv::Op op = spv::Op::OpNop;
-	explicit SPIRType(spv::Op op_) : op(op_) {}
+	explicit SPIRType(spv::Op op_)
+	    : op(op_)
+	{
+	}
 
 	enum BaseType
 	{
@@ -1505,7 +1508,7 @@ public:
 	}
 
 	template <typename T, typename... Ts>
-	T *allocate_and_set(Types new_type, Ts &&... ts)
+	T *allocate_and_set(Types new_type, Ts &&...ts)
 	{
 		T *val = static_cast<ObjectPool<T> &>(*group->pools[new_type]).allocate(std::forward<Ts>(ts)...);
 		set(val, new_type);
@@ -1580,7 +1583,7 @@ const T &variant_get(const Variant &var)
 }
 
 template <typename T, typename... P>
-T &variant_set(Variant &var, P &&... args)
+T &variant_set(Variant &var, P &&...args)
 {
 	auto *ptr = var.allocate_and_set<T>(static_cast<Types>(T::type), std::forward<P>(args)...);
 	return *ptr;

@@ -96,10 +96,8 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 bool Compiler::block_is_pure(const SPIRBlock &block)
 {
 	// This is a global side effect of the function.
-	if (block.terminator == SPIRBlock::Kill ||
-	    block.terminator == SPIRBlock::TerminateRay ||
-	    block.terminator == SPIRBlock::IgnoreIntersection ||
-	    block.terminator == SPIRBlock::EmitMeshTasks)
+	if (block.terminator == SPIRBlock::Kill || block.terminator == SPIRBlock::TerminateRay ||
+	    block.terminator == SPIRBlock::IgnoreIntersection || block.terminator == SPIRBlock::EmitMeshTasks)
 		return false;
 
 	for (auto &i : block.ops)
@@ -643,8 +641,7 @@ bool Compiler::is_physical_pointer(const SPIRType &type) const
 bool Compiler::is_physical_pointer_to_buffer_block(const SPIRType &type) const
 {
 	return is_physical_pointer(type) && get_pointee_type(type).self == type.parent_type &&
-	       (has_decoration(type.self, DecorationBlock) ||
-	        has_decoration(type.self, DecorationBufferBlock));
+	       (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock));
 }
 
 bool Compiler::is_runtime_size_array(const SPIRType &type)
@@ -928,7 +925,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			if (has_decoration(type.self, DecorationBlock))
 			{
 				resource.resource = { var.self, var.basetype, type.self,
-				                      get_remapped_declared_block_name(var.self, false) };
+					                  get_remapped_declared_block_name(var.self, false) };
 
 				for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
 				{
@@ -939,11 +936,10 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			}
 			else
 			{
-				bool strip_array =
-						!has_decoration(var.self, DecorationPatch) && (
-								get_execution_model() == ExecutionModelTessellationControl ||
-								(get_execution_model() == ExecutionModelTessellationEvaluation &&
-								 var.storage == StorageClassInput));
+				bool strip_array = !has_decoration(var.self, DecorationPatch) &&
+				                   (get_execution_model() == ExecutionModelTessellationControl ||
+				                    (get_execution_model() == ExecutionModelTessellationEvaluation &&
+				                     var.storage == StorageClassInput));
 
 				resource.resource = { var.self, var.basetype, type.self, get_name(var.self) };
 
@@ -966,8 +962,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			if (has_decoration(type.self, DecorationBlock))
 			{
 				res.stage_inputs.push_back(
-						{ var.self, var.basetype, type.self,
-						  get_remapped_declared_block_name(var.self, false) });
+				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
 			}
 			else
 				res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
@@ -983,7 +978,7 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			if (has_decoration(type.self, DecorationBlock))
 			{
 				res.stage_outputs.push_back(
-						{ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
+				    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
 			}
 			else
 				res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
@@ -1015,7 +1010,8 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 		}
 		else if (type.storage == StorageClassShaderRecordBufferKHR)
 		{
-			res.shader_record_buffers.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, ssbo_instance_name) });
+			res.shader_record_buffers.push_back(
+			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, ssbo_instance_name) });
 		}
 		// Atomic counters
 		else if (type.storage == StorageClassAtomicCounter)
@@ -1114,8 +1110,7 @@ void Compiler::parse_fixup()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
-			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
-			    var.storage == StorageClassOutput)
+			    var.storage == StorageClassTaskPayloadWorkgroupEXT || var.storage == StorageClassOutput)
 			{
 				global_variables.push_back(var.self);
 			}
@@ -1536,10 +1531,9 @@ bool Compiler::block_is_noop(const SPIRBlock &block) const
 			auto *ops = stream(i);
 			auto ext = get<SPIRExtension>(ops[2]).ext;
 
-			bool ext_is_nonsemantic_only =
-				ext == SPIRExtension::NonSemanticShaderDebugInfo ||
-				ext == SPIRExtension::SPV_debug_info ||
-				ext == SPIRExtension::NonSemanticGeneric;
+			bool ext_is_nonsemantic_only = ext == SPIRExtension::NonSemanticShaderDebugInfo ||
+			                               ext == SPIRExtension::SPV_debug_info ||
+			                               ext == SPIRExtension::NonSemanticGeneric;
 
 			if (!ext_is_nonsemantic_only)
 				return false;
@@ -2597,7 +2591,8 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	{
 		if (var.storage != StorageClassInput && var.storage != StorageClassOutput &&
 		    var.storage != StorageClassUniformConstant)
-			SPIRV_CROSS_THROW("Only Input, Output variables and Uniform constants are part of a shader linking interface.");
+			SPIRV_CROSS_THROW(
+			    "Only Input, Output variables and Uniform constants are part of a shader linking interface.");
 
 		// This is to avoid potential problems with very old glslang versions which did
 		// not emit input/output interfaces properly.
@@ -4303,8 +4298,8 @@ void Compiler::ActiveBuiltinHandler::add_if_builtin(uint32_t id, bool allow_bloc
 	{
 		auto &type = compiler.get<SPIRType>(var->basetype);
 		auto &decorations = m->decoration;
-		auto &flags = type.storage == StorageClassInput ?
-		              compiler.active_input_builtins : compiler.active_output_builtins;
+		auto &flags =
+		    type.storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
 		if (decorations.builtin)
 		{
 			flags.set(decorations.builtin_type);
@@ -4870,8 +4865,8 @@ bool Compiler::reflection_ssbo_instance_name_is_significant() const
 	return aliased_ssbo_types;
 }
 
-bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op,
-                                          const uint32_t *args, uint32_t length)
+bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op, const uint32_t *args,
+                                          uint32_t length)
 {
 	if (length < 2)
 		return false;
@@ -5000,7 +4995,8 @@ Compiler::PhysicalBlockMeta *Compiler::PhysicalStorageBufferPointerHandler::find
 		return nullptr;
 }
 
-void Compiler::PhysicalStorageBufferPointerHandler::mark_aligned_access(uint32_t id, const uint32_t *args, uint32_t length)
+void Compiler::PhysicalStorageBufferPointerHandler::mark_aligned_access(uint32_t id, const uint32_t *args,
+                                                                        uint32_t length)
 {
 	uint32_t mask = *args;
 	args++;
@@ -5155,8 +5151,7 @@ void Compiler::analyze_non_block_pointer_types()
 	ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type) {
 		// Only analyze the raw block struct, not any pointer-to-struct, since that's just redundant.
 		if (type.self == id &&
-		    (has_decoration(type.self, DecorationBlock) ||
-		     has_decoration(type.self, DecorationBufferBlock)))
+		    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)))
 		{
 			handler.analyze_non_block_types_from_block(type);
 		}

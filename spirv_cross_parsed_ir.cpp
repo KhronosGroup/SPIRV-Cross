@@ -116,7 +116,6 @@ ParsedIR &ParsedIR::operator=(const ParsedIR &other)
 		addressing_model = other.addressing_model;
 		memory_model = other.memory_model;
 
-
 		meta_needing_name_fixup = other.meta_needing_name_fixup;
 		load_type_width = other.load_type_width;
 

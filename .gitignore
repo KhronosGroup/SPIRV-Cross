@@ -19,6 +19,7 @@
 *.bc
 /external
 .vs/
+.vscode/
 *.vcxproj.user
 
 # Mac OS X Finder

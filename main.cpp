@@ -39,8 +39,8 @@
 #include <unordered_set>
 
 #ifdef _WIN32
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
 #endif
 
 #ifdef HAVE_SPIRV_CROSS_GIT_VERSION
@@ -50,6 +50,8 @@
 using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
+
+#define SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 
 #ifdef SPIRV_CROSS_EXCEPTIONS_TO_ASSERTIONS
 static inline void THROW(const char *str)
@@ -297,10 +299,17 @@ static void print_resources(const Compiler &compiler, spv::StorageClass storage,
 		auto &type = compiler.get_type(res.value_type_id);
 		switch (type.basetype)
 		{
-		case SPIRType::Float: basetype = "float"; break;
-		case SPIRType::Int: basetype = "int"; break;
-		case SPIRType::UInt: basetype = "uint"; break;
-		default: break;
+		case SPIRType::Float:
+			basetype = "float";
+			break;
+		case SPIRType::Int:
+			basetype = "int";
+			break;
+		case SPIRType::UInt:
+			basetype = "uint";
+			break;
+		default:
+			break;
 		}
 
 		uint32_t array_size = 0;
@@ -326,16 +335,30 @@ static void print_resources(const Compiler &compiler, spv::StorageClass storage,
 		string builtin_str;
 		switch (res.builtin)
 		{
-		case spv::BuiltInPosition: builtin_str = "Position"; break;
-		case spv::BuiltInPointSize: builtin_str = "PointSize"; break;
-		case spv::BuiltInCullDistance: builtin_str = "CullDistance"; break;
-		case spv::BuiltInClipDistance: builtin_str = "ClipDistance"; break;
-		case spv::BuiltInTessLevelInner: builtin_str = "TessLevelInner"; break;
-		case spv::BuiltInTessLevelOuter: builtin_str = "TessLevelOuter"; break;
-		default: builtin_str = string("builtin #") + to_string(res.builtin);
+		case spv::BuiltInPosition:
+			builtin_str = "Position";
+			break;
+		case spv::BuiltInPointSize:
+			builtin_str = "PointSize";
+			break;
+		case spv::BuiltInCullDistance:
+			builtin_str = "CullDistance";
+			break;
+		case spv::BuiltInClipDistance:
+			builtin_str = "ClipDistance";
+			break;
+		case spv::BuiltInTessLevelInner:
+			builtin_str = "TessLevelInner";
+			break;
+		case spv::BuiltInTessLevelOuter:
+			builtin_str = "TessLevelOuter";
+			break;
+		default:
+			builtin_str = string("builtin #") + to_string(res.builtin);
 		}
 
-		fprintf(stderr, "Builtin %s (%s) (active: %s).\n", builtin_str.c_str(), type_str.c_str(), active ? "yes" : "no");
+		fprintf(stderr, "Builtin %s (%s) (active: %s).\n", builtin_str.c_str(), type_str.c_str(),
+		        active ? "yes" : "no");
 	}
 	fprintf(stderr, "=============\n\n");
 }
@@ -645,7 +668,7 @@ struct CLIArguments
 	bool msl_pad_fragment_output = false;
 	bool msl_domain_lower_left = false;
 	bool msl_argument_buffers = false;
-	uint32_t msl_argument_buffers_tier = 0;		// Tier 1
+	uint32_t msl_argument_buffers_tier = 0; // Tier 1
 	bool msl_texture_buffer_native = false;
 	bool msl_framebuffer_fetch = false;
 	bool msl_invariant_float_math = false;
@@ -1215,7 +1238,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.pad_fragment_output_components = args.msl_pad_fragment_output;
 		msl_opts.tess_domain_origin_lower_left = args.msl_domain_lower_left;
 		msl_opts.argument_buffers = args.msl_argument_buffers;
-		msl_opts.argument_buffers_tier = static_cast<CompilerMSL::Options::ArgumentBuffersTier>(args.msl_argument_buffers_tier);
+		msl_opts.argument_buffers_tier =
+		    static_cast<CompilerMSL::Options::ArgumentBuffersTier>(args.msl_argument_buffers_tier);
 		msl_opts.texture_buffer_native = args.msl_texture_buffer_native;
 		msl_opts.multiview = args.msl_multiview;
 		msl_opts.multiview_layered_rendering = args.msl_multiview_layered_rendering;
@@ -1540,9 +1564,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 		for (auto &named_remap : args.hlsl_attr_remap_named)
 		{
-			auto itr = std::find_if(res.stage_inputs.begin(), res.stage_inputs.end(), [&](const Resource &input_res) {
-				return input_res.name == named_remap.name;
-			});
+			auto itr = std::find_if(res.stage_inputs.begin(), res.stage_inputs.end(),
+			                        [&](const Resource &input_res) { return input_res.name == named_remap.name; });
 
 			if (itr != res.stage_inputs.end())
 			{
@@ -1608,15 +1631,15 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--glsl-emit-push-constant-as-ubo", [&args](CLIParser &) { args.glsl_emit_push_constant_as_ubo = true; });
 	cbs.add("--glsl-emit-ubo-as-plain-uniforms", [&args](CLIParser &) { args.glsl_emit_ubo_as_plain_uniforms = true; });
 	cbs.add("--glsl-force-flattened-io-blocks", [&args](CLIParser &) { args.glsl_force_flattened_io_blocks = true; });
-	cbs.add("--glsl-ovr-multiview-view-count", [&args](CLIParser &parser) { args.glsl_ovr_multiview_view_count = parser.next_uint(); });
+	cbs.add("--glsl-ovr-multiview-view-count",
+	        [&args](CLIParser &parser) { args.glsl_ovr_multiview_view_count = parser.next_uint(); });
 	cbs.add("--glsl-remap-ext-framebuffer-fetch", [&args](CLIParser &parser) {
 		uint32_t input_index = parser.next_uint();
 		uint32_t color_attachment = parser.next_uint();
 		args.glsl_ext_framebuffer_fetch.push_back({ input_index, color_attachment });
 	});
-	cbs.add("--glsl-ext-framebuffer-fetch-noncoherent", [&args](CLIParser &) {
-		args.glsl_ext_framebuffer_fetch_noncoherent = true;
-	});
+	cbs.add("--glsl-ext-framebuffer-fetch-noncoherent",
+	        [&args](CLIParser &) { args.glsl_ext_framebuffer_fetch_noncoherent = true; });
 	cbs.add("--vulkan-glsl-disable-ext-samplerless-texture-functions",
 	        [&args](CLIParser &) { args.vulkan_glsl_disable_ext_samplerless_texture_functions = true; });
 	cbs.add("--disable-storage-image-qualifier-deduction",
@@ -1643,7 +1666,8 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--hlsl-enable-16bit-types", [&args](CLIParser &) { args.hlsl_enable_16bit_types = true; });
 	cbs.add("--hlsl-flatten-matrix-vertex-input-semantics",
 	        [&args](CLIParser &) { args.hlsl_flatten_matrix_vertex_input_semantics = true; });
-	cbs.add("--hlsl-preserve-structured-buffers", [&args](CLIParser &) { args.hlsl_preserve_structured_buffers = true; });
+	cbs.add("--hlsl-preserve-structured-buffers",
+	        [&args](CLIParser &) { args.hlsl_preserve_structured_buffers = true; });
 	cbs.add("--vulkan-semantics", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("-V", [&args](CLIParser &) { args.vulkan_semantics = true; });
 	cbs.add("--flatten-multidimensional-arrays", [&args](CLIParser &) { args.flatten_multidimensional_arrays = true; });
@@ -1804,13 +1828,11 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.msl_sample_dref_lod_array_as_grad = true; });
 	cbs.add("--msl-no-readwrite-texture-fences", [&args](CLIParser &) { args.msl_readwrite_texture_fences = false; });
 	cbs.add("--msl-agx-manual-cube-grad-fixup", [&args](CLIParser &) { args.msl_agx_manual_cube_grad_fixup = true; });
-	cbs.add("--msl-combined-sampler-suffix", [&args](CLIParser &parser) {
-		args.msl_combined_sampler_suffix = parser.next_string();
-	});
+	cbs.add("--msl-combined-sampler-suffix",
+	        [&args](CLIParser &parser) { args.msl_combined_sampler_suffix = parser.next_string(); });
 	cbs.add("--msl-runtime-array-rich-descriptor",
 	        [&args](CLIParser &) { args.msl_runtime_array_rich_descriptor = true; });
-	cbs.add("--msl-replace-recursive-inputs",
-	        [&args](CLIParser &) { args.msl_replace_recursive_inputs = true; });
+	cbs.add("--msl-replace-recursive-inputs", [&args](CLIParser &) { args.msl_replace_recursive_inputs = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
@@ -1911,9 +1933,8 @@ static int main_inner(int argc, char *argv[])
 		args.masked_stage_builtins.push_back(masked_builtin);
 	});
 
-	cbs.add("--force-recompile-max-debug-iterations", [&](CLIParser &parser) {
-		args.force_recompile_max_debug_iterations = parser.next_uint();
-	});
+	cbs.add("--force-recompile-max-debug-iterations",
+	        [&](CLIParser &parser) { args.force_recompile_max_debug_iterations = parser.next_uint(); });
 
 	cbs.add("--relax-nan-checks", [&](CLIParser &) { args.relax_nan_checks = true; });
 

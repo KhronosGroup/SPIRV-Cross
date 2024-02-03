@@ -126,7 +126,7 @@ public:
 		// By default, a readonly storage buffer will be declared as ByteAddressBuffer (SRV) instead.
 		// Alternatively, use set_hlsl_force_storage_buffer_as_uav to specify individually.
 		bool force_storage_buffer_as_uav = false;
-	
+
 		// Forces any storage image type marked as NonWritable to be considered an SRV instead.
 		// For this to work with function call parameters, NonWritable must be considered to be part of the type system
 		// so that NonWritable image arguments are also translated to Texture rather than RWTexture.

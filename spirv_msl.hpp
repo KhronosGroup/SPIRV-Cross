@@ -505,7 +505,7 @@ public:
 		// Note: Only Apple's GPU compiler takes advantage of the lack of coherency, so make sure to test on Apple GPUs if you disable this.
 		bool readwrite_texture_fences = true;
 
-		// Metal 3.1 introduced a Metal regression bug which causes infinite recursion during 
+		// Metal 3.1 introduced a Metal regression bug which causes infinite recursion during
 		// Metal's analysis of an entry point input structure that is itself recursive. Enabling
 		// this option will replace the recursive input declaration with a alternate variable of
 		// type void*, and then cast to the correct type at the top of the entry point function.
@@ -882,7 +882,8 @@ protected:
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool emit_complex_bitcast(uint32_t result_id, uint32_t id, uint32_t op0) override;
 	bool skip_argument(uint32_t id) const override;
-	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain_is_resolved) override;
+	std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index,
+	                                bool ptr_chain_is_resolved) override;
 	std::string to_qualifiers_glsl(uint32_t id) override;
 	void replace_illegal_names() override;
 	void declare_constant_arrays();
@@ -944,32 +945,29 @@ protected:
 	void add_plain_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
 	                                           SPIRType &ib_type, SPIRVariable &var, InterfaceBlockMeta &meta);
 	bool add_component_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
-	                                               SPIRVariable &var, const SPIRType &type,
-	                                               InterfaceBlockMeta &meta);
-	void add_plain_member_variable_to_interface_block(spv::StorageClass storage,
-	                                                  const std::string &ib_var_ref, SPIRType &ib_type,
-	                                                  SPIRVariable &var, SPIRType &var_type,
+	                                               SPIRVariable &var, const SPIRType &type, InterfaceBlockMeta &meta);
+	void add_plain_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                                  SPIRType &ib_type, SPIRVariable &var, SPIRType &var_type,
 	                                                  uint32_t mbr_idx, InterfaceBlockMeta &meta,
 	                                                  const std::string &mbr_name_qual,
-	                                                  const std::string &var_chain_qual,
-	                                                  uint32_t &location, uint32_t &var_mbr_idx);
-	void add_composite_member_variable_to_interface_block(spv::StorageClass storage,
-	                                                      const std::string &ib_var_ref, SPIRType &ib_type,
-	                                                      SPIRVariable &var, SPIRType &var_type,
+	                                                  const std::string &var_chain_qual, uint32_t &location,
+	                                                  uint32_t &var_mbr_idx);
+	void add_composite_member_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+	                                                      SPIRType &ib_type, SPIRVariable &var, SPIRType &var_type,
 	                                                      uint32_t mbr_idx, InterfaceBlockMeta &meta,
 	                                                      const std::string &mbr_name_qual,
-	                                                      const std::string &var_chain_qual,
-	                                                      uint32_t &location, uint32_t &var_mbr_idx);
+	                                                      const std::string &var_chain_qual, uint32_t &location,
+	                                                      uint32_t &var_mbr_idx);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 	void add_tess_level_input(const std::string &base_ref, const std::string &mbr_name, SPIRVariable &var);
 
 	void fix_up_interface_member_indices(spv::StorageClass storage, uint32_t ib_type_id);
 
-	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type,
-	                                     spv::StorageClass storage, bool fallback = false);
+	void mark_location_as_used_by_shader(uint32_t location, const SPIRType &type, spv::StorageClass storage,
+	                                     bool fallback = false);
 	uint32_t ensure_correct_builtin_type(uint32_t type_id, spv::BuiltIn builtin);
-	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t component,
-	                                   uint32_t num_components, bool strip_array);
+	uint32_t ensure_correct_input_type(uint32_t type_id, uint32_t location, uint32_t component, uint32_t num_components,
+	                                   bool strip_array);
 
 	void emit_custom_templates();
 	void emit_custom_functions();
@@ -1006,10 +1004,10 @@ protected:
 	std::string round_fp_tex_coords(std::string tex_coords, bool coord_is_fp);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype, uint32_t plane = 0);
 	uint32_t get_member_location(uint32_t type_id, uint32_t index, uint32_t *comp = nullptr) const;
-	uint32_t get_or_allocate_builtin_input_member_location(spv::BuiltIn builtin,
-	                                                       uint32_t type_id, uint32_t index, uint32_t *comp = nullptr);
-	uint32_t get_or_allocate_builtin_output_member_location(spv::BuiltIn builtin,
-	                                                        uint32_t type_id, uint32_t index, uint32_t *comp = nullptr);
+	uint32_t get_or_allocate_builtin_input_member_location(spv::BuiltIn builtin, uint32_t type_id, uint32_t index,
+	                                                       uint32_t *comp = nullptr);
+	uint32_t get_or_allocate_builtin_output_member_location(spv::BuiltIn builtin, uint32_t type_id, uint32_t index,
+	                                                        uint32_t *comp = nullptr);
 
 	uint32_t get_physical_tess_level_array_size(spv::BuiltIn builtin) const;
 
@@ -1055,14 +1053,15 @@ protected:
 	SPIRType &get_uint_type();
 	uint32_t get_uint_type_id();
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, spv::Op opcode,
-	                         uint32_t mem_order_1, uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
-	                         bool op1_is_pointer = false, bool op1_is_literal = false, uint32_t op2 = 0);
+	                         uint32_t mem_order_1, uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0,
+	                         uint32_t op1 = 0, bool op1_is_pointer = false, bool op1_is_literal = false,
+	                         uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
 	void add_typedef_line(const std::string &line);
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
-	bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
-	                     spv::StorageClass lhs_storage, spv::StorageClass rhs_storage) override;
+	bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id, spv::StorageClass lhs_storage,
+	                     spv::StorageClass rhs_storage) override;
 	void build_implicit_builtins();
 	uint32_t build_constant_uint_array_pointer();
 	void emit_entry_point_declarations() override;
@@ -1228,10 +1227,14 @@ protected:
 	void analyze_argument_buffers();
 	bool descriptor_set_is_argument_buffer(uint32_t desc_set) const;
 	MSLResourceBinding &get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx);
-	void add_argument_buffer_padding_buffer_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
-	void add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
-	void add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, MSLResourceBinding &rez_bind);
-	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, uint32_t count);
+	void add_argument_buffer_padding_buffer_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index,
+	                                             MSLResourceBinding &rez_bind);
+	void add_argument_buffer_padding_image_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index,
+	                                            MSLResourceBinding &rez_bind);
+	void add_argument_buffer_padding_sampler_type(SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index,
+	                                              MSLResourceBinding &rez_bind);
+	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx,
+	                                      uint32_t &arg_buff_index, uint32_t count);
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
@@ -1261,7 +1264,10 @@ protected:
 		       msl_options.check_discarded_frag_stores && frag_shader_needs_discard_checks;
 	}
 
-	bool has_additional_fixed_sample_mask() const { return msl_options.additional_fixed_sample_mask != 0xffffffff; }
+	bool has_additional_fixed_sample_mask() const
+	{
+		return msl_options.additional_fixed_sample_mask != 0xffffffff;
+	}
 	std::string additional_fixed_sample_mask_str() const;
 
 	// OpcodeHandler that handles several MSL preprocessing operations.
