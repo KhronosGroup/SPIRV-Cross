@@ -7416,19 +7416,28 @@ void CompilerMSL::emit_custom_functions()
 			break;
 
 		case SPVFuncImplVariableDescriptorArray:
-			statement("template<typename T>");
-			statement("struct spvDescriptorArray");
-			begin_scope();
-			statement("spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(ptr)");
-			begin_scope();
-			end_scope();
-			statement("const device T& operator [] (size_t i) const");
-			begin_scope();
-			statement("return ptr[i].value;");
-			end_scope();
-			statement("const device spvDescriptor<T>* ptr;");
-			end_scope_decl();
-			statement("");
+			if (spv_function_implementations.count(SPVFuncImplVariableDescriptor) != 0)
+			{
+				statement("template<typename T>");
+				statement("struct spvDescriptorArray");
+				begin_scope();
+				statement("spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(ptr)");
+				begin_scope();
+				end_scope();
+				statement("const device T& operator [] (size_t i) const");
+				begin_scope();
+				statement("return ptr[i].value;");
+				end_scope();
+				statement("const device spvDescriptor<T>* ptr;");
+				end_scope_decl();
+				statement("");
+			}
+			else
+			{
+				statement("template<typename T>");
+				statement("struct spvDescriptorArray;");
+				statement("");
+			}
 
 			if (msl_options.runtime_array_rich_descriptor &&
 			    spv_function_implementations.count(SPVFuncImplVariableSizedDescriptor) != 0)
