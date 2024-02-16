@@ -3335,13 +3335,11 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle_terminator(const SPIRBl
 bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint32_t *args, uint32_t length)
 {
 	// Keep track of the types of temporaries, so we can hoist them out as necessary.
-	uint32_t result_type, result_id;
+	uint32_t result_type = 0, result_id = 0;
 	if (compiler.instruction_to_result_type(result_type, result_id, op, args, length))
 	{
 		// For some opcodes, we will need to override the result id.
 		// If we need to hoist the temporary, the temporary type is the input, not the result.
-		// FIXME: This will likely break with OpCopyObject + hoisting, but we'll have to
-		// solve it if we ever get there ...
 		if (op == OpConvertUToAccelerationStructureKHR)
 		{
 			auto itr = result_id_to_type.find(args[2]);
@@ -3450,6 +3448,13 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 
 	case OpCopyObject:
 	{
+		// OpCopyObject copies the underlying non-pointer type, 
+		// so any temp variable should be declared using the underlying type.
+		// If the type is a pointer, get its base type and overwrite the result type mapping.
+		auto &type = compiler.get<SPIRType>(result_type);
+		if (type.pointer)
+			result_id_to_type[result_id] = type.parent_type;
+
 		if (length < 3)
 			return false;
 
