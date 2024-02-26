@@ -10210,9 +10210,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 					exp += join(coord, ".xy, ", coord, ".z");
 					break;
 				default:
-					// Texture cube arrays atomics are not supported by Metal.
-					assert(false);
-					break;
+					SPIRV_CROSS_THROW("Cannot do atomics on Cube textures.");
 				}
 			}
 			else
