@@ -2568,7 +2568,7 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 			return var.storage == StorageClassInput ? "in " : "out ";
 	}
 	else if (var.storage == StorageClassUniformConstant || var.storage == StorageClassUniform ||
-	         var.storage == StorageClassPushConstant)
+	         var.storage == StorageClassPushConstant || var.storage == StorageClassAtomicCounter)
 	{
 		return "uniform ";
 	}
