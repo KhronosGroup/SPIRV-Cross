@@ -10196,9 +10196,32 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 
 		// Will only be false if we're in "force recompile later" mode.
 		if (split_index != string::npos)
-			exp += join(obj_expression.substr(0, split_index), ".", op, "(", obj_expression.substr(split_index + 1));
+		{
+			auto coord = obj_expression.substr(split_index + 1);
+			exp += join(obj_expression.substr(0, split_index), ".", op, "(");
+			if (res_type.basetype == SPIRType::Image && res_type.image.arrayed)
+			{
+				switch (res_type.image.dim)
+				{
+				case Dim1D:
+					exp += join(coord, ".x, ", coord, ".y");
+					break;
+				case Dim2D:
+					exp += join(coord, ".xy, ", coord, ".z");
+					break;
+				default:
+					SPIRV_CROSS_THROW("Cannot do atomics on Cube textures.");
+				}
+			}
+			else
+			{
+				exp += coord;
+			}
+		}
 		else
+		{
 			exp += obj_expression;
+		}
 	}
 	else
 	{
