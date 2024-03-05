@@ -10127,7 +10127,8 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 {
 	string exp;
 
-	auto &type = get_pointee_type(expression_type(obj));
+	auto &ptr_type = expression_type(obj);
+	auto &type = get_pointee_type(ptr_type);
 	auto expected_type = type.basetype;
 	if (opcode == OpAtomicUMax || opcode == OpAtomicUMin)
 		expected_type = to_unsigned_basetype(type.width);
@@ -10147,15 +10148,13 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	remapped_type.basetype = expected_type;
 
 	auto *var = maybe_get_backing_variable(obj);
-	if (!var)
-		SPIRV_CROSS_THROW("No backing variable for atomic operation.");
-	const auto &res_type = get<SPIRType>(var->basetype);
+	const auto *res_type = var ? &get<SPIRType>(var->basetype) : nullptr;
+	assert(type.storage != StorageClassImage || res_type);
 
 	bool is_atomic_compare_exchange_strong = op1_is_pointer && op1;
 
 	bool check_discard = opcode != OpAtomicLoad && needs_frag_discard_checks() &&
-	                     ((res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image) ||
-	                      var->storage == StorageClassStorageBuffer || var->storage == StorageClassUniform);
+	                     ptr_type.storage != StorageClassWorkgroup;
 
 	// Even compare exchange atomics are vec4 on metal for ... reasons :v
 	uint32_t vec4_temporary_id = 0;
@@ -10199,9 +10198,9 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		{
 			auto coord = obj_expression.substr(split_index + 1);
 			exp += join(obj_expression.substr(0, split_index), ".", op, "(");
-			if (res_type.basetype == SPIRType::Image && res_type.image.arrayed)
+			if (ptr_type.storage == StorageClassImage && res_type->image.arrayed)
 			{
-				switch (res_type.image.dim)
+				switch (res_type->image.dim)
 				{
 				case Dim1D:
 					exp += join(coord, ".x, ", coord, ".y");
@@ -10228,16 +10227,21 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		exp += string(op) + "_explicit(";
 		exp += "(";
 		// Emulate texture2D atomic operations
-		if (res_type.storage == StorageClassUniformConstant && res_type.basetype == SPIRType::Image)
+		if (ptr_type.storage == StorageClassImage)
 		{
 			auto &flags = ir.get_decoration_bitset(var->self);
 			if (decoration_flags_signal_volatile(flags))
 				exp += "volatile ";
 			exp += "device";
 		}
-		else
+		else if (var && ptr_type.storage != StorageClassPhysicalStorageBuffer)
 		{
 			exp += get_argument_address_space(*var);
+		}
+		else
+		{
+			// Fallback scenario, could happen for raw pointers.
+			exp += ptr_type.storage == StorageClassWorkgroup ? "threadgroup" : "device";
 		}
 
 		exp += " atomic_";
