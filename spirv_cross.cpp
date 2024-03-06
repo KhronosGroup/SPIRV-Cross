@@ -4428,11 +4428,9 @@ bool Compiler::ActiveBuiltinHandler::handle(spv::Op opcode, const uint32_t *args
 		for (uint32_t i = 0; i < count; i++)
 		{
 			// Pointers
+			// PtrAccessChain functions more like a pointer offset. Type remains the same.
 			if (opcode == OpPtrAccessChain && i == 0)
-			{
-				type = &compiler.get<SPIRType>(type->parent_type);
 				continue;
-			}
 
 			// Arrays
 			if (!type->array.empty())
