@@ -2377,7 +2377,9 @@ uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t comp
 	if (basetype != SPIRType::Unknown)
 		type->basetype = basetype;
 	type->self = new_type_id;
-	type->parent_type = type_id;
+	// We want parent type to point to the scalar type.
+	type->parent_type = is_scalar(*p_old_type) ? TypeID(p_old_type->self) : p_old_type->parent_type;
+	assert(is_scalar(get<SPIRType>(type->parent_type)));
 	type->array.clear();
 	type->array_size_literal.clear();
 	type->pointer = false;
