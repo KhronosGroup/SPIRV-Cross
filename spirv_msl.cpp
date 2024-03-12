@@ -10205,7 +10205,11 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 				switch (res_type->image.dim)
 				{
 				case Dim1D:
-					exp += join(coord, ".x, ", coord, ".y");
+					if (msl_options.texture_1D_as_2D)
+						exp += join("uint2(", coord, ".x, 0), ", coord, ".y");
+					else
+						exp += join(coord, ".x, ", coord, ".y");
+
 					break;
 				case Dim2D:
 					exp += join(coord, ".xy, ", coord, ".z");
@@ -10214,10 +10218,10 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 					SPIRV_CROSS_THROW("Cannot do atomics on Cube textures.");
 				}
 			}
+			else if (ptr_type.storage == StorageClassImage && res_type->image.dim == Dim1D && msl_options.texture_1D_as_2D)
+				exp += join("uint2(", coord, ", 0)");
 			else
-			{
 				exp += coord;
-			}
 		}
 		else
 		{
