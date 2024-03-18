@@ -570,7 +570,7 @@ protected:
 	uint32_t to_array_size_literal(const SPIRType &type, uint32_t index) const;
 	uint32_t to_array_size_literal(const SPIRType &type) const;
 	virtual std::string variable_decl(const SPIRVariable &variable); // Threadgroup arrays can't have a wrapper type
-	std::string variable_decl_function_local(SPIRVariable &variable);
+	virtual std::string variable_decl_function_local(SPIRVariable &variable);
 
 	void add_local_variable_name(uint32_t id);
 	void add_resource_name(uint32_t id);

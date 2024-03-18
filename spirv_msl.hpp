@@ -853,6 +853,9 @@ protected:
 	std::string type_to_glsl(const SPIRType &type, uint32_t id, bool member);
 	std::string type_to_glsl(const SPIRType &type, uint32_t id = 0) override;
 	void emit_block_hints(const SPIRBlock &block) override;
+	void emit_mesh_tasks(SPIRBlock &block) override;
+	void emit_mesh_entry_point();
+	void emit_mesh_outputs();
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	std::string type_to_array_glsl(const SPIRType &type) override;
@@ -862,6 +865,7 @@ protected:
 
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
+	std::string variable_decl_function_local(SPIRVariable &variable) override;
 
 	std::string image_type_glsl(const SPIRType &type, uint32_t id, bool member) override;
 	std::string sampler_type(const SPIRType &type, uint32_t id, bool member);
@@ -904,6 +908,7 @@ protected:
 
 	bool is_tesc_shader() const;
 	bool is_tese_shader() const;
+	bool is_mesh_shader() const;
 
 	void preprocess_op_codes();
 	void localize_global_variables();
@@ -918,6 +923,7 @@ protected:
 	                                            std::unordered_set<uint32_t> &processed_func_ids);
 	uint32_t add_interface_block(spv::StorageClass storage, bool patch = false);
 	uint32_t add_interface_block_pointer(uint32_t ib_var_id, spv::StorageClass storage);
+	uint32_t add_meshlet_block(bool per_primitive);
 
 	struct InterfaceBlockMeta
 	{
@@ -1054,6 +1060,8 @@ protected:
 	std::string get_tess_factor_struct_name();
 	SPIRType &get_uint_type();
 	uint32_t get_uint_type_id();
+	uint32_t get_shared_uint_type_id();
+	uint32_t get_meshlet_type_id();
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, spv::Op opcode,
 	                         uint32_t mem_order_1, uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
 	                         bool op1_is_pointer = false, bool op1_is_literal = false, uint32_t op2 = 0);
@@ -1086,11 +1094,15 @@ protected:
 	uint32_t builtin_stage_input_size_id = 0;
 	uint32_t builtin_local_invocation_index_id = 0;
 	uint32_t builtin_workgroup_size_id = 0;
+	uint32_t builtin_mesh_primitive_indices_id = 0;
+	uint32_t builtin_mesh_primitive_count_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;
 	uint32_t dynamic_offsets_buffer_id = 0;
 	uint32_t uint_type_id = 0;
+	uint32_t shared_uint_type_id = 0;
+	uint32_t meshlet_type_id = 0;
 	uint32_t argument_buffer_padding_buffer_type_id = 0;
 	uint32_t argument_buffer_padding_image_type_id = 0;
 	uint32_t argument_buffer_padding_sampler_type_id = 0;
@@ -1155,6 +1167,8 @@ protected:
 	VariableID stage_out_ptr_var_id = 0;
 	VariableID tess_level_inner_var_id = 0;
 	VariableID tess_level_outer_var_id = 0;
+	VariableID mesh_out_per_vertex = 0;
+	VariableID mesh_out_per_primitive = 0;
 	VariableID stage_out_masked_builtin_type_id = 0;
 
 	// Handle HLSL-style 0-based vertex/instance index.
