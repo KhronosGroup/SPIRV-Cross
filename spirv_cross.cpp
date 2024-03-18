@@ -3736,6 +3736,14 @@ void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariab
 		auto &var = get<SPIRVariable>(accessed_var.first);
 		auto &type = expression_type(accessed_var.first);
 
+		// First check if there are writes to the variable. Later, if there are none, we'll
+		// reconsider it as globally accessed LUT.
+		if (!var.is_written_to)
+		{
+			var.is_written_to = handler.complete_write_variables_to_block.count(var.self) != 0 ||
+			                    handler.partial_write_variables_to_block.count(var.self) != 0;
+		}
+
 		// Only consider function local variables here.
 		// If we only have a single function in our CFG, private storage is also fine,
 		// since it behaves like a function local variable.
@@ -3760,8 +3768,7 @@ void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariab
 			static_constant_expression = var.initializer;
 
 			// There can be no stores to this variable, we have now proved we have a LUT.
-			if (handler.complete_write_variables_to_block.count(var.self) != 0 ||
-			    handler.partial_write_variables_to_block.count(var.self) != 0)
+			if (var.is_written_to)
 				continue;
 		}
 		else
@@ -4615,6 +4622,29 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 				for (auto loop_variable : b.loop_variables)
 					get<SPIRVariable>(loop_variable).loop_variable = false;
 				b.loop_variables.clear();
+			}
+		}
+	}
+
+	// Find LUTs which are not function local. Only consider this case if the CFG is multi-function,
+	// otherwise we treat Private as Function trivially.
+	// Needs to be analyzed from the outside since we have to block the LUT optimization if at least
+	// one function writes to it.
+	if (!single_function)
+	{
+		for (auto &id : global_variables)
+		{
+			auto &var = get<SPIRVariable>(id);
+			auto &type = get_variable_data_type(var);
+
+			if (is_array(type) && var.storage == StorageClassPrivate &&
+			    var.initializer && !var.is_written_to &&
+			    ir.ids[var.initializer].get_type() == TypeConstant)
+			{
+				get<SPIRConstant>(var.initializer).is_used_as_lut = true;
+				var.static_expression = var.initializer;
+				var.statically_assigned = true;
+				var.remapped_variable = true;
 			}
 		}
 	}
