@@ -405,6 +405,24 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('ClipDistance')
     if '.relax-nan.' in shader:
         msl_args.append('--relax-nan-checks')
+    if '.xfb-point-list.' in shader:
+        msl_args.append('--msl-xfb-primitive-type')
+        msl_args.append('point-list')
+    if '.xfb-line-list.' in shader:
+        msl_args.append('--msl-xfb-primitive-type')
+        msl_args.append('line-list')
+    if '.xfb-line-strip.' in shader:
+        msl_args.append('--msl-xfb-primitive-type')
+        msl_args.append('line-strip')
+    if '.xfb-triangle-list.' in shader:
+        msl_args.append('--msl-xfb-primitive-type')
+        msl_args.append('triangle-list')
+    if '.xfb-triangle-strip.' in shader:
+        msl_args.append('--msl-xfb-primitive-type')
+        msl_args.append('triangle-strip')
+    if '.xfb-triangle-fan.' in shader:
+        msl_args.append('--msl-xfb-primitive-type')
+        msl_args.append('triangle-fan')
 
     subprocess.check_call(msl_args)
 
