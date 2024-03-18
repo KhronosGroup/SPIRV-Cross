@@ -3738,8 +3738,11 @@ void Compiler::find_function_local_luts(SPIRFunction &entry, const AnalyzeVariab
 
 		// First check if there are writes to the variable. Later, if there are none, we'll
 		// reconsider it as globally accessed LUT.
-		var.is_written_to |= handler.complete_write_variables_to_block.count(var.self) != 0 ||
-		    handler.partial_write_variables_to_block.count(var.self) != 0;
+		if (!var.is_written_to)
+		{
+			var.is_written_to = handler.complete_write_variables_to_block.count(var.self) != 0 ||
+			                    handler.partial_write_variables_to_block.count(var.self) != 0;
+		}
 
 		// Only consider function local variables here.
 		// If we only have a single function in our CFG, private storage is also fine,
@@ -4623,25 +4626,27 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 		}
 	}
 
-	// Find LUTs which are not function local.
-	for (auto id: global_variables)
+	// Find LUTs which are not function local. Only consider this case if the CFG is multi-function,
+	// otherwise we treat Private as Function trivially.
+	// Needs to be analyzed from the outside since we have to block the LUT optimization if at least
+	// one function writes to it.
+	if (!single_function)
 	{
-		auto &var = get<SPIRVariable>(id);
-		auto &type = get_variable_data_type(var);
+		for (auto &id : global_variables)
+		{
+			auto &var = get<SPIRVariable>(id);
+			auto &type = get_variable_data_type(var);
 
-		if (!is_array(type))
-			continue;
-
-		if (var.storage != StorageClassPrivate || !var.initializer || var.is_written_to)
-			continue;
-
-		if (ir.ids[var.initializer].get_type() != TypeConstant)
-			continue;
-
-		get<SPIRConstant>(var.initializer).is_used_as_lut = true;
-		var.static_expression = var.initializer;
-		var.statically_assigned = true;
-		var.remapped_variable = true;
+			if (is_array(type) && var.storage == StorageClassPrivate &&
+			    var.initializer && !var.is_written_to &&
+			    ir.ids[var.initializer].get_type() == TypeConstant)
+			{
+				get<SPIRConstant>(var.initializer).is_used_as_lut = true;
+				var.static_expression = var.initializer;
+				var.statically_assigned = true;
+				var.remapped_variable = true;
+			}
+		}
 	}
 }
 
