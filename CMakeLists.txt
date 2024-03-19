@@ -88,6 +88,12 @@ else()
 	message(STATUS "SPIRV-Cross: Git not found, using unknown build version.")
 endif()
 
+find_program(CCACHE_FOUND ccache)
+if (CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+    set(ENV{CCACHE_SLOPPINESS} pch_defines,time_macros)
+endif ()
+
 string(TIMESTAMP spirv-cross-timestamp)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/gitversion.in.h ${CMAKE_CURRENT_BINARY_DIR}/gitversion.h @ONLY)
 
