@@ -1,0 +1,35 @@
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+
+struct spvDescriptorSetBuffer0
+{
+    array<texture_buffer<uint, access::write>, 8> u0 [[id(0)]];
+};
+
+struct spvDescriptorSetBuffer1
+{
+    array<texture_buffer<uint, access::write>, 1> u3 [[id(0)]];
+};
+
+struct spvDescriptorSetBuffer2
+{
+    array<texture_buffer<uint, access::write>, 8> u2 [[id(0)]];
+};
+
+struct spvDescriptorSetBuffer3
+{
+    array<texture_buffer<uint, access::write>, 8> u1 [[id(0)]];
+};
+
+kernel void main0(const device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], const device spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant spvDescriptorSetBuffer2& spvDescriptorSet2 [[buffer(2)]], constant spvDescriptorSetBuffer3& spvDescriptorSet3 [[buffer(3)]])
+{
+    spvDescriptorSet0.u0[0].write(uint4(0u), uint(0));
+    spvDescriptorSet3.u1[0].write(uint4(0u), uint(0));
+    spvDescriptorSet2.u2[0].write(uint4(0u), uint(0));
+    spvDescriptorSet1.u3[0].write(uint4(0u), uint(0));
+}
+
