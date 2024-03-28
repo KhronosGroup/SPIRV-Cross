@@ -14557,6 +14557,12 @@ bool CompilerMSL::type_is_msl_framebuffer_fetch(const SPIRType &type) const
 
 bool CompilerMSL::type_is_pointer(const SPIRType &type) const
 {
+	if ((type.basetype == SPIRType::Image || type.basetype == SPIRType::Sampler) && !type.array.empty())
+	{
+		uint32_t array_size = get_resource_array_size(type, 0);
+		if (array_size == 0 && processing_entry_point) return true;
+	}
+
 	if (!type.pointer)
 		return false;
 	auto &parent_type = get<SPIRType>(type.parent_type);
