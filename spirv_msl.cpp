@@ -18259,7 +18259,11 @@ void CompilerMSL::analyze_argument_buffers()
 						auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 						entry_func.fixup_hooks_in.push_back([=]()
 						{
-							auto name = join("(*(", type_to_glsl(get<SPIRType>(var.basetype), var.self, false), "*)&", to_name(resource.overlapping_var_id, false), ")");
+							auto var_type = get<SPIRType>(var.basetype);
+							SPIRType effective_type = var_type;
+							if ((argument_buffer_device_storage_mask & (1u << desc_set)) != 0)
+								effective_type.storage = StorageClassStorageBuffer;
+							auto name = join("(*(", type_to_glsl(effective_type, var.self, false), "*)&", to_name(resource.overlapping_var_id, false), ")");
 							set_qualified_name(var.self, name);
 						});
 					}
