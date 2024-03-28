@@ -1373,6 +1373,20 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
 		const string name = to_name(var.self);
+
+		bool has_alias = false;
+		for (auto &pair: buffer_aliases_argument)
+		{
+			if (var.self == pair.first)
+			{
+				has_alias = true;
+				break;
+			}
+		}
+
+		if (has_alias)
+			continue;
+
 		if (is_var_runtime_size_array(var))
 		{
 			if (msl_options.argument_buffers_tier < Options::ArgumentBuffersTier::Tier2)
