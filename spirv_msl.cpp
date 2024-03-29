@@ -1405,10 +1405,10 @@ void CompilerMSL::emit_entry_point_declarations()
 			case SPIRType::Image:
 			case SPIRType::Sampler:
 			case SPIRType::AccelerationStructure:
-				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", resource_name, "};");
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type, var.self), "> ", name, " {", resource_name, "};");
 				break;
 			case SPIRType::SampledImage:
-				statement("spvDescriptorArray<", type_to_glsl(buffer_type), "> ", name, " {", resource_name, "};");
+				statement("spvDescriptorArray<", type_to_glsl(buffer_type, var.self), "> ", name, " {", resource_name, "};");
 				// Unsupported with argument buffer for now.
 				statement("spvDescriptorArray<sampler> ", name, "Smplr {", name, "Smplr_};");
 				break;
