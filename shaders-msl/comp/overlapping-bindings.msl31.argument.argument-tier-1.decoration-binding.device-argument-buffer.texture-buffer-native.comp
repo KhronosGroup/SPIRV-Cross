@@ -10,7 +10,6 @@ layout(set = 0, binding = 0) uniform utexture2D t01[8];
 layout(set = 0, binding = 0) uniform itexture2D t02[8];
 layout(set = 0, binding = 0, r32ui) uniform uimageBuffer u0[8];
 
-
 layout(set = 3, binding = 0) buffer B10 { float v; } b10[8];
 layout(set = 3, binding = 0) uniform B11 { float v; } b11[8];
 layout(set = 3, binding = 0, r32ui) uniform uimageBuffer u1[8];
@@ -31,13 +30,21 @@ layout(set = 1, binding = 0) buffer B30 { uint i; } b30[];
 layout(set = 1, binding = 0) uniform B31 { float v; } b31[];
 layout(set = 1, binding = 0, r32ui) uniform uimageBuffer u3[];
 
+layout(set = 4, binding = 0) uniform samplerShadow s40;
+layout(set = 4, binding = 0) uniform texture2D t40;
+layout(set = 4, binding = 0) uniform utexture2D t41;
+layout(set = 4, binding = 0) uniform itexture2D t42;
+layout(set = 4, binding = 0, r32ui) uniform uimageBuffer u4;
+layout(set = 4, binding = 0) buffer B40 { float v; } b40;
+layout(set = 4, binding = 0) uniform B41 { float v; } b41;
+
 vec4 r0;
 vec4 r1;
 vec4 r2;
 vec4 r3;
+vec4 r4;
 
-
-void main()
+void in_function()
 {
     r0 = textureLod(sampler2D(t00[0u], s00[3u]), vec4(0.0).xy, 0.0);
     r0.x = uintBitsToFloat(texelFetch(t01[1u], ivec2(0), 0).x);
@@ -54,18 +61,29 @@ void main()
     r2.z = b20[3u].v + uintBitsToFloat(imageLoad(u2[2u], 0).x);
     r2.w = b21[4u].v;
 
-    uint i = b30[0u].i;
+    uint i = b30[gl_WorkGroupID.x].i;
 
     r3 = textureLod(sampler2D(t30[i], s30[i+1u]), vec4(0.0).xy, 0.0);
     r3.x = uintBitsToFloat(texelFetch(t31[i+2u], ivec2(0), 0).x);
     r3.y =  intBitsToFloat(texelFetch(t32[i+3u], ivec2(0), 0).x);
     r3.z = b31[i+5u].v;
-    // r3.w = uintBitsToFloat(imageLoad(u3[i+6u], 0).x); // TODO: Calls fence() on const device&, which is not supported.
+    r3.w = uintBitsToFloat(imageLoad(u3[i+6u], 0).x); // TODO: Calls fence() on const device&, which is not supported.
 
-    imageStore(u0[0u], 0, uvec4(0));
-    imageStore(u1[0u], 0, uvec4(0));
-    imageStore(u2[0u], 0, uvec4(0));
-    imageStore(u3[0u], 0, uvec4(0));
+    r4 = textureLod(sampler2D(t40, s40), vec4(0.0).xy, 0.0);
+    r4.x = uintBitsToFloat(texelFetch(t41, ivec2(0), 0).x);
+    r4.y =  intBitsToFloat(texelFetch(t42, ivec2(0), 0).x);
+	r4.z = b40.v + b41.v;
+    r4.w = uintBitsToFloat(imageLoad(u4, 0).x); // TODO: Calls fence() on const device&, which is not supported.
 
+    imageStore(u0[0u], 0, floatBitsToUint(r0));
+	imageStore(u1[0u], 0, floatBitsToUint(r1));
+	imageStore(u2[0u], 0, floatBitsToUint(r2));
+	imageStore(u3[0u], 0, floatBitsToUint(r3));
+	imageStore(u4, 0, floatBitsToUint(r4));
+}
+
+void main()
+{
+	in_function();
 }
 
