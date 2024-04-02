@@ -12307,17 +12307,12 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	else
 		decl_type = type_to_glsl(*declared_type, orig_id, true);
 
-	string result;
-	if (!has_extended_member_decoration(type.self, index, SPIRVCrossDecorationOverlappingBinding))
-	{
-		result = join(pack_pfx, decl_type, " ", qualifier,
-		               to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
-	}
-	else
-	{
-		result = join("// Overlapping binding: ", pack_pfx, decl_type, " ", qualifier,
-		               to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
-	}
+	const char *overlapping_binding_tag =
+			has_extended_member_decoration(type.self, index, SPIRVCrossDecorationOverlappingBinding) ?
+			"// Overlapping binding: " : "";
+
+	auto result = join(overlapping_binding_tag, pack_pfx, decl_type, " ", qualifier,
+	                   to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
 
 	is_using_builtin_array = false;
 	return result;
