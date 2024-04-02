@@ -1245,8 +1245,6 @@ protected:
 	void activate_argument_buffer_resources();
 
 	bool type_is_msl_framebuffer_fetch(const SPIRType &type) const;
-	bool type_is_pointer(const SPIRType &type) const;
-	bool type_is_pointer_to_pointer(const SPIRType &type) const;
 	bool is_supported_argument_buffer_type(const SPIRType &type) const;
 
 	bool variable_storage_requires_stage_io(spv::StorageClass storage) const;

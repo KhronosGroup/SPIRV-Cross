@@ -4452,13 +4452,13 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 	    ((builtin == BuiltInLayer || builtin == BuiltInViewportIndex || builtin == BuiltInFragStencilRefEXT) &&
 	     pointee_type.basetype != SPIRType::UInt))
 	{
-		uint32_t next_id = ir.increase_bound_by(type_is_pointer(type) ? 2 : 1);
+		uint32_t next_id = ir.increase_bound_by(is_pointer(type) ? 2 : 1);
 		uint32_t base_type_id = next_id++;
 		auto &base_type = set<SPIRType>(base_type_id, OpTypeInt);
 		base_type.basetype = SPIRType::UInt;
 		base_type.width = 32;
 
-		if (!type_is_pointer(type))
+		if (!is_pointer(type))
 			return base_type_id;
 
 		uint32_t ptr_type_id = next_id++;
@@ -14532,24 +14532,6 @@ bool CompilerMSL::type_is_msl_framebuffer_fetch(const SPIRType &type) const
 	       msl_options.use_framebuffer_fetch_subpasses;
 }
 
-bool CompilerMSL::type_is_pointer(const SPIRType &type) const
-{
-	if (!type.pointer)
-		return false;
-	auto &parent_type = get<SPIRType>(type.parent_type);
-	// Safeguards when we forget to set pointer_depth (there is an assert for it in type_to_glsl),
-	// but the extra check shouldn't hurt.
-	return (type.pointer_depth > parent_type.pointer_depth) || !parent_type.pointer;
-}
-
-bool CompilerMSL::type_is_pointer_to_pointer(const SPIRType &type) const
-{
-	if (!type.pointer)
-		return false;
-	auto &parent_type = get<SPIRType>(type.parent_type);
-	return type.pointer_depth > parent_type.pointer_depth && type_is_pointer(parent_type);
-}
-
 const char *CompilerMSL::descriptor_address_space(uint32_t id, StorageClass storage, const char *plain_address_space) const
 {
 	if (msl_options.argument_buffers)
@@ -14679,7 +14661,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else
 	{
 		// The type is a pointer type we need to emit cv_qualifier late.
-		if (type_is_pointer(type))
+		if (is_pointer(type))
 		{
 			decl = type_to_glsl(type, arg.id);
 			if (*cv_qualifier != '\0')
@@ -14793,7 +14775,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// for the reference has to go before the '&', but after the '*'.
 		if (!address_space.empty())
 		{
-			if (type_is_pointer(type))
+			if (is_pointer(type))
 			{
 				if (*cv_qualifier == '\0')
 					decl += ' ';
@@ -15310,13 +15292,13 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		// We could always go this route, but it makes the code unnatural.
 		// Prefer emitting thread T *foo over T thread* foo since it's more readable,
 		// but we'll have to emit thread T * thread * T constant bar; for example.
-		if (type_is_pointer_to_pointer(type))
+		if (is_pointer(type) && is_pointer(*p_parent_type))
 			type_name = join(type_to_glsl(*p_parent_type, id), " ", type_address_space, " ");
 		else
 		{
 			// Since this is not a pointer-to-pointer, ensure we've dug down to the base type.
 			// Some situations chain pointers even though they are not formally pointers-of-pointers.
-			while (type_is_pointer(*p_parent_type))
+			while (is_pointer(*p_parent_type))
 				p_parent_type = &get<SPIRType>(p_parent_type->parent_type);
 
 			// If we're emitting BDA, just use the templated type.
@@ -16863,7 +16845,7 @@ uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_p
 		// stopping when we hit a pointer that is not also an array.
 		int32_t dim_idx = (int32_t)type.array.size() - 1;
 		auto *p_type = &type;
-		while (!type_is_pointer(*p_type) && dim_idx >= 0)
+		while (!is_pointer(*p_type) && dim_idx >= 0)
 		{
 			type_size *= to_array_size_literal(*p_type, dim_idx);
 			p_type = &get<SPIRType>(p_type->parent_type);
