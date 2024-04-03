@@ -72,18 +72,18 @@ void in_function()
     r4 = textureLod(sampler2D(t40, s40), vec4(0.0).xy, 0.0);
     r4.x = uintBitsToFloat(texelFetch(t41, ivec2(0), 0).x);
     r4.y =  intBitsToFloat(texelFetch(t42, ivec2(0), 0).x);
-	r4.z = b40.v + b41.v;
+    r4.z = b40.v + b41.v;
     r4.w = uintBitsToFloat(imageLoad(u4, 0).x); // TODO: Calls fence() on const device&, which is not supported.
 
     imageStore(u0[0u], 0, floatBitsToUint(r0));
-	imageStore(u1[0u], 0, floatBitsToUint(r1));
-	imageStore(u2[0u], 0, floatBitsToUint(r2));
-	imageStore(u3[0u], 0, floatBitsToUint(r3));
-	imageStore(u4, 0, floatBitsToUint(r4));
+    imageStore(u1[0u], 0, floatBitsToUint(r1));
+    imageStore(u2[0u], 0, floatBitsToUint(r2));
+    imageStore(u3[0u], 0, floatBitsToUint(r3));
+    imageStore(u4, 0, floatBitsToUint(r4));
 }
 
 void main()
 {
-	in_function();
+    in_function();
 }
 
