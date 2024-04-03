@@ -1,17 +1,17 @@
 #version 450
 layout(local_size_x = 64) in;
 
-layout(set = 0, binding = 0) buffer SSBO_A
+layout(set = 0, binding = 10) buffer SSBO_A
 {
 	float data[];
 } ssbo_a;
 
-layout(set = 0, binding = 0) buffer SSBO_B
+layout(set = 0, binding = 10) buffer SSBO_B
 {
 	uvec2 data[];
 } ssbo_b;
 
-layout(set = 0, binding = 0) readonly buffer SSBO_BRO
+layout(set = 0, binding = 10) readonly buffer SSBO_BRO
 {
 	uvec2 data[];
 } ssbo_b_readonly;
@@ -41,37 +41,37 @@ layout(set = 0, binding = 2) readonly buffer SSBO_BsRO
 	uvec2 data[1024];
 } ssbo_bs_readonly[4];
 
-layout(set = 0, binding = 3) uniform UBO_Cs
+layout(set = 0, binding = 6) uniform UBO_Cs
 {
 	float data[1024];
 } ubo_cs[4];
 
-layout(set = 0, binding = 3) uniform UBO_Ds
+layout(set = 0, binding = 6) uniform UBO_Ds
 {
 	uvec2 data[1024];
 } ubo_ds[4];
 
-layout(set = 2, binding = 0) buffer SSBO_E
+layout(set = 2, binding = 11) buffer SSBO_E
 {
 	float data[];
 } ssbo_e;
 
-layout(set = 2, binding = 0) buffer SSBO_F
+layout(set = 2, binding = 11) buffer SSBO_F
 {
 	uvec2 data[];
 } ssbo_f;
 
-layout(set = 2, binding = 1) uniform UBO_G
+layout(set = 2, binding = 12) uniform UBO_G
 {
 	float data[1024];
 } ubo_g;
 
-layout(set = 2, binding = 1) uniform UBO_H
+layout(set = 2, binding = 12) uniform UBO_H
 {
 	uvec2 data[1024];
 } ubo_h;
 
-layout(set = 2, binding = 0) readonly buffer SSBO_I
+layout(set = 2, binding = 11) readonly buffer SSBO_I
 {
 	uvec2 data[];
 } ssbo_i;

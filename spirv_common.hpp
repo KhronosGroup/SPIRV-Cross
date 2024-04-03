@@ -1671,6 +1671,8 @@ enum ExtendedDecorations
 	// lack of constructors in the 'threadgroup' address space.
 	SPIRVCrossDecorationWorkgroupStruct,
 
+	SPIRVCrossDecorationOverlappingBinding,
+
 	SPIRVCrossDecorationCount
 };
 

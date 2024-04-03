@@ -91,8 +91,14 @@ struct spvDescriptorSetBuffer0
 {
     device SSBO_A* ssbo_a [[id(0)]];
     constant UBO_C* ubo_c [[id(1)]];
-    device SSBO_As* ssbo_as [[id(2)]][4];
-    constant UBO_Cs* ubo_cs [[id(6)]][4];
+    device SSBO_B* ssbo_b [[id(2)]];
+    constant UBO_D* ubo_d [[id(3)]];
+    const device SSBO_BRO* ssbo_b_readonly [[id(4)]];
+    device SSBO_As* ssbo_as [[id(5)]][4];
+    constant UBO_Cs* ubo_cs [[id(9)]][4];
+    device SSBO_Bs* ssbo_bs [[id(13)]][4];
+    constant UBO_Ds* ubo_ds [[id(17)]][4];
+    const device SSBO_BsRO* ssbo_bs_readonly [[id(21)]][4];
 };
 
 static inline __attribute__((always_inline))
@@ -128,15 +134,9 @@ kernel void main0(constant spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0
     device auto& ssbo_f = *(device SSBO_F*)spvBufferAliasSet2Binding0;
     constant auto& ubo_h = *(constant UBO_H*)spvBufferAliasSet2Binding1;
     const device auto& ssbo_i = *(const device SSBO_I*)spvBufferAliasSet2Binding0;
-    device auto& ssbo_b = (device SSBO_B&)(*spvDescriptorSet0.ssbo_a);
-    constant auto& ubo_d = (constant UBO_D&)(*spvDescriptorSet0.ubo_c);
-    const device auto& ssbo_b_readonly = (const device SSBO_BRO&)(*spvDescriptorSet0.ssbo_a);
-    constant auto& ssbo_bs = (device SSBO_Bs* constant (&)[4])spvDescriptorSet0.ssbo_as;
-    constant auto& ubo_ds = (constant UBO_Ds* constant (&)[4])spvDescriptorSet0.ubo_cs;
-    constant auto& ssbo_bs_readonly = (const device SSBO_BsRO* constant (&)[4])spvDescriptorSet0.ssbo_as;
-    func0((*spvDescriptorSet0.ssbo_a), gl_GlobalInvocationID, (*spvDescriptorSet0.ubo_c), gl_WorkGroupID, _42, ssbo_b, ubo_d, ssbo_b_readonly);
+    func0((*spvDescriptorSet0.ssbo_a), gl_GlobalInvocationID, (*spvDescriptorSet0.ubo_c), gl_WorkGroupID, _42, (*spvDescriptorSet0.ssbo_b), (*spvDescriptorSet0.ubo_d), (*spvDescriptorSet0.ssbo_b_readonly));
     func1(gl_GlobalInvocationID, gl_WorkGroupID, spvDescriptorSet0.ssbo_as, spvDescriptorSet0.ubo_cs);
-    func2(gl_GlobalInvocationID, gl_WorkGroupID, ssbo_bs, ubo_ds, ssbo_bs_readonly);
+    func2(gl_GlobalInvocationID, gl_WorkGroupID, spvDescriptorSet0.ssbo_bs, spvDescriptorSet0.ubo_ds, spvDescriptorSet0.ssbo_bs_readonly);
     func3(gl_GlobalInvocationID, gl_WorkGroupID, ssbo_e, ubo_g, ssbo_f, ubo_h, ssbo_i);
 }
 
