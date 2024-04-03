@@ -7492,6 +7492,12 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplImageFence:
+			statement("template <typename ImageT>");
+			statement("void spvImageFence(ImageT img) { img.fence(); }");
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -8968,7 +8974,12 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 		// Metal requires explicit fences to break up RAW hazards, even within the same shader invocation
 		if (msl_options.readwrite_texture_fences && p_var && !has_decoration(p_var->self, DecorationNonWritable))
-			statement(to_expression(img_id), ".fence();");
+		{
+			add_spv_func_and_recompile(SPVFuncImplImageFence);
+			// Need to wrap this with a value type,
+			// since the Metal headers are broken and do not consider case when the image is a reference.
+			statement("spvImageFence(", to_expression(img_id), ");");
+		}
 
 		emit_texture_op(instruction, false);
 		break;

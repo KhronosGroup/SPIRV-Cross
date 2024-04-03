@@ -25,6 +25,9 @@ struct spvDescriptorArray
     const device spvDescriptor<T>* ptr;
 };
 
+template <typename ImageT>
+void spvImageFence(ImageT img) { img.fence(); }
+
 struct B10
 {
     float v;
@@ -122,16 +125,16 @@ void in_function(thread float4& r0, const device array<texture2d<float>, 8>& t00
     r0 = t00[0].sample(s00[3], float2(0.0), level(0.0));
     r0.x = as_type<float>(t01[1].read(uint2(int2(0)), 0).x);
     r0.y = as_type<float>(t02[2].read(uint2(int2(0)), 0).x);
-    u0[2].fence();
+    spvImageFence(u0[2]);
     r0.z = as_type<float>(u0[2].read(uint(0)).x);
     r1.x = b10[3]->v;
     r1.y = b11[4]->v;
-    u1[2].fence();
+    spvImageFence(u1[2]);
     r1.z = as_type<float>(u1[2].read(uint(0)).x);
     r2 = t20[0].sample(s20[3], float2(0.0), level(0.0));
     r2.x = as_type<float>(t21[1].read(uint2(int2(0)), 0).x);
     r2.y = as_type<float>(t22[2].read(uint2(int2(0)), 0).x);
-    u2[2].fence();
+    spvImageFence(u2[2]);
     r2.z = b20[3]->v + as_type<float>(u2[2].read(uint(0)).x);
     r2.w = b21[4]->v;
     uint i = b30[gl_WorkGroupID.x]->i;
@@ -140,13 +143,13 @@ void in_function(thread float4& r0, const device array<texture2d<float>, 8>& t00
     r3.y = as_type<float>(t32[i + 3u].read(uint2(int2(0)), 0).x);
     r3.z = b31[i + 5u]->v;
     uint _218 = i + 6u;
-    u3[_218].fence();
+    spvImageFence(u3[_218]);
     r3.w = as_type<float>(u3[_218].read(uint(0)).x);
     r4 = float4(t40.sample(s40, float2(0.0), level(0.0)));
     r4.x = as_type<float>(t41.read(uint2(int2(0)), 0).x);
     r4.y = as_type<float>(t42.read(uint2(int2(0)), 0).x);
     r4.z = b40.v + b41.v;
-    u4.fence();
+    spvImageFence(u4);
     r4.w = as_type<float>(u4.read(uint(0)).x);
     u0[0].write(as_type<uint4>(r0), uint(0));
     u1[0].write(as_type<uint4>(r1), uint(0));
