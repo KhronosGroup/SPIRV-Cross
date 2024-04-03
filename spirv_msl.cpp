@@ -243,8 +243,8 @@ bool CompilerMSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
 void CompilerMSL::build_implicit_builtins()
 {
 	bool need_sample_pos = active_input_builtins.get(BuiltInSamplePosition);
-	bool need_vertex_params = capture_output_to_buffer && get_execution_model() == ExecutionModelVertex &&
-	                          !msl_options.vertex_for_tessellation;
+	bool need_vertex_params =
+	    capture_output_to_buffer && get_execution_model() == ExecutionModelVertex && !vertex_shader_is_kernel();
 	bool need_tesc_params = is_tesc_shader();
 	bool need_tese_params = is_tese_shader() && msl_options.raw_buffer_tese_input;
 	bool need_subgroup_mask =
@@ -259,7 +259,7 @@ void CompilerMSL::build_implicit_builtins()
 	bool need_dispatch_base =
 	    msl_options.dispatch_base && get_execution_model() == ExecutionModelGLCompute &&
 	    (active_input_builtins.get(BuiltInWorkgroupId) || active_input_builtins.get(BuiltInGlobalInvocationId));
-	bool need_grid_params = get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation;
+	bool need_grid_params = vertex_shader_is_kernel();
 	bool need_vertex_base_params =
 	    need_grid_params &&
 	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
@@ -945,6 +945,18 @@ void CompilerMSL::build_implicit_builtins()
 		dynamic_offsets_buffer_id = var_id;
 	}
 
+	if (is_tese_shader() && needs_transform_feedback())
+	{
+		uint32_t var_id = build_constant_uint_array_pointer();
+		set_name(var_id, "spvPatchVertexCounts");
+		// This should never match anything.
+		set_decoration(var_id, DecorationDescriptorSet, ~(6u));
+		set_decoration(var_id, DecorationBinding, msl_options.tese_patch_vertex_counts_buffer_index);
+		set_extended_decoration(var_id, SPIRVCrossDecorationResourceIndexPrimary,
+		                        msl_options.tese_patch_vertex_counts_buffer_index);
+		patch_vertex_counts_buffer_id = var_id;
+	}
+
 	// If we're returning a struct from a vertex-like entry point, we must return a position attribute.
 	bool need_position = (get_execution_model() == ExecutionModelVertex || is_tese_shader()) &&
 	                     !capture_output_to_buffer && !get_is_rasterization_disabled() &&
@@ -1530,7 +1542,7 @@ string CompilerMSL::compile()
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
 
-	capture_output_to_buffer = msl_options.capture_output_to_buffer;
+	capture_output_to_buffer = msl_options.capture_output_to_buffer || needs_transform_feedback();
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
 
 	// Initialize array here rather than constructor, MSVC 2013 workaround.
@@ -1565,6 +1577,7 @@ string CompilerMSL::compile()
 	}
 
 	fixup_image_load_store_access();
+	analyze_xfb_buffers();
 
 	set_enabled_interface_variables(get_active_interface_variables());
 	if (msl_options.force_active_argument_buffer_resources)
@@ -1578,6 +1591,8 @@ string CompilerMSL::compile()
 		add_active_interface_variable(view_mask_buffer_id);
 	if (dynamic_offsets_buffer_id)
 		add_active_interface_variable(dynamic_offsets_buffer_id);
+	if (patch_vertex_counts_buffer_id)
+		add_active_interface_variable(patch_vertex_counts_buffer_id);
 	if (builtin_layer_id)
 		add_active_interface_variable(builtin_layer_id);
 	if (builtin_dispatch_base_id && !msl_options.supports_msl_version(1, 2))
@@ -1589,7 +1604,8 @@ string CompilerMSL::compile()
 	// Do output first to ensure out. is declared at top of entry function.
 	qual_pos_var_name = "";
 	stage_out_var_id = add_interface_block(StorageClassOutput);
-	patch_stage_out_var_id = add_interface_block(StorageClassOutput, true);
+	if (is_tesc_shader())
+		patch_stage_out_var_id = add_interface_block(StorageClassOutput, true);
 	stage_in_var_id = add_interface_block(StorageClassInput);
 	if (is_tese_shader())
 		patch_stage_in_var_id = add_interface_block(StorageClassInput, true);
@@ -1674,7 +1690,7 @@ void CompilerMSL::preprocess_op_codes()
 
 	// Tessellation control shaders are run as compute functions in Metal, and so
 	// must capture their output to a buffer.
-	if (is_tesc_shader() || (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation))
+	if (is_tesc_shader() || vertex_shader_is_kernel())
 	{
 		is_rasterization_disabled = true;
 		capture_output_to_buffer = true;
@@ -2201,7 +2217,11 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 
 						func.add_parameter(mbr_type_id, var_id, true);
 						set<SPIRVariable>(var_id, ptr_type_id, StorageClassFunction);
+						if (xfb_captured_outputs.count(arg_id))
+							xfb_captured_outputs.insert(var_id);
 						ir.meta[var_id].decoration = ir.meta[type_id].members[mbr_idx];
+						if (xfb_packed_builtins.count(builtin))
+							set_extended_decoration(var_id, SPIRVCrossDecorationPhysicalTypePacked);
 					}
 					mbr_idx++;
 				}
@@ -2211,9 +2231,13 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				uint32_t next_id = ir.increase_bound_by(1);
 				func.add_parameter(type_id, next_id, true);
 				set<SPIRVariable>(next_id, type_id, StorageClassFunction, 0, arg_id);
+				if (xfb_captured_outputs.count(arg_id))
+					xfb_captured_outputs.insert(next_id);
 
 				// Ensure the new variable has all the same meta info
 				ir.meta[next_id] = ir.meta[arg_id];
+				if (xfb_packed_outputs.count(arg_id))
+					set_extended_decoration(next_id, SPIRVCrossDecorationPhysicalTypePacked);
 			}
 		}
 	}
@@ -3806,6 +3830,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 	SmallVector<SPIRVariable *> vars;
 	bool incl_builtins = storage == StorageClassOutput || is_tessellation_shader();
 	bool has_seen_barycentric = false;
+	auto &entry_point = get<SPIRFunction>(ir.default_entry_point);
 
 	InterfaceBlockMeta meta;
 
@@ -3875,6 +3900,34 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		// ClipDistance is never hidden, we need to emulate it when used as an input.
 		if (bi_type == BuiltInClipDistance || bi_type == BuiltInCullDistance)
 			hidden = false;
+
+		// Don't add captured transform feedback outputs.
+		if (needs_transform_feedback() && storage == StorageClassOutput)
+		{
+			if (is_block)
+			{
+				uint32_t mbr_cnt = uint32_t(type.member_types.size());
+				bool all_captured = true;
+				for (uint32_t i = 0; i < mbr_cnt; i++)
+				{
+					bool active =
+					    !is_builtin ||
+					    has_active_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn)), storage);
+					all_captured = all_captured && (has_member_decoration(type.self, i, DecorationOffset) || !active);
+				}
+				hidden = hidden || all_captured;
+				// We still rely on the block being declared as a variable. Make sure that happens.
+				if (all_captured && !is_builtin)
+				{
+					entry_point.add_local_variable(var_id);
+					vars_needing_early_declaration.push_back(var_id);
+				}
+			}
+			else if (has_decoration(var_id, DecorationOffset))
+			{
+				hidden = true;
+			}
+		}
 
 		// It's not enough to simply avoid marking fragment outputs if the pipeline won't
 		// accept them. We can't put them in the struct at all, or otherwise the compiler
@@ -4088,7 +4141,7 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 						// The first member of the indirect buffer is always the number of vertices
 						// to draw.
 						// We zero-base the InstanceID & VertexID variables for HLSL emulation elsewhere, so don't do it twice
-						if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
+						if (vertex_shader_is_kernel())
 						{
 							statement("device ", to_name(ir.default_entry_point), "_", ib_var_ref, "& ", ib_var_ref,
 							          " = ", output_buffer_var_name, "[", to_expression(builtin_invocation_id_id),
@@ -7663,6 +7716,11 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 	// attribute, and use its initializer to initialize all the spec constants with
 	// that ID.
 	std::unordered_map<uint32_t, ConstantID> unique_func_constants;
+	for (const auto &spec_constant : get_specialization_constants())
+	{
+		if (!unique_func_constants.count(spec_constant.constant_id))
+			unique_func_constants.insert(make_pair(spec_constant.constant_id, spec_constant.id));
+	}
 
 	for (auto &id_ : ir.ids_for_constant_undef_or_type)
 	{
@@ -12380,7 +12438,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			case BuiltInInstanceId:
 			case BuiltInInstanceIndex:
 			case BuiltInBaseInstance:
-				if (msl_options.vertex_for_tessellation)
+				if (vertex_shader_is_kernel())
 					return "";
 				return string(" [[") + builtin_qualifier(builtin) + "]]";
 
@@ -12403,7 +12461,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 	}
 
 	// Vertex and tessellation evaluation function outputs
-	if (((execution.model == ExecutionModelVertex && !msl_options.vertex_for_tessellation) || is_tese_shader()) &&
+	if (((execution.model == ExecutionModelVertex && !vertex_shader_is_kernel()) || is_tese_shader()) &&
 	    type.storage == StorageClassOutput)
 	{
 		if (is_builtin)
@@ -12446,7 +12504,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			return join(" [[", loc_qual, "]]");
 	}
 
-	if (execution.model == ExecutionModelVertex && msl_options.vertex_for_tessellation && type.storage == StorageClassOutput)
+	if (vertex_shader_is_kernel() && type.storage == StorageClassOutput)
 	{
 		// For this type of shader, we always arrange for it to capture its
 		// output to a buffer. For this reason, qualifiers are irrelevant here.
@@ -12860,7 +12918,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	case ExecutionModelVertex:
 		if (msl_options.vertex_for_tessellation && !msl_options.supports_msl_version(1, 2))
 			SPIRV_CROSS_THROW("Tessellation requires Metal 1.2.");
-		entry_type = msl_options.vertex_for_tessellation ? "kernel" : "vertex";
+		entry_type = vertex_shader_is_kernel() ? "kernel" : "vertex";
 		break;
 	case ExecutionModelTessellationEvaluation:
 		if (!msl_options.supports_msl_version(1, 2))
@@ -12913,6 +12971,11 @@ bool CompilerMSL::uses_explicit_early_fragment_test()
 // In MSL, address space qualifiers are required for all pointer or reference variables
 string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 {
+	// If this is for a captured transform feedback output, then use the thread address space.
+	// This is a terrible kluge, but since we reused the original pointer type in constructing
+	// fake parameters for globals, we have to do this here.
+	if (xfb_captured_outputs.count(argument.self))
+		return "thread";
 	const auto &type = get<SPIRType>(argument.basetype);
 	return get_type_address_space(type, argument.self, true);
 }
@@ -13095,7 +13158,7 @@ bool CompilerMSL::is_direct_input_builtin(BuiltIn bi_type)
 	case BuiltInInstanceId:
 	case BuiltInInstanceIndex:
 	case BuiltInBaseInstance:
-		return get_execution_model() != ExecutionModelVertex || !msl_options.vertex_for_tessellation;
+		return !vertex_shader_is_kernel();
 	// Tess. control function in
 	case BuiltInPosition:
 	case BuiltInPointSize:
@@ -13267,8 +13330,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			ep_args +=
 			    join("constant uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
-		else if (stage_out_var_id &&
-		         !(get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation))
+		else if (stage_out_var_id && !vertex_shader_is_kernel())
 		{
 			if (!ep_args.empty())
 				ep_args += ", ";
@@ -13276,7 +13338,7 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			    join("device uint* spvIndirectParams [[buffer(", msl_options.indirect_params_buffer_index, ")]]");
 		}
 
-		if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation &&
+		if (vertex_shader_is_kernel() &&
 		    (active_input_builtins.get(BuiltInVertexIndex) || active_input_builtins.get(BuiltInVertexId)) &&
 		    msl_options.vertex_index_type != Options::IndexType::None)
 		{
@@ -13298,6 +13360,25 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 			}
 		}
 
+		// Shaders with transform feedback get two additional buffers for
+		// each transform feedback buffer declared: a counter of data written,
+		// and the transform feedback data buffer proper.
+		if (needs_transform_feedback())
+		{
+			for (uint32_t xfb_buffer = 0; xfb_buffer < kMaxXfbBuffers; xfb_buffer++)
+			{
+				if (!xfb_buffers[xfb_buffer])
+					continue;
+				if (!ep_args.empty())
+					ep_args += ", ";
+				ep_args += join(
+				    variable_decl(get_type_from_variable(xfb_counters[xfb_buffer]), to_name(xfb_counters[xfb_buffer])),
+				    " [[buffer(", msl_options.xfb_counter_buffer_index_base + xfb_buffer, ")]], ");
+				ep_args += join(
+				    variable_decl(get_type_from_variable(xfb_buffers[xfb_buffer]), to_name(xfb_buffers[xfb_buffer])),
+				    " [[buffer(", msl_options.xfb_output_buffer_index_base + xfb_buffer, ")]]");
+			}
+		}
 		// Tessellation control shaders get three additional parameters:
 		// a buffer to hold the per-patch data, a buffer to hold the per-patch
 		// tessellation levels, and a block of workgroup memory to hold the
@@ -13839,7 +13920,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 	// Vertex shaders shouldn't have the problems with barriers in non-uniform control flow that
 	// tessellation control shaders do, so early returns should be OK. We may need to revisit this
 	// if it ever becomes possible to use barriers from a vertex shader.
-	if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
+	if (vertex_shader_is_kernel())
 	{
 		entry_func.fixup_hooks_in.push_back([this]() {
 			statement("if (any(", to_expression(builtin_invocation_id_id),
@@ -14355,7 +14436,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			case BuiltInVertexId:
 			case BuiltInVertexIndex:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -14379,7 +14460,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			case BuiltInBaseVertex:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -14390,7 +14471,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			case BuiltInInstanceId:
 			case BuiltInInstanceIndex:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -14403,7 +14484,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 				break;
 			case BuiltInBaseInstance:
 				// This is direct-mapped normally.
-				if (!msl_options.vertex_for_tessellation)
+				if (!vertex_shader_is_kernel())
 					break;
 
 				entry_func.fixup_hooks_in.push_back([=]() {
@@ -14428,6 +14509,321 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			});
 		}
 	});
+
+	// Transform feedback
+	if (needs_transform_feedback())
+	{
+		entry_func.fixup_hooks_out.push_back(
+		    [=]()
+		    {
+			    string index_expr;
+			    auto prim_type = is_tese_shader() ? Options::PrimitiveType::PatchList : msl_options.xfb_primitive_type;
+			    switch (prim_type)
+			    {
+			    case Options::PrimitiveType::PointList:
+				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * ",
+				                      to_expression(builtin_stage_input_size_id), ".x + ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::LineList:
+				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
+				                      to_expression(builtin_stage_input_size_id), ".x & ~1u) + ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::TriangleList:
+				    index_expr = join(to_expression(builtin_invocation_id_id), ".y * (",
+				                      to_expression(builtin_stage_input_size_id), ".x - ",
+				                      to_expression(builtin_stage_input_size_id), ".x % 3u) + ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::LineStrip:
+				    // Calculation of the index expression is also complicated a bit because of this.
+				    // Some worked examples:
+				    // Vertex ordinal	XFB indices
+				    // 0				   0
+				    // 1				1, 2
+				    // 2				3, 4
+				    // 3				5, 6
+				    // 4				7
+				    // FIXME: This doesn't account for primitive restart!
+				    // 0				   0
+				    // 1				1, 2
+				    // 2				3, 4
+				    // 3				5
+				    // 4				<restart>
+				    // 5				n/a
+				    // 6				<restart>
+				    // 7				   6
+				    // 8				7, 8
+				    // 9				9, 10
+				    // 10				11
+				    index_expr = join("2 * ", to_expression(builtin_invocation_id_id), ".y * (",
+				                      to_expression(builtin_stage_input_size_id), ".x - 1u) + 2 * ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::TriangleStrip:
+				    // Vertex ordinal	XFB indices
+				    // 0				      0
+				    // 1				   1, 3
+				    // 2				2, 5, 6
+				    // 3				4, 7, 9
+				    // 4				8, 11
+				    // 5				10
+				    // FIXME: This doesn't account for primitive restart!
+				    // 0				      0
+				    // 1				   1, 3
+				    // 2				2, 5, 6
+				    // 3				4, 7, 9
+				    // 4				8, 11
+				    // 5				10
+				    // 6				<restart>
+				    // 7				        12
+				    // 8				    13, 15
+				    // 9				14, 17, 18
+				    // 10				16, 19, 21
+				    // 11				20, 23
+				    // 12				22
+				    // ----
+				    // 0				      0
+				    // 1				   1
+				    // 2				2
+				    // 3				<restart>
+				    // 4				      3
+				    // 5				   4, 6
+				    // 6				5, 8
+				    // 7				7
+				    // ----
+				    // 0				      0
+				    // 1				   1, 3
+				    // 2				2, 5, 6
+				    // 3				4, 7
+				    // 4				8
+				    // 5				<restart>
+				    // 6				n/a
+				    // 7				n/a
+				    // 8				<restart>
+				    // 9				        9
+				    // 10				    10, 12
+				    // 11				11, 14, 15
+				    // 12				13, 16
+				    // 13				17
+				    index_expr = join("3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
+				                      to_expression(builtin_stage_input_size_id), ".x, 2u) + 3 * ",
+				                      to_expression(builtin_invocation_id_id), ".x");
+				    break;
+			    case Options::PrimitiveType::TriangleFan:
+				    // The index expression in this case is different for the fan base.
+				    // This is for the other vertices. It is very similar to the line strip case.
+				    // Vertex ordinal	XFB indices
+				    // 0				0, 3, 6, 9
+				    // 1				   1
+				    // 2				2, 4
+				    // 3				5, 7
+				    // 4				8, 10
+				    // 5				11
+				    // FIXME: This doesn't account for primitive restart!
+				    // 0				0, 3, 6, 9
+				    // 1				   1
+				    // 2				2, 4
+				    // 3				5, 7
+				    // 4				8, 10
+				    // 5				11
+				    // 6				<restart>
+				    // 7				12, 15, 18, 21
+				    // 8				    13
+				    // 9				14, 16
+				    // 10				17, 19
+				    // 11				20, 22
+				    // 12				23
+				    // ----
+				    // 0				0
+				    // 1				   1
+				    // 2				2
+				    // 3				<restart>
+				    // 4				3, 6
+				    // 5				   4
+				    // 6				5, 7
+				    // 7				8
+				    // ----
+				    // 0				0, 3, 6
+				    // 1				   1
+				    // 2				2, 4
+				    // 3				5, 7
+				    // 4				8
+				    // 5				<restart>
+				    // 6				n/a
+				    // 7				n/a
+				    // 8				<restart>
+				    // 9				9, 12, 15
+				    // 10				    10
+				    // 11				11, 13
+				    // 12				14, 16
+				    // 13				17
+				    statement("uint spvXfbBaseIndex = 3 * ", to_expression(builtin_invocation_id_id), ".y * subsat(",
+				              to_expression(builtin_stage_input_size_id), ".x, 2u);");
+				    index_expr = join("spvXfbBaseIndex + 3 * ", to_expression(builtin_invocation_id_id), ".x - 2u");
+				    break;
+				case Options::PrimitiveType::PatchList:
+					// This is particularly nasty, because a variable number of vertices may be generated
+					// from each patch. Therefore, we must maintain a count of vertices per patch and
+					// sum the entire array up to our patch to figure out the base. Yes, this will slow
+					// down the later patches.
+					// But wait, there's more! We also need to figure out which vertex and triangle in the
+					// patch this is, to identify where to write the transform feedback data. The only
+					// identifying information we have is the tessellation coordinates (barycentric for
+					// triangles, normalized for quads). Therefore, we have to perform some sort of
+					// mathematical transformation on the tessellation coordinate to derive an index, and
+					// what's more, we have to do it in a way that the resulting triangles' vertices are emitted
+					// in the buffer in winding order, and that each vertex is emitted once *per triangle*, as the
+					// spec requires.
+					statement("uint spvXfbBaseIndex = 0;");
+					statement("for (uint i = 0; i < ", to_expression(builtin_primitive_id_id), "; ++i)");
+					statement("    spvXfbBaseIndex += ", to_name(patch_vertex_counts_buffer_id), "[i];");
+			    case Options::PrimitiveType::Dynamic:
+			    default:
+				    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+			    }
+			    statement("uint spvXfbIndex = ", index_expr, ";");
+			    // First, write the data out.
+			    for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+			    {
+				    if (xfb_buffers[i] == 0)
+					    continue;
+				    statement("uint spvInitOffset", i, " = atomic_load_explicit(", to_name(xfb_counters[i]),
+				              ", memory_order_relaxed);");
+				    statement(to_name(xfb_buffers[i]), " = reinterpret_cast<",
+				              type_to_glsl(get_type_from_variable(xfb_buffers[i])), ">(reinterpret_cast<device char*>(",
+				              to_name(xfb_buffers[i]), ") + spvInitOffset", i, ");");
+				    switch (msl_options.xfb_primitive_type)
+				    {
+				    case Options::PrimitiveType::PointList:
+					    // This is straightforward enough. Just make sure we don't overstep the data buffer (FIXME).
+					    statement(to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]), ";");
+					    break;
+				    case Options::PrimitiveType::LineList:
+					    // This is a little trickier, because we don't want to write an incomplete primitive.
+					    // Therefore, we must write only if we're an odd vertex, or we're not the last one.
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if ((", to_expression(builtin_invocation_id_id), ".x & 1) || ",
+					              to_expression(builtin_invocation_id_id), ".x < ",
+					              to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    break;
+				    case Options::PrimitiveType::TriangleList:
+					    // This is similar to the previous case, except here the boundary condition is
+					    // if global_id.x % 3 == 2 or we're not one of the last two.
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if ((", to_expression(builtin_invocation_id_id), ".x % 3u == 2) || ",
+					              to_expression(builtin_invocation_id_id), ".x + 2 < ",
+					              to_expression(builtin_stage_input_size_id), ".x)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    break;
+				    case Options::PrimitiveType::LineStrip:
+					    // This is more complicated. We have to write out each individual line segment.
+					    // So if we're not the first or the last, we have to write twice.
+					    // On top of that, we also have to handle primitive restart. (FIXME)
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if (", to_expression(builtin_invocation_id_id),
+					              ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x != 0)");
+					    statement("    ", to_name(xfb_buffers[i]),
+					              "[spvXfbIndex - 1u] = ", to_expression(xfb_locals[i]), ";");
+					    break;
+				    case Options::PrimitiveType::TriangleStrip:
+					    // This is even worse. We have to write three times if we're not first or last,
+					    // and now if there's fewer than two vertices in this strip, we can't write at all.
+					    // Again, primitive restart is a factor here. (FIXME)
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x + 2 < ",
+					              to_expression(builtin_stage_input_size_id), ".x)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x != 0 && ",
+					              to_expression(builtin_invocation_id_id),
+					              ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 1u - (",
+					              to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x > 1)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex - 4u - (",
+					              to_expression(builtin_invocation_id_id), ".x & 1u)] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    break;
+				    case Options::PrimitiveType::TriangleFan:
+					    // This is the worst case of all. It's similar to the strip case, except now
+					    // we have to write the fan base vertex for *every* triangle.
+					    // Again, primitive restart is a factor here. (FIXME)
+					    // FIXME: Bounds check the buffer, too.
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x == 0)");
+					    begin_scope();
+					    statement("for (uint i = 0; i < subsat(", to_expression(builtin_stage_input_size_id),
+					              ".x, 2u); ++i)");
+					    statement("    ", to_name(xfb_buffers[i]),
+					              "[spvXfbBaseIndex + 3 * i] = ", to_name(xfb_locals[i]), ";");
+					    end_scope();
+					    statement("else");
+					    begin_scope();
+					    statement("if (", to_expression(builtin_invocation_id_id),
+					              ".x != ", to_expression(builtin_stage_input_size_id), ".x - 1u)");
+					    statement("    ", to_name(xfb_buffers[i]), "[spvXfbIndex] = ", to_expression(xfb_locals[i]),
+					              ";");
+					    statement("if (", to_expression(builtin_invocation_id_id), ".x != 1)");
+					    statement("    ", to_name(xfb_buffers[i]),
+					              "[spvXfbIndex - 2u] = ", to_expression(xfb_locals[i]), ";");
+					    end_scope();
+					    break;
+				    case Options::PrimitiveType::Dynamic:
+				    default:
+					    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+				    }
+			    }
+			    statement("threadgroup_barrier(mem_flags::mem_device);");
+			    // Now update the amount of data written to the buffer.
+			    statement("if (all(", to_expression(builtin_invocation_id_id), ".xy == 0))");
+			    begin_scope();
+			    switch (msl_options.xfb_primitive_type)
+			    {
+			    case Options::PrimitiveType::PointList:
+				    statement("uint spvWritten = ", to_expression(builtin_stage_input_size_id), ".x * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::LineList:
+				    statement("uint spvWritten = (", to_expression(builtin_stage_input_size_id), ".x & ~1u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::LineStrip:
+				    statement("uint spvWritten = 2 * (", to_expression(builtin_stage_input_size_id), ".x - 1u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::TriangleList:
+				    statement("uint spvWritten = (", to_expression(builtin_stage_input_size_id), ".x - ",
+				              to_expression(builtin_stage_input_size_id), ".x % 3u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::TriangleStrip:
+			    case Options::PrimitiveType::TriangleFan:
+				    statement("uint spvWritten = 3 * subsat(", to_expression(builtin_stage_input_size_id), ".x, 2u) * ",
+				              to_expression(builtin_stage_input_size_id), ".y;");
+				    break;
+			    case Options::PrimitiveType::Dynamic:
+			    default:
+				    SPIRV_CROSS_THROW("Primitive type not yet supported for transform feedback.");
+				    break;
+			    }
+			    for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+			    {
+				    if (xfb_buffers[i] == 0)
+					    continue;
+				    statement("atomic_store_explicit(", to_name(xfb_counters[i]), ", spvInitOffset", i, " + sizeof(*",
+				              to_name(xfb_buffers[i]), ") * spvWritten, memory_order_relaxed);");
+			    }
+			    end_scope();
+		    });
+	}
 }
 
 // Returns the Metal index of the resource of the specified type as used by the specified variable.
@@ -14612,6 +15008,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// For opaque types we handle const later due to descriptor address spaces.
 	const char *cv_qualifier = (constref && !type_is_image) ? "const " : "";
+	const char *pack_pfx = has_extended_decoration(var.self, SPIRVCrossDecorationPhysicalTypePacked) ? "packed_" : "";
 	string decl;
 
 	// If this is a combined image-sampler for a 2D image with floating-point type,
@@ -14652,9 +15049,9 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			is_using_builtin_array = true;
 
 		if (is_using_builtin_array)
-			decl = join(cv_qualifier, builtin_type_decl(builtin_type, arg.id));
+			decl = join(cv_qualifier, pack_pfx, builtin_type_decl(builtin_type, arg.id));
 		else
-			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
+			decl = join(cv_qualifier, pack_pfx, type_to_glsl(type, arg.id));
 	}
 	else if (is_var_runtime_size_array(var))
 	{
@@ -14690,7 +15087,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		else
 		{
-			decl = join(cv_qualifier, type_to_glsl(type, arg.id));
+			decl = join(cv_qualifier, pack_pfx, type_to_glsl(type, arg.id));
 		}
 	}
 
@@ -16323,6 +16720,10 @@ string CompilerMSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInLayer:
 		if (is_tesc_shader())
 			break;
+		if (needs_transform_feedback() && xfb_captured_builtins.count(builtin) && current_function &&
+		    (current_function->self == ir.default_entry_point))
+			return join(to_name(xfb_locals[xfb_captured_builtins[builtin]]), ".",
+			            CompilerGLSL::builtin_to_glsl(builtin, storage));
 		if (storage != StorageClassInput && current_function && (current_function->self == ir.default_entry_point) &&
 		    !is_stage_output_builtin_masked(builtin))
 			return stage_out_var_name + "." + CompilerGLSL::builtin_to_glsl(builtin, storage);
@@ -16567,8 +16968,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			return "thread_index_in_simdgroup";
 		}
 		else if (execution.model == ExecutionModelKernel || execution.model == ExecutionModelGLCompute ||
-		         execution.model == ExecutionModelTessellationControl ||
-		         (execution.model == ExecutionModelVertex && msl_options.vertex_for_tessellation))
+		         execution.model == ExecutionModelTessellationControl || vertex_shader_is_kernel())
 		{
 			// We are generating a Metal kernel function.
 			if (!msl_options.supports_msl_version(2))
@@ -18517,6 +18917,255 @@ void CompilerMSL::activate_argument_buffer_resources()
 		if (descriptor_set_is_argument_buffer(desc_set))
 			add_active_interface_variable(self);
 	});
+}
+
+void CompilerMSL::analyze_xfb_buffers()
+{
+	// Gather all used outputs and sort them out into transform feedback buffers.
+	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
+
+	struct XfbOutput
+	{
+		SPIRVariable *var;
+		string name;
+		uint32_t member_index;
+		uint32_t offset;
+		bool block;
+	};
+	SmallVector<XfbOutput> xfb_outputs[kMaxXfbBuffers];
+
+	for (uint32_t i = 0; i < kMaxXfbBuffers; ++i)
+	{
+		xfb_counters[i] = 0;
+		xfb_buffers[i] = 0;
+		xfb_locals[i] = 0;
+		xfb_strides[i] = 0;
+	}
+
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t self, SPIRVariable &var)
+	    {
+		    auto &type = get_variable_data_type(var);
+		    if (var.storage != StorageClassOutput)
+			    return;
+		    if (is_hidden_variable(var, true))
+			    return;
+
+		    uint32_t xfb_buffer_num = 0, xfb_stride;
+		    if (has_decoration(self, DecorationXfbBuffer))
+		    {
+			    xfb_buffer_num = get_decoration(self, DecorationXfbBuffer);
+			    xfb_stride = get_decoration(self, DecorationXfbStride);
+
+			    if (xfb_buffer_num >= kMaxXfbBuffers)
+				    SPIRV_CROSS_THROW("Shader uses more than 4 transform feedback buffers.");
+
+			    // According to the spec, individual outputs or blocks are decorated with
+			    // XfbStride to indicate the stride between two successive vertices in the buffer,
+			    // but all XfbStrides for a given XfbBuffer must agree.
+			    xfb_strides[xfb_buffer_num] = xfb_stride;
+		    }
+
+		    if (type.basetype == SPIRType::Struct && has_decoration(type.self, DecorationBlock))
+		    {
+			    for (uint32_t i = 0; i < type.member_types.size(); ++i)
+			    {
+				    // According to Vulkan VUID 04716:
+				    // "Only variables or block members in the output interface
+				    //  decorated with Offset can be captured for transform
+				    //  feedback..."
+				    if (!has_member_decoration(type.self, i, DecorationOffset))
+					    continue;
+				    xfb_captured_outputs.insert(self);
+				    uint32_t xfb_offset = get_member_decoration(type.self, i, DecorationOffset);
+				    uint32_t mbr_xfb_buffer_num = has_member_decoration(type.self, i, DecorationXfbBuffer) ?
+				                                      get_member_decoration(type.self, i, DecorationXfbBuffer) :
+				                                      xfb_buffer_num;
+				    string name;
+				    if (has_member_decoration(type.self, i, DecorationBuiltIn))
+				    {
+					    // Force this to have the proper name.
+					    BuiltIn bi_type = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+					    name = builtin_to_glsl(bi_type, StorageClassOutput);
+					    // Make sure it's referenced properly.
+					    xfb_captured_builtins.insert(make_pair(bi_type, mbr_xfb_buffer_num));
+				    }
+				    else
+				    {
+					    name = to_member_name(type, i);
+				    }
+				    xfb_outputs[mbr_xfb_buffer_num].emplace_back<XfbOutput>({ &var, name, i, xfb_offset, true });
+				    if (has_member_decoration(type.self, i, DecorationXfbStride))
+				    {
+					    xfb_strides[mbr_xfb_buffer_num] = get_member_decoration(type.self, i, DecorationXfbStride);
+				    }
+				    else
+				    {
+					    // XXX What's this for??? The validation rules for SPIR-V require
+					    // this to be set if any of the transform feedback decorations are used!
+					    bool hasTransformFeedback = has_member_decoration(type.parent_type, i, DecorationXfbStride);
+					    if (hasTransformFeedback)
+					    {
+						    auto &execution = get_entry_point();
+						    execution.flags.set(spv::ExecutionModeXfb);
+					    }
+					    break;
+				    }
+			    }
+		    }
+		    else
+		    {
+			    if (!has_decoration(self, DecorationOffset))
+				    return;
+			    xfb_captured_outputs.insert(self);
+			    uint32_t xfb_offset = get_decoration(self, DecorationOffset);
+			    string name;
+			    if (has_decoration(self, DecorationBuiltIn))
+			    {
+				    // Force this to have the proper name.
+				    BuiltIn bi_type = BuiltIn(get_decoration(self, DecorationBuiltIn));
+				    name = builtin_to_glsl(bi_type, StorageClassOutput);
+				    // Make sure it's referenced properly.
+				    xfb_captured_builtins.insert(make_pair(bi_type, xfb_buffer_num));
+			    }
+			    else
+			    {
+				    name = to_name(self);
+			    }
+			    xfb_outputs[xfb_buffer_num].emplace_back<XfbOutput>({ &var, name, 0, xfb_offset, false });
+		    }
+	    });
+
+	for (uint32_t xfb_buffer = 0; xfb_buffer < kMaxXfbBuffers; xfb_buffer++)
+	{
+		auto &outputs = xfb_outputs[xfb_buffer];
+		if (outputs.empty())
+			continue;
+
+		uint32_t next_id = ir.increase_bound_by(8);
+		uint32_t buffer_var_id = next_id;
+		uint32_t local_var_id = next_id + 1;
+		uint32_t type_id = next_id + 2;
+		uint32_t ptr_type_id = next_id + 3;
+		uint32_t local_ptr_type_id = next_id + 4;
+		uint32_t counter_var_id = next_id + 5;
+		uint32_t counter_type_id = next_id + 6;
+		uint32_t counter_ptr_type_id = next_id + 7;
+		xfb_counters[xfb_buffer] = counter_var_id;
+		xfb_buffers[xfb_buffer] = buffer_var_id;
+		xfb_locals[xfb_buffer] = local_var_id;
+
+		auto &counter_type = set<SPIRType>(counter_type_id);
+		counter_type.basetype = SPIRType::AtomicCounter;
+		counter_type.storage = StorageClassStorageBuffer;
+
+		auto &counter_ptr_type = set<SPIRType>(counter_ptr_type_id);
+		counter_ptr_type = counter_type;
+		counter_ptr_type.pointer = true;
+		counter_ptr_type.pointer_depth++;
+		counter_ptr_type.parent_type = counter_type_id;
+
+		set<SPIRVariable>(counter_var_id, counter_ptr_type_id, StorageClassUniform);
+		set_name(counter_var_id, join("spvXfbCounter", xfb_buffer));
+
+		auto &buffer_type = set<SPIRType>(type_id);
+		buffer_type.basetype = SPIRType::Struct;
+		buffer_type.storage = StorageClassStorageBuffer;
+		// Need to mark the type as a Block to enable this.
+		set_decoration(type_id, DecorationBlock);
+		set_name(type_id, join("spvXfbBuffer", xfb_buffer));
+
+		auto &ptr_type = set<SPIRType>(ptr_type_id);
+		ptr_type = buffer_type;
+		ptr_type.pointer = true;
+		ptr_type.pointer_depth++;
+		ptr_type.parent_type = type_id;
+
+		auto &local_ptr_type = set<SPIRType>(local_ptr_type_id);
+		local_ptr_type = ptr_type;
+		local_ptr_type.storage = StorageClassFunction;
+
+		set<SPIRVariable>(local_var_id, local_ptr_type_id, StorageClassFunction);
+		set_name(local_var_id, join("spvXfbOutput", xfb_buffer));
+		entry_func.add_local_variable(local_var_id);
+		vars_needing_early_declaration.push_back(local_var_id);
+
+		set<SPIRVariable>(buffer_var_id, ptr_type_id, StorageClassUniform);
+		set_name(buffer_var_id, join("spvXfb", xfb_buffer));
+
+		uint32_t member_index = 0;
+		for (auto &output : outputs)
+		{
+			auto &var = *output.var;
+			auto &type = get_variable_data_type(var);
+
+			string mbr_name = ensure_valid_name(output.name, "m");
+			set_member_name(buffer_type.self, member_index, mbr_name);
+
+			if (!output.block)
+			{
+				// Drop pointer information when we emit the outputs into a struct.
+				const auto &var_type = get_variable_data_type(var);
+				buffer_type.member_types.push_back(var_type.self);
+				set_member_decoration(type_id, member_index, DecorationOffset, output.offset);
+				set_qualified_name(var.self, join(to_name(local_var_id), ".", mbr_name));
+			}
+			else
+			{
+				buffer_type.member_types.push_back(type.member_types[output.member_index]);
+				set_member_decoration(type_id, member_index, DecorationOffset, output.offset);
+				string qual_var_name = join(to_name(local_var_id), ".", mbr_name);
+				if (!is_member_builtin(type, output.member_index, nullptr))
+				{
+					// n.b. Must come BEFORE the big one that writes out the XFB buffers!
+					entry_func.fixup_hooks_out.push_back(
+					    [=]() {
+						    statement(qual_var_name, " = ", to_name(var.self), ".", to_member_name(type, member_index),
+						              ";");
+					    });
+				}
+			}
+
+			set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationInterfaceOrigID,
+			                               var.self);
+			member_index++;
+		}
+
+		// Because we have custom offsets and stride, the buffer struct needs repacking.
+		mark_as_packable(buffer_type);
+		// If the declared stride is not a multiple of the struct's natural alignment,
+		// then the struct needs to be packed.
+		bool packed_buffer = xfb_strides[xfb_buffer] % get_declared_type_alignment_msl(buffer_type, false, false) != 0;
+		if (packed_buffer)
+			mark_struct_members_packed(buffer_type);
+		// If the block or any members are packed, we have to make sure that this is
+		// propagated to implicit parameters as well.
+		for (uint32_t i = 0; i < buffer_type.member_types.size(); ++i)
+		{
+			const auto &member_type = get<SPIRType>(buffer_type.member_types[i]);
+			uint32_t var_id = get_extended_member_decoration(type_id, i, SPIRVCrossDecorationInterfaceOrigID);
+			const auto &var = get<SPIRVariable>(var_id);
+			if (member_type.basetype != SPIRType::Struct &&
+			    (packed_buffer || has_extended_member_decoration(type_id, i, SPIRVCrossDecorationPhysicalTypePacked)))
+			{
+				if (is_builtin_variable(var))
+				{
+					if (outputs[i].block)
+						xfb_packed_builtins.insert(BuiltIn(get_member_decoration(
+						    get_variable_data_type_id(var), outputs[i].member_index, DecorationBuiltIn)));
+					else
+						xfb_packed_builtins.insert(BuiltIn(get_decoration(var_id, DecorationBuiltIn)));
+				}
+				else
+				{
+					xfb_packed_outputs.insert(var_id);
+				}
+			}
+		}
+		// Make sure struct is padded to declared stride, so indexing works properly.
+		if (xfb_strides[xfb_buffer] > get_declared_struct_size_msl(buffer_type, packed_buffer))
+			set_extended_decoration(type_id, SPIRVCrossDecorationPaddingTarget, xfb_strides[xfb_buffer]);
+	}
 }
 
 bool CompilerMSL::using_builtin_array() const

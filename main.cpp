@@ -681,6 +681,7 @@ struct CLIArguments
 	bool msl_readwrite_texture_fences = true;
 	bool msl_agx_manual_cube_grad_fixup = false;
 	const char *msl_combined_sampler_suffix = nullptr;
+	CompilerMSL::Options::PrimitiveType msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::Dynamic;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
 	bool glsl_force_flattened_io_blocks = false;
@@ -968,7 +969,11 @@ static void print_help_msl()
 	                "\t\tAll released Apple Silicon GPUs to date ignore one of the three partial derivatives\n"
 	                "\t\tbased on the selected major axis, and expect the remaining derivatives to be\n"
 	                "\t\tpartially transformed. This fixup gives correct results on Apple Silicon.\n"
-	                "\t[--msl-combined-sampler-suffix <suffix>]:\n\t\tUses a custom suffix for combined samplers.\n");
+	                "\t[--msl-combined-sampler-suffix <suffix>]:\n\t\tUses a custom suffix for combined samplers.\n"
+	                "\t[--msl-xfb-primitive-type <type>]:\n\t\tGenerates code in a vertex shader to capture primitives of the\n\t\t"
+	                "specified type for transform feedback. <type> may be one of dynamic,\n\t\t"
+	                "point-list, line-list, line-strip, triangle-list, triangle-strip, or\n\t\t"
+	                "triangle-fan. The default is \"dynamic\".\n");
 	// clang-format on
 }
 
@@ -1243,6 +1248,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.manual_helper_invocation_updates = args.msl_manual_helper_invocation_updates;
 		msl_opts.check_discarded_frag_stores = args.msl_check_discarded_frag_stores;
 		msl_opts.sample_dref_lod_array_as_grad = args.msl_sample_dref_lod_array_as_grad;
+		msl_opts.xfb_primitive_type = args.msl_xfb_primitive_type;
 		msl_opts.ios_support_base_vertex_instance = true;
 		msl_opts.runtime_array_rich_descriptor = args.msl_runtime_array_rich_descriptor;
 		msl_opts.replace_recursive_inputs = args.msl_replace_recursive_inputs;
@@ -1811,6 +1817,25 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.msl_runtime_array_rich_descriptor = true; });
 	cbs.add("--msl-replace-recursive-inputs",
 	        [&args](CLIParser &) { args.msl_replace_recursive_inputs = true; });
+	cbs.add("--msl-xfb-primitive-type",
+	        [&args](CLIParser &parser)
+	        {
+		        const char *type = parser.next_value_string("dynamic");
+		        if (strcmp(type, "dynamic") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::Dynamic;
+		        else if (strcmp(type, "point-list") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::PointList;
+		        else if (strcmp(type, "line-list") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::LineList;
+		        else if (strcmp(type, "line-strip") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::LineStrip;
+		        else if (strcmp(type, "triangle-list") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleList;
+		        else if (strcmp(type, "triangle-strip") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleStrip;
+		        else if (strcmp(type, "triangle-fan") == 0)
+			        args.msl_xfb_primitive_type = CompilerMSL::Options::PrimitiveType::TriangleFan;
+	        });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
