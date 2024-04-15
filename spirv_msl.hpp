@@ -951,7 +951,8 @@ protected:
 	                                                      uint32_t mbr_idx, InterfaceBlockMeta &meta,
 	                                                      const std::string &mbr_name_qual,
 	                                                      const std::string &var_chain_qual,
-	                                                      uint32_t &location, uint32_t &var_mbr_idx);
+	                                                      uint32_t &location, uint32_t &var_mbr_idx,
+	                                                      const Bitset &interpolation_qual);
 	void add_tess_level_input_to_interface_block(const std::string &ib_var_ref, SPIRType &ib_type, SPIRVariable &var);
 	void add_tess_level_input(const std::string &base_ref, const std::string &mbr_name, SPIRVariable &var);
 

@@ -2921,20 +2921,35 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
                                                                    uint32_t mbr_idx, InterfaceBlockMeta &meta,
                                                                    const string &mbr_name_qual,
                                                                    const string &var_chain_qual,
-                                                                   uint32_t &location, uint32_t &var_mbr_idx)
+                                                                   uint32_t &location, uint32_t &var_mbr_idx,
+                                                                   const Bitset &interpolation_qual)
 {
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 
 	BuiltIn builtin = BuiltInMax;
 	bool is_builtin = is_member_builtin(var_type, mbr_idx, &builtin);
-	bool is_flat =
-	    has_member_decoration(var_type.self, mbr_idx, DecorationFlat) || has_decoration(var.self, DecorationFlat);
-	bool is_noperspective = has_member_decoration(var_type.self, mbr_idx, DecorationNoPerspective) ||
+	bool is_flat = interpolation_qual.get(DecorationFlat) ||
+	               has_member_decoration(var_type.self, mbr_idx, DecorationFlat) ||
+	               has_decoration(var.self, DecorationFlat);
+	bool is_noperspective = interpolation_qual.get(DecorationNoPerspective) ||
+	                        has_member_decoration(var_type.self, mbr_idx, DecorationNoPerspective) ||
 	                        has_decoration(var.self, DecorationNoPerspective);
-	bool is_centroid = has_member_decoration(var_type.self, mbr_idx, DecorationCentroid) ||
+	bool is_centroid = interpolation_qual.get(DecorationCentroid) ||
+	                   has_member_decoration(var_type.self, mbr_idx, DecorationCentroid) ||
 	                   has_decoration(var.self, DecorationCentroid);
-	bool is_sample =
-	    has_member_decoration(var_type.self, mbr_idx, DecorationSample) || has_decoration(var.self, DecorationSample);
+	bool is_sample = interpolation_qual.get(DecorationSample) ||
+	                 has_member_decoration(var_type.self, mbr_idx, DecorationSample) ||
+	                 has_decoration(var.self, DecorationSample);
+
+	Bitset inherited_qual;
+	if (is_flat)
+		inherited_qual.set(DecorationFlat);
+	if (is_noperspective)
+		inherited_qual.set(DecorationNoPerspective);
+	if (is_centroid)
+		inherited_qual.set(DecorationCentroid);
+	if (is_sample)
+		inherited_qual.set(DecorationSample);
 
 	uint32_t mbr_type_id = var_type.member_types[mbr_idx];
 	auto &mbr_type = get<SPIRType>(mbr_type_id);
@@ -2998,7 +3013,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 				add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
 																 var, mbr_type, sub_mbr_idx,
 																 meta, mbr_name, var_chain,
-																 location, var_mbr_idx);
+																 location, var_mbr_idx, inherited_qual);
 				// FIXME: Recursive structs and tessellation breaks here.
 				var_mbr_idx++;
 			}
@@ -3684,7 +3699,7 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 							add_composite_member_variable_to_interface_block(storage, ib_var_ref, ib_type,
 							                                                 var, var_type, mbr_idx, meta,
 							                                                 mbr_name_qual, var_chain_qual,
-							                                                 location, var_mbr_idx);
+							                                                 location, var_mbr_idx, {});
 						}
 						else
 						{
