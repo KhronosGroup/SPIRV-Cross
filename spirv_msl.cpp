@@ -7476,6 +7476,17 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplTextureCast:
+			statement("template <typename T, typename U>");
+			statement("T spvTextureCast(U img)");
+			begin_scope();
+			// MSL complains if you try to cast the texture itself, but casting the reference type is ... ok? *shrug*
+			// Gotta go what you gotta do I suppose.
+			statement("return reinterpret_cast<thread const T &>(img);");
+			end_scope();
+			statement("");
+			break;
+
 		default:
 			break;
 		}
@@ -10163,7 +10174,35 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		if (split_index != string::npos)
 		{
 			auto coord = obj_expression.substr(split_index + 1);
-			exp += join(obj_expression.substr(0, split_index), ".", op, "(");
+			auto image_expr = obj_expression.substr(0, split_index);
+
+			// Handle problem cases with sign where we need signed min/max on a uint image for example.
+			// It seems to work to cast the texture type itself, even if it is probably wildly outside of spec,
+			// but SPIR-V requires this to work.
+			if ((opcode == OpAtomicUMax || opcode == OpAtomicUMin ||
+			     opcode == OpAtomicSMax || opcode == OpAtomicSMin) &&
+			    type.basetype != expected_type)
+			{
+				auto *backing_var = maybe_get_backing_variable(obj);
+				if (backing_var)
+				{
+					add_spv_func_and_recompile(SPVFuncImplTextureCast);
+
+					const auto *backing_type = &get<SPIRType>(backing_var->basetype);
+					while (backing_type->op != OpTypeImage)
+						backing_type = &get<SPIRType>(backing_type->parent_type);
+
+					auto img_type = *backing_type;
+					auto tmp_type = type;
+					tmp_type.basetype = expected_type;
+					img_type.image.type = ir.increase_bound_by(1);
+					set<SPIRType>(img_type.image.type, tmp_type);
+
+					image_expr = join("spvTextureCast<", type_to_glsl(img_type, obj), ">(", image_expr, ")");
+				}
+			}
+
+			exp += join(image_expr, ".", op, "(");
 			if (ptr_type.storage == StorageClassImage && res_type->image.arrayed)
 			{
 				switch (res_type->image.dim)
@@ -15636,8 +15675,8 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 
 	string img_type_name;
 
-	// Bypass pointers because we need the real image struct
-	auto &img_type = get<SPIRType>(type.self).image;
+	auto &img_type = type.image;
+
 	if (is_depth_image(type, id))
 	{
 		switch (img_type.dim)
