@@ -11610,6 +11610,10 @@ uint32_t CompilerGLSL::get_integer_width_for_instruction(const Instruction &inst
 	case OpUGreaterThanEqual:
 		return expression_type(ops[2]).width;
 
+	case OpSMulExtended:
+	case OpUMulExtended:
+		return get<SPIRType>(get<SPIRType>(ops[0]).member_types[0]).width;
+
 	default:
 	{
 		// We can look at result type which is more robust.
