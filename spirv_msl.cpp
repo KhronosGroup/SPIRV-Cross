@@ -7419,14 +7419,14 @@ void CompilerMSL::emit_custom_functions()
 				statement("template<typename T>");
 				statement("struct spvDescriptorArray");
 				begin_scope();
-				statement("spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(ptr)");
+				statement("spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(&ptr->value)");
 				begin_scope();
 				end_scope();
 				statement("const device T& operator [] (size_t i) const");
 				begin_scope();
-				statement("return ptr[i].value;");
+				statement("return ptr[i];");
 				end_scope();
-				statement("const device spvDescriptor<T>* ptr;");
+				statement("const device T* ptr;");
 				end_scope_decl();
 				statement("");
 			}
