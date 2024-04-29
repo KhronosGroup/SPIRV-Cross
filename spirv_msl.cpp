@@ -10405,19 +10405,54 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	op = get_remapped_glsl_op(op);
 
+	auto &restype = get<SPIRType>(result_type);
+
 	switch (op)
 	{
 	case GLSLstd450Sinh:
-		emit_unary_func_op(result_type, id, args[0], "fast::sinh");
+		if (restype.basetype == SPIRType::Half)
+		{
+			// MSL does not have overload for half. Force-cast back to half.
+			auto expr = join("half(fast::sinh(", to_unpacked_expression(args[0]), "))");
+			emit_op(result_type, id, expr, should_forward(args[0]));
+			inherit_expression_dependencies(id, args[0]);
+		}
+		else
+			emit_unary_func_op(result_type, id, args[0], "fast::sinh");
 		break;
 	case GLSLstd450Cosh:
-		emit_unary_func_op(result_type, id, args[0], "fast::cosh");
+		if (restype.basetype == SPIRType::Half)
+		{
+			// MSL does not have overload for half. Force-cast back to half.
+			auto expr = join("half(fast::cosh(", to_unpacked_expression(args[0]), "))");
+			emit_op(result_type, id, expr, should_forward(args[0]));
+			inherit_expression_dependencies(id, args[0]);
+		}
+		else
+			emit_unary_func_op(result_type, id, args[0], "fast::cosh");
 		break;
 	case GLSLstd450Tanh:
-		emit_unary_func_op(result_type, id, args[0], "precise::tanh");
+		if (restype.basetype == SPIRType::Half)
+		{
+			// MSL does not have overload for half. Force-cast back to half.
+			auto expr = join("half(fast::tanh(", to_unpacked_expression(args[0]), "))");
+			emit_op(result_type, id, expr, should_forward(args[0]));
+			inherit_expression_dependencies(id, args[0]);
+		}
+		else
+			emit_unary_func_op(result_type, id, args[0], "precise::tanh");
 		break;
 	case GLSLstd450Atan2:
-		emit_binary_func_op(result_type, id, args[0], args[1], "precise::atan2");
+		if (restype.basetype == SPIRType::Half)
+		{
+			// MSL does not have overload for half. Force-cast back to half.
+			auto expr = join("half(fast::atan2(", to_unpacked_expression(args[0]), ", ", to_unpacked_expression(args[1]), "))");
+			emit_op(result_type, id, expr, should_forward(args[0]) && should_forward(args[1]));
+			inherit_expression_dependencies(id, args[0]);
+			inherit_expression_dependencies(id, args[1]);
+		}
+		else
+			emit_binary_func_op(result_type, id, args[0], args[1], "precise::atan2");
 		break;
 	case GLSLstd450InverseSqrt:
 		emit_unary_func_op(result_type, id, args[0], "rsqrt");
