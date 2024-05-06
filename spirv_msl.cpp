@@ -18291,11 +18291,14 @@ void CompilerMSL::analyze_argument_buffers()
 					default:
 						break;
 					}
+
+					// After padding, retrieve the resource again. It will either be more padding, or the actual resource.
+					rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
 				}
 
 				// Adjust the number of slots consumed by current member itself.
 				// Use the count value from the app, instead of the shader, in case the
-				// shader is only accesing part, or even one element, of the array.
+				// shader is only accessing part, or even one element, of the array.
 				next_arg_buff_index += rez_bind.count;
 			}
 
