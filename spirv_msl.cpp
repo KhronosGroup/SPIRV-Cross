@@ -1553,8 +1553,10 @@ string CompilerMSL::compile()
 	if (needs_manual_helper_invocation_updates() &&
 	    (active_input_builtins.get(BuiltInHelperInvocation) || needs_helper_invocation))
 	{
-		string discard_expr =
-		    join(builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput), " = true, discard_fragment()");
+		string builtin_helper_invocation = builtin_to_glsl(BuiltInHelperInvocation, StorageClassInput);
+		string discard_expr = join(builtin_helper_invocation, " = true, discard_fragment()");
+		if (msl_options.force_fragment_with_side_effects_execution)
+			discard_expr = join("!", builtin_helper_invocation, " ? (", discard_expr, ") : (void)0");
 		backend.discard_literal = discard_expr;
 		backend.demote_literal = discard_expr;
 	}
@@ -1703,14 +1705,15 @@ void CompilerMSL::preprocess_op_codes()
 
 	// Fragment shaders that both write to storage resources and discard fragments
 	// need checks on the writes, to work around Metal allowing these writes despite
-	// the fragment being dead.
-	if (msl_options.check_discarded_frag_stores && preproc.uses_discard &&
-	    (preproc.uses_buffer_write || preproc.uses_image_write))
+	// the fragment being dead. We also require to force Metal to execute fragment
+	// shaders instead of being prematurely discarded.
+	if (preproc.uses_discard && (preproc.uses_buffer_write || preproc.uses_image_write))
 	{
-		frag_shader_needs_discard_checks = true;
-		needs_helper_invocation = true;
+		bool should_enable = (msl_options.check_discarded_frag_stores || msl_options.force_fragment_with_side_effects_execution);
+		frag_shader_needs_discard_checks |= msl_options.check_discarded_frag_stores;
+		needs_helper_invocation |= should_enable;
 		// Fragment discard store checks imply manual HelperInvocation updates.
-		msl_options.manual_helper_invocation_updates = true;
+		msl_options.manual_helper_invocation_updates |= should_enable;
 	}
 
 	if (is_intersection_query())
