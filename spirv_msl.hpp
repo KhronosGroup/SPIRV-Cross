@@ -516,6 +516,19 @@ public:
 		// transformed.
 		bool agx_manual_cube_grad_fixup = false;
 
+		// Metal will discard fragments with side effects under certain circumstances prematurely.
+		// Example: CTS test dEQP-VK.fragment_operations.early_fragment.discard_no_early_fragment_tests_depth
+		// Test will render a full screen quad with varying depth [0,1] for each fragment.
+		// Each fragment will do an operation with side effects, modify the depth value and
+		// discard the fragment. The test expects the fragment to be run due to:
+		// https://registry.khronos.org/vulkan/specs/1.0-extensions/html/vkspec.html#fragops-shader-depthreplacement
+		// which states that the fragment shader must be run due to replacing the depth in shader.
+		// However, Metal may prematurely discards fragments without executing them
+		// (I believe this to be due to a greedy optimization on their end) making the test fail.
+		// This option enforces fragment execution for such cases where the fragment has operations
+		// with side effects. Provided as an option hoping Metal will fix this issue in the future.
+		bool enforce_fragment_with_side_effects_execution = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
