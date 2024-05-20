@@ -271,11 +271,14 @@ void CompilerMSL::build_implicit_builtins()
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
 	bool need_local_invocation_index = msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId);
 	bool need_workgroup_size = msl_options.emulate_subgroups && active_input_builtins.get(BuiltInNumSubgroups);
+	bool force_frag_depth_passthrough =
+	    get_execution_model() == ExecutionModelFragment && !uses_explicit_early_fragment_test() && need_subpass_input &&
+	    msl_options.enable_frag_depth_builtin && msl_options.input_attachment_is_ds_attachment;
 
 	if (need_subpass_input || need_sample_pos || need_subgroup_mask || need_vertex_params || need_tesc_params ||
 	    need_tese_params || need_multiview || need_dispatch_base || need_vertex_base_params || need_grid_params ||
 	    needs_sample_id || needs_subgroup_invocation_id || needs_subgroup_size || needs_helper_invocation ||
-		has_additional_fixed_sample_mask() || need_local_invocation_index || need_workgroup_size)
+		has_additional_fixed_sample_mask() || need_local_invocation_index || need_workgroup_size || force_frag_depth_passthrough)
 	{
 		bool has_frag_coord = false;
 		bool has_sample_id = false;
@@ -292,6 +295,7 @@ void CompilerMSL::build_implicit_builtins()
 		bool has_helper_invocation = false;
 		bool has_local_invocation_index = false;
 		bool has_workgroup_size = false;
+		bool has_frag_depth = false;
 		uint32_t workgroup_id_type = 0;
 
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
@@ -311,6 +315,13 @@ void CompilerMSL::build_implicit_builtins()
 					builtin_sample_mask_id = var.self;
 					mark_implicit_builtin(StorageClassOutput, BuiltInSampleMask, var.self);
 					does_shader_write_sample_mask = true;
+				}
+
+				if (force_frag_depth_passthrough && builtin == BuiltInFragDepth)
+				{
+					builtin_frag_depth_id = var.self;
+					mark_implicit_builtin(StorageClassOutput, BuiltInFragDepth, var.self);
+					has_frag_depth = true;
 				}
 			}
 
@@ -901,6 +912,36 @@ void CompilerMSL::build_implicit_builtins()
 			set_decoration(var_id, DecorationBuiltIn, BuiltInWorkgroupSize);
 			builtin_workgroup_size_id = var_id;
 			mark_implicit_builtin(StorageClassInput, BuiltInWorkgroupSize, var_id);
+		}
+
+		if (!has_frag_depth && force_frag_depth_passthrough)
+		{
+			uint32_t offset = ir.increase_bound_by(3);
+			uint32_t type_id = offset;
+			uint32_t type_ptr_id = offset + 1;
+			uint32_t var_id = offset + 2;
+
+			// Create gl_FragDepth
+			SPIRType float_type { OpTypeFloat };
+			float_type.basetype = SPIRType::Float;
+			float_type.width = 32;
+			float_type.vecsize = 1;
+			set<SPIRType>(type_id, float_type);
+
+			SPIRType float_type_ptr_in = float_type;
+			float_type_ptr_in.op = spv::OpTypePointer;
+			float_type_ptr_in.pointer = true;
+			float_type_ptr_in.pointer_depth++;
+			float_type_ptr_in.parent_type = type_id;
+			float_type_ptr_in.storage = StorageClassOutput;
+
+			auto &ptr_in_type = set<SPIRType>(type_ptr_id, float_type_ptr_in);
+			ptr_in_type.self = type_id;
+			set<SPIRVariable>(var_id, type_ptr_id, StorageClassOutput);
+			set_decoration(var_id, DecorationBuiltIn, BuiltInFragDepth);
+			builtin_frag_depth_id = var_id;
+			mark_implicit_builtin(StorageClassOutput, BuiltInFragDepth, var_id);
+			active_output_builtins.set(BuiltInFragDepth);
 		}
 	}
 
@@ -1571,6 +1612,8 @@ string CompilerMSL::compile()
 		add_active_interface_variable(builtin_dispatch_base_id);
 	if (builtin_sample_mask_id)
 		add_active_interface_variable(builtin_sample_mask_id);
+	if (builtin_frag_depth_id)
+		add_active_interface_variable(builtin_frag_depth_id);
 
 	// Create structs to hold input, output and uniform variables.
 	// Do output first to ensure out. is declared at top of entry function.
@@ -1869,7 +1912,12 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			{
 				uint32_t base_id = ops[0];
 				if (global_var_ids.find(base_id) != global_var_ids.end())
+				{
 					added_arg_ids.insert(base_id);
+
+					if (msl_options.input_attachment_is_ds_attachment && base_id == builtin_frag_depth_id)
+						writes_to_depth = true;
+				}
 
 				uint32_t rvalue_id = ops[1];
 				if (global_var_ids.find(rvalue_id) != global_var_ids.end())
@@ -14513,16 +14561,33 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			}
 		}
 		else if (var.storage == StorageClassOutput && get_execution_model() == ExecutionModelFragment &&
-				 is_builtin_variable(var) && active_output_builtins.get(bi_type) &&
-				 bi_type == BuiltInSampleMask && has_additional_fixed_sample_mask())
+				 is_builtin_variable(var) && active_output_builtins.get(bi_type))
 		{
-			// If the additional fixed sample mask was set, we need to adjust the sample_mask
-			// output to reflect that. If the shader outputs the sample_mask itself too, we need
-			// to AND the two masks to get the final one.
-			string op_str = does_shader_write_sample_mask ? " &= " : " = ";
-			entry_func.fixup_hooks_out.push_back([=]() {
-				statement(to_expression(builtin_sample_mask_id), op_str, additional_fixed_sample_mask_str(), ";");
-			});
+			switch (bi_type)
+			{
+			case BuiltInSampleMask:
+				if (has_additional_fixed_sample_mask())
+				{
+					// If the additional fixed sample mask was set, we need to adjust the sample_mask
+					// output to reflect that. If the shader outputs the sample_mask itself too, we need
+					// to AND the two masks to get the final one.
+					string op_str = does_shader_write_sample_mask ? " &= " : " = ";
+					entry_func.fixup_hooks_out.push_back([=]() {
+						statement(to_expression(builtin_sample_mask_id), op_str, additional_fixed_sample_mask_str(), ";");
+					});
+				}
+				break;
+			case BuiltInFragDepth:
+				if (msl_options.input_attachment_is_ds_attachment && !writes_to_depth)
+				{
+					entry_func.fixup_hooks_out.push_back([=]() {
+						statement(to_expression(builtin_frag_depth_id), " = ", to_expression(builtin_frag_coord_id), ".z;");
+					});
+				}
+				break;
+			default:
+				break;
+			}
 		}
 	});
 }

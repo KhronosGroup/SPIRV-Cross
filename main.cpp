@@ -681,6 +681,7 @@ struct CLIArguments
 	bool msl_replace_recursive_inputs = false;
 	bool msl_readwrite_texture_fences = true;
 	bool msl_agx_manual_cube_grad_fixup = false;
+	bool msl_input_attachment_is_ds_attachment = false;
 	const char *msl_combined_sampler_suffix = nullptr;
 	bool glsl_emit_push_constant_as_ubo = false;
 	bool glsl_emit_ubo_as_plain_uniforms = false;
@@ -873,6 +874,10 @@ static void print_help_msl()
 	                "\t[--msl-runtime-array-rich-descriptor]:\n\t\tWhen declaring a runtime array of SSBOs, declare an array of {ptr, len} pairs to support OpArrayLength.\n"
 	                "\t[--msl-replace-recursive-inputs]:\n\t\tWorks around a Metal 3.1 regression bug, which causes an infinite recursion crash during Metal's analysis of an entry point input structure that itself contains internal recursion.\n"
 	                "\t[--msl-texture-buffer-native]:\n\t\tEnable native support for texel buffers. Otherwise, it is emulated as a normal texture.\n"
+	                "\t[--msl-input-attachment-is-ds-attachment]:\n\t\tAdds a simple depth passthrough in fragment shaders when they do not modify the depth value.\n"
+	                "\t\tRequired to force Metal to write to the depth/stencil attachment post fragment execution.\n"
+	                "\t\tOtherwise, Metal may optimize the write to pre fragment execution which goes against the Vulkan spec.\n"
+	                "\t\tOnly required if an input attachment and depth/stencil attachment reference the same resource.\n"
 	                "\t[--msl-framebuffer-fetch]:\n\t\tImplement subpass inputs with frame buffer fetch.\n"
 	                "\t\tEmits [[color(N)]] inputs in fragment stage.\n"
 	                "\t\tRequires an Apple GPU.\n"
@@ -1257,6 +1262,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		msl_opts.ios_support_base_vertex_instance = true;
 		msl_opts.runtime_array_rich_descriptor = args.msl_runtime_array_rich_descriptor;
 		msl_opts.replace_recursive_inputs = args.msl_replace_recursive_inputs;
+		msl_opts.input_attachment_is_ds_attachment = args.msl_input_attachment_is_ds_attachment;
 		msl_opts.readwrite_texture_fences = args.msl_readwrite_texture_fences;
 		msl_opts.agx_manual_cube_grad_fixup = args.msl_agx_manual_cube_grad_fixup;
 		msl_comp->set_msl_options(msl_opts);
@@ -1823,6 +1829,7 @@ static int main_inner(int argc, char *argv[])
 	        [&args](CLIParser &) { args.msl_runtime_array_rich_descriptor = true; });
 	cbs.add("--msl-replace-recursive-inputs",
 	        [&args](CLIParser &) { args.msl_replace_recursive_inputs = true; });
+	cbs.add("--msl-input-attachment-is-ds-attachment", [&args](CLIParser &) { args.msl_input_attachment_is_ds_attachment = true; });
 	cbs.add("--extension", [&args](CLIParser &parser) { args.extensions.push_back(parser.next_string()); });
 	cbs.add("--rename-entry-point", [&args](CLIParser &parser) {
 		auto old_name = parser.next_string();
