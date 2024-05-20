@@ -772,6 +772,8 @@ protected:
 		SPVFuncImplTextureSwizzle,
 		SPVFuncImplGatherSwizzle,
 		SPVFuncImplGatherCompareSwizzle,
+		SPVFuncImplGatherConstOffsets,
+		SPVFuncImplGatherCompareConstOffsets,
 		SPVFuncImplSubgroupBroadcast,
 		SPVFuncImplSubgroupBroadcastFirst,
 		SPVFuncImplSubgroupBallot,
