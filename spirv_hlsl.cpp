@@ -4448,6 +4448,18 @@ void CompilerHLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
 
+	case GLSLstd450NMin:
+		CompilerGLSL::emit_glsl_op(result_type, id, GLSLstd450FMin, args, count);
+		break;
+
+	case GLSLstd450NMax:
+		CompilerGLSL::emit_glsl_op(result_type, id, GLSLstd450FMax, args, count);
+		break;
+
+	case GLSLstd450NClamp:
+		CompilerGLSL::emit_glsl_op(result_type, id, GLSLstd450FClamp, args, count);
+		break;
+
 	default:
 		CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count);
 		break;
