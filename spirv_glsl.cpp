@@ -2434,7 +2434,7 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 		else
 		{
 			auto &pointee_type = get_pointee_type(type);
-			statement(type_to_glsl(pointee_type), " value", type_to_array_glsl(pointee_type), ";");
+			statement(type_to_glsl(pointee_type), " value", type_to_array_glsl(pointee_type, 0), ";");
 		}
 
 		end_scope_decl();
@@ -2513,7 +2513,7 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	// It will need to be reset if we have to recompile.
 	preserve_alias_on_reset(var.self);
 	add_resource_name(var.self);
-	end_scope_decl(to_name(var.self) + type_to_array_glsl(type));
+	end_scope_decl(to_name(var.self) + type_to_array_glsl(type, var.self));
 	statement("");
 }
 
@@ -2780,7 +2780,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			}
 
 			add_resource_name(var.self);
-			end_scope_decl(join(to_name(var.self), type_to_array_glsl(type)));
+			end_scope_decl(join(to_name(var.self), type_to_array_glsl(type, var.self)));
 			statement("");
 		}
 	}
@@ -3977,7 +3977,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 				auto &c = get<SPIRConstant>(var.initializer);
 				for (uint32_t j = 0; j < array_size; j++)
 					exprs.push_back(to_expression(get<SPIRConstant>(c.subconstants[j]).subconstants[i]));
-				statement("const ", type_to_glsl(array_type), " ", lut_name, type_to_array_glsl(array_type), " = ",
+				statement("const ", type_to_glsl(array_type), " ", lut_name, type_to_array_glsl(array_type, 0), " = ",
 				          type_to_glsl_constructor(array_type), "(", merge(exprs, ", "), ");");
 			}
 
@@ -4035,7 +4035,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 	else if (is_control_point)
 	{
 		auto lut_name = join("_", var.self, "_init");
-		statement("const ", type_to_glsl(type), " ", lut_name, type_to_array_glsl(type),
+		statement("const ", type_to_glsl(type), " ", lut_name, type_to_array_glsl(type, 0),
 		          " = ", to_expression(var.initializer), ";");
 		entry_func.fixup_hooks_in.push_back([&, lut_name]() {
 			statement(to_expression(var.self), "[gl_InvocationID] = ", lut_name, "[gl_InvocationID];");
@@ -4060,7 +4060,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 	{
 		auto lut_name = join("_", var.self, "_init");
 		statement("const ", type_to_glsl(type), " ", lut_name,
-		          type_to_array_glsl(type), " = ", to_expression(var.initializer), ";");
+		          type_to_array_glsl(type, var.self), " = ", to_expression(var.initializer), ";");
 		entry_func.fixup_hooks_in.push_back([&, lut_name, is_patch]() {
 			if (is_patch)
 			{
@@ -12204,7 +12204,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		if (emit_return_value_as_argument)
 		{
-			statement(type_to_glsl(return_type), " ", to_name(id), type_to_array_glsl(return_type), ";");
+			statement(type_to_glsl(return_type), " ", to_name(id), type_to_array_glsl(return_type, 0), ";");
 			arglist.push_back(to_name(id));
 		}
 
@@ -15175,7 +15175,7 @@ string CompilerGLSL::variable_decl(const SPIRType &type, const string &name, uin
 {
 	string type_name = type_to_glsl(type, id);
 	remap_variable_type_name(type, name, type_name);
-	return join(type_name, " ", name, type_to_array_glsl(type));
+	return join(type_name, " ", name, type_to_array_glsl(type, id));
 }
 
 bool CompilerGLSL::variable_decl_is_remapped_storage(const SPIRVariable &var, StorageClass storage) const
@@ -15532,7 +15532,7 @@ string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 		return "";
 }
 
-string CompilerGLSL::type_to_array_glsl(const SPIRType &type)
+string CompilerGLSL::type_to_array_glsl(const SPIRType &type, uint32_t)
 {
 	if (type.pointer && type.storage == StorageClassPhysicalStorageBufferEXT && type.basetype != SPIRType::Struct)
 	{
@@ -16096,7 +16096,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	auto &type = get<SPIRType>(func.return_type);
 	decl += flags_to_qualifiers_glsl(type, return_flags);
 	decl += type_to_glsl(type);
-	decl += type_to_array_glsl(type);
+	decl += type_to_array_glsl(type, 0);
 	decl += " ";
 
 	if (func.self == ir.default_entry_point)
