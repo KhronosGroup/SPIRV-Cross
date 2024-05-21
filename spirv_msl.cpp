@@ -1314,48 +1314,29 @@ void CompilerMSL::emit_entry_point_declarations()
 		uint32_t arg_id = argument_buffer_ids[desc_set];
 		uint32_t base_index = dynamic_buffer.second.first;
 
-		if (!type.array.empty())
+		if (is_array(type))
 		{
-			// This is complicated, because we need to support arrays of arrays.
-			// And it's even worse if the outermost dimension is a runtime array, because now
-			// all this complicated goop has to go into the shader itself. (FIXME)
 			if (!type.array[type.array.size() - 1])
 				SPIRV_CROSS_THROW("Runtime arrays with dynamic offsets are not supported yet.");
-			else
+
+			is_using_builtin_array = true;
+			statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
+			          type_to_array_glsl(type), " =");
+
+			uint32_t array_size = to_array_size_literal(type);
+			begin_scope();
+
+			for (uint32_t i = 0; i < array_size; i++)
 			{
-				is_using_builtin_array = true;
-				statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
-				          type_to_array_glsl(type), " =");
-
-				uint32_t dim = uint32_t(type.array.size());
-				uint32_t j = 0;
-				for (SmallVector<uint32_t> indices(type.array.size());
-				     indices[type.array.size() - 1] < to_array_size_literal(type); j++)
-				{
-					while (dim > 0)
-					{
-						begin_scope();
-						--dim;
-					}
-
-					string arrays;
-					for (uint32_t i = uint32_t(type.array.size()); i; --i)
-						arrays += join("[", indices[i - 1], "]");
-					statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ",
-					          to_restrict(var_id, false), ")((", get_argument_address_space(var), " char* ",
-					          to_restrict(var_id, false), ")", to_name(arg_id), ".", ensure_valid_name(name, "m"),
-					          arrays, " + ", to_name(dynamic_offsets_buffer_id), "[", base_index + j, "]),");
-
-					while (++indices[dim] >= to_array_size_literal(type, dim) && dim < type.array.size() - 1)
-					{
-						end_scope(",");
-						indices[dim++] = 0;
-					}
-				}
-				end_scope_decl();
-				statement_no_indent("");
-				is_using_builtin_array = false;
+				statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ",
+				          to_restrict(var_id, false), ")((", get_argument_address_space(var), " char* ",
+				          to_restrict(var_id, false), ")", to_name(arg_id), ".", ensure_valid_name(name, "m"),
+				          "[", i, "]", " + ", to_name(dynamic_offsets_buffer_id), "[", base_index + i, "]),");
 			}
+
+			end_scope_decl();
+			statement_no_indent("");
+			is_using_builtin_array = false;
 		}
 		else
 		{
