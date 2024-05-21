@@ -7847,6 +7847,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	args.grad_x = grad_x;
 	args.grad_y = grad_y;
 	args.lod = lod;
+	args.has_array_offsets = coffsets != 0;
 
 	if (coffsets)
 		args.offset = coffsets;

@@ -6227,6 +6227,57 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplGatherConstOffsets:
+			statement("// Wrapper function that processes a texture gather with a constant offset array.");
+			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
+			          "typename Toff, typename... Tp>");
+			statement("inline vec<T, 4> spvGatherConstOffsets(const thread Tex<T>& t, sampler s, "
+			          "Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)");
+			begin_scope();
+			statement("vec<T, 4> rslts[4];");
+			statement("for (uint i = 0; i < 4; i++)");
+			begin_scope();
+			statement("switch (c)");
+			begin_scope();
+			// Work around texture::gather() requiring its component parameter to be a constant expression
+			statement("case component::x:");
+			statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);");
+			statement("    break;");
+			statement("case component::y:");
+			statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);");
+			statement("    break;");
+			statement("case component::z:");
+			statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);");
+			statement("    break;");
+			statement("case component::w:");
+			statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);");
+			statement("    break;");
+			end_scope();
+			end_scope();
+			// Pull all values from the i0j0 component of each gather footprint
+			statement("return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
+			end_scope();
+			statement("");
+			break;
+
+		case SPVFuncImplGatherCompareConstOffsets:
+			statement("// Wrapper function that processes a texture gather with a constant offset array.");
+			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
+			          "typename Toff, typename... Tp>");
+			statement("inline vec<T, 4> spvGatherCompareConstOffsets(const thread Tex<T>& t, sampler s, "
+			          "Toff coffsets, Tp... params)");
+			begin_scope();
+			statement("vec<T, 4> rslts[4];");
+			statement("for (uint i = 0; i < 4; i++)");
+			begin_scope();
+			statement("    rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);");
+			end_scope();
+			// Pull all values from the i0j0 component of each gather footprint
+			statement("return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplSubgroupBroadcast:
 			// Metal doesn't allow broadcasting boolean values directly, but we can work around that by broadcasting
 			// them as integers.
@@ -10972,14 +11023,23 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 		is_dynamic_img_sampler = has_extended_decoration(var->self, SPIRVCrossDecorationDynamicImageSampler);
 	}
 
-	// Special-case gather. We have to alter the component being looked up
-	// in the swizzle case.
+	// Special-case gather. We have to alter the component being looked up in the swizzle case.
 	if (msl_options.swizzle_texture_samples && args.base.is_gather && !is_dynamic_img_sampler &&
 	    (!constexpr_sampler || !constexpr_sampler->ycbcr_conversion_enable))
 	{
 		bool is_compare = comparison_ids.count(img);
 		add_spv_func_and_recompile(is_compare ? SPVFuncImplGatherCompareSwizzle : SPVFuncImplGatherSwizzle);
 		return is_compare ? "spvGatherCompareSwizzle" : "spvGatherSwizzle";
+	}
+
+	// Special-case gather with an array of offsets. We have to lower into 4 separate gathers.
+	if (args.has_array_offsets && !is_dynamic_img_sampler &&
+	    (!constexpr_sampler || !constexpr_sampler->ycbcr_conversion_enable))
+	{
+		bool is_compare = comparison_ids.count(img);
+		add_spv_func_and_recompile(is_compare ? SPVFuncImplGatherCompareConstOffsets : SPVFuncImplGatherConstOffsets);
+		add_spv_func_and_recompile(SPVFuncImplForwardArgs);
+		return is_compare ? "spvGatherCompareConstOffsets" : "spvGatherConstOffsets";
 	}
 
 	auto *combined = maybe_get<SPIRCombinedImageSampler>(img);
@@ -11162,6 +11222,10 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			farg_str += to_expression(combined ? combined->image : img);
 		}
 
+		// Gathers with constant offsets call a special function, so include the texture.
+		if (args.has_array_offsets)
+			farg_str += to_expression(img);
+
 		// Sampler reference
 		if (!args.base.is_fetch)
 		{
@@ -11178,11 +11242,17 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			used_swizzle_buffer = true;
 		}
 
-		// Swizzled gather puts the component before the other args, to allow template
-		// deduction to work.
-		if (args.component && msl_options.swizzle_texture_samples)
+		// Const offsets gather puts the const offsets before the other args.
+		if (args.has_array_offsets)
 		{
-			forward = should_forward(args.component);
+			forward = forward && should_forward(args.offset);
+			farg_str += ", " + to_expression(args.offset);
+		}
+
+		// Const offsets gather or swizzled gather puts the component before the other args.
+		if (args.component && (args.has_array_offsets || msl_options.swizzle_texture_samples))
+		{
+			forward = forward && should_forward(args.component);
 			farg_str += ", " + to_component_argument(args.component);
 		}
 	}
@@ -11593,7 +11663,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 	// Add offsets
 	string offset_expr;
 	const SPIRType *offset_type = nullptr;
-	if (args.offset && !args.base.is_fetch)
+	if (args.offset && !args.base.is_fetch && !args.has_array_offsets)
 	{
 		forward = forward && should_forward(args.offset);
 		offset_expr = to_expression(args.offset);
@@ -11632,7 +11702,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		}
 	}
 
-	if (args.component)
+	if (args.component && !args.has_array_offsets)
 	{
 		// If 2D has gather component, ensure it also has an offset arg
 		if (imgtype.image.dim == Dim2D && offset_expr.empty())
