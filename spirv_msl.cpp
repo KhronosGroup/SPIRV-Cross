@@ -6227,7 +6227,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
-case SPVFuncImplGatherConstOffsets:
+		case SPVFuncImplGatherConstOffsets:
 			statement("// Wrapper function that processes a texture gather with a constant offset array.");
 			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
 			          "typename Toff, typename... Tp>");
@@ -6235,7 +6235,7 @@ case SPVFuncImplGatherConstOffsets:
 			          "Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)");
 			begin_scope();
 			statement("vec<T, 4> rslts[4];");
-			statement("for (uint i=0; i < 4; i++)");
+			statement("for (uint i = 0; i < 4; i++)");
 			begin_scope();
 			statement("switch (c)");
 			begin_scope();
@@ -6268,7 +6268,7 @@ case SPVFuncImplGatherConstOffsets:
 			          "Toff coffsets, Tp... params)");
 			begin_scope();
 			statement("vec<T, 4> rslts[4];");
-			statement("for (uint i=0; i < 4; i++)");
+			statement("for (uint i = 0; i < 4; i++)");
 			begin_scope();
 			statement("    rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);");
 			end_scope();

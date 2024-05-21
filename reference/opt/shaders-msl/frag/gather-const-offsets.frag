@@ -61,7 +61,7 @@ template<typename T, template<typename, access = access::sample, typename = void
 inline vec<T, 4> spvGatherConstOffsets(const thread Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
 {
     vec<T, 4> rslts[4];
-    for (uint i=0; i < 4; i++)
+    for (uint i = 0; i < 4; i++)
     {
         switch (c)
         {

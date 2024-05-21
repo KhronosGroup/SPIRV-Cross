@@ -61,7 +61,7 @@ template<typename T, template<typename, access = access::sample, typename = void
 inline vec<T, 4> spvGatherCompareConstOffsets(const thread Tex<T>& t, sampler s, Toff coffsets, Tp... params)
 {
     vec<T, 4> rslts[4];
-    for (uint i=0; i < 4; i++)
+    for (uint i = 0; i < 4; i++)
     {
             rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
     }
