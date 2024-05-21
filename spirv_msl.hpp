@@ -862,7 +862,7 @@ protected:
 	void emit_block_hints(const SPIRBlock &block) override;
 
 	// Allow Metal to use the array<T> template to make arrays a value type
-	std::string type_to_array_glsl(const SPIRType &type) override;
+	std::string type_to_array_glsl(const SPIRType &type, uint32_t variable_id) override;
 	std::string constant_op_expression(const SPIRConstantOp &cop) override;
 
 	bool variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const override;

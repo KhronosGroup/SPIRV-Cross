@@ -1325,7 +1325,7 @@ void CompilerMSL::emit_entry_point_declarations()
 
 			is_using_builtin_array = true;
 			statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
-			          type_to_array_glsl(type), " =");
+			          type_to_array_glsl(type, var_id), " =");
 
 			uint32_t array_size = to_array_size_literal(type);
 			begin_scope();
@@ -1454,7 +1454,7 @@ void CompilerMSL::emit_entry_point_declarations()
 			is_using_builtin_array = true;
 			statement(desc_addr_space, " auto& ", to_restrict(var_id, true), to_name(var_id), " = (", addr_space, " ",
 			          type_to_glsl(type), "* ", desc_addr_space, " (&)",
-			          type_to_array_glsl(type), ")", ir.meta[alias_id].decoration.qualified_alias, ";");
+			          type_to_array_glsl(type, var_id), ")", ir.meta[alias_id].decoration.qualified_alias, ";");
 			is_using_builtin_array = false;
 		}
 	}
@@ -3488,7 +3488,7 @@ void CompilerMSL::emit_local_masked_variable(const SPIRVariable &masked_var, boo
 					get_entry_point().output_vertices;
 			statement("threadgroup ", type_to_glsl(type), " ",
 			          "spvStorage", to_name(masked_var.self), "[", max_num_instances, "]",
-			          type_to_array_glsl(type), ";");
+			          type_to_array_glsl(type, 0), ";");
 
 			// Assign a threadgroup slice to each PrimitiveID.
 			// We assume here that workgroup size is rounded to 32,
@@ -10887,7 +10887,7 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 		decl += "thread ";
 		decl += type_to_glsl(type);
 		decl += " (&spvReturnValue)";
-		decl += type_to_array_glsl(type);
+		decl += type_to_array_glsl(type, 0);
 		if (!func.arguments.empty())
 			decl += ", ";
 	}
@@ -12370,7 +12370,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 				  variable_storage_requires_stage_io(StorageClassInput)));
 		if (is_ib_in_out && is_member_builtin(type, index, &builtin))
 			is_using_builtin_array = true;
-		array_type = type_to_array_glsl(physical_type);
+		array_type = type_to_array_glsl(physical_type, orig_id);
 	}
 
 	if (orig_id)
@@ -12940,14 +12940,14 @@ uint32_t CompilerMSL::get_or_allocate_builtin_output_member_location(spv::BuiltI
 string CompilerMSL::func_type_decl(SPIRType &type)
 {
 	// The regular function return type. If not processing the entry point function, that's all we need
-	string return_type = type_to_glsl(type) + type_to_array_glsl(type);
+	string return_type = type_to_glsl(type) + type_to_array_glsl(type, 0);
 	if (!processing_entry_point)
 		return return_type;
 
 	// If an outgoing interface block has been defined, and it should be returned, override the entry point return type
 	bool ep_should_return_output = !get_is_rasterization_disabled();
 	if (stage_out_var_id && ep_should_return_output)
-		return_type = type_to_glsl(get_stage_out_struct_type()) + type_to_array_glsl(type);
+		return_type = type_to_glsl(get_stage_out_struct_type()) + type_to_array_glsl(type, 0);
 
 	// Prepend a entry type, based on the execution model
 	string entry_type;
@@ -14814,7 +14814,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			}
 			decl += to_expression(name_id);
 			decl += ")";
-			decl += type_to_array_glsl(type);
+			decl += type_to_array_glsl(type, name_id);
 		}
 		else
 		{
@@ -14865,7 +14865,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		else
 		{
-			auto array_size_decl = type_to_array_glsl(type);
+			auto array_size_decl = type_to_array_glsl(type, name_id);
 			if (array_size_decl.empty())
 				decl += "& ";
 			else
@@ -15605,7 +15605,7 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	return type_to_glsl(type, id, false);
 }
 
-string CompilerMSL::type_to_array_glsl(const SPIRType &type)
+string CompilerMSL::type_to_array_glsl(const SPIRType &type, uint32_t variable_id)
 {
 	// Allow Metal to use the array<T> template to make arrays a value type
 	switch (type.basetype)
@@ -15613,11 +15613,20 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type)
 	case SPIRType::AtomicCounter:
 	case SPIRType::ControlPointArray:
 	case SPIRType::RayQuery:
-		return CompilerGLSL::type_to_array_glsl(type);
+		return CompilerGLSL::type_to_array_glsl(type, variable_id);
 
 	default:
 		if (type_is_array_of_pointers(type) || using_builtin_array())
-			return CompilerGLSL::type_to_array_glsl(type);
+		{
+			const SPIRVariable *var = variable_id ? &get<SPIRVariable>(variable_id) : nullptr;
+			if (var && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer) &&
+			    is_array(get_variable_data_type(*var)))
+			{
+				return join("[", get_resource_array_size(type, variable_id), "]");
+			}
+			else
+				return CompilerGLSL::type_to_array_glsl(type, variable_id);
+		}
 		else
 			return "";
 	}
@@ -18022,7 +18031,7 @@ void CompilerMSL::emit_argument_buffer_aliased_descriptor(const SPIRVariable &al
 		is_using_builtin_array = true;
 
 		bool needs_post_cast_deref = !is_array(data_type);
-		string ref_type = needs_post_cast_deref ? "&" : join("(&)", type_to_array_glsl(var_type));
+		string ref_type = needs_post_cast_deref ? "&" : join("(&)", type_to_array_glsl(var_type, aliased_var.self));
 
 		if (is_var_runtime_size_array(aliased_var))
 		{
