@@ -933,6 +933,15 @@ protected:
 		PolyfillMatrixInverse2x2 = 1 << 6,
 		PolyfillMatrixInverse3x3 = 1 << 7,
 		PolyfillMatrixInverse4x4 = 1 << 8,
+		PolyfillNMin16 = 1 << 9,
+		PolyfillNMin32 = 1 << 10,
+		PolyfillNMin64 = 1 << 11,
+		PolyfillNMax16 = 1 << 12,
+		PolyfillNMax32 = 1 << 13,
+		PolyfillNMax64 = 1 << 14,
+		PolyfillNClamp16 = 1 << 15,
+		PolyfillNClamp32 = 1 << 16,
+		PolyfillNClamp64 = 1 << 17,
 	};
 
 	uint32_t required_polyfills = 0;

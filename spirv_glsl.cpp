@@ -639,7 +639,8 @@ void CompilerGLSL::find_static_extensions()
 
 void CompilerGLSL::require_polyfill(Polyfill polyfill, bool relaxed)
 {
-	uint32_t &polyfills = (relaxed && options.es) ? required_polyfills_relaxed : required_polyfills;
+	uint32_t &polyfills = (relaxed && (options.es || options.vulkan_semantics)) ?
+	                      required_polyfills_relaxed : required_polyfills;
 
 	if ((polyfills & polyfill) == 0)
 	{
@@ -715,7 +716,7 @@ string CompilerGLSL::compile()
 
 		if (required_polyfills != 0)
 			emit_polyfills(required_polyfills, false);
-		if (options.es && required_polyfills_relaxed != 0)
+		if ((options.es || options.vulkan_semantics) && required_polyfills_relaxed != 0)
 			emit_polyfills(required_polyfills_relaxed, true);
 
 		emit_function(get<SPIRFunction>(ir.default_entry_point), Bitset());
@@ -4842,6 +4843,109 @@ void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
 		end_scope();
 		statement("");
 	}
+
+	if (!relaxed)
+	{
+		static const Polyfill polys[3][3] = {
+			{ PolyfillNMin16, PolyfillNMin32, PolyfillNMin64 },
+			{ PolyfillNMax16, PolyfillNMax32, PolyfillNMax64 },
+			{ PolyfillNClamp16, PolyfillNClamp32, PolyfillNClamp64 },
+		};
+
+		static const GLSLstd450 glsl_ops[] = { GLSLstd450NMin, GLSLstd450NMax, GLSLstd450NClamp };
+		static const char *spv_ops[] = { "spvNMin", "spvNMax", "spvNClamp" };
+		bool has_poly = false;
+
+		for (uint32_t i = 0; i < 3; i++)
+		{
+			for (uint32_t j = 0; j < 3; j++)
+			{
+				if ((polyfills & polys[i][j]) == 0)
+					continue;
+
+				const char *types[3][4] = {
+					{ "float16_t", "f16vec2", "f16vec3", "f16vec4" },
+					{ "float",     "vec2",    "vec3",    "vec4" },
+					{ "double",    "dvec2",   "dvec3",   "dvec4" },
+				};
+
+				for (uint32_t k = 0; k < 4; k++)
+				{
+					auto *type = types[j][k];
+
+					if (i < 2)
+					{
+						statement("spirv_instruction(set = \"GLSL.std.450\", id = ", glsl_ops[i], ") ",
+						          type, " ", spv_ops[i], "(", type, ", ", type, ");");
+					}
+					else
+					{
+						statement("spirv_instruction(set = \"GLSL.std.450\", id = ", glsl_ops[i], ") ",
+						          type, " ", spv_ops[i], "(", type, ", ", type, ", ", type, ");");
+					}
+
+					has_poly = true;
+				}
+			}
+		}
+
+		if (has_poly)
+			statement("");
+	}
+	else
+	{
+		// Mediump intrinsics don't work correctly, so wrap the intrinsic in an outer shell that ensures mediump
+		// propagation.
+
+		static const Polyfill polys[3][3] = {
+			{ PolyfillNMin16, PolyfillNMin32, PolyfillNMin64 },
+			{ PolyfillNMax16, PolyfillNMax32, PolyfillNMax64 },
+			{ PolyfillNClamp16, PolyfillNClamp32, PolyfillNClamp64 },
+		};
+
+		static const char *spv_ops[] = { "spvNMin", "spvNMax", "spvNClamp" };
+
+		for (uint32_t i = 0; i < 3; i++)
+		{
+			for (uint32_t j = 0; j < 3; j++)
+			{
+				if ((polyfills & polys[i][j]) == 0)
+					continue;
+
+				const char *types[3][4] = {
+					{ "float16_t", "f16vec2", "f16vec3", "f16vec4" },
+					{ "float",     "vec2",    "vec3",    "vec4" },
+					{ "double",    "dvec2",   "dvec3",   "dvec4" },
+				};
+
+				for (uint32_t k = 0; k < 4; k++)
+				{
+					auto *type = types[j][k];
+
+					if (i < 2)
+					{
+						statement("mediump ", type, " ", spv_ops[i], "Relaxed(",
+						          "mediump ", type, " a, mediump ", type, " b)");
+						begin_scope();
+						statement("mediump ", type, " res = ", spv_ops[i], "(a, b);");
+						statement("return res;");
+						end_scope();
+						statement("");
+					}
+					else
+					{
+						statement("mediump ", type, " ", spv_ops[i], "Relaxed(",
+						          "mediump ", type, " a, mediump ", type, " b, mediump ", type, " c)");
+						begin_scope();
+						statement("mediump ", type, " res = ", spv_ops[i], "(a, b, c);");
+						statement("return res;");
+						end_scope();
+						statement("");
+					}
+				}
+			}
+		}
+	}
 }
 
 // Returns a string representation of the ID, usable as a function arg.
@@ -8865,23 +8969,97 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 	case GLSLstd450NMin:
 	case GLSLstd450NMax:
 	{
-		emit_nminmax_op(result_type, id, args[0], args[1], op);
+		if (options.vulkan_semantics)
+		{
+			require_extension_internal("GL_EXT_spirv_intrinsics");
+			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			Polyfill poly = {};
+			switch (get<SPIRType>(result_type).width)
+			{
+			case 16:
+				poly = op == GLSLstd450NMin ? PolyfillNMin16 : PolyfillNMax16;
+				break;
+
+			case 32:
+				poly = op == GLSLstd450NMin ? PolyfillNMin32 : PolyfillNMax32;
+				break;
+
+			case 64:
+				poly = op == GLSLstd450NMin ? PolyfillNMin64 : PolyfillNMax64;
+				break;
+
+			default:
+				SPIRV_CROSS_THROW("Invalid bit width for NMin/NMax.");
+			}
+
+			require_polyfill(poly, relaxed);
+
+			// Function return decorations are broken, so need to do double polyfill.
+			if (relaxed)
+				require_polyfill(poly, false);
+
+			const char *op_str;
+			if (relaxed)
+				op_str = op == GLSLstd450NMin ? "spvNMinRelaxed" : "spvNMaxRelaxed";
+			else
+				op_str = op == GLSLstd450NMin ? "spvNMin" : "spvNMax";
+
+			emit_binary_func_op(result_type, id, args[0], args[1], op_str);
+		}
+		else
+		{
+			emit_nminmax_op(result_type, id, args[0], args[1], op);
+		}
 		break;
 	}
 
 	case GLSLstd450NClamp:
 	{
-		// Make sure we have a unique ID here to avoid aliasing the extra sub-expressions between clamp and NMin sub-op.
-		// IDs cannot exceed 24 bits, so we can make use of the higher bits for some unique flags.
-		uint32_t &max_id = extra_sub_expressions[id | EXTRA_SUB_EXPRESSION_TYPE_AUX];
-		if (!max_id)
-			max_id = ir.increase_bound_by(1);
+		if (options.vulkan_semantics)
+		{
+			require_extension_internal("GL_EXT_spirv_intrinsics");
+			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			Polyfill poly = {};
+			switch (get<SPIRType>(result_type).width)
+			{
+			case 16:
+				poly = PolyfillNClamp16;
+				break;
 
-		// Inherit precision qualifiers.
-		ir.meta[max_id] = ir.meta[id];
+			case 32:
+				poly = PolyfillNClamp32;
+				break;
 
-		emit_nminmax_op(result_type, max_id, args[0], args[1], GLSLstd450NMax);
-		emit_nminmax_op(result_type, id, max_id, args[2], GLSLstd450NMin);
+			case 64:
+				poly = PolyfillNClamp64;
+				break;
+
+			default:
+				SPIRV_CROSS_THROW("Invalid bit width for NMin/NMax.");
+			}
+
+			require_polyfill(poly, relaxed);
+
+			// Function return decorations are broken, so need to do double polyfill.
+			if (relaxed)
+				require_polyfill(poly, false);
+
+			emit_trinary_func_op(result_type, id, args[0], args[1], args[2], relaxed ? "spvNClampRelaxed" : "spvNClamp");
+		}
+		else
+		{
+			// Make sure we have a unique ID here to avoid aliasing the extra sub-expressions between clamp and NMin sub-op.
+			// IDs cannot exceed 24 bits, so we can make use of the higher bits for some unique flags.
+			uint32_t &max_id = extra_sub_expressions[id | EXTRA_SUB_EXPRESSION_TYPE_AUX];
+			if (!max_id)
+				max_id = ir.increase_bound_by(1);
+
+			// Inherit precision qualifiers.
+			ir.meta[max_id] = ir.meta[id];
+
+			emit_nminmax_op(result_type, max_id, args[0], args[1], GLSLstd450NMax);
+			emit_nminmax_op(result_type, id, max_id, args[2], GLSLstd450NMin);
+		}
 		break;
 	}
 
