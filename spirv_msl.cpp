@@ -18309,7 +18309,7 @@ void CompilerMSL::analyze_argument_buffers()
 			// member_index and next_arg_buff_index are incremented when padding members are added.
 			if (msl_options.pad_argument_buffer_resources)
 			{
-				auto &rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
+				auto rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
 				while (resource.index > next_arg_buff_index)
 				{
 					switch (rez_bind.basetype)
@@ -18487,7 +18487,7 @@ void CompilerMSL::analyze_argument_buffers()
 // that matches the resource index of the argument buffer index.
 // This is a two-step lookup, first lookup the resource binding number from the argument buffer index,
 // then lookup the resource binding using the binding number.
-MSLResourceBinding &CompilerMSL::get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx)
+const MSLResourceBinding &CompilerMSL::get_argument_buffer_resource(uint32_t desc_set, uint32_t arg_idx) const
 {
 	auto stage = get_entry_point().model;
 	StageSetBinding arg_idx_tuple = { stage, desc_set, arg_idx };
