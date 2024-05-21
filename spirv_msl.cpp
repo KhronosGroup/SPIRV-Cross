@@ -201,13 +201,17 @@ bool CompilerMSL::is_var_runtime_size_array(const SPIRVariable &var) const
 uint32_t CompilerMSL::get_resource_array_size(const SPIRType &type, uint32_t id) const
 {
 	uint32_t array_size = to_array_size_literal(type);
-	if (array_size) 
+
+	// If we have argument buffers, we need to honor the ABI by using the correct array size
+	// from the layout. Only use shader declared size if we're not using argument buffers.
+	uint32_t desc_set = get_decoration(id, DecorationDescriptorSet);
+	if (!descriptor_set_is_argument_buffer(desc_set) && array_size)
 		return array_size;
 
-	StageSetBinding tuple = { get_entry_point().model, get_decoration(id, DecorationDescriptorSet),
+	StageSetBinding tuple = { get_entry_point().model, desc_set,
 		                      get_decoration(id, DecorationBinding) };
 	auto itr = resource_bindings.find(tuple);
-	return itr != end(resource_bindings) ? itr->second.first.count : 0;
+	return itr != end(resource_bindings) ? itr->second.first.count : array_size;
 }
 
 uint32_t CompilerMSL::get_automatic_msl_resource_binding(uint32_t id) const
