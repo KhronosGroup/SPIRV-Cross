@@ -529,6 +529,13 @@ public:
 		// with side effects. Provided as an option hoping Metal will fix this issue in the future.
 		bool force_fragment_with_side_effects_execution = false;
 
+		// If set, adds a depth pass through statement to circumvent the following issue:
+		// When the same depth/stencil is used as input and depth/stencil attachment, we need to
+		// force Metal to perform the depth/stencil write after fragment execution. Otherwise,
+		// Metal will write to the depth attachment before fragment execution. This happens
+		// if the fragment does not modify the depth value.
+		bool input_attachment_is_ds_attachment = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -1094,6 +1101,7 @@ protected:
 	uint32_t builtin_stage_input_size_id = 0;
 	uint32_t builtin_local_invocation_index_id = 0;
 	uint32_t builtin_workgroup_size_id = 0;
+	uint32_t builtin_frag_depth_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
 	uint32_t view_mask_buffer_id = 0;
@@ -1190,6 +1198,7 @@ protected:
 	bool needs_subgroup_size = false;
 	bool needs_sample_id = false;
 	bool needs_helper_invocation = false;
+	bool writes_to_depth = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
