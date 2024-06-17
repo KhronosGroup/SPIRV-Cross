@@ -12167,21 +12167,26 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 string CompilerMSL::to_sampler_expression(uint32_t id)
 {
 	auto *combined = maybe_get<SPIRCombinedImageSampler>(id);
-	auto expr = to_expression(combined ? combined->image : VariableID(id));
-	auto index = expr.find_first_of('[');
+	if (combined && combined->sampler)
+		return to_expression(combined->sampler);
 
-	uint32_t samp_id = 0;
-	if (combined)
-		samp_id = combined->sampler;
+	uint32_t expr_id = combined ? uint32_t(combined->image) : id;
 
-	if (index == string::npos)
-		return samp_id ? to_expression(samp_id) : expr + sampler_name_suffix;
-	else
+	// Constexpr samplers are declared as local variables,
+	// so exclude any qualifier names on the image expression.
+	if (auto *var = maybe_get_backing_variable(expr_id))
 	{
-		auto image_expr = expr.substr(0, index);
-		auto array_expr = expr.substr(index);
-		return samp_id ? to_expression(samp_id) : (image_expr + sampler_name_suffix + array_expr);
+		uint32_t img_id =  var->basevariable ? var->basevariable : VariableID(var->self);
+		if (find_constexpr_sampler(img_id))
+			return Compiler::to_name(img_id) + sampler_name_suffix;
 	}
+
+	auto img_expr = to_expression(expr_id);
+	auto index = img_expr.find_first_of('[');
+	if (index == string::npos)
+		return img_expr + sampler_name_suffix;
+	else
+		return img_expr.substr(0, index) + sampler_name_suffix + img_expr.substr(index);
 }
 
 string CompilerMSL::to_swizzle_expression(uint32_t id)
@@ -18158,6 +18163,7 @@ void CompilerMSL::analyze_argument_buffers()
 		string name;
 		SPIRType::BaseType basetype;
 		uint32_t index;
+		uint32_t plane_count;
 		uint32_t plane;
 		uint32_t overlapping_var_id;
 	};
@@ -18208,14 +18214,14 @@ void CompilerMSL::analyze_argument_buffers()
 				{
 					uint32_t image_resource_index = get_metal_resource_index(var, SPIRType::Image, i);
 					resources_in_set[desc_set].push_back(
-					    { &var, to_name(var_id), SPIRType::Image, image_resource_index, i, 0 });
+					    { &var, to_name(var_id), SPIRType::Image, image_resource_index, plane_count, i, 0 });
 				}
 
 				if (type.image.dim != DimBuffer && !constexpr_sampler)
 				{
 					uint32_t sampler_resource_index = get_metal_resource_index(var, SPIRType::Sampler);
 					resources_in_set[desc_set].push_back(
-					    { &var, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 0, 0 });
+					    { &var, to_sampler_expression(var_id), SPIRType::Sampler, sampler_resource_index, 1, 0, 0 });
 				}
 			}
 			else if (inline_uniform_blocks.count(SetBindingPair{ desc_set, binding }))
@@ -18231,14 +18237,14 @@ void CompilerMSL::analyze_argument_buffers()
 				uint32_t resource_index = get_metal_resource_index(var, type.basetype);
 
 				resources_in_set[desc_set].push_back(
-					{ &var, to_name(var_id), type.basetype, resource_index, 0, 0 });
+					{ &var, to_name(var_id), type.basetype, resource_index, 1, 0, 0 });
 
 				// Emulate texture2D atomic operations
 				if (atomic_image_vars_emulated.count(var.self))
 				{
 					uint32_t buffer_resource_index = get_metal_resource_index(var, SPIRType::AtomicCounter, 0);
 					resources_in_set[desc_set].push_back(
-						{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 0, 0 });
+						{ &var, to_name(var_id) + "_atomic", SPIRType::Struct, buffer_resource_index, 1, 0, 0 });
 				}
 			}
 
@@ -18286,7 +18292,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kSwizzleBufferBinding);
 				resources_in_set[desc_set].push_back(
-				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0, 0 });
+				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 1, 0, 0 });
 			}
 
 			if (set_needs_buffer_sizes[desc_set])
@@ -18297,7 +18303,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_decoration(var_id, DecorationDescriptorSet, desc_set);
 				set_decoration(var_id, DecorationBinding, kBufferSizeBufferBinding);
 				resources_in_set[desc_set].push_back(
-				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 0, 0 });
+				    { &var, to_name(var_id), SPIRType::UInt, get_metal_resource_index(var, SPIRType::UInt), 1, 0, 0 });
 			}
 		}
 	}
@@ -18309,7 +18315,7 @@ void CompilerMSL::analyze_argument_buffers()
 		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
 		add_resource_name(var_id);
 		resources_in_set[desc_set].push_back(
-		    { &var, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 0, 0 });
+		    { &var, to_name(var_id), SPIRType::Struct, get_metal_resource_index(var, SPIRType::Struct), 1, 0, 0 });
 	}
 
 	for (uint32_t desc_set = 0; desc_set < kMaxArgumentBuffers; desc_set++)
@@ -18386,7 +18392,7 @@ void CompilerMSL::analyze_argument_buffers()
 
 			// If needed, synthesize and add padding members.
 			// member_index and next_arg_buff_index are incremented when padding members are added.
-			if (msl_options.pad_argument_buffer_resources && resource.overlapping_var_id == 0)
+			if (msl_options.pad_argument_buffer_resources && resource.plane == 0 && resource.overlapping_var_id == 0)
 			{
 				auto rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
 				while (resource.index > next_arg_buff_index)
@@ -18432,7 +18438,7 @@ void CompilerMSL::analyze_argument_buffers()
 				// Adjust the number of slots consumed by current member itself.
 				// Use the count value from the app, instead of the shader, in case the
 				// shader is only accessing part, or even one element, of the array.
-				next_arg_buff_index += rez_bind.count;
+				next_arg_buff_index += resource.plane_count * rez_bind.count;
 			}
 
 			string mbr_name = ensure_valid_name(resource.name, "m");
