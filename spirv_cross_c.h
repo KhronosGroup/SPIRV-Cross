@@ -40,7 +40,7 @@ extern "C" {
 /* Bumped if ABI or API breaks backwards compatibility. */
 #define SPVC_C_API_VERSION_MAJOR 0
 /* Bumped if APIs or enumerations are added in a backwards compatible way. */
-#define SPVC_C_API_VERSION_MINOR 60
+#define SPVC_C_API_VERSION_MINOR 61
 /* Bumped if internal implementation details change. */
 #define SPVC_C_API_VERSION_PATCH 0
 
@@ -380,7 +380,8 @@ typedef struct spvc_msl_shader_interface_var_2
  */
 SPVC_PUBLIC_API void spvc_msl_shader_interface_var_init_2(spvc_msl_shader_interface_var_2 *var);
 
-/* Maps to C++ API. */
+/* Maps to C++ API.
+ * Deprecated. Use spvc_msl_resource_binding_2. */
 typedef struct spvc_msl_resource_binding
 {
 	SpvExecutionModel stage;
@@ -391,11 +392,24 @@ typedef struct spvc_msl_resource_binding
 	unsigned msl_sampler;
 } spvc_msl_resource_binding;
 
+typedef struct spvc_msl_resource_binding_2
+{
+	SpvExecutionModel stage;
+	unsigned desc_set;
+	unsigned binding;
+	unsigned count;
+	unsigned msl_buffer;
+	unsigned msl_texture;
+	unsigned msl_sampler;
+} spvc_msl_resource_binding_2;
+
 /*
  * Initializes the resource binding struct.
  * The defaults are non-zero.
+ * Deprecated: Use spvc_msl_resource_binding_init_2.
  */
 SPVC_PUBLIC_API void spvc_msl_resource_binding_init(spvc_msl_resource_binding *binding);
+SPVC_PUBLIC_API void spvc_msl_resource_binding_init_2(spvc_msl_resource_binding_2 *binding);
 
 #define SPVC_MSL_PUSH_CONSTANT_DESC_SET (~(0u))
 #define SPVC_MSL_PUSH_CONSTANT_BINDING (0)
@@ -836,8 +850,11 @@ SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_patch_output_buffer(spvc_compi
 SPVC_PUBLIC_API spvc_bool spvc_compiler_msl_needs_input_threadgroup_mem(spvc_compiler compiler);
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_vertex_attribute(spvc_compiler compiler,
                                                                    const spvc_msl_vertex_attribute *attrs);
+/* Deprecated; use spvc_compiler_msl_add_resource_binding_2(). */
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_resource_binding(spvc_compiler compiler,
                                                                    const spvc_msl_resource_binding *binding);
+SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_resource_binding_2(spvc_compiler compiler,
+                                                                     const spvc_msl_resource_binding_2 *binding);
 /* Deprecated; use spvc_compiler_msl_add_shader_input_2(). */
 SPVC_PUBLIC_API spvc_result spvc_compiler_msl_add_shader_input(spvc_compiler compiler,
                                                                const spvc_msl_shader_interface_var *input);
