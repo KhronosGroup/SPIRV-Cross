@@ -14059,8 +14059,8 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 			}
 		}
 
-		if ( !msl_options.argument_buffers &&
-			msl_options.replace_recursive_inputs && type_contains_recursion(type) &&
+		if (!msl_options.argument_buffers &&
+		     msl_options.replace_recursive_inputs && type_contains_recursion(type) &&
 		    (var.storage == StorageClassUniform || var.storage == StorageClassUniformConstant ||
 		     var.storage == StorageClassPushConstant || var.storage == StorageClassStorageBuffer))
 		{
@@ -18578,7 +18578,6 @@ void CompilerMSL::analyze_argument_buffers()
 				statement(addr_space, " auto& ", buffer_name, " = *(", addr_space, " ", buffer_type_name, "*)", buffer_name, "_vp;");
 			});
 		}
-
 	}
 }
 
