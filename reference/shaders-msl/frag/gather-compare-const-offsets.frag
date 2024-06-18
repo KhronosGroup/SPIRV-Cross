@@ -56,7 +56,31 @@ template<typename T> inline constexpr thread T&& spvForward(thread typename spvR
     return static_cast<thread T&&>(x);
 }
 
-// Wrapper function that processes a texture gather with a constant offset array.
+// Wrapper function that processes a device texture gather with a constant offset array.
+template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
+inline vec<T, 4> spvGatherCompareConstOffsets(const device Tex<T>& t, sampler s, Toff coffsets, Tp... params)
+{
+    vec<T, 4> rslts[4];
+    for (uint i = 0; i < 4; i++)
+    {
+            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+    }
+    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+}
+
+// Wrapper function that processes a constant texture gather with a constant offset array.
+template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
+inline vec<T, 4> spvGatherCompareConstOffsets(const constant Tex<T>& t, sampler s, Toff coffsets, Tp... params)
+{
+    vec<T, 4> rslts[4];
+    for (uint i = 0; i < 4; i++)
+    {
+            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+    }
+    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+}
+
+// Wrapper function that processes a thread texture gather with a constant offset array.
 template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
 inline vec<T, 4> spvGatherCompareConstOffsets(const thread Tex<T>& t, sampler s, Toff coffsets, Tp... params)
 {

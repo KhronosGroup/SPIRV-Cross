@@ -56,7 +56,59 @@ template<typename T> inline constexpr thread T&& spvForward(thread typename spvR
     return static_cast<thread T&&>(x);
 }
 
-// Wrapper function that processes a texture gather with a constant offset array.
+// Wrapper function that processes a device texture gather with a constant offset array.
+template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
+inline vec<T, 4> spvGatherConstOffsets(const device Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
+{
+    vec<T, 4> rslts[4];
+    for (uint i = 0; i < 4; i++)
+    {
+        switch (c)
+        {
+            case component::x:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                break;
+            case component::y:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                break;
+            case component::z:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                break;
+            case component::w:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                break;
+        }
+    }
+    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+}
+
+// Wrapper function that processes a constant texture gather with a constant offset array.
+template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
+inline vec<T, 4> spvGatherConstOffsets(const constant Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
+{
+    vec<T, 4> rslts[4];
+    for (uint i = 0; i < 4; i++)
+    {
+        switch (c)
+        {
+            case component::x:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                break;
+            case component::y:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                break;
+            case component::z:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                break;
+            case component::w:
+                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                break;
+        }
+    }
+    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+}
+
+// Wrapper function that processes a thread texture gather with a constant offset array.
 template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
 inline vec<T, 4> spvGatherConstOffsets(const thread Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
 {
