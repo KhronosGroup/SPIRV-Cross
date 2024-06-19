@@ -10306,13 +10306,13 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					// add yet another virtual interface just for this.
 					auto intptr_expr = join("reinterpret_cast<", type_to_glsl(tmp_type), ">(", expr, ")");
 					intptr_expr += join(" + ", to_enclosed_unpacked_expression(index), " * ",
-										get_decoration(ptr_type_id, DecorationArrayStride));
+					                    get_decoration(ptr_type_id, DecorationArrayStride));
 
 					if (flags & ACCESS_CHAIN_PTR_CHAIN_CAST_TO_SCALAR_BIT)
 					{
 						is_packed = true;
 						expr = join("*reinterpret_cast<device packed_", type_to_glsl(pointee_type),
-									" *>(", intptr_expr, ")");
+						            " *>(", intptr_expr, ")");
 					}
 					else
 					{
