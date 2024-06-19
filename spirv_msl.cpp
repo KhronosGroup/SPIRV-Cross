@@ -1361,14 +1361,14 @@ void CompilerMSL::emit_entry_point_declarations()
 
 		if (is_array(type))
 		{
-			if (!type.array[type.array.size() - 1])
-				SPIRV_CROSS_THROW("Runtime arrays with dynamic offsets are not supported yet.");
-
 			is_using_builtin_array = true;
 			statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
 			          type_to_array_glsl(type, var_id), " =");
 
-			uint32_t array_size = to_array_size_literal(type);
+			uint32_t array_size = get_resource_array_size(type, var_id);
+			if (array_size == 0)
+				SPIRV_CROSS_THROW("Size of runtime array with dynamic offset could not be determined from resource bindings.");
+
 			begin_scope();
 
 			for (uint32_t i = 0; i < array_size; i++)
