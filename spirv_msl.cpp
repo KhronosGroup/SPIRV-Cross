@@ -4803,7 +4803,7 @@ bool CompilerMSL::validate_member_packing_rules_msl(const SPIRType &type, uint32
 			return false;
 	}
 
-	if (!mbr_type.array.empty())
+	if (is_array(mbr_type))
 	{
 		// If we have an array type, array stride must match exactly with SPIR-V.
 
@@ -17050,13 +17050,21 @@ uint32_t CompilerMSL::get_declared_struct_size_msl(const SPIRType &struct_type, 
 	return msl_size;
 }
 
+uint32_t CompilerMSL::get_physical_type_stride(const SPIRType &type) const
+{
+	// This should only be relevant for plain types such as scalars and vectors?
+	// If we're pointing to a struct, it will recursively pick up packed/row-major state.
+	return get_declared_type_size_msl(type, false, false);
+}
+
 // Returns the byte size of a struct member.
 uint32_t CompilerMSL::get_declared_type_size_msl(const SPIRType &type, bool is_packed, bool row_major) const
 {
 	// Pointers take 8 bytes each
+	// Match both pointer and array-of-pointer here.
 	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
 	{
-		uint32_t type_size = 8 * (type.vecsize == 3 ? 4 : type.vecsize);
+		uint32_t type_size = 8;
 
 		// Work our way through potentially layered arrays,
 		// stopping when we hit a pointer that is not also an array.
@@ -17131,9 +17139,10 @@ uint32_t CompilerMSL::get_declared_input_size_msl(const SPIRType &type, uint32_t
 // Returns the byte alignment of a type.
 uint32_t CompilerMSL::get_declared_type_alignment_msl(const SPIRType &type, bool is_packed, bool row_major) const
 {
-	// Pointers aligns on multiples of 8 bytes
+	// Pointers align on multiples of 8 bytes.
+	// Deliberately ignore array-ness here. It's not relevant for alignment.
 	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer)
-		return 8 * (type.vecsize == 3 ? 4 : type.vecsize);
+		return 8;
 
 	switch (type.basetype)
 	{
