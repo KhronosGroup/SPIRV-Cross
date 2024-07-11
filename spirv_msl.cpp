@@ -18167,6 +18167,9 @@ void CompilerMSL::emit_argument_buffer_aliased_descriptor(const SPIRVariable &al
 	}
 	else
 	{
+		if (ir.meta[aliased_var.self].decoration.qualified_alias != name)
+			force_recompile();
+
 		// This will get wrapped in a separate temporary when a spvDescriptorArray wrapper is emitted.
 		set_qualified_name(aliased_var.self, name);
 	}
