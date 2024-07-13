@@ -14085,7 +14085,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 						    statement("constant uint", is_array_type ? "* " : "& ", to_buffer_size_expression(var_id),
 						              is_array_type ? " = &" : " = ", to_name(argument_buffer_ids[desc_set]),
 						              ".spvBufferSizeConstants", "[",
-						              convert_to_string(get_metal_resource_index(var, SPIRType::Image)), "];");
+						              convert_to_string(get_metal_resource_index(var, SPIRType::UInt)), "];");
 					    }
 					    else
 					    {
