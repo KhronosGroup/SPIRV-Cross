@@ -13764,12 +13764,12 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				entry_point_bindings.push_back(&var);
 				for (uint32_t i = 0; i < plane_count; i++)
 					resources.push_back({&var, discrete_descriptor_alias, to_name(var_id), SPIRType::Image,
-					                     get_metal_resource_index(var, SPIRType::Image, i), i, secondary_index });
+					                     get_decoration(var_id, DecorationBinding), i, secondary_index });
 
 				if (type.image.dim != DimBuffer && !constexpr_sampler)
 				{
 					resources.push_back({&var, discrete_descriptor_alias, to_sampler_expression(var_id), SPIRType::Sampler,
-					                     get_metal_resource_index(var, SPIRType::Sampler), 0, 0 });
+					                     get_decoration(var_id, DecorationBinding), 0, 0 });
 				}
 			}
 			else if (!constexpr_sampler)
