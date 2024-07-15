@@ -9262,8 +9262,8 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto sampler_expr = to_sampler_expression(image_id);
 		auto *combined = maybe_get<SPIRCombinedImageSampler>(image_id);
 		auto image_expr = combined ? to_expression(combined->image) : to_expression(image_id);
-		const SPIRType& image_type = expression_type(image_id);
-		const SPIRType& coord_type = expression_type(coord_id);
+		const SPIRType &image_type = expression_type(image_id);
+		const SPIRType &coord_type = expression_type(coord_id);
 
 		switch (image_type.image.dim)
 		{
