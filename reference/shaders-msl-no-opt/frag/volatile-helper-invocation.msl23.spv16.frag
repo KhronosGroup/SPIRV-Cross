@@ -11,7 +11,7 @@ struct main0_out
 };
 
 static inline __attribute__((always_inline))
-void func(thread float& FragColor, volatile thread bool& gl_HelperInvocation)
+void func(thread float& FragColor, thread bool& gl_HelperInvocation)
 {
     bool _14 = gl_HelperInvocation;
     float _17 = float(_14);

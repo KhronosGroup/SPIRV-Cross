@@ -13213,7 +13213,10 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		addr_space = type.pointer || (argument && type.basetype == SPIRType::ControlPointArray) ? "thread" : "";
 	}
 
-	return join(decoration_flags_signal_volatile(flags) ? "volatile " : "", addr_space);
+	if (decoration_flags_signal_volatile(flags) && 0 != strcmp(addr_space, "thread"))
+		return join("volatile ", addr_space);
+	else
+		return addr_space;
 }
 
 const char *CompilerMSL::to_restrict(uint32_t id, bool space)
