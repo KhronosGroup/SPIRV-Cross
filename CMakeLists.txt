@@ -28,6 +28,9 @@ if (${CMAKE_VERSION} VERSION_GREATER "3.0.1")
 	cmake_policy(SET CMP0048 NEW)
 endif()
 
+# Avoid error on Android NDK 27+'s CMake files
+cmake_policy(SET CMP0057 NEW)
+
 project(SPIRV-Cross LANGUAGES CXX C)
 enable_testing()
 
