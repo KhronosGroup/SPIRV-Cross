@@ -516,6 +516,10 @@ spvc_result spvc_compiler_options_set_uint(spvc_compiler_options options, spvc_c
 	case SPVC_COMPILER_OPTION_HLSL_FLATTEN_MATRIX_VERTEX_INPUT_SEMANTICS:
 		options->hlsl.flatten_matrix_vertex_input_semantics = value != 0;
 		break;
+
+	case SPVC_COMPILER_OPTION_HLSL_USE_ENTRY_POINT_NAME:
+		options->hlsl.use_entry_point_name = value != 0;
+		break;
 #endif
 
 #if SPIRV_CROSS_C_API_MSL
