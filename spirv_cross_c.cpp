@@ -2177,7 +2177,11 @@ spvc_result spvc_compiler_get_entry_points(spvc_compiler compiler, const spvc_en
 
 spvc_result spvc_compiler_set_entry_point(spvc_compiler compiler, const char *name, SpvExecutionModel model)
 {
-	compiler->compiler->set_entry_point(name, static_cast<spv::ExecutionModel>(model));
+	SPVC_BEGIN_SAFE_SCOPE
+	{
+		compiler->compiler->set_entry_point(name, static_cast<spv::ExecutionModel>(model));
+	}
+	SPVC_END_SAFE_SCOPE(compiler->context, SPVC_ERROR_INVALID_ARGUMENT)
 	return SPVC_SUCCESS;
 }
 
