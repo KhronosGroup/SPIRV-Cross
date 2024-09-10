@@ -17608,7 +17608,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		if (!collapsed_switch)
 		{
-			if (block_like_switch || is_legacy_es())
+			if (block_like_switch || is_legacy())
 			{
 				// ESSL 1.0 is not guaranteed to support do/while.
 				if (is_legacy_es())
@@ -17638,7 +17638,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				// Default case.
 				if (!block_like_switch)
 				{
-					if (is_legacy_es())
+					if (is_legacy())
 						statement("else");
 					else
 						statement("default:");
@@ -17646,7 +17646,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 			}
 			else
 			{
-				if (is_legacy_es())
+				if (is_legacy())
 				{
 					statement((i ? "else " : ""), "if (", to_legacy_case_label(block.condition, literals, label_suffix),
 					          ")");
@@ -17698,7 +17698,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 			if (block.default_block == block.next_block)
 			{
-				if (is_legacy_es())
+				if (is_legacy())
 					statement("else");
 				else
 					statement("default:");
@@ -17712,7 +17712,7 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 		if (!collapsed_switch)
 		{
-			if (block_like_switch && !is_legacy_es())
+			if ((block_like_switch || is_legacy()) && !is_legacy_es())
 				end_scope_decl("while(false)");
 			else
 				end_scope();
