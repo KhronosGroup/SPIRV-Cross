@@ -10303,6 +10303,13 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 	{
 		auto obj_expression = to_expression(obj);
 		auto split_index = obj_expression.find_first_of('@');
+		bool needs_reinterpret = opcode == OpAtomicUMax || opcode == OpAtomicUMin || opcode == OpAtomicSMax || opcode == OpAtomicSMin;
+		needs_reinterpret &= type.basetype != expected_type;
+		SPIRVariable *backing_var = nullptr;
+
+		// Try to avoid waiting until not force recompile later mode to enable force recompile later
+		if (needs_reinterpret && (backing_var = maybe_get_backing_variable(obj)))
+			add_spv_func_and_recompile(SPVFuncImplTextureCast);
 
 		// Will only be false if we're in "force recompile later" mode.
 		if (split_index != string::npos)
@@ -10313,27 +10320,21 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 			// Handle problem cases with sign where we need signed min/max on a uint image for example.
 			// It seems to work to cast the texture type itself, even if it is probably wildly outside of spec,
 			// but SPIR-V requires this to work.
-			if ((opcode == OpAtomicUMax || opcode == OpAtomicUMin ||
-			     opcode == OpAtomicSMax || opcode == OpAtomicSMin) &&
-			    type.basetype != expected_type)
+			if (needs_reinterpret && backing_var)
 			{
-				auto *backing_var = maybe_get_backing_variable(obj);
-				if (backing_var)
-				{
-					add_spv_func_and_recompile(SPVFuncImplTextureCast);
+				assert(spv_function_implementations.count(SPVFuncImplTextureCast) && "Should have been added above");
 
-					const auto *backing_type = &get<SPIRType>(backing_var->basetype);
-					while (backing_type->op != OpTypeImage)
-						backing_type = &get<SPIRType>(backing_type->parent_type);
+				const auto *backing_type = &get<SPIRType>(backing_var->basetype);
+				while (backing_type->op != OpTypeImage)
+					backing_type = &get<SPIRType>(backing_type->parent_type);
 
-					auto img_type = *backing_type;
-					auto tmp_type = type;
-					tmp_type.basetype = expected_type;
-					img_type.image.type = ir.increase_bound_by(1);
-					set<SPIRType>(img_type.image.type, tmp_type);
+				auto img_type = *backing_type;
+				auto tmp_type = type;
+				tmp_type.basetype = expected_type;
+				img_type.image.type = ir.increase_bound_by(1);
+				set<SPIRType>(img_type.image.type, tmp_type);
 
-					image_expr = join("spvTextureCast<", type_to_glsl(img_type, obj), ">(", image_expr, ")");
-				}
+				image_expr = join("spvTextureCast<", type_to_glsl(img_type, obj), ">(", image_expr, ")");
 			}
 
 			exp += join(image_expr, ".", op, "(");
