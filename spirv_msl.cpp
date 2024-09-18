@@ -10305,7 +10305,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		auto split_index = obj_expression.find_first_of('@');
 		bool needs_reinterpret = opcode == OpAtomicUMax || opcode == OpAtomicUMin || opcode == OpAtomicSMax || opcode == OpAtomicSMin;
 		needs_reinterpret &= type.basetype != expected_type;
-		SPIRVariable* backing_var = nullptr;
+		SPIRVariable *backing_var = nullptr;
 
 		// Try to avoid waiting until not force recompile later mode to enable force recompile later
 		if (needs_reinterpret && (backing_var = maybe_get_backing_variable(obj)))
