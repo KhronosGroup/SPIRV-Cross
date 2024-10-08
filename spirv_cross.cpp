@@ -187,10 +187,8 @@ bool Compiler::block_is_control_dependent(const SPIRBlock &block)
 bool Compiler::block_is_pure(const SPIRBlock &block)
 {
 	// This is a global side effect of the function.
-	if (block.terminator == SPIRBlock::Kill ||
-	    block.terminator == SPIRBlock::TerminateRay ||
-	    block.terminator == SPIRBlock::IgnoreIntersection ||
-	    block.terminator == SPIRBlock::EmitMeshTasks)
+	if (block.terminator == SPIRBlock::Kill || block.terminator == SPIRBlock::TerminateRay ||
+	    block.terminator == SPIRBlock::IgnoreIntersection || block.terminator == SPIRBlock::EmitMeshTasks)
 		return false;
 
 	for (auto &i : block.ops)
@@ -644,9 +642,9 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 		return true;
 
 	// Combined image samplers are always considered active as they are "magic" variables.
-	if (find_if(begin(combined_image_samplers), end(combined_image_samplers), [&var](const CombinedImageSampler &samp) {
-		    return samp.combined_id == var.self;
-	    }) != end(combined_image_samplers))
+	if (find_if(begin(combined_image_samplers), end(combined_image_samplers),
+	            [&var](const CombinedImageSampler &samp)
+	            { return samp.combined_id == var.self; }) != end(combined_image_samplers))
 	{
 		return false;
 	}
@@ -737,8 +735,7 @@ bool Compiler::is_physical_pointer(const SPIRType &type) const
 bool Compiler::is_physical_pointer_to_buffer_block(const SPIRType &type) const
 {
 	return is_physical_pointer(type) && get_pointee_type(type).self == type.parent_type &&
-	       (has_decoration(type.self, DecorationBlock) ||
-	        has_decoration(type.self, DecorationBufferBlock));
+	       (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock));
 }
 
 bool Compiler::is_runtime_size_array(const SPIRType &type)
@@ -951,19 +948,21 @@ unordered_set<VariableID> Compiler::get_active_interface_variables() const
 	InterfaceVariableAccessHandler handler(*this, variables);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage != StorageClassOutput)
-			return;
-		if (!interface_variable_exists_in_entry_point(var.self))
-			return;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t, const SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassOutput)
+			    return;
+		    if (!interface_variable_exists_in_entry_point(var.self))
+			    return;
 
-		// An output variable which is just declared (but uninitialized) might be read by subsequent stages
-		// so we should force-enable these outputs,
-		// since compilation will fail if a subsequent stage attempts to read from the variable in question.
-		// Also, make sure we preserve output variables which are only initialized, but never accessed by any code.
-		if (var.initializer != ID(0) || get_execution_model() != ExecutionModelFragment)
-			variables.insert(var.self);
-	});
+		    // An output variable which is just declared (but uninitialized) might be read by subsequent stages
+		    // so we should force-enable these outputs,
+		    // since compilation will fail if a subsequent stage attempts to read from the variable in question.
+		    // Also, make sure we preserve output variables which are only initialized, but never accessed by any code.
+		    if (var.initializer != ID(0) || get_execution_model() != ExecutionModelFragment)
+			    variables.insert(var.self);
+	    });
 
 	// If we needed to create one, we'll need it.
 	if (dummy_sampler_id)
@@ -984,174 +983,175 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 
 	bool ssbo_instance_name = reflection_ssbo_instance_name_is_significant();
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		auto &type = this->get<SPIRType>(var.basetype);
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t, const SPIRVariable &var)
+	    {
+		    auto &type = this->get<SPIRType>(var.basetype);
 
-		// It is possible for uniform storage classes to be passed as function parameters, so detect
-		// that. To detect function parameters, check of StorageClass of variable is function scope.
-		if (var.storage == StorageClassFunction || !type.pointer)
-			return;
+		    // It is possible for uniform storage classes to be passed as function parameters, so detect
+		    // that. To detect function parameters, check of StorageClass of variable is function scope.
+		    if (var.storage == StorageClassFunction || !type.pointer)
+			    return;
 
-		if (active_variables && active_variables->find(var.self) == end(*active_variables))
-			return;
+		    if (active_variables && active_variables->find(var.self) == end(*active_variables))
+			    return;
 
-		// In SPIR-V 1.4 and up, every global must be present in the entry point interface list,
-		// not just IO variables.
-		bool active_in_entry_point = true;
-		if (ir.get_spirv_version() < 0x10400)
-		{
-			if (var.storage == StorageClassInput || var.storage == StorageClassOutput)
-				active_in_entry_point = interface_variable_exists_in_entry_point(var.self);
-		}
-		else
-			active_in_entry_point = interface_variable_exists_in_entry_point(var.self);
+		    // In SPIR-V 1.4 and up, every global must be present in the entry point interface list,
+		    // not just IO variables.
+		    bool active_in_entry_point = true;
+		    if (ir.get_spirv_version() < 0x10400)
+		    {
+			    if (var.storage == StorageClassInput || var.storage == StorageClassOutput)
+				    active_in_entry_point = interface_variable_exists_in_entry_point(var.self);
+		    }
+		    else
+			    active_in_entry_point = interface_variable_exists_in_entry_point(var.self);
 
-		if (!active_in_entry_point)
-			return;
+		    if (!active_in_entry_point)
+			    return;
 
-		bool is_builtin = is_builtin_variable(var);
+		    bool is_builtin = is_builtin_variable(var);
 
-		if (is_builtin)
-		{
-			if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
-				return;
+		    if (is_builtin)
+		    {
+			    if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
+				    return;
 
-			auto &list = var.storage == StorageClassInput ? res.builtin_inputs : res.builtin_outputs;
-			BuiltInResource resource;
+			    auto &list = var.storage == StorageClassInput ? res.builtin_inputs : res.builtin_outputs;
+			    BuiltInResource resource;
 
-			if (has_decoration(type.self, DecorationBlock))
-			{
-				resource.resource = { var.self, var.basetype, type.self,
-				                      get_remapped_declared_block_name(var.self, false) };
+			    if (has_decoration(type.self, DecorationBlock))
+			    {
+				    resource.resource = { var.self, var.basetype, type.self,
+					                      get_remapped_declared_block_name(var.self, false) };
 
-				for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
-				{
-					resource.value_type_id = type.member_types[i];
-					resource.builtin = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
-					list.push_back(resource);
-				}
-			}
-			else
-			{
-				bool strip_array =
-						!has_decoration(var.self, DecorationPatch) && (
-								get_execution_model() == ExecutionModelTessellationControl ||
-								(get_execution_model() == ExecutionModelTessellationEvaluation &&
-								 var.storage == StorageClassInput));
+				    for (uint32_t i = 0; i < uint32_t(type.member_types.size()); i++)
+				    {
+					    resource.value_type_id = type.member_types[i];
+					    resource.builtin = BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn));
+					    list.push_back(resource);
+				    }
+			    }
+			    else
+			    {
+				    bool strip_array = !has_decoration(var.self, DecorationPatch) &&
+				                       (get_execution_model() == ExecutionModelTessellationControl ||
+				                        (get_execution_model() == ExecutionModelTessellationEvaluation &&
+				                         var.storage == StorageClassInput));
 
-				resource.resource = { var.self, var.basetype, type.self, get_name(var.self) };
+				    resource.resource = { var.self, var.basetype, type.self, get_name(var.self) };
 
-				if (strip_array && !type.array.empty())
-					resource.value_type_id = get_variable_data_type(var).parent_type;
-				else
-					resource.value_type_id = get_variable_data_type_id(var);
+				    if (strip_array && !type.array.empty())
+					    resource.value_type_id = get_variable_data_type(var).parent_type;
+				    else
+					    resource.value_type_id = get_variable_data_type_id(var);
 
-				assert(resource.value_type_id);
+				    assert(resource.value_type_id);
 
-				resource.builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
-				list.push_back(std::move(resource));
-			}
-			return;
-		}
+				    resource.builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+				    list.push_back(std::move(resource));
+			    }
+			    return;
+		    }
 
-		// Input
-		if (var.storage == StorageClassInput)
-		{
-			if (has_decoration(type.self, DecorationBlock))
-			{
-				res.stage_inputs.push_back(
-						{ var.self, var.basetype, type.self,
-						  get_remapped_declared_block_name(var.self, false) });
-			}
-			else
-				res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-		}
-		// Subpass inputs
-		else if (var.storage == StorageClassUniformConstant && type.image.dim == DimSubpassData)
-		{
-			res.subpass_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-		}
-		// Outputs
-		else if (var.storage == StorageClassOutput)
-		{
-			if (has_decoration(type.self, DecorationBlock))
-			{
-				res.stage_outputs.push_back(
-						{ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
-			}
-			else
-				res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-		}
-		// UBOs
-		else if (type.storage == StorageClassUniform && has_decoration(type.self, DecorationBlock))
-		{
-			res.uniform_buffers.push_back(
-			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
-		}
-		// Old way to declare SSBOs.
-		else if (type.storage == StorageClassUniform && has_decoration(type.self, DecorationBufferBlock))
-		{
-			res.storage_buffers.push_back(
-			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, ssbo_instance_name) });
-		}
-		// Modern way to declare SSBOs.
-		else if (type.storage == StorageClassStorageBuffer)
-		{
-			res.storage_buffers.push_back(
-			    { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, ssbo_instance_name) });
-		}
-		// Push constant blocks
-		else if (type.storage == StorageClassPushConstant)
-		{
-			// There can only be one push constant block, but keep the vector in case this restriction is lifted
-			// in the future.
-			res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-		}
-		else if (type.storage == StorageClassShaderRecordBufferKHR)
-		{
-			res.shader_record_buffers.push_back({ var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, ssbo_instance_name) });
-		}
-		// Atomic counters
-		else if (type.storage == StorageClassAtomicCounter)
-		{
-			res.atomic_counters.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-		}
-		else if (type.storage == StorageClassUniformConstant)
-		{
-			if (type.basetype == SPIRType::Image)
-			{
-				// Images
-				if (type.image.sampled == 2)
-				{
-					res.storage_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-				}
-				// Separate images
-				else if (type.image.sampled == 1)
-				{
-					res.separate_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-				}
-			}
-			// Separate samplers
-			else if (type.basetype == SPIRType::Sampler)
-			{
-				res.separate_samplers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-			}
-			// Textures
-			else if (type.basetype == SPIRType::SampledImage)
-			{
-				res.sampled_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-			}
-			// Acceleration structures
-			else if (type.basetype == SPIRType::AccelerationStructure)
-			{
-				res.acceleration_structures.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-			}
-			else
-			{
-				res.gl_plain_uniforms.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
-			}
-		}
-	});
+		    // Input
+		    if (var.storage == StorageClassInput)
+		    {
+			    if (has_decoration(type.self, DecorationBlock))
+			    {
+				    res.stage_inputs.push_back(
+				        { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
+			    }
+			    else
+				    res.stage_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+		    }
+		    // Subpass inputs
+		    else if (var.storage == StorageClassUniformConstant && type.image.dim == DimSubpassData)
+		    {
+			    res.subpass_inputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+		    }
+		    // Outputs
+		    else if (var.storage == StorageClassOutput)
+		    {
+			    if (has_decoration(type.self, DecorationBlock))
+			    {
+				    res.stage_outputs.push_back(
+				        { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
+			    }
+			    else
+				    res.stage_outputs.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+		    }
+		    // UBOs
+		    else if (type.storage == StorageClassUniform && has_decoration(type.self, DecorationBlock))
+		    {
+			    res.uniform_buffers.push_back(
+			        { var.self, var.basetype, type.self, get_remapped_declared_block_name(var.self, false) });
+		    }
+		    // Old way to declare SSBOs.
+		    else if (type.storage == StorageClassUniform && has_decoration(type.self, DecorationBufferBlock))
+		    {
+			    res.storage_buffers.push_back({ var.self, var.basetype, type.self,
+			                                    get_remapped_declared_block_name(var.self, ssbo_instance_name) });
+		    }
+		    // Modern way to declare SSBOs.
+		    else if (type.storage == StorageClassStorageBuffer)
+		    {
+			    res.storage_buffers.push_back({ var.self, var.basetype, type.self,
+			                                    get_remapped_declared_block_name(var.self, ssbo_instance_name) });
+		    }
+		    // Push constant blocks
+		    else if (type.storage == StorageClassPushConstant)
+		    {
+			    // There can only be one push constant block, but keep the vector in case this restriction is lifted
+			    // in the future.
+			    res.push_constant_buffers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+		    }
+		    else if (type.storage == StorageClassShaderRecordBufferKHR)
+		    {
+			    res.shader_record_buffers.push_back({ var.self, var.basetype, type.self,
+			                                          get_remapped_declared_block_name(var.self, ssbo_instance_name) });
+		    }
+		    // Atomic counters
+		    else if (type.storage == StorageClassAtomicCounter)
+		    {
+			    res.atomic_counters.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+		    }
+		    else if (type.storage == StorageClassUniformConstant)
+		    {
+			    if (type.basetype == SPIRType::Image)
+			    {
+				    // Images
+				    if (type.image.sampled == 2)
+				    {
+					    res.storage_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+				    }
+				    // Separate images
+				    else if (type.image.sampled == 1)
+				    {
+					    res.separate_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+				    }
+			    }
+			    // Separate samplers
+			    else if (type.basetype == SPIRType::Sampler)
+			    {
+				    res.separate_samplers.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+			    }
+			    // Textures
+			    else if (type.basetype == SPIRType::SampledImage)
+			    {
+				    res.sampled_images.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+			    }
+			    // Acceleration structures
+			    else if (type.basetype == SPIRType::AccelerationStructure)
+			    {
+				    res.acceleration_structures.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+			    }
+			    else
+			    {
+				    res.gl_plain_uniforms.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+			    }
+		    }
+	    });
 
 	return res;
 }
@@ -1208,8 +1208,7 @@ void Compiler::parse_fixup()
 		{
 			auto &var = id.get<SPIRVariable>();
 			if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
-			    var.storage == StorageClassTaskPayloadWorkgroupEXT ||
-			    var.storage == StorageClassOutput)
+			    var.storage == StorageClassTaskPayloadWorkgroupEXT || var.storage == StorageClassOutput)
 			{
 				global_variables.push_back(var.self);
 			}
@@ -1225,7 +1224,8 @@ void Compiler::update_name_cache(unordered_set<string> &cache_primary, const uno
 	if (name.empty())
 		return;
 
-	const auto find_name = [&](const string &n) -> bool {
+	const auto find_name = [&](const string &n) -> bool
+	{
 		if (cache_primary.find(n) != end(cache_primary))
 			return true;
 
@@ -1630,10 +1630,9 @@ bool Compiler::block_is_noop(const SPIRBlock &block) const
 			auto *ops = stream(i);
 			auto ext = get<SPIRExtension>(ops[2]).ext;
 
-			bool ext_is_nonsemantic_only =
-				ext == SPIRExtension::NonSemanticShaderDebugInfo ||
-				ext == SPIRExtension::SPV_debug_info ||
-				ext == SPIRExtension::NonSemanticGeneric;
+			bool ext_is_nonsemantic_only = ext == SPIRExtension::NonSemanticShaderDebugInfo ||
+			                               ext == SPIRExtension::SPV_debug_info ||
+			                               ext == SPIRExtension::NonSemanticGeneric;
 
 			if (!ext_is_nonsemantic_only)
 				return false;
@@ -2031,7 +2030,8 @@ uint32_t Compiler::evaluate_spec_constant_u32(const SPIRConstantOp &spec) const
 
 	uint32_t value = 0;
 
-	const auto eval_u32 = [&](uint32_t id) -> uint32_t {
+	const auto eval_u32 = [&](uint32_t id) -> uint32_t
+	{
 		auto &type = expression_type(id);
 		if (type.basetype != SPIRType::UInt && type.basetype != SPIRType::Int && type.basetype != SPIRType::Boolean)
 		{
@@ -2625,9 +2625,9 @@ void Compiler::set_entry_point(const std::string &name, spv::ExecutionModel mode
 
 SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
 {
-	auto itr = find_if(
-	    begin(ir.entry_points), end(ir.entry_points),
-	    [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.orig_name == name; });
+	auto itr = find_if(begin(ir.entry_points), end(ir.entry_points),
+	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool
+	                   { return entry.second.orig_name == name; });
 
 	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
@@ -2637,9 +2637,9 @@ SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name)
 
 const SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name) const
 {
-	auto itr = find_if(
-	    begin(ir.entry_points), end(ir.entry_points),
-	    [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool { return entry.second.orig_name == name; });
+	auto itr = find_if(begin(ir.entry_points), end(ir.entry_points),
+	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool
+	                   { return entry.second.orig_name == name; });
 
 	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
@@ -2650,9 +2650,8 @@ const SPIREntryPoint &Compiler::get_first_entry_point(const std::string &name) c
 SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionModel model)
 {
 	auto itr = find_if(begin(ir.entry_points), end(ir.entry_points),
-	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
-		                   return entry.second.orig_name == name && entry.second.model == model;
-	                   });
+	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool
+	                   { return entry.second.orig_name == name && entry.second.model == model; });
 
 	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
@@ -2663,9 +2662,8 @@ SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionMode
 const SPIREntryPoint &Compiler::get_entry_point(const std::string &name, ExecutionModel model) const
 {
 	auto itr = find_if(begin(ir.entry_points), end(ir.entry_points),
-	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool {
-		                   return entry.second.orig_name == name && entry.second.model == model;
-	                   });
+	                   [&](const std::pair<uint32_t, SPIREntryPoint> &entry) -> bool
+	                   { return entry.second.orig_name == name && entry.second.model == model; });
 
 	if (itr == end(ir.entry_points))
 		SPIRV_CROSS_THROW("Entry point does not exist.");
@@ -2696,7 +2694,8 @@ bool Compiler::interface_variable_exists_in_entry_point(uint32_t id) const
 	{
 		if (var.storage != StorageClassInput && var.storage != StorageClassOutput &&
 		    var.storage != StorageClassUniformConstant)
-			SPIRV_CROSS_THROW("Only Input, Output variables and Uniform constants are part of a shader linking interface.");
+			SPIRV_CROSS_THROW(
+			    "Only Input, Output variables and Uniform constants are part of a shader linking interface.");
 
 		// This is to avoid potential problems with very old glslang versions which did
 		// not emit input/output interfaces properly.
@@ -2839,7 +2838,8 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		return;
 
 	auto itr = find_if(begin(caller.combined_parameters), end(caller.combined_parameters),
-	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p) {
+	                   [&param](const SPIRFunction::CombinedImageSamplerParameter &p)
+	                   {
 		                   return param.image_id == p.image_id && param.sampler_id == p.sampler_id &&
 		                          param.global_image == p.global_image && param.global_sampler == p.global_sampler;
 	                   });
@@ -3099,9 +3099,8 @@ bool Compiler::CombinedImageSamplerHandler::handle(Op opcode, const uint32_t *ar
 	VariableID sampler_id = is_fetch ? compiler.dummy_sampler_id : remap_parameter(args[3]);
 
 	auto itr = find_if(begin(compiler.combined_image_samplers), end(compiler.combined_image_samplers),
-	                   [image_id, sampler_id](const CombinedImageSampler &combined) {
-		                   return combined.image_id == image_id && combined.sampler_id == sampler_id;
-	                   });
+	                   [image_id, sampler_id](const CombinedImageSampler &combined)
+	                   { return combined.image_id == image_id && combined.sampler_id == sampler_id; });
 
 	if (itr == end(compiler.combined_image_samplers))
 	{
@@ -3197,11 +3196,13 @@ VariableID Compiler::build_dummy_sampler_for_combined_images()
 
 void Compiler::build_combined_image_samplers()
 {
-	ir.for_each_typed_id<SPIRFunction>([&](uint32_t, SPIRFunction &func) {
-		func.combined_parameters.clear();
-		func.shadow_arguments.clear();
-		func.do_combined_parameters = true;
-	});
+	ir.for_each_typed_id<SPIRFunction>(
+	    [&](uint32_t, SPIRFunction &func)
+	    {
+		    func.combined_parameters.clear();
+		    func.shadow_arguments.clear();
+		    func.do_combined_parameters = true;
+	    });
 
 	combined_image_samplers.clear();
 	CombinedImageSamplerHandler handler(*this);
@@ -3211,10 +3212,12 @@ void Compiler::build_combined_image_samplers()
 SmallVector<SpecializationConstant> Compiler::get_specialization_constants() const
 {
 	SmallVector<SpecializationConstant> spec_consts;
-	ir.for_each_typed_id<SPIRConstant>([&](uint32_t, const SPIRConstant &c) {
-		if (c.specialization && has_decoration(c.self, DecorationSpecId))
-			spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
-	});
+	ir.for_each_typed_id<SPIRConstant>(
+	    [&](uint32_t, const SPIRConstant &c)
+	    {
+		    if (c.specialization && has_decoration(c.self, DecorationSpecId))
+			    spec_consts.push_back({ c.self, get_decoration(c.self, DecorationSpecId) });
+	    });
 	return spec_consts;
 }
 
@@ -3332,7 +3335,8 @@ void Compiler::AnalyzeVariableScopeAccessHandler::set_current_block(const SPIRBl
 	// this will be a variable write when we branch,
 	// so we need to track access to these variables as well to
 	// have a complete picture.
-	const auto test_phi = [this, &block](uint32_t to) {
+	const auto test_phi = [this, &block](uint32_t to)
+	{
 		auto &next = compiler.get<SPIRBlock>(to);
 		for (auto &phi : next.phi_variables)
 		{
@@ -3547,7 +3551,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(spv::Op op, const uint3
 
 	case OpCopyObject:
 	{
-		// OpCopyObject copies the underlying non-pointer type, 
+		// OpCopyObject copies the underlying non-pointer type,
 		// so any temp variable should be declared using the underlying type.
 		// If the type is a pointer, get its base type and overwrite the result type mapping.
 		auto &type = compiler.get<SPIRType>(result_type);
@@ -4249,12 +4253,14 @@ void Compiler::analyze_variable_scope(SPIRFunction &entry, AnalyzeVariableScopeA
 		// merge can occur. Walk the CFG to see if we find anything.
 
 		seen_blocks.clear();
-		cfg.walk_from(seen_blocks, header_block.merge_block, [&](uint32_t walk_block) -> bool {
-			// We found a block which accesses the variable outside the loop.
-			if (blocks.find(walk_block) != end(blocks))
-				static_loop_init = false;
-			return true;
-		});
+		cfg.walk_from(seen_blocks, header_block.merge_block,
+		              [&](uint32_t walk_block) -> bool
+		              {
+			              // We found a block which accesses the variable outside the loop.
+			              if (blocks.find(walk_block) != end(blocks))
+				              static_loop_init = false;
+			              return true;
+		              });
 
 		if (!static_loop_init)
 			continue;
@@ -4414,8 +4420,8 @@ void Compiler::ActiveBuiltinHandler::add_if_builtin(uint32_t id, bool allow_bloc
 	{
 		auto &type = compiler.get<SPIRType>(var->basetype);
 		auto &decorations = m->decoration;
-		auto &flags = type.storage == StorageClassInput ?
-		              compiler.active_input_builtins : compiler.active_output_builtins;
+		auto &flags =
+		    type.storage == StorageClassInput ? compiler.active_input_builtins : compiler.active_output_builtins;
 		if (decorations.builtin)
 		{
 			flags.set(decorations.builtin_type);
@@ -4586,16 +4592,18 @@ void Compiler::update_active_builtins()
 	ActiveBuiltinHandler handler(*this);
 	traverse_all_reachable_opcodes(get<SPIRFunction>(ir.default_entry_point), handler);
 
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage != StorageClassOutput)
-			return;
-		if (!interface_variable_exists_in_entry_point(var.self))
-			return;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t, const SPIRVariable &var)
+	    {
+		    if (var.storage != StorageClassOutput)
+			    return;
+		    if (!interface_variable_exists_in_entry_point(var.self))
+			    return;
 
-		// Also, make sure we preserve output variables which are only initialized, but never accessed by any code.
-		if (var.initializer != ID(0))
-			handler.add_if_builtin_or_block(var.self);
-	});
+		    // Also, make sure we preserve output variables which are only initialized, but never accessed by any code.
+		    if (var.initializer != ID(0))
+			    handler.add_if_builtin_or_block(var.self);
+	    });
 }
 
 // Returns whether this shader uses a builtin of the storage class
@@ -4736,8 +4744,7 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 			auto &var = get<SPIRVariable>(id);
 			auto &type = get_variable_data_type(var);
 
-			if (is_array(type) && var.storage == StorageClassPrivate &&
-			    var.initializer && !var.is_written_to &&
+			if (is_array(type) && var.storage == StorageClassPrivate && var.initializer && !var.is_written_to &&
 			    ir.ids[var.initializer].get_type() == TypeConstant)
 			{
 				get<SPIRConstant>(var.initializer).is_used_as_lut = true;
@@ -4981,29 +4988,31 @@ bool Compiler::reflection_ssbo_instance_name_is_significant() const
 	bool aliased_ssbo_types = false;
 
 	// If we don't have any OpSource information, we need to perform some shaky heuristics.
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		auto &type = this->get<SPIRType>(var.basetype);
-		if (!type.pointer || var.storage == StorageClassFunction)
-			return;
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t, const SPIRVariable &var)
+	    {
+		    auto &type = this->get<SPIRType>(var.basetype);
+		    if (!type.pointer || var.storage == StorageClassFunction)
+			    return;
 
-		bool ssbo = var.storage == StorageClassStorageBuffer ||
-		            (var.storage == StorageClassUniform && has_decoration(type.self, DecorationBufferBlock));
+		    bool ssbo = var.storage == StorageClassStorageBuffer ||
+		                (var.storage == StorageClassUniform && has_decoration(type.self, DecorationBufferBlock));
 
-		if (ssbo)
-		{
-			if (ssbo_type_ids.count(type.self))
-				aliased_ssbo_types = true;
-			else
-				ssbo_type_ids.insert(type.self);
-		}
-	});
+		    if (ssbo)
+		    {
+			    if (ssbo_type_ids.count(type.self))
+				    aliased_ssbo_types = true;
+			    else
+				    ssbo_type_ids.insert(type.self);
+		    }
+	    });
 
 	// If the block name is aliased, assume we have HLSL-style UAV declarations.
 	return aliased_ssbo_types;
 }
 
-bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op,
-                                          const uint32_t *args, uint32_t length)
+bool Compiler::instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, spv::Op op, const uint32_t *args,
+                                          uint32_t length)
 {
 	if (length < 2)
 		return false;
@@ -5132,7 +5141,8 @@ Compiler::PhysicalBlockMeta *Compiler::PhysicalStorageBufferPointerHandler::find
 		return nullptr;
 }
 
-void Compiler::PhysicalStorageBufferPointerHandler::mark_aligned_access(uint32_t id, const uint32_t *args, uint32_t length)
+void Compiler::PhysicalStorageBufferPointerHandler::mark_aligned_access(uint32_t id, const uint32_t *args,
+                                                                        uint32_t length)
 {
 	uint32_t mask = *args;
 	args++;
@@ -5284,15 +5294,16 @@ void Compiler::analyze_non_block_pointer_types()
 	// Analyze any block declaration we have to make. It might contain
 	// physical pointers to POD types which we never used, and thus never added to the list.
 	// We'll need to add those pointer types to the set of types we declare.
-	ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type) {
-		// Only analyze the raw block struct, not any pointer-to-struct, since that's just redundant.
-		if (type.self == id &&
-		    (has_decoration(type.self, DecorationBlock) ||
-		     has_decoration(type.self, DecorationBufferBlock)))
-		{
-			handler.analyze_non_block_types_from_block(type);
-		}
-	});
+	ir.for_each_typed_id<SPIRType>(
+	    [&](uint32_t id, SPIRType &type)
+	    {
+		    // Only analyze the raw block struct, not any pointer-to-struct, since that's just redundant.
+		    if (type.self == id &&
+		        (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)))
+		    {
+			    handler.analyze_non_block_types_from_block(type);
+		    }
+	    });
 
 	physical_storage_non_block_pointer_types.reserve(handler.non_block_types.size());
 	for (auto type : handler.non_block_types)

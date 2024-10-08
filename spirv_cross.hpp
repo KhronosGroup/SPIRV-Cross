@@ -595,7 +595,7 @@ protected:
 	// If our IDs are out of range here as part of opcodes, throw instead of
 	// undefined behavior.
 	template <typename T, typename... P>
-	T &set(uint32_t id, P &&... args)
+	T &set(uint32_t id, P &&...args)
 	{
 		ir.add_typed_id(static_cast<Types>(T::type), id);
 		auto &var = variant_set<T>(ir.ids[id], std::forward<P>(args)...);

@@ -423,20 +423,22 @@ void Parser::parse(const Instruction &instruction)
 		for (uint32_t i = 1; i < length; i++)
 		{
 			uint32_t target = ops[i];
-			flags.for_each_bit([&](uint32_t bit) {
-				auto decoration = static_cast<Decoration>(bit);
+			flags.for_each_bit(
+			    [&](uint32_t bit)
+			    {
+				    auto decoration = static_cast<Decoration>(bit);
 
-				if (decoration_is_string(decoration))
-				{
-					ir.set_decoration_string(target, decoration, ir.get_decoration_string(group_id, decoration));
-				}
-				else
-				{
-					ir.meta[target].decoration_word_offset[decoration] =
-					    ir.meta[group_id].decoration_word_offset[decoration];
-					ir.set_decoration(target, decoration, ir.get_decoration(group_id, decoration));
-				}
-			});
+				    if (decoration_is_string(decoration))
+				    {
+					    ir.set_decoration_string(target, decoration, ir.get_decoration_string(group_id, decoration));
+				    }
+				    else
+				    {
+					    ir.meta[target].decoration_word_offset[decoration] =
+					        ir.meta[group_id].decoration_word_offset[decoration];
+					    ir.set_decoration(target, decoration, ir.get_decoration(group_id, decoration));
+				    }
+			    });
 		}
 		break;
 	}
@@ -452,15 +454,17 @@ void Parser::parse(const Instruction &instruction)
 		{
 			uint32_t target = ops[i + 0];
 			uint32_t index = ops[i + 1];
-			flags.for_each_bit([&](uint32_t bit) {
-				auto decoration = static_cast<Decoration>(bit);
+			flags.for_each_bit(
+			    [&](uint32_t bit)
+			    {
+				    auto decoration = static_cast<Decoration>(bit);
 
-				if (decoration_is_string(decoration))
-					ir.set_member_decoration_string(target, index, decoration,
-					                                ir.get_decoration_string(group_id, decoration));
-				else
-					ir.set_member_decoration(target, index, decoration, ir.get_decoration(group_id, decoration));
-			});
+				    if (decoration_is_string(decoration))
+					    ir.set_member_decoration_string(target, index, decoration,
+					                                    ir.get_decoration_string(group_id, decoration));
+				    else
+					    ir.set_member_decoration(target, index, decoration, ir.get_decoration(group_id, decoration));
+			    });
 		}
 		break;
 	}

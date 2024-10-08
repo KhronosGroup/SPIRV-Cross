@@ -25,10 +25,10 @@
 #define SPIRV_CROSS_SPIRV_HPP
 
 #include "spirv_glsl.hpp"
-#include <vector>
 #include <map>
 #include <set>
 #include <stddef.h>
+#include <vector>
 
 namespace SPIRV_CROSS_NAMESPACE
 {

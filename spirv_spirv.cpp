@@ -50,7 +50,7 @@ string CompilerSPIRV::compile()
 {
 	buffer.clear();
 	ir.fixup_reserved_names();
-	
+
 	this->emit_header();
 	this->emit_capabilities();
 	this->emit_ext_inst_imports();
@@ -58,7 +58,7 @@ string CompilerSPIRV::compile()
 	this->emit_annotations();
 	this->emit_types();
 
-	return string(reinterpret_cast<const char *>(buffer.data()), buffer.size()*sizeof(uint32_t));
+	return string(reinterpret_cast<const char *>(buffer.data()), buffer.size() * sizeof(uint32_t));
 }
 
 void CompilerSPIRV::emit_header()
@@ -82,8 +82,8 @@ void CompilerSPIRV::emit_capabilities()
 
 void CompilerSPIRV::emit_extensions()
 {
-	
-	for (string& ext: ir.declared_extensions)
+
+	for (string &ext : ir.declared_extensions)
 	{
 		auto str = this->get_spirv_string(ext);
 		this->emit_opcode(Op::OpExtension, str.size());
@@ -93,54 +93,56 @@ void CompilerSPIRV::emit_extensions()
 
 void CompilerSPIRV::emit_ext_inst_imports()
 {
-	ir.for_each_typed_id<SPIRExtension>([this](ID id, SPIRExtension ext) {
-		if (ext.ext != SPIRExtension::Unsupported && ext.ext != SPIRExtension::NonSemanticGeneric)
-		{
-			vector<uint32_t> ext_name;
+	ir.for_each_typed_id<SPIRExtension>(
+	    [this](ID id, SPIRExtension ext)
+	    {
+		    if (ext.ext != SPIRExtension::Unsupported && ext.ext != SPIRExtension::NonSemanticGeneric)
+		    {
+			    vector<uint32_t> ext_name;
 
-			switch (ext.ext)
-			{
-			default:
-				break;
+			    switch (ext.ext)
+			    {
+			    default:
+				    break;
 
-			case SPIRExtension::GLSL:
-				ext_name = this->get_spirv_string("GLSL.std.450");
-				break;
+			    case SPIRExtension::GLSL:
+				    ext_name = this->get_spirv_string("GLSL.std.450");
+				    break;
 
-			case SPIRExtension::SPV_debug_info:
-				ext_name = this->get_spirv_string("DebugInfo");
-				break;
+			    case SPIRExtension::SPV_debug_info:
+				    ext_name = this->get_spirv_string("DebugInfo");
+				    break;
 
-			case SPIRExtension::SPV_AMD_shader_ballot:
-				ext_name = this->get_spirv_string("SPV_AMD_shader_ballot");
-				break;
+			    case SPIRExtension::SPV_AMD_shader_ballot:
+				    ext_name = this->get_spirv_string("SPV_AMD_shader_ballot");
+				    break;
 
-			case SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter:
-				ext_name = this->get_spirv_string("SPV_AMD_shader_explicit_vertex_parameter");
-				break;
+			    case SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter:
+				    ext_name = this->get_spirv_string("SPV_AMD_shader_explicit_vertex_parameter");
+				    break;
 
-			case SPIRExtension::SPV_AMD_shader_trinary_minmax:
-				ext_name = this->get_spirv_string("SPV_AMD_shader_trinary_minmax");
-				break;
+			    case SPIRExtension::SPV_AMD_shader_trinary_minmax:
+				    ext_name = this->get_spirv_string("SPV_AMD_shader_trinary_minmax");
+				    break;
 
-			case SPIRExtension::SPV_AMD_gcn_shader:
-				ext_name = this->get_spirv_string("SPV_AMD_gcn_shader");
-				break;
+			    case SPIRExtension::SPV_AMD_gcn_shader:
+				    ext_name = this->get_spirv_string("SPV_AMD_gcn_shader");
+				    break;
 
-			case SPIRExtension::NonSemanticDebugPrintf:
-				ext_name = this->get_spirv_string("NonSemantic.DebugPrintf");
-				break;
+			    case SPIRExtension::NonSemanticDebugPrintf:
+				    ext_name = this->get_spirv_string("NonSemantic.DebugPrintf");
+				    break;
 
-			case SPIRExtension::NonSemanticShaderDebugInfo:
-				ext_name = this->get_spirv_string("NonSemantic.Shader.DebugInfo.100");
-				break;
-			}
+			    case SPIRExtension::NonSemanticShaderDebugInfo:
+				    ext_name = this->get_spirv_string("NonSemantic.Shader.DebugInfo.100");
+				    break;
+			    }
 
-			this->emit_opcode(Op::OpExtInstImport, 1+ext_name.size());
-			this->emit_id(id);
-			this->emit_string(ext_name);
-		}
-	});
+			    this->emit_opcode(Op::OpExtInstImport, 1 + ext_name.size());
+			    this->emit_id(id);
+			    this->emit_string(ext_name);
+		    }
+	    });
 }
 
 void CompilerSPIRV::emit_exec_info()
@@ -386,10 +388,10 @@ void CompilerSPIRV::emit_types()
 		    uint32_t signed_ = 0;
 		    switch (type.op)
 		    {
-			default:
+		    default:
 			    break;
 
-			case Op::OpTypeSampler:
+		    case Op::OpTypeSampler:
 		    case Op::OpTypeVoid:
 			    this->emit_opcode(type.op, 1);
 			    this->emit_id(id);
@@ -397,7 +399,7 @@ void CompilerSPIRV::emit_types()
 
 		    case Op::OpTypeInt:
 			    signed_ = (type.basetype == SPIRType::SByte || type.basetype == SPIRType::Short ||
-			                        type.basetype == SPIRType::Int || type.basetype == SPIRType::Int64);
+			               type.basetype == SPIRType::Int || type.basetype == SPIRType::Int64);
 			    this->emit_opcode(type.op, 3);
 			    this->emit_id(id);
 			    this->emit_id(type.width);
@@ -424,7 +426,7 @@ void CompilerSPIRV::emit_types()
 			    this->emit_id(type.columns);
 			    break;
 
-			case Op::OpTypeImage:
+		    case Op::OpTypeImage:
 			    this->emit_opcode(type.op, 9);
 			    this->emit_id(id);
 			    this->emit_id(type.image.sampled);
@@ -435,20 +437,20 @@ void CompilerSPIRV::emit_types()
 			    this->emit_id(type.image.sampled);
 			    this->emit_id(type.image.format);
 			    this->emit_id(type.image.access);
-				break;
+			    break;
 
-			case Op::OpTypeSampledImage:
+		    case Op::OpTypeSampledImage:
 			    this->emit_opcode(type.op, 2);
 			    this->emit_id(id);
 			    this->emit_id(type.parent_type);
 			    break;
 
-			case Op::OpTypeArray:
+		    case Op::OpTypeArray:
 			    if (type.array_size_literal[0])
 			    {
-					this->emit_opcode(type.op, 3);
-					this->emit_id(id);
-					this->emit_id(type.parent_type);
+				    this->emit_opcode(type.op, 3);
+				    this->emit_id(id);
+				    this->emit_id(type.parent_type);
 				    this->emit_id(type.array[0]);
 			    }
 			    else
@@ -460,49 +462,44 @@ void CompilerSPIRV::emit_types()
 			    break;
 
 		    case Op::OpTypeStruct:
-			    this->emit_opcode(type.op, 1+type.member_types.size());
+			    this->emit_opcode(type.op, 1 + type.member_types.size());
 			    this->emit_id(id);
 			    for (auto member_id : type.member_types)
 			    {
 				    this->emit_id(member_id);
-				}
+			    }
 			    break;
 
-
-			case Op::OpTypePointer:
+		    case Op::OpTypePointer:
 			    this->emit_opcode(type.op, 3);
 			    this->emit_id(id);
 			    this->emit_id(type.storage);
 			    this->emit_id(type.parent_type);
 			    break;
-			}
-	    }
-	);
+		    }
+	    });
 
 	ir.for_each_typed_id<SPIRConstant>(
-		[this](ID id, SPIRConstant const_) 
-		{ 
-			Op opcode;
+	    [this](ID id, SPIRConstant const_)
+	    {
+		    Op opcode;
 		    auto type = this->get_type(const_.constant_type);
 
-			// SPIRConstant does itself not fully know what type it is.
-			// So we'll go looking.
-			// Additionally, we don't care what kind of float
-			// or integer scalar types are, so we use the op as the switch key.
+		    // SPIRConstant does itself not fully know what type it is.
+		    // So we'll go looking.
+		    // Additionally, we don't care what kind of float
+		    // or integer scalar types are, so we use the op as the switch key.
 		    switch (type.op)
 		    {
 		    case Op::OpTypeBool:
-				
-			    opcode = const_.scalar_u8() == 1 ? 
-					Op::OpConstantTrue :
-					Op::OpConstantFalse;
+
+			    opcode = const_.scalar_u8() == 1 ? Op::OpConstantTrue : Op::OpConstantFalse;
 
 			    this->emit_opcode(opcode, 2);
 			    this->emit_id(const_.constant_type);
 			    this->emit_id(id);
 			    break;
 
-			
 		    case Op::OpTypeInt:
 		    case Op::OpTypeFloat:
 			    this->emit_opcode(type.op, 3);
@@ -510,38 +507,33 @@ void CompilerSPIRV::emit_types()
 			    this->emit_id(id);
 			    this->emit_id(const_.scalar());
 			    break;
-
-
-			}
-		}
-	);
+		    }
+	    });
 
 	ir.for_each_typed_id<SPIRFunction>(
-		[this] (ID id, SPIRFunction func) { 
-			this->emit_opcode(Op::OpTypeFunction, 2 + func.arguments.size());
+	    [this](ID id, SPIRFunction func)
+	    {
+		    this->emit_opcode(Op::OpTypeFunction, 2 + func.arguments.size());
 		    this->emit_id(func.function_type);
 		    this->emit_id(func.return_type);
 		    for (auto &param : func.arguments)
 		    {
 			    this->emit_id(param.type);
-			}
-		}
-	);
+		    }
+	    });
 }
 
 void CompilerSPIRV::emit_function_defs()
 {
-
 }
 
 void CompilerSPIRV::emit_functions()
 {
-
 }
 
 void CompilerSPIRV::emit_opcode(Op opcode, uint32_t arglength)
 {
-	buffer.push_back(opcode + ((arglength+1) << 16));
+	buffer.push_back(opcode + ((arglength + 1) << 16));
 }
 
 void CompilerSPIRV::emit_id(uint32_t id)

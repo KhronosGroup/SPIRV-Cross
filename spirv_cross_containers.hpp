@@ -326,7 +326,7 @@ public:
 	}
 
 	template <typename... Ts>
-	void emplace_back(Ts &&... ts) SPIRV_CROSS_NOEXCEPT
+	void emplace_back(Ts &&...ts) SPIRV_CROSS_NOEXCEPT
 	{
 		reserve(this->buffer_size + 1);
 		new (&this->ptr[this->buffer_size]) T(std::forward<Ts>(ts)...);
@@ -567,7 +567,7 @@ public:
 	}
 
 	template <typename... P>
-	T *allocate(P &&... p)
+	T *allocate(P &&...p)
 	{
 		if (vacants.empty())
 		{

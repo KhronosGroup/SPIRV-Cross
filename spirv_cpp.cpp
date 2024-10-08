@@ -107,7 +107,8 @@ void CompilerCPP::emit_uniform(const SPIRVariable &var)
 	}
 	else
 	{
-		statement("internal::UniformConstant<", type_name, type_to_array_glsl(type, var.self), "> ", instance_name, "__;");
+		statement("internal::UniformConstant<", type_name, type_to_array_glsl(type, var.self), "> ", instance_name,
+		          "__;");
 		statement_no_indent("#define ", instance_name, " __res->", instance_name, "__.get()");
 		resource_registrations.push_back(
 		    join("s.register_uniform_constant(", instance_name, "__", ", ", location, ");"));
