@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2021 Arm Limited
+ * Copyright 2015-2021 Kitsunebi Games
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");

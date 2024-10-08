@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2021 The Brenwill Workshop Ltd.
+ * Copyright 2024 Kitsunebi Games
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
