@@ -46,6 +46,7 @@ option(SPIRV_CROSS_ENABLE_GLSL "Enable GLSL support." ON)
 option(SPIRV_CROSS_ENABLE_HLSL "Enable HLSL target support." ON)
 option(SPIRV_CROSS_ENABLE_MSL "Enable MSL target support." ON)
 option(SPIRV_CROSS_ENABLE_CPP "Enable C++ target support." ON)
+option(SPIRV_CROSS_ENABLE_SPIRV "Enable SPIRV target support." ON)
 option(SPIRV_CROSS_ENABLE_REFLECT "Enable JSON reflection target support." ON)
 option(SPIRV_CROSS_ENABLE_C_API "Enable C API wrapper support in static library." ON)
 option(SPIRV_CROSS_ENABLE_UTIL "Enable util module support." ON)
@@ -237,6 +238,10 @@ set(spirv-cross-hlsl-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.hpp)
 
+set(spirv-cross-spirv-sources
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_spirv.cpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv_spirv.hpp)
+
 set(spirv-cross-reflect-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_reflect.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_reflect.hpp)
@@ -307,6 +312,16 @@ if (SPIRV_CROSS_STATIC)
 		endif()
 	endif()
 
+	if (SPIRV_CROSS_ENABLE_SPIRV)
+		spirv_cross_add_library(spirv-cross-spirv spirv_cross_spirv STATIC
+				${spirv-cross-spirv-sources})
+		if (SPIRV_CROSS_ENABLE_GLSL)
+			target_link_libraries(spirv-cross-hlsl PRIVATE spirv-cross-glsl)
+		else()
+			message(FATAL_ERROR "Must enable GLSL support to enable SPIRV support.")
+		endif()
+	endif()
+
 	if (SPIRV_CROSS_ENABLE_UTIL)
 		spirv_cross_add_library(spirv-cross-util spirv_cross_util STATIC
 				${spirv-cross-util-sources})
@@ -337,6 +352,11 @@ if (SPIRV_CROSS_STATIC)
 		if (SPIRV_CROSS_ENABLE_CPP)
 			target_link_libraries(spirv-cross-c PRIVATE spirv-cross-cpp)
 			target_compile_definitions(spirv-cross-c PRIVATE SPIRV_CROSS_C_API_CPP=1)
+		endif()
+
+		if (SPIRV_CROSS_ENABLE_SPIRV)
+			target_link_libraries(spirv-cross-c PRIVATE spirv-cross-cpp)
+			target_compile_definitions(spirv-cross-c PRIVATE SPIRV_CROSS_C_API_SPIRV=1)
 		endif()
 
 		if (SPIRV_CROSS_ENABLE_REFLECT)
@@ -391,6 +411,15 @@ if (SPIRV_CROSS_SHARED)
 			message(FATAL_ERROR "Must enable GLSL support to enable C++ support.")
 		endif()
 		target_compile_definitions(spirv-cross-c-shared PRIVATE SPIRV_CROSS_C_API_CPP=1)
+	endif()
+
+	if (SPIRV_CROSS_ENABLE_SPIRV)
+		if (SPIRV_CROSS_ENABLE_GLSL)
+			target_sources(spirv-cross-c-shared PRIVATE ${spirv-cross-spirv-sources})
+		else()
+			message(FATAL_ERROR "Must enable GLSL support to enable SPIRV support.")
+		endif()
+		target_compile_definitions(spirv-cross-c-shared PRIVATE SPIRV_CROSS_C_API_SPIRV=1)
 	endif()
 
 	if (SPIRV_CROSS_ENABLE_REFLECT)
