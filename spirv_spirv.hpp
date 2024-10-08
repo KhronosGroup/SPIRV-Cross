@@ -53,7 +53,8 @@ private:
 
 	void emit_opcode(spv::Op opcode, uint32_t arglength = 0);
 	void emit_id(uint32_t id);
-	void emit_string(std::string str);
+	void emit_string(std::vector<uint32_t> str);
+	std::vector<uint32_t> get_spirv_string(std::string str);
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 

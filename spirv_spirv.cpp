@@ -70,7 +70,7 @@ void CompilerSPIRV::emit_capabilities()
 {
 	for (spv::Capability cap : ir.declared_capabilities)
 	{
-		this->emit_opcode(Op::OpCapability);
+		this->emit_opcode(Op::OpCapability, 1);
 		this->emit_id(cap);
 	}
 }
@@ -80,8 +80,9 @@ void CompilerSPIRV::emit_extensions()
 	
 	for (string& ext: ir.declared_extensions)
 	{
-		this->emit_opcode(Op::OpExtension);
-		this->emit_string(ext);
+		auto str = this->get_spirv_string(ext);
+		this->emit_opcode(Op::OpExtension, str.size());
+		this->emit_string(str);
 	}
 }
 
@@ -90,7 +91,8 @@ void CompilerSPIRV::emit_ext_inst_imports()
 	ir.for_each_typed_id<SPIRExtension>([this](ID id, SPIRExtension ext) {
 		if (ext.ext != SPIRExtension::Unsupported && ext.ext != SPIRExtension::NonSemanticGeneric)
 		{
-			this->emit_opcode(Op::OpExtInstImport);
+
+			vector<uint32_t> ext_name;
 
 			switch (ext.ext)
 			{
@@ -98,39 +100,40 @@ void CompilerSPIRV::emit_ext_inst_imports()
 				break;
 
 			case SPIRExtension::GLSL:
-				this->emit_string("GLSL.std.450");
+				ext_name = this->get_spirv_string("GLSL.std.450");
 				break;
 
 			case SPIRExtension::SPV_debug_info:
-				this->emit_string("DebugInfo");
+				ext_name = this->get_spirv_string("DebugInfo");
 				break;
 
 			case SPIRExtension::SPV_AMD_shader_ballot:
-				this->emit_string("SPV_AMD_shader_ballot");
+				ext_name = this->get_spirv_string("SPV_AMD_shader_ballot");
 				break;
 
 			case SPIRExtension::SPV_AMD_shader_explicit_vertex_parameter:
-				this->emit_string("SPV_AMD_shader_explicit_vertex_parameter");
+				ext_name = this->get_spirv_string("SPV_AMD_shader_explicit_vertex_parameter");
 				break;
 
 			case SPIRExtension::SPV_AMD_shader_trinary_minmax:
-				this->emit_string("SPV_AMD_shader_trinary_minmax");
+				ext_name = this->get_spirv_string("SPV_AMD_shader_trinary_minmax");
 				break;
 
 			case SPIRExtension::SPV_AMD_gcn_shader:
-				this->emit_string("SPV_AMD_gcn_shader");
+				ext_name = this->get_spirv_string("SPV_AMD_gcn_shader");
 				break;
 
 			case SPIRExtension::NonSemanticDebugPrintf:
-				this->emit_string("NonSemantic.DebugPrintf");
+				ext_name = this->get_spirv_string("NonSemantic.DebugPrintf");
 				break;
 
 			case SPIRExtension::NonSemanticShaderDebugInfo:
-				this->emit_string("NonSemantic.Shader.DebugInfo.100");
+				ext_name = this->get_spirv_string("NonSemantic.Shader.DebugInfo.100");
 				break;
-
 			}
-		    
+
+			this->emit_opcode(Op::OpExtInstImport, ext_name.size());
+			this->emit_string(ext_name);
 		}
 	});
 }
@@ -145,16 +148,17 @@ void CompilerSPIRV::emit_exec_info()
 	// Emit entrypoints
 	for (auto& entrypoint : ir.entry_points)
 	{
-		auto functionId = entrypoint.first;
-		auto functionInfo = entrypoint.second;
+		auto function_id = entrypoint.first;
+		auto function_info = entrypoint.second;
+		auto spirv_name = this->get_spirv_string(function_info.name);
 
-		this->emit_opcode(Op::OpEntryPoint, 3 + functionInfo.interface_variables.size());
-		this->emit_id(functionInfo.model);
-		this->emit_id(functionId);
-		this->emit_string(functionInfo.name);
-		for (auto &ifaceId : functionInfo.interface_variables)
+		this->emit_opcode(Op::OpEntryPoint, 3 + function_info.interface_variables.size() + spirv_name.size());
+		this->emit_id(function_info.model);
+		this->emit_id(function_id);
+		this->emit_string(spirv_name);
+		for (auto &iface_id : function_info.interface_variables)
 		{
-			this->emit_id(ifaceId);
+			this->emit_id(iface_id);
 		}
 	}
 }
@@ -169,7 +173,31 @@ void CompilerSPIRV::emit_id(uint32_t id)
 	buffer.push_back(id);
 }
 
-void CompilerSPIRV::emit_string(string str)
+void CompilerSPIRV::emit_string(vector<uint32_t> str)
 {
-	// TODO implement
+	buffer.insert(buffer.end(), str.begin(), str.end());
+}
+
+vector<uint32_t> CompilerSPIRV::get_spirv_string(string str)
+{
+	vector<uint32_t> tmp;
+	uint32_t out_char = 0;
+	size_t acc = 0;
+
+	for (char c : str)
+	{
+		if (acc == 4) {
+			acc = 0;
+			tmp.push_back(out_char);
+			out_char = 0;
+		}
+
+		out_char |= (c << (acc++ * 8));
+	}
+	
+	if (out_char != 0)
+	{
+		tmp.push_back(out_char);
+	}
+	return tmp;
 }
