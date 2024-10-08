@@ -459,6 +459,10 @@ if (SPIRV_CROSS_CLI)
 		message(FATAL_ERROR "Must enable MSL if building CLI.")
 	endif()
 
+	if (NOT SPIRV_CROSS_ENABLE_SPIRV)
+		message(FATAL_ERROR "Must enable SPIRV if building CLI.")
+	endif()
+
 	if (NOT SPIRV_CROSS_ENABLE_CPP)
 		message(FATAL_ERROR "Must enable C++ if building CLI.")
 	endif()
@@ -487,6 +491,7 @@ if (SPIRV_CROSS_CLI)
 			spirv-cross-hlsl
 			spirv-cross-cpp
 			spirv-cross-reflect
+			spirv-cross-spirv
 			spirv-cross-msl
 			spirv-cross-util
 			spirv-cross-core)

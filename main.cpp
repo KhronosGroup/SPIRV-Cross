@@ -26,6 +26,7 @@
 #include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_msl.hpp"
+#include "spirv_spirv.hpp"
 #include "spirv_parser.hpp"
 #include "spirv_reflect.hpp"
 #include <algorithm>
@@ -37,6 +38,8 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
+#include <iostream>
+#include <fstream>
 
 #ifdef _WIN32
 #include <io.h>
@@ -265,17 +268,16 @@ static vector<uint32_t> read_spirv_file(const char *path)
 	return spirv;
 }
 
-static bool write_string_to_file(const char *path, const char *string)
+static bool write_string_to_file(const char *path, string str)
 {
-	FILE *file = fopen(path, "w");
-	if (!file)
+	fstream file(path, std::ios::out | std::ios::binary);
+	if (!file.is_open())
 	{
 		fprintf(stderr, "Failed to write file: %s\n", path);
 		return false;
 	}
-
-	fprintf(file, "%s", string);
-	fclose(file);
+	file << str;
+	file.close();
 	return true;
 }
 
@@ -728,6 +730,7 @@ struct CLIArguments
 	bool msl = false;
 	bool hlsl = false;
 	bool hlsl_compat = false;
+	bool spirv = false;
 
 	bool hlsl_support_nonzero_base = false;
 	bool hlsl_base_vertex_index_explicit_binding = false;
@@ -764,6 +767,7 @@ static void print_help_backend()
 	        "\t[--vulkan-semantics] or [-V]:\n\t\tEmit Vulkan GLSL instead of plain GLSL. Makes use of Vulkan-only features to match SPIR-V.\n"
 	        "\t[--msl]:\n\t\tEmit Metal Shading Language (MSL).\n"
 	        "\t[--hlsl]:\n\t\tEmit HLSL.\n"
+	        "\t[--spirv]:\n\t\tEmit SPIRV.\n"
 	        "\t[--reflect]:\n\t\tEmit JSON reflection.\n"
 	        "\t[--cpp]:\n\t\tDEPRECATED. Emits C++ code.\n"
 	);
@@ -1284,6 +1288,10 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 	}
 	else if (args.hlsl)
 		compiler.reset(new CompilerHLSL(std::move(spirv_parser.get_parsed_ir())));
+	else if (args.spirv)
+	{
+		compiler.reset(new CompilerSPIRV(std::move(spirv_parser.get_parsed_ir())));
+	}
 	else
 	{
 		combined_image_samplers = !args.vulkan_semantics;
@@ -1619,6 +1627,7 @@ static int main_inner(int argc, char *argv[])
 	cbs.add("--flip-vert-y", [&args](CLIParser &) { args.yflip = true; });
 	cbs.add("--iterations", [&args](CLIParser &parser) { args.iterations = parser.next_uint(); });
 	cbs.add("--cpp", [&args](CLIParser &) { args.cpp = true; });
+	cbs.add("--spirv", [&args](CLIParser &) { args.spirv = true; });
 	cbs.add("--reflect", [&args](CLIParser &parser) { args.reflect = parser.next_value_string("json"); });
 	cbs.add("--cpp-interface-name", [&args](CLIParser &parser) { args.cpp_interface_name = parser.next_string(); });
 	cbs.add("--metal", [&args](CLIParser &) { args.msl = true; }); // Legacy compatibility
@@ -1984,9 +1993,9 @@ static int main_inner(int argc, char *argv[])
 	}
 
 	if (args.output)
-		write_string_to_file(args.output, compiled_output.c_str());
+		write_string_to_file(args.output, compiled_output);
 	else
-		printf("%s", compiled_output.c_str());
+		std::cout << compiled_output << endl;
 
 	return EXIT_SUCCESS;
 }

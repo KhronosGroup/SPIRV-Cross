@@ -27,43 +27,47 @@ using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
 CompilerSPIRV::CompilerSPIRV(std::vector<uint32_t> spirv_)
-    : Compiler(std::move(spirv_))
+    : CompilerGLSL(std::move(spirv_))
 {
 }
 
 CompilerSPIRV::CompilerSPIRV(const uint32_t *ir_, size_t word_count)
-    : Compiler(ir_, word_count)
+    : CompilerGLSL(ir_, word_count)
 {
 }
 
 CompilerSPIRV::CompilerSPIRV(const ParsedIR &ir_)
-    : Compiler(ir_)
+    : CompilerGLSL(ir_)
 {
 }
 
 CompilerSPIRV::CompilerSPIRV(ParsedIR &&ir_)
-    : Compiler(std::move(ir_))
+    : CompilerGLSL(std::move(ir_))
 {
 }
 
 string CompilerSPIRV::compile()
 {
+	buffer.clear();
 	ir.fixup_reserved_names();
 	
 	this->emit_header();
 	this->emit_capabilities();
 	this->emit_ext_inst_imports();
 	this->emit_exec_info();
+	this->emit_types();
+
+	return string(reinterpret_cast<const char *>(buffer.data()), buffer.size()*sizeof(uint32_t));
 }
 
 void CompilerSPIRV::emit_header()
 {
 	// Push header info to buffer
-	buffer.push_back(spv::MagicNumber);
-	buffer.push_back(ir.get_spirv_version());
-	buffer.push_back(0);
-	buffer.push_back(ir.ids.size());
-	buffer.push_back(0);
+	this->buffer.push_back(spv::MagicNumber);
+	this->buffer.push_back(ir.get_spirv_version());
+	this->buffer.push_back(0);
+	this->buffer.push_back(ir.ids.size());
+	this->buffer.push_back(0);
 }
 
 void CompilerSPIRV::emit_capabilities()
@@ -146,7 +150,7 @@ void CompilerSPIRV::emit_exec_info()
 	this->emit_id(ir.memory_model);
 
 	// Emit entrypoints
-	for (auto& entrypoint : ir.entry_points)
+	for (auto &entrypoint : ir.entry_points)
 	{
 		auto function_id = entrypoint.first;
 		auto function_info = entrypoint.second;
@@ -161,9 +165,160 @@ void CompilerSPIRV::emit_exec_info()
 			this->emit_id(iface_id);
 		}
 	}
+
+	// Emit execution modes
+	for (auto &entrypoint : ir.entry_points)
+	{
+		auto function_id = entrypoint.first;
+		auto function_info = entrypoint.second;
+
+		switch (function_info.flags.get_lower())
+		{
+		case ExecutionModeInvocations:
+			this->emit_opcode(Op::OpExecutionMode, 3);
+			this->emit_id(function_id);
+			this->emit_id(ExecutionModeInvocations);
+			this->emit_id(function_info.invocations);
+			break;
+
+		case ExecutionModeLocalSize:
+			this->emit_opcode(Op::OpExecutionMode, 5);
+			this->emit_id(function_id);
+			this->emit_id(ExecutionModeLocalSize);
+			this->emit_id(function_info.workgroup_size.x);
+			this->emit_id(function_info.workgroup_size.y);
+			this->emit_id(function_info.workgroup_size.z);
+			break;
+
+		case ExecutionModeOutputVertices:
+			this->emit_opcode(Op::OpExecutionMode, 3);
+			this->emit_id(function_id);
+			this->emit_id(ExecutionModeOutputVertices);
+			this->emit_id(function_info.output_vertices);
+			break;
+
+		case ExecutionModeOutputPrimitivesEXT:
+			this->emit_opcode(Op::OpExecutionMode, 3);
+			this->emit_id(function_id);
+			this->emit_id(ExecutionModeOutputPrimitivesEXT);
+			this->emit_id(function_info.output_primitives);
+			break;
+
+		default:
+			break;
+		}
+	}
+
+	// Emit execution mode IDs
+	for (auto &entrypoint : ir.entry_points)
+	{
+		auto function_id = entrypoint.first;
+		auto function_info = entrypoint.second;
+
+		switch (function_info.flags.get_lower())
+		{
+		case ExecutionModeLocalSizeId:
+			this->emit_opcode(Op::OpExecutionMode, 5);
+			this->emit_id(function_id);
+			this->emit_id(ExecutionModeLocalSizeId);
+			this->emit_id(function_info.workgroup_size.id_x);
+			this->emit_id(function_info.workgroup_size.id_y);
+			this->emit_id(function_info.workgroup_size.id_z);
+			break;
+
+		default:
+			break;
+		}
+	}
 }
 
-void CompilerSPIRV::emit_opcode(Op opcode, uint32_t arglength = 0)
+void CompilerSPIRV::emit_types()
+{
+	ir.for_each_typed_id<SPIRType>(
+	    [this](ID id, SPIRType type)
+	    {
+		    switch (type.type)
+		    {
+			default:
+				break;
+
+			case SPIRType::Void:
+			    this->emit_opcode(type.op, 1);
+				this->emit_id(id);
+				break;
+
+			// We fall-through
+			case SPIRType::Int64:
+			case SPIRType::Int:
+			case SPIRType::Short:
+			case SPIRType::SByte:
+				this->emit_opcode(type.op, 3);
+				this->emit_id(id);
+				this->emit_id(type.width);
+				this->emit_id(1); // Signed
+				break;
+
+			case SPIRType::UByte:
+			case SPIRType::UShort:
+			case SPIRType::UInt:
+		    case SPIRType::UInt64:
+			    this->emit_opcode(type.op, 3);
+				this->emit_id(id);
+				this->emit_id(type.width);
+				this->emit_id(0); // Unsigned
+				break;
+
+			case SPIRType::Half:
+			case SPIRType::Float:
+			case SPIRType::Double:
+			    this->emit_opcode(type.op, 2);
+				this->emit_id(id);
+				this->emit_id(type.width);
+			    break;
+
+			// Apparently vectors, matrices, etc. are "unknown".
+			case SPIRType::Unknown:
+			    if (type.columns > 1)
+			    {
+				    this->emit_opcode(type.op, 3);
+				    this->emit_id(id);
+				    this->emit_id(this->get_type(type.parent_type).self);
+				    this->emit_id(type.columns);
+				}
+			    else if (type.vecsize > 1)
+			    {
+				    this->emit_opcode(type.op, 3);
+				    this->emit_id(id);
+				    this->emit_id(this->get_type(type.parent_type).self);
+				    this->emit_id(type.vecsize);
+				}
+				break;
+
+		    case SPIRType::Struct:
+			    this->emit_opcode(type.op, 1+type.member_types.size());
+			    this->emit_id(id);
+			    for (auto id : type.member_types)
+			    {
+				    this->emit_id(this->get_type(id).self);
+				}
+			    break;
+			}
+	    }
+	);
+}
+
+
+void CompilerSPIRV::emit_function_defs()
+{
+
+}
+
+void CompilerSPIRV::emit_functions()
+{
+
+}
+
+void CompilerSPIRV::emit_opcode(Op opcode, uint32_t arglength)
 {
 	buffer.push_back(opcode | ((arglength+1) << 16));
 }

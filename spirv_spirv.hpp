@@ -1,5 +1,5 @@
 /*
- * Copyright 2015-2021 Kitsunebi Games
+ * Copyright 2024 Kitsunebi Games
  * SPDX-License-Identifier: Apache-2.0 OR MIT
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,7 +24,7 @@
 #ifndef SPIRV_CROSS_SPIRV_HPP
 #define SPIRV_CROSS_SPIRV_HPP
 
-#include "spirv_cross.hpp"
+#include "spirv_glsl.hpp"
 #include <vector>
 #include <map>
 #include <set>
@@ -32,7 +32,7 @@
 
 namespace SPIRV_CROSS_NAMESPACE
 {
-class CompilerSPIRV : public Compiler
+class CompilerSPIRV : public CompilerGLSL
 {
 public:
 	explicit CompilerSPIRV(std::vector<uint32_t> spirv);
@@ -45,12 +45,17 @@ public:
 private:
 	std::vector<uint32_t> buffer;
 
+	// The different stages of emitting SPIRV.
 	void emit_header();
 	void emit_capabilities();
 	void emit_extensions();
 	void emit_ext_inst_imports();
 	void emit_exec_info();
+	void emit_types();
+	void emit_function_defs();
+	void emit_functions();
 
+	// Helper functions
 	void emit_opcode(spv::Op opcode, uint32_t arglength = 0);
 	void emit_id(uint32_t id);
 	void emit_string(std::vector<uint32_t> str);
