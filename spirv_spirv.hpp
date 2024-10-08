@@ -51,6 +51,7 @@ private:
 	void emit_extensions();
 	void emit_ext_inst_imports();
 	void emit_exec_info();
+	void emit_annotations();
 	void emit_types();
 	void emit_function_defs();
 	void emit_functions();
@@ -60,6 +61,13 @@ private:
 	void emit_id(uint32_t id);
 	void emit_string(std::vector<uint32_t> str);
 	std::vector<uint32_t> get_spirv_string(std::string str);
+
+	// Decoration helpers
+	std::vector<spv::Decoration> get_decoration_list(Meta::Decoration decoration);
+	void emit_decorations(ID id, Meta::Decoration decoration);
+	void emit_decorations_member(uint32_t offset, ID id, Meta::Decoration decoration);
+	void emit_decorations_operand(spv::Decoration decoration, Meta::Decoration meta);
+	bool has_decorations(Meta::Decoration decoration);
 };
 } // namespace SPIRV_CROSS_NAMESPACE
 

@@ -55,6 +55,7 @@ string CompilerSPIRV::compile()
 	this->emit_capabilities();
 	this->emit_ext_inst_imports();
 	this->emit_exec_info();
+	this->emit_annotations();
 	this->emit_types();
 
 	return string(reinterpret_cast<const char *>(buffer.data()), buffer.size()*sizeof(uint32_t));
@@ -95,7 +96,6 @@ void CompilerSPIRV::emit_ext_inst_imports()
 	ir.for_each_typed_id<SPIRExtension>([this](ID id, SPIRExtension ext) {
 		if (ext.ext != SPIRExtension::Unsupported && ext.ext != SPIRExtension::NonSemanticGeneric)
 		{
-
 			vector<uint32_t> ext_name;
 
 			switch (ext.ext)
@@ -136,7 +136,8 @@ void CompilerSPIRV::emit_ext_inst_imports()
 				break;
 			}
 
-			this->emit_opcode(Op::OpExtInstImport, ext_name.size());
+			this->emit_opcode(Op::OpExtInstImport, 1+ext_name.size());
+			this->emit_id(id);
 			this->emit_string(ext_name);
 		}
 	});
@@ -156,7 +157,7 @@ void CompilerSPIRV::emit_exec_info()
 		auto function_info = entrypoint.second;
 		auto spirv_name = this->get_spirv_string(function_info.name);
 
-		this->emit_opcode(Op::OpEntryPoint, 3 + function_info.interface_variables.size() + spirv_name.size());
+		this->emit_opcode(Op::OpEntryPoint, 2 + function_info.interface_variables.size() + spirv_name.size());
 		this->emit_id(function_info.model);
 		this->emit_id(function_id);
 		this->emit_string(spirv_name);
@@ -232,81 +233,301 @@ void CompilerSPIRV::emit_exec_info()
 	}
 }
 
+bool CompilerSPIRV::has_decorations(Meta::Decoration decoration)
+{
+	return decoration.decoration_flags.get_lower() != 0;
+}
+
+vector<Decoration> CompilerSPIRV::get_decoration_list(Meta::Decoration decoration)
+{
+	vector<Decoration> out_;
+
+	auto flags = decoration.decoration_flags;
+	if (flags.get(DecorationBuiltIn) && decoration.builtin)
+		out_.push_back(DecorationBuiltIn);
+
+	if (flags.get(DecorationLocation))
+		out_.push_back(DecorationLocation);
+
+	if (flags.get(DecorationComponent))
+		out_.push_back(DecorationComponent);
+
+	if (flags.get(DecorationBinding))
+		out_.push_back(DecorationBinding);
+
+	if (flags.get(DecorationOffset))
+		out_.push_back(DecorationOffset);
+
+	if (flags.get(DecorationXfbBuffer))
+		out_.push_back(DecorationXfbBuffer);
+
+	if (flags.get(DecorationXfbStride))
+		out_.push_back(DecorationXfbStride);
+
+	if (flags.get(DecorationStream))
+		out_.push_back(DecorationStream);
+
+	if (flags.get(DecorationSpecId))
+		out_.push_back(DecorationSpecId);
+
+	if (flags.get(DecorationMatrixStride))
+		out_.push_back(DecorationMatrixStride);
+
+	if (flags.get(DecorationIndex))
+		out_.push_back(DecorationIndex);
+
+	return out_;
+}
+
+void CompilerSPIRV::emit_decorations_operand(Decoration decoration, Meta::Decoration meta)
+{
+	this->emit_id(decoration);
+	switch (decoration)
+	{
+
+	case DecorationBuiltIn:
+		this->emit_id(meta.builtin_type);
+		break;
+
+	case DecorationLocation:
+		this->emit_id(meta.location);
+		break;
+
+	case DecorationComponent:
+		this->emit_id(meta.component);
+		break;
+
+	case DecorationBinding:
+		this->emit_id(meta.binding);
+		break;
+
+	case DecorationOffset:
+		this->emit_id(meta.offset);
+		break;
+
+	case DecorationXfbBuffer:
+		this->emit_id(meta.xfb_buffer);
+		break;
+
+	case DecorationXfbStride:
+		this->emit_id(meta.xfb_stride);
+		break;
+
+	case DecorationStream:
+		this->emit_id(meta.stream);
+		break;
+
+	case DecorationSpecId:
+		this->emit_id(meta.spec_id);
+		break;
+
+	case DecorationMatrixStride:
+		this->emit_id(meta.matrix_stride);
+		break;
+
+	case DecorationIndex:
+		this->emit_id(meta.index);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void CompilerSPIRV::emit_decorations(ID id, Meta::Decoration decoration)
+{
+	for (auto &decor : this->get_decoration_list(decoration))
+	{
+		this->emit_opcode(Op::OpDecorate, 3);
+		this->emit_id(id);
+		this->emit_decorations_operand(decor, decoration);
+	}
+}
+
+void CompilerSPIRV::emit_decorations_member(uint32_t offset, ID id, Meta::Decoration decoration)
+{
+	for (auto &decor : this->get_decoration_list(decoration))
+	{
+		this->emit_opcode(Op::OpMemberDecorate, 4);
+		this->emit_id(id);
+		this->emit_id(offset);
+		this->emit_decorations_operand(decor, decoration);
+	}
+}
+
+void CompilerSPIRV::emit_annotations()
+{
+	for (auto &meta : ir.meta)
+	{
+		auto meta_id = meta.first;
+		auto meta_obj = meta.second;
+
+		if (this->has_decorations(meta_obj.decoration))
+			this->emit_decorations(meta_id, meta_obj.decoration);
+		if (meta_obj.members.size() > 0)
+		{
+			uint32_t i = 0;
+			for (auto &member : meta_obj.members)
+			{
+				if (this->has_decorations(member))
+					this->emit_decorations_member(i, meta_id, member);
+
+				i++;
+			}
+		}
+	}
+}
+
 void CompilerSPIRV::emit_types()
 {
 	ir.for_each_typed_id<SPIRType>(
 	    [this](ID id, SPIRType type)
 	    {
-		    switch (type.type)
+		    uint32_t signed_ = 0;
+		    switch (type.op)
 		    {
 			default:
-				break;
-
-			case SPIRType::Void:
-			    this->emit_opcode(type.op, 1);
-				this->emit_id(id);
-				break;
-
-			// We fall-through
-			case SPIRType::Int64:
-			case SPIRType::Int:
-			case SPIRType::Short:
-			case SPIRType::SByte:
-				this->emit_opcode(type.op, 3);
-				this->emit_id(id);
-				this->emit_id(type.width);
-				this->emit_id(1); // Signed
-				break;
-
-			case SPIRType::UByte:
-			case SPIRType::UShort:
-			case SPIRType::UInt:
-		    case SPIRType::UInt64:
-			    this->emit_opcode(type.op, 3);
-				this->emit_id(id);
-				this->emit_id(type.width);
-				this->emit_id(0); // Unsigned
-				break;
-
-			case SPIRType::Half:
-			case SPIRType::Float:
-			case SPIRType::Double:
-			    this->emit_opcode(type.op, 2);
-				this->emit_id(id);
-				this->emit_id(type.width);
 			    break;
 
-			// Apparently vectors, matrices, etc. are "unknown".
-			case SPIRType::Unknown:
-			    if (type.columns > 1)
-			    {
-				    this->emit_opcode(type.op, 3);
-				    this->emit_id(id);
-				    this->emit_id(this->get_type(type.parent_type).self);
-				    this->emit_id(type.columns);
-				}
-			    else if (type.vecsize > 1)
-			    {
-				    this->emit_opcode(type.op, 3);
-				    this->emit_id(id);
-				    this->emit_id(this->get_type(type.parent_type).self);
-				    this->emit_id(type.vecsize);
-				}
+			case Op::OpTypeSampler:
+		    case Op::OpTypeVoid:
+			    this->emit_opcode(type.op, 1);
+			    this->emit_id(id);
+			    break;
+
+		    case Op::OpTypeInt:
+			    signed_ = (type.basetype == SPIRType::SByte || type.basetype == SPIRType::Short ||
+			                        type.basetype == SPIRType::Int || type.basetype == SPIRType::Int64);
+			    this->emit_opcode(type.op, 3);
+			    this->emit_id(id);
+			    this->emit_id(type.width);
+			    this->emit_id(signed_); // Signed
+			    break;
+
+		    case Op::OpTypeFloat:
+			    this->emit_opcode(Op::OpTypeFloat, 2);
+			    this->emit_id(id);
+			    this->emit_id(type.width);
+			    break;
+
+		    case Op::OpTypeVector:
+			    this->emit_opcode(type.op, 3);
+			    this->emit_id(id);
+			    this->emit_id(type.parent_type);
+			    this->emit_id(type.vecsize);
+			    break;
+
+		    case Op::OpTypeMatrix:
+			    this->emit_opcode(type.op, 3);
+			    this->emit_id(id);
+			    this->emit_id(type.parent_type);
+			    this->emit_id(type.columns);
+			    break;
+
+			case Op::OpTypeImage:
+			    this->emit_opcode(type.op, 9);
+			    this->emit_id(id);
+			    this->emit_id(type.image.sampled);
+			    this->emit_id(type.image.dim);
+			    this->emit_id(type.image.depth);
+			    this->emit_id(type.image.arrayed);
+			    this->emit_id(type.image.ms);
+			    this->emit_id(type.image.sampled);
+			    this->emit_id(type.image.format);
+			    this->emit_id(type.image.access);
 				break;
 
-		    case SPIRType::Struct:
+			case Op::OpTypeSampledImage:
+			    this->emit_opcode(type.op, 2);
+			    this->emit_id(id);
+			    this->emit_id(type.parent_type);
+			    break;
+
+			case Op::OpTypeArray:
+			    if (type.array_size_literal[0])
+			    {
+					this->emit_opcode(type.op, 3);
+					this->emit_id(id);
+					this->emit_id(type.parent_type);
+				    this->emit_id(type.array[0]);
+			    }
+			    else
+			    {
+				    this->emit_opcode(type.op, 2);
+				    this->emit_id(id);
+				    this->emit_id(type.parent_type);
+			    }
+			    break;
+
+		    case Op::OpTypeStruct:
 			    this->emit_opcode(type.op, 1+type.member_types.size());
 			    this->emit_id(id);
-			    for (auto id : type.member_types)
+			    for (auto member_id : type.member_types)
 			    {
-				    this->emit_id(this->get_type(id).self);
+				    this->emit_id(member_id);
 				}
+			    break;
+
+
+			case Op::OpTypePointer:
+			    this->emit_opcode(type.op, 3);
+			    this->emit_id(id);
+			    this->emit_id(type.storage);
+			    this->emit_id(type.parent_type);
 			    break;
 			}
 	    }
 	);
-}
 
+	ir.for_each_typed_id<SPIRConstant>(
+		[this](ID id, SPIRConstant const_) 
+		{ 
+			Op opcode;
+		    auto type = this->get_type(const_.constant_type);
+
+			// SPIRConstant does itself not fully know what type it is.
+			// So we'll go looking.
+			// Additionally, we don't care what kind of float
+			// or integer scalar types are, so we use the op as the switch key.
+		    switch (type.op)
+		    {
+		    case Op::OpTypeBool:
+				
+			    opcode = const_.scalar_u8() == 1 ? 
+					Op::OpConstantTrue :
+					Op::OpConstantFalse;
+
+			    this->emit_opcode(opcode, 2);
+			    this->emit_id(const_.constant_type);
+			    this->emit_id(id);
+			    break;
+
+			
+		    case Op::OpTypeInt:
+		    case Op::OpTypeFloat:
+			    this->emit_opcode(type.op, 3);
+			    this->emit_id(const_.constant_type);
+			    this->emit_id(id);
+			    this->emit_id(const_.scalar());
+			    break;
+
+
+			}
+		}
+	);
+
+	ir.for_each_typed_id<SPIRFunction>(
+		[this] (ID id, SPIRFunction func) { 
+			this->emit_opcode(Op::OpTypeFunction, 2 + func.arguments.size());
+		    this->emit_id(func.function_type);
+		    this->emit_id(func.return_type);
+		    for (auto &param : func.arguments)
+		    {
+			    this->emit_id(param.type);
+			}
+		}
+	);
+}
 
 void CompilerSPIRV::emit_function_defs()
 {
@@ -320,7 +541,7 @@ void CompilerSPIRV::emit_functions()
 
 void CompilerSPIRV::emit_opcode(Op opcode, uint32_t arglength)
 {
-	buffer.push_back(opcode | ((arglength+1) << 16));
+	buffer.push_back(opcode + ((arglength+1) << 16));
 }
 
 void CompilerSPIRV::emit_id(uint32_t id)
@@ -341,18 +562,15 @@ vector<uint32_t> CompilerSPIRV::get_spirv_string(string str)
 
 	for (char c : str)
 	{
-		if (acc == 4) {
-			acc = 0;
+		out_char |= (c << (acc++ * 8));
+		if (acc == 4)
+		{
 			tmp.push_back(out_char);
+			acc = 0;
 			out_char = 0;
 		}
+	}
 
-		out_char |= (c << (acc++ * 8));
-	}
-	
-	if (out_char != 0)
-	{
-		tmp.push_back(out_char);
-	}
+	tmp.push_back(out_char);
 	return tmp;
 }
