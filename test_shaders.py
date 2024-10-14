@@ -492,6 +492,8 @@ def validate_shader_hlsl(shader, force_no_external_validation, paths):
 def shader_to_sm(shader):
     if '.sm62.' in shader:
         return '62'
+    elif '.sm61.' in shader:
+        return '61'
     elif '.sm60.' in shader:
         return '60'
     elif '.sm68.' in shader:
