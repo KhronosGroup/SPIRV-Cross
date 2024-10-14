@@ -13874,6 +13874,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					}
 					else
 					{
+						add_spv_func_and_recompile(SPVFuncImplVariableDescriptor);
 						ep_args += "const device spvDescriptor<" + get_argument_address_space(var) + " " +
 						           type_to_glsl(type) + "*>* ";
 					}
