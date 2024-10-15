@@ -3693,11 +3693,11 @@ void CompilerGLSL::emit_resources()
 				auto &type = this->get<SPIRType>(undef.basetype);
 				// OpUndef can be void for some reason ...
 				if (type.basetype == SPIRType::Void)
-					return;
+					continue;
 
 				// This will break. It is bogus and should not be legal.
 				if (type_is_top_level_block(type))
-					return;
+					continue;
 
 				string initializer;
 				if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
