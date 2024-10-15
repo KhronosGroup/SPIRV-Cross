@@ -12769,17 +12769,10 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 		else
 			quals = member_location_attribute_qualifier(type, index);
 
-		if (builtin == BuiltInBaryCoordKHR || builtin == BuiltInBaryCoordNoPerspKHR)
+		if (builtin == BuiltInBaryCoordKHR && has_member_decoration(type.self, index, DecorationNoPerspective))
 		{
-			if (has_member_decoration(type.self, index, DecorationFlat) ||
-			    has_member_decoration(type.self, index, DecorationCentroid) ||
-			    has_member_decoration(type.self, index, DecorationSample) ||
-			    has_member_decoration(type.self, index, DecorationNoPerspective))
-			{
-				// NoPerspective is baked into the builtin type.
-				SPIRV_CROSS_THROW(
-				    "Flat, Centroid, Sample, NoPerspective decorations are not supported for BaryCoord inputs.");
-			}
+			// NoPerspective is baked into the builtin type.
+			SPIRV_CROSS_THROW("NoPerspective decorations are not supported for BaryCoord inputs.");
 		}
 
 		// Don't bother decorating integers with the 'flat' attribute; it's
@@ -12797,7 +12790,7 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			{
 				if (!quals.empty())
 					quals += ", ";
-				if (has_member_decoration(type.self, index, DecorationNoPerspective))
+				if (has_member_decoration(type.self, index, DecorationNoPerspective) || builtin == BuiltInBaryCoordNoPerspKHR)
 					quals += "centroid_no_perspective";
 				else
 					quals += "centroid_perspective";
@@ -12806,16 +12799,22 @@ string CompilerMSL::member_attribute_qualifier(const SPIRType &type, uint32_t in
 			{
 				if (!quals.empty())
 					quals += ", ";
-				if (has_member_decoration(type.self, index, DecorationNoPerspective))
+				if (has_member_decoration(type.self, index, DecorationNoPerspective) || builtin == BuiltInBaryCoordNoPerspKHR)
 					quals += "sample_no_perspective";
 				else
 					quals += "sample_perspective";
 			}
-			else if (has_member_decoration(type.self, index, DecorationNoPerspective))
+			else if (has_member_decoration(type.self, index, DecorationNoPerspective) || builtin == BuiltInBaryCoordNoPerspKHR)
 			{
 				if (!quals.empty())
 					quals += ", ";
 				quals += "center_no_perspective";
+			}
+			else if (builtin == BuiltInBaryCoordKHR)
+			{
+				if (!quals.empty())
+					quals += ", ";
+				quals += "center_perspective";
 			}
 		}
 
@@ -16819,18 +16818,12 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		SPIRV_CROSS_THROW("Subgroup ballot masks are handled specially in MSL.");
 
 	case BuiltInBaryCoordKHR:
-		if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
-			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.3 and above on iOS.");
-		else if (!msl_options.supports_msl_version(2, 2))
-			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.2 and above on macOS.");
-		return "barycentric_coord, center_perspective";
-
 	case BuiltInBaryCoordNoPerspKHR:
 		if (msl_options.is_ios() && !msl_options.supports_msl_version(2, 3))
 			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.3 and above on iOS.");
 		else if (!msl_options.supports_msl_version(2, 2))
 			SPIRV_CROSS_THROW("Barycentrics are only supported in MSL 2.2 and above on macOS.");
-		return "barycentric_coord, center_no_perspective";
+		return "barycentric_coord";
 
 	default:
 		return "unsupported-built-in";
