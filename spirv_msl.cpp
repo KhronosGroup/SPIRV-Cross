@@ -9560,7 +9560,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t op0 = ops[2];
 		uint32_t op1 = ops[3];
 		auto &type = get<SPIRType>(result_type);
-		auto &op_type = expression_type(op0);
+		auto &op_type = get<SPIRType>(type.member_types[0]);
 		auto input_type = opcode == OpSMulExtended ? int_type : uint_type;
 		string cast_op0, cast_op1;
 
