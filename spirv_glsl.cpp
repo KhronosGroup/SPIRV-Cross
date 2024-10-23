@@ -13229,13 +13229,24 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t op0 = ops[2];
 		uint32_t op1 = ops[3];
 
-		// Needs special handling.
+		auto &out_type = get<SPIRType>(result_type);
+
 		bool forward = should_forward(op0) && should_forward(op1);
-		auto expr = join(to_enclosed_expression(op0), " - ", to_enclosed_expression(op1), " * ", "(",
-		                 to_enclosed_expression(op0), " / ", to_enclosed_expression(op1), ")");
+		string cast_op0, cast_op1;
+		auto expected_type = binary_op_bitcast_helper(cast_op0, cast_op1, int_type, op0, op1, false);
+
+		// Needs special handling.
+		auto expr = join(cast_op0, " - ", cast_op1, " * ", "(", cast_op0, " / ", cast_op1, ")");
 
 		if (implicit_integer_promotion)
+		{
 			expr = join(type_to_glsl(get<SPIRType>(result_type)), '(', expr, ')');
+		}
+		else if (out_type.basetype != int_type)
+		{
+			expected_type.basetype = int_type;
+			expr = join(bitcast_glsl_op(out_type, expected_type), '(', expr, ')');
+		}
 
 		emit_op(result_type, result_id, expr, forward);
 		inherit_expression_dependencies(result_id, op0);
