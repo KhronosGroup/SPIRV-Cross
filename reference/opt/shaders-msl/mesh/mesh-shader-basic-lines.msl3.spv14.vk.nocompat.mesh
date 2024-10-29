@@ -91,13 +91,6 @@ struct BlockOutPrim
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 3u, 4u);
 
-struct TaskPayload
-{
-    float a;
-    float b;
-    int c;
-};
-
 struct spvPerVertex
 {
     float4 gl_Position [[position]];
