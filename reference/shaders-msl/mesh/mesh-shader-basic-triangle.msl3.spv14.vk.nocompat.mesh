@@ -67,7 +67,6 @@ struct gl_MeshPerVertexEXT
     float4 gl_Position [[position]];
     float gl_PointSize;
     float gl_ClipDistance [[clip_distance]] [1];
-    float gl_CullDistance [[cull_distance]] [2];
 };
 
 struct BlockOut
@@ -88,7 +87,6 @@ struct gl_MeshPerPrimitiveEXT
     uint gl_Layer [[render_target_array_index]];
     uint gl_ViewportIndex [[viewport_array_index]];
     bool gl_CullPrimitiveEXT [[primitive_culled]];
-    
 };
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 3u, 4u);
@@ -106,8 +104,6 @@ struct spvPerVertex
     float gl_PointSize;
     float gl_ClipDistance [[clip_distance]] [1];
     float gl_ClipDistance_0 [[user(clip0)]];
-    float gl_CullDistance_0 [[user(cull0)]];
-    float gl_CullDistance_1 [[user(cull1)]];
     float4 vOut [[user(locn0)]];
     float4 outputs_a [[user(locn2)]];
     float4 outputs_b [[user(locn3)]];
@@ -118,11 +114,10 @@ struct spvPerPrimitive
     float4 vPrim [[user(locn1)]];
     float4 prim_outputs_a [[user(locn4)]];
     float4 prim_outputs_b [[user(locn5)]];
-    int gl_PrimitiveID [[primitive_id]];
+    uint gl_PrimitiveID [[primitive_id]];
     uint gl_Layer [[render_target_array_index]];
     uint gl_ViewportIndex [[viewport_array_index]];
-    short gl_CullPrimitiveEXT [[primitive_culled]];
-    int gl_PrimitiveShadingRateEXT [[unsupported-built-in]];
+    bool gl_CullPrimitiveEXT [[primitive_culled]];
 };
 
 using spvMesh_t = mesh<spvPerVertex, spvPerPrimitive, 24, 22, topology::triangle>;
@@ -134,8 +129,6 @@ void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT,
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = float4(float3(gl_GlobalInvocationID), 1.0);
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_PointSize = 2.0;
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_ClipDistance[0] = 4.0;
-    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_CullDistance[0] = 3.0;
-    gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_CullDistance[1] = 5.0;
     vOut[gl_LocalInvocationIndex] = float4(float3(gl_GlobalInvocationID), 2.0);
     outputs[gl_LocalInvocationIndex].a = float4(5.0);
     outputs[gl_LocalInvocationIndex].b = float4(6.0);
@@ -150,7 +143,6 @@ void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT,
         gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_Layer = int(gl_GlobalInvocationID.x) + 1;
         gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_ViewportIndex = int(gl_GlobalInvocationID.x) + 2;
         gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_CullPrimitiveEXT = short((gl_GlobalInvocationID.x & 1u) != 0u);
-        gl_MeshPrimitivesEXT[gl_LocalInvocationIndex].gl_PrimitiveShadingRateEXT = int(gl_GlobalInvocationID.x) + 3;
     }
 }
 
@@ -187,10 +179,6 @@ void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT,
         spvV.gl_PointSize = gl_MeshVerticesEXT[spvI].gl_PointSize;
         spvV.gl_ClipDistance[0] = gl_MeshVerticesEXT[spvI].gl_ClipDistance[0];
         spvV.gl_ClipDistance_0 = gl_MeshVerticesEXT[spvI].gl_ClipDistance[0];
-        spvV.gl_CullDistance[0] = gl_MeshVerticesEXT[spvI].gl_CullDistance[0];
-        spvV.gl_CullDistance_0 = gl_MeshVerticesEXT[spvI].gl_CullDistance[0];
-        spvV.gl_CullDistance[1] = gl_MeshVerticesEXT[spvI].gl_CullDistance[1];
-        spvV.gl_CullDistance_1 = gl_MeshVerticesEXT[spvI].gl_CullDistance[1];
         spvV.outputs_a = outputs[spvI].a;
         spvV.outputs_b = outputs[spvI].b;
         spvMesh.set_vertex(spvI, spvV);
@@ -206,7 +194,6 @@ void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT,
         spvP.gl_Layer = gl_MeshPrimitivesEXT[spvI].gl_Layer;
         spvP.gl_ViewportIndex = gl_MeshPrimitivesEXT[spvI].gl_ViewportIndex;
         spvP.gl_CullPrimitiveEXT = gl_MeshPrimitivesEXT[spvI].gl_CullPrimitiveEXT;
-        spvP.gl_PrimitiveShadingRateEXT = gl_MeshPrimitivesEXT[spvI].gl_PrimitiveShadingRateEXT;
         spvMesh.set_primitive(spvI, spvP);
     }
 }

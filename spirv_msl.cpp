@@ -12671,8 +12671,7 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 	if (is_mesh_shader())
 	{
 		BuiltIn builtin = BuiltInMax;
-		bool block = has_decoration(type.self, DecorationBlock);
-		if (block && is_member_builtin(type, index, &builtin))
+		if (is_member_builtin(type, index, &builtin))
 		{
 			if (builtin == BuiltInPrimitiveShadingRateKHR)
 			{
@@ -12693,9 +12692,18 @@ string CompilerMSL::to_struct_member(const SPIRType &type, uint32_t member_type_
 
 			is_using_builtin_array = true;
 			std::string result;
-			result = join(type_to_glsl(metallic_type, orig_id, false), " ", qualifier,
-			              builtin_to_glsl(builtin, StorageClassOutput), member_attribute_qualifier(type, index),
-			              array_type, ";");
+			if (has_member_decoration(type.self, orig_id, DecorationBuiltIn))
+			{
+				// avoid '_RESERVED_IDENTIFIER_FIXUP_' in variable name
+				result = join(type_to_glsl(metallic_type, orig_id, false), " ", qualifier,
+				              builtin_to_glsl(builtin, StorageClassOutput), member_attribute_qualifier(type, index),
+				              array_type, ";");
+			}
+			else
+			{
+				result = join(type_to_glsl(metallic_type, orig_id, false), " ", qualifier,
+				              to_member_name(type, index), member_attribute_qualifier(type, index), array_type, ";");
+			}
 			is_using_builtin_array = false;
 			return result;
 		}
