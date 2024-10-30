@@ -19232,7 +19232,6 @@ void CompilerMSL::emit_mesh_outputs()
 
 	if (mesh_out_per_primitive != 0 || builtin_mesh_primitive_indices_id != 0)
 	{
-		auto &type_prim = get<SPIRType>(mesh_out_per_primitive);
 		if (num_invocations < mode.output_primitives)
 		{
 			statement("for (uint spvPI = gl_LocalInvocationIndex; spvPI < spvMeshSizes.y; spvPI += spvThreadCount)");
@@ -19268,6 +19267,7 @@ void CompilerMSL::emit_mesh_outputs()
 
 		if (mesh_out_per_primitive != 0)
 		{
+			auto &type_prim = get<SPIRType>(mesh_out_per_primitive);
 			statement("spvPerPrimitive spvP = {};");
 			for (uint32_t index = 0; index < uint32_t(type_prim.member_types.size()); ++index)
 			{
