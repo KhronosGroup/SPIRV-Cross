@@ -36,8 +36,7 @@ struct TaskPayload
 	int c;
 };
 
-// taskPayloadSharedEXT TaskPayload payload;
-const TaskPayload payload = {0.0, 1.0, 2};
+taskPayloadSharedEXT TaskPayload payload;
 
 void main3()
 {

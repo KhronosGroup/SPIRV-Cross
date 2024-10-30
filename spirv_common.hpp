@@ -579,7 +579,8 @@ struct SPIRType : IVariant
 		ControlPointArray,
 		Interpolant,
 		Char,
-		Meshlet
+		// MSL specific type, that is used by 'object'(analog of 'task' from glsl) shader.
+		MeshGridProperties
 	};
 
 	// Scalar/vector/matrix support.

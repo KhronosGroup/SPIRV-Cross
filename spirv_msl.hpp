@@ -871,6 +871,7 @@ protected:
 	void emit_block_hints(const SPIRBlock &block) override;
 	void emit_mesh_entry_point();
 	void emit_mesh_outputs();
+	void emit_mesh_tasks(SPIRBlock &block) override;
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	std::string type_to_array_glsl(const SPIRType &type, uint32_t variable_id) override;
@@ -1077,8 +1078,6 @@ protected:
 	std::string get_tess_factor_struct_name();
 	SPIRType &get_uint_type();
 	uint32_t get_uint_type_id();
-	uint32_t get_shared_uint_type_id();
-	uint32_t get_meshlet_type_id();
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, spv::Op opcode,
 	                         uint32_t mem_order_1, uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
 	                         bool op1_is_pointer = false, bool op1_is_literal = false, uint32_t op2 = 0);
@@ -1113,6 +1112,7 @@ protected:
 	uint32_t builtin_workgroup_size_id = 0;
 	uint32_t builtin_mesh_primitive_indices_id = 0;
 	uint32_t builtin_mesh_sizes_id = 0;
+	uint32_t builtin_task_grid_id = 0;
 	uint32_t builtin_frag_depth_id = 0;
 	uint32_t swizzle_buffer_id = 0;
 	uint32_t buffer_size_buffer_id = 0;
