@@ -2215,11 +2215,8 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			// This kind of analysis is done in several places ...
 		}
 
-		if (b.terminator == SPIRBlock::EmitMeshTasks)
-		{
-			if (builtin_task_grid_id != 0)
-				added_arg_ids.insert(builtin_task_grid_id);
-		}
+		if (b.terminator == SPIRBlock::EmitMeshTasks && builtin_task_grid_id != 0)
+			added_arg_ids.insert(builtin_task_grid_id);
 	}
 
 	function_global_vars[func_id] = added_arg_ids;
@@ -19353,7 +19350,12 @@ void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
 	// TODO: find relieble and clean of terminating shader.
 	flush_variable_declaration(builtin_task_grid_id);
 	statement("spvMgp.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
-		        to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
+	          to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
+	// This is correct if EmitMeshTasks is called in the entry function for shader.
+	// Only viable solutions would be:
+	// - Caller ensures the SPIR-V is inlined, then this always holds true.
+	// - Pass down a "should terminate" bool to leaf functions and chain return (horrible and disgusting, let's not).
+	statement("return;");
 }
 
 string CompilerMSL::additional_fixed_sample_mask_str() const

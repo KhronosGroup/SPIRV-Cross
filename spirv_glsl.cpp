@@ -16500,9 +16500,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 		auto &var = get<SPIRVariable>(v);
 		var.deferred_declaration = false;
 		if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
-		{
-		  continue;
-		}
+			continue;
 
 		if (variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
 		{
