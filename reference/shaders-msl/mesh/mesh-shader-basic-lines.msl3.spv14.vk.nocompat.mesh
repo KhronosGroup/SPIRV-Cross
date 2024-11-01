@@ -89,14 +89,14 @@ struct BlockOutPrim
     float4 b;
 };
 
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 3u, 4u);
-
 struct TaskPayload
 {
     float a;
     float b;
     int c;
 };
+
+constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(2u, 3u, 4u);
 
 struct spvPerVertex
 {
@@ -133,7 +133,7 @@ void main3(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, th
 }
 
 static inline __attribute__((always_inline))
-void main2(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, thread uint& gl_LocalInvocationIndex, threadgroup spvUnsafeArray<gl_MeshPerPrimitiveEXT, 22>& gl_MeshPrimitivesEXT, thread uint3& gl_GlobalInvocationID, threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT, threadgroup spvUnsafeArray<float4, 24>& vOut, threadgroup spvUnsafeArray<BlockOut, 24>& outputs, threadgroup spvUnsafeArray<float4, 22>& vPrim, thread uint3& gl_WorkGroupID, threadgroup spvUnsafeArray<BlockOutPrim, 22>& prim_outputs, threadgroup uint2& spvMeshSizes)
+void main2(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, thread uint& gl_LocalInvocationIndex, threadgroup spvUnsafeArray<gl_MeshPerPrimitiveEXT, 22>& gl_MeshPrimitivesEXT, thread uint3& gl_GlobalInvocationID, threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT, threadgroup spvUnsafeArray<float4, 24>& vOut, threadgroup spvUnsafeArray<BlockOut, 24>& outputs, threadgroup spvUnsafeArray<float4, 22>& vPrim, thread uint3& gl_WorkGroupID, threadgroup spvUnsafeArray<BlockOutPrim, 22>& prim_outputs, const object_data TaskPayload& payload, threadgroup uint2& spvMeshSizes)
 {
     spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 24u, 22u);
     gl_MeshVerticesEXT[gl_LocalInvocationIndex].gl_Position = float4(float3(gl_GlobalInvocationID), 1.0);
@@ -146,19 +146,19 @@ void main2(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, th
     if (gl_LocalInvocationIndex < 22u)
     {
         vPrim[gl_LocalInvocationIndex] = float4(float3(gl_WorkGroupID), 3.0);
-        prim_outputs[gl_LocalInvocationIndex].a = float4(0.0);
-        prim_outputs[gl_LocalInvocationIndex].b = float4(1.0);
+        prim_outputs[gl_LocalInvocationIndex].a = float4(payload.a);
+        prim_outputs[gl_LocalInvocationIndex].b = float4(payload.b);
         main3(gl_PrimitiveLineIndicesEXT, gl_LocalInvocationIndex, gl_MeshPrimitivesEXT, gl_GlobalInvocationID);
     }
 }
 
 static inline __attribute__((always_inline))
-void _4(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, thread uint& gl_LocalInvocationIndex, threadgroup spvUnsafeArray<gl_MeshPerPrimitiveEXT, 22>& gl_MeshPrimitivesEXT, thread uint3& gl_GlobalInvocationID, threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT, threadgroup spvUnsafeArray<float4, 24>& vOut, threadgroup spvUnsafeArray<BlockOut, 24>& outputs, threadgroup spvUnsafeArray<float4, 22>& vPrim, thread uint3& gl_WorkGroupID, threadgroup spvUnsafeArray<BlockOutPrim, 22>& prim_outputs, threadgroup uint2& spvMeshSizes)
+void _4(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, thread uint& gl_LocalInvocationIndex, threadgroup spvUnsafeArray<gl_MeshPerPrimitiveEXT, 22>& gl_MeshPrimitivesEXT, thread uint3& gl_GlobalInvocationID, threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT, threadgroup spvUnsafeArray<float4, 24>& vOut, threadgroup spvUnsafeArray<BlockOut, 24>& outputs, threadgroup spvUnsafeArray<float4, 22>& vPrim, thread uint3& gl_WorkGroupID, threadgroup spvUnsafeArray<BlockOutPrim, 22>& prim_outputs, const object_data TaskPayload& payload, threadgroup uint2& spvMeshSizes)
 {
-    main2(gl_PrimitiveLineIndicesEXT, gl_LocalInvocationIndex, gl_MeshPrimitivesEXT, gl_GlobalInvocationID, gl_MeshVerticesEXT, vOut, outputs, vPrim, gl_WorkGroupID, prim_outputs, spvMeshSizes);
+    main2(gl_PrimitiveLineIndicesEXT, gl_LocalInvocationIndex, gl_MeshPrimitivesEXT, gl_GlobalInvocationID, gl_MeshVerticesEXT, vOut, outputs, vPrim, gl_WorkGroupID, prim_outputs, payload, spvMeshSizes);
 }
 
-[[mesh]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]], spvMesh_t spvMesh)
+[[mesh]] void main0(uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]], spvMesh_t spvMesh, const object_data TaskPayload& payload [[payload]])
 {
     threadgroup uint2 spvMeshSizes;
     threadgroup spvUnsafeArray<uint2, 22> gl_PrimitiveLineIndicesEXT;
@@ -170,7 +170,7 @@ void _4(threadgroup spvUnsafeArray<uint2, 22>& gl_PrimitiveLineIndicesEXT, threa
     threadgroup spvUnsafeArray<BlockOutPrim, 22> prim_outputs;
     threadgroup spvUnsafeArray<float, 16> shared_float;
     if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
-    _4(gl_PrimitiveLineIndicesEXT, gl_LocalInvocationIndex, gl_MeshPrimitivesEXT, gl_GlobalInvocationID, gl_MeshVerticesEXT, vOut, outputs, vPrim, gl_WorkGroupID, prim_outputs, spvMeshSizes);
+    _4(gl_PrimitiveLineIndicesEXT, gl_LocalInvocationIndex, gl_MeshPrimitivesEXT, gl_GlobalInvocationID, gl_MeshVerticesEXT, vOut, outputs, vPrim, gl_WorkGroupID, prim_outputs, payload, spvMeshSizes);
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (spvMeshSizes.y == 0)
     {

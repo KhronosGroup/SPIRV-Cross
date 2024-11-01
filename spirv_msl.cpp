@@ -1086,6 +1086,31 @@ void CompilerMSL::build_implicit_builtins()
 		set_name(var_id, "spvMeshSizes");
 		builtin_mesh_sizes_id = var_id;
 	}
+
+	if (get_execution_model() == spv::ExecutionModelTaskEXT)
+	{
+		uint32_t offset = ir.increase_bound_by(3);
+		uint32_t type_id = offset;
+		uint32_t type_ptr_id = offset + 1;
+		uint32_t var_id = offset + 2;
+
+		SPIRType mesh_grid_type { OpTypeStruct };
+		mesh_grid_type.basetype = SPIRType::MeshGridProperties;
+		set<SPIRType>(type_id, mesh_grid_type);
+
+		SPIRType mesh_grid_type_ptr = mesh_grid_type;
+		mesh_grid_type_ptr.op = spv::OpTypePointer;
+		mesh_grid_type_ptr.pointer = true;
+		mesh_grid_type_ptr.pointer_depth++;
+		mesh_grid_type_ptr.parent_type = type_id;
+		mesh_grid_type_ptr.storage = StorageClassOutput;
+
+		auto &ptr_in_type = set<SPIRType>(type_ptr_id, mesh_grid_type_ptr);
+		ptr_in_type.self = type_id;
+		set<SPIRVariable>(var_id, type_ptr_id, StorageClassOutput);
+		set_name(var_id, "spvMgp");
+		builtin_task_grid_id = var_id;
+	}
 }
 
 // Checks if the specified builtin variable (e.g. gl_InstanceIndex) is marked as active.
@@ -1235,35 +1260,6 @@ uint32_t CompilerMSL::get_uint_type_id()
 	type.width = 32;
 	set<SPIRType>(uint_type_id, type);
 	return uint_type_id;
-}
-
-uint32_t CompilerMSL::get_shared_uint_type_id()
-{
-	if (shared_uint_type_id != 0)
-		return shared_uint_type_id;
-
-	shared_uint_type_id = ir.increase_bound_by(1);
-
-	SPIRType type { OpTypeInt };
-	type.basetype = SPIRType::UInt;
-	type.width = 32;
-	type.storage = spv::StorageClassWorkgroup;
-	set<SPIRType>(shared_uint_type_id, type);
-	return shared_uint_type_id;
-}
-
-uint32_t CompilerMSL::get_meshlet_type_id()
-{
-	if (meshlet_type_id != 0)
-		return meshlet_type_id;
-
-	meshlet_type_id = ir.increase_bound_by(1);
-
-	SPIRType type { OpTypeStruct };
-	type.basetype = SPIRType::Meshlet;
-	// type.storage = StorageClassWorkgroup; // threadgroup is not alowed with mesh<>
-	set<SPIRType>(meshlet_type_id, type);
-	return meshlet_type_id;
 }
 
 void CompilerMSL::emit_entry_point_declarations()
@@ -1848,7 +1844,8 @@ void CompilerMSL::localize_global_variables()
 	{
 		uint32_t v_id = *iter;
 		auto &var = get<SPIRVariable>(v_id);
-		if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup)
+		if (var.storage == StorageClassPrivate || var.storage == StorageClassWorkgroup ||
+		    var.storage == StorageClassTaskPayloadWorkgroupEXT)
 		{
 			if (!variable_is_lut(var))
 				entry_func.add_local_variable(v_id);
@@ -2217,6 +2214,9 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 			// We should consider a more unified system here to reduce boiler-plate.
 			// This kind of analysis is done in several places ...
 		}
+
+		if (b.terminator == SPIRBlock::EmitMeshTasks && builtin_task_grid_id != 0)
+			added_arg_ids.insert(builtin_task_grid_id);
 	}
 
 	function_global_vars[func_id] = added_arg_ids;
@@ -11210,6 +11210,21 @@ void CompilerMSL::emit_function_prototype(SPIRFunction &func, const Bitset &)
 			if (ir.ids[initializer].get_type() == TypeNone || ir.ids[initializer].get_type() == TypeExpression)
 				set<SPIRExpression>(ed_var.initializer, "{}", ed_var.basetype, true);
 		}
+
+		// add `taskPayloadSharedEXT` variable to entry-point arguments
+		for (auto &v : func.local_variables)
+		{
+			auto &var = get<SPIRVariable>(v);
+			if (var.storage != StorageClassTaskPayloadWorkgroupEXT)
+				continue;
+
+			add_local_variable_name(v);
+			SPIRFunction::Parameter arg = {};
+			arg.id = v;
+			arg.type = var.basetype;
+			arg.alias_global_variable = true;
+			decl += join(", ", argument_decl(arg), " [[payload]]");
+		}
 	}
 
 	for (auto &arg : func.arguments)
@@ -13336,6 +13351,9 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 	case ExecutionModelMeshEXT:
 		entry_type = "[[mesh]]";
 		break;
+	case ExecutionModelTaskEXT:
+		entry_type = "[[object]]";
+		break;
 	default:
 		entry_type = "unknown";
 		break;
@@ -13477,6 +13495,13 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 
 		if (is_mesh_shader())
 			addr_space = "threadgroup";
+		break;
+
+	case StorageClassTaskPayloadWorkgroupEXT:
+		if (is_mesh_shader())
+			addr_space = "const object_data";
+		else
+			addr_space = "object_data";
 		break;
 
 	default:
@@ -13884,6 +13909,13 @@ void CompilerMSL::entry_point_args_builtin(string &ep_args)
 		if (!ep_args.empty())
 			ep_args += ", ";
 		ep_args += join("spvMesh_t spvMesh");
+	}
+
+	if (get_execution_model() == ExecutionModelTaskEXT)
+	{
+		if (!ep_args.empty())
+			ep_args += ", ";
+		ep_args += join("mesh_grid_properties spvMgp");
 	}
 }
 
@@ -15769,6 +15801,9 @@ string CompilerMSL::to_qualifiers_glsl(uint32_t id)
 	auto *var = maybe_get<SPIRVariable>(id);
 	auto &type = expression_type(id);
 
+	if (type.storage == StorageClassTaskPayloadWorkgroupEXT)
+		quals += "object_data ";
+
 	if (type.storage == StorageClassWorkgroup || (var && variable_decl_is_remapped_storage(*var, StorageClassWorkgroup)))
 		quals += "threadgroup ";
 
@@ -15953,6 +15988,8 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		break;
 	case SPIRType::RayQuery:
 		return "raytracing::intersection_query<raytracing::instancing, raytracing::triangle_data>";
+	case SPIRType::MeshGridProperties:
+		return "mesh_grid_properties";
 
 	default:
 		return "unknown_type";
@@ -19305,6 +19342,20 @@ void CompilerMSL::emit_mesh_outputs()
 
 		end_scope();
 	}
+}
+
+void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
+{
+	// GLSL: Once this instruction is called, the workgroup must be terminated immediately, and the mesh shaders are launched.
+	// TODO: find relieble and clean of terminating shader.
+	flush_variable_declaration(builtin_task_grid_id);
+	statement("spvMgp.set_threadgroups_per_grid(uint3(", to_unpacked_expression(block.mesh.groups[0]), ", ",
+	          to_unpacked_expression(block.mesh.groups[1]), ", ", to_unpacked_expression(block.mesh.groups[2]), "));");
+	// This is correct if EmitMeshTasks is called in the entry function for shader.
+	// Only viable solutions would be:
+	// - Caller ensures the SPIR-V is inlined, then this always holds true.
+	// - Pass down a "should terminate" bool to leaf functions and chain return (horrible and disgusting, let's not).
+	statement("return;");
 }
 
 string CompilerMSL::additional_fixed_sample_mask_str() const
