@@ -202,6 +202,9 @@ uint32_t CompilerMSL::get_resource_array_size(const SPIRType &type, uint32_t id)
 {
 	uint32_t array_size = to_array_size_literal(type);
 
+	if (id == 0)
+		return array_size;
+
 	// If we have argument buffers, we need to honor the ABI by using the correct array size
 	// from the layout. Only use shader declared size if we're not using argument buffers.
 	uint32_t desc_set = get_decoration(id, DecorationDescriptorSet);
@@ -18793,6 +18796,7 @@ void CompilerMSL::analyze_argument_buffers()
 
 		uint32_t member_index = 0;
 		uint32_t next_arg_buff_index = 0;
+		uint32_t prev_was_scalar_on_array_offset = 0;
 		for (auto &resource : resources)
 		{
 			auto &var = *resource.var;
@@ -18805,7 +18809,9 @@ void CompilerMSL::analyze_argument_buffers()
 			// member_index and next_arg_buff_index are incremented when padding members are added.
 			if (msl_options.pad_argument_buffer_resources && resource.plane == 0 && resource.overlapping_var_id == 0)
 			{
-				auto rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
+				auto rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index - prev_was_scalar_on_array_offset);
+				rez_bind.count -= prev_was_scalar_on_array_offset;
+
 				while (resource.index > next_arg_buff_index)
 				{
 					switch (rez_bind.basetype)
@@ -18844,12 +18850,19 @@ void CompilerMSL::analyze_argument_buffers()
 
 					// After padding, retrieve the resource again. It will either be more padding, or the actual resource.
 					rez_bind = get_argument_buffer_resource(desc_set, next_arg_buff_index);
+					prev_was_scalar_on_array_offset = 0;
 				}
 
+				uint32_t count = rez_bind.count;
+
+				// If the current resource is an array in the descriptor, but is a scalar
+				// in the shader, only the first element will be consumed. The next pass
+				// will add a padding member to consume the remaining array elements.
+				if(count > 1 && type.array.empty())
+					count = prev_was_scalar_on_array_offset = 1;
+
 				// Adjust the number of slots consumed by current member itself.
-				// Use the count value from the app, instead of the shader, in case the
-				// shader is only accessing part, or even one element, of the array.
-				next_arg_buff_index += resource.plane_count * rez_bind.count;
+				next_arg_buff_index += resource.plane_count * count;
 			}
 
 			string mbr_name = ensure_valid_name(resource.name, "m");
