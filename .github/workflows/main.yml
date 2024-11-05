@@ -69,6 +69,8 @@ jobs:
         run: ctest --verbose -C Release
 
   build-mobile:
+    # iOS is 10x expensive to run on GitHub machines, so only run if we know something else passed as well
+    needs: build
     name: "Build ${{ matrix.sdk }}"
     strategy:
       matrix:
