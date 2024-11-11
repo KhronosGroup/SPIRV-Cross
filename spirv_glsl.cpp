@@ -3563,6 +3563,12 @@ void CompilerGLSL::emit_resources()
 		fixup_implicit_builtin_block_names(execution.model);
 		break;
 
+	case ExecutionModelFragment:
+		if (options.fragment.emulate_alpha_test_func != Options::Always &&
+		    options.fragment.emulate_alpha_test_func != Options::Never)
+			statement("uniform float SPIRV_Cross_AlphaTestRef;");
+		break;
+
 	default:
 		break;
 	}
@@ -16612,6 +16618,28 @@ void CompilerGLSL::emit_fixup()
 
 		if (options.vertex.flip_vert_y)
 			statement("gl_Position.y = -gl_Position.y;");
+	}
+	else if (get_entry_point().model == ExecutionModelFragment)
+	{
+		if (options.fragment.emulate_alpha_test_func == Options::Never)
+		{
+			statement("discard;");
+		}
+		else if (options.fragment.emulate_alpha_test_func != Options::Always)
+		{
+			auto *output_var = find_color_output_by_location(0);
+			if (output_var && this->get<SPIRType>(output_var->basetype).vecsize >= 4)
+			{
+				// We check for test fail, so we use the opposite operator
+				static const char *ops[Options::Always] = {
+					"", ">=", "!=", ">", "<=", "==", "<",
+				};
+				assert(options.fragment.emulate_alpha_test_func < Options::Always);
+				const char *op = ops[options.fragment.emulate_alpha_test_func];
+				statement("if (", to_expression(output_var->self), ".a ", op,
+				          " SPIRV_Cross_AlphaTestRef) discard;");
+			}
+		}
 	}
 }
 

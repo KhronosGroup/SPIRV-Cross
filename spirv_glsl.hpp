@@ -164,6 +164,18 @@ public:
 			Highp
 		};
 
+		enum CompareFunc
+		{
+			Never,
+			Less,
+			Equal,
+			LessEqual,
+			Greater,
+			NotEqual,
+			GreaterEqual,
+			Always,
+		};
+
 		struct VertexOptions
 		{
 			// "Vertex-like shader" here is any shader stage that can write BuiltInPosition.
@@ -189,6 +201,9 @@ public:
 			// Add precision highp int in ES targets when emitting GLES source.
 			Precision default_float_precision = Mediump;
 			Precision default_int_precision = Highp;
+
+			// If this is not Always, injects an alpha test for the output with location 0.
+			CompareFunc emulate_alpha_test_func = Always;
 		} fragment;
 	};
 
