@@ -18858,7 +18858,7 @@ void CompilerMSL::analyze_argument_buffers()
 				// If the current resource is an array in the descriptor, but is a scalar
 				// in the shader, only the first element will be consumed. The next pass
 				// will add a padding member to consume the remaining array elements.
-				if(count > 1 && type.array.empty())
+				if (count > 1 && type.array.empty())
 					count = prev_was_scalar_on_array_offset = 1;
 
 				// Adjust the number of slots consumed by current member itself.
