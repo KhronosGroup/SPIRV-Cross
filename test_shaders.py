@@ -116,23 +116,6 @@ def print_msl_compiler_version():
     except subprocess.CalledProcessError:
         pass
 
-def msl_compiler_supports_version(version):
-    try:
-        if platform.system() == 'Darwin':
-            subprocess.check_call(['xcrun', '--sdk', 'macosx', 'metal', '-x', 'metal', version, '-'],
-                stdin = subprocess.DEVNULL, stdout = subprocess.DEVNULL, stderr = subprocess.DEVNULL)
-            print('Current SDK supports MSL {0}. Enabling validation for MSL {0} shaders.'.format(version))
-        else:
-            print('Running on {}, assuming {} is supported.'.format(platform.system(), version))
-        # If we're running on non-macOS system, assume it's supported.
-        return True
-    except OSError as e:
-        print('Failed to check if MSL {} is not supported. It probably is not.'.format(version))
-        return False
-    except subprocess.CalledProcessError:
-        print('Current SDK does NOT support MSL {0}. Disabling validation for MSL {0} shaders.'.format(version))
-        return False
-
 def path_to_msl_standard(shader):
     if '.msl31.' in shader:
         return '-std=metal3.1'
@@ -905,23 +888,7 @@ def test_shader_msl(stats, shader, args, paths):
     # executable from Xcode using args: `--msl --entry main --output msl_path spirv_path`.
 #    print('SPRIV shader: ' + spirv)
 
-    shader_is_msl22 = '.msl22.' in joined_path
-    shader_is_msl23 = '.msl23.' in joined_path
-    shader_is_msl24 = '.msl24.' in joined_path
-    shader_is_msl30 = '.msl3.' in joined_path
-    shader_is_msl31 = '.msl31.' in joined_path
-    skip_validation = (shader_is_msl22 and (not args.msl22)) or \
-        (shader_is_msl23 and (not args.msl23)) or \
-        (shader_is_msl24 and (not args.msl24)) or \
-        (shader_is_msl30 and (not args.msl30)) or \
-        (shader_is_msl31 and (not args.msl31))
-
-    if skip_validation:
-        print('Skipping validation for {} due to lack of toolchain support.'.format(joined_path))
-
-    if '.invalid.' in joined_path:
-        skip_validation = True
-
+    skip_validation = '.invalid.' in joined_path
     if (not args.force_no_external_validation) and (not skip_validation):
         validate_shader_msl(shader, args.opt)
 
@@ -1068,18 +1035,8 @@ def main():
         sys.stderr.write('Parallel execution is disabled when using the flags --update, --malisc or --force-no-external-validation\n')
         args.parallel = False
 
-    args.msl22 = False
-    args.msl23 = False
-    args.msl24 = False
-    args.msl30 = False
-    args.msl31 = False
     if args.msl:
         print_msl_compiler_version()
-        args.msl22 = msl_compiler_supports_version('-std=macos-metal2.2')
-        args.msl23 = msl_compiler_supports_version('-std=macos-metal2.3')
-        args.msl24 = msl_compiler_supports_version('-std=macos-metal2.4')
-        args.msl30 = msl_compiler_supports_version('-std=metal3.0')
-        args.msl31 = msl_compiler_supports_version('-std=metal3.1')
 
     backend = 'glsl'
     if (args.msl or args.metal):
