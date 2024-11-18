@@ -165,7 +165,7 @@ void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT,
         return;
     }
     spvMesh.set_primitive_count(spvMeshSizes.y);
-    const uint spvThreadCount = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
+    const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);
     const uint spvVI = gl_LocalInvocationIndex;
     if (gl_LocalInvocationIndex < spvMeshSizes.x)
     {
@@ -174,6 +174,7 @@ void _4(threadgroup spvUnsafeArray<gl_MeshPerVertexEXT, 24>& gl_MeshVerticesEXT,
         spvV.gl_PointSize = gl_MeshVerticesEXT[spvVI].gl_PointSize;
         spvV.gl_ClipDistance[0] = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[0];
         spvV.gl_ClipDistance_0 = gl_MeshVerticesEXT[spvVI].gl_ClipDistance[0];
+        spvV.vOut = vOut[spvVI];
         spvV.outputs_a = outputs[spvVI].a;
         spvV.outputs_b = outputs[spvVI].b;
         spvMesh.set_vertex(spvVI, spvV);
