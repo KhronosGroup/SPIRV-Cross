@@ -19215,7 +19215,7 @@ void CompilerMSL::emit_mesh_outputs()
 	end_scope();
 	statement("spvMesh.set_primitive_count(spvMeshSizes.y);");
 
-	statement("const uint spvThreadCount = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);");
+	statement("const uint spvThreadCount [[maybe_unused]] = (gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z);");
 
 	if (mesh_out_per_vertex != 0)
 	{
@@ -19240,7 +19240,7 @@ void CompilerMSL::emit_mesh_outputs()
 			uint32_t orig_id = get_extended_member_decoration(type_vert.self, index, SPIRVCrossDecorationInterfaceMemberIndex);
 
 			// Clip/cull distances are special-case
-			if (orig_id == (~0u))
+			if (orig_var == 0 && orig_id == (~0u))
 				continue;
 
 			auto &orig = get<SPIRVariable>(orig_var);
