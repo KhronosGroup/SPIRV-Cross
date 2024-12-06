@@ -11545,7 +11545,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		if (args.has_array_offsets)
 		{
 			forward = forward && should_forward(args.offset);
-			farg_str += ", " + to_expression(args.offset);
+			farg_str += ", " + to_unpacked_expression(args.offset);
 		}
 
 		// Const offsets gather or swizzled gather puts the component before the other args.
@@ -11558,7 +11558,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 
 	// Texture coordinates
 	forward = forward && should_forward(args.coord);
-	auto coord_expr = to_enclosed_expression(args.coord);
+	auto coord_expr = to_enclosed_unpacked_expression(args.coord);
 	auto &coord_type = expression_type(args.coord);
 	bool coord_is_fp = type_is_floating_point(coord_type);
 	bool is_cube_fetch = false;
@@ -11682,14 +11682,14 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			if (type.basetype != SPIRType::UInt)
 				tex_coords += join(" + uint2(", bitcast_expression(SPIRType::UInt, args.offset), ", 0)");
 			else
-				tex_coords += join(" + uint2(", to_enclosed_expression(args.offset), ", 0)");
+				tex_coords += join(" + uint2(", to_enclosed_unpacked_expression(args.offset), ", 0)");
 		}
 		else
 		{
 			if (type.basetype != SPIRType::UInt)
 				tex_coords += " + " + bitcast_expression(SPIRType::UInt, args.offset);
 			else
-				tex_coords += " + " + to_enclosed_expression(args.offset);
+				tex_coords += " + " + to_enclosed_unpacked_expression(args.offset);
 		}
 	}
 
@@ -11776,10 +11776,10 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 
 		string dref_expr;
 		if (args.base.is_proj)
-			dref_expr = join(to_enclosed_expression(args.dref), " / ",
+			dref_expr = join(to_enclosed_unpacked_expression(args.dref), " / ",
 			                 to_extract_component_expression(args.coord, alt_coord_component));
 		else
-			dref_expr = to_expression(args.dref);
+			dref_expr = to_unpacked_expression(args.dref);
 
 		if (sampling_type_needs_f32_conversion(dref_type))
 			dref_expr = convert_to_f32(dref_expr, 1);
@@ -11830,7 +11830,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 	if (bias && (imgtype.image.dim != Dim1D || msl_options.texture_1D_as_2D))
 	{
 		forward = forward && should_forward(bias);
-		farg_str += ", bias(" + to_expression(bias) + ")";
+		farg_str += ", bias(" + to_unpacked_expression(bias) + ")";
 	}
 
 	// Metal does not support LOD for 1D textures.
@@ -11839,7 +11839,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 		forward = forward && should_forward(lod);
 		if (args.base.is_fetch)
 		{
-			farg_str += ", " + to_expression(lod);
+			farg_str += ", " + to_unpacked_expression(lod);
 		}
 		else if (msl_options.sample_dref_lod_array_as_grad && args.dref && imgtype.image.arrayed)
 		{
@@ -11896,12 +11896,12 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 				extent = "float3(1.0)";
 				break;
 			}
-			farg_str += join(", ", grad_opt, "(", grad_coord, "exp2(", to_expression(lod), " - 0.5) / ", extent,
-			                 ", exp2(", to_expression(lod), " - 0.5) / ", extent, ")");
+			farg_str += join(", ", grad_opt, "(", grad_coord, "exp2(", to_unpacked_expression(lod), " - 0.5) / ", extent,
+			                 ", exp2(", to_unpacked_expression(lod), " - 0.5) / ", extent, ")");
 		}
 		else
 		{
-			farg_str += ", level(" + to_expression(lod) + ")";
+			farg_str += ", level(" + to_unpacked_expression(lod) + ")";
 		}
 	}
 	else if (args.base.is_fetch && !lod && (imgtype.image.dim != Dim1D || msl_options.texture_1D_as_2D) &&
@@ -11947,7 +11947,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			grad_opt = "unsupported_gradient_dimension";
 			break;
 		}
-		farg_str += join(", ", grad_opt, "(", grad_coord, to_expression(grad_x), ", ", to_expression(grad_y), ")");
+		farg_str += join(", ", grad_opt, "(", grad_coord, to_unpacked_expression(grad_x), ", ", to_unpacked_expression(grad_y), ")");
 	}
 
 	if (args.min_lod)
@@ -11956,7 +11956,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 			SPIRV_CROSS_THROW("min_lod_clamp() is only supported in MSL 2.2+ and up.");
 
 		forward = forward && should_forward(args.min_lod);
-		farg_str += ", min_lod_clamp(" + to_expression(args.min_lod) + ")";
+		farg_str += ", min_lod_clamp(" + to_unpacked_expression(args.min_lod) + ")";
 	}
 
 	// Add offsets
@@ -11965,7 +11965,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 	if (args.offset && !args.base.is_fetch && !args.has_array_offsets)
 	{
 		forward = forward && should_forward(args.offset);
-		offset_expr = to_expression(args.offset);
+		offset_expr = to_unpacked_expression(args.offset);
 		offset_type = &expression_type(args.offset);
 	}
 
@@ -12031,7 +12031,7 @@ string CompilerMSL::to_function_args(const TextureFunctionArguments &args, bool 
 	{
 		forward = forward && should_forward(args.sample);
 		farg_str += ", ";
-		farg_str += to_expression(args.sample);
+		farg_str += to_unpacked_expression(args.sample);
 	}
 
 	*p_forward = forward;
