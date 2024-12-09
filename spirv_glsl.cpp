@@ -11772,7 +11772,7 @@ void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression 
 		force_temporary_and_recompile(expr.self);
 		forced_invariant_temporaries.insert(expr.self);
 
-		for (auto &dependent : expr.expression_dependencies)
+		for (auto &dependent : expr.invariance_dependencies)
 			disallow_forwarding_in_expression_chain(get<SPIRExpression>(dependent));
 	}
 }
