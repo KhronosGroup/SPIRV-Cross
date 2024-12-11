@@ -2569,25 +2569,24 @@ void Compiler::add_active_interface_variable(uint32_t var_id)
 
 void Compiler::inherit_expression_dependencies(uint32_t dst, uint32_t source_expression)
 {
-	// When position is invariant we'll need the full dependency chain to be available
-	// in order to force all dependencies into temporaries
-	if( !is_position_invariant() )
+	auto *ptr_e = maybe_get<SPIRExpression>(dst);
+
+	if (is_position_invariant() && ptr_e && maybe_get<SPIRExpression>(source_expression))
 	{
-		// Don't inherit any expression dependencies if the expression in dst
-		// is not a forwarded temporary.
-		if( forwarded_temporaries.find( dst ) == end( forwarded_temporaries ) ||
-			forced_temporaries.find( dst ) != end( forced_temporaries ) )
-		{
-			return;
-		}
+		auto &deps = ptr_e->invariance_dependencies;
+		if (std::find(deps.begin(), deps.end(), source_expression) == deps.end())
+			deps.push_back(source_expression);
 	}
 
-	auto *e_ptr = maybe_get<SPIRExpression>(dst);
-	if( !e_ptr )
+	// Don't inherit any expression dependencies if the expression in dst
+	// is not a forwarded temporary.
+	if (forwarded_temporaries.find(dst) == end(forwarded_temporaries) ||
+	    forced_temporaries.find(dst) != end(forced_temporaries))
 	{
 		return;
 	}
-	auto& e = *e_ptr;
+
+	auto &e = *ptr_e;
 	auto *phi = maybe_get<SPIRVariable>(source_expression);
 	if (phi && phi->phi_variable)
 	{
