@@ -11766,10 +11766,10 @@ void CompilerGLSL::disallow_forwarding_in_expression_chain(const SPIRExpression 
 	// Allow trivially forwarded expressions like OpLoad or trivial shuffles,
 	// these will be marked as having suppressed usage tracking.
 	// Our only concern is to make sure arithmetic operations are done in similar ways.
-	if (expression_is_forwarded(expr.self) && !expression_suppresses_usage_tracking(expr.self) &&
-	    forced_invariant_temporaries.count(expr.self) == 0)
+	if (forced_invariant_temporaries.count(expr.self) == 0)
 	{
-		force_temporary_and_recompile(expr.self);
+		if (!expression_suppresses_usage_tracking(expr.self))
+			force_temporary_and_recompile(expr.self);
 		forced_invariant_temporaries.insert(expr.self);
 
 		for (auto &dependent : expr.invariance_dependencies)
