@@ -1604,6 +1604,8 @@ struct AccessChainMeta
 	bool flattened_struct = false;
 	bool relaxed_precision = false;
 	bool access_meshlet_position_y = false;
+	bool chain_is_builtin = false;
+	spv::BuiltIn builtin = {};
 };
 
 enum ExtendedDecorations

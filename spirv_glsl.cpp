@@ -10210,6 +10210,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 	bool access_meshlet_position_y = false;
+	bool chain_is_builtin = false;
+	spv::BuiltIn chained_builtin = {};
 
 	if (auto *base_expr = maybe_get<SPIRExpression>(base))
 	{
@@ -10367,6 +10369,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				auto builtin = ir.meta[base].decoration.builtin_type;
 				bool mesh_shader = get_execution_model() == ExecutionModelMeshEXT;
 
+				chain_is_builtin = true;
+				chained_builtin = builtin;
+
 				switch (builtin)
 				{
 				case BuiltInCullDistance:
@@ -10502,6 +10507,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					{
 						access_meshlet_position_y = true;
 					}
+
+					chain_is_builtin = true;
+					chained_builtin = builtin;
 				}
 				else
 				{
@@ -10721,6 +10729,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 		meta->storage_physical_type = physical_type;
 		meta->relaxed_precision = relaxed_precision;
 		meta->access_meshlet_position_y = access_meshlet_position_y;
+		meta->chain_is_builtin = chain_is_builtin;
+		meta->builtin = chained_builtin;
 	}
 
 	return expr;
@@ -12336,6 +12346,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			flattened_structs[ops[1]] = true;
 		if (meta.relaxed_precision && backend.requires_relaxed_precision_analysis)
 			set_decoration(ops[1], DecorationRelaxedPrecision);
+		if (meta.chain_is_builtin)
+			set_decoration(ops[1], DecorationBuiltIn, meta.builtin);
 
 		// If we have some expression dependencies in our access chain, this access chain is technically a forwarded
 		// temporary which could be subject to invalidation.
