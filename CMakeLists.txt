@@ -551,6 +551,14 @@ if (SPIRV_CROSS_CLI)
 				target_link_libraries(spirv-cross-typed-id-test spirv-cross-core)
 				set_target_properties(spirv-cross-typed-id-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
 
+				add_executable(spirv-cross-debug-lines-test tests-other/debug-lines.cpp)
+				target_link_libraries(spirv-cross-debug-lines-test spirv-cross-core)
+				set_target_properties(spirv-cross-debug-lines-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
+				add_executable(spirv-cross-debug-info-test tests-other/debug-info.cpp)
+				target_link_libraries(spirv-cross-debug-info-test spirv-cross-core)
+				set_target_properties(spirv-cross-debug-info-test PROPERTIES LINK_FLAGS "${spirv-cross-link-flags}")
+
 				if (CMAKE_COMPILER_IS_GNUCXX OR (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang"))
 					target_compile_options(spirv-cross-c-api-test PRIVATE -std=c89 -Wall -Wextra)
 				endif()
@@ -573,6 +581,10 @@ if (SPIRV_CROSS_CLI)
 						COMMAND $<TARGET_FILE:spirv-cross-msl-ycbcr-conversion-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/msl_ycbcr_conversion_test_2.spv)
 				add_test(NAME spirv-cross-typed-id-test
 						COMMAND $<TARGET_FILE:spirv-cross-typed-id-test>)
+				add_test(NAME spirv-cross-debug-lines-test
+						COMMAND $<TARGET_FILE:spirv-cross-debug-lines-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/debug-lines.spv)
+				add_test(NAME spirv-cross-debug-info-test
+						COMMAND $<TARGET_FILE:spirv-cross-debug-info-test> ${CMAKE_CURRENT_SOURCE_DIR}/tests-other/debug-info.spv)
 				add_test(NAME spirv-cross-test
 						COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_shaders.py --parallel
 						${spirv-cross-externals}

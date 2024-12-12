@@ -206,10 +206,10 @@ static BufferPackingStandard packing_to_substruct_packing(BufferPackingStandard 
 
 void CompilerGLSL::init()
 {
-	if (ir.source.known)
+	if (!ir.sources.empty() && ir.sources.front().known)
 	{
-		options.es = ir.source.es;
-		options.version = ir.source.version;
+		options.es = ir.sources.front().es;
+		options.version = ir.sources.front().version;
 	}
 
 	// Query the locale to see what the decimal point is.

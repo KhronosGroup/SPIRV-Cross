@@ -118,10 +118,25 @@ public:
 		bool known = false;
 		bool hlsl = false;
 
+		uint32_t fileID = 0; // string
+		uint32_t defineID = 0; // only non-zero for DebugSource
+		std::string source;
+
+		struct Marker {
+			uint32_t line; // in source
+			uint32_t col; // in source
+			uint32_t offset; // in spirv stream
+
+			SPIRFunction *function = nullptr;
+			SPIRBlock *block = nullptr;
+		};
+
+		std::vector<Marker> line_markers; // sorted by line
+
 		Source() = default;
 	};
 
-	Source source;
+	std::vector<Source> sources;
 
 	AddressingModel addressing_model = AddressingModelMax;
 	MemoryModel memory_model = MemoryModelMax;
@@ -233,7 +248,6 @@ public:
 
 	uint32_t get_spirv_version() const;
 
-private:
 	template <typename T>
 	T &get(uint32_t id)
 	{
@@ -246,6 +260,7 @@ private:
 		return variant_get<T>(ids[id]);
 	}
 
+private:
 	mutable uint32_t loop_iteration_depth_hard = 0;
 	mutable uint32_t loop_iteration_depth_soft = 0;
 	std::string empty_string;
