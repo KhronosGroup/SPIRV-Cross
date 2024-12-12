@@ -15691,7 +15691,16 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	if (type.pointer)
 	{
-		if (arg.write_count && arg.read_count)
+		// If we're passing around block types to function, we really mean reference in a pointer sense,
+		// but DXC does not like inout for mesh blocks, so workaround that. out is technically not correct,
+		// but it works in practice due to legalization. It's ... not great, but you gotta do what you gotta do.
+		// GLSL will never hit this case since it's not valid.
+		if (type.storage == StorageClassOutput && get_execution_model() == ExecutionModelMeshEXT &&
+		    has_decoration(type.self, DecorationBlock) && is_builtin_type(type) && arg.write_count)
+		{
+			direction = "out ";
+		}
+		else if (arg.write_count && arg.read_count)
 			direction = "inout ";
 		else if (arg.write_count)
 			direction = "out ";
