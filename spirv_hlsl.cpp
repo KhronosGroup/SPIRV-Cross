@@ -4827,14 +4827,15 @@ void CompilerHLSL::emit_load(const Instruction &instruction)
 		    has_decoration(ptr, DecorationBuiltIn) &&
 		    (get_decoration(ptr, DecorationBuiltIn) == BuiltInClipDistance ||
 		     get_decoration(ptr, DecorationBuiltIn) == BuiltInCullDistance) &&
-		    is_array(res_type) && !is_array(get<SPIRType>(res_type.parent_type)))
+		    is_array(res_type) && !is_array(get<SPIRType>(res_type.parent_type)) &&
+		    to_array_size_literal(res_type) > 1)
 		{
 			track_expression_read(ptr);
 			string load_expr = "{ ";
 			uint32_t num_elements = to_array_size_literal(res_type);
 			for (uint32_t i = 0; i < num_elements; i++)
 			{
-				load_expr += join(to_expression(ptr), "[", i, "]");
+				load_expr += join(to_expression(ptr), ".", index_to_swizzle(i));
 				if (i + 1 < num_elements)
 					load_expr += ", ";
 			}
@@ -6959,6 +6960,13 @@ void CompilerHLSL::cast_to_variable_store(uint32_t target_id, std::string &expr,
 	uint32_t num_clip = to_array_size_literal(expr_type);
 	if (num_clip > 4)
 		SPIRV_CROSS_THROW("Number of clip or cull distances exceeds 4, this will not work with mesh shaders.");
+
+	if (num_clip == 1)
+	{
+		// We already emit array here.
+		CompilerGLSL::cast_to_variable_store(target_id, expr, expr_type);
+		return;
+	}
 
 	auto unrolled_expr = join("float", num_clip, "(");
 	for (uint32_t i = 0; i < num_clip; i++)
