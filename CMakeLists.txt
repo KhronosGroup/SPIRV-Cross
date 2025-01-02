@@ -19,7 +19,7 @@
 #  2. The MIT License, found at <http://opensource.org/licenses/MIT>.
 #
 
-cmake_minimum_required(VERSION 3.6)
+cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
