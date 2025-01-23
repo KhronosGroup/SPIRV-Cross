@@ -17869,6 +17869,14 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 
 	case SPIRBlock::Unreachable:
 	{
+		// If the entry point ends with unreachable and has a return value, insert a return
+		// statement to avoid potential compiler errors from non-void functions without a return value.
+		if (block.return_value)
+		{
+			statement("return ", to_unpacked_expression(block.return_value), ";");
+			break;
+		}
+
 		// Avoid emitting false fallthrough, which can happen for
 		// if (cond) break; else discard; inside a case label.
 		// Discard is not always implementable as a terminator.
