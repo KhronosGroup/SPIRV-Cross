@@ -9824,7 +9824,17 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInInvocationId:
 		return "gl_InvocationID";
 	case BuiltInLayer:
+	{
+		auto model = get_execution_model();
+		if (model == ExecutionModelVertex || model == ExecutionModelTessellationEvaluation)
+		{
+			if (options.es)
+				require_extension_internal("GL_NV_viewport_array2");
+			else
+				require_extension_internal("GL_ARB_shader_viewport_layer_array");
+		}
 		return "gl_Layer";
+	}
 	case BuiltInViewportIndex:
 		return "gl_ViewportIndex";
 	case BuiltInTessLevelOuter:
