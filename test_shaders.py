@@ -392,6 +392,10 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('ClipDistance')
     if '.relax-nan.' in shader:
         msl_args.append('--relax-nan-checks')
+    if '.auto-disable-rasterization.' in shader:
+        msl_args.append('--msl-auto-disable-rasterization')
+    if '.disable-rasterization.' in shader:
+        msl_args.append('--msl-disable-rasterization')
 
     subprocess.check_call(msl_args)
 

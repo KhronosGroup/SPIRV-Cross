@@ -1003,6 +1003,7 @@ void CompilerMSL::build_implicit_builtins()
 	// If we're returning a struct from a vertex-like entry point, we must return a position attribute.
 	bool need_position = (get_execution_model() == ExecutionModelVertex || is_tese_shader()) &&
 	                     !capture_output_to_buffer && !get_is_rasterization_disabled() &&
+	                     !msl_options.auto_disable_rasterization &&
 	                     !active_output_builtins.get(BuiltInPosition);
 
 	if (need_position)
@@ -1038,6 +1039,10 @@ void CompilerMSL::build_implicit_builtins()
 			}
 		});
 		need_position = has_output && !active_output_builtins.get(BuiltInPosition);
+	}
+	else if (!active_output_builtins.get(BuiltInPosition) && msl_options.auto_disable_rasterization)
+	{
+		is_rasterization_disabled = true;
 	}
 
 	if (need_position)
