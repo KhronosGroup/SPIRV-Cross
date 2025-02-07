@@ -681,6 +681,8 @@ string CompilerGLSL::compile()
 	backend.requires_relaxed_precision_analysis = options.es || options.vulkan_semantics;
 	backend.support_precise_qualifier =
 			(!options.es && options.version >= 400) || (options.es && options.version >= 320);
+	backend.constant_null_initializer = "{ }";
+	backend.requires_matching_array_initializer = true;
 
 	if (is_legacy_es())
 		backend.support_case_fallthrough = false;
@@ -5901,6 +5903,11 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 	if (is_pointer(type))
 	{
 		return backend.null_pointer_literal;
+	}
+	else if (c.is_null_array_specialized_length && backend.requires_matching_array_initializer)
+	{
+		require_extension_internal("GL_EXT_null_initializer");
+		return backend.constant_null_initializer;
 	}
 	else if (!c.subconstants.empty())
 	{

@@ -625,6 +625,7 @@ protected:
 		const char *uint16_t_literal_suffix = "us";
 		const char *nonuniform_qualifier = "nonuniformEXT";
 		const char *boolean_mix_function = "mix";
+		std::string constant_null_initializer = "";
 		SPIRType::BaseType boolean_in_struct_remapped_type = SPIRType::Boolean;
 		bool swizzle_is_function = false;
 		bool shared_is_implied = false;
@@ -632,6 +633,7 @@ protected:
 		bool explicit_struct_type = false;
 		bool use_initializer_list = false;
 		bool use_typed_initializer_list = false;
+		bool requires_matching_array_initializer = false;
 		bool can_declare_struct_inline = true;
 		bool can_declare_arrays_inline = true;
 		bool native_row_major_matrix = true;
