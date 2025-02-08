@@ -453,6 +453,7 @@ protected:
 	virtual std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0);
 	virtual bool variable_decl_is_remapped_storage(const SPIRVariable &var, spv::StorageClass storage) const;
 	virtual std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id);
+	virtual void emit_workgroup_initialization(const SPIRVariable &var);
 
 	struct TextureFunctionBaseArguments
 	{

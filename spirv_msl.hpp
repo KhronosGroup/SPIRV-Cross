@@ -881,6 +881,7 @@ protected:
 	void emit_mesh_entry_point();
 	void emit_mesh_outputs();
 	void emit_mesh_tasks(SPIRBlock &block) override;
+	void emit_workgroup_initialization(const SPIRVariable &var) override;
 
 	// Allow Metal to use the array<T> template to make arrays a value type
 	std::string type_to_array_glsl(const SPIRType &type, uint32_t variable_id) override;
@@ -1142,6 +1143,7 @@ protected:
 	void emit_store_statement(uint32_t lhs_expression, uint32_t rhs_expression) override;
 
 	void analyze_sampled_image_usage();
+	void analyze_workgroup_variables();
 
 	bool access_chain_needs_stage_io_builtin_translation(uint32_t base) override;
 	bool prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type, spv::StorageClass storage,
@@ -1224,6 +1226,7 @@ protected:
 	bool needs_subgroup_size = false;
 	bool needs_sample_id = false;
 	bool needs_helper_invocation = false;
+	bool needs_workgroup_zero_init = false;
 	bool writes_to_depth = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
@@ -1286,6 +1289,7 @@ protected:
 
 	bool suppress_missing_prototypes = false;
 	bool suppress_incompatible_pointer_types_discard_qualifiers = false;
+	bool suppress_sometimes_unitialized = false;
 
 	void add_spv_func_and_recompile(SPVFuncImpl spv_func);
 
