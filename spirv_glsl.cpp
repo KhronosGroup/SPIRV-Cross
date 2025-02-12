@@ -14727,6 +14727,20 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpExtInstWithForwardRefsKHR:
+	{
+		uint32_t extension_set = ops[2];
+		auto ext = get<SPIRExtension>(extension_set).ext;
+		if (ext != SPIRExtension::SPV_debug_info &&
+		    ext != SPIRExtension::NonSemanticShaderDebugInfo &&
+		    ext != SPIRExtension::NonSemanticGeneric)
+		{
+			SPIRV_CROSS_THROW("Unexpected use of ExtInstWithForwardRefsKHR.");
+		}
+
+		break;
+	}
+
 	case OpExtInst:
 	{
 		uint32_t extension_set = ops[2];
