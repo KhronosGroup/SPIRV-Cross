@@ -15713,7 +15713,10 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &type = expression_type(arg.id);
 	const char *direction = "";
 
-	if (type.pointer)
+	if (is_pointer(type) &&
+	    (type.storage == StorageClassFunction ||
+	     type.storage == StorageClassPrivate ||
+	     type.storage == StorageClassOutput))
 	{
 		// If we're passing around block types to function, we really mean reference in a pointer sense,
 		// but DXC does not like inout for mesh blocks, so workaround that. out is technically not correct,
