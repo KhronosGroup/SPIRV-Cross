@@ -12317,7 +12317,7 @@ string CompilerMSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_
 	}
 	// Dereference pointer variables where needed.
 	// FIXME: This dereference is actually backwards. We should really just support passing pointer variables between functions.
-	else if (should_dereference(id))
+	else if (should_dereference_caller_param(id))
 		arg_str += dereference_expression(type, CompilerGLSL::to_func_call_arg(arg, id));
 	else
 		arg_str += CompilerGLSL::to_func_call_arg(arg, id);
@@ -13405,6 +13405,9 @@ bool CompilerMSL::uses_explicit_early_fragment_test()
 string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 {
 	const auto &type = get<SPIRType>(argument.basetype);
+	// BDA is always passed around by value. There is no storage class for the argument itself.
+	if (is_physical_pointer(type))
+		return "";
 	return get_type_address_space(type, argument.self, true);
 }
 
@@ -15140,9 +15143,13 @@ const char *CompilerMSL::descriptor_address_space(uint32_t id, StorageClass stor
 string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 {
 	auto &var = get<SPIRVariable>(arg.id);
-	auto &type = get_variable_data_type(var);
 	auto &var_type = get<SPIRType>(arg.type);
 	StorageClass type_storage = var_type.storage;
+
+	// Physical pointer types are passed by pointer, not reference.
+	auto &data_type = get_variable_data_type(var);
+	bool passed_by_value = is_physical_pointer(var_type);
+	auto &type = passed_by_value ? var_type : data_type;
 
 	// If we need to modify the name of the variable, make sure we use the original variable.
 	// Our alias is just a shadow variable.
@@ -15150,7 +15157,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	if (arg.alias_global_variable && var.basevariable)
 		name_id = var.basevariable;
 
-	bool constref = !arg.alias_global_variable && is_pointer(var_type) && arg.write_count == 0;
+	bool constref = !arg.alias_global_variable && !passed_by_value && is_pointer(var_type) && arg.write_count == 0;
 	// Framebuffer fetch is plain value, const looks out of place, but it is not wrong.
 	if (type_is_msl_framebuffer_fetch(type))
 		constref = false;
@@ -15234,7 +15241,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	else
 	{
 		// The type is a pointer type we need to emit cv_qualifier late.
-		if (is_pointer(type))
+		if (is_pointer(data_type))
 		{
 			decl = type_to_glsl(type, arg.id);
 			if (*cv_qualifier != '\0')
@@ -15246,8 +15253,8 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 	}
 
-	if (!builtin && !is_pointer(var_type) &&
-	    (type_storage == StorageClassFunction || type_storage == StorageClassGeneric))
+	if (passed_by_value || (!builtin && !is_pointer(var_type) &&
+	                        (type_storage == StorageClassFunction || type_storage == StorageClassGeneric)))
 	{
 		// If the argument is a pure value and not an opaque type, we will pass by value.
 		if (msl_options.force_native_arrays && is_array(type))
@@ -15348,7 +15355,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		// for the reference has to go before the '&', but after the '*'.
 		if (!address_space.empty())
 		{
-			if (is_pointer(type))
+			if (is_pointer(data_type))
 			{
 				if (*cv_qualifier == '\0')
 					decl += ' ';
@@ -15357,6 +15364,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 			else
 				decl = join(address_space, " ", decl);
 		}
+
 		decl += "&";
 		decl += " ";
 		decl += to_restrict(name_id, true);

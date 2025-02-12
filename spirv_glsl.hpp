@@ -695,6 +695,7 @@ protected:
 	void emit_variable_temporary_copies(const SPIRVariable &var);
 
 	bool should_dereference(uint32_t id);
+	bool should_dereference_caller_param(uint32_t id);
 	bool should_forward(uint32_t id) const;
 	bool should_suppress_usage_tracking(uint32_t id) const;
 	void emit_mix_op(uint32_t result_type, uint32_t id, uint32_t left, uint32_t right, uint32_t lerp);
