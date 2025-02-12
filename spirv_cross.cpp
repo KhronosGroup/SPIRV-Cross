@@ -587,6 +587,7 @@ const SPIRType &Compiler::expression_type(uint32_t id) const
 bool Compiler::expression_is_lvalue(uint32_t id) const
 {
 	auto &type = expression_type(id);
+
 	switch (type.basetype)
 	{
 	case SPIRType::SampledImage:

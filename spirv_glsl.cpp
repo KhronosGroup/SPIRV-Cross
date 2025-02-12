@@ -4955,12 +4955,16 @@ void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
 // Subclasses may override to modify the return value.
 string CompilerGLSL::to_func_call_arg(const SPIRFunction::Parameter &, uint32_t id)
 {
+	// BDA expects pointers through function interface.
+	if (is_physical_pointer(expression_type(id)))
+		return to_pointer_expression(id);
+
 	// Make sure that we use the name of the original variable, and not the parameter alias.
 	uint32_t name_id = id;
 	auto *var = maybe_get<SPIRVariable>(id);
 	if (var && var->basevariable)
 		name_id = var->basevariable;
-	return to_expression(name_id);
+	return to_unpacked_expression(name_id);
 }
 
 void CompilerGLSL::force_temporary_and_recompile(uint32_t id)
@@ -11249,7 +11253,7 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 {
 	const auto &type = expression_type(id);
 	// Non-pointer expressions don't need to be dereferenced.
-	if (!type.pointer)
+	if (!is_pointer(type))
 		return false;
 
 	// Handles shouldn't be dereferenced either.
@@ -11257,8 +11261,9 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 		return false;
 
 	// If id is a variable but not a phi variable, we should not dereference it.
+	// BDA passed around as parameters are always pointers.
 	if (auto *var = maybe_get<SPIRVariable>(id))
-		return var->phi_variable;
+		return (var->parameter && is_physical_pointer(type)) || var->phi_variable;
 
 	if (auto *expr = maybe_get<SPIRExpression>(id))
 	{
@@ -11289,6 +11294,16 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 
 	// Otherwise, we should dereference this pointer expression.
 	return true;
+}
+
+bool CompilerGLSL::should_dereference_caller_param(uint32_t id)
+{
+	const auto &type = expression_type(id);
+	// BDA is always passed around as pointers.
+	if (is_physical_pointer(type))
+		return false;
+
+	return should_dereference(id);
 }
 
 bool CompilerGLSL::should_forward(uint32_t id) const
@@ -15713,7 +15728,10 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 	auto &type = expression_type(arg.id);
 	const char *direction = "";
 
-	if (type.pointer)
+	if (is_pointer(type) &&
+	    (type.storage == StorageClassFunction ||
+	     type.storage == StorageClassPrivate ||
+	     type.storage == StorageClassOutput))
 	{
 		// If we're passing around block types to function, we really mean reference in a pointer sense,
 		// but DXC does not like inout for mesh blocks, so workaround that. out is technically not correct,
