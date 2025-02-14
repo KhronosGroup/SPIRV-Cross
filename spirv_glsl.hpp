@@ -297,6 +297,9 @@ public:
 		float_formatter = formatter;
 	}
 
+	// Returns the macro name corresponding to constant id
+	std::string constant_value_macro_name(uint32_t id) const;
+
 protected:
 	struct ShaderSubgroupSupportHelper
 	{
@@ -679,7 +682,6 @@ protected:
 	                                    const SmallVector<uint32_t> &indices);
 	void emit_block_chain(SPIRBlock &block);
 	void emit_hoisted_temporaries(SmallVector<std::pair<TypeID, ID>> &temporaries);
-	std::string constant_value_macro_name(uint32_t id);
 	int get_constant_mapping_to_workgroup_component(const SPIRConstant &constant) const;
 	void emit_constant(const SPIRConstant &constant);
 	void emit_specialization_constant_op(const SPIRConstantOp &constant);

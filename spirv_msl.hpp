@@ -760,6 +760,11 @@ public:
 	void set_combined_sampler_suffix(const char *suffix);
 	const char *get_combined_sampler_suffix() const;
 
+	// Information about specialization constants that are translated into MSL macros
+	// instead of using function constant
+	// These must only be called after a successful call to CompilerMSL::compile().
+	bool specialization_constant_is_macro(uint32_t constant_id) const;
+
 protected:
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.
@@ -1171,6 +1176,7 @@ protected:
 	std::set<std::string> pragma_lines;
 	std::set<std::string> typedef_lines;
 	SmallVector<uint32_t> vars_needing_early_declaration;
+	std::unordered_set<uint32_t> constant_macro_ids;
 
 	std::unordered_map<StageSetBinding, std::pair<MSLResourceBinding, bool>, InternalHasher> resource_bindings;
 	std::unordered_map<StageSetBinding, uint32_t, InternalHasher> resource_arg_buff_idx_to_binding_number;

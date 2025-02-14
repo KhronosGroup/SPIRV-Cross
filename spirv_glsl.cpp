@@ -2841,7 +2841,7 @@ void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 	statement(layout_for_variable(var), variable_decl(var), ";");
 }
 
-string CompilerGLSL::constant_value_macro_name(uint32_t id)
+string CompilerGLSL::constant_value_macro_name(uint32_t id) const
 {
 	return join("SPIRV_CROSS_CONSTANT_ID_", id);
 }
