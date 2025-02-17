@@ -7923,8 +7923,16 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 {
 	SpecializationConstant wg_x, wg_y, wg_z;
 	ID workgroup_size_id = get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
-	bool emitted = false;
+	if (workgroup_size_id == 0 && is_mesh_shader())
+	{
+		auto &execution = get_entry_point();
+		statement("constant uint3 ", builtin_to_glsl(BuiltInWorkgroupSize, StorageClassWorkgroup),
+		          " [[maybe_unused]] = ", "uint3(", execution.workgroup_size.x, ", ", execution.workgroup_size.y, ", ",
+		          execution.workgroup_size.z, ");");
+		statement("");
+	}
 
+	bool emitted = false;
 	unordered_set<uint32_t> declared_structs;
 	unordered_set<uint32_t> aligned_structs;
 
@@ -8038,7 +8046,7 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 					statement("#endif");
 					statement("constant ", sc_type_name, " ", sc_name, " = ", c.specialization_constant_macro_name,
 					          ";");
-					
+
 					// Record the usage of macro
 					constant_macro_ids.insert(constant_id);
 				}
@@ -19043,7 +19051,7 @@ void CompilerMSL::analyze_argument_buffers()
 				set_extended_member_decoration(buffer_type.self, member_index, SPIRVCrossDecorationOverlappingBinding);
 			member_index++;
 		}
-		
+
 		if (msl_options.replace_recursive_inputs && type_contains_recursion(buffer_type))
 		{
 			recursive_inputs.insert(type_id);
