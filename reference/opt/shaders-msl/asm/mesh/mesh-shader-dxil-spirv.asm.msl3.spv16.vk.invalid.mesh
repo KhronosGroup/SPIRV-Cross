@@ -73,7 +73,7 @@ struct spvPerVertex
 using spvMesh_t = mesh<spvPerVertex, void, 3, 1, topology::triangle>;
 
 static inline __attribute__((always_inline))
-void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, threadgroup float4 (&gl_Position)[3], threadgroup spvUnsafeArray<float3, 3>& out_var_COLOR0, thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
+void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, threadgroup spvUnsafeArray<float4, 3>& gl_Position, threadgroup spvUnsafeArray<float3, 3>& out_var_COLOR0, thread uint& gl_LocalInvocationIndex, threadgroup uint2& spvMeshSizes)
 {
     spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 3u, 1u);
     gl_PrimitiveTriangleIndicesEXT[0] = uint3(0u, 1u, 2u);
