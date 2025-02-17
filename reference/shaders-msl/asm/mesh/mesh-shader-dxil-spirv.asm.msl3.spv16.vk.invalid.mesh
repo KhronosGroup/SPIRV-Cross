@@ -77,11 +77,11 @@ void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, th
 {
     spvSetMeshOutputsEXT(gl_LocalInvocationIndex, spvMeshSizes, 3u, 1u);
     gl_PrimitiveTriangleIndicesEXT[0] = uint3(0u, 1u, 2u);
-    gl_MeshVerticesEXT[0].gl_Position = float4(-0.5, -0.5, 0.0, 1.0);
+    gl_Position[0] = float4(-0.5, -0.5, 0.0, 1.0);
     out_var_COLOR0[0] = float3(1.0, 0.0, 0.0);
-    gl_MeshVerticesEXT[1].gl_Position = float4(0.5, -0.5, 0.0, 1.0);
+    gl_Position[1] = float4(0.5, -0.5, 0.0, 1.0);
     out_var_COLOR0[1] = float3(0.0, 1.0, 0.0);
-    gl_MeshVerticesEXT[2].gl_Position = float4(0.0, 0.5, 0.0, 1.0);
+    gl_Position[2] = float4(0.0, 0.5, 0.0, 1.0);
     out_var_COLOR0[2] = float3(0.0, 0.0, 1.0);
 }
 
