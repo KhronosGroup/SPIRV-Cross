@@ -89,7 +89,7 @@ void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, th
 {
     threadgroup uint2 spvMeshSizes;
     threadgroup spvUnsafeArray<uint3, 1> gl_PrimitiveTriangleIndicesEXT;
-    threadgroup spvUnsafeArray<float4, 3> v_3;
+    threadgroup spvUnsafeArray<float4, 3> gl_Position;
     threadgroup spvUnsafeArray<float3, 3> out_var_COLOR0;
     if (gl_LocalInvocationIndex == 0) spvMeshSizes.y = 0u;
     _1(gl_PrimitiveTriangleIndicesEXT, gl_Position, out_var_COLOR0, gl_LocalInvocationIndex, spvMeshSizes);
@@ -103,7 +103,7 @@ void _1(threadgroup spvUnsafeArray<uint3, 1>& gl_PrimitiveTriangleIndicesEXT, th
     for (uint spvVI = gl_LocalInvocationIndex; spvVI < spvMeshSizes.x; spvVI += spvThreadCount)
     {
         spvPerVertex spvV = {};
-        spvV.gl_Position = v_3[spvVI];
+        spvV.gl_Position = gl_Position[spvVI];
         spvV.out_var_COLOR0 = out_var_COLOR0[spvVI];
         spvMesh.set_vertex(spvVI, spvV);
     }
