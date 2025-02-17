@@ -272,7 +272,9 @@ void CompilerMSL::build_implicit_builtins()
 	    (active_input_builtins.get(BuiltInVertexId) || active_input_builtins.get(BuiltInVertexIndex) ||
 	     active_input_builtins.get(BuiltInBaseVertex) || active_input_builtins.get(BuiltInInstanceId) ||
 	     active_input_builtins.get(BuiltInInstanceIndex) || active_input_builtins.get(BuiltInBaseInstance));
-	bool need_local_invocation_index = (msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId)) || is_mesh_shader();
+	bool need_local_invocation_index =
+		(msl_options.emulate_subgroups && active_input_builtins.get(BuiltInSubgroupId)) || is_mesh_shader() ||
+		needs_workgroup_zero_init;
 	bool need_workgroup_size = msl_options.emulate_subgroups && active_input_builtins.get(BuiltInNumSubgroups);
 	bool force_frag_depth_passthrough =
 	    get_execution_model() == ExecutionModelFragment && !uses_explicit_early_fragment_test() && need_subpass_input &&
@@ -1649,6 +1651,7 @@ string CompilerMSL::compile()
 	analyze_image_and_sampler_usage();
 	analyze_sampled_image_usage();
 	analyze_interlocked_resource_usage();
+	analyze_workgroup_variables();
 	preprocess_op_codes();
 	build_implicit_builtins();
 
@@ -5549,6 +5552,10 @@ void CompilerMSL::emit_header()
 		statement("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
 	if (suppress_incompatible_pointer_types_discard_qualifiers)
 		statement("#pragma clang diagnostic ignored \"-Wincompatible-pointer-types-discards-qualifiers\"");
+
+	// Disable warning about "sometimes unitialized" when zero-initializing simple threadgroup variables
+	if (suppress_sometimes_unitialized)
+		statement("#pragma clang diagnostic ignored \"-Wsometimes-uninitialized\"");
 
 	// Disable warning about missing braces for array<T> template to make arrays a value type
 	if (spv_function_implementations.count(SPVFuncImplUnsafeArray) != 0)
@@ -17620,6 +17627,23 @@ void CompilerMSL::analyze_sampled_image_usage()
 	}
 }
 
+void CompilerMSL::analyze_workgroup_variables()
+{
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		// If workgroup variables have initializer, it can only be ConstantNull (zero init)
+		if (var.storage == StorageClassWorkgroup && var.initializer)
+		{
+			needs_workgroup_zero_init = true;
+
+			// MSL compiler does not like the routine to initialize simple threadgroup variables,
+			// falsely claiming it is "sometimes uninitialized". Suppress it.
+			auto &type = get_variable_data_type(var);
+			if (type.array.empty() && type.member_types.empty())
+				suppress_sometimes_unitialized = true;
+		}
+	});
+}
+
 bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
 {
 	switch (opcode)
@@ -19404,6 +19428,70 @@ void CompilerMSL::emit_mesh_tasks(SPIRBlock &block)
 	// - Caller ensures the SPIR-V is inlined, then this always holds true.
 	// - Pass down a "should terminate" bool to leaf functions and chain return (horrible and disgusting, let's not).
 	statement("return;");
+}
+
+void CompilerMSL::emit_workgroup_initialization(const SPIRVariable &var)
+{
+	auto &type = get_variable_data_type(var);
+
+	begin_scope();
+
+	if (type.array.empty() && type.member_types.empty())
+	{
+		// For simple shared variables, we just initialize it in thread 0 of the block
+		// We use short to represent bool for threadgroup variable to workaround compiler bug,
+		// so we do a temporary fixup here. Alas. (see the type_to_glsl method)
+		bool is_boolean = type.basetype == SPIRType::Boolean;
+		if (is_boolean)
+			type.basetype = SPIRType::Short;
+
+		statement("if (gl_LocalInvocationIndex == 0)");
+		begin_scope();
+		statement(to_name(var.self), " = ", to_initializer_expression(var), ";");
+		end_scope();
+
+		if (is_boolean)
+			type.basetype = SPIRType::Boolean;
+	}
+	else
+	{
+		// Otherwise, we use a loop to cooperatively initialize the memory within the group
+
+		// First, we define a few variable names;
+		string var_name = to_name(var.self);
+		string var_ptr_name = join(var_name, "_ptr");
+		string var_size_name = join(var_name, "_sz");
+		string var_pos_name = join(var_name, "_pos");
+		string var_stride_name = join(var_name, "_stride");
+		string var_ptr2_name = join(var_name, "_ptr2");
+
+		statement("threadgroup uint *", var_ptr_name, " = (threadgroup uint *)&", var_name, ";");
+		statement("uint ", var_size_name, " = ", "sizeof(", var_name, ");");
+		statement("uint ", var_pos_name, " = gl_LocalInvocationIndex;");
+		statement("uint ", var_stride_name, " = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;");
+
+		statement("while (sizeof(uint) * ", var_pos_name, " < ", var_size_name, ")");
+		begin_scope();
+		statement(var_ptr_name, "[", var_pos_name, "] = 0u;");
+		statement(var_pos_name, " += ", var_stride_name, ";");
+		end_scope();
+
+		statement("if (gl_LocalInvocationIndex == 0)");
+		begin_scope();
+		statement(var_pos_name, " = (", var_size_name, " / sizeof(uint)) * sizeof(uint);");
+		statement("threadgroup uchar *", var_ptr2_name, " = (threadgroup uchar *)&", var_name, ";");
+
+		statement("while (", var_pos_name, " < ", var_size_name, ")");
+		begin_scope();
+		statement(var_ptr2_name, "[", var_pos_name, "] = '\\0';");
+		statement(var_pos_name, "++;");
+		end_scope();
+		end_scope();
+	}
+
+	statement("threadgroup_barrier(mem_flags::mem_threadgroup);");
+
+	end_scope();
 }
 
 string CompilerMSL::additional_fixed_sample_mask_str() const

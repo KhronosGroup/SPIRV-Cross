@@ -681,6 +681,8 @@ string CompilerGLSL::compile()
 	backend.requires_relaxed_precision_analysis = options.es || options.vulkan_semantics;
 	backend.support_precise_qualifier =
 			(!options.es && options.version >= 400) || (options.es && options.version >= 320);
+	backend.constant_null_initializer = "{ }";
+	backend.requires_matching_array_initializer = true;
 
 	if (is_legacy_es())
 		backend.support_case_fallthrough = false;
@@ -5901,6 +5903,11 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 	if (is_pointer(type))
 	{
 		return backend.null_pointer_literal;
+	}
+	else if (c.is_null_array_specialized_length && backend.requires_matching_array_initializer)
+	{
+		require_extension_internal("GL_EXT_null_initializer");
+		return backend.constant_null_initializer;
 	}
 	else if (!c.subconstants.empty())
 	{
@@ -15805,13 +15812,24 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 		else if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			res += join(" = ", to_zero_initialized_expression(get_variable_data_type_id(variable)));
 	}
-	else if (variable.initializer && !variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
+	else if (variable.initializer)
 	{
-		uint32_t expr = variable.initializer;
-		if (ir.ids[expr].get_type() != TypeUndef)
-			res += join(" = ", to_initializer_expression(variable));
-		else if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
-			res += join(" = ", to_zero_initialized_expression(get_variable_data_type_id(variable)));
+		if (!variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
+		{
+			uint32_t expr = variable.initializer;
+			if (ir.ids[expr].get_type() != TypeUndef)
+				res += join(" = ", to_initializer_expression(variable));
+			else if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
+				res += join(" = ", to_zero_initialized_expression(get_variable_data_type_id(variable)));
+		}
+		else
+		{
+			// Workgroup memory requires special handling. First, it can only be Null-Initialized.
+			// GLSL will handle this with null initializer, while others require more work after the decl
+			require_extension_internal("GL_EXT_null_initializer");
+			if (!backend.constant_null_initializer.empty())
+				res += join(" = ", backend.constant_null_initializer);
+		}
 	}
 
 	return res;
@@ -16572,6 +16590,12 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			// Comes from MSL which can push global variables as local variables in main function.
 			add_local_variable_name(var.self);
 			statement(variable_decl(var), ";");
+
+			// "Real" workgroup variables in compute shaders needs extra caretaking.
+			// They need to be initialized with an extra routine as they come in arbitrary form.
+			if (var.storage == StorageClassWorkgroup && var.initializer)
+				emit_workgroup_initialization(var);
+
 			var.deferred_declaration = false;
 		}
 		else if (var.storage == StorageClassPrivate)
@@ -16676,6 +16700,10 @@ void CompilerGLSL::emit_fixup()
 		if (options.vertex.flip_vert_y)
 			statement("gl_Position.y = -gl_Position.y;");
 	}
+}
+
+void CompilerGLSL::emit_workgroup_initialization(const SPIRVariable &)
+{
 }
 
 void CompilerGLSL::flush_phi(BlockID from, BlockID to)
