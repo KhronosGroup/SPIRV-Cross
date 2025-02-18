@@ -6999,6 +6999,9 @@ void CompilerGLSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id,
 		require_extension_internal("GL_EXT_shader_atomic_float");
 	}
 
+	if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+		require_extension_internal("GL_EXT_shader_atomic_int64");
+
 	forced_temporaries.insert(result_id);
 	emit_op(result_type, result_id,
 	        join(op, "(", to_non_uniform_aware_expression(op0), ", ",
@@ -13877,6 +13880,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		        join(op, "(",
 		             to_non_uniform_aware_expression(ops[2]), ", ", increment, ")"), false);
 		flush_all_atomic_capable_variables();
+
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+			require_extension_internal("GL_EXT_shader_atomic_int64");
 		break;
 	}
 
@@ -13890,6 +13896,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		const char *op = check_atomic_image(ptr) ? "imageAtomicExchange" : "atomicExchange";
 		statement(op, "(", to_non_uniform_aware_expression(ptr), ", ", to_expression(val), ");");
 		flush_all_atomic_capable_variables();
+
+		auto &type = expression_type(ptr);
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+			require_extension_internal("GL_EXT_shader_atomic_int64");
 		break;
 	}
 
@@ -13925,6 +13935,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 			emit_op(ops[0], ops[1],
 			        join(op, "(", to_non_uniform_aware_expression(ops[2]), ", ", increment, ")"), false);
+
+			if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+				require_extension_internal("GL_EXT_shader_atomic_int64");
 		}
 
 		flush_all_atomic_capable_variables();
@@ -13946,6 +13959,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto expr = join(op, "(", to_non_uniform_aware_expression(ops[2]), ", -", to_enclosed_expression(ops[5]), ")");
 		emit_op(ops[0], ops[1], expr, should_forward(ops[2]) && should_forward(ops[5]));
 		flush_all_atomic_capable_variables();
+
+		auto &type = get<SPIRType>(ops[0]);
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+			require_extension_internal("GL_EXT_shader_atomic_int64");
 		break;
 	}
 
