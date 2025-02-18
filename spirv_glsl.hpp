@@ -800,6 +800,7 @@ protected:
 	SPIRExpression &emit_uninitialized_temporary_expression(uint32_t type, uint32_t id);
 	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist);
 	std::string to_non_uniform_aware_expression(uint32_t id);
+	std::string to_atomic_ptr_expression(uint32_t id);
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
 	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);

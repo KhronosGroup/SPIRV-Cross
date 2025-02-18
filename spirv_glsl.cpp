@@ -5397,6 +5397,15 @@ string CompilerGLSL::to_non_uniform_aware_expression(uint32_t id)
 	return expr;
 }
 
+string CompilerGLSL::to_atomic_ptr_expression(uint32_t id)
+{
+	string expr = to_non_uniform_aware_expression(id);
+	// If we have naked pointer to POD, we need to dereference to get the proper ".value" resolve.
+	if (should_dereference(id))
+		expr = dereference_expression(expression_type(id), expr);
+	return expr;
+}
+
 string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 {
 	auto itr = invalid_expressions.find(id);
@@ -6999,9 +7008,12 @@ void CompilerGLSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id,
 		require_extension_internal("GL_EXT_shader_atomic_float");
 	}
 
+	if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+		require_extension_internal("GL_EXT_shader_atomic_int64");
+
 	forced_temporaries.insert(result_id);
 	emit_op(result_type, result_id,
-	        join(op, "(", to_non_uniform_aware_expression(op0), ", ",
+	        join(op, "(", to_atomic_ptr_expression(op0), ", ",
 	             to_unpacked_expression(op1), ")"), false);
 	flush_all_atomic_capable_variables();
 }
@@ -13875,8 +13887,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		const char *increment = unsigned_type ? "0u" : "0";
 		emit_op(ops[0], ops[1],
 		        join(op, "(",
-		             to_non_uniform_aware_expression(ops[2]), ", ", increment, ")"), false);
+		             to_atomic_ptr_expression(ops[2]), ", ", increment, ")"), false);
 		flush_all_atomic_capable_variables();
+
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+			require_extension_internal("GL_EXT_shader_atomic_int64");
 		break;
 	}
 
@@ -13888,8 +13903,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Ignore semantics for now, probably only relevant to CL.
 		uint32_t val = ops[3];
 		const char *op = check_atomic_image(ptr) ? "imageAtomicExchange" : "atomicExchange";
-		statement(op, "(", to_non_uniform_aware_expression(ptr), ", ", to_expression(val), ");");
+		statement(op, "(", to_atomic_ptr_expression(ptr), ", ", to_expression(val), ");");
 		flush_all_atomic_capable_variables();
+
+		auto &type = expression_type(ptr);
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+			require_extension_internal("GL_EXT_shader_atomic_int64");
 		break;
 	}
 
@@ -13924,7 +13943,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				increment = "-1";
 
 			emit_op(ops[0], ops[1],
-			        join(op, "(", to_non_uniform_aware_expression(ops[2]), ", ", increment, ")"), false);
+			        join(op, "(", to_atomic_ptr_expression(ops[2]), ", ", increment, ")"), false);
+
+			if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+				require_extension_internal("GL_EXT_shader_atomic_int64");
 		}
 
 		flush_all_atomic_capable_variables();
@@ -13943,9 +13965,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAdd" : "atomicAdd";
 		forced_temporaries.insert(ops[1]);
-		auto expr = join(op, "(", to_non_uniform_aware_expression(ops[2]), ", -", to_enclosed_expression(ops[5]), ")");
+		auto expr = join(op, "(", to_atomic_ptr_expression(ops[2]), ", -", to_enclosed_expression(ops[5]), ")");
 		emit_op(ops[0], ops[1], expr, should_forward(ops[2]) && should_forward(ops[5]));
 		flush_all_atomic_capable_variables();
+
+		auto &type = get<SPIRType>(ops[0]);
+		if (type.basetype == SPIRType::UInt64 || type.basetype == SPIRType::Int64)
+			require_extension_internal("GL_EXT_shader_atomic_int64");
 		break;
 	}
 
