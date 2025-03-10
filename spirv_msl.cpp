@@ -10025,11 +10025,11 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto &type = get<SPIRType>(ops[0]);
 		auto &input_type = expression_type(ops[2]);
 
-		if (opcode != OpBitcast || type.pointer || input_type.pointer)
+		if (opcode != OpBitcast || is_pointer(type) || is_pointer(input_type))
 		{
 			string op;
 
-			if ((type.vecsize == 1 || type.pointer) && (input_type.vecsize == 1 || input_type.pointer))
+			if ((type.vecsize == 1 || is_pointer(type)) && (input_type.vecsize == 1 || is_pointer(input_type)))
 				op = join("reinterpret_cast<", type_to_glsl(type), ">(", to_unpacked_expression(ops[2]), ")");
 			else if (input_type.vecsize == 2)
 				op = join("reinterpret_cast<", type_to_glsl(type), ">(as_type<ulong>(", to_unpacked_expression(ops[2]), "))");
