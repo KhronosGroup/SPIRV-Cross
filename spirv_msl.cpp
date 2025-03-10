@@ -3197,41 +3197,58 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		string mbr_name = ensure_valid_name(append_member_name(mbr_name_qual, var_type, mbr_idx) + (mbr_is_indexable ? join("_", i) : ""), "m");
 		set_member_name(ib_type.self, ib_mbr_idx, mbr_name);
 
+		// The SPIRV location of interface variable, used to obtain the initial
+		// MSL location (the location variable) and interface matching
+		uint32_t ir_location = UINT32_MAX;
+		bool has_member_loc_decor = has_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+		bool has_var_loc_decor = has_decoration(var.self, DecorationLocation);
+		uint32_t orig_vecsize = UINT32_MAX;
+
+		if (has_member_loc_decor)
+			ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+		else if (has_var_loc_decor)
+			ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
+		else if (is_builtin)
+		{
+			if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
+				ir_location = inputs_by_builtin[builtin].location;
+			else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
+				ir_location = outputs_by_builtin[builtin].location;
+		}
+
 		// Once we determine the location of the first member within nested structures,
 		// from a var of the topmost structure, the remaining flattened members of
 		// the nested structures will have consecutive location values. At this point,
 		// we've recursively tunnelled into structs, arrays, and matrices, and are
 		// down to a single location for each member now.
-		if (!is_builtin && location != UINT32_MAX)
+		if (location == UINT32_MAX && ir_location != UINT32_MAX)
+			location = ir_location + i;
+
+		if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
 		{
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-			mark_location_as_used_by_shader(location, *usable_type, storage);
-			location++;
+			uint32_t component = 0;
+			uint32_t orig_mbr_type_id = usable_type->self;
+
+			if (has_member_loc_decor)
+				component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
+
+			var.basetype = ensure_correct_input_type(var.basetype, location, component, 0, meta.strip_array);
+			mbr_type_id = ensure_correct_input_type(usable_type->self, location, component, 0, meta.strip_array);
+
+			// For members of the composite interface block, we only change the interface block type
+			// when interface matching happens. In the meantime, we store the original vector size
+			// and insert a swizzle when loading from metal interface block (see fixup below)
+			if (mbr_type_id != orig_mbr_type_id)
+				orig_vecsize = get<SPIRType>(orig_mbr_type_id).vecsize;
+
+			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
+				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
+			else
+				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
 		}
-		else if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
+
+		if ((!is_builtin && location != UINT32_MAX) || (is_builtin && ir_location != UINT32_MAX))
 		{
-			location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation) + i;
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-			mark_location_as_used_by_shader(location, *usable_type, storage);
-			location++;
-		}
-		else if (has_decoration(var.self, DecorationLocation))
-		{
-			location = get_accumulated_member_location(var, mbr_idx, meta.strip_array) + i;
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-			mark_location_as_used_by_shader(location, *usable_type, storage);
-			location++;
-		}
-		else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
-		{
-			location = inputs_by_builtin[builtin].location + i;
-			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-			mark_location_as_used_by_shader(location, *usable_type, storage);
-			location++;
-		}
-		else if (is_builtin && capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
-		{
-			location = outputs_by_builtin[builtin].location + i;
 			set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 			mark_location_as_used_by_shader(location, *usable_type, storage);
 			location++;
@@ -3271,6 +3288,7 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 			case StorageClassInput:
 				entry_func.fixup_hooks_in.push_back([=, &var]() {
 					string lerp_call;
+					string swizzle;
 					if (pull_model_inputs.count(var.self))
 					{
 						if (is_centroid)
@@ -3280,7 +3298,9 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 						else
 							lerp_call = ".interpolate_at_center()";
 					}
-					statement(var_chain, " = ", ib_var_ref, ".", mbr_name, lerp_call, ";");
+					if (orig_vecsize != UINT32_MAX)
+						swizzle = vector_swizzle(orig_vecsize, 0);
+					statement(var_chain, " = ", ib_var_ref, ".", mbr_name, lerp_call, swizzle, ";");
 				});
 				break;
 
@@ -3348,6 +3368,55 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 			qual_var_name += ".interpolate_at_center()";
 	}
 
+	// The SPIRV location of interface variable, used to obtain the initial
+	// MSL location (the location variable) and interface matching
+	uint32_t ir_location = UINT32_MAX;
+	bool has_member_loc_decor = has_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+	bool has_var_loc_decor = has_decoration(var.self, DecorationLocation);
+	uint32_t orig_vecsize = UINT32_MAX;
+
+	if (has_member_loc_decor)
+		ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+	else if (has_var_loc_decor)
+		ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
+	else if (is_builtin)
+	{
+		if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
+			ir_location = inputs_by_builtin[builtin].location;
+		else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
+			ir_location = outputs_by_builtin[builtin].location;
+	}
+
+	// Once we determine the location of the first member within nested structures,
+	// from a var of the topmost structure, the remaining flattened members of
+	// the nested structures will have consecutive location values. At this point,
+	// we've recursively tunnelled into structs, arrays, and matrices, and are
+	// down to a single location for each member now.
+	if (location == UINT32_MAX && ir_location != UINT32_MAX)
+		location = ir_location;
+
+	if (storage == StorageClassInput && (has_member_loc_decor || has_var_loc_decor))
+	{
+		uint32_t component = 0;
+		uint32_t orig_mbr_type_id = mbr_type_id;
+
+		if (has_member_loc_decor)
+			component = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
+
+		mbr_type_id = ensure_correct_input_type(mbr_type_id, location, component, 0, meta.strip_array);
+
+		// For members of the composite interface block, we only change the interface block type
+		// when interface matching happens. In the meantime, we store the original vector size
+		// and insert a swizzle when loading from metal interface block (see fixup below)
+		if (mbr_type_id != orig_mbr_type_id)
+			orig_vecsize = get<SPIRType>(orig_mbr_type_id).vecsize;
+
+		if (storage == StorageClassInput && pull_model_inputs.count(var.self))
+			ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
+		else
+			ib_type.member_types[ib_mbr_idx] = mbr_type_id;
+	}
+
 	bool flatten_stage_out = false;
 	string var_chain = var_chain_qual + "." + to_member_name(var_type, mbr_idx);
 	if (is_builtin && !meta.strip_array)
@@ -3363,7 +3432,11 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		{
 		case StorageClassInput:
 			entry_func.fixup_hooks_in.push_back([=]() {
-				statement(var_chain, " = ", qual_var_name, ";");
+				string swizzle;
+				// Insert swizzle for widened interface block vector from interface matching
+				if (orig_vecsize != UINT32_MAX)
+					swizzle = vector_swizzle(orig_vecsize, 0);
+				statement(var_chain, " = ", qual_var_name, swizzle, ";");
 			});
 			break;
 
@@ -3379,60 +3452,8 @@ void CompilerMSL::add_plain_member_variable_to_interface_block(StorageClass stor
 		}
 	}
 
-	// Once we determine the location of the first member within nested structures,
-	// from a var of the topmost structure, the remaining flattened members of
-	// the nested structures will have consecutive location values. At this point,
-	// we've recursively tunnelled into structs, arrays, and matrices, and are
-	// down to a single location for each member now.
-	if (!is_builtin && location != UINT32_MAX)
+	if ((!is_builtin && location != UINT32_MAX) || (is_builtin && ir_location != UINT32_MAX))
 	{
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location += type_to_location_count(get<SPIRType>(mbr_type_id));
-	}
-	else if (has_member_decoration(var_type.self, mbr_idx, DecorationLocation))
-	{
-		location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-		uint32_t comp = get_member_decoration(var_type.self, mbr_idx, DecorationComponent);
-		if (storage == StorageClassInput)
-		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, location, comp, 0, meta.strip_array);
-			var_type.member_types[mbr_idx] = mbr_type_id;
-			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
-				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
-			else
-				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
-		}
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location += type_to_location_count(get<SPIRType>(mbr_type_id));
-	}
-	else if (has_decoration(var.self, DecorationLocation))
-	{
-		location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
-		if (storage == StorageClassInput)
-		{
-			mbr_type_id = ensure_correct_input_type(mbr_type_id, location, 0, 0, meta.strip_array);
-			var_type.member_types[mbr_idx] = mbr_type_id;
-			if (storage == StorageClassInput && pull_model_inputs.count(var.self))
-				ib_type.member_types[ib_mbr_idx] = build_msl_interpolant_type(mbr_type_id, is_noperspective);
-			else
-				ib_type.member_types[ib_mbr_idx] = mbr_type_id;
-		}
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location += type_to_location_count(get<SPIRType>(mbr_type_id));
-	}
-	else if (is_builtin && is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
-	{
-		location = inputs_by_builtin[builtin].location;
-		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
-		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
-		location += type_to_location_count(get<SPIRType>(mbr_type_id));
-	}
-	else if (is_builtin && capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
-	{
-		location = outputs_by_builtin[builtin].location;
 		set_member_decoration(ib_type.self, ib_mbr_idx, DecorationLocation, location);
 		mark_location_as_used_by_shader(location, get<SPIRType>(mbr_type_id), storage);
 		location += type_to_location_count(get<SPIRType>(mbr_type_id));
