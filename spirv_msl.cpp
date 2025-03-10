@@ -10029,7 +10029,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		{
 			string op;
 
-			if (type.vecsize == 1 && input_type.vecsize == 1)
+			if ((type.vecsize == 1 || type.pointer) && (input_type.vecsize == 1 || input_type.pointer))
 				op = join("reinterpret_cast<", type_to_glsl(type), ">(", to_unpacked_expression(ops[2]), ")");
 			else if (input_type.vecsize == 2)
 				op = join("reinterpret_cast<", type_to_glsl(type), ">(as_type<ulong>(", to_unpacked_expression(ops[2]), "))");
