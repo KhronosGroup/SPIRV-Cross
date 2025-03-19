@@ -5831,7 +5831,6 @@ void CompilerMSL::emit_custom_functions()
 		if (!msl_options.supports_msl_version(2))
 			SPIRV_CROSS_THROW(
 			    "spvDynamicImageSampler requires default-constructible texture objects, which require MSL 2.0.");
-		spv_function_implementations.insert(SPVFuncImplForwardArgs);
 		spv_function_implementations.insert(SPVFuncImplTextureSwizzle);
 		if (msl_options.swizzle_texture_samples)
 			spv_function_implementations.insert(SPVFuncImplGatherSwizzle);
@@ -5857,16 +5856,10 @@ void CompilerMSL::emit_custom_functions()
 		spv_function_implementations.insert(SPVFuncImplGatherCompareReturn);
 	}
 
-	for (uint32_t i = SPVFuncImplChromaReconstructNearest2Plane;
-	     i <= SPVFuncImplChromaReconstructLinear420XMidpointYMidpoint3Plane; i++)
-		if (spv_function_implementations.count(static_cast<SPVFuncImpl>(i)))
-			spv_function_implementations.insert(SPVFuncImplForwardArgs);
-
 	if (spv_function_implementations.count(SPVFuncImplTextureSwizzle) ||
 	    spv_function_implementations.count(SPVFuncImplGatherSwizzle) ||
 	    spv_function_implementations.count(SPVFuncImplGatherCompareSwizzle))
 	{
-		spv_function_implementations.insert(SPVFuncImplForwardArgs);
 		spv_function_implementations.insert(SPVFuncImplGetSwizzle);
 	}
 
@@ -6336,23 +6329,6 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
-		case SPVFuncImplForwardArgs:
-			statement("template<typename T> struct spvRemoveReference { typedef T type; };");
-			statement("template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };");
-			statement("template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };");
-			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
-			          "spvRemoveReference<T>::type& x)");
-			begin_scope();
-			statement("return static_cast<thread T&&>(x);");
-			end_scope();
-			statement("template<typename T> inline constexpr thread T&& spvForward(thread typename "
-			          "spvRemoveReference<T>::type&& x)");
-			begin_scope();
-			statement("return static_cast<thread T&&>(x);");
-			end_scope();
-			statement("");
-			break;
-
 		case SPVFuncImplGetSwizzle:
 			statement("enum class spvSwizzle : uint");
 			begin_scope();
@@ -6439,13 +6415,13 @@ void CompilerMSL::emit_custom_functions()
 			statement("case spvSwizzle::one:");
 			statement("    return spvGatherReturn<Tex, Ts...>(1, 1, 1, 1);");
 			statement("case spvSwizzle::red:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::x);");
+			statement("    return t.gather(s, params..., component::x);");
 			statement("case spvSwizzle::green:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::y);");
+			statement("    return t.gather(s, params..., component::y);");
 			statement("case spvSwizzle::blue:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::z);");
+			statement("    return t.gather(s, params..., component::z);");
 			statement("case spvSwizzle::alpha:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::w);");
+			statement("    return t.gather(s, params..., component::w);");
 			end_scope();
 			end_scope();
 			// texture::gather insists on its component parameter being a constant
@@ -6453,13 +6429,13 @@ void CompilerMSL::emit_custom_functions()
 			statement("switch (c)");
 			begin_scope();
 			statement("case component::x:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::x);");
+			statement("    return t.gather(s, params..., component::x);");
 			statement("case component::y:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::y);");
+			statement("    return t.gather(s, params..., component::y);");
 			statement("case component::z:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::z);");
+			statement("    return t.gather(s, params..., component::z);");
 			statement("case component::w:");
-			statement("    return t.gather(s, spvForward<Ts>(params)..., component::w);");
+			statement("    return t.gather(s, params..., component::w);");
 			end_scope();
 			end_scope();
 			statement("");
@@ -6486,7 +6462,7 @@ void CompilerMSL::emit_custom_functions()
 			statement("    return spvGatherCompareReturn<Tex, Ts...>(1, 1, 1, 1);");
 			end_scope();
 			end_scope();
-			statement("return t.gather_compare(s, spvForward<Ts>(params)...);");
+			statement("return t.gather_compare(s, params...);");
 			end_scope();
 			statement("");
 			break;
@@ -6507,16 +6483,16 @@ void CompilerMSL::emit_custom_functions()
 				begin_scope();
 				// Work around texture::gather() requiring its component parameter to be a constant expression
 				statement("case component::x:");
-				statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);");
+				statement("    rslts[i] = t.gather(s, params..., coffsets[i], component::x);");
 				statement("    break;");
 				statement("case component::y:");
-				statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);");
+				statement("    rslts[i] = t.gather(s, params..., coffsets[i], component::y);");
 				statement("    break;");
 				statement("case component::z:");
-				statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);");
+				statement("    rslts[i] = t.gather(s, params..., coffsets[i], component::z);");
 				statement("    break;");
 				statement("case component::w:");
-				statement("    rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);");
+				statement("    rslts[i] = t.gather(s, params..., coffsets[i], component::w);");
 				statement("    break;");
 				end_scope();
 				end_scope();
@@ -6539,7 +6515,7 @@ void CompilerMSL::emit_custom_functions()
 				statement("spvGatherCompareReturn<Tex, Tp...> rslts[4];");
 				statement("for (uint i = 0; i < 4; i++)");
 				begin_scope();
-				statement("    rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);");
+				statement("    rslts[i] = t.gather_compare(s, params..., coffsets[i]);");
 				end_scope();
 				// Pull all values from the i0j0 component of each gather footprint
 				statement("return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
@@ -6986,8 +6962,8 @@ void CompilerMSL::emit_custom_functions()
 			          "samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
-			statement("ycbcr.br = plane1.sample(samp, coord, spvForward<LodOptions>(options)...).rg;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
+			statement("ycbcr.br = plane1.sample(samp, coord, options...).rg;");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -6999,9 +6975,9 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
-			statement("ycbcr.b = plane1.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
-			statement("ycbcr.r = plane2.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
+			statement("ycbcr.b = plane1.sample(samp, coord, options...).r;");
+			statement("ycbcr.r = plane2.sample(samp, coord, options...).r;");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7013,15 +6989,15 @@ void CompilerMSL::emit_custom_functions()
 			          "plane1, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("if (fract(coord.x * plane1.get_width()) != 0.0)");
 			begin_scope();
-			statement("ycbcr.br = vec<T, 2>(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), 0.5).rg);");
+			statement("ycbcr.br = vec<T, 2>(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), 0.5).rg);");
 			end_scope();
 			statement("else");
 			begin_scope();
-			statement("ycbcr.br = plane1.sample(samp, coord, spvForward<LodOptions>(options)...).rg;");
+			statement("ycbcr.br = plane1.sample(samp, coord, options...).rg;");
 			end_scope();
 			statement("return ycbcr;");
 			end_scope();
@@ -7034,18 +7010,18 @@ void CompilerMSL::emit_custom_functions()
 			          "plane1, texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("if (fract(coord.x * plane1.get_width()) != 0.0)");
 			begin_scope();
-			statement("ycbcr.b = T(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), 0.5).r);");
-			statement("ycbcr.r = T(mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), 0.5).r);");
+			statement("ycbcr.b = T(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), 0.5).r);");
+			statement("ycbcr.r = T(mix(plane2.sample(samp, coord, options...), "
+			          "plane2.sample(samp, coord, options..., int2(1, 0)), 0.5).r);");
 			end_scope();
 			statement("else");
 			begin_scope();
-			statement("ycbcr.b = plane1.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
-			statement("ycbcr.r = plane2.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.b = plane1.sample(samp, coord, options...).r;");
+			statement("ycbcr.r = plane2.sample(samp, coord, options...).r;");
 			end_scope();
 			statement("return ycbcr;");
 			end_scope();
@@ -7058,10 +7034,10 @@ void CompilerMSL::emit_custom_functions()
 			          "plane1, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("int2 offs = int2(fract(coord.x * plane1.get_width()) != 0.0 ? 1 : -1, 0);");
-			statement("ycbcr.br = vec<T, 2>(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., offs), 0.25).rg);");
+			statement("ycbcr.br = vec<T, 2>(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., offs), 0.25).rg);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7073,12 +7049,12 @@ void CompilerMSL::emit_custom_functions()
 			          "plane1, texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("int2 offs = int2(fract(coord.x * plane1.get_width()) != 0.0 ? 1 : -1, 0);");
-			statement("ycbcr.b = T(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., offs), 0.25).r);");
-			statement("ycbcr.r = T(mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., offs), 0.25).r);");
+			statement("ycbcr.b = T(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., offs), 0.25).r);");
+			statement("ycbcr.r = T(mix(plane2.sample(samp, coord, options...), "
+			          "plane2.sample(samp, coord, options..., offs), 0.25).r);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7090,12 +7066,12 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract(round(coord * float2(plane0.get_width(), plane0.get_height())) * 0.5);");
-			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).rg);");
+			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).rg);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7107,16 +7083,16 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract(round(coord * float2(plane0.get_width(), plane0.get_height())) * 0.5);");
-			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
-			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, options...), "
+			          "plane2.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane2.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane2.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7128,13 +7104,13 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract((round(coord * float2(plane0.get_width(), plane0.get_height())) - float2(0.5, "
 			          "0)) * 0.5);");
-			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).rg);");
+			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).rg);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7146,17 +7122,17 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract((round(coord * float2(plane0.get_width(), plane0.get_height())) - float2(0.5, "
 			          "0)) * 0.5);");
-			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
-			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, options...), "
+			          "plane2.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane2.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane2.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7168,13 +7144,13 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract((round(coord * float2(plane0.get_width(), plane0.get_height())) - float2(0, "
 			          "0.5)) * 0.5);");
-			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).rg);");
+			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).rg);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7186,17 +7162,17 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract((round(coord * float2(plane0.get_width(), plane0.get_height())) - float2(0, "
 			          "0.5)) * 0.5);");
-			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
-			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, options...), "
+			          "plane2.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane2.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane2.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7208,13 +7184,13 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract((round(coord * float2(plane0.get_width(), plane0.get_height())) - float2(0.5, "
 			          "0.5)) * 0.5);");
-			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).rg);");
+			statement("ycbcr.br = vec<T, 2>(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).rg);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7226,17 +7202,17 @@ void CompilerMSL::emit_custom_functions()
 			          "texture2d<T> plane1, texture2d<T> plane2, sampler samp, float2 coord, LodOptions... options)");
 			begin_scope();
 			statement("vec<T, 4> ycbcr = vec<T, 4>(0, 0, 0, 1);");
-			statement("ycbcr.g = plane0.sample(samp, coord, spvForward<LodOptions>(options)...).r;");
+			statement("ycbcr.g = plane0.sample(samp, coord, options...).r;");
 			statement("float2 ab = fract((round(coord * float2(plane0.get_width(), plane0.get_height())) - float2(0.5, "
 			          "0.5)) * 0.5);");
-			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane1.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
-			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)...), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 0)), ab.x), "
-			          "mix(plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(0, 1)), "
-			          "plane2.sample(samp, coord, spvForward<LodOptions>(options)..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.b = T(mix(mix(plane1.sample(samp, coord, options...), "
+			          "plane1.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane1.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane1.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
+			statement("ycbcr.r = T(mix(mix(plane2.sample(samp, coord, options...), "
+			          "plane2.sample(samp, coord, options..., int2(1, 0)), ab.x), "
+			          "mix(plane2.sample(samp, coord, options..., int2(0, 1)), "
+			          "plane2.sample(samp, coord, options..., int2(1, 1)), ab.x), ab.y).r);");
 			statement("return ycbcr;");
 			end_scope();
 			statement("");
@@ -7518,10 +7494,8 @@ void CompilerMSL::emit_custom_functions()
 			statement("    ycbcr_samp.get_chroma_filter() == spvChromaFilter::nearest)");
 			begin_scope();
 			statement("if (!is_null_texture(plane2))");
-			statement("    return spvChromaReconstructNearest(plane0, plane1, plane2, samp, coord,");
-			statement("                                       spvForward<LodOptions>(options)...);");
-			statement(
-			    "return spvChromaReconstructNearest(plane0, plane1, samp, coord, spvForward<LodOptions>(options)...);");
+			statement("    return spvChromaReconstructNearest(plane0, plane1, plane2, samp, coord, options...);");
+			statement("return spvChromaReconstructNearest(plane0, plane1, samp, coord, options...);");
 			end_scope(); // if (resolution == 422 || chroma_filter == nearest)
 			statement("switch (ycbcr_samp.get_resolution())");
 			begin_scope();
@@ -7534,18 +7508,18 @@ void CompilerMSL::emit_custom_functions()
 			statement("    if (!is_null_texture(plane2))");
 			statement("        return spvChromaReconstructLinear422CositedEven(");
 			statement("            plane0, plane1, plane2, samp,");
-			statement("            coord, spvForward<LodOptions>(options)...);");
+			statement("            coord, options...);");
 			statement("    return spvChromaReconstructLinear422CositedEven(");
 			statement("        plane0, plane1, samp, coord,");
-			statement("        spvForward<LodOptions>(options)...);");
+			statement("        options...);");
 			statement("case spvXChromaLocation::midpoint:");
 			statement("    if (!is_null_texture(plane2))");
 			statement("        return spvChromaReconstructLinear422Midpoint(");
 			statement("            plane0, plane1, plane2, samp,");
-			statement("            coord, spvForward<LodOptions>(options)...);");
+			statement("            coord, options...);");
 			statement("    return spvChromaReconstructLinear422Midpoint(");
 			statement("        plane0, plane1, samp, coord,");
-			statement("        spvForward<LodOptions>(options)...);");
+			statement("        options...);");
 			end_scope(); // switch (x_chroma_offset)
 			end_scope(); // case 422:
 			statement("case spvFormatResolution::_420:");
@@ -7560,18 +7534,18 @@ void CompilerMSL::emit_custom_functions()
 			statement("    if (!is_null_texture(plane2))");
 			statement("        return spvChromaReconstructLinear420XCositedEvenYCositedEven(");
 			statement("            plane0, plane1, plane2, samp,");
-			statement("            coord, spvForward<LodOptions>(options)...);");
+			statement("            coord, options...);");
 			statement("    return spvChromaReconstructLinear420XCositedEvenYCositedEven(");
 			statement("        plane0, plane1, samp, coord,");
-			statement("        spvForward<LodOptions>(options)...);");
+			statement("        options...);");
 			statement("case spvYChromaLocation::midpoint:");
 			statement("    if (!is_null_texture(plane2))");
 			statement("        return spvChromaReconstructLinear420XCositedEvenYMidpoint(");
 			statement("            plane0, plane1, plane2, samp,");
-			statement("            coord, spvForward<LodOptions>(options)...);");
+			statement("            coord, options...);");
 			statement("    return spvChromaReconstructLinear420XCositedEvenYMidpoint(");
 			statement("        plane0, plane1, samp, coord,");
-			statement("        spvForward<LodOptions>(options)...);");
+			statement("        options...);");
 			end_scope(); // switch (y_chroma_offset)
 			end_scope(); // case x::cosited_even:
 			statement("case spvXChromaLocation::midpoint:");
@@ -7582,31 +7556,30 @@ void CompilerMSL::emit_custom_functions()
 			statement("    if (!is_null_texture(plane2))");
 			statement("        return spvChromaReconstructLinear420XMidpointYCositedEven(");
 			statement("            plane0, plane1, plane2, samp,");
-			statement("            coord, spvForward<LodOptions>(options)...);");
+			statement("            coord, options...);");
 			statement("    return spvChromaReconstructLinear420XMidpointYCositedEven(");
 			statement("        plane0, plane1, samp, coord,");
-			statement("        spvForward<LodOptions>(options)...);");
+			statement("        options...);");
 			statement("case spvYChromaLocation::midpoint:");
 			statement("    if (!is_null_texture(plane2))");
 			statement("        return spvChromaReconstructLinear420XMidpointYMidpoint(");
 			statement("            plane0, plane1, plane2, samp,");
-			statement("            coord, spvForward<LodOptions>(options)...);");
+			statement("            coord, options...);");
 			statement("    return spvChromaReconstructLinear420XMidpointYMidpoint(");
 			statement("        plane0, plane1, samp, coord,");
-			statement("        spvForward<LodOptions>(options)...);");
+			statement("        options...);");
 			end_scope(); // switch (y_chroma_offset)
 			end_scope(); // case x::midpoint
 			end_scope(); // switch (x_chroma_offset)
 			end_scope(); // case 420:
 			end_scope(); // switch (resolution)
 			end_scope(); // if (multiplanar)
-			statement("return plane0.sample(samp, coord, spvForward<LodOptions>(options)...);");
+			statement("return plane0.sample(samp, coord, options...);");
 			end_scope(); // do_sample()
 			statement("template <typename... LodOptions>");
 			statement("vec<T, 4> sample(float2 coord, LodOptions... options) const thread");
 			begin_scope();
-			statement(
-			    "vec<T, 4> s = spvTextureSwizzle(do_sample(coord, spvForward<LodOptions>(options)...), swizzle);");
+			statement("vec<T, 4> s = spvTextureSwizzle(do_sample(coord, options...), swizzle);");
 			statement("if (ycbcr_samp.get_ycbcr_model() == spvYCbCrModelConversion::rgb_identity)");
 			statement("    return s;");
 			statement("");
@@ -11410,7 +11383,6 @@ string CompilerMSL::to_function_name(const TextureFunctionNameArguments &args)
 	{
 		bool is_compare = comparison_ids.count(img);
 		add_spv_func_and_recompile(is_compare ? SPVFuncImplGatherCompareConstOffsets : SPVFuncImplGatherConstOffsets);
-		add_spv_func_and_recompile(SPVFuncImplForwardArgs);
 		return is_compare ? "spvGatherCompareConstOffsets" : "spvGatherConstOffsets";
 	}
 

@@ -44,18 +44,6 @@ struct spvUnsafeArray
     }
 };
 
-template<typename T> struct spvRemoveReference { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
-{
-    return static_cast<thread T&&>(x);
-}
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
-{
-    return static_cast<thread T&&>(x);
-}
-
 template<typename Tex, typename... Tp>
 using spvGatherReturn = decltype(declval<Tex>().gather(declval<sampler>(), declval<Tp>()...));
 
@@ -69,16 +57,16 @@ inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const device Tex& t, sa
         switch (c)
         {
             case component::x:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::x);
                 break;
             case component::y:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::y);
                 break;
             case component::z:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::z);
                 break;
             case component::w:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::w);
                 break;
         }
     }
@@ -95,16 +83,16 @@ inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const constant Tex& t, 
         switch (c)
         {
             case component::x:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::x);
                 break;
             case component::y:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::y);
                 break;
             case component::z:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::z);
                 break;
             case component::w:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::w);
                 break;
         }
     }
@@ -121,16 +109,16 @@ inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const thread Tex& t, sa
         switch (c)
         {
             case component::x:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::x);
                 break;
             case component::y:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::y);
                 break;
             case component::z:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::z);
                 break;
             case component::w:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::w);
                 break;
         }
     }

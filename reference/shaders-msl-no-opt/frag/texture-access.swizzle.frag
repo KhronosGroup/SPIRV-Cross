@@ -12,18 +12,6 @@ uint2 spvTexelBufferCoord(uint tc)
     return uint2(tc % 4096, tc / 4096);
 }
 
-template<typename T> struct spvRemoveReference { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
-{
-    return static_cast<thread T&&>(x);
-}
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
-{
-    return static_cast<thread T&&>(x);
-}
-
 enum class spvSwizzle : uint
 {
     none = 0,
@@ -93,25 +81,25 @@ inline spvGatherReturn<Tex, Ts...> spvGatherSwizzle(const thread Tex& t, sampler
             case spvSwizzle::one:
                 return spvGatherReturn<Tex, Ts...>(1, 1, 1, 1);
             case spvSwizzle::red:
-                return t.gather(s, spvForward<Ts>(params)..., component::x);
+                return t.gather(s, params..., component::x);
             case spvSwizzle::green:
-                return t.gather(s, spvForward<Ts>(params)..., component::y);
+                return t.gather(s, params..., component::y);
             case spvSwizzle::blue:
-                return t.gather(s, spvForward<Ts>(params)..., component::z);
+                return t.gather(s, params..., component::z);
             case spvSwizzle::alpha:
-                return t.gather(s, spvForward<Ts>(params)..., component::w);
+                return t.gather(s, params..., component::w);
         }
     }
     switch (c)
     {
         case component::x:
-            return t.gather(s, spvForward<Ts>(params)..., component::x);
+            return t.gather(s, params..., component::x);
         case component::y:
-            return t.gather(s, spvForward<Ts>(params)..., component::y);
+            return t.gather(s, params..., component::y);
         case component::z:
-            return t.gather(s, spvForward<Ts>(params)..., component::z);
+            return t.gather(s, params..., component::z);
         case component::w:
-            return t.gather(s, spvForward<Ts>(params)..., component::w);
+            return t.gather(s, params..., component::w);
     }
 }
 
@@ -135,7 +123,7 @@ inline spvGatherCompareReturn<Tex, Ts...> spvGatherCompareSwizzle(const thread T
                 return spvGatherCompareReturn<Tex, Ts...>(1, 1, 1, 1);
         }
     }
-    return t.gather_compare(s, spvForward<Ts>(params)...);
+    return t.gather_compare(s, params...);
 }
 
 fragment void main0(constant uint* spvSwizzleConstants [[buffer(30)]], texture1d<float> tex1d [[texture(0)]], texture2d<float> tex2d [[texture(1)]], texture3d<float> tex3d [[texture(2)]], texturecube<float> texCube [[texture(3)]], texture2d_array<float> tex2dArray [[texture(4)]], texturecube_array<float> texCubeArray [[texture(5)]], depth2d<float> depth2d [[texture(6)]], depthcube<float> depthCube [[texture(7)]], depth2d_array<float> depth2dArray [[texture(8)]], depthcube_array<float> depthCubeArray [[texture(9)]], texture2d<float> texBuffer [[texture(10)]], sampler tex1dSmplr [[sampler(0)]], sampler tex2dSmplr [[sampler(1)]], sampler tex3dSmplr [[sampler(2)]], sampler texCubeSmplr [[sampler(3)]], sampler tex2dArraySmplr [[sampler(4)]], sampler texCubeArraySmplr [[sampler(5)]], sampler depth2dSmplr [[sampler(6)]], sampler depthCubeSmplr [[sampler(7)]], sampler depth2dArraySmplr [[sampler(8)]], sampler depthCubeArraySmplr [[sampler(9)]])

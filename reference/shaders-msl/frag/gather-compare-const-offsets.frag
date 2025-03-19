@@ -44,18 +44,6 @@ struct spvUnsafeArray
     }
 };
 
-template<typename T> struct spvRemoveReference { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
-{
-    return static_cast<thread T&&>(x);
-}
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
-{
-    return static_cast<thread T&&>(x);
-}
-
 template<typename Tex, typename... Tp>
 using spvGatherCompareReturn = decltype(declval<Tex>().gather_compare(declval<sampler>(), declval<Tp>()...));
 
@@ -66,7 +54,7 @@ inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const dev
     spvGatherCompareReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
-            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+            rslts[i] = t.gather_compare(s, params..., coffsets[i]);
     }
     return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
@@ -78,7 +66,7 @@ inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const con
     spvGatherCompareReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
-            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+            rslts[i] = t.gather_compare(s, params..., coffsets[i]);
     }
     return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
@@ -90,7 +78,7 @@ inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const thr
     spvGatherCompareReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
-            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+            rslts[i] = t.gather_compare(s, params..., coffsets[i]);
     }
     return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
