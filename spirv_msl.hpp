@@ -793,12 +793,11 @@ protected:
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
 		SPVFuncImplInverse2x2,
-		// It is very important that this come before *Swizzle and ChromaReconstruct*, to ensure it's
-		// emitted before them.
-		SPVFuncImplForwardArgs,
-		// Likewise, this must come before *Swizzle.
+		// It is very important that this come before *Swizzle, to ensure it's emitted before them.
 		SPVFuncImplGetSwizzle,
 		SPVFuncImplTextureSwizzle,
+		SPVFuncImplGatherReturn,
+		SPVFuncImplGatherCompareReturn,
 		SPVFuncImplGatherSwizzle,
 		SPVFuncImplGatherCompareSwizzle,
 		SPVFuncImplGatherConstOffsets,

@@ -44,94 +44,85 @@ struct spvUnsafeArray
     }
 };
 
-template<typename T> struct spvRemoveReference { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
-{
-    return static_cast<thread T&&>(x);
-}
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
-{
-    return static_cast<thread T&&>(x);
-}
+template<typename Tex, typename... Tp>
+using spvGatherReturn = decltype(declval<Tex>().gather(declval<sampler>(), declval<Tp>()...));
 
 // Wrapper function that processes a device texture gather with a constant offset array.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
-inline vec<T, 4> spvGatherConstOffsets(const device Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
+template<typename Tex, typename Toff, typename... Tp>
+inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const device Tex& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
 {
-    vec<T, 4> rslts[4];
+    spvGatherReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
         switch (c)
         {
             case component::x:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::x);
                 break;
             case component::y:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::y);
                 break;
             case component::z:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::z);
                 break;
             case component::w:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::w);
                 break;
         }
     }
-    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+    return spvGatherReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
 
 // Wrapper function that processes a constant texture gather with a constant offset array.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
-inline vec<T, 4> spvGatherConstOffsets(const constant Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
+template<typename Tex, typename Toff, typename... Tp>
+inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const constant Tex& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
 {
-    vec<T, 4> rslts[4];
+    spvGatherReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
         switch (c)
         {
             case component::x:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::x);
                 break;
             case component::y:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::y);
                 break;
             case component::z:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::z);
                 break;
             case component::w:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::w);
                 break;
         }
     }
-    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+    return spvGatherReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
 
 // Wrapper function that processes a thread texture gather with a constant offset array.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
-inline vec<T, 4> spvGatherConstOffsets(const thread Tex<T>& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
+template<typename Tex, typename Toff, typename... Tp>
+inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const thread Tex& t, sampler s, Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)
 {
-    vec<T, 4> rslts[4];
+    spvGatherReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
         switch (c)
         {
             case component::x:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::x);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::x);
                 break;
             case component::y:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::y);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::y);
                 break;
             case component::z:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::z);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::z);
                 break;
             case component::w:
-                rslts[i] = t.gather(s, spvForward<Tp>(params)..., coffsets[i], component::w);
+                rslts[i] = t.gather(s, params..., coffsets[i], component::w);
                 break;
         }
     }
-    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+    return spvGatherReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
 
 constant spvUnsafeArray<int2, 4> _30 = spvUnsafeArray<int2, 4>({ int2(-8), int2(-8, 7), int2(7, -8), int2(7) });
