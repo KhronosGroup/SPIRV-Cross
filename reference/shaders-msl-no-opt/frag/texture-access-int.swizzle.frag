@@ -72,9 +72,12 @@ inline T spvTextureSwizzle(T x, uint s)
     return spvTextureSwizzle(vec<T, 4>(x, 0, 0, 1), s).x;
 }
 
+template<typename Tex, typename... Tp>
+using spvGatherReturn = decltype(declval<Tex>().gather(declval<sampler>(), declval<Tp>()...));
+
 // Wrapper function that swizzles texture gathers.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename... Ts>
-inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, component c, Ts... params) METAL_CONST_ARG(c)
+template<typename Tex, typename... Ts>
+inline spvGatherReturn<Tex, Ts...> spvGatherSwizzle(const thread Tex& t, sampler s, uint sw, component c, Ts... params) METAL_CONST_ARG(c)
 {
     if (sw)
     {
@@ -83,9 +86,9 @@ inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, uint sw, co
             case spvSwizzle::none:
                 break;
             case spvSwizzle::zero:
-                return vec<T, 4>(0, 0, 0, 0);
+                return spvGatherReturn<Tex, Ts...>(0, 0, 0, 0);
             case spvSwizzle::one:
-                return vec<T, 4>(1, 1, 1, 1);
+                return spvGatherReturn<Tex, Ts...>(1, 1, 1, 1);
             case spvSwizzle::red:
                 return t.gather(s, spvForward<Ts>(params)..., component::x);
             case spvSwizzle::green:

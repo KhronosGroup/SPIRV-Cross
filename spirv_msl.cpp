@@ -5845,6 +5845,18 @@ void CompilerMSL::emit_custom_functions()
 		spv_function_implementations.insert(SPVFuncImplConvertYCbCrBT2020);
 	}
 
+	if (spv_function_implementations.count(SPVFuncImplGatherSwizzle) ||
+	    spv_function_implementations.count(SPVFuncImplGatherConstOffsets))
+	{
+		spv_function_implementations.insert(SPVFuncImplGatherReturn);
+	}
+
+	if (spv_function_implementations.count(SPVFuncImplGatherCompareSwizzle) ||
+	    spv_function_implementations.count(SPVFuncImplGatherCompareConstOffsets))
+	{
+		spv_function_implementations.insert(SPVFuncImplGatherCompareReturn);
+	}
+
 	for (uint32_t i = SPVFuncImplChromaReconstructNearest2Plane;
 	     i <= SPVFuncImplChromaReconstructLinear420XMidpointYMidpoint3Plane; i++)
 		if (spv_function_implementations.count(static_cast<SPVFuncImpl>(i)))
@@ -6398,11 +6410,22 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplGatherReturn:
+			statement("template<typename Tex, typename... Tp>");
+			statement("using spvGatherReturn = decltype(declval<Tex>().gather(declval<sampler>(), declval<Tp>()...));");
+			statement("");
+			break;
+
+		case SPVFuncImplGatherCompareReturn:
+			statement("template<typename Tex, typename... Tp>");
+			statement("using spvGatherCompareReturn = decltype(declval<Tex>().gather_compare(declval<sampler>(), declval<Tp>()...));");
+			statement("");
+			break;
+
 		case SPVFuncImplGatherSwizzle:
 			statement("// Wrapper function that swizzles texture gathers.");
-			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
-			          "typename... Ts>");
-			statement("inline vec<T, 4> spvGatherSwizzle(const thread Tex<T>& t, sampler s, "
+			statement("template<typename Tex, typename... Ts>");
+			statement("inline spvGatherReturn<Tex, Ts...> spvGatherSwizzle(const thread Tex& t, sampler s, "
 			          "uint sw, component c, Ts... params) METAL_CONST_ARG(c)");
 			begin_scope();
 			statement("if (sw)");
@@ -6412,9 +6435,9 @@ void CompilerMSL::emit_custom_functions()
 			statement("case spvSwizzle::none:");
 			statement("    break;");
 			statement("case spvSwizzle::zero:");
-			statement("    return vec<T, 4>(0, 0, 0, 0);");
+			statement("    return spvGatherReturn<Tex, Ts...>(0, 0, 0, 0);");
 			statement("case spvSwizzle::one:");
-			statement("    return vec<T, 4>(1, 1, 1, 1);");
+			statement("    return spvGatherReturn<Tex, Ts...>(1, 1, 1, 1);");
 			statement("case spvSwizzle::red:");
 			statement("    return t.gather(s, spvForward<Ts>(params)..., component::x);");
 			statement("case spvSwizzle::green:");
@@ -6444,10 +6467,8 @@ void CompilerMSL::emit_custom_functions()
 
 		case SPVFuncImplGatherCompareSwizzle:
 			statement("// Wrapper function that swizzles depth texture gathers.");
-			statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
-			          "typename... Ts>");
-			statement("inline vec<T, 4> spvGatherCompareSwizzle(const thread Tex<T>& t, sampler "
-			          "s, uint sw, Ts... params) ");
+			statement("template<typename Tex, typename... Ts>");
+			statement("inline spvGatherCompareReturn<Tex, Ts...> spvGatherCompareSwizzle(const thread Tex& t, sampler s, uint sw, Ts... params)");
 			begin_scope();
 			statement("if (sw)");
 			begin_scope();
@@ -6460,9 +6481,9 @@ void CompilerMSL::emit_custom_functions()
 			statement("case spvSwizzle::green:");
 			statement("case spvSwizzle::blue:");
 			statement("case spvSwizzle::alpha:");
-			statement("    return vec<T, 4>(0, 0, 0, 0);");
+			statement("    return spvGatherCompareReturn<Tex, Ts...>(0, 0, 0, 0);");
 			statement("case spvSwizzle::one:");
-			statement("    return vec<T, 4>(1, 1, 1, 1);");
+			statement("    return spvGatherCompareReturn<Tex, Ts...>(1, 1, 1, 1);");
 			end_scope();
 			end_scope();
 			statement("return t.gather_compare(s, spvForward<Ts>(params)...);");
@@ -6475,12 +6496,11 @@ void CompilerMSL::emit_custom_functions()
 			for (uint32_t i = 0; i < texture_addr_space_count; i++)
 			{
 				statement("// Wrapper function that processes a ", texture_addr_spaces[i], " texture gather with a constant offset array.");
-				statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
-						  "typename Toff, typename... Tp>");
-				statement("inline vec<T, 4> spvGatherConstOffsets(const ", texture_addr_spaces[i], " Tex<T>& t, sampler s, "
+				statement("template<typename Tex, typename Toff, typename... Tp>");
+				statement("inline spvGatherReturn<Tex, Tp...> spvGatherConstOffsets(const ", texture_addr_spaces[i], " Tex& t, sampler s, "
 						  "Toff coffsets, component c, Tp... params) METAL_CONST_ARG(c)");
 				begin_scope();
-				statement("vec<T, 4> rslts[4];");
+				statement("spvGatherReturn<Tex, Tp...> rslts[4];");
 				statement("for (uint i = 0; i < 4; i++)");
 				begin_scope();
 				statement("switch (c)");
@@ -6501,7 +6521,7 @@ void CompilerMSL::emit_custom_functions()
 				end_scope();
 				end_scope();
 				// Pull all values from the i0j0 component of each gather footprint
-				statement("return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
+				statement("return spvGatherReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
 				end_scope();
 				statement("");
 			}
@@ -6512,18 +6532,17 @@ void CompilerMSL::emit_custom_functions()
 			for (uint32_t i = 0; i < texture_addr_space_count; i++)
 			{
 				statement("// Wrapper function that processes a ", texture_addr_spaces[i], " texture gather with a constant offset array.");
-				statement("template<typename T, template<typename, access = access::sample, typename = void> class Tex, "
-						  "typename Toff, typename... Tp>");
-				statement("inline vec<T, 4> spvGatherCompareConstOffsets(const ", texture_addr_spaces[i], " Tex<T>& t, sampler s, "
+				statement("template<typename Tex, typename Toff, typename... Tp>");
+				statement("inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const ", texture_addr_spaces[i], " Tex& t, sampler s, "
 						  "Toff coffsets, Tp... params)");
 				begin_scope();
-				statement("vec<T, 4> rslts[4];");
+				statement("spvGatherCompareReturn<Tex, Tp...> rslts[4];");
 				statement("for (uint i = 0; i < 4; i++)");
 				begin_scope();
 				statement("    rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);");
 				end_scope();
 				// Pull all values from the i0j0 component of each gather footprint
-				statement("return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
+				statement("return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);");
 				end_scope();
 				statement("");
 			}

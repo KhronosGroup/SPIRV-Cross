@@ -799,6 +799,8 @@ protected:
 		// Likewise, this must come before *Swizzle.
 		SPVFuncImplGetSwizzle,
 		SPVFuncImplTextureSwizzle,
+		SPVFuncImplGatherReturn,
+		SPVFuncImplGatherCompareReturn,
 		SPVFuncImplGatherSwizzle,
 		SPVFuncImplGatherCompareSwizzle,
 		SPVFuncImplGatherConstOffsets,
