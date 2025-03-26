@@ -44,52 +44,43 @@ struct spvUnsafeArray
     }
 };
 
-template<typename T> struct spvRemoveReference { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&> { typedef T type; };
-template<typename T> struct spvRemoveReference<thread T&&> { typedef T type; };
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type& x)
-{
-    return static_cast<thread T&&>(x);
-}
-template<typename T> inline constexpr thread T&& spvForward(thread typename spvRemoveReference<T>::type&& x)
-{
-    return static_cast<thread T&&>(x);
-}
+template<typename Tex, typename... Tp>
+using spvGatherCompareReturn = decltype(declval<Tex>().gather_compare(declval<sampler>(), declval<Tp>()...));
 
 // Wrapper function that processes a device texture gather with a constant offset array.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
-inline vec<T, 4> spvGatherCompareConstOffsets(const device Tex<T>& t, sampler s, Toff coffsets, Tp... params)
+template<typename Tex, typename Toff, typename... Tp>
+inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const device Tex& t, sampler s, Toff coffsets, Tp... params)
 {
-    vec<T, 4> rslts[4];
+    spvGatherCompareReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
-            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+            rslts[i] = t.gather_compare(s, params..., coffsets[i]);
     }
-    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+    return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
 
 // Wrapper function that processes a constant texture gather with a constant offset array.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
-inline vec<T, 4> spvGatherCompareConstOffsets(const constant Tex<T>& t, sampler s, Toff coffsets, Tp... params)
+template<typename Tex, typename Toff, typename... Tp>
+inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const constant Tex& t, sampler s, Toff coffsets, Tp... params)
 {
-    vec<T, 4> rslts[4];
+    spvGatherCompareReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
-            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+            rslts[i] = t.gather_compare(s, params..., coffsets[i]);
     }
-    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+    return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
 
 // Wrapper function that processes a thread texture gather with a constant offset array.
-template<typename T, template<typename, access = access::sample, typename = void> class Tex, typename Toff, typename... Tp>
-inline vec<T, 4> spvGatherCompareConstOffsets(const thread Tex<T>& t, sampler s, Toff coffsets, Tp... params)
+template<typename Tex, typename Toff, typename... Tp>
+inline spvGatherCompareReturn<Tex, Tp...> spvGatherCompareConstOffsets(const thread Tex& t, sampler s, Toff coffsets, Tp... params)
 {
-    vec<T, 4> rslts[4];
+    spvGatherCompareReturn<Tex, Tp...> rslts[4];
     for (uint i = 0; i < 4; i++)
     {
-            rslts[i] = t.gather_compare(s, spvForward<Tp>(params)..., coffsets[i]);
+            rslts[i] = t.gather_compare(s, params..., coffsets[i]);
     }
-    return vec<T, 4>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
+    return spvGatherCompareReturn<Tex, Tp...>(rslts[0].w, rslts[1].w, rslts[2].w, rslts[3].w);
 }
 
 constant spvUnsafeArray<int2, 4> _38 = spvUnsafeArray<int2, 4>({ int2(-8, 3), int2(-4, 7), int2(0, 3), int2(3, 0) });
