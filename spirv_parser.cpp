@@ -593,6 +593,22 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpTypeCooperativeMatrixKHR:
+	{
+		uint32_t id = ops[0];
+		auto &base = get<SPIRType>(ops[1]);
+		auto &matrixbase = set<SPIRType>(id, base);
+
+		matrixbase.op = op;
+		matrixbase.cooperative.scope_id = ops[2];
+		matrixbase.cooperative.rows_id = ops[3];
+		matrixbase.cooperative.columns_id = ops[4];
+		matrixbase.cooperative.use_id = ops[5];
+		matrixbase.self = id;
+		matrixbase.parent_type = ops[1];
+		break;
+	}
+
 	case OpTypeArray:
 	{
 		uint32_t id = ops[0];
