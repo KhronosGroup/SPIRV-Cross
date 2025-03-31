@@ -6023,7 +6023,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		else
 			return join(type_to_glsl(type), "(0)");
 	}
-	else if (c.columns() == 1)
+	else if (c.columns() == 1 && type.op != spv::OpTypeCooperativeMatrixKHR)
 	{
 		auto res = constant_expression_vector(c, 0);
 
@@ -10605,7 +10605,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			type = &get<SPIRType>(type_id);
 		}
 		// Vector -> Scalar
-		else if (type->vecsize > 1)
+		else if (type->op == OpTypeCooperativeMatrixKHR || type->vecsize > 1)
 		{
 			string deferred_index;
 			if (row_major_matrix_needs_conversion)
@@ -10667,9 +10667,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			if (is_literal)
 			{
-				bool out_of_bounds = (index >= type->vecsize);
+				bool out_of_bounds = index >= type->vecsize && type->op != OpTypeCooperativeMatrixKHR;
 
-				if (!is_packed && !row_major_matrix_needs_conversion)
+				if (!is_packed && !row_major_matrix_needs_conversion && type->op != OpTypeCooperativeMatrixKHR)
 				{
 					expr += ".";
 					expr += index_to_swizzle(out_of_bounds ? 0 : index);
@@ -12174,6 +12174,33 @@ CompilerGLSL::TemporaryCopy CompilerGLSL::handle_instruction_precision(const Ins
 	}
 
 	return {};
+}
+
+static pair<string, string> split_coopmat_pointer(const string &expr)
+{
+	auto ptr_expr = expr;
+	string index_expr;
+
+	if (ptr_expr.back() != ']')
+		SPIRV_CROSS_THROW("Access chain for coopmat must be indexed into an array.");
+
+	// Strip the access chain.
+	ptr_expr.pop_back();
+	uint32_t counter = 1;
+	while (counter && !ptr_expr.empty())
+	{
+		if (ptr_expr.back() == ']')
+			counter++;
+		else if (ptr_expr.back() == '[')
+			counter--;
+		ptr_expr.pop_back();
+	}
+
+	if (ptr_expr.empty())
+		SPIRV_CROSS_THROW("Invalid pointer expression for coopmat.");
+
+	index_expr = expr.substr(ptr_expr.size() + 1, expr.size() - (ptr_expr.size() + 1) - 1);
+	return { std::move(ptr_expr), std::move(index_expr) };
 }
 
 void CompilerGLSL::emit_instruction(const Instruction &instruction)
@@ -15363,6 +15390,94 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCooperativeMatrixLengthKHR:
+	{
+		// Need to synthesize a dummy temporary, since the SPIR-V opcode is based on the type.
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		set<SPIRExpression>(
+				id, join(type_to_glsl(get<SPIRType>(result_type)),
+				         "(", type_to_glsl(get<SPIRType>(ops[2])), "(0).length())"),
+				result_type, true);
+		break;
+	}
+
+	case OpCooperativeMatrixLoadKHR:
+	{
+		// Spec contradicts itself if stride is optional or not.
+		if (length < 5)
+			SPIRV_CROSS_THROW("Stride is not provided.");
+
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		auto expr = to_expression(ops[2]);
+		pair<string, string> split_expr;
+		if (!is_forcing_recompilation())
+			split_expr = split_coopmat_pointer(expr);
+
+		statement("coopMatLoad(",
+		          to_expression(id), ", ",
+		          split_expr.first, ", ",
+		          split_expr.second, ", ",
+		          to_expression(ops[4]), ", ",
+		          to_expression(ops[3]), ");");
+
+		register_read(id, ops[2], false);
+		break;
+	}
+
+	case OpCooperativeMatrixStoreKHR:
+	{
+		// Spec contradicts itself if stride is optional or not.
+		if (length < 4)
+			SPIRV_CROSS_THROW("Stride is not provided.");
+
+		// SPIR-V and GLSL don't agree how to pass the expression.
+		// In SPIR-V it's a pointer, but in GLSL it's reference to array + index.
+
+		auto expr = to_expression(ops[0]);
+		pair<string, string> split_expr;
+		if (!is_forcing_recompilation())
+			split_expr = split_coopmat_pointer(expr);
+
+		statement("coopMatStore(",
+		          to_expression(ops[1]), ", ",
+		          split_expr.first, ", ",
+		          split_expr.second, ", ",
+		          to_expression(ops[3]), ", ",
+		          to_expression(ops[2]), ");");
+
+		// TODO: Do we care about memory operands?
+
+		register_write(ops[0]);
+		break;
+	}
+
+	case OpCooperativeMatrixMulAddKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t A = ops[2];
+		uint32_t B = ops[3];
+		uint32_t C = ops[4];
+		bool forward = should_forward(A) && should_forward(B) && should_forward(C);
+		emit_op(result_type, id,
+		        join("coopMatMulAdd(",
+		             to_unpacked_expression(A), ", ",
+		             to_unpacked_expression(B), ", ",
+		             to_unpacked_expression(C), ", ",
+		             (length >= 6 ? ops[5] : 0),
+		             ")"),
+		        forward);
+
+		inherit_expression_dependencies(id, A);
+		inherit_expression_dependencies(id, B);
+		inherit_expression_dependencies(id, C);
+		break;
+	}
+
 	default:
 		statement("// unimplemented op ", instruction.op);
 		break;
@@ -16208,6 +16323,39 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("At least ESSL 3.10 required for atomic counters.");
 		else if (!options.es && options.version < 420)
 			require_extension_internal("GL_ARB_shader_atomic_counters");
+	}
+
+	if (type.op == spv::OpTypeCooperativeMatrixKHR)
+	{
+		require_extension_internal("GL_KHR_cooperative_matrix");
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Cooperative matrix only available in Vulkan.");
+		// GLSL doesn't support this as spec constant, which makes sense ...
+		uint32_t use_type = get<SPIRConstant>(type.cooperative.use_id).scalar();
+
+		const char *use = nullptr;
+		switch (use_type)
+		{
+		case CooperativeMatrixUseMatrixAKHR:
+			use = "gl_MatrixUseA";
+			break;
+
+		case CooperativeMatrixUseMatrixBKHR:
+			use = "gl_MatrixUseB";
+			break;
+
+		case CooperativeMatrixUseMatrixAccumulatorKHR:
+			use = "gl_MatrixUseAccumulator";
+			break;
+
+		default:
+			SPIRV_CROSS_THROW("Invalid matrix use.");
+		}
+
+		return join("coopmat<", type_to_glsl(get<SPIRType>(type.parent_type)), ", ",
+		            to_expression(type.cooperative.scope_id), ", ",
+		            to_expression(type.cooperative.rows_id), ", ",
+		            to_expression(type.cooperative.columns_id), ", ", use, ">");
 	}
 
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
