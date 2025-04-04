@@ -16329,13 +16329,17 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			require_extension_internal("GL_ARB_shader_atomic_counters");
 	}
 
-	if (type.op == spv::OpTypeCooperativeMatrixKHR)
+	const SPIRType *coop_type = &type;
+	while (is_pointer(*coop_type) || is_array(*coop_type))
+		coop_type = &get<SPIRType>(coop_type->parent_type);
+
+	if (coop_type->op == spv::OpTypeCooperativeMatrixKHR)
 	{
 		require_extension_internal("GL_KHR_cooperative_matrix");
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cooperative matrix only available in Vulkan.");
 		// GLSL doesn't support this as spec constant, which makes sense ...
-		uint32_t use_type = get<SPIRConstant>(type.cooperative.use_id).scalar();
+		uint32_t use_type = get<SPIRConstant>(coop_type->cooperative.use_id).scalar();
 
 		const char *use = nullptr;
 		switch (use_type)
@@ -16356,10 +16360,10 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			SPIRV_CROSS_THROW("Invalid matrix use.");
 		}
 
-		return join("coopmat<", type_to_glsl(get<SPIRType>(type.parent_type)), ", ",
-		            to_expression(type.cooperative.scope_id), ", ",
-		            to_expression(type.cooperative.rows_id), ", ",
-		            to_expression(type.cooperative.columns_id), ", ", use, ">");
+		return join("coopmat<", type_to_glsl(get<SPIRType>(coop_type->parent_type)), ", ",
+		            to_expression(coop_type->cooperative.scope_id), ", ",
+		            to_expression(coop_type->cooperative.rows_id), ", ",
+		            to_expression(coop_type->cooperative.columns_id), ", ", use, ">");
 	}
 
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin

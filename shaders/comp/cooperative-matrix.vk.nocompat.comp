@@ -24,6 +24,11 @@ const int UseC = gl_MatrixUseAccumulator;
 layout(constant_id = 5) const int Layout = gl_CooperativeMatrixLayoutRowMajor;
 layout(constant_id = 6) const int Scope = gl_ScopeSubgroup;
 
+coopmat<float, Scope, Rows, Columns, UseA> coopmat_square(coopmat<float, Scope, Rows, Columns, UseA> a)
+{
+	return a * a;
+}
+
 void loads_32()
 {
 	coopmat<float, Scope, Rows, Columns, UseA> A32;
@@ -65,6 +70,7 @@ void matmul()
 	coopmat<float, Scope, Rows, Columns, UseA> A;
 	coopmat<float, Scope, Rows, Columns, UseB> B;
 	coopmat<float, Scope, Rows, Columns, UseC> C;
+	A = coopmat_square(A);
 	coopMatLoad(A, ssbo32.data, 256 * gl_WorkGroupID.x, 16, Layout);
 	coopMatLoad(B, ssbo32.data, 256 * gl_WorkGroupID.x, 16, Layout);
 	coopMatLoad(C, ssbo32.data, 256 * gl_WorkGroupID.x, 16, Layout);
@@ -164,6 +170,13 @@ void lds()
 	coopMatStore(A, blah, 0, 16, Layout);
 }
 
+void array_of_coopmat()
+{
+	coopmat<float, Scope, Rows, Columns, UseA> As[4];
+	for (int i = 0; i < 4; i++)
+		As[i] = coopmat<float, Scope, Rows, Columns, UseA>(float(i));
+}
+
 void main()
 {
 	loads_32();
@@ -178,4 +191,5 @@ void main()
 	matmul_uint();
 	matmul_int();
 	lds();
+	array_of_coopmat();
 }
