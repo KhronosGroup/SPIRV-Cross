@@ -34,8 +34,8 @@ void loads_32()
 	coopmat<float, Scope, Rows, Columns, UseA> A32;
 	coopmat<float, Scope, Rows, Columns, UseB> B32;
 	coopmat<float, Scope, Rows, Columns, UseC> C32;
-	coopMatLoad(A32, ssbo32.data, 256 * gl_WorkGroupID.x, 16, Layout);
-	coopMatLoad(A32, ssbo16.data, 512 * gl_WorkGroupID.x, 32, Layout);
+	coopMatLoad(A32, ssbo32.data, 256 * gl_WorkGroupID.x, 16, gl_CooperativeMatrixLayoutColumnMajor);
+	coopMatLoad(A32, ssbo16.data, 512 * gl_WorkGroupID.x, 32, gl_CooperativeMatrixLayoutRowMajor);
 	coopMatLoad(B32, ssbo32.data, 256 * gl_WorkGroupID.x, 16, Layout);
 	coopMatLoad(B32, ssbo16.data, 512 * gl_WorkGroupID.x, 32, Layout);
 	coopMatLoad(C32, ssbo32.data, 256 * gl_WorkGroupID.x, 16, Layout);
@@ -57,8 +57,8 @@ void loads_16()
 
 void stores()
 {
-	coopMatStore(coopmat<float, Scope, Rows, Columns, UseA>(100.0), ssbo32.data, 128 * gl_WorkGroupID.x, 0, Layout);
-	coopMatStore(coopmat<uint, Scope, Rows, Columns, UseA>(100.0), ssbo32.data, 128 * gl_WorkGroupID.x, 0, Layout);
+	coopMatStore(coopmat<float, Scope, Rows, Columns, UseA>(100.0), ssbo32.data, 128 * gl_WorkGroupID.x, 0, gl_CooperativeMatrixLayoutColumnMajor);
+	coopMatStore(coopmat<uint, Scope, Rows, Columns, UseA>(100.0), ssbo32.data, 128 * gl_WorkGroupID.x, 0, gl_CooperativeMatrixLayoutRowMajor);
 	coopMatStore(coopmat<int, Scope, Rows, Columns, UseA>(-100), ssbo32.data, 128 * gl_WorkGroupID.x, 0, Layout);
 	coopMatStore(coopmat<float16_t, Scope, Rows, Columns, UseA>(100.0hf), ssbo32.data, 128 * gl_WorkGroupID.x, 0, Layout);
 	coopMatStore(coopmat<int16_t, Scope, Rows, Columns, UseA>(-100s), ssbo32.data, 128 * gl_WorkGroupID.x, 0, Layout);
@@ -177,6 +177,12 @@ void array_of_coopmat()
 		As[i] = coopmat<float, Scope, Rows, Columns, UseA>(float(i));
 }
 
+void types()
+{
+	coopmat<float, gl_ScopeSubgroup, 16, 16, UseA> A = coopmat<float, gl_ScopeSubgroup, 16, 16, UseA>(0);
+	coopmat<float, gl_ScopeWorkgroup, 16, 16, UseA> B = coopmat<float, gl_ScopeWorkgroup, 16, 16, UseA>(0);
+}
+
 void main()
 {
 	loads_32();
@@ -192,4 +198,5 @@ void main()
 	matmul_int();
 	lds();
 	array_of_coopmat();
+	types();
 }
