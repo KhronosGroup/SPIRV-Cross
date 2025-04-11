@@ -9,6 +9,7 @@
 #extension GL_EXT_shader_16bit_storage : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 #extension GL_KHR_cooperative_matrix : require
+#extension GL_KHR_memory_scope_semantics : require
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 layout(constant_id = 6) const int Scope = 3;
@@ -30,68 +31,68 @@ shared uint blah[512];
 
 void loads_32()
 {
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _71;
-    coopMatLoad(_71, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _71;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _73;
+    coopMatLoad(_73, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, gl_CooperativeMatrixLayoutColumnMajor);
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _73;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> A32 = tempArg;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _90;
-    coopMatLoad(_90, ssbo16.data, 512u * gl_WorkGroupID.x, 32u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg_1 = _90;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _92;
+    coopMatLoad(_92, ssbo16.data, 512u * gl_WorkGroupID.x, 32u, gl_CooperativeMatrixLayoutRowMajor);
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg_1 = _92;
     A32 = tempArg_1;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> _103;
-    coopMatLoad(_103, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> tempArg_2 = _103;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> _106;
+    coopMatLoad(_106, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> tempArg_2 = _106;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> B32 = tempArg_2;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> _114;
-    coopMatLoad(_114, ssbo16.data, 512u * gl_WorkGroupID.x, 32u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> tempArg_3 = _114;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> _117;
+    coopMatLoad(_117, ssbo16.data, 512u * gl_WorkGroupID.x, 32u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> tempArg_3 = _117;
     B32 = tempArg_3;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> _127;
-    coopMatLoad(_127, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_4 = _127;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> _130;
+    coopMatLoad(_130, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_4 = _130;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> C32 = tempArg_4;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> _138;
-    coopMatLoad(_138, ssbo16.data, 512u * gl_WorkGroupID.x, 32u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_5 = _138;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> _141;
+    coopMatLoad(_141, ssbo16.data, 512u * gl_WorkGroupID.x, 32u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_5 = _141;
     C32 = tempArg_5;
 }
 
 void loads_16()
 {
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> _152;
-    coopMatLoad(_152, ssbo32.data, 128u * gl_WorkGroupID.x, 8u, Layout);
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _152;
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> _155;
+    coopMatLoad(_155, ssbo32.data, 128u * gl_WorkGroupID.x, 8u, int(Layout));
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _155;
     coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> A16 = tempArg;
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> _163;
-    coopMatLoad(_163, ssbo16.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> tempArg_1 = _163;
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> _166;
+    coopMatLoad(_166, ssbo16.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA> tempArg_1 = _166;
     A16 = tempArg_1;
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> _175;
-    coopMatLoad(_175, ssbo32.data, 128u * gl_WorkGroupID.x, 8u, Layout);
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> tempArg_2 = _175;
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> _178;
+    coopMatLoad(_178, ssbo32.data, 128u * gl_WorkGroupID.x, 8u, int(Layout));
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> tempArg_2 = _178;
     coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> B16 = tempArg_2;
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> _186;
-    coopMatLoad(_186, ssbo16.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> tempArg_3 = _186;
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> _189;
+    coopMatLoad(_189, ssbo16.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseB> tempArg_3 = _189;
     B16 = tempArg_3;
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> _198;
-    coopMatLoad(_198, ssbo32.data, 128u * gl_WorkGroupID.x, 8u, Layout);
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_4 = _198;
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> _201;
+    coopMatLoad(_201, ssbo32.data, 128u * gl_WorkGroupID.x, 8u, int(Layout));
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_4 = _201;
     coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> C16 = tempArg_4;
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> _209;
-    coopMatLoad(_209, ssbo16.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_5 = _209;
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> _212;
+    coopMatLoad(_212, ssbo16.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_5 = _212;
     C16 = tempArg_5;
 }
 
 void stores()
 {
-    coopMatStore(coopmat<float, Scope, Rows, Columns, gl_MatrixUseA>(100.0), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, Layout);
-    coopMatStore(coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA>(100u), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, Layout);
-    coopMatStore(coopmat<int, Scope, Rows, Columns, gl_MatrixUseA>(-100), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, Layout);
-    coopMatStore(coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA>(float16_t(100.0)), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, Layout);
-    coopMatStore(coopmat<int16_t, Scope, Rows, Columns, gl_MatrixUseA>(-100s), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, Layout);
-    coopMatStore(coopmat<uint16_t, Scope, Rows, Columns, gl_MatrixUseA>(100us), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, Layout);
+    coopMatStore(coopmat<float, Scope, Rows, Columns, gl_MatrixUseA>(100.0), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, gl_CooperativeMatrixLayoutColumnMajor);
+    coopMatStore(coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA>(100u), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, gl_CooperativeMatrixLayoutRowMajor);
+    coopMatStore(coopmat<int, Scope, Rows, Columns, gl_MatrixUseA>(-100), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, int(Layout));
+    coopMatStore(coopmat<float16_t, Scope, Rows, Columns, gl_MatrixUseA>(float16_t(100.0)), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, int(Layout));
+    coopMatStore(coopmat<int16_t, Scope, Rows, Columns, gl_MatrixUseA>(-100s), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, int(Layout));
+    coopMatStore(coopmat<uint16_t, Scope, Rows, Columns, gl_MatrixUseA>(100us), ssbo32.data, 128u * gl_WorkGroupID.x, 0u, int(Layout));
 }
 
 void len()
@@ -135,13 +136,13 @@ void insert_extract()
     {
         A[i] += 50.0;
     }
-    coopMatStore(A, ssbo32.data, 0u, 16u, Layout);
+    coopMatStore(A, ssbo32.data, 0u, 16u, int(Layout));
 }
 
 void scalar_construct()
 {
     coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA> A = coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA>(gl_WorkGroupID.x);
-    coopMatStore(A, ssbo32.data, 0u, 16u, Layout);
+    coopMatStore(A, ssbo32.data, 0u, 16u, int(Layout));
 }
 
 coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> coopmat_square(coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> a)
@@ -154,17 +155,17 @@ void matmul()
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> A;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> param = A;
     A = coopmat_square(param);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _283;
-    coopMatLoad(_283, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _283;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _286;
+    coopMatLoad(_286, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _286;
     A = tempArg;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> _293;
-    coopMatLoad(_293, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> tempArg_1 = _293;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> _296;
+    coopMatLoad(_296, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> tempArg_1 = _296;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseB> B = tempArg_1;
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> _304;
-    coopMatLoad(_304, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_2 = _304;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> _307;
+    coopMatLoad(_307, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_2 = _307;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseAccumulator> C = tempArg_2;
     C = coopMatMulAdd(A, B, C, 0);
     C = coopMatMulAdd(A, B, C, 0);
@@ -173,45 +174,45 @@ void matmul()
 
 void matmul_uint()
 {
-    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA> _329;
-    coopMatLoad(_329, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _329;
+    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA> _332;
+    coopMatLoad(_332, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _332;
     coopmat<uint, Scope, Rows, Columns, gl_MatrixUseA> A = tempArg;
-    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseB> _342;
-    coopMatLoad(_342, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseB> tempArg_1 = _342;
+    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseB> _345;
+    coopMatLoad(_345, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseB> tempArg_1 = _345;
     coopmat<uint, Scope, Rows, Columns, gl_MatrixUseB> B = tempArg_1;
-    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseAccumulator> _355;
-    coopMatLoad(_355, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_2 = _355;
+    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseAccumulator> _358;
+    coopMatLoad(_358, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<uint, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_2 = _358;
     coopmat<uint, Scope, Rows, Columns, gl_MatrixUseAccumulator> C = tempArg_2;
     C = coopMatMulAdd(A, B, C, 31);
 }
 
 void matmul_int()
 {
-    coopmat<int, Scope, Rows, Columns, gl_MatrixUseA> _372;
-    coopMatLoad(_372, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<int, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _372;
+    coopmat<int, Scope, Rows, Columns, gl_MatrixUseA> _375;
+    coopMatLoad(_375, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<int, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _375;
     coopmat<int, Scope, Rows, Columns, gl_MatrixUseA> A = tempArg;
-    coopmat<int, Scope, Rows, Columns, gl_MatrixUseB> _385;
-    coopMatLoad(_385, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<int, Scope, Rows, Columns, gl_MatrixUseB> tempArg_1 = _385;
+    coopmat<int, Scope, Rows, Columns, gl_MatrixUseB> _388;
+    coopMatLoad(_388, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<int, Scope, Rows, Columns, gl_MatrixUseB> tempArg_1 = _388;
     coopmat<int, Scope, Rows, Columns, gl_MatrixUseB> B = tempArg_1;
-    coopmat<int, Scope, Rows, Columns, gl_MatrixUseAccumulator> _398;
-    coopMatLoad(_398, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, Layout);
-    coopmat<int, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_2 = _398;
+    coopmat<int, Scope, Rows, Columns, gl_MatrixUseAccumulator> _401;
+    coopMatLoad(_401, ssbo32.data, 256u * gl_WorkGroupID.x, 16u, int(Layout));
+    coopmat<int, Scope, Rows, Columns, gl_MatrixUseAccumulator> tempArg_2 = _401;
     coopmat<int, Scope, Rows, Columns, gl_MatrixUseAccumulator> C = tempArg_2;
     C = coopMatMulAdd(A, B, C, 31);
 }
 
 void lds()
 {
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _496;
-    coopMatLoad(_496, blah, 0u, 16u, Layout);
-    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _496;
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> _498;
+    coopMatLoad(_498, blah, 0u, 16u, int(Layout));
+    coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> tempArg = _498;
     coopmat<float, Scope, Rows, Columns, gl_MatrixUseA> A = tempArg;
-    coopMatStore(A, blah, 0u, 16u, Layout);
+    coopMatStore(A, blah, 0u, 16u, int(Layout));
 }
 
 void array_of_coopmat()
@@ -221,6 +222,12 @@ void array_of_coopmat()
     {
         As[i] = coopmat<float, Scope, Rows, Columns, gl_MatrixUseA>(float(i));
     }
+}
+
+void types()
+{
+    coopmat<float, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> A = coopmat<float, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA>(0.0);
+    coopmat<float, gl_ScopeWorkgroup, 16u, 16u, gl_MatrixUseA> B = coopmat<float, gl_ScopeWorkgroup, 16u, 16u, gl_MatrixUseA>(0.0);
 }
 
 void main()
@@ -238,5 +245,6 @@ void main()
     matmul_int();
     lds();
     array_of_coopmat();
+    types();
 }
 
