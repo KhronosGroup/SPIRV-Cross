@@ -3756,6 +3756,20 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 		return;
 	}
 
+	// Tesselation stages pass I/O via buffer content which may contain nested structs.
+	// Ensure the vector sizes of any nested struct members within these input variables match
+	// the vector sizes of the corresponding output variables from the previous pipeline stage.
+	// This adjustment is handled here instead of ensure_correct_input_type() in order to
+	// perform the necessary recursive processing.
+	if (storage == StorageClassInput && var_type.basetype == SPIRType::Struct &&
+		((is_tesc_shader() && msl_options.multi_patch_workgroup) ||
+		 (is_tese_shader() && msl_options.raw_buffer_tese_input)) &&
+		has_decoration(var.self, DecorationLocation))
+	{
+		uint32_t locn = get_decoration(var.self, DecorationLocation);
+		ensure_struct_members_valid_vecsizes(get_variable_data_type(var), locn);
+	}
+
 	if (storage == StorageClassInput && has_decoration(var.self, DecorationPerVertexKHR))
 		SPIRV_CROSS_THROW("PerVertexKHR decoration is not supported in MSL.");
 
@@ -3947,6 +3961,43 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 			{
 				add_plain_variable_to_interface_block(storage, ib_var_ref, ib_type, var, meta);
 			}
+		}
+	}
+}
+
+// Recursively iterate into the input struct type, and adjust the vecsize
+// of any nested members, based on location info provided through the API.
+// The location parameter is modified recursively.
+void CompilerMSL::ensure_struct_members_valid_vecsizes(SPIRType &struct_type, uint32_t &location)
+{
+	assert(struct_type.basetype == SPIRType::Struct);
+
+	auto mbr_cnt = struct_type.member_types.size();
+	for (size_t mbr_idx = 0; mbr_idx < mbr_cnt; mbr_idx++)
+	{
+		auto mbr_type_id = struct_type.member_types[mbr_idx];
+		auto &mbr_type = get<SPIRType>(mbr_type_id);
+
+		if (mbr_type.basetype == SPIRType::Struct)
+			ensure_struct_members_valid_vecsizes(mbr_type, location);
+		else
+		{
+			auto p_va = inputs_by_location.find({location, 0});
+			if (p_va != end(inputs_by_location) && p_va->second.vecsize > mbr_type.vecsize)
+			{
+				// Set a new member type into the struct type, and all its parent types.
+				auto new_mbr_type_id = build_extended_vector_type(mbr_type_id, p_va->second.vecsize);
+				for (auto *p_type = &struct_type; p_type; p_type = maybe_get<SPIRType>(p_type->parent_type))
+					p_type->member_types[mbr_idx] = new_mbr_type_id;
+			}
+
+			// Calc location of next member
+			uint32_t loc_cnt = mbr_type.columns;
+			auto dim_cnt = mbr_type.array.size();
+			for (uint32_t i = 0; i < dim_cnt; i++)
+				loc_cnt *= to_array_size_literal(mbr_type, i);
+
+			location += loc_cnt;
 		}
 	}
 }
