@@ -3968,7 +3968,8 @@ void CompilerMSL::add_variable_to_interface_block(StorageClass storage, const st
 // Recursively iterate into the input struct type, and adjust the vecsize
 // of any nested members, based on location info provided through the API.
 // The location parameter is modified recursively.
-void CompilerMSL::ensure_struct_members_valid_vecsizes(SPIRType &struct_type, uint32_t &location) {
+void CompilerMSL::ensure_struct_members_valid_vecsizes(SPIRType &struct_type, uint32_t &location)
+{
 	assert(struct_type.basetype == SPIRType::Struct);
 
 	auto mbr_cnt = struct_type.member_types.size();
