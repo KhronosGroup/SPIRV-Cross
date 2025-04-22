@@ -7,6 +7,7 @@
 #extension GL_KHR_shader_subgroup_arithmetic : require
 #extension GL_KHR_shader_subgroup_clustered : require
 #extension GL_KHR_shader_subgroup_quad : require
+#extension GL_KHR_shader_subgroup_rotate : require
 layout(local_size_x = 1) in;
 
 layout(std430, binding = 0) buffer SSBO
@@ -58,6 +59,10 @@ void main()
 	bool shuffled_up_bool = subgroupShuffleUp(true, 4u);
 	uint shuffled_down = subgroupShuffleDown(20u, 4u);
 	bool shuffled_down_bool = subgroupShuffleDown(false, 4u);
+
+	// rotate
+	uint rotated = subgroupRotate(20u, 4u);
+	bool rotated_bool = subgroupRotate(false, 4u);
 
 	// vote
 	bool has_all = subgroupAll(true);

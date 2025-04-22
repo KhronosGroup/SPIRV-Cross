@@ -171,6 +171,7 @@ bool Compiler::block_is_control_dependent(const SPIRBlock &block)
 		case OpGroupNonUniformLogicalXor:
 		case OpGroupNonUniformQuadBroadcast:
 		case OpGroupNonUniformQuadSwap:
+		case OpGroupNonUniformRotateKHR:
 
 		// Control barriers
 		case OpControlBarrier:

@@ -9387,6 +9387,10 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 		require_extension_internal("GL_KHR_shader_subgroup_shuffle_relative");
 		break;
 
+	case OpGroupNonUniformRotateKHR:
+		require_extension_internal("GL_KHR_shader_subgroup_rotate");
+		break;
+
 	case OpGroupNonUniformAll:
 	case OpGroupNonUniformAny:
 	case OpGroupNonUniformAllEqual:
@@ -9531,6 +9535,13 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 
 	case OpGroupNonUniformShuffleDown:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleDown");
+		break;
+
+	case OpGroupNonUniformRotateKHR:
+		if (i.length > 5)
+			emit_trinary_func_op(result_type, id, ops[3], ops[4], ops[5], "subgroupClusteredRotate");
+		else
+			emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupRotate");
 		break;
 
 	case OpGroupNonUniformAll:
@@ -15073,6 +15084,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupNonUniformLogicalXor:
 	case OpGroupNonUniformQuadSwap:
 	case OpGroupNonUniformQuadBroadcast:
+	case OpGroupNonUniformRotateKHR:
 		emit_subgroup_op(instruction);
 		break;
 
