@@ -580,7 +580,8 @@ struct SPIRType : IVariant
 		Interpolant,
 		Char,
 		// MSL specific type, that is used by 'object'(analog of 'task' from glsl) shader.
-		MeshGridProperties
+		MeshGridProperties,
+		BFloat16
 	};
 
 	// Scalar/vector/matrix support.
@@ -1272,6 +1273,14 @@ struct SPIRConstant : IVariant
 	inline float scalar_f16(uint32_t col = 0, uint32_t row = 0) const
 	{
 		return f16_to_f32(scalar_u16(col, row));
+	}
+
+	inline float scalar_bf16(uint32_t col = 0, uint32_t row = 0) const
+	{
+		uint32_t v = scalar_u16(col, row) << 16;
+		float fp32;
+		memcpy(&fp32, &v, sizeof(float));
+		return fp32;
 	}
 
 	inline float scalar_f32(uint32_t col = 0, uint32_t row = 0) const

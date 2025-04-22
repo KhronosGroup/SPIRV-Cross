@@ -3,6 +3,7 @@
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
 #extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
 #extension GL_KHR_memory_scope_semantics : require
+#extension GL_EXT_bfloat16 : require
 
 layout(local_size_x = 64) in;
 
@@ -181,6 +182,7 @@ void types()
 {
 	coopmat<float, gl_ScopeSubgroup, 16, 16, UseA> A = coopmat<float, gl_ScopeSubgroup, 16, 16, UseA>(0);
 	coopmat<float, gl_ScopeWorkgroup, 16, 16, UseA> B = coopmat<float, gl_ScopeWorkgroup, 16, 16, UseA>(0);
+	coopmat<bfloat16_t, gl_ScopeWorkgroup, 16, 16, UseA> C = coopmat<bfloat16_t, gl_ScopeWorkgroup, 16, 16, UseA>(2.5);
 }
 
 void main()
