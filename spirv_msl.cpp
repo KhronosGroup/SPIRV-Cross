@@ -10245,7 +10245,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpAssumeTrueKHR:
 	{
 		auto condition = ops[0];
-		statement(join("SPV_ASSUME(", to_expression(condition), ")"));
+		statement(join("SPV_ASSUME(", to_unpacked_expression(condition), ")"));
 		break;
 	}
 
@@ -10256,7 +10256,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		auto value = ops[2];
 		auto exp_value = ops[3];
 
-		auto exp = join("SPV_EXPECT(", to_expression(value), ", ", to_expression(exp_value), ")");
+		auto exp = join("SPV_EXPECT(", to_unpacked_expression(value), ", ", to_unpacked_expression(exp_value), ")");
 		emit_op(result_type, ret, exp, should_forward(value), should_forward(exp_value));
 		inherit_expression_dependencies(ret, value);
 		inherit_expression_dependencies(ret, exp_value);
