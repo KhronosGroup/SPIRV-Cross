@@ -9,9 +9,11 @@ OpCapability Int16
 OpCapability Int8
 OpCapability DenormPreserve
 OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModel
 OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_KHR_float_controls"
-OpMemoryModel Logical GLSL450
+OpExtension "SPV_KHR_vulkan_memory_model"
+OpMemoryModel Logical Vulkan
 OpEntryPoint GLCompute %3 "main" %21
 OpExecutionMode %3 LocalSize 32 1 1
 OpExecutionMode %3 DenormPreserve 16
