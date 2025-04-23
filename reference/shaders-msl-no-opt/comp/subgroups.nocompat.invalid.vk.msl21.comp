@@ -184,6 +184,24 @@ inline vec<bool, N> spvSubgroupShuffleDown(vec<bool, N> value, ushort delta)
 }
 
 template<typename T>
+inline T spvSubgroupRotate(T value, ushort delta)
+{
+    return simd_shuffle_rotate_down(value, delta);
+}
+
+template<>
+inline bool spvSubgroupRotate(bool value, ushort delta)
+{
+    return !!simd_shuffle_rotate_down((ushort)value, delta);
+}
+
+template<uint N>
+inline vec<bool, N> spvSubgroupRotate(vec<bool, N> value, ushort delta)
+{
+    return (vec<bool, N>)simd_shuffle_rotate_down((vec<ushort, N>)value, delta);
+}
+
+template<typename T>
 inline T spvQuadBroadcast(T value, uint lane)
 {
     return quad_broadcast(value, lane);
@@ -269,6 +287,8 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     bool shuffled_up_bool = spvSubgroupShuffleUp(true, 4u);
     uint shuffled_down = spvSubgroupShuffleDown(20u, 4u);
     bool shuffled_down_bool = spvSubgroupShuffleDown(false, 4u);
+    uint rotated = spvSubgroupRotate(20u, 4u);
+    bool rotated_bool = spvSubgroupRotate(false, 4u);
     bool has_all = simd_all(true);
     bool has_any = simd_any(true);
     bool has_equal = spvSubgroupAllEqual(0);

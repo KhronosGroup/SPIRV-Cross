@@ -814,6 +814,7 @@ protected:
 		SPVFuncImplSubgroupShuffleXor,
 		SPVFuncImplSubgroupShuffleUp,
 		SPVFuncImplSubgroupShuffleDown,
+		SPVFuncImplSubgroupRotate,
 		SPVFuncImplQuadBroadcast,
 		SPVFuncImplQuadSwap,
 		SPVFuncImplReflectScalar,

@@ -6914,6 +6914,36 @@ void CompilerMSL::emit_custom_functions()
 			statement("");
 			break;
 
+		case SPVFuncImplSubgroupRotate:
+			statement("template<typename T>");
+			statement("inline T spvSubgroupRotate(T value, ushort delta)");
+			begin_scope();
+			if (msl_options.use_quadgroup_operation())
+				statement("return quad_shuffle_rotate_down(value, delta);");
+			else
+				statement("return simd_shuffle_rotate_down(value, delta);");
+			end_scope();
+			statement("");
+			statement("template<>");
+			statement("inline bool spvSubgroupRotate(bool value, ushort delta)");
+			begin_scope();
+			if (msl_options.use_quadgroup_operation())
+				statement("return !!quad_shuffle_rotate_down((ushort)value, delta);");
+			else
+				statement("return !!simd_shuffle_rotate_down((ushort)value, delta);");
+			end_scope();
+			statement("");
+			statement("template<uint N>");
+			statement("inline vec<bool, N> spvSubgroupRotate(vec<bool, N> value, ushort delta)");
+			begin_scope();
+			if (msl_options.use_quadgroup_operation())
+				statement("return (vec<bool, N>)quad_shuffle_rotate_down((vec<ushort, N>)value, delta);");
+			else
+				statement("return (vec<bool, N>)simd_shuffle_rotate_down((vec<ushort, N>)value, delta);");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplQuadBroadcast:
 			statement("template<typename T>");
 			statement("inline T spvQuadBroadcast(T value, uint lane)");
@@ -16612,6 +16642,10 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 			if (!msl_options.supports_msl_version(2, 2))
 				SPIRV_CROSS_THROW("Ballot ops on iOS requires Metal 2.2 and up.");
 			break;
+		case OpGroupNonUniformRotateKHR:
+			if (!msl_options.supports_msl_version(2, 2))
+				SPIRV_CROSS_THROW("Rotate on iOS requires Metal 2.2 and up.");
+			break;
 		case OpGroupNonUniformBroadcast:
 		case OpGroupNonUniformShuffle:
 		case OpGroupNonUniformShuffleXor:
@@ -16739,6 +16773,12 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 
 	case OpGroupNonUniformShuffleDown:
 		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupShuffleDown");
+		break;
+
+	case OpGroupNonUniformRotateKHR:
+		if (i.length > 5)
+			SPIRV_CROSS_THROW("Subgroup rotate ClusterSize is not supported.");
+		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvSubgroupRotate");
 		break;
 
 	case OpGroupNonUniformAll:
@@ -18212,6 +18252,9 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 
 	case OpGroupNonUniformShuffleDown:
 		return SPVFuncImplSubgroupShuffleDown;
+
+	case OpGroupNonUniformRotateKHR:
+		return SPVFuncImplSubgroupRotate;
 
 	case OpGroupNonUniformQuadBroadcast:
 		return SPVFuncImplQuadBroadcast;
