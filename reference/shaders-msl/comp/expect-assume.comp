@@ -5,11 +5,11 @@
 
 using namespace metal;
 
-#if !defined(SPV_ASSUME) && defined(__has_builtin)
-#if __has_builtin(__builtin_assume)
+#if defined(__has_builtin)
+#if !defined(SPV_ASSUME) && __has_builtin(__builtin_assume)
 #define SPV_ASSUME(x) __builtin_assume(x);
 #endif
-#if __has_builtin(__builtin_expect)
+#if !defined(SPV_EXPECT) && __has_builtin(__builtin_expect)
 #define SPV_EXPECT(x, y) __builtin_expect(x, y);
 #endif
 #endif
@@ -17,7 +17,7 @@ using namespace metal;
 #define SPV_ASSUME(x)
 #endif
 #ifndef SPV_EXPECT
-#define SPV_EXPECT(x, y)
+#define SPV_EXPECT(x, y) x
 #endif
 struct buffer_t
 {
