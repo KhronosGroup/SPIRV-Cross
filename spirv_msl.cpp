@@ -7870,11 +7870,11 @@ void CompilerMSL::emit_custom_functions()
 			break;
 
 		case SPVFuncImplAssume:
-			statement_no_indent("#if !defined(SPV_ASSUME) && defined(__has_builtin)");
-			statement_no_indent("#if __has_builtin(__builtin_assume)");
+			statement_no_indent("#if defined(__has_builtin)");
+			statement_no_indent("#if !defined(SPV_ASSUME) && __has_builtin(__builtin_assume)");
 			statement_no_indent("#define SPV_ASSUME(x) __builtin_assume(x);");
 			statement_no_indent("#endif");
-			statement_no_indent("#if __has_builtin(__builtin_expect)");
+			statement_no_indent("#if !defined(SPV_EXPECT) && __has_builtin(__builtin_expect)");
 			statement_no_indent("#define SPV_EXPECT(x, y) __builtin_expect(x, y);");
 			statement_no_indent("#endif");
 			statement_no_indent("#endif");
@@ -7884,7 +7884,7 @@ void CompilerMSL::emit_custom_functions()
 			statement_no_indent("#endif");
 
 			statement_no_indent("#ifndef SPV_EXPECT");
-			statement_no_indent("#define SPV_EXPECT(x, y)");
+			statement_no_indent("#define SPV_EXPECT(x, y) x");
 			statement_no_indent("#endif");
 
 			break;
