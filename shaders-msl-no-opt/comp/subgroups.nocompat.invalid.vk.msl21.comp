@@ -15,6 +15,12 @@ layout(std430, binding = 0) buffer SSBO
 	float FragColor;
 };
 
+void doClusteredRotate()
+{
+	uint rotated_clustered = subgroupClusteredRotate(20u, 4u, 8u);
+	bool rotated_clustered_bool = subgroupClusteredRotate(false, 4u, 8u);
+}
+
 void main()
 {
 	// basic
@@ -63,6 +69,7 @@ void main()
 	// rotate
 	uint rotated = subgroupRotate(20u, 4u);
 	bool rotated_bool = subgroupRotate(false, 4u);
+	doClusteredRotate();
 
 	// vote
 	bool has_all = subgroupAll(true);

@@ -244,7 +244,16 @@ struct SSBO
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
-kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgroups_per_threadgroup]], uint gl_SubgroupID [[simdgroup_index_in_threadgroup]], uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]])
+static inline __attribute__((always_inline))
+void doClusteredRotate(thread uint& gl_SubgroupInvocationID)
+{
+    uint _15 = spvSubgroupShuffle(20u, ((gl_SubgroupInvocationID + 4u) & 7) + (gl_SubgroupInvocationID & 4294967288));
+    uint rotated_clustered = _15;
+    bool _20 = spvSubgroupShuffle(false, ((gl_SubgroupInvocationID + 4u) & 7) + (gl_SubgroupInvocationID & 4294967288));
+    bool rotated_clustered_bool = _20;
+}
+
+kernel void main0(device SSBO& _24 [[buffer(0)]], uint gl_NumSubgroups [[simdgroups_per_threadgroup]], uint gl_SubgroupID [[simdgroup_index_in_threadgroup]], uint gl_SubgroupInvocationID [[thread_index_in_simdgroup]])
 {
     uint gl_SubgroupSize = 32;
     uint4 gl_SubgroupEqMask = gl_SubgroupInvocationID >= 32 ? uint4(0, (1 << (gl_SubgroupInvocationID - 32)), uint2(0)) : uint4(1 << gl_SubgroupInvocationID, uint3(0));
@@ -252,22 +261,22 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     uint4 gl_SubgroupGtMask = uint4(insert_bits(0u, 0xFFFFFFFF, gl_SubgroupInvocationID + 1, 32 - gl_SubgroupInvocationID - 1), uint3(0));
     uint4 gl_SubgroupLeMask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID + 1, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID + 1 - 32, 0)), uint2(0));
     uint4 gl_SubgroupLtMask = uint4(extract_bits(0xFFFFFFFF, 0, min(gl_SubgroupInvocationID, 32u)), extract_bits(0xFFFFFFFF, 0, (uint)max((int)gl_SubgroupInvocationID - 32, 0)), uint2(0));
-    _9.FragColor = float(gl_NumSubgroups);
-    _9.FragColor = float(gl_SubgroupID);
-    _9.FragColor = float(gl_SubgroupSize);
-    _9.FragColor = float(gl_SubgroupInvocationID);
+    _24.FragColor = float(gl_NumSubgroups);
+    _24.FragColor = float(gl_SubgroupID);
+    _24.FragColor = float(gl_SubgroupSize);
+    _24.FragColor = float(gl_SubgroupInvocationID);
     simdgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup | mem_flags::mem_texture);
     simdgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup | mem_flags::mem_texture);
     simdgroup_barrier(mem_flags::mem_device);
     simdgroup_barrier(mem_flags::mem_threadgroup);
     simdgroup_barrier(mem_flags::mem_texture);
-    bool _39 = simd_is_first();
-    bool elected = _39;
-    _9.FragColor = float4(gl_SubgroupEqMask).x;
-    _9.FragColor = float4(gl_SubgroupGeMask).x;
-    _9.FragColor = float4(gl_SubgroupGtMask).x;
-    _9.FragColor = float4(gl_SubgroupLeMask).x;
-    _9.FragColor = float4(gl_SubgroupLtMask).x;
+    bool _50 = simd_is_first();
+    bool elected = _50;
+    _24.FragColor = float4(gl_SubgroupEqMask).x;
+    _24.FragColor = float4(gl_SubgroupGeMask).x;
+    _24.FragColor = float4(gl_SubgroupGtMask).x;
+    _24.FragColor = float4(gl_SubgroupLeMask).x;
+    _24.FragColor = float4(gl_SubgroupLtMask).x;
     float4 broadcasted = spvSubgroupBroadcast(float4(10.0), 8u);
     bool2 broadcasted_bool = spvSubgroupBroadcast(bool2(true), 8u);
     float3 first = spvSubgroupBroadcastFirst(float3(20.0));
@@ -290,6 +299,7 @@ kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_NumSubgroups [[simdgrou
     bool shuffled_down_bool = spvSubgroupShuffleDown(false, 4u);
     uint rotated = spvSubgroupRotate(20u, 4u);
     bool rotated_bool = spvSubgroupRotate(false, 4u);
+    doClusteredRotate(gl_SubgroupInvocationID);
     bool has_all = simd_all(true);
     bool has_any = simd_any(true);
     bool has_equal = spvSubgroupAllEqual(0);
