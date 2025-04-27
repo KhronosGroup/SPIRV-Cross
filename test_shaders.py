@@ -396,6 +396,9 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
         msl_args.append('--msl-auto-disable-rasterization')
     if '.disable-rasterization.' in shader:
         msl_args.append('--msl-disable-rasterization')
+    if '.default-point-size.' in shader:
+        msl_args.append('--msl-default-point-size')
+        msl_args.append('1.0')
 
     subprocess.check_call(msl_args)
 
