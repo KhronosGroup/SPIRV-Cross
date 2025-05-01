@@ -3215,16 +3215,20 @@ void CompilerMSL::add_composite_member_variable_to_interface_block(StorageClass 
 		bool has_var_loc_decor = has_decoration(var.self, DecorationLocation);
 		uint32_t orig_vecsize = UINT32_MAX;
 
-		if (has_member_loc_decor)
-			ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
-		else if (has_var_loc_decor)
-			ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
-		else if (is_builtin)
+		// If we haven't established a location base yet, do so here.
+		if (location == UINT32_MAX)
 		{
-			if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
-				ir_location = inputs_by_builtin[builtin].location;
-			else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
-				ir_location = outputs_by_builtin[builtin].location;
+			if (has_member_loc_decor)
+				ir_location = get_member_decoration(var_type.self, mbr_idx, DecorationLocation);
+			else if (has_var_loc_decor)
+				ir_location = get_accumulated_member_location(var, mbr_idx, meta.strip_array);
+			else if (is_builtin)
+			{
+				if (is_tessellation_shader() && storage == StorageClassInput && inputs_by_builtin.count(builtin))
+					ir_location = inputs_by_builtin[builtin].location;
+				else if (capture_output_to_buffer && storage == StorageClassOutput && outputs_by_builtin.count(builtin))
+					ir_location = outputs_by_builtin[builtin].location;
+			}
 		}
 
 		// Once we determine the location of the first member within nested structures,
