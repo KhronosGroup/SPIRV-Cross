@@ -324,6 +324,8 @@ public:
 		// of the shader with the additional fixed sample mask.
 		uint32_t additional_fixed_sample_mask = 0xffffffff;
 		bool enable_point_size_builtin = true;
+		bool enable_point_size_default = false;
+		float default_point_size = 1.0f;
 		bool enable_frag_depth_builtin = true;
 		bool enable_frag_stencil_ref_builtin = true;
 		bool disable_rasterization = false;
@@ -1231,6 +1233,7 @@ protected:
 	bool needs_helper_invocation = false;
 	bool needs_workgroup_zero_init = false;
 	bool writes_to_depth = false;
+	bool writes_to_point_size = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
