@@ -22,7 +22,7 @@ struct SPIRV_Cross_Output
 void frag_main()
 {
     int4 coords = Buf.Load(int3(int2(gl_FragCoord.xy), 0));
-    float4 foo = asfloat(_34.Load4((coords.x % 16) * 16 + 0));
+    float4 foo = asfloat(_34.Load4(((coords.x - 16 * (coords.x / 16) + 16) - 16 * ((coords.x - 16 * (coords.x / 16) + 16) / 16)) * 16 + 0));
     int c = vIn * vIn;
     int d = vIn2 * vIn2;
     FragColor = (foo + foo) + asfloat(_34.Load4((c + d) * 16 + 0));

@@ -29,6 +29,8 @@ kernel void main0(const device SSBO& _23 [[buffer(0)]], device SSBO2& _33 [[buff
     float4 _29 = _23.in_data[gl_GlobalInvocationID.x];
     _33.out_data[gl_GlobalInvocationID.x] = mod(_29, _33.out_data[gl_GlobalInvocationID.x]);
     _33.out_data[gl_GlobalInvocationID.x] = as_type<float4>(as_type<uint4>(_29) % as_type<uint4>(_33.out_data[gl_GlobalInvocationID.x]));
-    _33.out_data[gl_GlobalInvocationID.x] = as_type<float4>(as_type<int4>(_29) % as_type<int4>(_33.out_data[gl_GlobalInvocationID.x]));
+    int4 _63 = as_type<int4>(_29);
+    int4 _67 = as_type<int4>(_33.out_data[gl_GlobalInvocationID.x]);
+    _33.out_data[gl_GlobalInvocationID.x] = as_type<float4>((_63 - _67 * (_63 / _67) + _67) - _67 * ((_63 - _67 * (_63 / _67) + _67) / _67));
 }
 
