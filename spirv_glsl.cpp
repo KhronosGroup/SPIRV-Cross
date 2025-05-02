@@ -14885,7 +14885,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 					SPIRV_CROSS_THROW("Debug printf is only supported in Vulkan GLSL.\n");
 				require_extension_internal("GL_EXT_debug_printf");
 				auto &format_string = get<SPIRString>(ops[4]).str;
-				string expr = join("debugPrintfEXT(\"", format_string, "\"");
+				string expr = join(backend.printf_function, "(\"", format_string, "\"");
 				for (uint32_t i = 5; i < length; i++)
 				{
 					expr += ", ";

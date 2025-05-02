@@ -1600,6 +1600,7 @@ string CompilerMSL::compile()
 	backend.basic_int16_type = "short";
 	backend.basic_uint16_type = "ushort";
 	backend.boolean_mix_function = "select";
+	backend.printf_function = "os_log_default.log";
 	backend.swizzle_is_function = false;
 	backend.shared_is_implied = false;
 	backend.use_initializer_list = true;
@@ -18031,7 +18032,8 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpExtInst:
 	{
 		uint32_t extension_set = args[2];
-		if (compiler.get<SPIRExtension>(extension_set).ext == SPIRExtension::GLSL)
+		SPIRExtension::Extension ext = compiler.get<SPIRExtension>(extension_set).ext;
+		if (ext == SPIRExtension::GLSL)
 		{
 			auto op_450 = static_cast<GLSLstd450>(args[3]);
 			switch (op_450)
@@ -18073,6 +18075,12 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 			default:
 				break;
 			}
+		}
+		else if (ext == SPIRExtension::NonSemanticDebugPrintf)
+		{
+			// Operation 1 is printf.
+			if (args[3] == 1 && !compiler.msl_options.supports_msl_version(3, 2))
+				SPIRV_CROSS_THROW("Debug printf requires MSL 3.2.");
 		}
 		break;
 	}

@@ -117,6 +117,8 @@ def print_msl_compiler_version():
         pass
 
 def path_to_msl_standard(shader):
+    if '.msl32.' in shader:
+        return '-std=metal3.2'
     if '.msl31.' in shader:
         return '-std=metal3.1'
     elif '.msl3.' in shader:
@@ -155,6 +157,8 @@ def path_to_msl_standard(shader):
             return '-std=macos-metal1.2'
 
 def path_to_msl_standard_cli(shader):
+    if '.msl32.' in shader:
+        return '30200'
     if '.msl31.' in shader:
         return '30100'
     elif '.msl3.' in shader:
