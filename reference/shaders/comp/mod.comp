@@ -18,7 +18,9 @@ void main()
     _33.out_data[ident] = v;
     uvec4 vu = floatBitsToUint(_23.in_data[ident]) % floatBitsToUint(_33.out_data[ident]);
     _33.out_data[ident] = uintBitsToFloat(vu);
-    ivec4 vi = floatBitsToInt(_23.in_data[ident]) % floatBitsToInt(_33.out_data[ident]);
+    ivec4 _63 = floatBitsToInt(_23.in_data[ident]);
+    ivec4 _67 = floatBitsToInt(_33.out_data[ident]);
+    ivec4 vi = (_63 - _67 * (_63 / _67) + _67) - _67 * ((_63 - _67 * (_63 / _67) + _67) / _67);
     _33.out_data[ident] = intBitsToFloat(vi);
 }
 

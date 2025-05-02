@@ -16,6 +16,8 @@ void main()
     vec4 _29 = _23.in_data[gl_GlobalInvocationID.x];
     _33.out_data[gl_GlobalInvocationID.x] = mod(_29, _33.out_data[gl_GlobalInvocationID.x]);
     _33.out_data[gl_GlobalInvocationID.x] = uintBitsToFloat(floatBitsToUint(_29) % floatBitsToUint(_33.out_data[gl_GlobalInvocationID.x]));
-    _33.out_data[gl_GlobalInvocationID.x] = intBitsToFloat(floatBitsToInt(_29) % floatBitsToInt(_33.out_data[gl_GlobalInvocationID.x]));
+    ivec4 _63 = floatBitsToInt(_29);
+    ivec4 _67 = floatBitsToInt(_33.out_data[gl_GlobalInvocationID.x]);
+    _33.out_data[gl_GlobalInvocationID.x] = intBitsToFloat((_63 - _67 * (_63 / _67) + _67) - _67 * ((_63 - _67 * (_63 / _67) + _67) / _67));
 }
 

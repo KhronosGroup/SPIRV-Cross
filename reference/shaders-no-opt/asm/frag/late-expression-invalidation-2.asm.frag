@@ -141,7 +141,7 @@ void main()
         }
         else
         {
-            int d = v % directions;
+            int d = (v - directions * (v / directions) + directions) - directions * ((v - directions * (v / directions) + directions) / directions);
             v += directions;
             bool _216 = d >= 0;
             bool _222;

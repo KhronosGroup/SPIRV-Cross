@@ -1681,6 +1681,7 @@ string CompilerMSL::compile()
 	backend.array_is_value_type_in_buffer_blocks = false;
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
+	backend.requires_emulated_smod = true;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;

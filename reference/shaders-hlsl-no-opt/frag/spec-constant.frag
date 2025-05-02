@@ -30,7 +30,7 @@ static const uint e = SPIRV_CROSS_CONSTANT_ID_5;
 #endif
 static const uint f = SPIRV_CROSS_CONSTANT_ID_6;
 static const uint _36 = (e / f);
-static const int _38 = (c % d);
+static const int _38 = (c - d * (c / d) + d) - d * ((c - d * (c / d) + d) / d);
 static const uint _40 = (e % f);
 static const int _42 = (c >> d);
 static const uint _44 = (e >> f);

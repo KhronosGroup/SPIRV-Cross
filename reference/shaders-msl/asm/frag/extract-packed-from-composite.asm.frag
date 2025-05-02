@@ -31,7 +31,8 @@ struct main0_out
 static inline __attribute__((always_inline))
 float4 _main(thread const float4& pos, constant buf& _15)
 {
-    int _32 = int(pos.x) % 16;
+    int _30 = int(pos.x);
+    int _32 = (_30 - 16 * (_30 / 16) + 16) - 16 * ((_30 - 16 * (_30 / 16) + 16) / 16);
     Foo foo;
     foo.a = float3(_15.results[_32].a);
     foo.b = _15.results[_32].b;
