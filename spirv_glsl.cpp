@@ -631,6 +631,12 @@ void CompilerGLSL::find_static_extensions()
 		require_extension_internal("GL_OVR_multiview2");
 	}
 
+	if (execution.flags.get(ExecutionModeQuadDerivativesKHR) ||
+	    (execution.flags.get(ExecutionModeRequireFullQuadsKHR) && get_execution_model() == ExecutionModelFragment))
+	{
+		require_extension_internal("GL_EXT_shader_quad_control");
+	}
+
 	// KHR one is likely to get promoted at some point, so if we don't see an explicit SPIR-V extension, assume KHR.
 	for (auto &ext : ir.declared_extensions)
 		if (ext == "SPV_NV_fragment_shader_barycentric")
@@ -1194,6 +1200,9 @@ void CompilerGLSL::emit_header()
 		else if (!options.es && execution.flags.get(ExecutionModeDepthLess))
 			statement("layout(depth_less) out float gl_FragDepth;");
 
+		if (execution.flags.get(ExecutionModeRequireFullQuadsKHR))
+			statement("layout(full_quads) in;");
+
 		break;
 
 	default:
@@ -1203,6 +1212,9 @@ void CompilerGLSL::emit_header()
 	for (auto &cap : ir.declared_capabilities)
 		if (cap == CapabilityRayTraversalPrimitiveCullingKHR)
 			statement("layout(primitive_culling);");
+
+	if (execution.flags.get(ExecutionModeQuadDerivativesKHR))
+		statement("layout(quad_derivatives) in;");
 
 	if (!inputs.empty())
 		statement("layout(", merge(inputs), ") in;");
@@ -9515,6 +9527,13 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 		require_extension_internal("GL_KHR_shader_subgroup_quad");
 		break;
 
+	case OpGroupNonUniformQuadAllKHR:
+	case OpGroupNonUniformQuadAnyKHR:
+		// Require both extensions to be enabled.
+		require_extension_internal("GL_KHR_shader_subgroup_vote");
+		require_extension_internal("GL_EXT_shader_quad_control");
+		break;
+
 	default:
 		SPIRV_CROSS_THROW("Invalid opcode for subgroup.");
 	}
@@ -9522,9 +9541,13 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	uint32_t result_type = ops[0];
 	uint32_t id = ops[1];
 
-	auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
-	if (scope != ScopeSubgroup)
-		SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+	// These quad ops do not have a scope parameter.
+	if (op != OpGroupNonUniformQuadAllKHR && op != OpGroupNonUniformQuadAnyKHR)
+	{
+		auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
+		if (scope != ScopeSubgroup)
+			SPIRV_CROSS_THROW("Only subgroup scope is supported.");
+	}
 
 	switch (op)
 	{
@@ -9683,6 +9706,14 @@ case OpGroupNonUniform##op: \
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupQuadBroadcast");
 		break;
 	}
+
+	case OpGroupNonUniformQuadAllKHR:
+		emit_unary_func_op(result_type, id, ops[2], "subgroupQuadAll");
+		break;
+
+	case OpGroupNonUniformQuadAnyKHR:
+		emit_unary_func_op(result_type, id, ops[2], "subgroupQuadAny");
+		break;
 
 	default:
 		SPIRV_CROSS_THROW("Invalid opcode for subgroup.");
@@ -15112,6 +15143,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpGroupNonUniformLogicalXor:
 	case OpGroupNonUniformQuadSwap:
 	case OpGroupNonUniformQuadBroadcast:
+	case OpGroupNonUniformQuadAllKHR:
+	case OpGroupNonUniformQuadAnyKHR:
 	case OpGroupNonUniformRotateKHR:
 		emit_subgroup_op(instruction);
 		break;

@@ -16759,13 +16759,16 @@ void CompilerMSL::emit_subgroup_op(const Instruction &i)
 	Scope scope;
 	switch (op)
 	{
+	// These earlier instructions don't have the scope operand.
 	case OpSubgroupBallotKHR:
 	case OpSubgroupFirstInvocationKHR:
 	case OpSubgroupReadInvocationKHR:
 	case OpSubgroupAllKHR:
 	case OpSubgroupAnyKHR:
 	case OpSubgroupAllEqualKHR:
-		// These earlier instructions don't have the scope operand.
+	// These instructions are always quad-scoped and thus do not have a scope operand.
+	case OpGroupNonUniformQuadAllKHR:
+	case OpGroupNonUniformQuadAnyKHR:
 		scope = ScopeSubgroup;
 		break;
 	default:
@@ -16989,6 +16992,14 @@ case OpGroupNonUniform##op: \
 
 	case OpGroupNonUniformQuadBroadcast:
 		emit_binary_func_op(result_type, id, ops[op_idx], ops[op_idx + 1], "spvQuadBroadcast");
+		break;
+
+	case OpGroupNonUniformQuadAllKHR:
+		emit_unary_func_op(result_type, id, ops[op_idx], "quad_all");
+		break;
+
+	case OpGroupNonUniformQuadAnyKHR:
+		emit_unary_func_op(result_type, id, ops[op_idx], "quad_any");
 		break;
 
 	default:
