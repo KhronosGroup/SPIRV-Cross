@@ -35,7 +35,7 @@ constant uint e = SPIRV_CROSS_CONSTANT_ID_5;
 #endif
 constant uint f = SPIRV_CROSS_CONSTANT_ID_6;
 constant uint _36 = (e / f);
-constant int _38 = (c - d * (c / d) + d) - d * ((c - d * (c / d) + d) / d);
+constant int _38 = (c % d);
 constant uint _40 = (e % f);
 constant int _42 = (c >> d);
 constant uint _44 = (e >> f);

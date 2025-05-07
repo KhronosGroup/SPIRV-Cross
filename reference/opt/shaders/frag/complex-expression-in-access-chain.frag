@@ -15,8 +15,7 @@ layout(location = 0) out vec4 FragColor;
 
 void main()
 {
-    mediump int _38 = texelFetch(Buf, ivec2(gl_FragCoord.xy), 0).x;
-    mediump int _40 = (_38 - 16 * (_38 / 16) + 16) - 16 * ((_38 - 16 * (_38 / 16) + 16) / 16);
+    mediump int _40 = texelFetch(Buf, ivec2(gl_FragCoord.xy), 0).x % 16;
     FragColor = (_34.results[_40] + _34.results[_40]) + _34.results[(vIn * vIn) + (vIn2 * vIn2)];
 }
 

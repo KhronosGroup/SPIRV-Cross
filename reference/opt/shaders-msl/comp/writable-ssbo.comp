@@ -11,8 +11,7 @@ struct myBlock
 
 kernel void main0(device myBlock& myStorage [[buffer(0)]])
 {
-    int _16 = myStorage.a + 1;
-    myStorage.a = (_16 - 256 * (_16 / 256) + 256) - 256 * ((_16 - 256 * (_16 / 256) + 256) / 256);
+    myStorage.a = (myStorage.a + 1) % 256;
     myStorage.b += 0.0199999995529651641845703125;
 }
 

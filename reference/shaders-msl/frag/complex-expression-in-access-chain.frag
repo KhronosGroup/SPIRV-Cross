@@ -23,7 +23,7 @@ fragment main0_out main0(main0_in in [[stage_in]], device UBO& _34 [[buffer(0)]]
 {
     main0_out out = {};
     int4 coords = Buf.read(uint2(int2(gl_FragCoord.xy)), 0);
-    float4 foo = _34.results[(coords.x - 16 * (coords.x / 16) + 16) - 16 * ((coords.x - 16 * (coords.x / 16) + 16) / 16)];
+    float4 foo = _34.results[coords.x % 16];
     int c = in.vIn * in.vIn;
     int d = in.vIn2 * in.vIn2;
     out.FragColor = (foo + foo) + _34.results[c + d];

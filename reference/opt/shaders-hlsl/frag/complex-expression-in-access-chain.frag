@@ -21,8 +21,7 @@ struct SPIRV_Cross_Output
 
 void frag_main()
 {
-    int _38 = Buf.Load(int3(int2(gl_FragCoord.xy), 0)).x;
-    int _40 = (_38 - 16 * (_38 / 16) + 16) - 16 * ((_38 - 16 * (_38 / 16) + 16) / 16);
+    int _40 = Buf.Load(int3(int2(gl_FragCoord.xy), 0)).x % 16;
     FragColor = (asfloat(_34.Load4(_40 * 16 + 0)) + asfloat(_34.Load4(_40 * 16 + 0))) + asfloat(_34.Load4(((vIn * vIn) + (vIn2 * vIn2)) * 16 + 0));
 }
 

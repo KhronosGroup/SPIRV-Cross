@@ -22,8 +22,7 @@ struct main0_in
 fragment main0_out main0(main0_in in [[stage_in]], device UBO& _34 [[buffer(0)]], texture2d<int> Buf [[texture(0)]], sampler BufSmplr [[sampler(0)]], float4 gl_FragCoord [[position]])
 {
     main0_out out = {};
-    int _38 = Buf.read(uint2(int2(gl_FragCoord.xy)), 0).x;
-    int _40 = (_38 - 16 * (_38 / 16) + 16) - 16 * ((_38 - 16 * (_38 / 16) + 16) / 16);
+    int _40 = Buf.read(uint2(int2(gl_FragCoord.xy)), 0).x % 16;
     out.FragColor = (_34.results[_40] + _34.results[_40]) + _34.results[(in.vIn * in.vIn) + (in.vIn2 * in.vIn2)];
     return out;
 }

@@ -35,7 +35,7 @@ kernel void main0(uint3 gl_GlobalInvocationID [[thread_position_in_grid]], devic
     uint _21 = uint(gl_InvocationID);
     gl_out[gl_InvocationID].in_te_data0 = te_data{ _15, _19, _21 };
     threadgroup_barrier(mem_flags::mem_device | mem_flags::mem_threadgroup);
-    int _38 = (_18 - 3 * (_18 / 3) + 3) - 3 * ((_18 - 3 * (_18 / 3) + 3) / 3);
+    int _38 = _18 % 3;
     gl_out[gl_InvocationID].in_te_data1 = te_data{ _15 + gl_out[_38].in_te_data0.a, _19 + gl_out[_38].in_te_data0.b, _21 + gl_out[_38].in_te_data0.c };
     gl_out[gl_InvocationID].in_te_attr = gl_in[gl_InvocationID].in_tc_attr.x;
     spvTessLevel[gl_PrimitiveID].insideTessellationFactor[0] = half(1.0);

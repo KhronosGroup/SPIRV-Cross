@@ -23,7 +23,7 @@ constant uint e = is_function_constant_defined(e_tmp) ? e_tmp : 5u;
 constant uint f_tmp [[function_constant(6)]];
 constant uint f = is_function_constant_defined(f_tmp) ? f_tmp : 6u;
 constant uint _36 = (e / f);
-constant int _38 = (c - d * (c / d) + d) - d * ((c - d * (c / d) + d) / d);
+constant int _38 = (c % d);
 constant uint _40 = (e % f);
 constant int _42 = (c >> d);
 constant uint _44 = (e >> f);

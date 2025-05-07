@@ -11,8 +11,7 @@ struct myBlock
 
 kernel void main0(device myBlock& myStorage [[buffer(0)]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
 {
-    int _19 = myStorage.a + 1;
-    myStorage.a = (_19 - 256 * (_19 / 256) + 256) - 256 * ((_19 - 256 * (_19 / 256) + 256) / 256);
+    myStorage.a = (myStorage.a + 1) % 256;
     myStorage.b[gl_LocalInvocationIndex] += 0.0199999995529651641845703125;
 }
 
