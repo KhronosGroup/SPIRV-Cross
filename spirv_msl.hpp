@@ -774,6 +774,7 @@ protected:
 	{
 		SPVFuncImplNone,
 		SPVFuncImplMod,
+		SPVFuncImplSMod,
 		SPVFuncImplRadians,
 		SPVFuncImplDegrees,
 		SPVFuncImplFindILsb,
