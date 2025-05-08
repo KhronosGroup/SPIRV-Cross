@@ -34,7 +34,7 @@ const uint e = SPIRV_CROSS_CONSTANT_ID_5;
 #endif
 const uint f = SPIRV_CROSS_CONSTANT_ID_6;
 const uint _36 = (e / f);
-const int _38 = (c - d * (c / d) + d) - d * ((c - d * (c / d) + d) / d);
+const int _38 = (c % d);
 const uint _40 = (e % f);
 const int _42 = (c >> d);
 const uint _44 = (e >> f);

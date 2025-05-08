@@ -1681,7 +1681,6 @@ string CompilerMSL::compile()
 	backend.array_is_value_type_in_buffer_blocks = false;
 	backend.support_pointer_to_pointer = true;
 	backend.implicit_c_integer_promotion_rules = true;
-	backend.requires_emulated_smod = true;
 
 	capture_output_to_buffer = msl_options.capture_output_to_buffer;
 	is_rasterization_disabled = msl_options.disable_rasterization || capture_output_to_buffer;
@@ -5990,6 +5989,17 @@ void CompilerMSL::emit_custom_functions()
 	{
 		switch (spv_func)
 		{
+		case SPVFuncImplSMod:
+			statement("// Implementation of signed integer mod accurate to SPIR-V specification");
+			statement("template<typename Tx, typename Ty>");
+			statement("inline Tx spvSMod(Tx x, Ty y)");
+			begin_scope();
+			statement("Tx remainder = x - y * (x / y);");
+			statement("return select(Tx(remainder + y), remainder, remainder == 0 || (x >= 0) == (y >= 0));");
+			end_scope();
+			statement("");
+			break;
+
 		case SPVFuncImplMod:
 			statement("// Implementation of the GLSL mod() function, which is slightly different than Metal fmod()");
 			statement("template<typename Tx, typename Ty>");
@@ -9342,6 +9352,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "popcount", basetype, basetype);
 		break;
 	}
+
+	case OpSMod:
+		MSL_BFOP(spvSMod);
+		break;
 
 	case OpFRem:
 		MSL_BFOP(fmod);
@@ -16346,6 +16360,9 @@ string CompilerMSL::constant_op_expression(const SPIRConstantOp &cop)
 {
 	switch (cop.opcode)
 	{
+	case OpSMod:
+		add_spv_func_and_recompile(SPVFuncImplSMod);
+		return join("spvSMod(", to_expression(cop.arguments[0]), ", ", to_expression(cop.arguments[1]), ")");
 	case OpQuantizeToF16:
 		add_spv_func_and_recompile(SPVFuncImplQuantizeToF16);
 		return join("spvQuantizeToF16(", to_expression(cop.arguments[0]), ")");
@@ -18193,6 +18210,9 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 {
 	switch (opcode)
 	{
+	case OpSMod:
+		return SPVFuncImplSMod;
+
 	case OpFMod:
 		return SPVFuncImplMod;
 

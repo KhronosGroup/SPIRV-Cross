@@ -37,7 +37,7 @@ const int _52 = (SDIV + 2);
 #define SPIRV_CROSS_CONSTANT_ID_7 -3
 #endif
 const int SNEG_THREE = SPIRV_CROSS_CONSTANT_ID_7;
-const int SMOD = (STWO - SNEG_THREE * (STWO / SNEG_THREE) + SNEG_THREE) - SNEG_THREE * ((STWO - SNEG_THREE * (STWO / SNEG_THREE) + SNEG_THREE) / SNEG_THREE);
+const int SMOD = (STWO % SNEG_THREE);
 const int _66 = (SMOD + 2);
 const uint UMOD = (IADD % IMUL);
 const uint _73 = (UMOD - 1u);
