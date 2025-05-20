@@ -127,6 +127,42 @@ void main()
 	//xored = subgroupExclusiveXor(ored);
 
 	// clustered
+	added = subgroupClusteredAdd(added, 1u);
+	multiplied = subgroupClusteredMul(multiplied, 1u);
+	iadded = subgroupClusteredAdd(iadded, 1u);
+	imultiplied = subgroupClusteredMul(imultiplied, 1u);
+	lo = subgroupClusteredMin(lo, 1u);
+	hi = subgroupClusteredMax(hi, 1u);
+	ulo = subgroupClusteredMin(ulo, 1u);
+	uhi = subgroupClusteredMax(uhi, 1u);
+	slo = subgroupClusteredMin(slo, 1u);
+	shi = subgroupClusteredMax(shi, 1u);
+	anded = subgroupClusteredAnd(anded, 1u);
+	ored = subgroupClusteredOr(ored, 1u);
+	xored = subgroupClusteredXor(xored, 1u);
+
+	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 1u);
+	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 1u);
+	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 1u);
+
+	added = subgroupClusteredAdd(added, 2u);
+	multiplied = subgroupClusteredMul(multiplied, 2u);
+	iadded = subgroupClusteredAdd(iadded, 2u);
+	imultiplied = subgroupClusteredMul(imultiplied, 2u);
+	lo = subgroupClusteredMin(lo, 2u);
+	hi = subgroupClusteredMax(hi, 2u);
+	ulo = subgroupClusteredMin(ulo, 2u);
+	uhi = subgroupClusteredMax(uhi, 2u);
+	slo = subgroupClusteredMin(slo, 2u);
+	shi = subgroupClusteredMax(shi, 2u);
+	anded = subgroupClusteredAnd(anded, 2u);
+	ored = subgroupClusteredOr(ored, 2u);
+	xored = subgroupClusteredXor(xored, 2u);
+
+	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 2u);
+	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 2u);
+	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 2u);
+
 	added = subgroupClusteredAdd(added, 4u);
 	multiplied = subgroupClusteredMul(multiplied, 4u);
 	iadded = subgroupClusteredAdd(iadded, 4u);
@@ -144,6 +180,24 @@ void main()
 	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 4u);
 	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 4u);
 	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 4u);
+
+	added = subgroupClusteredAdd(added, 16u);
+	multiplied = subgroupClusteredMul(multiplied, 16u);
+	iadded = subgroupClusteredAdd(iadded, 16u);
+	imultiplied = subgroupClusteredMul(imultiplied, 16u);
+	lo = subgroupClusteredMin(lo, 16u);
+	hi = subgroupClusteredMax(hi, 16u);
+	ulo = subgroupClusteredMin(ulo, 16u);
+	uhi = subgroupClusteredMax(uhi, 16u);
+	slo = subgroupClusteredMin(slo, 16u);
+	shi = subgroupClusteredMax(shi, 16u);
+	anded = subgroupClusteredAnd(anded, 16u);
+	ored = subgroupClusteredOr(ored, 16u);
+	xored = subgroupClusteredXor(xored, 16u);
+
+	anded_b = subgroupClusteredAnd(equal(anded, uvec4(2u)), 16u);
+	ored_b = subgroupClusteredOr(equal(ored, uvec4(3u)), 16u);
+	xored_b = subgroupClusteredXor(equal(xored, uvec4(4u)), 16u);
 
 	// quad
 	vec4 swap_horiz = subgroupQuadSwapHorizontal(vec4(20.0));

@@ -818,6 +818,29 @@ protected:
 		SPVFuncImplSubgroupShuffleUp,
 		SPVFuncImplSubgroupShuffleDown,
 		SPVFuncImplSubgroupRotate,
+		SPVFuncImplSubgroupClusteredAdd,
+		SPVFuncImplSubgroupClusteredFAdd = SPVFuncImplSubgroupClusteredAdd,
+		SPVFuncImplSubgroupClusteredIAdd = SPVFuncImplSubgroupClusteredAdd,
+		SPVFuncImplSubgroupClusteredMul,
+		SPVFuncImplSubgroupClusteredFMul = SPVFuncImplSubgroupClusteredMul,
+		SPVFuncImplSubgroupClusteredIMul = SPVFuncImplSubgroupClusteredMul,
+		SPVFuncImplSubgroupClusteredMin,
+		SPVFuncImplSubgroupClusteredFMin = SPVFuncImplSubgroupClusteredMin,
+		SPVFuncImplSubgroupClusteredSMin = SPVFuncImplSubgroupClusteredMin,
+		SPVFuncImplSubgroupClusteredUMin = SPVFuncImplSubgroupClusteredMin,
+		SPVFuncImplSubgroupClusteredMax,
+		SPVFuncImplSubgroupClusteredFMax = SPVFuncImplSubgroupClusteredMax,
+		SPVFuncImplSubgroupClusteredSMax = SPVFuncImplSubgroupClusteredMax,
+		SPVFuncImplSubgroupClusteredUMax = SPVFuncImplSubgroupClusteredMax,
+		SPVFuncImplSubgroupClusteredAnd,
+		SPVFuncImplSubgroupClusteredBitwiseAnd = SPVFuncImplSubgroupClusteredAnd,
+		SPVFuncImplSubgroupClusteredLogicalAnd = SPVFuncImplSubgroupClusteredAnd,
+		SPVFuncImplSubgroupClusteredOr,
+		SPVFuncImplSubgroupClusteredBitwiseOr = SPVFuncImplSubgroupClusteredOr,
+		SPVFuncImplSubgroupClusteredLogicalOr = SPVFuncImplSubgroupClusteredOr,
+		SPVFuncImplSubgroupClusteredXor,
+		SPVFuncImplSubgroupClusteredBitwiseXor = SPVFuncImplSubgroupClusteredXor,
+		SPVFuncImplSubgroupClusteredLogicalXor = SPVFuncImplSubgroupClusteredXor,
 		SPVFuncImplQuadBroadcast,
 		SPVFuncImplQuadSwap,
 		SPVFuncImplReflectScalar,
@@ -871,6 +894,11 @@ protected:
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_sampled_image_op(uint32_t result_type, uint32_t result_id, uint32_t image_id, uint32_t samp_id) override;
 	void emit_subgroup_op(const Instruction &i) override;
+	void emit_subgroup_cluster_op(uint32_t result_type, uint32_t result_id, uint32_t cluster_size, uint32_t op0,
+	                              const char *op);
+	void emit_subgroup_cluster_op_cast(uint32_t result_type, uint32_t result_id, uint32_t cluster_size, uint32_t op0,
+	                                   const char *op, SPIRType::BaseType input_type,
+	                                   SPIRType::BaseType expected_result_type);
 	std::string to_texture_op(const Instruction &i, bool sparse, bool *forward,
 	                          SmallVector<uint32_t> &inherited_expressions) override;
 	void emit_fixup() override;
