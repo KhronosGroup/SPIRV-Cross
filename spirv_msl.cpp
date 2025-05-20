@@ -2222,6 +2222,27 @@ void CompilerMSL::extract_global_variables_from_function(uint32_t func_id, std::
 				break;
 			}
 
+			case OpGroupNonUniformFAdd:
+			case OpGroupNonUniformFMul:
+			case OpGroupNonUniformFMin:
+			case OpGroupNonUniformFMax:
+			case OpGroupNonUniformIAdd:
+			case OpGroupNonUniformIMul:
+			case OpGroupNonUniformSMin:
+			case OpGroupNonUniformSMax:
+			case OpGroupNonUniformUMin:
+			case OpGroupNonUniformUMax:
+			case OpGroupNonUniformBitwiseAnd:
+			case OpGroupNonUniformBitwiseOr:
+			case OpGroupNonUniformBitwiseXor:
+			case OpGroupNonUniformLogicalAnd:
+			case OpGroupNonUniformLogicalOr:
+			case OpGroupNonUniformLogicalXor:
+				if ((get_execution_model() != ExecutionModelFragment || msl_options.supports_msl_version(2, 2)) &&
+				    ops[3] == GroupOperationClusteredReduce)
+					added_arg_ids.insert(builtin_subgroup_invocation_id_id);
+				break;
+
 			case OpDemoteToHelperInvocation:
 				if (needs_manual_helper_invocation_updates() && needs_helper_invocation)
 					added_arg_ids.insert(builtin_helper_invocation_id);
@@ -7025,6 +7046,105 @@ void CompilerMSL::emit_custom_functions()
 			end_scope();
 			statement("");
 			break;
+
+			// C++ disallows partial specializations of function templates,
+			// hence the use of a struct.
+			// clang-format off
+#define FUNC_SUBGROUP_CLUSTERED(spv, msl, combine, op, ident) \
+		case SPVFuncImplSubgroupClustered##spv: \
+			statement("template<uint N, uint offset>"); \
+			statement("struct spvClustered" #spv "Detail;"); \
+			statement(""); \
+			statement("// Base cases"); \
+			statement("template<>"); \
+			statement("struct spvClustered" #spv "Detail<1, 0>"); \
+			begin_scope(); \
+			statement("template<typename T>"); \
+			statement("static T op(T value, uint)"); \
+			begin_scope(); \
+			statement("return value;"); \
+			end_scope(); \
+			end_scope_decl(); \
+			statement(""); \
+			statement("template<uint offset>"); \
+			statement("struct spvClustered" #spv "Detail<1, offset>"); \
+			begin_scope(); \
+			statement("template<typename T>"); \
+			statement("static T op(T value, uint lid)"); \
+			begin_scope(); \
+			statement("// If the target lane is inactive, then return identity."); \
+			if (msl_options.use_quadgroup_operation()) \
+				statement("if (!extract_bits((quad_vote::vote_t)quad_active_threads_mask(), (lid ^ offset), 1))"); \
+			else \
+				statement("if (!extract_bits(as_type<uint2>((simd_vote::vote_t)simd_active_threads_mask())[(lid ^ offset) / 32], (lid ^ offset) % 32, 1))"); \
+			statement("    return " #ident ";"); \
+			if (msl_options.use_quadgroup_operation()) \
+				statement("return quad_shuffle_xor(value, offset);"); \
+			else \
+				statement("return simd_shuffle_xor(value, offset);"); \
+			end_scope(); \
+			end_scope_decl(); \
+			statement(""); \
+			statement("template<>"); \
+			statement("struct spvClustered" #spv "Detail<4, 0>"); \
+			begin_scope(); \
+			statement("template<typename T>"); \
+			statement("static T op(T value, uint)"); \
+			begin_scope(); \
+			statement("return quad_" #msl "(value);"); \
+			end_scope(); \
+			end_scope_decl(); \
+			statement(""); \
+			statement("template<uint offset>"); \
+			statement("struct spvClustered" #spv "Detail<4, offset>"); \
+			begin_scope(); \
+			statement("template<typename T>"); \
+			statement("static T op(T value, uint lid)"); \
+			begin_scope(); \
+			statement("// Here, we care if any of the lanes in the quad are active."); \
+			statement("uint quad_mask = extract_bits(as_type<uint2>((simd_vote::vote_t)simd_active_threads_mask())[(lid ^ offset) / 32], ((lid ^ offset) % 32) & ~3, 4);"); \
+			statement("if (!quad_mask)"); \
+			statement("    return " #ident ";"); \
+			statement("// But we need to make sure we shuffle from an active lane."); \
+			if (msl_options.use_quadgroup_operation()) \
+				SPIRV_CROSS_THROW("Subgroup size with quadgroup operation cannot exceed 4."); \
+			else \
+				statement("return simd_shuffle(quad_" #msl "(value), ((lid ^ offset) & ~3) | ctz(quad_mask));"); \
+			end_scope(); \
+			end_scope_decl(); \
+			statement(""); \
+			statement("// General case"); \
+			statement("template<uint N, uint offset>"); \
+			statement("struct spvClustered" #spv "Detail"); \
+			begin_scope(); \
+			statement("template<typename T>"); \
+			statement("static T op(T value, uint lid)"); \
+			begin_scope(); \
+			statement("return " combine(msl, op, "spvClustered" #spv "Detail<N/2, offset>::op(value, lid)", "spvClustered" #spv "Detail<N/2, offset + N/2>::op(value, lid)") ";"); \
+			end_scope(); \
+			end_scope_decl(); \
+			statement(""); \
+			statement("template<uint N, typename T>"); \
+			statement("T spvClustered_" #msl "(T value, uint lid)"); \
+			begin_scope(); \
+			statement("return spvClustered" #spv "Detail<N, 0>::op(value, lid);"); \
+			end_scope(); \
+			statement(""); \
+			break
+#define BINOP(msl, op, l, r) l " " #op " " r
+#define BINFUNC(msl, op, l, r) #msl "(" l ", " r ")"
+
+		FUNC_SUBGROUP_CLUSTERED(Add, sum, BINOP, +, 0);
+		FUNC_SUBGROUP_CLUSTERED(Mul, product, BINOP, *, 1);
+		FUNC_SUBGROUP_CLUSTERED(Min, min, BINFUNC, , numeric_limits<T>::max());
+		FUNC_SUBGROUP_CLUSTERED(Max, max, BINFUNC, , numeric_limits<T>::min());
+		FUNC_SUBGROUP_CLUSTERED(And, and, BINOP, &, ~T(0));
+		FUNC_SUBGROUP_CLUSTERED(Or, or, BINOP, |, 0);
+		FUNC_SUBGROUP_CLUSTERED(Xor, xor, BINOP, ^, 0);
+			// clang-format on
+#undef FUNC_SUBGROUP_CLUSTERED
+#undef BINOP
+#undef BINFUNC
 
 		case SPVFuncImplQuadBroadcast:
 			statement("template<typename T>");
@@ -17019,11 +17139,10 @@ case OpGroupNonUniform##op: \
 			emit_unary_func_op(result_type, id, ops[op_idx], "simd_prefix_exclusive_" #msl_op); \
 		else if (operation == GroupOperationClusteredReduce) \
 		{ \
-			/* Only cluster sizes of 4 are supported. */ \
 			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx + 1]); \
-			if (cluster_size != 4) \
-				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
-			emit_unary_func_op(result_type, id, ops[op_idx], "quad_" #msl_op); \
+			if (get_execution_model() != ExecutionModelFragment || msl_options.supports_msl_version(2, 2)) \
+				add_spv_func_and_recompile(SPVFuncImplSubgroupClustered##op); \
+			emit_subgroup_cluster_op(result_type, id, cluster_size, ops[op_idx], #msl_op); \
 		} \
 		else \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
@@ -17048,11 +17167,10 @@ case OpGroupNonUniform##op: \
 			SPIRV_CROSS_THROW("Metal doesn't support ExclusiveScan for OpGroupNonUniform" #op "."); \
 		else if (operation == GroupOperationClusteredReduce) \
 		{ \
-			/* Only cluster sizes of 4 are supported. */ \
 			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx + 1]); \
-			if (cluster_size != 4) \
-				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
-			emit_unary_func_op(result_type, id, ops[op_idx], "quad_" #msl_op); \
+			if (get_execution_model() != ExecutionModelFragment || msl_options.supports_msl_version(2, 2)) \
+				add_spv_func_and_recompile(SPVFuncImplSubgroupClustered##op); \
+			emit_subgroup_cluster_op(result_type, id, cluster_size, ops[op_idx], #msl_op); \
 		} \
 		else \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
@@ -17071,11 +17189,10 @@ case OpGroupNonUniform##op: \
 			SPIRV_CROSS_THROW("Metal doesn't support ExclusiveScan for OpGroupNonUniform" #op "."); \
 		else if (operation == GroupOperationClusteredReduce) \
 		{ \
-			/* Only cluster sizes of 4 are supported. */ \
 			uint32_t cluster_size = evaluate_constant_u32(ops[op_idx + 1]); \
-			if (cluster_size != 4) \
-				SPIRV_CROSS_THROW("Metal only supports quad ClusteredReduce."); \
-			emit_unary_func_op_cast(result_type, id, ops[op_idx], "quad_" #msl_op, type, type); \
+			if (get_execution_model() != ExecutionModelFragment || msl_options.supports_msl_version(2, 2)) \
+				add_spv_func_and_recompile(SPVFuncImplSubgroupClustered##op); \
+			emit_subgroup_cluster_op_cast(result_type, id, cluster_size, ops[op_idx], #msl_op, type, type); \
 		} \
 		else \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
@@ -17091,9 +17208,11 @@ case OpGroupNonUniform##op: \
 	MSL_GROUP_OP(BitwiseAnd, and)
 	MSL_GROUP_OP(BitwiseOr, or)
 	MSL_GROUP_OP(BitwiseXor, xor)
-	MSL_GROUP_OP(LogicalAnd, and)
-	MSL_GROUP_OP(LogicalOr, or)
-	MSL_GROUP_OP(LogicalXor, xor)
+	// Metal doesn't support boolean types in SIMD-group operations, so we
+	// have to emit some casts.
+	MSL_GROUP_OP_CAST(LogicalAnd, and, SPIRType::UShort)
+	MSL_GROUP_OP_CAST(LogicalOr, or, SPIRType::UShort)
+	MSL_GROUP_OP_CAST(LogicalXor, xor, SPIRType::UShort)
 		// clang-format on
 #undef MSL_GROUP_OP
 #undef MSL_GROUP_OP_CAST
@@ -17119,6 +17238,83 @@ case OpGroupNonUniform##op: \
 	}
 
 	register_control_dependent_expression(id);
+}
+
+void CompilerMSL::emit_subgroup_cluster_op(uint32_t result_type, uint32_t result_id, uint32_t cluster_size,
+                                           uint32_t op0, const char *op)
+{
+	if (get_execution_model() == ExecutionModelFragment && !msl_options.supports_msl_version(2, 2))
+	{
+		if (cluster_size == 4)
+		{
+			emit_unary_func_op(result_type, result_id, op0, join("quad_", op).c_str());
+			return;
+		}
+		SPIRV_CROSS_THROW("Cluster sizes other than 4 in fragment shaders require MSL 2.2.");
+	}
+	bool forward = should_forward(op0);
+	emit_op(result_type, result_id,
+	        join("spvClustered_", op, "<", cluster_size, ">(", to_unpacked_expression(op0), ", ",
+	             to_expression(builtin_subgroup_invocation_id_id), ")"),
+	        forward);
+	inherit_expression_dependencies(result_id, op0);
+}
+
+void CompilerMSL::emit_subgroup_cluster_op_cast(uint32_t result_type, uint32_t result_id, uint32_t cluster_size,
+                                                uint32_t op0, const char *op, SPIRType::BaseType input_type,
+                                                SPIRType::BaseType expected_result_type)
+{
+	if (get_execution_model() == ExecutionModelFragment && !msl_options.supports_msl_version(2, 2))
+	{
+		if (cluster_size == 4)
+		{
+			emit_unary_func_op_cast(result_type, result_id, op0, join("quad_", op).c_str(), input_type,
+			                        expected_result_type);
+			return;
+		}
+		SPIRV_CROSS_THROW("Cluster sizes other than 4 in fragment shaders require MSL 2.2.");
+	}
+
+	auto &out_type = get<SPIRType>(result_type);
+	auto &expr_type = expression_type(op0);
+	auto expected_type = out_type;
+
+	// Bit-widths might be different in unary cases because we use it for SConvert/UConvert and friends.
+	expected_type.basetype = input_type;
+	expected_type.width = expr_type.width;
+
+	string cast_op;
+	if (expr_type.basetype != input_type)
+	{
+		if (expr_type.basetype == SPIRType::Boolean)
+			cast_op = join(type_to_glsl(expected_type), "(", to_unpacked_expression(op0), ")");
+		else
+			cast_op = bitcast_glsl(expected_type, op0);
+	}
+	else
+		cast_op = to_unpacked_expression(op0);
+
+	string sg_op = join("spvClustered_", op, "<", cluster_size, ">");
+	string expr;
+	if (out_type.basetype != expected_result_type)
+	{
+		expected_type.basetype = expected_result_type;
+		expected_type.width = out_type.width;
+		if (out_type.basetype == SPIRType::Boolean)
+			expr = type_to_glsl(out_type);
+		else
+			expr = bitcast_glsl_op(out_type, expected_type);
+		expr += '(';
+		expr += join(sg_op, "(", cast_op, ", ", to_expression(builtin_subgroup_invocation_id_id), ")");
+		expr += ')';
+	}
+	else
+	{
+		expr += join(sg_op, "(", cast_op, ", ", to_expression(builtin_subgroup_invocation_id_id), ")");
+	}
+
+	emit_op(result_type, result_id, expr, should_forward(op0));
+	inherit_expression_dependencies(result_id, op0);
 }
 
 string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
@@ -18190,6 +18386,28 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 			else
 				needs_local_invocation_index = true;
 		}
+		break;
+
+	case OpGroupNonUniformFAdd:
+	case OpGroupNonUniformFMul:
+	case OpGroupNonUniformFMin:
+	case OpGroupNonUniformFMax:
+	case OpGroupNonUniformIAdd:
+	case OpGroupNonUniformIMul:
+	case OpGroupNonUniformSMin:
+	case OpGroupNonUniformSMax:
+	case OpGroupNonUniformUMin:
+	case OpGroupNonUniformUMax:
+	case OpGroupNonUniformBitwiseAnd:
+	case OpGroupNonUniformBitwiseOr:
+	case OpGroupNonUniformBitwiseXor:
+	case OpGroupNonUniformLogicalAnd:
+	case OpGroupNonUniformLogicalOr:
+	case OpGroupNonUniformLogicalXor:
+		if ((compiler.get_execution_model() != ExecutionModelFragment ||
+		     compiler.msl_options.supports_msl_version(2, 2)) &&
+		    args[3] == GroupOperationClusteredReduce)
+			needs_subgroup_invocation_id = true;
 		break;
 
 	case OpArrayLength:
