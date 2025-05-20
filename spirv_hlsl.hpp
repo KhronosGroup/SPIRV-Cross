@@ -286,6 +286,7 @@ private:
 	                        uint32_t base_offset = 0) override;
 	void emit_rayquery_function(const char *commited, const char *candidate, const uint32_t *ops);
 	void emit_mesh_tasks(SPIRBlock &block) override;
+	void emit_geometry_stream_append();
 
 	const char *to_storage_qualifiers_glsl(const SPIRVariable &var) override;
 	void replace_illegal_names() override;
@@ -295,6 +296,7 @@ private:
 	bool is_hlsl_force_storage_buffer_as_uav(ID id) const;
 
 	Options hlsl_options;
+	std::string geometry_stream = "triStream";
 
 	// TODO: Refactor this to be more similar to MSL, maybe have some common system in place?
 	bool requires_op_fmod = false;
