@@ -3655,7 +3655,8 @@ void CompilerGLSL::emit_resources()
 					                      id) != physical_storage_non_block_pointer_types.end();
 				}
 
-				if (emit_type){
+				if (emit_type)
+				{
 					emit_buffer_reference_block(id, true);
 					emitted = true;
 				}
@@ -3776,10 +3777,10 @@ void CompilerGLSL::emit_resources()
 
 	emitted = false;
 
-	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64EXT)
+	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
 	{
 		// Output buffer reference blocks.
-    // Buffer reference blocks can reference themselves to support things like linked lists.
+		// Buffer reference blocks can reference themselves to support things like linked lists.
 		for (auto type : physical_storage_non_block_pointer_types)
 			emit_buffer_reference_block(type, false);
 
