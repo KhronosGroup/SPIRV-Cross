@@ -9126,7 +9126,7 @@ void CompilerMSL::fix_up_interpolant_access_chain(const uint32_t *ops, uint32_t 
 
 // If the physical type of a physical buffer pointer has been changed
 // to a ulong or ulongn vector, add a cast back to the pointer type.
-void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type)
+bool CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *type, uint32_t physical_type)
 {
 	auto *p_physical_type = maybe_get<SPIRType>(physical_type);
 	if (p_physical_type &&
@@ -9137,7 +9137,10 @@ void CompilerMSL::check_physical_type_cast(std::string &expr, const SPIRType *ty
 			expr += ".x";
 
 		expr = join("((", type_to_glsl(*type), ")", expr, ")");
+		return true;
 	}
+
+	return false;
 }
 
 // Override for MSL-specific syntax instructions

@@ -1054,6 +1054,7 @@ protected:
 		std::unordered_set<uint32_t> non_block_types;
 		std::unordered_map<uint32_t, PhysicalBlockMeta> physical_block_type_meta;
 		std::unordered_map<uint32_t, PhysicalBlockMeta *> access_chain_to_physical_block;
+		std::unordered_set<uint32_t> analyzed_type_ids;
 
 		void mark_aligned_access(uint32_t id, const uint32_t *args, uint32_t length);
 		PhysicalBlockMeta *find_block_meta(uint32_t id) const;
