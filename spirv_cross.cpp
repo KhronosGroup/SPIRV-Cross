@@ -5298,6 +5298,10 @@ uint32_t Compiler::PhysicalStorageBufferPointerHandler::get_base_non_block_type_
 
 void Compiler::PhysicalStorageBufferPointerHandler::analyze_non_block_types_from_block(const SPIRType &type)
 {
+	if (analyzed_type_ids.count(type.self))
+		return;
+	analyzed_type_ids.insert(type.self);
+
 	for (auto &member : type.member_types)
 	{
 		auto &subtype = compiler.get<SPIRType>(member);
