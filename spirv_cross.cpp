@@ -82,7 +82,7 @@ bool Compiler::variable_storage_is_aliased(const SPIRVariable &v)
 	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
 	bool image = type.basetype == SPIRType::Image;
 	bool counter = type.basetype == SPIRType::AtomicCounter;
-	bool buffer_reference = type.storage == StorageClassPhysicalStorageBufferEXT;
+	bool buffer_reference = type.storage == StorageClassPhysicalStorageBuffer;
 
 	bool is_restrict;
 	if (ssbo)
@@ -484,7 +484,7 @@ void Compiler::register_write(uint32_t chain)
 			}
 		}
 
-		if (type.storage == StorageClassPhysicalStorageBufferEXT || variable_storage_is_aliased(*var))
+		if (type.storage == StorageClassPhysicalStorageBuffer || variable_storage_is_aliased(*var))
 			flush_all_aliased_variables();
 		else if (var)
 			flush_dependees(*var);
@@ -5194,7 +5194,7 @@ bool Compiler::PhysicalStorageBufferPointerHandler::type_is_bda_block_entry(uint
 
 uint32_t Compiler::PhysicalStorageBufferPointerHandler::get_minimum_scalar_alignment(const SPIRType &type) const
 {
-	if (type.storage == spv::StorageClassPhysicalStorageBufferEXT)
+	if (type.storage == spv::StorageClassPhysicalStorageBuffer)
 		return 8;
 	else if (type.basetype == SPIRType::Struct)
 	{

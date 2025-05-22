@@ -2,27 +2,25 @@
 #extension GL_EXT_buffer_reference2 : require
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
-layout(buffer_reference) buffer Blah;
 layout(buffer_reference) buffer Foo;
 
-layout(buffer_reference, buffer_reference_align = 8, std430) buffer Blah
+struct Bar
 {
-    Foo foo;
-    int a;
+    Foo f;
 };
 
-layout(buffer_reference, std430) buffer Foo
+layout(buffer_reference, buffer_reference_align = 16, std430) buffer Foo
 {
-    int b;
+    float v;
 };
 
 layout(push_constant, std430) uniform Registers
 {
-    Blah blah;
-} _61;
+    Bar bar;
+} _12;
 
 void main()
 {
-    _61.blah.a = 10;
+    _12.bar.f.v = 1.0;
 }
 
