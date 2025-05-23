@@ -1084,7 +1084,8 @@ protected:
 	bool validate_member_packing_rules_msl(const SPIRType &type, uint32_t index) const;
 	std::string get_argument_address_space(const SPIRVariable &argument);
 	std::string get_type_address_space(const SPIRType &type, uint32_t id, bool argument = false);
-	static bool decoration_flags_signal_volatile(const Bitset &flags);
+	bool decoration_flags_signal_volatile(const Bitset &flags) const;
+	bool decoration_flags_signal_coherent(const Bitset &flags) const;
 	const char *to_restrict(uint32_t id, bool space);
 	SPIRType &get_stage_in_struct_type();
 	SPIRType &get_stage_out_struct_type();
