@@ -9845,7 +9845,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		// In GLSL a memory barrier is often followed by a control barrier.
 		// But in MSL, memory barriers are also control barriers (before MSL 3.2), so don't
 		// emit a simple control barrier if a memory barrier has just been emitted.
-		if (previous_instruction_opcode != OpMemoryBarrier && !msl_options.supports_msl_version(3, 2))
+		if (previous_instruction_opcode != OpMemoryBarrier || msl_options.supports_msl_version(3, 2))
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
 
@@ -10509,6 +10509,16 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 
 	if (!id_exe_scope && msl_options.supports_msl_version(3, 2))
 	{
+		// If there's no device-related memory in the barrier, demote to workgroup scope.
+		// glslang seems to emit device scope even for memoryBarrierShared().
+		if (mem_scope == ScopeDevice &&
+		    (mem_sem & (MemorySemanticsUniformMemoryMask |
+		                MemorySemanticsImageMemoryMask |
+		                MemorySemanticsCrossWorkgroupMemoryMask)) == 0)
+		{
+			mem_scope = ScopeWorkgroup;
+		}
+
 		// MSL 3.2 only supports seq_cst or relaxed.
 		if (mem_sem & (MemorySemanticsAcquireReleaseMask |
 		               MemorySemanticsAcquireMask |
