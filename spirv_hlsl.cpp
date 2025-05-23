@@ -3127,7 +3127,8 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 			var->parameter = &arg;
 	}
 
-	if (func.self == ir.default_entry_point && get_entry_point().model == ExecutionModelGeometry)
+	if ((func.self == ir.default_entry_point || func.emits_geometry) &&
+	    get_entry_point().model == ExecutionModelGeometry)
 	{
 		uint32_t input_vertices = 1;
 		auto &execution = get_entry_point();
@@ -3140,7 +3141,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		else if (execution.flags.get(ExecutionModeTriangles))
 			input_vertices = 3;
 
-		string prim;
+		const char *prim;
 		if (execution.flags.get(ExecutionModeInputLinesAdjacency))
 			prim = "lineadj";
 		else if (execution.flags.get(ExecutionModeInputLines))
@@ -3152,7 +3153,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		else
 			prim = "point";
 
-		string stream_type;
+		const char *stream_type;
 		if (execution.flags.get(ExecutionModeOutputPoints))
 			stream_type = "PointStream";
 		else if (execution.flags.get(ExecutionModeOutputLineStrip))
@@ -3160,7 +3161,8 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		else
 			stream_type = "TriangleStream";
 
-		arglist.push_back(join(prim, " SPIRV_Cross_Input stage_input[", input_vertices, "]"));
+		if (func.self == ir.default_entry_point)
+			arglist.push_back(join(prim, " SPIRV_Cross_Input stage_input[", input_vertices, "]"));
 		arglist.push_back(join("inout ", stream_type, "<SPIRV_Cross_Output> ", geometry_stream));
 	}
 
