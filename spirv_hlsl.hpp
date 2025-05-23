@@ -231,6 +231,7 @@ private:
 	std::string image_type_hlsl(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_modern(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_legacy(const SPIRType &type, uint32_t id);
+	uint32_t input_vertices_from_execution_mode(spirv_cross::SPIREntryPoint& execution) const;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;

@@ -3029,6 +3029,25 @@ string CompilerHLSL::get_inner_entry_point_name() const
 		SPIRV_CROSS_THROW("Unsupported execution model.");
 }
 
+uint32_t CompilerHLSL::input_vertices_from_execution_mode(spirv_cross::SPIREntryPoint &execution) const
+{
+	uint32_t input_vertices = 1;
+
+	if (execution.flags.get(ExecutionModeInputLines))
+		input_vertices = 2;
+	else if (execution.flags.get(ExecutionModeInputLinesAdjacency))
+		input_vertices = 4;
+	else if (execution.flags.get(ExecutionModeInputTrianglesAdjacency))
+		input_vertices = 6;
+	else if (execution.flags.get(ExecutionModeTriangles))
+		input_vertices = 3;
+	else if (execution.flags.get(ExecutionModeInputPoints))
+		input_vertices = 1;
+	else
+		SPIRV_CROSS_THROW("Unsupported execution model.");
+	return input_vertices;
+}
+
 void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &return_flags)
 {
 	if (func.self != ir.default_entry_point)
@@ -3125,16 +3144,9 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	if ((func.self == ir.default_entry_point || func.emits_geometry) &&
 	    get_entry_point().model == ExecutionModelGeometry)
 	{
-		uint32_t input_vertices = 1;
 		auto &execution = get_entry_point();
-		if (execution.flags.get(ExecutionModeInputLines))
-			input_vertices = 2;
-		else if (execution.flags.get(ExecutionModeInputLinesAdjacency))
-			input_vertices = 4;
-		else if (execution.flags.get(ExecutionModeInputTrianglesAdjacency))
-			input_vertices = 6;
-		else if (execution.flags.get(ExecutionModeTriangles))
-			input_vertices = 3;
+
+		uint32_t input_vertices = input_vertices_from_execution_mode(execution);
 
 		const char *prim;
 		if (execution.flags.get(ExecutionModeInputLinesAdjacency))
@@ -3181,14 +3193,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	{
 	case ExecutionModelGeometry:
 	{
-		if (execution.flags.get(ExecutionModeInputLines))
-			input_vertices = 2;
-		else if (execution.flags.get(ExecutionModeInputLinesAdjacency))
-			input_vertices = 4;
-		else if (execution.flags.get(ExecutionModeInputTrianglesAdjacency))
-			input_vertices = 6;
-		else if (execution.flags.get(ExecutionModeTriangles))
-			input_vertices = 3;
+		input_vertices = input_vertices_from_execution_mode(execution);
 
 		string prim;
 		if (execution.flags.get(ExecutionModeInputLinesAdjacency))
