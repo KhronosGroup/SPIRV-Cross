@@ -1832,11 +1832,11 @@ void CompilerHLSL::emit_resources()
 		statement("");
 	}
 
-        const bool is_mesh_shader = execution.model == ExecutionModelMeshEXT;
-        if (!output_variables.empty() || !active_output_builtins.empty())
-        {
-                sort(output_variables.begin(), output_variables.end(), variable_compare);
-                require_output = !(is_mesh_shader || execution.model == ExecutionModelGeometry);
+	const bool is_mesh_shader = execution.model == ExecutionModelMeshEXT;
+	if (!output_variables.empty() || !active_output_builtins.empty())
+	{
+		sort(output_variables.begin(), output_variables.end(), variable_compare);
+		require_output = !is_mesh_shader;
 
 		statement(is_mesh_shader ? "struct gl_MeshPerVertexEXT" : "struct SPIRV_Cross_Output");
 		begin_scope();
@@ -2791,18 +2791,13 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 
 		std::string type_name;
 		if (is_user_type_structured(var.self))
-			type_name = join(is_readonly    ? "" :
-			                 is_interlocked ? "RasterizerOrdered" :
-			                                  "RW",
-			                 "StructuredBuffer<", to_structuredbuffer_subtype_name(type), ">");
+			type_name = join(is_readonly ? "" : is_interlocked ? "RasterizerOrdered" : "RW", "StructuredBuffer<", to_structuredbuffer_subtype_name(type), ">");
 		else
-			type_name = is_readonly    ? "ByteAddressBuffer" :
-			            is_interlocked ? "RasterizerOrderedByteAddressBuffer" :
-			                             "RWByteAddressBuffer";
+			type_name = is_readonly ? "ByteAddressBuffer" : is_interlocked ? "RasterizerOrderedByteAddressBuffer" : "RWByteAddressBuffer";
 
 		add_resource_name(var.self);
-		statement(is_coherent ? "globallycoherent " : "", type_name, " ", to_name(var.self),
-		          type_to_array_glsl(type, var.self), to_resource_binding(var), ";");
+		statement(is_coherent ? "globallycoherent " : "", type_name, " ", to_name(var.self), type_to_array_glsl(type, var.self),
+		          to_resource_binding(var), ";");
 	}
 	else
 	{
@@ -2888,8 +2883,8 @@ void CompilerHLSL::emit_buffer_block(const SPIRVariable &var)
 			}
 
 			emit_struct(get<SPIRType>(type.self));
-			statement("ConstantBuffer<", to_name(type.self), "> ", to_name(var.self),
-			          type_to_array_glsl(type, var.self), to_resource_binding(var), ";");
+			statement("ConstantBuffer<", to_name(type.self), "> ", to_name(var.self), type_to_array_glsl(type, var.self),
+			          to_resource_binding(var), ";");
 		}
 	}
 }
@@ -3324,241 +3319,218 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	bool legacy = hlsl_options.shader_model <= 30;
 
 	// Copy builtins from entry point arguments to globals.
-	active_input_builtins.for_each_bit(
-	    [&](uint32_t i)
-	    {
-		    auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
-		    switch (static_cast<BuiltIn>(i))
-		    {
-		    case BuiltInFragCoord:
-			    // VPOS in D3D9 is sampled at integer locations, apply half-pixel offset to be consistent.
-			    // TODO: Do we need an option here? Any reason why a D3D9 shader would be used
-			    // on a D3D10+ system with a different rasterization config?
-			    if (legacy)
-				    statement(builtin, " = stage_input.", builtin, " + float4(0.5f, 0.5f, 0.0f, 0.0f);");
-			    else
-			    {
-				    statement(builtin, " = stage_input.", builtin, ";");
-				    // ZW are undefined in D3D9, only do this fixup here.
-				    statement(builtin, ".w = 1.0 / ", builtin, ".w;");
-			    }
-			    break;
+	active_input_builtins.for_each_bit([&](uint32_t i) {
+		auto builtin = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassInput);
+		switch (static_cast<BuiltIn>(i))
+		{
+		case BuiltInFragCoord:
+			// VPOS in D3D9 is sampled at integer locations, apply half-pixel offset to be consistent.
+			// TODO: Do we need an option here? Any reason why a D3D9 shader would be used
+			// on a D3D10+ system with a different rasterization config?
+			if (legacy)
+				statement(builtin, " = stage_input.", builtin, " + float4(0.5f, 0.5f, 0.0f, 0.0f);");
+			else
+			{
+				statement(builtin, " = stage_input.", builtin, ";");
+				// ZW are undefined in D3D9, only do this fixup here.
+				statement(builtin, ".w = 1.0 / ", builtin, ".w;");
+			}
+			break;
 
-		    case BuiltInVertexId:
-		    case BuiltInVertexIndex:
-		    case BuiltInInstanceIndex:
-			    // D3D semantics are uint, but shader wants int.
-			    if (hlsl_options.support_nonzero_base_vertex_base_instance || hlsl_options.shader_model >= 68)
-			    {
-				    if (hlsl_options.shader_model >= 68)
-				    {
-					    if (static_cast<BuiltIn>(i) == BuiltInInstanceIndex)
-						    statement(builtin, " = int(stage_input.", builtin, " + stage_input.gl_BaseInstanceARB);");
-					    else
-						    statement(builtin, " = int(stage_input.", builtin, " + stage_input.gl_BaseVertexARB);");
-				    }
-				    else
-				    {
-					    if (static_cast<BuiltIn>(i) == BuiltInInstanceIndex)
-						    statement(builtin, " = int(stage_input.", builtin, ") + SPIRV_Cross_BaseInstance;");
-					    else
-						    statement(builtin, " = int(stage_input.", builtin, ") + SPIRV_Cross_BaseVertex;");
-				    }
-			    }
-			    else
-				    statement(builtin, " = int(stage_input.", builtin, ");");
-			    break;
+		case BuiltInVertexId:
+		case BuiltInVertexIndex:
+		case BuiltInInstanceIndex:
+			// D3D semantics are uint, but shader wants int.
+			if (hlsl_options.support_nonzero_base_vertex_base_instance || hlsl_options.shader_model >= 68)
+			{
+				if (hlsl_options.shader_model >= 68)
+				{
+					if (static_cast<BuiltIn>(i) == BuiltInInstanceIndex)
+						statement(builtin, " = int(stage_input.", builtin, " + stage_input.gl_BaseInstanceARB);");
+					else
+						statement(builtin, " = int(stage_input.", builtin, " + stage_input.gl_BaseVertexARB);");
+				}
+				else
+				{
+					if (static_cast<BuiltIn>(i) == BuiltInInstanceIndex)
+						statement(builtin, " = int(stage_input.", builtin, ") + SPIRV_Cross_BaseInstance;");
+					else
+						statement(builtin, " = int(stage_input.", builtin, ") + SPIRV_Cross_BaseVertex;");
+				}
+			}
+			else
+				statement(builtin, " = int(stage_input.", builtin, ");");
+			break;
 
-		    case BuiltInBaseVertex:
-			    if (hlsl_options.shader_model >= 68)
-				    statement(builtin, " = stage_input.gl_BaseVertexARB;");
-			    else
-				    statement(builtin, " = SPIRV_Cross_BaseVertex;");
-			    break;
+		case BuiltInBaseVertex:
+			if (hlsl_options.shader_model >= 68)
+				statement(builtin, " = stage_input.gl_BaseVertexARB;");
+			else
+				statement(builtin, " = SPIRV_Cross_BaseVertex;");
+			break;
 
-		    case BuiltInBaseInstance:
-			    if (hlsl_options.shader_model >= 68)
-				    statement(builtin, " = stage_input.gl_BaseInstanceARB;");
-			    else
-				    statement(builtin, " = SPIRV_Cross_BaseInstance;");
-			    break;
+		case BuiltInBaseInstance:
+			if (hlsl_options.shader_model >= 68)
+				statement(builtin, " = stage_input.gl_BaseInstanceARB;");
+			else
+				statement(builtin, " = SPIRV_Cross_BaseInstance;");
+			break;
 
-		    case BuiltInInstanceId:
-			    // D3D semantics are uint, but shader wants int.
-			    statement(builtin, " = int(stage_input.", builtin, ");");
-			    break;
+		case BuiltInInstanceId:
+			// D3D semantics are uint, but shader wants int.
+			statement(builtin, " = int(stage_input.", builtin, ");");
+			break;
 
-		    case BuiltInSampleMask:
-			    statement(builtin, "[0] = stage_input.", builtin, ";");
-			    break;
+		case BuiltInSampleMask:
+			statement(builtin, "[0] = stage_input.", builtin, ";");
+			break;
 
-		    case BuiltInNumWorkgroups:
-		    case BuiltInPointCoord:
-		    case BuiltInSubgroupSize:
-		    case BuiltInSubgroupLocalInvocationId:
-		    case BuiltInHelperInvocation:
-			    break;
+		case BuiltInNumWorkgroups:
+		case BuiltInPointCoord:
+		case BuiltInSubgroupSize:
+		case BuiltInSubgroupLocalInvocationId:
+		case BuiltInHelperInvocation:
+			break;
 
-		    case BuiltInSubgroupEqMask:
-			    // Emulate these ...
-			    // No 64-bit in HLSL, so have to do it in 32-bit and unroll.
-			    statement("gl_SubgroupEqMask = 1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96));");
-			    statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupEqMask.x = 0;");
-			    statement("if (WaveGetLaneIndex() >= 64 || WaveGetLaneIndex() < 32) gl_SubgroupEqMask.y = 0;");
-			    statement("if (WaveGetLaneIndex() >= 96 || WaveGetLaneIndex() < 64) gl_SubgroupEqMask.z = 0;");
-			    statement("if (WaveGetLaneIndex() < 96) gl_SubgroupEqMask.w = 0;");
-			    break;
+		case BuiltInSubgroupEqMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("gl_SubgroupEqMask = 1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96));");
+			statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupEqMask.x = 0;");
+			statement("if (WaveGetLaneIndex() >= 64 || WaveGetLaneIndex() < 32) gl_SubgroupEqMask.y = 0;");
+			statement("if (WaveGetLaneIndex() >= 96 || WaveGetLaneIndex() < 64) gl_SubgroupEqMask.z = 0;");
+			statement("if (WaveGetLaneIndex() < 96) gl_SubgroupEqMask.w = 0;");
+			break;
 
-		    case BuiltInSubgroupGeMask:
-			    // Emulate these ...
-			    // No 64-bit in HLSL, so have to do it in 32-bit and unroll.
-			    statement("gl_SubgroupGeMask = ~((1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96))) - 1u);");
-			    statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupGeMask.x = 0u;");
-			    statement("if (WaveGetLaneIndex() >= 64) gl_SubgroupGeMask.y = 0u;");
-			    statement("if (WaveGetLaneIndex() >= 96) gl_SubgroupGeMask.z = 0u;");
-			    statement("if (WaveGetLaneIndex() < 32) gl_SubgroupGeMask.y = ~0u;");
-			    statement("if (WaveGetLaneIndex() < 64) gl_SubgroupGeMask.z = ~0u;");
-			    statement("if (WaveGetLaneIndex() < 96) gl_SubgroupGeMask.w = ~0u;");
-			    break;
+		case BuiltInSubgroupGeMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("gl_SubgroupGeMask = ~((1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96))) - 1u);");
+			statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupGeMask.x = 0u;");
+			statement("if (WaveGetLaneIndex() >= 64) gl_SubgroupGeMask.y = 0u;");
+			statement("if (WaveGetLaneIndex() >= 96) gl_SubgroupGeMask.z = 0u;");
+			statement("if (WaveGetLaneIndex() < 32) gl_SubgroupGeMask.y = ~0u;");
+			statement("if (WaveGetLaneIndex() < 64) gl_SubgroupGeMask.z = ~0u;");
+			statement("if (WaveGetLaneIndex() < 96) gl_SubgroupGeMask.w = ~0u;");
+			break;
 
-		    case BuiltInSubgroupGtMask:
-			    // Emulate these ...
-			    // No 64-bit in HLSL, so have to do it in 32-bit and unroll.
-			    statement("uint gt_lane_index = WaveGetLaneIndex() + 1;");
-			    statement("gl_SubgroupGtMask = ~((1u << (gt_lane_index - uint4(0, 32, 64, 96))) - 1u);");
-			    statement("if (gt_lane_index >= 32) gl_SubgroupGtMask.x = 0u;");
-			    statement("if (gt_lane_index >= 64) gl_SubgroupGtMask.y = 0u;");
-			    statement("if (gt_lane_index >= 96) gl_SubgroupGtMask.z = 0u;");
-			    statement("if (gt_lane_index >= 128) gl_SubgroupGtMask.w = 0u;");
-			    statement("if (gt_lane_index < 32) gl_SubgroupGtMask.y = ~0u;");
-			    statement("if (gt_lane_index < 64) gl_SubgroupGtMask.z = ~0u;");
-			    statement("if (gt_lane_index < 96) gl_SubgroupGtMask.w = ~0u;");
-			    break;
+		case BuiltInSubgroupGtMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("uint gt_lane_index = WaveGetLaneIndex() + 1;");
+			statement("gl_SubgroupGtMask = ~((1u << (gt_lane_index - uint4(0, 32, 64, 96))) - 1u);");
+			statement("if (gt_lane_index >= 32) gl_SubgroupGtMask.x = 0u;");
+			statement("if (gt_lane_index >= 64) gl_SubgroupGtMask.y = 0u;");
+			statement("if (gt_lane_index >= 96) gl_SubgroupGtMask.z = 0u;");
+			statement("if (gt_lane_index >= 128) gl_SubgroupGtMask.w = 0u;");
+			statement("if (gt_lane_index < 32) gl_SubgroupGtMask.y = ~0u;");
+			statement("if (gt_lane_index < 64) gl_SubgroupGtMask.z = ~0u;");
+			statement("if (gt_lane_index < 96) gl_SubgroupGtMask.w = ~0u;");
+			break;
 
-		    case BuiltInSubgroupLeMask:
-			    // Emulate these ...
-			    // No 64-bit in HLSL, so have to do it in 32-bit and unroll.
-			    statement("uint le_lane_index = WaveGetLaneIndex() + 1;");
-			    statement("gl_SubgroupLeMask = (1u << (le_lane_index - uint4(0, 32, 64, 96))) - 1u;");
-			    statement("if (le_lane_index >= 32) gl_SubgroupLeMask.x = ~0u;");
-			    statement("if (le_lane_index >= 64) gl_SubgroupLeMask.y = ~0u;");
-			    statement("if (le_lane_index >= 96) gl_SubgroupLeMask.z = ~0u;");
-			    statement("if (le_lane_index >= 128) gl_SubgroupLeMask.w = ~0u;");
-			    statement("if (le_lane_index < 32) gl_SubgroupLeMask.y = 0u;");
-			    statement("if (le_lane_index < 64) gl_SubgroupLeMask.z = 0u;");
-			    statement("if (le_lane_index < 96) gl_SubgroupLeMask.w = 0u;");
-			    break;
+		case BuiltInSubgroupLeMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("uint le_lane_index = WaveGetLaneIndex() + 1;");
+			statement("gl_SubgroupLeMask = (1u << (le_lane_index - uint4(0, 32, 64, 96))) - 1u;");
+			statement("if (le_lane_index >= 32) gl_SubgroupLeMask.x = ~0u;");
+			statement("if (le_lane_index >= 64) gl_SubgroupLeMask.y = ~0u;");
+			statement("if (le_lane_index >= 96) gl_SubgroupLeMask.z = ~0u;");
+			statement("if (le_lane_index >= 128) gl_SubgroupLeMask.w = ~0u;");
+			statement("if (le_lane_index < 32) gl_SubgroupLeMask.y = 0u;");
+			statement("if (le_lane_index < 64) gl_SubgroupLeMask.z = 0u;");
+			statement("if (le_lane_index < 96) gl_SubgroupLeMask.w = 0u;");
+			break;
 
-		    case BuiltInSubgroupLtMask:
-			    // Emulate these ...
-			    // No 64-bit in HLSL, so have to do it in 32-bit and unroll.
-			    statement("gl_SubgroupLtMask = (1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96))) - 1u;");
-			    statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupLtMask.x = ~0u;");
-			    statement("if (WaveGetLaneIndex() >= 64) gl_SubgroupLtMask.y = ~0u;");
-			    statement("if (WaveGetLaneIndex() >= 96) gl_SubgroupLtMask.z = ~0u;");
-			    statement("if (WaveGetLaneIndex() < 32) gl_SubgroupLtMask.y = 0u;");
-			    statement("if (WaveGetLaneIndex() < 64) gl_SubgroupLtMask.z = 0u;");
-			    statement("if (WaveGetLaneIndex() < 96) gl_SubgroupLtMask.w = 0u;");
-			    break;
+		case BuiltInSubgroupLtMask:
+			// Emulate these ...
+			// No 64-bit in HLSL, so have to do it in 32-bit and unroll.
+			statement("gl_SubgroupLtMask = (1u << (WaveGetLaneIndex() - uint4(0, 32, 64, 96))) - 1u;");
+			statement("if (WaveGetLaneIndex() >= 32) gl_SubgroupLtMask.x = ~0u;");
+			statement("if (WaveGetLaneIndex() >= 64) gl_SubgroupLtMask.y = ~0u;");
+			statement("if (WaveGetLaneIndex() >= 96) gl_SubgroupLtMask.z = ~0u;");
+			statement("if (WaveGetLaneIndex() < 32) gl_SubgroupLtMask.y = 0u;");
+			statement("if (WaveGetLaneIndex() < 64) gl_SubgroupLtMask.z = 0u;");
+			statement("if (WaveGetLaneIndex() < 96) gl_SubgroupLtMask.w = 0u;");
+			break;
 
-		    case BuiltInClipDistance:
-			    for (uint32_t clip = 0; clip < clip_distance_count; clip++)
-				    statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".",
-				              "xyzw"[clip & 3], ";");
-			    break;
+		case BuiltInClipDistance:
+			for (uint32_t clip = 0; clip < clip_distance_count; clip++)
+				statement("gl_ClipDistance[", clip, "] = stage_input.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3],
+				          ";");
+			break;
 
-		    case BuiltInCullDistance:
-			    for (uint32_t cull = 0; cull < cull_distance_count; cull++)
-				    statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".",
-				              "xyzw"[cull & 3], ";");
-			    break;
+		case BuiltInCullDistance:
+			for (uint32_t cull = 0; cull < cull_distance_count; cull++)
+				statement("gl_CullDistance[", cull, "] = stage_input.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3],
+				          ";");
+			break;
 
-		    default:
-			    statement(builtin, " = stage_input.", builtin, ";");
-			    break;
-		    }
-	    });
+		default:
+			statement(builtin, " = stage_input.", builtin, ";");
+			break;
+		}
+	});
 
 	// Copy from stage input struct to globals.
-	ir.for_each_typed_id<SPIRVariable>(
-	    [&](uint32_t, SPIRVariable &var)
-	    {
-		    auto &type = this->get<SPIRType>(var.basetype);
-		    bool block = has_decoration(type.self, DecorationBlock);
+	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+		auto &type = this->get<SPIRType>(var.basetype);
+		bool block = has_decoration(type.self, DecorationBlock);
 
-		    if (var.storage != StorageClassInput)
-			    return;
+		if (var.storage != StorageClassInput)
+			return;
 
-		    bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
+		bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
 
-		    if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-		        interface_variable_exists_in_entry_point(var.self))
-		    {
-			    if (block)
-			    {
-				    auto type_name = to_name(type.self);
-				    auto var_name = to_name(var.self);
-				    bool is_per_vertex = has_decoration(var.self, DecorationPerVertexKHR);
-				    uint32_t array_size = is_per_vertex ? to_array_size_literal(type) : 0;
+		if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
+		    interface_variable_exists_in_entry_point(var.self))
+		{
+			if (block)
+			{
+				auto type_name = to_name(type.self);
+				auto var_name = to_name(var.self);
+				bool is_per_vertex = has_decoration(var.self, DecorationPerVertexKHR);
+				uint32_t array_size = is_per_vertex ? to_array_size_literal(type) : 0;
 
-				    for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(type.member_types.size()); mbr_idx++)
-				    {
-					    auto mbr_name = to_member_name(type, mbr_idx);
-					    auto flat_name = join(type_name, "_", mbr_name);
+				for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(type.member_types.size()); mbr_idx++)
+				{
+					auto mbr_name = to_member_name(type, mbr_idx);
+					auto flat_name = join(type_name, "_", mbr_name);
 
-					    if (is_per_vertex)
-					    {
-						    for (uint32_t i = 0; i < array_size; i++)
-						    {
-							    if (execution.model == ExecutionModelGeometry)
-								    statement(var_name, "[", i, "].", mbr_name, " = stage_input[", i, "].", flat_name,
-								              ";");
-							    else
-								    statement(var_name, "[", i, "].", mbr_name, " = GetAttributeAtVertex(stage_input.",
-								              flat_name, ", ", i, ");");
-						    }
-					    }
-					    else
-					    {
-						    statement(var_name, ".", mbr_name, " = stage_input.", flat_name, ";");
-					    }
-				    }
-			    }
-			    else
-			    {
-				    auto name = to_name(var.self);
-				    auto &mtype = this->get<SPIRType>(var.basetype);
-				    if (need_matrix_unroll && mtype.columns > 1)
-				    {
-					    // Unroll matrices.
-					    for (uint32_t col = 0; col < mtype.columns; col++)
-						    statement(name, "[", col, "] = stage_input.", name, "_", col, ";");
-				    }
-				    else if (has_decoration(var.self, DecorationPerVertexKHR))
-				    {
-					    uint32_t array_size = to_array_size_literal(type);
-					    for (uint32_t i = 0; i < array_size; i++)
-					    {
-						    if (execution.model == ExecutionModelGeometry)
-							    statement(name, "[", i, "] = stage_input[", i, "].", name, ";");
-						    else
-							    statement(name, "[", i, "]", " = GetAttributeAtVertex(stage_input.", name, ", ", i,
-							              ");");
-					    }
-				    }
-				    else
-				    {
-					    if (execution.model == ExecutionModelGeometry)
-					    {
-						    statement("for(int i = 0; i < ", input_vertices, "; i++)");
-						    statement(name, "[i] = stage_input[i].", name, ";");
-					    }
-					    else
-						    statement(name, " = stage_input.", name, ";");
-				    }
-			    }
-		    }
-	    });
+					if (is_per_vertex)
+					{
+						for (uint32_t i = 0; i < array_size; i++)
+							statement(var_name, "[", i, "].", mbr_name, " = GetAttributeAtVertex(stage_input.", flat_name, ", ", i, ");");
+					}
+					else
+					{
+						statement(var_name, ".", mbr_name, " = stage_input.", flat_name, ";");
+					}
+				}
+			}
+			else
+			{
+				auto name = to_name(var.self);
+				auto &mtype = this->get<SPIRType>(var.basetype);
+				if (need_matrix_unroll && mtype.columns > 1)
+				{
+					// Unroll matrices.
+					for (uint32_t col = 0; col < mtype.columns; col++)
+						statement(name, "[", col, "] = stage_input.", name, "_", col, ";");
+				}
+				else if (has_decoration(var.self, DecorationPerVertexKHR))
+				{
+					uint32_t array_size = to_array_size_literal(type);
+					for (uint32_t i = 0; i < array_size; i++)
+						statement(name, "[", i, "]", " = GetAttributeAtVertex(stage_input.", name, ", ", i, ");");
+				}
+				else
+				{
+					statement(name, " = stage_input.", name, ";");
+				}
+			}
+		}
+	});
 
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex || execution.model == ExecutionModelFragment ||
@@ -3592,83 +3564,80 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		statement("SPIRV_Cross_Output stage_output;");
 
 		// Copy builtins from globals to return struct.
-		active_output_builtins.for_each_bit(
-		    [&](uint32_t i)
-		    {
-			    // PointSize doesn't exist in HLSL SM 4+.
-			    if (i == BuiltInPointSize && !legacy)
-				    return;
+		active_output_builtins.for_each_bit([&](uint32_t i) {
+			// PointSize doesn't exist in HLSL SM 4+.
+			if (i == BuiltInPointSize && !legacy)
+				return;
 
-			    switch (static_cast<BuiltIn>(i))
-			    {
-			    case BuiltInClipDistance:
-				    for (uint32_t clip = 0; clip < clip_distance_count; clip++)
-					    statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3],
-					              " = gl_ClipDistance[", clip, "];");
-				    break;
+			switch (static_cast<BuiltIn>(i))
+			{
+			case BuiltInClipDistance:
+				for (uint32_t clip = 0; clip < clip_distance_count; clip++)
+					statement("stage_output.gl_ClipDistance", clip / 4, ".", "xyzw"[clip & 3], " = gl_ClipDistance[",
+					          clip, "];");
+				break;
 
-			    case BuiltInCullDistance:
-				    for (uint32_t cull = 0; cull < cull_distance_count; cull++)
-					    statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3],
-					              " = gl_CullDistance[", cull, "];");
-				    break;
+			case BuiltInCullDistance:
+				for (uint32_t cull = 0; cull < cull_distance_count; cull++)
+					statement("stage_output.gl_CullDistance", cull / 4, ".", "xyzw"[cull & 3], " = gl_CullDistance[",
+					          cull, "];");
+				break;
 
-			    case BuiltInSampleMask:
-				    statement("stage_output.gl_SampleMask = gl_SampleMask[0];");
-				    break;
+			case BuiltInSampleMask:
+				statement("stage_output.gl_SampleMask = gl_SampleMask[0];");
+				break;
 
-			    default:
-			    {
-				    auto builtin_expr = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassOutput);
-				    statement("stage_output.", builtin_expr, " = ", builtin_expr, ";");
-				    break;
-			    }
-			    }
-		    });
+			default:
+			{
+				auto builtin_expr = builtin_to_glsl(static_cast<BuiltIn>(i), StorageClassOutput);
+				statement("stage_output.", builtin_expr, " = ", builtin_expr, ";");
+				break;
+			}
+			}
+		});
 
-		ir.for_each_typed_id<SPIRVariable>(
-		    [&](uint32_t, SPIRVariable &var)
-		    {
-			    auto &type = this->get<SPIRType>(var.basetype);
-			    bool block = has_decoration(type.self, DecorationBlock);
+		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
+			auto &type = this->get<SPIRType>(var.basetype);
+			bool block = has_decoration(type.self, DecorationBlock);
 
-			    if (var.storage != StorageClassOutput)
-				    return;
+			if (var.storage != StorageClassOutput)
+				return;
 
-			    if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-			        interface_variable_exists_in_entry_point(var.self))
-			    {
-				    if (block)
-				    {
-					    // I/O blocks need to flatten output.
-					    auto type_name = to_name(type.self);
-					    auto var_name = to_name(var.self);
-					    for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(type.member_types.size()); mbr_idx++)
-					    {
-						    auto mbr_name = to_member_name(type, mbr_idx);
-						    auto flat_name = join(type_name, "_", mbr_name);
-						    statement("stage_output.", flat_name, " = ", var_name, ".", mbr_name, ";");
-					    }
-				    }
-				    else
-				    {
-					    auto name = to_name(var.self);
+			if (!var.remapped_variable && type.pointer &&
+			    !is_builtin_variable(var) &&
+			    interface_variable_exists_in_entry_point(var.self))
+			{
+				if (block)
+				{
+					// I/O blocks need to flatten output.
+					auto type_name = to_name(type.self);
+					auto var_name = to_name(var.self);
+					for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(type.member_types.size()); mbr_idx++)
+					{
+						auto mbr_name = to_member_name(type, mbr_idx);
+						auto flat_name = join(type_name, "_", mbr_name);
+						statement("stage_output.", flat_name, " = ", var_name, ".", mbr_name, ";");
+					}
+				}
+				else
+				{
+					auto name = to_name(var.self);
 
-					    if (legacy && execution.model == ExecutionModelFragment)
-					    {
-						    string output_filler;
-						    for (uint32_t size = type.vecsize; size < 4; ++size)
-							    output_filler += ", 0.0";
+					if (legacy && execution.model == ExecutionModelFragment)
+					{
+						string output_filler;
+						for (uint32_t size = type.vecsize; size < 4; ++size)
+							output_filler += ", 0.0";
 
-						    statement("stage_output.", name, " = float4(", name, output_filler, ");");
-					    }
-					    else
-					    {
-						    statement("stage_output.", name, " = ", name, ";");
-					    }
-				    }
-			    }
-		    });
+						statement("stage_output.", name, " = float4(", name, output_filler, ");");
+					}
+					else
+					{
+						statement("stage_output.", name, " = ", name, ";");
+					}
+				}
+			}
+		});
 
 		statement("return stage_output;");
 	}
