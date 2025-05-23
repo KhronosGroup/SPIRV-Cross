@@ -9843,9 +9843,9 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpControlBarrier:
 		// In GLSL a memory barrier is often followed by a control barrier.
-		// But in MSL, memory barriers are also control barriers, so don't
+		// But in MSL, memory barriers are also control barriers (before MSL 3.2), so don't
 		// emit a simple control barrier if a memory barrier has just been emitted.
-		if (previous_instruction_opcode != OpMemoryBarrier)
+		if (previous_instruction_opcode != OpMemoryBarrier || msl_options.supports_msl_version(3, 2))
 			emit_barrier(ops[0], ops[1], ops[2]);
 		break;
 
@@ -10444,10 +10444,20 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 		return;
 
 	string bar_stmt;
-	if ((msl_options.is_ios() && msl_options.supports_msl_version(1, 2)) || msl_options.supports_msl_version(2))
-		bar_stmt = exe_scope < ScopeSubgroup ? "threadgroup_barrier" : "simdgroup_barrier";
+
+	if (!id_exe_scope && msl_options.supports_msl_version(3, 2))
+	{
+		// Just took 10 years to get a proper barrier, but hey!
+		bar_stmt = "atomic_thread_fence";
+	}
 	else
-		bar_stmt = "threadgroup_barrier";
+	{
+		if ((msl_options.is_ios() && msl_options.supports_msl_version(1, 2)) || msl_options.supports_msl_version(2))
+			bar_stmt = exe_scope < ScopeSubgroup ? "threadgroup_barrier" : "simdgroup_barrier";
+		else
+			bar_stmt = "threadgroup_barrier";
+	}
+
 	bar_stmt += "(";
 
 	uint32_t mem_sem = id_mem_sem ? evaluate_constant_u32(id_mem_sem) : uint32_t(MemorySemanticsMaskNone);
@@ -10455,7 +10465,8 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 	// Use the | operator to combine flags if we can.
 	if (msl_options.supports_msl_version(1, 2))
 	{
-		string mem_flags = "";
+		string mem_flags;
+
 		// For tesc shaders, this also affects objects in the Output storage class.
 		// Since in Metal, these are placed in a device buffer, we have to sync device memory here.
 		if (is_tesc_shader() ||
@@ -10494,6 +10505,55 @@ void CompilerMSL::emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uin
 			bar_stmt += "mem_flags::mem_texture";
 		else
 			bar_stmt += "mem_flags::mem_none";
+	}
+
+	if (!id_exe_scope && msl_options.supports_msl_version(3, 2))
+	{
+		// If there's no device-related memory in the barrier, demote to workgroup scope.
+		// glslang seems to emit device scope even for memoryBarrierShared().
+		if (mem_scope == ScopeDevice &&
+		    (mem_sem & (MemorySemanticsUniformMemoryMask |
+		                MemorySemanticsImageMemoryMask |
+		                MemorySemanticsCrossWorkgroupMemoryMask)) == 0)
+		{
+			mem_scope = ScopeWorkgroup;
+		}
+
+		// MSL 3.2 only supports seq_cst or relaxed.
+		if (mem_sem & (MemorySemanticsAcquireReleaseMask |
+		               MemorySemanticsAcquireMask |
+		               MemorySemanticsReleaseMask |
+		               MemorySemanticsSequentiallyConsistentMask))
+		{
+			bar_stmt += ", memory_order_seq_cst";
+		}
+		else
+		{
+			bar_stmt += ", memory_order_relaxed";
+		}
+
+		switch (mem_scope)
+		{
+		case ScopeDevice:
+			bar_stmt += ", thread_scope_device";
+			break;
+
+		case ScopeWorkgroup:
+			bar_stmt += ", thread_scope_threadgroup";
+			break;
+
+		case ScopeSubgroup:
+			bar_stmt += ", thread_scope_subgroup";
+			break;
+
+		case ScopeInvocation:
+			bar_stmt += ", thread_scope_thread";
+			break;
+
+		default:
+			// The default argument is device, which is conservative.
+			break;
+		}
 	}
 
 	bar_stmt += ");";
@@ -13666,9 +13726,17 @@ string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
 	return get_type_address_space(type, argument.self, true);
 }
 
-bool CompilerMSL::decoration_flags_signal_volatile(const Bitset &flags)
+bool CompilerMSL::decoration_flags_signal_volatile(const Bitset &flags) const
 {
-	return flags.get(DecorationVolatile) || flags.get(DecorationCoherent);
+	// Using volatile for coherent pre-3.2 is definitely not correct, but it's something.
+	// MSL 3.2 adds actual coherent qualifiers.
+	return flags.get(DecorationVolatile) ||
+	       (flags.get(DecorationCoherent) && !msl_options.supports_msl_version(3, 2));
+}
+
+bool CompilerMSL::decoration_flags_signal_coherent(const Bitset &flags) const
+{
+	return flags.get(DecorationCoherent) && msl_options.supports_msl_version(3, 2);
 }
 
 string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bool argument)
@@ -13680,7 +13748,16 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 	    (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock)))
 		flags = get_buffer_block_flags(id);
 	else
+	{
 		flags = get_decoration_bitset(id);
+
+		if (type.basetype == SPIRType::Struct &&
+		    (has_decoration(type.self, DecorationBlock) ||
+		     has_decoration(type.self, DecorationBufferBlock)))
+		{
+			flags.merge_or(ir.get_buffer_block_type_flags(type));
+		}
+	}
 
 	const char *addr_space = nullptr;
 	switch (type.storage)
@@ -13696,6 +13773,9 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		bool readonly = false;
 		if (!var || has_decoration(type.self, DecorationBlock))
 			readonly = flags.get(DecorationNonWritable);
+
+		if (decoration_flags_signal_coherent(flags))
+			readonly = false;
 
 		addr_space = readonly ? "const device" : "device";
 		break;
@@ -13795,7 +13875,9 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		addr_space = type.pointer || (argument && type.basetype == SPIRType::ControlPointArray) ? "thread" : "";
 	}
 
-	if (decoration_flags_signal_volatile(flags) && 0 != strcmp(addr_space, "thread"))
+	if (decoration_flags_signal_coherent(flags) && strcmp(addr_space, "device") == 0)
+		return join("coherent device");
+	else if (decoration_flags_signal_volatile(flags) && strcmp(addr_space, "thread") != 0)
 		return join("volatile ", addr_space);
 	else
 		return addr_space;
@@ -16648,6 +16730,10 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 	// Otherwise it may be set based on whether the image is read from or written to within the shader.
 	if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.dim != DimSubpassData)
 	{
+		auto *p_var = maybe_get_backing_variable(id);
+		if (p_var && p_var->basevariable)
+			p_var = maybe_get<SPIRVariable>(p_var->basevariable);
+
 		switch (img_type.access)
 		{
 		case AccessQualifierReadOnly:
@@ -16664,9 +16750,6 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 
 		default:
 		{
-			auto *p_var = maybe_get_backing_variable(id);
-			if (p_var && p_var->basevariable)
-				p_var = maybe_get<SPIRVariable>(p_var->basevariable);
 			if (p_var && !has_decoration(p_var->self, DecorationNonWritable))
 			{
 				img_type_name += ", access::";
@@ -16679,6 +16762,9 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 			break;
 		}
 		}
+
+		if (p_var && has_decoration(p_var->self, DecorationCoherent) && msl_options.supports_msl_version(3, 2))
+			img_type_name += ", memory_coherence_device";
 	}
 
 	img_type_name += ">";
