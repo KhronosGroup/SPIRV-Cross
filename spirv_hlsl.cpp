@@ -3473,64 +3473,85 @@ void CompilerHLSL::emit_hlsl_entry_point()
 	});
 
 	// Copy from stage input struct to globals.
-	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
-		auto &type = this->get<SPIRType>(var.basetype);
-		bool block = has_decoration(type.self, DecorationBlock);
+	ir.for_each_typed_id<SPIRVariable>(
+	    [&](uint32_t, SPIRVariable &var)
+	    {
+		    auto &type = this->get<SPIRType>(var.basetype);
+		    bool block = has_decoration(type.self, DecorationBlock);
 
-		if (var.storage != StorageClassInput)
-			return;
+		    if (var.storage != StorageClassInput)
+			    return;
 
-		bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
+		    bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
 
-		if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-		    interface_variable_exists_in_entry_point(var.self))
-		{
-			if (block)
-			{
-				auto type_name = to_name(type.self);
-				auto var_name = to_name(var.self);
-				bool is_per_vertex = has_decoration(var.self, DecorationPerVertexKHR);
-				uint32_t array_size = is_per_vertex ? to_array_size_literal(type) : 0;
+		    if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
+		        interface_variable_exists_in_entry_point(var.self))
+		    {
+			    if (block)
+			    {
+				    auto type_name = to_name(type.self);
+				    auto var_name = to_name(var.self);
+				    bool is_per_vertex = has_decoration(var.self, DecorationPerVertexKHR);
+				    uint32_t array_size = is_per_vertex ? to_array_size_literal(type) : 0;
 
-				for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(type.member_types.size()); mbr_idx++)
-				{
-					auto mbr_name = to_member_name(type, mbr_idx);
-					auto flat_name = join(type_name, "_", mbr_name);
+				    for (uint32_t mbr_idx = 0; mbr_idx < uint32_t(type.member_types.size()); mbr_idx++)
+				    {
+					    auto mbr_name = to_member_name(type, mbr_idx);
+					    auto flat_name = join(type_name, "_", mbr_name);
 
-					if (is_per_vertex)
-					{
-						for (uint32_t i = 0; i < array_size; i++)
-							statement(var_name, "[", i, "].", mbr_name, " = GetAttributeAtVertex(stage_input.", flat_name, ", ", i, ");");
-					}
-					else
-					{
-						statement(var_name, ".", mbr_name, " = stage_input.", flat_name, ";");
-					}
-				}
-			}
-			else
-			{
-				auto name = to_name(var.self);
-				auto &mtype = this->get<SPIRType>(var.basetype);
-				if (need_matrix_unroll && mtype.columns > 1)
-				{
-					// Unroll matrices.
-					for (uint32_t col = 0; col < mtype.columns; col++)
-						statement(name, "[", col, "] = stage_input.", name, "_", col, ";");
-				}
-				else if (has_decoration(var.self, DecorationPerVertexKHR))
-				{
-					uint32_t array_size = to_array_size_literal(type);
-					for (uint32_t i = 0; i < array_size; i++)
-						statement(name, "[", i, "]", " = GetAttributeAtVertex(stage_input.", name, ", ", i, ");");
-				}
-				else
-				{
-					statement(name, " = stage_input.", name, ";");
-				}
-			}
-		}
-	});
+					    if (is_per_vertex)
+					    {
+						    for (uint32_t i = 0; i < array_size; i++)
+						    {
+							    if (execution.model == ExecutionModelGeometry)
+								    statement(var_name, "[", i, "].", mbr_name, " = stage_input[", i, "].", flat_name,
+								              ";");
+							    else
+								    statement(var_name, "[", i, "].", mbr_name, " = GetAttributeAtVertex(stage_input.",
+								              flat_name, ", ", i, ");");
+						    }
+					    }
+					    else
+					    {
+						    statement(var_name, ".", mbr_name, " = stage_input.", flat_name, ";");
+					    }
+				    }
+			    }
+			    else
+			    {
+				    auto name = to_name(var.self);
+				    auto &mtype = this->get<SPIRType>(var.basetype);
+				    if (need_matrix_unroll && mtype.columns > 1)
+				    {
+					    // Unroll matrices.
+					    for (uint32_t col = 0; col < mtype.columns; col++)
+						    statement(name, "[", col, "] = stage_input.", name, "_", col, ";");
+				    }
+				    else if (has_decoration(var.self, DecorationPerVertexKHR))
+				    {
+					    uint32_t array_size = to_array_size_literal(type);
+					    for (uint32_t i = 0; i < array_size; i++)
+					    {
+						    if (execution.model == ExecutionModelGeometry)
+							    statement(name, "[", i, "] = stage_input[", i, "].", name, ";");
+						    else
+							    statement(name, "[", i, "]", " = GetAttributeAtVertex(stage_input.", name, ", ", i,
+							              ");");
+					    }
+				    }
+				    else
+				    {
+					    if (execution.model == ExecutionModelGeometry)
+					    {
+						    statement("for(int i = 0; i < ", input_vertices, "; i++)");
+						    statement(name, "[i] = stage_input[i].", name, ";");
+					    }
+					    else
+						    statement(name, " = stage_input.", name, ";");
+				    }
+			    }
+		    }
+	    });
 
 	// Run the shader.
 	if (execution.model == ExecutionModelVertex || execution.model == ExecutionModelFragment ||
