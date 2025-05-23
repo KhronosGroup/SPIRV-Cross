@@ -1836,7 +1836,7 @@ void CompilerHLSL::emit_resources()
 	if (!output_variables.empty() || !active_output_builtins.empty())
 	{
 		sort(output_variables.begin(), output_variables.end(), variable_compare);
-		require_output = !is_mesh_shader;
+		require_output = !(is_mesh_shader || execution.model == ExecutionModelGeometry);
 
 		statement(is_mesh_shader ? "struct gl_MeshPerVertexEXT" : "struct SPIRV_Cross_Output");
 		begin_scope();
