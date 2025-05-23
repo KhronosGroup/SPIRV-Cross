@@ -16856,7 +16856,12 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			{
 				// Recursively emit functions which are called.
 				uint32_t id = ops[2];
-				emit_function(get<SPIRFunction>(id), ir.meta[ops[1]].decoration.decoration_flags);
+				auto& calledFunction = get<SPIRFunction>(id);
+
+				// Propagate state back up the call tree.
+				func.emits_geometry |= calledFunction.emits_geometry;
+
+				emit_function(calledFunction, ir.meta[ops[1]].decoration.decoration_flags);
 			}
 		}
 	}
