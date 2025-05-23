@@ -4408,6 +4408,14 @@ bool CompilerHLSL::emit_complex_bitcast(uint32_t, uint32_t, uint32_t)
 	return false;
 }
 
+void CompilerHLSL::append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist)
+{
+	CompilerGLSL::append_global_func_args(func, index, arglist);
+
+	if (func.emits_geometry)
+		arglist.push_back(geometry_stream);
+}
+
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
 	if (out_type.basetype == SPIRType::UInt && in_type.basetype == SPIRType::Int)
