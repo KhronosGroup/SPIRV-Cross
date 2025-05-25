@@ -10,7 +10,7 @@ struct SSBO
 
 constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
 
-kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]], unsupported-built-in-type gl_WorkGroupSize [[unsupported-built-in]])
+kernel void main0(device SSBO& _9 [[buffer(0)]], uint gl_LocalInvocationIndex [[thread_index_in_threadgroup]])
 {
     uint gl_NumSubgroups = gl_WorkGroupSize.x * gl_WorkGroupSize.y * gl_WorkGroupSize.z;
     uint gl_SubgroupID = gl_LocalInvocationIndex;
