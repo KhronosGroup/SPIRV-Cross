@@ -5940,6 +5940,32 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		require_extension_internal("GL_EXT_null_initializer");
 		return backend.constant_null_initializer;
 	}
+	else if (c.replicated && type.op != spv::OpTypeArray)
+	{
+		if (type.op == spv::OpTypeMatrix)
+		{
+			uint32_t num_elements = type.columns;
+			// GLSL does not allow the replication constructor for matrices
+			// mat4(vec4(0.0)) needs to be manually expanded to mat4(vec4(0.0), vec4(0.0), vec4(0.0), vec4(0.0));
+			std::string res;
+			res += type_to_glsl(type);
+			res += "(";
+			for (uint32_t i = 0; i < num_elements; i++)
+			{
+				res += to_expression(c.subconstants[0]);
+				if (i < num_elements - 1)
+				{
+					res += ", ";
+				}
+			}
+			res += ")";
+			return res;
+		}
+		else
+		{
+			return join(type_to_glsl(type), "(", to_expression(c.subconstants[0]), ")");
+		}
+	}
 	else if (!c.subconstants.empty())
 	{
 		// Handles Arrays and structures.
@@ -5989,8 +6015,17 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		}
 
 		uint32_t subconstant_index = 0;
-		for (auto &elem : c.subconstants)
+		size_t num_elements = c.subconstants.size();
+		if (c.replicated)
 		{
+			if (type.array.size() != 1) {
+				SPIRV_CROSS_THROW("Multidimensional arrays not yet supported as replicated constans");
+			}
+			num_elements = type.array[0];
+		}
+		for (size_t i = 0; i < num_elements; i++)
+		{
+			auto &elem = c.subconstants[c.replicated ? 0 : i];
 			if (auto *op = maybe_get<SPIRConstantOp>(elem))
 			{
 				res += constant_op_expression(*op);
@@ -6021,7 +6056,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 				}
 			}
 
-			if (&elem != &c.subconstants.back())
+			if (i != num_elements - 1)
 				res += ", ";
 
 			subconstant_index++;
@@ -15580,6 +15615,57 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		inherit_expression_dependencies(id, A);
 		inherit_expression_dependencies(id, B);
 		inherit_expression_dependencies(id, C);
+		break;
+	}
+
+	case OpCompositeConstructReplicateEXT:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		auto &type = get<SPIRType>(result_type);
+		auto value_to_replicate = to_expression(ops[2]);
+		std::string rhs;
+		// Matrices don't have a replicating constructor for vectors. Need to manually replicate
+		if (type.op == spv::OpTypeMatrix || type.op == spv::OpTypeArray)
+		{
+			if (type.op == spv::OpTypeArray && type.array.size() != 1)
+			{
+				SPIRV_CROSS_THROW(
+				    "Multi-dimensional arrays currently not supported for OpCompositeConstructReplicateEXT");
+			}
+			uint32_t num_elements = type.op == spv::OpTypeMatrix ? type.columns : type.array[0];
+			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
+			{
+				rhs += "{";
+			}
+			else
+			{
+				rhs += type_to_glsl_constructor(type);
+				rhs += "(";
+			}
+			for (uint32_t i = 0; i < num_elements; i++)
+			{
+				rhs += value_to_replicate;
+				if (i < num_elements - 1)
+				{
+					rhs += ", ";
+				}
+			}
+			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
+			{
+				rhs += "}";
+			}
+			else
+			{
+				rhs += ")";
+			}
+		}
+		else
+		{
+			rhs = join(type_to_glsl(type), "(", to_expression(ops[2]), ")");
+		}
+		emit_op(result_type, id, rhs, true);
 		break;
 	}
 
