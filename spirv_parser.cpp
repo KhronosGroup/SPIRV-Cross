@@ -22,6 +22,7 @@
  */
 
 #include "spirv_parser.hpp"
+#include "spirv.hpp"
 #include <assert.h>
 
 using namespace std;
@@ -620,6 +621,18 @@ void Parser::parse(const Instruction &instruction)
 		matrixbase.cooperative.use_id = ops[5];
 		matrixbase.self = id;
 		matrixbase.parent_type = ops[1];
+		break;
+	}
+
+	case OpTypeCooperativeVectorNV:
+	{
+		uint32_t id = ops[0];
+		auto &type = set<SPIRType>(id, op);
+
+		type.basetype = SPIRType::CoopVecNv;
+		type.op = op;
+		type.coopVecNv.component_type_id = ops[1];
+		type.coopVecNv.component_count_id = ops[2];
 		break;
 	}
 

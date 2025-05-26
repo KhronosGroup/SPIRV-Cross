@@ -23,6 +23,7 @@
 
 #include "spirv_cross.hpp"
 #include "GLSL.std.450.h"
+#include "spirv.hpp"
 #include "spirv_cfg.hpp"
 #include "spirv_common.hpp"
 #include "spirv_parser.hpp"
@@ -373,6 +374,7 @@ void Compiler::register_global_read_dependencies(const SPIRBlock &block, uint32_
 
 		case OpLoad:
 		case OpCooperativeMatrixLoadKHR:
+		case OpCooperativeVectorLoadNV:
 		case OpImageRead:
 		{
 			// If we're in a storage class which does not get invalidated, adding dependencies here is no big deal.
@@ -4334,6 +4336,7 @@ bool Compiler::may_read_undefined_variable_in_block(const SPIRBlock &block, uint
 
 		case OpCopyObject:
 		case OpLoad:
+		case OpCooperativeVectorLoadNV:
 		case OpCooperativeMatrixLoadKHR:
 			if (ops[2] == var)
 				return true;
@@ -5436,6 +5439,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 	{
 	case OpLoad:
 	case OpCooperativeMatrixLoadKHR:
+	case OpCooperativeVectorLoadNV:
 	{
 		if (length < 3)
 			return false;
@@ -5514,6 +5518,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 	case OpImageWrite:
 	case OpAtomicStore:
 	case OpCooperativeMatrixStoreKHR:
+	case OpCooperativeVectorStoreNV:
 	{
 		if (length < 1)
 			return false;
