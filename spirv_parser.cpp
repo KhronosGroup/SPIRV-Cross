@@ -866,17 +866,27 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
-		// Constants
+	// Constants
 	case OpSpecConstant:
 	case OpConstant:
+	case OpConstantCompositeReplicateEXT:
+	case OpSpecConstantCompositeReplicateEXT:
 	{
 		uint32_t id = ops[1];
 		auto &type = get<SPIRType>(ops[0]);
-
-		if (type.width > 32)
-			set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
+		if (op == OpConstantCompositeReplicateEXT || op == OpSpecConstantCompositeReplicateEXT)
+		{
+			auto subconstant = uint32_t(ops[2]);
+			set<SPIRConstant>(id, ops[0], &subconstant, 1, op == OpSpecConstantCompositeReplicateEXT, true);
+		}
 		else
-			set<SPIRConstant>(id, ops[0], ops[2], op == OpSpecConstant);
+		{
+
+			if (type.width > 32)
+				set<SPIRConstant>(id, ops[0], ops[2] | (uint64_t(ops[3]) << 32), op == OpSpecConstant);
+			else
+				set<SPIRConstant>(id, ops[0], ops[2], op == OpSpecConstant);
+		}
 		break;
 	}
 
