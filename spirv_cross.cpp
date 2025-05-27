@@ -4362,7 +4362,7 @@ bool Compiler::may_read_undefined_variable_in_block(const SPIRBlock &block, uint
 	return true;
 }
 
-bool Compiler::GeometryEmitDisocveryHandler::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
+bool Compiler::GeometryEmitDisocveryHandler::handle(spv::Op opcode, const uint32_t *, uint32_t)
 {
 	if (opcode == OpEmitVertex || opcode == OpEndPrimitive)
 	{
@@ -4380,7 +4380,7 @@ bool Compiler::GeometryEmitDisocveryHandler::begin_function_scope(const uint32_t
 	return true;
 }
 
-bool Compiler::GeometryEmitDisocveryHandler::end_function_scope(const uint32_t *stream, uint32_t)
+bool Compiler::GeometryEmitDisocveryHandler::end_function_scope([[maybe_unused]] const uint32_t *stream, uint32_t)
 {
 	assert(function_stack.back() == &compiler.get<SPIRFunction>(stream[2]));
 	function_stack.pop_back();
