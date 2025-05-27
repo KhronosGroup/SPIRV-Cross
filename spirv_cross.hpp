@@ -1073,6 +1073,22 @@ protected:
 	                              bool single_function);
 	bool may_read_undefined_variable_in_block(const SPIRBlock &block, uint32_t var);
 
+	struct GeometryEmitDisocveryHandler : OpcodeHandler
+	{
+		explicit GeometryEmitDisocveryHandler(Compiler &compiler_)
+		    : compiler(compiler_)
+		{
+		}
+		Compiler &compiler;
+
+		bool handle(spv::Op opcode, const uint32_t *args, uint32_t length) override;
+		bool begin_function_scope(const uint32_t *, uint32_t) override;
+		bool end_function_scope(const uint32_t *, uint32_t) override;
+		SmallVector<SPIRFunction *> function_stack;
+	};
+
+	void discover_geometry_emitters();
+
 	// Finds all resources that are written to from inside the critical section, if present.
 	// The critical section is delimited by OpBeginInvocationInterlockEXT and
 	// OpEndInvocationInterlockEXT instructions. In MSL and HLSL, any resources written
