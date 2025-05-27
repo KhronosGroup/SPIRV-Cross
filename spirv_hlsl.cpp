@@ -3528,16 +3528,16 @@ void CompilerHLSL::emit_hlsl_entry_point()
 				}
 				else
 				{
-					    if (execution.model == ExecutionModelGeometry)
-					    {
-						    statement("for(int i = 0; i < ", input_vertices, "; i++)");
-						    begin_scope();
-						    statement(name, "[i] = stage_input[i].", name, ";");
-						    end_scope();
-					    }
-					    else
-						    statement(name, " = stage_input.", name, ";");
-				    }
+					if (execution.model == ExecutionModelGeometry)
+					{
+						statement("for (int i = 0; i < ", input_vertices, "; i++)");
+						begin_scope();
+						statement(name, "[i] = stage_input[i].", name, ";");
+						end_scope();
+					}
+					else
+						statement(name, " = stage_input.", name, ";");
+				}
 			}
 		}
 	});

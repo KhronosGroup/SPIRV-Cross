@@ -231,7 +231,7 @@ private:
 	std::string image_type_hlsl(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_modern(const SPIRType &type, uint32_t id);
 	std::string image_type_hlsl_legacy(const SPIRType &type, uint32_t id);
-	uint32_t input_vertices_from_execution_mode(spirv_cross::SPIREntryPoint& execution) const;
+	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
 	void emit_header() override;
@@ -260,7 +260,7 @@ private:
 	std::string to_interpolation_qualifiers(const Bitset &flags) override;
 	std::string bitcast_glsl_op(const SPIRType &result_type, const SPIRType &argument_type) override;
 	bool emit_complex_bitcast(uint32_t result_type, uint32_t id, uint32_t op0) override;
-	void append_global_func_args(const SPIRFunction& func, uint32_t index, SmallVector<std::string>& arglist) override;
+	void append_global_func_args(const SPIRFunction &func, uint32_t index, SmallVector<std::string> &arglist) override;
 
 	std::string to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id) override;
 	std::string to_sampler_expression(uint32_t id);

@@ -69,11 +69,11 @@ void geom_main(point SPIRV_Cross_Input stage_input[1], inout TriangleStream<SPIR
 [maxvertexcount(9)]
 void main(point SPIRV_Cross_Input stage_input[1], inout TriangleStream<SPIRV_Cross_Output> geometry_stream)
 {
-    for(int i = 0; i < 1; i++)
+    for (int i = 0; i < 1; i++)
     {
         vColorIn[i] = stage_input[i].vColorIn;
     }
-    for(int i = 0; i < 1; i++)
+    for (int i = 0; i < 1; i++)
     {
         vPositionIn[i] = stage_input[i].vPositionIn;
     }
