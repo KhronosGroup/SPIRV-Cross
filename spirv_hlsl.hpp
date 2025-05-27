@@ -299,7 +299,6 @@ private:
 	bool is_hlsl_force_storage_buffer_as_uav(ID id) const;
 
 	Options hlsl_options;
-	std::string geometry_stream = "triStream";
 
 	// TODO: Refactor this to be more similar to MSL, maybe have some common system in place?
 	bool requires_op_fmod = false;
