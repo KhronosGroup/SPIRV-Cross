@@ -2753,7 +2753,7 @@ void CompilerHLSL::emit_geometry_stream_append()
 		    }
 	    });
 
-	statement(geometry_stream, ".Append(stage_output);");
+	statement("geometry_stream.Append(stage_output);");
 	end_scope();
 }
 
@@ -3170,7 +3170,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 
 		if (func.self == ir.default_entry_point)
 			arglist.push_back(join(prim, " SPIRV_Cross_Input stage_input[", input_vertices, "]"));
-		arglist.push_back(join("inout ", stream_type, "<SPIRV_Cross_Output> ", geometry_stream));
+		arglist.push_back(join("inout ", stream_type, "<SPIRV_Cross_Output> ", "geometry_stream"));
 	}
 
 	decl += merge(arglist);
@@ -3211,22 +3211,19 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		if (execution.flags.get(ExecutionModeOutputPoints))
 		{
 			stream_type = "PointStream";
-			geometry_stream = "pointStream";
 		}
 		else if (execution.flags.get(ExecutionModeOutputLineStrip))
 		{
 			stream_type = "LineStream";
-			geometry_stream = "lineStream";
 		}
 		else
 		{
 			stream_type = "TriangleStream";
-			geometry_stream = "triStream";
 		}
 
 		statement("[maxvertexcount(", execution.output_vertices, ")]");
 		arguments.push_back(join(prim, " SPIRV_Cross_Input stage_input[", input_vertices, "]"));
-		arguments.push_back(join("inout ", stream_type, "<SPIRV_Cross_Output> ", geometry_stream));
+		arguments.push_back(join("inout ", stream_type, "<SPIRV_Cross_Output> ", "geometry_stream"));
 		break;
 	}
 	case ExecutionModelTaskEXT:
@@ -3576,7 +3573,7 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		if (execution.model == ExecutionModelGeometry)
 		{
 			arglist.push_back("stage_input");
-			arglist.push_back(geometry_stream);
+			arglist.push_back("geometry_stream");
 		}
 
 		statement(get_inner_entry_point_name(), "(", merge(arglist), ");");
@@ -4410,7 +4407,7 @@ void CompilerHLSL::append_global_func_args(const SPIRFunction &func, uint32_t in
 	CompilerGLSL::append_global_func_args(func, index, arglist);
 
 	if (func.emits_geometry)
-		arglist.push_back(geometry_stream);
+		arglist.push_back("geometry_stream");
 }
 
 string CompilerHLSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
@@ -6808,7 +6805,7 @@ void CompilerHLSL::emit_instruction(const Instruction &instruction)
 	}
 	case OpEndPrimitive:
 	{
-		statement(geometry_stream, ".RestartStrip();");
+		statement("geometry_stream.RestartStrip();");
 		break;
 	}
 	default:
@@ -7028,6 +7025,9 @@ string CompilerHLSL::compile()
 	analyze_interlocked_resource_usage();
 	if (get_execution_model() == ExecutionModelMeshEXT)
 		analyze_meshlet_writes();
+
+	if (get_execution_model() == ExecutionModelGeometry)
+		discover_geometry_emitters();
 
 	// Subpass input needs SV_Position.
 	if (need_subpass_input)
