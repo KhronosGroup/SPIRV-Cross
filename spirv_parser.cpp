@@ -1291,12 +1291,6 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
-	case OpEmitVertex:
-	case OpEndPrimitive:
-		current_function->emits_geometry = true;
-		current_block->ops.push_back(instruction);
-		break;
-
 	// Actual opcodes.
 	default:
 	{
