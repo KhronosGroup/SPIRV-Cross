@@ -4367,7 +4367,7 @@ bool Compiler::GeometryEmitDisocveryHandler::handle(spv::Op opcode, const uint32
 	if (opcode == OpEmitVertex || opcode == OpEndPrimitive)
 	{
 		for (auto *func : function_stack)
-			func->emits_geometry |= true;
+			func->emits_geometry = true;
 	}
 
 	return true;
