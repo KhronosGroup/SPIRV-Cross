@@ -510,7 +510,7 @@ void CompilerMSL::build_implicit_builtins()
 				has_local_invocation_index = true;
 			}
 
-			if (need_workgroup_size && builtin == BuiltInLocalInvocationId)
+			if (need_workgroup_size && builtin == BuiltInWorkgroupSize)
 			{
 				builtin_workgroup_size_id = var.self;
 				mark_implicit_builtin(StorageClassInput, BuiltInWorkgroupSize, var.self);
@@ -932,25 +932,55 @@ void CompilerMSL::build_implicit_builtins()
 
 		if (need_workgroup_size && !has_workgroup_size)
 		{
-			uint32_t offset = ir.increase_bound_by(2);
-			uint32_t type_ptr_id = offset;
-			uint32_t var_id = offset + 1;
+			auto &execution = get_entry_point();
+			// First, check if the workgroup size _constant_ were defined.
+			// If it were, we don't need to do--in fact, shouldn't do--anything.
+			builtin_workgroup_size_id = execution.workgroup_size.constant;
+			if (builtin_workgroup_size_id == 0)
+			{
+				uint32_t var_id = ir.increase_bound_by(1);
 
-			// Create gl_WorkgroupSize.
-			uint32_t type_id = build_extended_vector_type(get_uint_type_id(), 3);
-			SPIRType uint_type_ptr = get<SPIRType>(type_id);
-			uint_type_ptr.op = OpTypePointer;
-			uint_type_ptr.pointer = true;
-			uint_type_ptr.pointer_depth++;
-			uint_type_ptr.parent_type = type_id;
-			uint_type_ptr.storage = StorageClassInput;
+				// Create gl_WorkgroupSize.
+				uint32_t type_id = build_extended_vector_type(get_uint_type_id(), 3);
+				// If we have LocalSize or LocalSizeId, use those to define the workgroup size.
+				if (execution.flags.get(ExecutionModeLocalSizeId))
+				{
+					const SPIRConstant *init[] = { &get<SPIRConstant>(execution.workgroup_size.id_x),
+						                           &get<SPIRConstant>(execution.workgroup_size.id_y),
+						                           &get<SPIRConstant>(execution.workgroup_size.id_z) };
+					bool specialized = init[0]->specialization || init[1]->specialization || init[2]->specialization;
+					set<SPIRConstant>(var_id, type_id, init, 3, specialized);
+					execution.workgroup_size.constant = var_id;
+				}
+				else if (execution.flags.get(ExecutionModeLocalSize))
+				{
+					uint32_t offset = ir.increase_bound_by(3);
+					const SPIRConstant *init[] = {
+						&set<SPIRConstant>(offset, get_uint_type_id(), execution.workgroup_size.x, false),
+						&set<SPIRConstant>(offset + 1, get_uint_type_id(), execution.workgroup_size.y, false),
+						&set<SPIRConstant>(offset + 2, get_uint_type_id(), execution.workgroup_size.z, false)
+					};
+					set<SPIRConstant>(var_id, type_id, init, 3, false);
+					execution.workgroup_size.constant = var_id;
+				}
+				else
+				{
+					uint32_t type_ptr_id = ir.increase_bound_by(1);
+					SPIRType uint_type_ptr = get<SPIRType>(type_id);
+					uint_type_ptr.op = OpTypePointer;
+					uint_type_ptr.pointer = true;
+					uint_type_ptr.pointer_depth++;
+					uint_type_ptr.parent_type = type_id;
+					uint_type_ptr.storage = StorageClassInput;
 
-			auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
-			ptr_type.self = type_id;
-			set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
-			set_decoration(var_id, DecorationBuiltIn, BuiltInWorkgroupSize);
-			builtin_workgroup_size_id = var_id;
-			mark_implicit_builtin(StorageClassInput, BuiltInWorkgroupSize, var_id);
+					auto &ptr_type = set<SPIRType>(type_ptr_id, uint_type_ptr);
+					ptr_type.self = type_id;
+					set<SPIRVariable>(var_id, type_ptr_id, StorageClassInput);
+					mark_implicit_builtin(StorageClassInput, BuiltInWorkgroupSize, var_id);
+				}
+				set_decoration(var_id, DecorationBuiltIn, BuiltInWorkgroupSize);
+				builtin_workgroup_size_id = var_id;
+			}
 		}
 
 		if (!has_frag_depth && force_frag_depth_passthrough)
@@ -17679,6 +17709,9 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 	case BuiltInGlobalInvocationId:
 		return "thread_position_in_grid";
 
+	case BuiltInWorkgroupSize:
+		return "threads_per_threadgroup";
+
 	case BuiltInWorkgroupId:
 		return "threadgroup_position_in_grid";
 
@@ -17864,6 +17897,7 @@ string CompilerMSL::builtin_type_decl(BuiltIn builtin, uint32_t id)
 	case BuiltInLocalInvocationId:
 	case BuiltInNumWorkgroups:
 	case BuiltInWorkgroupId:
+	case BuiltInWorkgroupSize:
 		return "uint3";
 	case BuiltInLocalInvocationIndex:
 	case BuiltInNumSubgroups:
