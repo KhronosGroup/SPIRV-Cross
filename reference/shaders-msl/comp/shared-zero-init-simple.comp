@@ -1,4 +1,5 @@
 #pragma clang diagnostic ignored "-Wsometimes-uninitialized"
+
 #include <metal_stdlib>
 #include <simd/simd.h>
 

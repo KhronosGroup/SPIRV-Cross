@@ -695,6 +695,7 @@ struct SPIREntryPoint
 	FunctionID self = 0;
 	std::string name;
 	std::string orig_name;
+	std::unordered_map<uint32_t, uint32_t> fp_fast_math_defaults;
 	SmallVector<VariableID> interface_variables;
 
 	Bitset flags;
@@ -1732,6 +1733,7 @@ struct Meta
 		uint32_t spec_id = 0;
 		uint32_t index = 0;
 		spv::FPRoundingMode fp_rounding_mode = spv::FPRoundingModeMax;
+		spv::FPFastMathModeMask fp_fast_math_mode = spv::FPFastMathModeMaskNone;
 		bool builtin = false;
 		bool qualified_alias_explicit_override = false;
 
