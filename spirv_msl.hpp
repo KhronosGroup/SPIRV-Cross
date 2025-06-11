@@ -767,6 +767,13 @@ public:
 	// These must only be called after a successful call to CompilerMSL::compile().
 	bool specialization_constant_is_macro(uint32_t constant_id) const;
 
+	// Returns a mask of SPIR-V FP Fast Math Mode flags, that represents the set of flags that can be applied
+	// across all floating-point types. Each FPFastMathDefault execution mode operation identifies the flags
+	// for one floating-point type, and the value returned here is a bitwise-AND combination across all types.
+	// If incl_ops is enabled, the FPFastMathMode of any SPIR-V operations are also included in the bitwise-AND
+	// to determine the minimal fast-math that applies to all default execution modes and all operations.
+	uint32_t get_fp_fast_math_combined(bool incl_ops);
+
 protected:
 	// An enum of SPIR-V functions that are implemented in additional
 	// source code that is added to the shader if necessary.

@@ -452,6 +452,10 @@ void ParsedIR::set_decoration(ID id, Decoration decoration, uint32_t argument)
 		dec.fp_rounding_mode = static_cast<FPRoundingMode>(argument);
 		break;
 
+	case DecorationFPFastMathMode:
+		dec.fp_fast_math_mode = static_cast<FPFastMathModeMask>(argument);
+		break;
+
 	default:
 		break;
 	}
@@ -643,6 +647,8 @@ uint32_t ParsedIR::get_decoration(ID id, Decoration decoration) const
 		return dec.index;
 	case DecorationFPRoundingMode:
 		return dec.fp_rounding_mode;
+	case DecorationFPFastMathMode:
+		return dec.fp_fast_math_mode;
 	default:
 		return 1;
 	}
@@ -728,6 +734,10 @@ void ParsedIR::unset_decoration(ID id, Decoration decoration)
 
 	case DecorationFPRoundingMode:
 		dec.fp_rounding_mode = FPRoundingModeMax;
+		break;
+
+	case DecorationFPFastMathMode:
+		dec.fp_fast_math_mode = FPFastMathModeMaskNone;
 		break;
 
 	case DecorationHlslCounterBufferGOOGLE:
