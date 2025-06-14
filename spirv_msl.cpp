@@ -19861,6 +19861,28 @@ bool CompilerMSL::specialization_constant_is_macro(uint32_t const_id) const
 	return constant_macro_ids.find(const_id) != constant_macro_ids.end();
 }
 
+// If the dst_flags are not zero, bitwise-AND the two parameters. Otherwise return src_flags.
+static uint32_t and_if_not_zero(const uint32_t dst_flags, const uint32_t src_flags)
+{
+	return (dst_flags != 0) ? dst_flags & src_flags : src_flags;
+}
+
+uint32_t CompilerMSL::get_fp_fast_math_combined(bool incl_ops)
+{
+	uint32_t accum_flags = 0;
+	auto &ep = get_entry_point();
+	for (auto &fp_pair : ep.fp_fast_math_defaults)
+		if (fp_pair.second)
+			accum_flags = and_if_not_zero(accum_flags, get<SPIRConstant>(fp_pair.second).scalar());
+
+	if (incl_ops)
+		for (auto &p_m : ir.meta)
+			if(p_m.second.decoration.decoration_flags.get(DecorationFPFastMathMode))
+				accum_flags = and_if_not_zero(accum_flags, p_m.second.decoration.fp_fast_math_mode);
+
+	return accum_flags;
+}
+
 void CompilerMSL::emit_block_hints(const SPIRBlock &)
 {
 }
