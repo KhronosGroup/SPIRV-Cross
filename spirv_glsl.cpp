@@ -6018,9 +6018,8 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		size_t num_elements = c.subconstants.size();
 		if (c.replicated)
 		{
-			if (type.array.size() != 1) {
+			if (type.array.size() != 1)
 				SPIRV_CROSS_THROW("Multidimensional arrays not yet supported as replicated constans");
-			}
 			num_elements = type.array[0];
 		}
 		for (size_t i = 0; i < num_elements; i++)
@@ -15653,13 +15652,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				}
 			}
 			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
-			{
 				rhs += "}";
-			}
 			else
-			{
 				rhs += ")";
-			}
 		}
 		else
 		{
