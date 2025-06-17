@@ -5954,9 +5954,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 			{
 				res += to_expression(c.subconstants[0]);
 				if (i < num_elements - 1)
-				{
 					res += ", ";
-				}
 			}
 			res += ")";
 			return res;
@@ -15647,9 +15645,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			{
 				rhs += value_to_replicate;
 				if (i < num_elements - 1)
-				{
 					rhs += ", ";
-				}
 			}
 			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
 				rhs += "}";
