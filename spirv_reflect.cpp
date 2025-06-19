@@ -547,6 +547,7 @@ void CompilerReflection::emit_resources()
 	emit_resources("push_constants", res.push_constant_buffers);
 	emit_resources("counters", res.atomic_counters);
 	emit_resources("acceleration_structures", res.acceleration_structures);
+	emit_resources("tensors", res.tensors);
 }
 
 void CompilerReflection::emit_resources(const char *tag, const SmallVector<Resource> &resources)
