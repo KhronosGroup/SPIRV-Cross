@@ -1,0 +1,37 @@
+#version 460
+#extension GL_ARM_tensors : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+int _89;
+
+layout(set = 0, binding = 1) uniform tensorARM<bool, 2u> tb;
+layout(set = 0, binding = 0) uniform tensorARM<int, 4u> t;
+
+void main()
+{
+    bool _20;
+    tensorReadARM(tb, uint[](0u, 0u), _20);
+    bool b = _20;
+    bool _26[4];
+    tensorReadARM(tb, uint[](0u, 0u), _26);
+    bool _69 = _26[0];
+    bool _70 = _26[1];
+    bool _71 = _26[2];
+    bool _72 = _26[3];
+    int _37;
+    tensorReadARM(t, uint[](0u, 0u, 0u, 0u), _37, 2, 33);
+    int i32 = _37;
+    int _45[2];
+    tensorReadARM(t, uint[](1u, 2u, 3u, 4u), _45);
+    int _82 = _45[0];
+    int _83 = _45[1];
+    int _51[3];
+    tensorReadARM(t, uint[](3u, 2u, 1u, 0u), _51);
+    int _58[4];
+    tensorReadARM(t, uint[](99u, 99u, 99u, 99u), _58);
+    tensorWriteARM(tb, uint[](0u, 0u), _20);
+    tensorWriteARM(tb, uint[](0u, 0u), _26);
+    tensorWriteARM(t, uint[](4u, 3u, 2u, 1u), _37);
+    tensorWriteARM(t, uint[](0u, 0u, 0u, 0u), _45);
+}
+

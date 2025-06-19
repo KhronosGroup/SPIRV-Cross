@@ -617,6 +617,12 @@ void CompilerGLSL::find_static_extensions()
 			ray_tracing_is_khr = true;
 			break;
 
+		case CapabilityTensorsARM:
+			if (options.es || options.version < 460 || !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Tensor requires Vulkan GLSL 460.");
+			require_extension_internal("GL_ARM_tensors");
+			break;
+
 		default:
 			break;
 		}
@@ -15351,7 +15357,78 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	GLSL_RAY_QUERY_GET_OP2(IntersectionWorldToObject);
 #undef GLSL_RAY_QUERY_GET_OP
 #undef GLSL_RAY_QUERY_GET_OP2
+	case OpTensorQuerySizeARM:
+		flush_variable_declaration(ops[1]);
+		// tensorSizeARM(tensor, dimension)
+		emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], "tensorSizeARM");
+		break;
+	case OpTensorReadARM:
+	{
+		flush_variable_declaration(ops[1]);
+		emit_uninitialized_temporary_expression(ops[0], ops[1]);
 
+		const std::string functionName = "tensorReadARM";
+		SmallVector<std::string> args {
+			to_expression(ops[2]), // tensor
+			to_expression(ops[3]), // coordinates
+			to_expression(ops[1]), // out value
+		};
+		if (length > 4)
+		{
+			std::string tensorOperands;
+			if (ops[4] == 0)
+				tensorOperands = "0x0u";
+			else if (ops[4] == spv::TensorOperandsNontemporalARMMask)
+				tensorOperands = "gl_TensorOperandsNonTemporalARM";
+			else if (ops[4] == spv::TensorOperandsOutOfBoundsValueARMMask)
+				tensorOperands = "gl_TensorOperandsOutOfBoundsValueARM";
+			else if (ops[4] == (spv::TensorOperandsNontemporalARMMask | spv::TensorOperandsOutOfBoundsValueARMMask))
+				tensorOperands = "gl_TensorOperandsNonTemporalARM | gl_TensorOperandsOutOfBoundsValueARM";
+			else
+				SPIRV_CROSS_THROW("Invalid tensorOperands for tensorReadARM.");
+			if ((ops[4] & spv::TensorOperandsOutOfBoundsValueARMMask) && length != 6)
+				SPIRV_CROSS_THROW("gl_TensorOperandsOutOfBoundsValueARM requires an outOfBoundsValue argument.");
+			args.push_back(tensorOperands); // tensorOperands
+		}
+		if (length >= 6)
+		{
+			if ((length > 6) || (ops[4] & spv::TensorOperandsOutOfBoundsValueARMMask) == 0)
+				SPIRV_CROSS_THROW("Too many arguments to tensorReadARM.");
+			args.push_back(to_expression(ops[5])); // outOfBoundsValue
+		}
+
+		// tensorRead(tensor, sizeof(type), coordinates, value, operand, ...)
+		statement(functionName, "(", merge(args), ");");
+		break;
+	}
+	case OpTensorWriteARM:
+	{
+		flush_variable_declaration(ops[0]);
+
+		const std::string functionName = "tensorWriteARM";
+		SmallVector<std::string> args {
+			to_expression(ops[0]), // tensor
+			to_expression(ops[1]), // coordinates
+			to_expression(ops[2]), // out value
+		};
+
+		if (length > 3){
+			std::string tensorOperands;
+			if (ops[3] == 0)
+				tensorOperands = "0x0u";
+			else if (ops[3] == spv::TensorOperandsNontemporalARMMask)
+				tensorOperands = "gl_TensorOperandsNonTemporalARM";
+			else
+				SPIRV_CROSS_THROW("Invalid tensorOperands for tensorWriteARM.");
+			args.push_back(tensorOperands); // tensorOperands
+		}
+		if (length > 4)
+			SPIRV_CROSS_THROW("Too many arguments to tensorWriteARM.");
+
+		// tensorWrite(tensor, sizeof(type), coordinates, value)
+		statement(functionName, "(", merge(args), ");");
+		break;
+	}
 	case OpConvertUToAccelerationStructureKHR:
 	{
 		require_extension_internal("GL_EXT_ray_tracing");
@@ -16045,6 +16122,14 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 			else
 				SPIRV_CROSS_THROW("Cannot use GL_EXT_shader_image_load_formatted in ESSL.");
 		}
+	} else if (type.basetype == SPIRType::Tensor){
+		if (flags.get(DecorationNonWritable)){
+			res += "readonly ";
+		}
+
+		if (flags.get(DecorationNonReadable)){
+			res += "writeonly ";
+		}
 	}
 
 	res += to_precision_qualifiers_glsl(id);
@@ -16479,6 +16564,14 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 
 	case SPIRType::RayQuery:
 		return "rayQueryEXT";
+
+	case SPIRType::Tensor:
+		if (type.tensor.rank == 0)
+			SPIRV_CROSS_THROW("GLSL tensors must have a Rank.");
+		if (type.tensor.shape != 0)
+			SPIRV_CROSS_THROW("GLSL tensors cannot have a Shape.");
+		return join("tensorARM<", type_to_glsl(get<SPIRType>(type.tensor.type)), ", ",
+								to_expression(type.tensor.rank), ">");
 
 	case SPIRType::Void:
 		return "void";

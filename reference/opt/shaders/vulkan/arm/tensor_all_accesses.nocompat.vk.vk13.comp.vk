@@ -1,0 +1,111 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_8bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int16 : require
+#extension GL_EXT_shader_16bit_storage : require
+#if defined(GL_ARB_gpu_shader_int64)
+#extension GL_ARB_gpu_shader_int64 : require
+#else
+#error No extension available for 64-bit integers.
+#endif
+#if defined(GL_AMD_gpu_shader_half_float)
+#extension GL_AMD_gpu_shader_half_float : require
+#elif defined(GL_EXT_shader_explicit_arithmetic_types_float16)
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#else
+#error No extension available for FP16.
+#endif
+#extension GL_ARM_tensors : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+int _253;
+uint _267;
+float _281;
+
+layout(set = 0, binding = 0) uniform tensorARM<int8_t, 1u> it8;
+layout(set = 0, binding = 1) uniform tensorARM<int16_t, 1u> it16;
+layout(set = 0, binding = 2) uniform tensorARM<int, 1u> it32;
+layout(set = 0, binding = 3) uniform tensorARM<int64_t, 1u> it64;
+layout(set = 0, binding = 4) uniform tensorARM<uint8_t, 1u> ut8;
+layout(set = 0, binding = 5) uniform tensorARM<uint16_t, 1u> ut16;
+layout(set = 0, binding = 6) uniform tensorARM<uint, 1u> ut32;
+layout(set = 0, binding = 7) uniform tensorARM<uint64_t, 1u> ut64;
+layout(set = 0, binding = 8) uniform tensorARM<float16_t, 1u> ft16;
+layout(set = 0, binding = 9) uniform tensorARM<float, 1u> ft32;
+
+void main()
+{
+    uint _186 = 0u;
+    int8_t iw8 = int8_t(1);
+    int16_t iw16 = 1s;
+    int iw = 1;
+    int64_t iw64 = 1l;
+    tensorWriteARM(it8, uint[](0u), int8_t(1));
+    tensorWriteARM(it16, uint[](0u), 1s);
+    tensorWriteARM(it32, uint[](0u), 1);
+    tensorWriteARM(it64, uint[](0u), 1l);
+    int _240 = 1;
+    int _241 = 1;
+    int _242 = 1;
+    int _243 = 1;
+    tensorWriteARM(it32, uint[](0u), int[](1, 1, 1, 1));
+    int8_t _65;
+    tensorReadARM(it8, uint[](0u), _65);
+    int8_t ir8 = _65;
+    int16_t _69;
+    tensorReadARM(it16, uint[](0u), _69);
+    int16_t ir16 = _69;
+    int _73;
+    tensorReadARM(it32, uint[](0u), _73);
+    int ir = _73;
+    int64_t _77;
+    tensorReadARM(it64, uint[](0u), _77);
+    int64_t ir64 = _77;
+    int _81[4];
+    tensorReadARM(it32, uint[](0u), _81);
+    uint8_t uw8 = uint8_t(1);
+    uint16_t uw16 = 1us;
+    uint uw = 1u;
+    uint64_t uw64 = 1ul;
+    tensorWriteARM(ut8, uint[](0u), uint8_t(1));
+    tensorWriteARM(ut16, uint[](0u), 1us);
+    tensorWriteARM(ut32, uint[](0u), 1u);
+    tensorWriteARM(ut64, uint[](0u), 1ul);
+    uint _254 = 1u;
+    uint _255 = 1u;
+    uint _256 = 1u;
+    uint _257 = 1u;
+    tensorWriteARM(ut32, uint[](0u), uint[](1u, 1u, 1u, 1u));
+    uint8_t _130;
+    tensorReadARM(ut8, uint[](0u), _130);
+    uint8_t ur8 = _130;
+    uint16_t _134;
+    tensorReadARM(ut16, uint[](0u), _134);
+    uint16_t ur16 = _134;
+    uint _138;
+    tensorReadARM(ut32, uint[](0u), _138);
+    uint ur = _138;
+    uint64_t _142;
+    tensorReadARM(ut64, uint[](0u), _142);
+    uint64_t ur64 = _142;
+    uint _146[4];
+    tensorReadARM(ut32, uint[](0u), _146);
+    float fw = 1.0;
+    float16_t fw16 = float16_t(1.0);
+    tensorWriteARM(ft16, uint[](0u), float16_t(1.0));
+    tensorWriteARM(ft32, uint[](0u), 1.0);
+    float _268 = 1.0;
+    float _269 = 1.0;
+    float _270 = 1.0;
+    float _271 = 1.0;
+    tensorWriteARM(ft32, uint[](0u), float[](1.0, 1.0, 1.0, 1.0));
+    float16_t _177;
+    tensorReadARM(ft16, uint[](0u), _177);
+    float16_t fr16 = _177;
+    float _181;
+    tensorReadARM(ft32, uint[](0u), _181);
+    float fr = _181;
+    float _185[4];
+    tensorReadARM(ft32, uint[](0u), _185);
+}
+
