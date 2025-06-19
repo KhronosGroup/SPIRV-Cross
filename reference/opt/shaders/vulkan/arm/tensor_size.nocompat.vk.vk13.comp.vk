@@ -1,0 +1,19 @@
+#version 460
+#extension GL_ARM_tensors : require
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform tensorARM<int, 1u> rank1;
+layout(set = 0, binding = 1) uniform tensorARM<float, 2u> rank2;
+layout(set = 0, binding = 2) uniform tensorARM<uint, 4u> rank4;
+
+shared uint x;
+
+void main()
+{
+    x = 0u;
+    x += tensorSizeARM(rank1, 0u);
+    x += tensorSizeARM(rank2, 0u);
+    x += tensorSizeARM(rank2, 1u);
+    x += tensorSizeARM(rank4, 3u);
+}
+

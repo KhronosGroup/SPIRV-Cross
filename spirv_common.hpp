@@ -574,6 +574,7 @@ struct SPIRType : IVariant
 		Sampler,
 		AccelerationStructure,
 		RayQuery,
+		Tensor,
 
 		// Keep internal types at the end.
 		ControlPointArray,
@@ -633,6 +634,13 @@ struct SPIRType : IVariant
 		spv::ImageFormat format;
 		spv::AccessQualifier access;
 	} image = {};
+
+	struct TensorType
+	{
+		TypeID type;
+		TypeID rank;
+		TypeID shape;
+	} tensor;
 
 	// Structs can be declared multiple times if they are used as part of interface blocks.
 	// We want to detect this so that we only emit the struct definition once.

@@ -1069,6 +1069,9 @@ enum Capability {
     CapabilityTileImageColorReadAccessEXT = 4166,
     CapabilityTileImageDepthReadAccessEXT = 4167,
     CapabilityTileImageStencilReadAccessEXT = 4168,
+    CapabilityTensorsARM = 4174,
+    CapabilityStorageTensorArrayDynamicIndexingARM = 4175,
+    CapabilityStorageTensorArrayNonUniformIndexingARM = 4176,
     CapabilityCooperativeMatrixLayoutsARM = 4201,
     CapabilityFragmentShadingRateKHR = 4422,
     CapabilitySubgroupBallotKHR = 4423,
@@ -1457,6 +1460,24 @@ enum TensorAddressingOperandsMask {
     TensorAddressingOperandsMaskNone = 0,
     TensorAddressingOperandsTensorViewMask = 0x00000001,
     TensorAddressingOperandsDecodeFuncMask = 0x00000002,
+};
+
+enum TensorOperandsShift {
+    TensorOperandsNontemporalARMShift = 0,
+    TensorOperandsOutOfBoundsValueARMShift = 1,
+    TensorOperandsMakeElementAvailableARMShift = 2,
+    TensorOperandsMakeElementVisibleARMShift = 3,
+    TensorOperandsNonPrivateElementARMShift = 4,
+    TensorOperandsMax = 0x7fffffff,
+};
+
+enum TensorOperandsMask {
+    TensorOperandsMaskNone = 0,
+    TensorOperandsNontemporalARMMask = 0x00000001,
+    TensorOperandsOutOfBoundsValueARMMask = 0x00000002,
+    TensorOperandsMakeElementAvailableARMMask = 0x00000004,
+    TensorOperandsMakeElementVisibleARMMask = 0x00000008,
+    TensorOperandsNonPrivateElementARMMask = 0x00000010,
 };
 
 enum InitializationModeQualifier {
@@ -1923,6 +1944,10 @@ enum Op {
     OpColorAttachmentReadEXT = 4160,
     OpDepthAttachmentReadEXT = 4161,
     OpStencilAttachmentReadEXT = 4162,
+    OpTypeTensorARM = 4163,
+    OpTensorReadARM = 4164,
+    OpTensorWriteARM = 4165,
+    OpTensorQuerySizeARM = 4166,
     OpTerminateInvocation = 4416,
     OpTypeUntypedPointerKHR = 4417,
     OpUntypedVariableKHR = 4418,
@@ -2739,6 +2764,10 @@ inline void HasResultAndType(Op opcode, bool *hasResult, bool *hasResultType) {
     case OpColorAttachmentReadEXT: *hasResult = true; *hasResultType = true; break;
     case OpDepthAttachmentReadEXT: *hasResult = true; *hasResultType = true; break;
     case OpStencilAttachmentReadEXT: *hasResult = true; *hasResultType = true; break;
+    case OpTypeTensorARM: *hasResult = true; *hasResultType = false; break;
+    case OpTensorReadARM: *hasResult = true; *hasResultType = true; break;
+    case OpTensorWriteARM: *hasResult = false; *hasResultType = false; break;
+    case OpTensorQuerySizeARM: *hasResult = true; *hasResultType = true; break;
     case OpTerminateInvocation: *hasResult = false; *hasResultType = false; break;
     case OpTypeUntypedPointerKHR: *hasResult = true; *hasResultType = false; break;
     case OpUntypedVariableKHR: *hasResult = true; *hasResultType = true; break;
@@ -3954,6 +3983,9 @@ inline const char* CapabilityToString(Capability value) {
     case CapabilityTileImageColorReadAccessEXT: return "TileImageColorReadAccessEXT";
     case CapabilityTileImageDepthReadAccessEXT: return "TileImageDepthReadAccessEXT";
     case CapabilityTileImageStencilReadAccessEXT: return "TileImageStencilReadAccessEXT";
+    case CapabilityTensorsARM: return "TensorsARM";
+    case CapabilityStorageTensorArrayDynamicIndexingARM: return "StorageTensorArrayDynamicIndexingARM";
+    case CapabilityStorageTensorArrayNonUniformIndexingARM: return "StorageTensorArrayNonUniformIndexingARM";
     case CapabilityCooperativeMatrixLayoutsARM: return "CooperativeMatrixLayoutsARM";
     case CapabilityFragmentShadingRateKHR: return "FragmentShadingRateKHR";
     case CapabilitySubgroupBallotKHR: return "SubgroupBallotKHR";
@@ -4679,6 +4711,10 @@ inline const char* OpToString(Op value) {
     case OpColorAttachmentReadEXT: return "OpColorAttachmentReadEXT";
     case OpDepthAttachmentReadEXT: return "OpDepthAttachmentReadEXT";
     case OpStencilAttachmentReadEXT: return "OpStencilAttachmentReadEXT";
+    case OpTypeTensorARM: return "OpTypeTensorARM";
+    case OpTensorReadARM: return "OpTensorReadARM";
+    case OpTensorWriteARM: return "OpTensorWriteARM";
+    case OpTensorQuerySizeARM: return "OpTensorQuerySizeARM";
     case OpTerminateInvocation: return "OpTerminateInvocation";
     case OpTypeUntypedPointerKHR: return "OpTypeUntypedPointerKHR";
     case OpUntypedVariableKHR: return "OpUntypedVariableKHR";
@@ -5186,6 +5222,10 @@ inline TensorAddressingOperandsMask operator|(TensorAddressingOperandsMask a, Te
 inline TensorAddressingOperandsMask operator&(TensorAddressingOperandsMask a, TensorAddressingOperandsMask b) { return TensorAddressingOperandsMask(unsigned(a) & unsigned(b)); }
 inline TensorAddressingOperandsMask operator^(TensorAddressingOperandsMask a, TensorAddressingOperandsMask b) { return TensorAddressingOperandsMask(unsigned(a) ^ unsigned(b)); }
 inline TensorAddressingOperandsMask operator~(TensorAddressingOperandsMask a) { return TensorAddressingOperandsMask(~unsigned(a)); }
+inline TensorOperandsMask operator|(TensorOperandsMask a, TensorOperandsMask b) { return TensorOperandsMask(unsigned(a) | unsigned(b)); }
+inline TensorOperandsMask operator&(TensorOperandsMask a, TensorOperandsMask b) { return TensorOperandsMask(unsigned(a) & unsigned(b)); }
+inline TensorOperandsMask operator^(TensorOperandsMask a, TensorOperandsMask b) { return TensorOperandsMask(unsigned(a) ^ unsigned(b)); }
+inline TensorOperandsMask operator~(TensorOperandsMask a) { return TensorOperandsMask(~unsigned(a)); }
 inline MatrixMultiplyAccumulateOperandsMask operator|(MatrixMultiplyAccumulateOperandsMask a, MatrixMultiplyAccumulateOperandsMask b) { return MatrixMultiplyAccumulateOperandsMask(unsigned(a) | unsigned(b)); }
 inline MatrixMultiplyAccumulateOperandsMask operator&(MatrixMultiplyAccumulateOperandsMask a, MatrixMultiplyAccumulateOperandsMask b) { return MatrixMultiplyAccumulateOperandsMask(unsigned(a) & unsigned(b)); }
 inline MatrixMultiplyAccumulateOperandsMask operator^(MatrixMultiplyAccumulateOperandsMask a, MatrixMultiplyAccumulateOperandsMask b) { return MatrixMultiplyAccumulateOperandsMask(unsigned(a) ^ unsigned(b)); }

@@ -584,7 +584,13 @@ def cross_compile_reflect(shader, spirv, opt, iterations, paths):
 def validate_shader(shader, vulkan, paths):
     if vulkan:
         spirv_14 = '.spv14.' in shader
-        glslang_env = 'spirv1.4' if spirv_14 else 'vulkan1.1'
+        spirv_16 = '.spv16.' in shader
+        if spirv_14:
+            glslang_env = 'spirv1.4'
+        elif spirv_16:
+            glslang_env = 'spirv1.6'
+        else:
+            glslang_env = 'vulkan1.1'
         subprocess.check_call([paths.glslang, '--amb', '--target-env', glslang_env, '-V', shader])
     else:
         subprocess.check_call([paths.glslang, shader])
