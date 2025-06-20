@@ -215,7 +215,7 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
 
     if spirv_16:
         spirv_env = 'spv1.6'
-        glslang_env = 'spirv1.6'
+        glslang_env = 'vulkan1.3'
     elif spirv_14:
         spirv_env = 'vulkan1.1spv1.4'
         glslang_env = 'spirv1.4'
@@ -508,7 +508,7 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
 
     if spirv_16:
         spirv_env = 'spv1.6'
-        glslang_env = 'spirv1.6'
+        glslang_env = 'vulkan1.3'
     elif spirv_14:
         spirv_env = 'vulkan1.1spv1.4'
         glslang_env = 'spirv1.4'
@@ -583,8 +583,9 @@ def cross_compile_reflect(shader, spirv, opt, iterations, paths):
 
 def validate_shader(shader, vulkan, paths):
     if vulkan:
+        spirv_16 = '.spv16.' in shader
         spirv_14 = '.spv14.' in shader
-        glslang_env = 'spirv1.4' if spirv_14 else 'vulkan1.1'
+        glslang_env = 'vulkan1.3' if spirv_16 else ('spirv1.4' if spirv_14 else 'vulkan1.1')
         subprocess.check_call([paths.glslang, '--amb', '--target-env', glslang_env, '-V', shader])
     else:
         subprocess.check_call([paths.glslang, shader])
@@ -597,7 +598,7 @@ def cross_compile(shader, vulkan, spirv, invalid_spirv, eliminate, is_legacy, fo
     spirv_14 = '.spv14.' in shader
     if spirv_16:
         spirv_env = 'spv1.6'
-        glslang_env = 'spirv1.6'
+        glslang_env = 'vulkan1.3'
     elif spirv_14:
         spirv_env = 'vulkan1.1spv1.4'
         glslang_env = 'spirv1.4'
