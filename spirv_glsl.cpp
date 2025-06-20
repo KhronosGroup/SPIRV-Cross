@@ -1529,6 +1529,7 @@ uint32_t CompilerGLSL::type_to_packed_base_size(const SPIRType &type, BufferPack
 	case SPIRType::Half:
 	case SPIRType::Short:
 	case SPIRType::UShort:
+	case SPIRType::BFloat16:
 		return 2;
 	case SPIRType::SByte:
 	case SPIRType::UByte:
