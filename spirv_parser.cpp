@@ -381,13 +381,21 @@ void Parser::parse(const Instruction &instruction)
 		auto mode = static_cast<ExecutionMode>(ops[1]);
 		execution.flags.set(mode);
 
-		if (mode == ExecutionModeLocalSizeId)
+		switch (mode)
 		{
+		case ExecutionModeLocalSizeId:
 			execution.workgroup_size.id_x = ops[2];
 			execution.workgroup_size.id_y = ops[3];
 			execution.workgroup_size.id_z = ops[4];
-		}
+			break;
 
+		case ExecutionModeFPFastMathDefault:
+			execution.fp_fast_math_defaults[ops[2]] = ops[3];
+			break;
+
+		default:
+			break;
+		}
 		break;
 	}
 
