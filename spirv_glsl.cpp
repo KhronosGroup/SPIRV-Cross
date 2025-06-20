@@ -13862,12 +13862,31 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCooperativeMatrixConvertNV:
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("CooperativeMatrixConvertNV requires vulkan semantics.");
+		require_extension_internal("GL_NV_cooperative_matrix2");
+		// fallthrough
 	case OpFConvert:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
 		auto &type = get<SPIRType>(result_type);
+
+		if (type.op == OpTypeCooperativeMatrixKHR && opcode == OpFConvert)
+		{
+			auto &expr_type = expression_type(ops[2]);
+			if (get<SPIRConstant>(type.cooperative.use_id).scalar() !=
+			    get<SPIRConstant>(expr_type.cooperative.use_id).scalar())
+			{
+				// Somewhat questionable with spec constant uses.
+				if (!options.vulkan_semantics)
+					SPIRV_CROSS_THROW("NV_cooperative_matrix2 requires vulkan semantics.");
+				require_extension_internal("GL_NV_cooperative_matrix2");
+			}
+		}
+
 		if ((type.basetype == SPIRType::FloatE4M3 || type.basetype == SPIRType::FloatE5M2) &&
 		    has_decoration(id, spv::DecorationSaturatedToLargestFloat8NormalConversionEXT))
 		{
