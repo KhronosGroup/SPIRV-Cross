@@ -581,7 +581,9 @@ struct SPIRType : IVariant
 		Char,
 		// MSL specific type, that is used by 'object'(analog of 'task' from glsl) shader.
 		MeshGridProperties,
-		BFloat16
+		BFloat16,
+		FloatE4M3,
+		FloatE5M2
 	};
 
 	// Scalar/vector/matrix support.
@@ -1238,6 +1240,26 @@ struct SPIRConstant : IVariant
 		return u.f32;
 	}
 
+	static inline float fe4m3_to_f32(uint8_t v)
+	{
+		if ((v & 0x7f) == 0x7f)
+		{
+			union
+			{
+				float f32;
+				uint32_t u32;
+			} u;
+
+			u.u32 = (v & 0x80) ? 0xffffffffu : 0x7fffffffu;
+			return u.f32;
+		}
+		else
+		{
+			// Reuse the FP16 to FP32 code. Cute bit-hackery.
+			return f16_to_f32((int16_t(int8_t(v)) << 7) & (0xffff ^ 0x4000)) * 256.0f;
+		}
+	}
+
 	inline uint32_t specialization_constant_id(uint32_t col, uint32_t row) const
 	{
 		return m.c[col].id[row];
@@ -1284,6 +1306,16 @@ struct SPIRConstant : IVariant
 		float fp32;
 		memcpy(&fp32, &v, sizeof(float));
 		return fp32;
+	}
+
+	inline float scalar_floate4m3(uint32_t col = 0, uint32_t row = 0) const
+	{
+		return fe4m3_to_f32(scalar_u8(col, row));
+	}
+
+	inline float scalar_bf8(uint32_t col = 0, uint32_t row = 0) const
+	{
+		return f16_to_f32(scalar_u8(col, row) << 8);
 	}
 
 	inline float scalar_f32(uint32_t col = 0, uint32_t row = 0) const
