@@ -1871,7 +1871,7 @@ void CompilerMSL::preprocess_op_codes()
 	if (preproc.uses_atomics)
 	{
 		add_header_line("#include <metal_atomic>");
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wunused-variable\"", false);
 	}
 
 	// Before MSL 2.1 (2.2 for textures), Metal vertex functions that write to
@@ -5750,17 +5750,17 @@ void CompilerMSL::emit_header()
 {
 	// This particular line can be overridden during compilation, so make it a flag and not a pragma line.
 	if (suppress_missing_prototypes)
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"", false);
 	if (suppress_incompatible_pointer_types_discard_qualifiers)
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wincompatible-pointer-types-discards-qualifiers\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wincompatible-pointer-types-discards-qualifiers\"", false);
 
 	// Disable warning about "sometimes unitialized" when zero-initializing simple threadgroup variables
 	if (suppress_sometimes_unitialized)
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wsometimes-uninitialized\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wsometimes-uninitialized\"", false);
 
 	// Disable warning about missing braces for array<T> template to make arrays a value type
 	if (spv_function_implementations.count(SPVFuncImplUnsafeArray) != 0)
-		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-braces\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-braces\"", false);
 
 	// Floating point fast math compile declarations
 	if (msl_options.use_fast_math_pragmas && msl_options.supports_msl_version(3, 2))
@@ -5777,11 +5777,11 @@ void CompilerMSL::emit_header()
 		else if ((fp_flags & relax_mask) == relax_mask)	// Must have all flags
 			math_mode = "relaxed";
 
-		add_pragma_line(join("#pragma metal fp math_mode(", math_mode, ")"));
+		add_pragma_line(join("#pragma metal fp math_mode(", math_mode, ")"), false);
 
 		// FP contraction
 		const char *contract_mode = ((fp_flags & contract_mask) == contract_mask) ?  "fast" : "off";
-		add_pragma_line(join("#pragma metal fp contract(", contract_mode, ")"));
+		add_pragma_line(join("#pragma metal fp contract(", contract_mode, ")"), false);
 	}
 
 	for (auto &pragma : pragma_lines)
@@ -5807,18 +5807,23 @@ void CompilerMSL::emit_header()
 		statement("");
 }
 
-void CompilerMSL::add_pragma_line(const string &line)
+void CompilerMSL::add_pragma_line(const string &line, bool recompile_on_unique)
 {
-	auto rslt = pragma_lines.insert(line);
-	if (rslt.second)
-		force_recompile();
+	if (std::find(pragma_lines.begin(), pragma_lines.end(), line) == pragma_lines.end())
+	{
+		pragma_lines.push_back(line);
+		if (recompile_on_unique)
+			force_recompile();
+	}
 }
 
 void CompilerMSL::add_typedef_line(const string &line)
 {
-	auto rslt = typedef_lines.insert(line);
-	if (rslt.second)
+	if (std::find(typedef_lines.begin(), typedef_lines.end(), line) == typedef_lines.end())
+	{
+		typedef_lines.push_back(line);
 		force_recompile();
+	}
 }
 
 // Template struct like spvUnsafeArray<> need to be declared *before* any resources are declared

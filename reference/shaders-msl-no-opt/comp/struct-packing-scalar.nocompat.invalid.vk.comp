@@ -3,9 +3,9 @@
 
 using namespace metal;
 
-typedef packed_float2 packed_float2x2[2];
 typedef packed_float3 packed_float2x3[2];
 typedef packed_float3 packed_rm_float3x2[2];
+typedef packed_float2 packed_float2x2[2];
 
 struct S0
 {

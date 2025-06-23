@@ -1138,7 +1138,7 @@ protected:
 	                         uint32_t mem_order_1, uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
 	                         bool op1_is_pointer = false, bool op1_is_literal = false, uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
-	void add_pragma_line(const std::string &line);
+	void add_pragma_line(const std::string &line, bool recompile_on_unique);
 	void add_typedef_line(const std::string &line);
 	void emit_barrier(uint32_t id_exe_scope, uint32_t id_mem_scope, uint32_t id_mem_sem);
 	bool emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id,
@@ -1221,8 +1221,8 @@ protected:
 	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_input_location;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_output_location;
-	std::set<std::string> pragma_lines;
-	std::set<std::string> typedef_lines;
+	std::vector<std::string> pragma_lines;
+	std::vector<std::string> typedef_lines;
 	SmallVector<uint32_t> vars_needing_early_declaration;
 	std::unordered_set<uint32_t> constant_macro_ids;
 

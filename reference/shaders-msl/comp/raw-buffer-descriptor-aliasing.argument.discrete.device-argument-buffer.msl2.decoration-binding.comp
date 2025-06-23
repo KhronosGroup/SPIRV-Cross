@@ -1,5 +1,5 @@
-#pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
