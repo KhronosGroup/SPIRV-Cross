@@ -542,6 +542,10 @@ public:
 		// The result can be queried with get_is_rasterization_disabled.
 		bool auto_disable_rasterization = false;
 
+		// Use Fast Math pragmas in MSL code, based on SPIR-V float controls and FP ExecutionModes.
+		// Requires MSL 3.2 or above, and has no effect with earlier MSL versions.
+		bool use_fast_math_pragmas = false;
+
 		bool is_ios() const
 		{
 			return platform == iOS;
@@ -766,6 +770,14 @@ public:
 	// instead of using function constant
 	// These must only be called after a successful call to CompilerMSL::compile().
 	bool specialization_constant_is_macro(uint32_t constant_id) const;
+
+	// Returns a mask of SPIR-V FP Fast Math Mode flags, that represents the set of flags that can be applied
+	// across all floating-point types. Each FPFastMathDefault execution mode operation identifies the flags
+	// for one floating-point type, and the value returned here is a bitwise-AND combination across all types.
+	// If incl_ops is enabled, the FPFastMathMode of any SPIR-V operations are also included in the bitwise-AND
+	// to determine the minimal fast-math that applies to all default execution modes and all operations.
+	// The returned value is also affected by execution modes SignedZeroInfNanPreserve and ContractionOff.
+	uint32_t get_fp_fast_math_flags(bool incl_ops);
 
 protected:
 	// An enum of SPIR-V functions that are implemented in additional

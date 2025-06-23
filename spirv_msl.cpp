@@ -5750,22 +5750,44 @@ void CompilerMSL::emit_header()
 {
 	// This particular line can be overridden during compilation, so make it a flag and not a pragma line.
 	if (suppress_missing_prototypes)
-		statement("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-prototypes\"");
 	if (suppress_incompatible_pointer_types_discard_qualifiers)
-		statement("#pragma clang diagnostic ignored \"-Wincompatible-pointer-types-discards-qualifiers\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wincompatible-pointer-types-discards-qualifiers\"");
 
 	// Disable warning about "sometimes unitialized" when zero-initializing simple threadgroup variables
 	if (suppress_sometimes_unitialized)
-		statement("#pragma clang diagnostic ignored \"-Wsometimes-uninitialized\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wsometimes-uninitialized\"");
 
 	// Disable warning about missing braces for array<T> template to make arrays a value type
 	if (spv_function_implementations.count(SPVFuncImplUnsafeArray) != 0)
-		statement("#pragma clang diagnostic ignored \"-Wmissing-braces\"");
+		add_pragma_line("#pragma clang diagnostic ignored \"-Wmissing-braces\"");
+
+	// Floating point fast math compile declarations
+	if (msl_options.use_fast_math_pragmas && msl_options.supports_msl_version(3, 2))
+	{
+		uint32_t contract_mask = FPFastMathModeAllowContractMask;
+		uint32_t relax_mask = (FPFastMathModeNSZMask | FPFastMathModeAllowRecipMask | FPFastMathModeAllowReassocMask);
+		uint32_t fast_mask = (relax_mask | FPFastMathModeNotNaNMask | FPFastMathModeNotInfMask);
+
+		// FP math mode
+		uint32_t fp_flags = get_fp_fast_math_flags(true);
+		const char *math_mode = "safe";
+		if ((fp_flags & fast_mask) == fast_mask)		// Must have all flags
+			math_mode = "fast";
+		else if ((fp_flags & relax_mask) == relax_mask)	// Must have all flags
+			math_mode = "relaxed";
+
+		add_pragma_line(join("#pragma metal fp math_mode(", math_mode, ")"));
+
+		// FP contraction
+		const char *contract_mode = ((fp_flags & contract_mask) == contract_mask) ?  "fast" : "off";
+		add_pragma_line(join("#pragma metal fp contract(", contract_mode, ")"));
+	}
 
 	for (auto &pragma : pragma_lines)
 		statement(pragma);
 
-	if (!pragma_lines.empty() || suppress_missing_prototypes)
+	if (!pragma_lines.empty())
 		statement("");
 
 	statement("#include <metal_stdlib>");
@@ -19859,6 +19881,30 @@ const char *CompilerMSL::get_combined_sampler_suffix() const
 bool CompilerMSL::specialization_constant_is_macro(uint32_t const_id) const
 {
 	return constant_macro_ids.find(const_id) != constant_macro_ids.end();
+}
+
+// Start with all fast math flags enabled, and selectively disable based execution modes and float controls
+uint32_t CompilerMSL::get_fp_fast_math_flags(bool incl_ops)
+{
+	uint32_t fp_flags = ~0;
+	auto &ep = get_entry_point();
+
+	if (ep.flags.get(ExecutionModeSignedZeroInfNanPreserve))
+		fp_flags &= ~(FPFastMathModeNSZMask | FPFastMathModeNotInfMask | FPFastMathModeNotNaNMask);
+
+	if (ep.flags.get(ExecutionModeContractionOff))
+		fp_flags &= ~(FPFastMathModeAllowContractMask);
+
+	for (auto &fp_pair : ep.fp_fast_math_defaults)
+		if (fp_pair.second)
+			fp_flags &= get<SPIRConstant>(fp_pair.second).scalar();
+
+	if (incl_ops)
+		for (auto &p_m : ir.meta)
+			if (p_m.second.decoration.decoration_flags.get(DecorationFPFastMathMode))
+				fp_flags &= p_m.second.decoration.fp_fast_math_mode;
+
+	return fp_flags;
 }
 
 void CompilerMSL::emit_block_hints(const SPIRBlock &)

@@ -2370,6 +2370,10 @@ void Compiler::set_execution_mode(ExecutionMode mode, uint32_t arg0, uint32_t ar
 		execution.output_primitives = arg0;
 		break;
 
+	case ExecutionModeFPFastMathDefault:
+		execution.fp_fast_math_defaults[arg0] = arg1;
+		break;
+
 	default:
 		break;
 	}
