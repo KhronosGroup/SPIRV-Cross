@@ -19901,7 +19901,7 @@ uint32_t CompilerMSL::get_fp_fast_math_flags(bool incl_ops)
 
 	if (incl_ops)
 		for (auto &p_m : ir.meta)
-			if(p_m.second.decoration.decoration_flags.get(DecorationFPFastMathMode))
+			if (p_m.second.decoration.decoration_flags.get(DecorationFPFastMathMode))
 				fp_flags &= p_m.second.decoration.fp_fast_math_mode;
 
 	return fp_flags;
