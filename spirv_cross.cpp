@@ -280,6 +280,9 @@ bool Compiler::block_is_pure(const SPIRBlock &block)
 			// This is a global side effect of the function.
 			return false;
 
+		case OpTensorReadARM:
+			return false;
+
 		case OpExtInst:
 		{
 			uint32_t extension_set = ops[2];
@@ -1151,6 +1154,11 @@ ShaderResources Compiler::get_shader_resources(const unordered_set<VariableID> *
 			else if (type.basetype == SPIRType::AccelerationStructure)
 			{
 				res.acceleration_structures.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
+			}
+			// Tensors
+			else if (type.basetype == SPIRType::Tensor)
+			{
+				res.tensors.push_back({ var.self, var.basetype, type.self, get_name(var.self) });
 			}
 			else
 			{
@@ -5155,7 +5163,7 @@ bool Compiler::is_depth_image(const SPIRType &type, uint32_t id) const
 bool Compiler::type_is_opaque_value(const SPIRType &type) const
 {
 	return !type.pointer && (type.basetype == SPIRType::SampledImage || type.basetype == SPIRType::Image ||
-	                         type.basetype == SPIRType::Sampler);
+	                         type.basetype == SPIRType::Sampler || type.basetype == SPIRType::Tensor);
 }
 
 // Make these member functions so we can easily break on any force_recompile events.
