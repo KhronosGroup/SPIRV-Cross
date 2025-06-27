@@ -16911,6 +16911,8 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 		if (p_var && p_var->basevariable)
 			p_var = maybe_get<SPIRVariable>(p_var->basevariable);
 
+		bool has_access_qualifier = true;
+
 		switch (img_type.access)
 		{
 		case AccessQualifierReadOnly:
@@ -16936,12 +16938,21 @@ string CompilerMSL::image_type_glsl(const SPIRType &type, uint32_t id, bool memb
 
 				img_type_name += "write";
 			}
+			else
+			{
+				has_access_qualifier = false;
+			}
 			break;
 		}
 		}
 
 		if (p_var && has_decoration(p_var->self, DecorationCoherent) && msl_options.supports_msl_version(3, 2))
+		{
+			// Cannot declare memory_coherence_device without access qualifier.
+			if (!has_access_qualifier)
+				img_type_name += ", access::read";
 			img_type_name += ", memory_coherence_device";
+		}
 	}
 
 	img_type_name += ">";
