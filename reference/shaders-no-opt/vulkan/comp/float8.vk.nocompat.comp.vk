@@ -17,8 +17,8 @@ layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
 
 layout(constant_id = 0) const floate5m2_t SPEC0 = floate5m2_t(5.0);
 layout(constant_id = 1) const floate4m3_t SPEC1 = floate4m3_t(2.5);
-layout(constant_id = 2) const floate4m3_t SPEC2 = floate4m3_t(-256.0);
-layout(constant_id = 3) const floate4m3_t SPEC3 = floate4m3_t(256.0);
+layout(constant_id = 2) const floate4m3_t SPEC2 = floate4m3_t(-448.0);
+layout(constant_id = 3) const floate4m3_t SPEC3 = floate4m3_t(448.0);
 layout(constant_id = 4) const floate5m2_t SPEC4 = floate5m2_t(-57344.0);
 layout(constant_id = 5) const floate5m2_t SPEC5 = floate5m2_t(57344.0);
 
