@@ -95,6 +95,7 @@ struct ShaderResources
 	SmallVector<Resource> atomic_counters;
 	SmallVector<Resource> acceleration_structures;
 	SmallVector<Resource> gl_plain_uniforms;
+	SmallVector<Resource> tensors;
 
 	// There can only be one push constant block,
 	// but keep the vector in case this restriction is lifted in the future.
