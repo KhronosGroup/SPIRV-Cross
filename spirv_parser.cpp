@@ -642,6 +642,23 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpTypeCooperativeVectorNV:
+	{
+		uint32_t id = ops[0];
+		auto &type = set<SPIRType>(id, op);
+
+		type.basetype = SPIRType::CoopVecNv;
+		type.op = op;
+		type.coopVecNv.component_type_id = ops[1];
+		type.coopVecNv.component_count_id = ops[2];
+
+		// CoopVec-Nv can be used with integer operations like SMax where
+		// where spirv-opt does explicit checks on integer bitwidth
+		auto component_type = get<SPIRType>(type.coopVecNv.component_type_id);
+		type.width = component_type.width;
+		break;
+	}
+
 	case OpTypeArray:
 	{
 		uint32_t id = ops[0];

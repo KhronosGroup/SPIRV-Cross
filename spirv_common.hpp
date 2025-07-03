@@ -574,6 +574,7 @@ struct SPIRType : IVariant
 		Sampler,
 		AccelerationStructure,
 		RayQuery,
+		CoopVecNv,
 
 		// Keep internal types at the end.
 		ControlPointArray,
@@ -617,6 +618,12 @@ struct SPIRType : IVariant
 		uint32_t columns_id = 0;
 		uint32_t scope_id = 0;
 	} cooperative;
+
+	struct
+	{
+		uint32_t component_type_id = 0;
+		uint32_t component_count_id = 0;
+	} coopVecNv;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
 
