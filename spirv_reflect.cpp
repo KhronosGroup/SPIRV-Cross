@@ -477,6 +477,12 @@ string CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
 		return "rmiss";
 	case ExecutionModelCallableNV:
 		return "rcall";
+	case ExecutionModelMeshNV:
+	case ExecutionModelMeshEXT:
+		return "mesh";
+	case ExecutionModelTaskNV:
+	case ExecutionModelTaskEXT:
+		return "task";
 	default:
 		return "???";
 	}
