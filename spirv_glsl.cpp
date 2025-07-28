@@ -661,6 +661,13 @@ void CompilerGLSL::find_static_extensions()
 			ray_tracing_is_khr = true;
 			break;
 
+		case CapabilityRayTracingClusterAccelerationStructureNV:
+			if (options.es || options.version < 460 || !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Cluster AS requires Vulkan GLSL 460.");
+			require_extension_internal("GL_NV_cluster_acceleration_structure");
+			ray_tracing_is_khr = true;
+			break;
+
 		case CapabilityTensorsARM:
 			if (options.es || options.version < 460 || !options.vulkan_semantics)
 				SPIRV_CROSS_THROW("Tensor requires Vulkan GLSL 460.");
@@ -10349,6 +10356,14 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInCullPrimitiveEXT:
 		return "gl_CullPrimitiveEXT";
 
+	case BuiltInClusterIDNV:
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Can only use ClusterIDNV in Vulkan GLSL.");
+		require_extension_internal("GL_NV_cluster_acceleration_structure");
+		return "gl_ClusterIDNV";
+	}
+
 	default:
 		return join("gl_BuiltIn_", convert_to_string(builtin));
 	}
@@ -15499,6 +15514,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	GLSL_RAY_QUERY_GET_OP2(IntersectionWorldToObject);
 #undef GLSL_RAY_QUERY_GET_OP
 #undef GLSL_RAY_QUERY_GET_OP2
+	case OpRayQueryGetClusterIdNV:
+		flush_variable_declaration(ops[2]);
+		emit_op(ops[0], ops[1], join("rayQueryGetIntersectionClusterIdNV(", to_expression(ops[2]), ", ", "bool(", to_expression(ops[3]), "))"), false);
+		break;
 	case OpTensorQuerySizeARM:
 		flush_variable_declaration(ops[1]);
 		// tensorSizeARM(tensor, dimension)
