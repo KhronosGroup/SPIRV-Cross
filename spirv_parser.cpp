@@ -647,10 +647,11 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t id = ops[0];
 		auto &type = set<SPIRType>(id, op);
 
-		type.basetype = SPIRType::CoopVecNv;
+		type.basetype = SPIRType::CoopVecNV;
 		type.op = op;
 		type.ext.coopVecNV.component_type_id = ops[1];
 		type.ext.coopVecNV.component_count_id = ops[2];
+		type.parent_type = ops[1];
 
 		// CoopVec-Nv can be used with integer operations like SMax where
 		// where spirv-opt does explicit checks on integer bitwidth
