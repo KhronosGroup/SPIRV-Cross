@@ -41,6 +41,9 @@ using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
+namespace SPIRV_CROSS_NAMESPACE
+{
+
 enum ExtraSubExpressionType
 {
 	// Create masks above any legal ID range to allow multiple address spaces into the extra_sub_expressions map.
@@ -48,35 +51,45 @@ enum ExtraSubExpressionType
 	EXTRA_SUB_EXPRESSION_TYPE_AUX = 0x20000000
 };
 
-const std::vector<std::tuple<uint32_t, const char *>> COOPVEC_COMPONENT_TYPE_NAMES = {
-	{ 0, "gl_ComponentTypeFloat16NV" },
-	{ 1, "gl_ComponentTypeFloat32NV" },
-	{ 2, "gl_ComponentTypeFloat64NV" },
-	{ 3, "gl_ComponentTypeSignedInt8NV" },
-	{ 4, "gl_ComponentTypeSignedInt16NV" },
-	{ 5, "gl_ComponentTypeSignedInt32NV" },
-	{ 6, "gl_ComponentTypeSignedInt64NV" },
-	{ 7, "gl_ComponentTypeUnsignedInt8NV" },
-	{ 8, "gl_ComponentTypeUnsignedInt16NV" },
-	{ 9, "gl_ComponentTypeUnsignedInt32NV" },
-	{ 10, "gl_ComponentTypeUnsignedInt64NV" },
-	{ 1000491000, "gl_ComponentTypeSignedInt8PackedNV" },
-	{ 1000491001, "gl_ComponentTypeUnsignedInt8PackedNV" },
-	{ 1000491002, "gl_ComponentTypeFloatE4M3NV" },
-	{ 1000491003, "gl_ComponentTypeFloatE5M2NV" },
+struct GlslConstantNameMapping
+{
+	uint32_t value;
+	const char *alias;
 };
 
-const std::vector<std::tuple<uint32_t, const char *>> COOPVEC_MATRIX_LAYOUT_NAMES = {
-	{ 0, "gl_CooperativeVectorMatrixLayoutRowMajorNV" },
-	{ 1, "gl_CooperativeVectorMatrixLayoutColumnMajorNV" },
-	{ 2, "gl_CooperativeVectorMatrixLayoutInferencingOptimalNV" },
-	{ 3, "gl_CooperativeVectorMatrixLayoutTrainingOptimalNV" },
+#define DEF_GLSL_MAPPING(x) { x, "gl_" #x }
+#define DEF_GLSL_MAPPING_EXT(x) { x##KHR, "gl_" #x }
+static const GlslConstantNameMapping CoopVecComponentTypeNames[] = {
+	DEF_GLSL_MAPPING(ComponentTypeFloat16NV),
+	DEF_GLSL_MAPPING(ComponentTypeFloat32NV),
+	DEF_GLSL_MAPPING(ComponentTypeFloat64NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt8NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt16NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt32NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt64NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt8NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt16NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt32NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt64NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt8PackedNV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt8PackedNV),
+	DEF_GLSL_MAPPING(ComponentTypeFloatE4M3NV),
+	DEF_GLSL_MAPPING(ComponentTypeFloatE5M2NV),
 };
 
-const std::vector<std::tuple<uint32_t, const char *>> COOPMAT_MATRIX_LAYOUT_NAMES = {
-	{ 0, "gl_CooperativeMatrixLayoutRowMajor" },
-	{ 1, "gl_CooperativeMatrixLayoutColumnMajor" },
+static const GlslConstantNameMapping CoopVecMatrixLayoutNames[] = {
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutRowMajorNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutColumnMajorNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutInferencingOptimalNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutTrainingOptimalNV),
 };
+
+static const GlslConstantNameMapping CoopMatMatrixLayoutNames[] = {
+	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutRowMajor),
+	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutColumnMajor),
+};
+#undef DEF_GLSL_MAPPING
+#undef DEF_GLSL_MAPPING_EXT
 
 static bool is_unsigned_opcode(Op op)
 {
@@ -188,6 +201,7 @@ static BufferPackingStandard packing_to_substruct_packing(BufferPackingStandard 
 	default:
 		return packing;
 	}
+}
 }
 
 void CompilerGLSL::init()
@@ -15724,13 +15738,6 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpCooperativeVectorOuterProductAccumulateNV:
 	{
-		//Pointer
-		//Offset
-		//A
-		//B
-		//MemoryLayout
-		//MatrixInterpretation
-		//MatrixStride
 		auto buf = ops[0];
 		auto offset = ops[1];
 		auto v1 = ops[2];
@@ -15738,13 +15745,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto matrix_layout_id = ops[4];
 		auto matrix_iterpretation_id = ops[5];
 		auto matrix_stride_id = length >= 6 ? ops[6] : 0;
-		//void coopVecOuterProductAccumulateNV(const coopvecNV<T, M> v1, const coopvecNV<T, N> v2,
-		//T[] buf, uint offset, uint stride,
-		//int matrixLayout, int matrixInterpretation);
 		statement(join("coopVecOuterProductAccumulateNV(", to_expression(v1), ", ", to_expression(v2), ", ",
 		               to_expression(buf), ", ", to_expression(offset), ", ",
 		               matrix_stride_id ? to_expression(matrix_stride_id) : "0", ", ", to_expression(matrix_layout_id),
-		               ", ", to_pretty_expression_if_int_constant(matrix_iterpretation_id, COOPVEC_COMPONENT_TYPE_NAMES),
+		               ", ", to_pretty_expression_if_int_constant(
+							   matrix_iterpretation_id, std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames)),
 		               ");"));
 		register_write(ops[0]);
 		break;
@@ -15752,14 +15757,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 	case OpCooperativeVectorReduceSumAccumulateNV:
 	{
-		//Pointer
-		//Offset
-		//V
 		auto buf = ops[0];
 		auto offset = ops[1];
 		auto v1 = ops[2];
-		//void coopVecReduceSumAccumulateNV(const coopvecNV<VectorElemTy, NumComps> v,
-		//T[] buf, uint offset);
 		statement(join("coopVecReduceSumAccumulateNV(", to_expression(v1), ", ", to_expression(buf), ", ",
 		               to_expression(offset), ");"));
 		register_write(ops[0]);
@@ -15791,16 +15791,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// arguments 3, 6 and in case of MulAddNv also 9 use component type int constants
 			if (i == 3 || i == 6 || (i == 9 && opcode == OpCooperativeVectorMatrixMulAddNV))
 			{
-				stmt += to_pretty_expression_if_int_constant(ops[i], COOPVEC_COMPONENT_TYPE_NAMES);
+				stmt += to_pretty_expression_if_int_constant(
+						ops[i], std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames));
 			}
 			else
-			{
 				stmt += to_expression(ops[i]);
-			}
+
 			if (i < length - 1)
-			{
 				stmt += ", ";
-			}
 		}
 		stmt += ");";
 		statement(stmt);
@@ -15834,7 +15832,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!is_forcing_recompilation())
 			split_expr = split_coopmat_pointer(expr);
 
-		string layout_expr = to_pretty_expression_if_int_constant(ops[3], COOPMAT_MATRIX_LAYOUT_NAMES);
+		string layout_expr = to_pretty_expression_if_int_constant(
+				ops[3], std::begin(CoopMatMatrixLayoutNames), std::end(CoopMatMatrixLayoutNames));
 		statement("coopMatLoad(", to_expression(id), ", ", split_expr.first, ", ", split_expr.second, ", ",
 		          to_expression(ops[4]), ", ", layout_expr, ");");
 
@@ -15856,7 +15855,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!is_forcing_recompilation())
 			split_expr = split_coopmat_pointer(expr);
 
-		string layout_expr = to_pretty_expression_if_int_constant(ops[2], COOPMAT_MATRIX_LAYOUT_NAMES);
+		string layout_expr = to_pretty_expression_if_int_constant(
+				ops[2], std::begin(CoopMatMatrixLayoutNames), std::end(CoopMatMatrixLayoutNames));
 
 		statement("coopMatStore(", to_expression(ops[1]), ", ", split_expr.first, ", ", split_expr.second, ", ",
 		          to_expression(ops[3]), ", ", layout_expr, ");");
@@ -19981,21 +19981,18 @@ std::string CompilerGLSL::format_double(double value) const
 }
 
 std::string CompilerGLSL::to_pretty_expression_if_int_constant(
-    uint32_t id, const std::vector<std::tuple<uint32_t, const char *>> pretty_names, bool register_expression_read)
+		uint32_t id,
+		const GlslConstantNameMapping *mapping_start, const GlslConstantNameMapping *mapping_end,
+		bool register_expression_read)
 {
+	auto *c = maybe_get<SPIRConstant>(id);
+	if (c && !c->specialization)
 	{
-		auto maybe_constant = maybe_get<SPIRConstant>(id);
-		if (maybe_constant && !maybe_constant->specialization)
-		{
-			auto value = static_cast<size_t>(maybe_constant->scalar());
-			auto pretty_name = std::find_if(pretty_names.begin(), pretty_names.end(),
-			                                [value](std::tuple<uint32_t, const char *> idx_name)
-			                                { return std::get<0>(idx_name) == value; });
-			if (pretty_name != pretty_names.end())
-			{
-				return std::get<1>(*pretty_name);
-			}
-		}
-		return join("int(", to_expression(id, register_expression_read), ")");
+		auto value = c->scalar();
+		auto pretty_name = std::find_if(mapping_start, mapping_end,
+		                                [value](const GlslConstantNameMapping &mapping) { return mapping.value == value; });
+		if (pretty_name != mapping_end)
+			return pretty_name->alias;
 	}
+	return join("int(", to_expression(id, register_expression_read), ")");
 }
