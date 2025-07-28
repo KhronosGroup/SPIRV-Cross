@@ -13927,8 +13927,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (type.op == OpTypeCooperativeMatrixKHR && opcode == OpFConvert)
 		{
 			auto &expr_type = expression_type(ops[2]);
-			if (get<SPIRConstant>(type.cooperative.use_id).scalar() !=
-			    get<SPIRConstant>(expr_type.cooperative.use_id).scalar())
+			if (get<SPIRConstant>(type.ext.cooperative.use_id).scalar() !=
+			    get<SPIRConstant>(expr_type.ext.cooperative.use_id).scalar())
 			{
 				// Somewhat questionable with spec constant uses.
 				if (!options.vulkan_semantics)
@@ -16763,12 +16763,12 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return "rayQueryEXT";
 
 	case SPIRType::Tensor:
-		if (type.tensor.rank == 0)
+		if (type.ext.tensor.rank == 0)
 			SPIRV_CROSS_THROW("GLSL tensors must have a Rank.");
-		if (type.tensor.shape != 0)
+		if (type.ext.tensor.shape != 0)
 			SPIRV_CROSS_THROW("GLSL tensors cannot have a Shape.");
-		return join("tensorARM<", type_to_glsl(get<SPIRType>(type.tensor.type)), ", ",
-								to_expression(type.tensor.rank), ">");
+		return join("tensorARM<", type_to_glsl(get<SPIRType>(type.ext.tensor.type)), ", ",
+								to_expression(type.ext.tensor.rank), ">");
 
 	case SPIRType::Void:
 		return "void";
@@ -16803,9 +16803,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cooperative vector NV only available in Vulkan.");
 
-		std::string component_type_str = type_to_glsl(get<SPIRType>(type.coopVecNv.component_type_id));
+		std::string component_type_str = type_to_glsl(get<SPIRType>(type.ext.coopVecNV.component_type_id));
 
-		return join("coopvecNV<", component_type_str, ", ", to_expression(type.coopVecNv.component_count_id), ">");
+		return join("coopvecNV<", component_type_str, ", ", to_expression(type.ext.coopVecNV.component_count_id), ">");
 	}
 
 	const SPIRType *coop_type = &type;
@@ -16818,7 +16818,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cooperative matrix only available in Vulkan.");
 		// GLSL doesn't support this as spec constant, which makes sense ...
-		uint32_t use_type = get<SPIRConstant>(coop_type->cooperative.use_id).scalar();
+		uint32_t use_type = get<SPIRConstant>(coop_type->ext.cooperative.use_id).scalar();
 
 		const char *use = nullptr;
 		switch (use_type)
@@ -16840,7 +16840,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		}
 
 		string scope_expr;
-		if (const auto *scope = maybe_get<SPIRConstant>(coop_type->cooperative.scope_id))
+		if (const auto *scope = maybe_get<SPIRConstant>(coop_type->ext.cooperative.scope_id))
 		{
 			if (!scope->specialization)
 			{
@@ -16855,12 +16855,12 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		}
 
 		if (scope_expr.empty())
-			scope_expr = to_expression(coop_type->cooperative.scope_id);
+			scope_expr = to_expression(coop_type->ext.cooperative.scope_id);
 
 		return join("coopmat<", type_to_glsl(get<SPIRType>(coop_type->parent_type)), ", ",
 		            scope_expr, ", ",
-		            to_expression(coop_type->cooperative.rows_id), ", ",
-		            to_expression(coop_type->cooperative.columns_id), ", ", use, ">");
+		            to_expression(coop_type->ext.cooperative.rows_id), ", ",
+		            to_expression(coop_type->ext.cooperative.columns_id), ", ", use, ">");
 	}
 
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin

@@ -611,19 +611,29 @@ struct SPIRType : IVariant
 	bool pointer = false;
 	bool forward_pointer = false;
 
-	struct
+	union
 	{
-		uint32_t use_id = 0;
-		uint32_t rows_id = 0;
-		uint32_t columns_id = 0;
-		uint32_t scope_id = 0;
-	} cooperative;
+		struct
+		{
+			uint32_t use_id;
+			uint32_t rows_id;
+			uint32_t columns_id;
+			uint32_t scope_id;
+		} cooperative;
 
-	struct
-	{
-		uint32_t component_type_id = 0;
-		uint32_t component_count_id = 0;
-	} coopVecNv;
+		struct
+		{
+			uint32_t component_type_id;
+			uint32_t component_count_id;
+		} coopVecNV;
+
+		struct
+		{
+			uint32_t type;
+			uint32_t rank;
+			uint32_t shape;
+		} tensor;
+	} ext;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
 
@@ -644,13 +654,6 @@ struct SPIRType : IVariant
 		spv::ImageFormat format;
 		spv::AccessQualifier access;
 	} image = {};
-
-	struct TensorType
-	{
-		TypeID type;
-		TypeID rank;
-		TypeID shape;
-	} tensor;
 
 	// Structs can be declared multiple times if they are used as part of interface blocks.
 	// We want to detect this so that we only emit the struct definition once.

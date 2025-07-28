@@ -633,10 +633,10 @@ void Parser::parse(const Instruction &instruction)
 		auto &matrixbase = set<SPIRType>(id, base);
 
 		matrixbase.op = op;
-		matrixbase.cooperative.scope_id = ops[2];
-		matrixbase.cooperative.rows_id = ops[3];
-		matrixbase.cooperative.columns_id = ops[4];
-		matrixbase.cooperative.use_id = ops[5];
+		matrixbase.ext.cooperative.scope_id = ops[2];
+		matrixbase.ext.cooperative.rows_id = ops[3];
+		matrixbase.ext.cooperative.columns_id = ops[4];
+		matrixbase.ext.cooperative.use_id = ops[5];
 		matrixbase.self = id;
 		matrixbase.parent_type = ops[1];
 		break;
@@ -649,12 +649,12 @@ void Parser::parse(const Instruction &instruction)
 
 		type.basetype = SPIRType::CoopVecNv;
 		type.op = op;
-		type.coopVecNv.component_type_id = ops[1];
-		type.coopVecNv.component_count_id = ops[2];
+		type.ext.coopVecNV.component_type_id = ops[1];
+		type.ext.coopVecNV.component_count_id = ops[2];
 
 		// CoopVec-Nv can be used with integer operations like SMax where
 		// where spirv-opt does explicit checks on integer bitwidth
-		auto component_type = get<SPIRType>(type.coopVecNv.component_type_id);
+		auto component_type = get<SPIRType>(type.ext.coopVecNV.component_type_id);
 		type.width = component_type.width;
 		break;
 	}
@@ -861,11 +861,12 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t id = ops[0];
 		auto &type = set<SPIRType>(id, op);
 		type.basetype = SPIRType::Tensor;
-		type.tensor.type = ops[1];
+		type.ext.tensor = {};
+		type.ext.tensor.type = ops[1];
 		if (length >= 3)
-			type.tensor.rank = ops[2];
+			type.ext.tensor.rank = ops[2];
 		if (length >= 4)
-			type.tensor.shape = ops[3];
+			type.ext.tensor.shape = ops[3];
 		break;
 	}
 
