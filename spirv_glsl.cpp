@@ -15747,7 +15747,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto matrix_stride_id = length >= 6 ? ops[6] : 0;
 		statement(join("coopVecOuterProductAccumulateNV(", to_expression(v1), ", ", to_expression(v2), ", ",
 		               to_expression(buf), ", ", to_expression(offset), ", ",
-		               matrix_stride_id ? to_expression(matrix_stride_id) : "0", ", ", to_expression(matrix_layout_id),
+		               matrix_stride_id ? to_expression(matrix_stride_id) : "0",
+					   ", ", to_pretty_expression_if_int_constant(
+							   matrix_layout_id, std::begin(CoopVecMatrixLayoutNames), std::end(CoopVecMatrixLayoutNames)),
 		               ", ", to_pretty_expression_if_int_constant(
 							   matrix_iterpretation_id, std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames)),
 		               ");"));
@@ -15793,6 +15795,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			{
 				stmt += to_pretty_expression_if_int_constant(
 						ops[i], std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames));
+			}
+			else if ((i == 12 && opcode == OpCooperativeVectorMatrixMulAddNV) ||
+			         (i == 9 && opcode == OpCooperativeVectorMatrixMulNV))
+			{
+				stmt += to_pretty_expression_if_int_constant(
+						ops[i], std::begin(CoopVecMatrixLayoutNames), std::end(CoopVecMatrixLayoutNames));
 			}
 			else
 				stmt += to_expression(ops[i]);
