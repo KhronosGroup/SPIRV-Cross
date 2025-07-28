@@ -41,12 +41,55 @@ using namespace spv;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
+namespace SPIRV_CROSS_NAMESPACE
+{
+
 enum ExtraSubExpressionType
 {
 	// Create masks above any legal ID range to allow multiple address spaces into the extra_sub_expressions map.
 	EXTRA_SUB_EXPRESSION_TYPE_STREAM_OFFSET = 0x10000000,
 	EXTRA_SUB_EXPRESSION_TYPE_AUX = 0x20000000
 };
+
+struct GlslConstantNameMapping
+{
+	uint32_t value;
+	const char *alias;
+};
+
+#define DEF_GLSL_MAPPING(x) { x, "gl_" #x }
+#define DEF_GLSL_MAPPING_EXT(x) { x##KHR, "gl_" #x }
+static const GlslConstantNameMapping CoopVecComponentTypeNames[] = {
+	DEF_GLSL_MAPPING(ComponentTypeFloat16NV),
+	DEF_GLSL_MAPPING(ComponentTypeFloat32NV),
+	DEF_GLSL_MAPPING(ComponentTypeFloat64NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt8NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt16NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt32NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt64NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt8NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt16NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt32NV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt64NV),
+	DEF_GLSL_MAPPING(ComponentTypeSignedInt8PackedNV),
+	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt8PackedNV),
+	DEF_GLSL_MAPPING(ComponentTypeFloatE4M3NV),
+	DEF_GLSL_MAPPING(ComponentTypeFloatE5M2NV),
+};
+
+static const GlslConstantNameMapping CoopVecMatrixLayoutNames[] = {
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutRowMajorNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutColumnMajorNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutInferencingOptimalNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutTrainingOptimalNV),
+};
+
+static const GlslConstantNameMapping CoopMatMatrixLayoutNames[] = {
+	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutRowMajor),
+	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutColumnMajor),
+};
+#undef DEF_GLSL_MAPPING
+#undef DEF_GLSL_MAPPING_EXT
 
 static bool is_unsigned_opcode(Op op)
 {
@@ -158,6 +201,7 @@ static BufferPackingStandard packing_to_substruct_packing(BufferPackingStandard 
 	default:
 		return packing;
 	}
+}
 }
 
 void CompilerGLSL::init()
@@ -13883,8 +13927,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (type.op == OpTypeCooperativeMatrixKHR && opcode == OpFConvert)
 		{
 			auto &expr_type = expression_type(ops[2]);
-			if (get<SPIRConstant>(type.cooperative.use_id).scalar() !=
-			    get<SPIRConstant>(expr_type.cooperative.use_id).scalar())
+			if (get<SPIRConstant>(type.ext.cooperative.use_id).scalar() !=
+			    get<SPIRConstant>(expr_type.ext.cooperative.use_id).scalar())
 			{
 				// Somewhat questionable with spec constant uses.
 				if (!options.vulkan_semantics)
@@ -15671,6 +15715,104 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCooperativeVectorLoadNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		statement("coopVecLoadNV(", to_expression(id), ", ", to_expression(ops[2]), ", ", to_expression(ops[3]), ");");
+		register_read(id, ops[2], false);
+		break;
+	}
+
+	case OpCooperativeVectorStoreNV:
+	{
+		uint32_t id = ops[0];
+
+		statement("coopVecStoreNV(", to_expression(ops[2]), ", ", to_expression(id), ", ", to_expression(ops[1]), ");");
+		register_write(ops[2]);
+		break;
+	}
+
+	case OpCooperativeVectorOuterProductAccumulateNV:
+	{
+		auto buf = ops[0];
+		auto offset = ops[1];
+		auto v1 = ops[2];
+		auto v2 = ops[3];
+		auto matrix_layout_id = ops[4];
+		auto matrix_iterpretation_id = ops[5];
+		auto matrix_stride_id = length >= 6 ? ops[6] : 0;
+		statement(join("coopVecOuterProductAccumulateNV(", to_expression(v1), ", ", to_expression(v2), ", ",
+		               to_expression(buf), ", ", to_expression(offset), ", ",
+		               matrix_stride_id ? to_expression(matrix_stride_id) : "0",
+					   ", ", to_pretty_expression_if_int_constant(
+							   matrix_layout_id, std::begin(CoopVecMatrixLayoutNames), std::end(CoopVecMatrixLayoutNames)),
+		               ", ", to_pretty_expression_if_int_constant(
+							   matrix_iterpretation_id, std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames)),
+		               ");"));
+		register_write(ops[0]);
+		break;
+	}
+
+	case OpCooperativeVectorReduceSumAccumulateNV:
+	{
+		auto buf = ops[0];
+		auto offset = ops[1];
+		auto v1 = ops[2];
+		statement(join("coopVecReduceSumAccumulateNV(", to_expression(v1), ", ", to_expression(buf), ", ",
+		               to_expression(offset), ");"));
+		register_write(ops[0]);
+		break;
+	}
+
+	case OpCooperativeVectorMatrixMulNV:
+	case OpCooperativeVectorMatrixMulAddNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		std::string stmt;
+		switch (opcode)
+		{
+		case OpCooperativeVectorMatrixMulAddNV:
+			stmt += "coopVecMatMulAddNV(";
+			break;
+		case OpCooperativeVectorMatrixMulNV:
+			stmt += "coopVecMatMulNV(";
+			break;
+		default:
+			SPIRV_CROSS_THROW("Invalid op code for coopvec instruction.");
+		}
+		for (uint32_t i = 1; i < length; i++)
+		{
+			// arguments 3, 6 and in case of MulAddNv also 9 use component type int constants
+			if (i == 3 || i == 6 || (i == 9 && opcode == OpCooperativeVectorMatrixMulAddNV))
+			{
+				stmt += to_pretty_expression_if_int_constant(
+						ops[i], std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames));
+			}
+			else if ((i == 12 && opcode == OpCooperativeVectorMatrixMulAddNV) ||
+			         (i == 9 && opcode == OpCooperativeVectorMatrixMulNV))
+			{
+				stmt += to_pretty_expression_if_int_constant(
+						ops[i], std::begin(CoopVecMatrixLayoutNames), std::end(CoopVecMatrixLayoutNames));
+			}
+			else
+				stmt += to_expression(ops[i]);
+
+			if (i < length - 1)
+				stmt += ", ";
+		}
+		stmt += ");";
+		statement(stmt);
+		break;
+	}
+
 	case OpCooperativeMatrixLengthKHR:
 	{
 		// Need to synthesize a dummy temporary, since the SPIR-V opcode is based on the type.
@@ -15698,27 +15840,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!is_forcing_recompilation())
 			split_expr = split_coopmat_pointer(expr);
 
-		string layout_expr;
-		if (const auto *layout = maybe_get<SPIRConstant>(ops[3]))
-		{
-			if (!layout->specialization)
-			{
-				if (layout->scalar() == spv::CooperativeMatrixLayoutColumnMajorKHR)
-					layout_expr = "gl_CooperativeMatrixLayoutColumnMajor";
-				else
-					layout_expr = "gl_CooperativeMatrixLayoutRowMajor";
-			}
-		}
-
-		if (layout_expr.empty())
-			layout_expr = join("int(", to_expression(ops[3]), ")");
-
-		statement("coopMatLoad(",
-		          to_expression(id), ", ",
-		          split_expr.first, ", ",
-		          split_expr.second, ", ",
-		          to_expression(ops[4]), ", ",
-		          layout_expr, ");");
+		string layout_expr = to_pretty_expression_if_int_constant(
+				ops[3], std::begin(CoopMatMatrixLayoutNames), std::end(CoopMatMatrixLayoutNames));
+		statement("coopMatLoad(", to_expression(id), ", ", split_expr.first, ", ", split_expr.second, ", ",
+		          to_expression(ops[4]), ", ", layout_expr, ");");
 
 		register_read(id, ops[2], false);
 		break;
@@ -15738,27 +15863,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!is_forcing_recompilation())
 			split_expr = split_coopmat_pointer(expr);
 
-		string layout_expr;
-		if (const auto *layout = maybe_get<SPIRConstant>(ops[2]))
-		{
-			if (!layout->specialization)
-			{
-				if (layout->scalar() == spv::CooperativeMatrixLayoutColumnMajorKHR)
-					layout_expr = "gl_CooperativeMatrixLayoutColumnMajor";
-				else
-					layout_expr = "gl_CooperativeMatrixLayoutRowMajor";
-			}
-		}
+		string layout_expr = to_pretty_expression_if_int_constant(
+				ops[2], std::begin(CoopMatMatrixLayoutNames), std::end(CoopMatMatrixLayoutNames));
 
-		if (layout_expr.empty())
-			layout_expr = join("int(", to_expression(ops[2]), ")");
-
-		statement("coopMatStore(",
-		          to_expression(ops[1]), ", ",
-		          split_expr.first, ", ",
-		          split_expr.second, ", ",
-		          to_expression(ops[3]), ", ",
-		          layout_expr, ");");
+		statement("coopMatStore(", to_expression(ops[1]), ", ", split_expr.first, ", ", split_expr.second, ", ",
+		          to_expression(ops[3]), ", ", layout_expr, ");");
 
 		// TODO: Do we care about memory operands?
 
@@ -16662,12 +16771,12 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		return "rayQueryEXT";
 
 	case SPIRType::Tensor:
-		if (type.tensor.rank == 0)
+		if (type.ext.tensor.rank == 0)
 			SPIRV_CROSS_THROW("GLSL tensors must have a Rank.");
-		if (type.tensor.shape != 0)
+		if (type.ext.tensor.shape != 0)
 			SPIRV_CROSS_THROW("GLSL tensors cannot have a Shape.");
-		return join("tensorARM<", type_to_glsl(get<SPIRType>(type.tensor.type)), ", ",
-								to_expression(type.tensor.rank), ">");
+		return join("tensorARM<", type_to_glsl(get<SPIRType>(type.ext.tensor.type)), ", ",
+								to_expression(type.ext.tensor.rank), ">");
 
 	case SPIRType::Void:
 		return "void";
@@ -16696,6 +16805,17 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			require_extension_internal("GL_ARB_shader_atomic_counters");
 	}
 
+	if (type.op == spv::OpTypeCooperativeVectorNV)
+	{
+		require_extension_internal("GL_NV_cooperative_vector");
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Cooperative vector NV only available in Vulkan.");
+
+		std::string component_type_str = type_to_glsl(get<SPIRType>(type.ext.coopVecNV.component_type_id));
+
+		return join("coopvecNV<", component_type_str, ", ", to_expression(type.ext.coopVecNV.component_count_id), ">");
+	}
+
 	const SPIRType *coop_type = &type;
 	while (is_pointer(*coop_type) || is_array(*coop_type))
 		coop_type = &get<SPIRType>(coop_type->parent_type);
@@ -16706,7 +16826,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cooperative matrix only available in Vulkan.");
 		// GLSL doesn't support this as spec constant, which makes sense ...
-		uint32_t use_type = get<SPIRConstant>(coop_type->cooperative.use_id).scalar();
+		uint32_t use_type = get<SPIRConstant>(coop_type->ext.cooperative.use_id).scalar();
 
 		const char *use = nullptr;
 		switch (use_type)
@@ -16728,7 +16848,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		}
 
 		string scope_expr;
-		if (const auto *scope = maybe_get<SPIRConstant>(coop_type->cooperative.scope_id))
+		if (const auto *scope = maybe_get<SPIRConstant>(coop_type->ext.cooperative.scope_id))
 		{
 			if (!scope->specialization)
 			{
@@ -16743,12 +16863,12 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		}
 
 		if (scope_expr.empty())
-			scope_expr = to_expression(coop_type->cooperative.scope_id);
+			scope_expr = to_expression(coop_type->ext.cooperative.scope_id);
 
 		return join("coopmat<", type_to_glsl(get<SPIRType>(coop_type->parent_type)), ", ",
 		            scope_expr, ", ",
-		            to_expression(coop_type->cooperative.rows_id), ", ",
-		            to_expression(coop_type->cooperative.columns_id), ", ", use, ">");
+		            to_expression(coop_type->ext.cooperative.rows_id), ", ",
+		            to_expression(coop_type->ext.cooperative.columns_id), ", ", use, ">");
 	}
 
 	if (type.vecsize == 1 && type.columns == 1) // Scalar builtin
@@ -19868,3 +19988,19 @@ std::string CompilerGLSL::format_double(double value) const
 	return convert_to_string(value, current_locale_radix_character);
 }
 
+std::string CompilerGLSL::to_pretty_expression_if_int_constant(
+		uint32_t id,
+		const GlslConstantNameMapping *mapping_start, const GlslConstantNameMapping *mapping_end,
+		bool register_expression_read)
+{
+	auto *c = maybe_get<SPIRConstant>(id);
+	if (c && !c->specialization)
+	{
+		auto value = c->scalar();
+		auto pretty_name = std::find_if(mapping_start, mapping_end,
+		                                [value](const GlslConstantNameMapping &mapping) { return mapping.value == value; });
+		if (pretty_name != mapping_end)
+			return pretty_name->alias;
+	}
+	return join("int(", to_expression(id, register_expression_read), ")");
+}
