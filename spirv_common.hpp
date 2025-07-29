@@ -32,6 +32,7 @@
 #include "spirv_cross_containers.hpp"
 #include "spirv_cross_error_handling.hpp"
 #include <functional>
+#include <array>
 
 // A bit crude, but allows projects which embed SPIRV-Cross statically to
 // effectively hide all the symbols from other projects.
@@ -575,6 +576,8 @@ struct SPIRType : IVariant
 		AccelerationStructure,
 		RayQuery,
 		CoopVecNV,
+		TensorLayoutNv,
+		TensorViewNv,
 
 		// Keep internal types at the end.
 		ControlPointArray,
@@ -633,6 +636,20 @@ struct SPIRType : IVariant
 			uint32_t rank;
 			uint32_t shape;
 		} tensor;
+
+		struct
+		{
+			uint32_t dim_id;
+			uint32_t clamp_mode_id;
+		} tensorLayoutNv;
+
+		struct
+		{
+			uint32_t dim_id;
+			uint32_t has_dimensions_id;
+			// From spec on Dims: "The value must be greater than zero and less than or equal to 5."
+			std::array<int32_t, 5> dim_ids;
+		} tensorViewNv;
 	} ext;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
@@ -997,6 +1014,8 @@ struct SPIRFunction : IVariant
 		// read and write counts as access to the function arguments
 		// is not local to the function in question.
 		bool alias_global_variable;
+	        spv::StorageClass storage;
+	        bool force_const;
 	};
 
 	// When calling a function, and we're remapping separate image samplers,
@@ -1044,7 +1063,7 @@ struct SPIRFunction : IVariant
 	void add_parameter(TypeID parameter_type, ID id, bool alias_global_variable = false)
 	{
 		// Arguments are read-only until proven otherwise.
-		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
+		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable, spv::StorageClassGeneric, false });
 	}
 
 	// Hooks to be run when the function returns.
