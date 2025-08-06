@@ -5851,8 +5851,22 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 
 	case OpCompositeExtract:
 	{
-		auto expr = access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1),
-		                                  ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+		// Trivial vector extracts (of WorkGroupSize typically),
+		// punch through to the input spec constant if the composite is used as array size.
+		const auto *c = maybe_get<SPIRConstant>(cop.arguments[0]);
+
+		string expr;
+		if (c && cop.arguments.size() == 2 && c->is_used_as_array_length &&
+		    !backend.supports_spec_constant_array_size &&
+		    is_vector(get<SPIRType>(c->constant_type)))
+		{
+			expr = to_expression(c->specialization_constant_id(0, cop.arguments[1]));
+		}
+		else
+		{
+			expr = access_chain_internal(cop.arguments[0], &cop.arguments[1], uint32_t(cop.arguments.size() - 1),
+			                             ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
+		}
 		return expr;
 	}
 
