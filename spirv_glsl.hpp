@@ -666,6 +666,7 @@ protected:
 		bool workgroup_size_is_hidden = false;
 		bool requires_relaxed_precision_analysis = false;
 		bool implicit_c_integer_promotion_rules = false;
+		bool supports_spec_constant_array_size = true;
 	} backend;
 
 	void emit_struct(SPIRType &type);
