@@ -15108,8 +15108,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		{
 			emit_spv_amd_gcn_shader_op(ops[0], ops[1], ops[3], &ops[4], length - 4);
 		}
+		else if (ext == SPIRExtension::NonSemanticShaderDebugInfo)
+		{
+			emit_non_semantic_shader_debug_info(ops[0], ops[1], ops[3], &ops[4], length - 4);
+		}
 		else if (ext == SPIRExtension::SPV_debug_info ||
-		         ext == SPIRExtension::NonSemanticShaderDebugInfo ||
 		         ext == SPIRExtension::NonSemanticGeneric)
 		{
 			break; // Ignore SPIR-V debug information extended instructions.
@@ -19365,6 +19368,34 @@ void CompilerGLSL::emit_line_directive(uint32_t file_id, uint32_t line_literal)
 	{
 		require_extension_internal("GL_GOOGLE_cpp_style_line_directive");
 		statement_no_indent("#line ", line_literal, " \"", get<SPIRString>(file_id).str, "\"");
+	}
+}
+
+void CompilerGLSL::emit_non_semantic_shader_debug_info(uint32_t, uint32_t result_id, uint32_t eop,
+                                                       const uint32_t *args, uint32_t)
+{
+	if (!options.emit_line_directives)
+		return;
+
+	switch (eop)
+	{
+	case SPIRExtension::DebugLine:
+	{
+		// We're missing line end and columns here, but I don't think we can emit those in any meaningful way.
+		emit_line_directive(args[0], get<SPIRConstant>(args[1]).scalar());
+		break;
+	}
+
+	case SPIRExtension::DebugSource:
+	{
+		// Forward the string declaration here. We ignore the optional text operand.
+		auto &str = get<SPIRString>(args[0]).str;
+		set<SPIRString>(result_id, str);
+		break;
+	}
+
+	default:
+		break;
 	}
 }
 

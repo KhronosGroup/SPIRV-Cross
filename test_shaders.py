@@ -228,7 +228,12 @@ def cross_compile_msl(shader, spirv, opt, iterations, paths):
     if spirv:
         subprocess.check_call(spirv_cmd)
     else:
-        subprocess.check_call([paths.glslang, '--amb' ,'--target-env', glslang_env, '-V', '-o', spirv_path, shader])
+        glslang_cmd = [paths.glslang, '--amb' ,'--target-env', glslang_env, '-V', '-o', spirv_path, shader]
+        if '.g.' in shader:
+            glslang_cmd.append('-g')
+        if '.gV.' in shader:
+            glslang_cmd.append('-gV')
+        subprocess.check_call(glslang_cmd)
 
     if opt and (not shader_is_invalid_spirv(shader)):
         if '.graphics-robust-access.' in shader:
@@ -521,7 +526,12 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
     if spirv:
         subprocess.check_call(spirv_cmd)
     else:
-        subprocess.check_call([paths.glslang, '--amb', '--target-env', glslang_env, '-V', '-o', spirv_path, shader])
+        glslang_cmd = [paths.glslang, '--amb', '--target-env', glslang_env, '-V', '-o', spirv_path, shader]
+        if '.g.' in shader:
+            glslang_cmd.append('-g')
+        if '.gV.' in shader:
+            glslang_cmd.append('-gV')
+        subprocess.check_call(glslang_cmd)
 
     if opt and (not shader_is_invalid_spirv(hlsl_path)):
         subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])

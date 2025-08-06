@@ -318,6 +318,19 @@ void Parser::parse(const Instruction &instruction)
 					ir.load_type_width.insert({ ops[1], type->width });
 			}
 		}
+		else if (op == OpExtInst)
+		{
+			// Don't want to deal with ForwardRefs here.
+
+			auto &ext = get<SPIRExtension>(ops[2]);
+			if (ext.ext == SPIRExtension::NonSemanticShaderDebugInfo)
+			{
+				// Parse global ShaderDebugInfo we care about.
+				// Just forward the string information.
+				if (ops[3] == SPIRExtension::DebugSource)
+					set<SPIRString>(ops[1], get<SPIRString>(ops[4]).str);
+			}
+		}
 		break;
 	}
 

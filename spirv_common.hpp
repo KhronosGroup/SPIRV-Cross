@@ -691,6 +691,12 @@ struct SPIRExtension : IVariant
 		NonSemanticGeneric
 	};
 
+	enum ShaderDebugInfoOps
+	{
+		DebugLine = 103,
+		DebugSource = 35
+	};
+
 	explicit SPIRExtension(Extension ext_)
 	    : ext(ext_)
 	{
