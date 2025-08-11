@@ -11535,11 +11535,11 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 	{
 		auto &exp_type = expression_type(args[0]);
 		// MSL does not support scalar versions here.
-		// MSL has no implementation for normalize in the fast:: namespace for half2 and half3
+		// MSL has no implementation for normalize in the fast:: namespace for half
 		// Returns -1 or 1 for valid input, sign() does the job.
 		if (exp_type.vecsize == 1)
 			emit_unary_func_op(result_type, id, args[0], "sign");
-		else if (exp_type.vecsize <= 3 && exp_type.basetype == SPIRType::Half)
+		else if (exp_type.basetype == SPIRType::Half)
 			emit_unary_func_op(result_type, id, args[0], "normalize");
 		else
 			emit_unary_func_op(result_type, id, args[0], "fast::normalize");
