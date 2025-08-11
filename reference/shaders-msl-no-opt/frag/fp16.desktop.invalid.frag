@@ -150,7 +150,7 @@ void test_builtins(thread half4& v4, thread half3& v3, thread half& v1)
     t0 = distance(v4, v4);
     t0 = dot(v4, v4);
     half3 res3 = cross(v3, v3);
-    res = fast::normalize(v4);
+    res = normalize(v4);
     res = faceforward(v4, v4, v4);
     res = reflect(v4, v4);
     res = refract(v4, v4, v1);
