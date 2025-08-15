@@ -10621,8 +10621,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			if (ptr_chain_array_entry)
 				expr = join("(", expr, ")");
 		}
-		// Arrays
-		else if (!type->array.empty())
+		// Arrays and OpTypeCooperativeVectorNV (aka fancy arrays)
+		else if (!type->array.empty() || type->op == spv::OpTypeCooperativeVectorNV)
 		{
 			// If we are flattening multidimensional arrays, only create opening bracket on first
 			// array index.

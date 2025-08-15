@@ -34,6 +34,7 @@ void main()
     inVec = tempArg_2;
     coopvecNV<float16_t, 8u> a = coopvecNV<float16_t, 8u>(float16_t(0.0));
     inVec = max(inVec, inVec);
+    inVec[5] = inVec[3] + inVec[4];
     coopVecOuterProductAccumulateNV(inVec, inVec, _15.data_q, 0u, 0u, gl_CooperativeVectorMatrixLayoutTrainingOptimalNV, gl_ComponentTypeFloat16NV);
     coopVecReduceSumAccumulateNV(inVec, _15.data_q, 0u);
     coopvecNV<int8_t, 8u> a_8bit = coopvecNV<int8_t, 8u>(int8_t(0));
