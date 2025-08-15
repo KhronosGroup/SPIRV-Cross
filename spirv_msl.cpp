@@ -16631,7 +16631,7 @@ string CompilerMSL::type_to_array_glsl(const SPIRType &type, uint32_t variable_i
 	default:
 		if (type_is_array_of_pointers(type) || using_builtin_array())
 		{
-			const SPIRVariable *var = variable_id ? &get<SPIRVariable>(variable_id) : nullptr;
+			const SPIRVariable *var = variable_id ? maybe_get<SPIRVariable>(variable_id) : nullptr;
 			if (var && (var->storage == StorageClassUniform || var->storage == StorageClassStorageBuffer) &&
 			    is_array(get_variable_data_type(*var)))
 			{
