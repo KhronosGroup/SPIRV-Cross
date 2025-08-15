@@ -690,6 +690,8 @@ protected:
 	void emit_flattened_io_block_member(const std::string &basename, const SPIRType &type, const char *qual,
 	                                    const SmallVector<uint32_t> &indices);
 	void emit_block_chain(SPIRBlock &block);
+	BlockID emit_block_chain_inner(SPIRBlock &block);
+	void emit_block_chain_cleanup(SPIRBlock &block);
 	void emit_hoisted_temporaries(SmallVector<std::pair<TypeID, ID>> &temporaries);
 	int get_constant_mapping_to_workgroup_component(const SPIRConstant &constant) const;
 	void emit_constant(const SPIRConstant &constant);

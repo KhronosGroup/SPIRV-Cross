@@ -18112,6 +18112,26 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<TypeID, ID>> &tempo
 
 void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 {
+	SmallVector<BlockID> cleanup_stack;
+	BlockID next_block = emit_block_chain_inner(block);
+
+	while (next_block != 0)
+	{
+		cleanup_stack.push_back(next_block);
+		next_block = emit_block_chain_inner(get<SPIRBlock>(next_block));
+	}
+
+	while (!cleanup_stack.empty())
+	{
+		emit_block_chain_cleanup(get<SPIRBlock>(cleanup_stack.back()));
+		cleanup_stack.pop_back();
+	}
+
+	emit_block_chain_cleanup(block);
+}
+
+BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
+{
 	bool select_branch_to_true_block = false;
 	bool select_branch_to_false_block = false;
 	bool skip_direct_branch = false;
@@ -18161,12 +18181,13 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 	}
 
 	// Remember deferred declaration state. We will restore it before returning.
-	SmallVector<bool, 64> rearm_dominated_variables(block.dominated_variables.size());
+	assert(block.rearm_dominated_variables.empty());
+	block.rearm_dominated_variables.resize(block.dominated_variables.size());
 	for (size_t i = 0; i < block.dominated_variables.size(); i++)
 	{
 		uint32_t var_id = block.dominated_variables[i];
 		auto &var = get<SPIRVariable>(var_id);
-		rearm_dominated_variables[i] = var.deferred_declaration;
+		block.rearm_dominated_variables[i] = var.deferred_declaration;
 	}
 
 	// This is the method often used by spirv-opt to implement loops.
@@ -18759,6 +18780,8 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		SPIRV_CROSS_THROW("Unimplemented block terminator.");
 	}
 
+	BlockID trailing_block_id = 0;
+
 	if (block.next_block && emit_next_block)
 	{
 		// If we hit this case, we're dealing with an unconditional branch, which means we will output
@@ -18766,8 +18789,10 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		if (block.merge != SPIRBlock::MergeSelection)
 		{
 			flush_phi(block.self, block.next_block);
+
 			// For a direct branch, need to remember to invalidate expressions in the next linear block instead.
-			get<SPIRBlock>(block.next_block).invalidate_expressions = block.invalidate_expressions;
+			get<SPIRBlock>(block.next_block).invalidate_expressions.clear();
+			std::swap(get<SPIRBlock>(block.next_block).invalidate_expressions, block.invalidate_expressions);
 		}
 
 		// For switch fallthrough cases, we terminate the chain here, but we still need to handle Phi.
@@ -18788,7 +18813,15 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 				branch_to_continue(block.self, block.next_block);
 			}
 			else if (BlockID(block.self) != block.next_block)
-				emit_block_chain(get<SPIRBlock>(block.next_block));
+			{
+				// Recursing here is quite scary since it's quite easy to stack overflow if
+				// the SPIR-V is constructed a particular way.
+				// We have to simulate the tail call ourselves.
+				if (block.merge != SPIRBlock::MergeLoop)
+					trailing_block_id = block.next_block;
+				else
+					emit_block_chain(get<SPIRBlock>(block.next_block));
+			}
 		}
 	}
 
@@ -18830,20 +18863,28 @@ void CompilerGLSL::emit_block_chain(SPIRBlock &block)
 		if (is_continue(block.merge_block))
 			branch_to_continue(block.self, block.merge_block);
 		else
-			emit_block_chain(get<SPIRBlock>(block.merge_block));
+			trailing_block_id = block.merge_block;
 	}
 
+	return trailing_block_id;
+}
+
+void CompilerGLSL::emit_block_chain_cleanup(SPIRBlock &block)
+{
 	// Forget about control dependent expressions now.
 	block.invalidate_expressions.clear();
 
-	// After we return, we must be out of scope, so if we somehow have to re-emit this function,
+	// After we return, we must be out of scope, so if we somehow have to re-emit this block,
 	// re-declare variables if necessary.
-	assert(rearm_dominated_variables.size() == block.dominated_variables.size());
+	// We only need one array here for rearm_dominated_variables,
+	// since it should be impossible for the same block to be remitted in the same chain twice.
+	assert(block.rearm_dominated_variables.size() == block.dominated_variables.size());
 	for (size_t i = 0; i < block.dominated_variables.size(); i++)
 	{
 		uint32_t var = block.dominated_variables[i];
-		get<SPIRVariable>(var).deferred_declaration = rearm_dominated_variables[i];
+		get<SPIRVariable>(var).deferred_declaration = block.rearm_dominated_variables[i];
 	}
+	block.rearm_dominated_variables.clear();
 
 	// Just like for deferred declaration, we need to forget about loop variable enable
 	// if our block chain is reinstantiated later.
