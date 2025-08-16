@@ -213,8 +213,8 @@ void Parser::parse(const Instruction &instruction)
 
 	case OpSource:
 	{
-		auto lang = static_cast<SourceLanguage>(ops[0]);
-		switch (lang)
+		ir.source.lang = static_cast<SourceLanguage>(ops[0]);
+		switch (ir.source.lang)
 		{
 		case SourceLanguageESSL:
 			ir.source.es = true;
