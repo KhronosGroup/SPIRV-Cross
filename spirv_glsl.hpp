@@ -841,7 +841,7 @@ protected:
 	void emit_output_variable_initializer(const SPIRVariable &var);
 	std::string to_precision_qualifiers_glsl(uint32_t id);
 	virtual const char *to_storage_qualifiers_glsl(const SPIRVariable &var);
-	std::string flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags);
+	std::string flags_to_qualifiers_glsl(const SPIRType &type, uint32_t id, const Bitset &flags);
 	const char *format_to_glsl(spv::ImageFormat format);
 	virtual std::string layout_for_member(const SPIRType &type, uint32_t index);
 	virtual std::string to_interpolation_qualifiers(const Bitset &flags);

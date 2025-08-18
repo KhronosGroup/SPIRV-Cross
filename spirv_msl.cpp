@@ -9548,21 +9548,21 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	case OpFMul:
-		if (msl_options.invariant_float_math || has_decoration(ops[1], DecorationNoContraction))
+		if (msl_options.invariant_float_math || has_legacy_nocontract(ops[0], ops[1]))
 			MSL_BFOP(spvFMul);
 		else
 			MSL_BOP(*);
 		break;
 
 	case OpFAdd:
-		if (msl_options.invariant_float_math || has_decoration(ops[1], DecorationNoContraction))
+		if (msl_options.invariant_float_math || has_legacy_nocontract(ops[0], ops[1]))
 			MSL_BFOP(spvFAdd);
 		else
 			MSL_BOP(+);
 		break;
 
 	case OpFSub:
-		if (msl_options.invariant_float_math || has_decoration(ops[1], DecorationNoContraction))
+		if (msl_options.invariant_float_math || has_legacy_nocontract(ops[0], ops[1]))
 			MSL_BFOP(spvFSub);
 		else
 			MSL_BOP(-);
@@ -10060,7 +10060,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesVector:
 	{
-		if (!msl_options.invariant_float_math && !has_decoration(ops[1], DecorationNoContraction))
+		if (!msl_options.invariant_float_math && !has_legacy_nocontract(ops[0], ops[1]))
 		{
 			CompilerGLSL::emit_instruction(instruction);
 			break;
@@ -10102,7 +10102,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 
 	case OpMatrixTimesMatrix:
 	{
-		if (!msl_options.invariant_float_math && !has_decoration(ops[1], DecorationNoContraction))
+		if (!msl_options.invariant_float_math && !has_legacy_nocontract(ops[0], ops[1]))
 		{
 			CompilerGLSL::emit_instruction(instruction);
 			break;
@@ -18624,11 +18624,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 
 	case OpFAdd:
 	case OpFSub:
-		if (compiler.msl_options.invariant_float_math ||
-		    compiler.has_decoration(args[1], DecorationNoContraction))
-		{
+		if (compiler.msl_options.invariant_float_math || compiler.has_legacy_nocontract(args[0], args[1]))
 			return opcode == OpFAdd ? SPVFuncImplFAdd : SPVFuncImplFSub;
-		}
 		break;
 
 	case OpFMul:
@@ -18636,11 +18633,8 @@ CompilerMSL::SPVFuncImpl CompilerMSL::OpCodePreprocessor::get_spv_func_impl(Op o
 	case OpMatrixTimesVector:
 	case OpVectorTimesMatrix:
 	case OpMatrixTimesMatrix:
-		if (compiler.msl_options.invariant_float_math ||
-		    compiler.has_decoration(args[1], DecorationNoContraction))
-		{
+		if (compiler.msl_options.invariant_float_math || compiler.has_legacy_nocontract(args[0], args[1]))
 			return SPVFuncImplFMul;
-		}
 		break;
 
 	case OpQuantizeToF16:

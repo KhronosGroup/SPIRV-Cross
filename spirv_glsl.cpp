@@ -2610,7 +2610,7 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 			SPIRV_CROSS_THROW("Basic types in a flattened UBO must be float, int or uint.");
 
 		auto flags = ir.get_buffer_block_flags(var);
-		statement("uniform ", flags_to_qualifiers_glsl(tmp, flags), type_to_glsl(tmp), " ", buffer_name, "[",
+		statement("uniform ", flags_to_qualifiers_glsl(tmp, 0, flags), type_to_glsl(tmp), " ", buffer_name, "[",
 		          buffer_size, "];");
 	}
 	else
@@ -6878,7 +6878,7 @@ void CompilerGLSL::emit_uninitialized_temporary(uint32_t result_type, uint32_t r
 		if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			initializer = join(" = ", to_zero_initialized_expression(result_type));
 
-		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), initializer, ";");
+		statement(flags_to_qualifiers_glsl(type, result_id, flags), variable_decl(type, to_name(result_id)), initializer, ";");
 	}
 }
 
@@ -6913,7 +6913,7 @@ string CompilerGLSL::declare_temporary(uint32_t result_type, uint32_t result_id)
 		// The result_id has not been made into an expression yet, so use flags interface.
 		add_local_variable_name(result_id);
 		auto &flags = get_decoration_bitset(result_id);
-		return join(flags_to_qualifiers_glsl(type, flags), variable_decl(type, to_name(result_id)), " = ");
+		return join(flags_to_qualifiers_glsl(type, result_id, flags), variable_decl(type, to_name(result_id)), " = ");
 	}
 }
 
@@ -6986,7 +6986,7 @@ void CompilerGLSL::emit_binary_op(uint32_t result_type, uint32_t result_id, uint
 {
 	// Various FP arithmetic opcodes such as add, sub, mul will hit this.
 	bool force_temporary_precise = backend.support_precise_qualifier &&
-	                               has_decoration(result_id, DecorationNoContraction) &&
+	                               has_legacy_nocontract(result_type, result_id) &&
 	                               type_is_floating_point(get<SPIRType>(result_type));
 	bool forward = should_forward(op0) && should_forward(op1) && !force_temporary_precise;
 
@@ -11727,7 +11727,7 @@ void CompilerGLSL::emit_variable_temporary_copies(const SPIRVariable &var)
 	{
 		auto &type = get<SPIRType>(var.basetype);
 		auto &flags = get_decoration_bitset(var.self);
-		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, join("_", var.self, "_copy")), ";");
+		statement(flags_to_qualifiers_glsl(type, var.self, flags), variable_decl(type, join("_", var.self, "_copy")), ";");
 		flushed_phi_variables.insert(var.self);
 	}
 }
@@ -16196,7 +16196,7 @@ void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
 
-	statement(layout_for_member(type, index), qualifiers, qualifier, flags_to_qualifiers_glsl(membertype, memberflags),
+	statement(layout_for_member(type, index), qualifiers, qualifier, flags_to_qualifiers_glsl(membertype, 0, memberflags),
 	          variable_decl(membertype, to_member_name(type, index)), ";");
 }
 
@@ -16204,7 +16204,7 @@ void CompilerGLSL::emit_struct_padding_target(const SPIRType &)
 {
 }
 
-string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset &flags)
+string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, uint32_t id, const Bitset &flags)
 {
 	// GL_EXT_buffer_reference variables can be marked as restrict.
 	if (flags.get(DecorationRestrictPointerEXT))
@@ -16212,8 +16212,12 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, const Bitset
 
 	string qual;
 
-	if (type_is_floating_point(type) && flags.get(DecorationNoContraction) && backend.support_precise_qualifier)
+	if (type_is_floating_point(type) &&
+	    (flags.get(DecorationNoContraction) || (type.self && has_legacy_nocontract(type.self, id))) &&
+	    backend.support_precise_qualifier)
+	{
 		qual = "precise ";
+	}
 
 	// Structs do not have precision qualifiers, neither do doubles (desktop only anyways, so no mediump/highp).
 	bool type_supports_precision =
@@ -16282,7 +16286,7 @@ string CompilerGLSL::to_precision_qualifiers_glsl(uint32_t id)
 		if (result_type.width < 32)
 			return "mediump ";
 	}
-	return flags_to_qualifiers_glsl(type, ir.meta[id].decoration.decoration_flags);
+	return flags_to_qualifiers_glsl(type, id, ir.meta[id].decoration.decoration_flags);
 }
 
 void CompilerGLSL::fixup_io_block_patch_primitive_qualifiers(const SPIRVariable &var)
@@ -17227,7 +17231,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	string decl;
 
 	auto &type = get<SPIRType>(func.return_type);
-	decl += flags_to_qualifiers_glsl(type, return_flags);
+	decl += flags_to_qualifiers_glsl(type, 0, return_flags);
 	decl += type_to_glsl(type);
 	decl += type_to_array_glsl(type, 0);
 	decl += " ";
@@ -18085,7 +18089,7 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<TypeID, ID>> &tempo
 		if (options.force_zero_initialized_variables && type_can_zero_initialize(type))
 			initializer = join(" = ", to_zero_initialized_expression(tmp.first));
 
-		statement(flags_to_qualifiers_glsl(type, flags), variable_decl(type, to_name(tmp.second)), initializer, ";");
+		statement(flags_to_qualifiers_glsl(type, tmp.second, flags), variable_decl(type, to_name(tmp.second)), initializer, ";");
 
 		hoisted_temporaries.insert(tmp.second);
 		forced_temporaries.insert(tmp.second);
@@ -18100,7 +18104,7 @@ void CompilerGLSL::emit_hoisted_temporaries(SmallVector<pair<TypeID, ID>> &tempo
 		{
 			uint32_t mirror_id = mirrored_precision_itr->second;
 			auto &mirror_flags = get_decoration_bitset(mirror_id);
-			statement(flags_to_qualifiers_glsl(type, mirror_flags),
+			statement(flags_to_qualifiers_glsl(type, mirror_id, mirror_flags),
 			          variable_decl(type, to_name(mirror_id)),
 			          initializer, ";");
 			// The temporary might be read from before it's assigned, set up the expression now.
@@ -20113,10 +20117,14 @@ std::string CompilerGLSL::to_pretty_expression_if_int_constant(
 uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint32_t id) const
 {
 	uint32_t fp_flags = ~0;
+
+	if (!type_is_floating_point(get<SPIRType>(result_type)))
+		return fp_flags;
+
 	auto &ep = get_entry_point();
 
 	// Per-operation flag supersedes all defaults.
-	if (has_decoration(id, DecorationFPFastMathMode))
+	if (id != 0 && has_decoration(id, DecorationFPFastMathMode))
 		return get_decoration(id, DecorationFPFastMathMode);
 
 	// Handle float_controls1 execution modes.
@@ -20150,7 +20158,7 @@ uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint3
 		fp_flags &= ~(FPFastMathModeNSZMask | FPFastMathModeNotInfMask | FPFastMathModeNotNaNMask);
 
 	// Legacy NoContraction deals with any kind of transform to the expression.
-	if (has_decoration(id, DecorationNoContraction))
+	if (id != 0 && has_decoration(id, DecorationNoContraction))
 		fp_flags &= ~(FPFastMathModeAllowContractMask | FPFastMathModeAllowTransformMask | FPFastMathModeAllowReassocMask);
 
 	// Handle float_controls2 execution modes.
