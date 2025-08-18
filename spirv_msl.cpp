@@ -19921,7 +19921,7 @@ bool CompilerMSL::specialization_constant_is_macro(uint32_t const_id) const
 }
 
 // Start with all fast math flags enabled, and selectively disable based execution modes and float controls
-uint32_t CompilerMSL::get_fp_fast_math_flags(bool incl_ops)
+uint32_t CompilerMSL::get_fp_fast_math_flags(bool incl_ops) const
 {
 	uint32_t fp_flags = ~0;
 	auto &ep = get_entry_point();

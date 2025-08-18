@@ -1081,6 +1081,9 @@ protected:
 	std::string format_float(float value) const;
 	std::string format_double(double value) const;
 
+	uint32_t get_fp_fast_math_flags_for_op(uint32_t result_type, uint32_t id) const;
+	bool has_legacy_nocontract(uint32_t result_type, uint32_t id) const;
+
 private:
 	void init();
 

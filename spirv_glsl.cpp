@@ -20109,3 +20109,76 @@ std::string CompilerGLSL::to_pretty_expression_if_int_constant(
 	}
 	return join("int(", to_expression(id, register_expression_read), ")");
 }
+
+uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint32_t id) const
+{
+	uint32_t fp_flags = ~0;
+	auto &ep = get_entry_point();
+
+	// Per-operation flag supersedes all defaults.
+	if (has_decoration(id, DecorationFPFastMathMode))
+		return get_decoration(id, DecorationFPFastMathMode);
+
+	// Handle float_controls1 execution modes.
+	uint32_t width = get<SPIRType>(result_type).width;
+
+	bool szinp = false;
+
+	switch (width)
+	{
+	case 8:
+		szinp = ep.signed_zero_inf_nan_preserve_8;
+		break;
+
+	case 16:
+		szinp = ep.signed_zero_inf_nan_preserve_16;
+		break;
+
+	case 32:
+		szinp = ep.signed_zero_inf_nan_preserve_32;
+		break;
+
+	case 64:
+		szinp = ep.signed_zero_inf_nan_preserve_64;
+		break;
+
+	default:
+		break;
+	}
+
+	if (szinp)
+		fp_flags &= ~(FPFastMathModeNSZMask | FPFastMathModeNotInfMask | FPFastMathModeNotNaNMask);
+
+	// Legacy NoContraction deals with any kind of transform to the expression.
+	if (has_decoration(id, DecorationNoContraction))
+		fp_flags &= ~(FPFastMathModeAllowContractMask | FPFastMathModeAllowTransformMask | FPFastMathModeAllowReassocMask);
+
+	// Handle float_controls2 execution modes.
+	bool found_default = false;
+	for (auto &fp_pair : ep.fp_fast_math_defaults)
+	{
+		if (get<SPIRType>(fp_pair.first).width == width && fp_pair.second)
+		{
+			fp_flags &= get<SPIRConstant>(fp_pair.second).scalar();
+			found_default = true;
+		}
+	}
+
+	// From SPV_KHR_float_controls2:
+	// "This definition implies that, if the entry point set any FPFastMathDefault execution mode
+	// then any type for which a default is not set uses no fast math flags
+	// (although this can still be overridden on a per-operation basis).
+	// Modules must not mix setting fast math modes explicitly using this extension and relying on older API defaults."
+	if (!found_default && !ep.fp_fast_math_defaults.empty())
+		fp_flags = 0;
+
+	return fp_flags;
+}
+
+bool CompilerGLSL::has_legacy_nocontract(uint32_t result_type, uint32_t id) const
+{
+	const auto fp_flags = FPFastMathModeAllowContractMask |
+	                      FPFastMathModeAllowTransformMask |
+	                      FPFastMathModeAllowReassocMask;
+	return (get_fp_fast_math_flags_for_op(result_type, id) & fp_flags) != fp_flags;
+}

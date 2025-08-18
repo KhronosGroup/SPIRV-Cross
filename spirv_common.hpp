@@ -723,6 +723,10 @@ struct SPIREntryPoint
 	std::string name;
 	std::string orig_name;
 	std::unordered_map<uint32_t, uint32_t> fp_fast_math_defaults;
+	bool signed_zero_inf_nan_preserve_8 = false;
+	bool signed_zero_inf_nan_preserve_16 = false;
+	bool signed_zero_inf_nan_preserve_32 = false;
+	bool signed_zero_inf_nan_preserve_64 = false;
 	SmallVector<VariableID> interface_variables;
 
 	Bitset flags;
