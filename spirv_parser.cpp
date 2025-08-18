@@ -697,6 +697,39 @@ void Parser::parse(const Instruction &instruction)
 		break;
 	}
 
+	case OpTypeTensorLayoutNV:
+	{
+		uint32_t id = ops[0];
+		auto &type = set<SPIRType>(id, op);
+		type.basetype = SPIRType::TensorLayoutNv;
+		type.ext.tensorLayoutNv.dim_id = ops[1];
+		type.ext.tensorLayoutNv.clamp_mode_id = ops[2];
+		break;
+	}
+
+	case OpTypeTensorViewNV:
+	{
+		uint32_t id = ops[0];
+		auto &type = set<SPIRType>(id, op);
+		type.basetype = SPIRType::TensorViewNv;
+		type.ext.tensorViewNv.dim_id = ops[1];
+		type.ext.tensorViewNv.has_dimensions_id = ops[2];
+		auto dims = get<SPIRConstant>(type.ext.tensorViewNv.dim_id);
+		if (dims.specialization)
+		{
+			SPIRV_CROSS_THROW("Specialization on tensor view dimension not supported.");
+		}
+		if (length - 3 > type.ext.tensorViewNv.dim_ids.size() || dims.scalar() > type.ext.tensorViewNv.dim_ids.size())
+		{
+			SPIRV_CROSS_THROW("Can't have more than 5 dimensions for tensor view!");
+		}
+		for (uint32_t i = 3; i < length; i++)
+		{
+			type.ext.tensorViewNv.dim_ids[i - 3] = ops[i];
+		}
+		break;
+	}
+
 	case OpTypeArray:
 	{
 		uint32_t id = ops[0];
