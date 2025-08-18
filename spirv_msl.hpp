@@ -777,7 +777,7 @@ public:
 	// If incl_ops is enabled, the FPFastMathMode of any SPIR-V operations are also included in the bitwise-AND
 	// to determine the minimal fast-math that applies to all default execution modes and all operations.
 	// The returned value is also affected by execution modes SignedZeroInfNanPreserve and ContractionOff.
-	uint32_t get_fp_fast_math_flags(bool incl_ops);
+	uint32_t get_fp_fast_math_flags(bool incl_ops) const;
 
 protected:
 	// An enum of SPIR-V functions that are implemented in additional

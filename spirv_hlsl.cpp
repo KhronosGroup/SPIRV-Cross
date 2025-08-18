@@ -3061,7 +3061,7 @@ void CompilerHLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 	auto &type = get<SPIRType>(func.return_type);
 	if (type.array.empty())
 	{
-		decl += flags_to_qualifiers_glsl(type, return_flags);
+		decl += flags_to_qualifiers_glsl(type, 0, return_flags);
 		decl += type_to_glsl(type);
 		decl += " ";
 	}
