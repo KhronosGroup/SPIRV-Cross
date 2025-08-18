@@ -11245,8 +11245,36 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	auto &restype = get<SPIRType>(result_type);
 
+	// Only precise:: preserves NaN in trancendentals (supposedly, cannot find documentation for this).
+	const auto drop_nan_inf = FPFastMathModeNotInfMask | FPFastMathModeNotNaNMask;
+	bool preserve_nan = (get_fp_fast_math_flags_for_op(result_type, id) & drop_nan_inf) != drop_nan_inf;
+	const char *preserve_str = preserve_nan ? "precise" : "fast";
+
+	// TODO: Emit the default behavior to match existing code. Might need to be revisited.
+	// Only fp32 has the precise:: override.
+#define EMIT_PRECISE_OVERRIDE(glsl_op, op) \
+	case GLSLstd450##glsl_op: \
+		if (restype.basetype == SPIRType::Float && preserve_nan) \
+			emit_unary_func_op(result_type, id, args[0], "precise::" op); \
+		else \
+			CompilerGLSL::emit_glsl_op(result_type, id, eop, args, count); \
+		break
+
 	switch (op)
 	{
+	EMIT_PRECISE_OVERRIDE(Cos, "cos");
+	EMIT_PRECISE_OVERRIDE(Sin, "sin");
+	EMIT_PRECISE_OVERRIDE(Tan, "tan");
+	EMIT_PRECISE_OVERRIDE(Acos, "acos");
+	EMIT_PRECISE_OVERRIDE(Asin, "asin");
+	EMIT_PRECISE_OVERRIDE(Atan, "atan");
+	EMIT_PRECISE_OVERRIDE(Exp, "exp");
+	EMIT_PRECISE_OVERRIDE(Exp2, "exp2");
+	EMIT_PRECISE_OVERRIDE(Log, "log");
+	EMIT_PRECISE_OVERRIDE(Log2, "log2");
+	EMIT_PRECISE_OVERRIDE(Sqrt, "sqrt");
+#undef EMIT_PRECISE_OVERRIDE
+
 	case GLSLstd450Sinh:
 		if (restype.basetype == SPIRType::Half)
 		{
@@ -11254,10 +11282,12 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			ftype.basetype = SPIRType::Float;
 
 			// MSL does not have overload for half. Force-cast back to half.
-			auto expr = join(type_to_glsl(restype), "(fast::sinh(", type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), ")))");
+			auto expr = join(type_to_glsl(restype), "(", preserve_str, "::sinh(", type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), ")))");
 			emit_op(result_type, id, expr, should_forward(args[0]));
 			inherit_expression_dependencies(id, args[0]);
 		}
+		else if (preserve_nan)
+			emit_unary_func_op(result_type, id, args[0], "precise::sinh");
 		else
 			emit_unary_func_op(result_type, id, args[0], "fast::sinh");
 		break;
@@ -11268,10 +11298,12 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			ftype.basetype = SPIRType::Float;
 
 			// MSL does not have overload for half. Force-cast back to half.
-			auto expr = join(type_to_glsl(restype), "(fast::cosh(", type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), ")))");
+			auto expr = join(type_to_glsl(restype), "(", preserve_str, "::cosh(", type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), ")))");
 			emit_op(result_type, id, expr, should_forward(args[0]));
 			inherit_expression_dependencies(id, args[0]);
 		}
+		else if (preserve_nan)
+			emit_unary_func_op(result_type, id, args[0], "precise::cosh");
 		else
 			emit_unary_func_op(result_type, id, args[0], "fast::cosh");
 		break;
@@ -11282,7 +11314,7 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			ftype.basetype = SPIRType::Float;
 
 			// MSL does not have overload for half. Force-cast back to half.
-			auto expr = join(type_to_glsl(restype), "(fast::tanh(", type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), ")))");
+			auto expr = join(type_to_glsl(restype), "(", preserve_str, "::tanh(", type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), ")))");
 			emit_op(result_type, id, expr, should_forward(args[0]));
 			inherit_expression_dependencies(id, args[0]);
 		}
@@ -11297,7 +11329,7 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			ftype.basetype = SPIRType::Float;
 
 			auto expr = join(type_to_glsl(restype),
-			                 "(fast::atan2(",
+			                 "(", preserve_str, "::atan2(",
 			                 type_to_glsl(ftype), "(", to_unpacked_expression(args[0]), "), ",
 			                 type_to_glsl(ftype), "(", to_unpacked_expression(args[1]), ")))");
 			emit_op(result_type, id, expr, should_forward(args[0]) && should_forward(args[1]));
@@ -11308,7 +11340,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 			emit_binary_func_op(result_type, id, args[0], args[1], "precise::atan2");
 		break;
 	case GLSLstd450InverseSqrt:
-		emit_unary_func_op(result_type, id, args[0], "rsqrt");
+		if (restype.basetype == SPIRType::Float && preserve_nan)
+			emit_unary_func_op(result_type, id, args[0], "precise::rsqrt");
+		else
+			emit_unary_func_op(result_type, id, args[0], "rsqrt");
 		break;
 	case GLSLstd450RoundEven:
 		emit_unary_func_op(result_type, id, args[0], "rint");
@@ -11542,6 +11577,9 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 		// MSL does not support scalar versions here.
 		// MSL has no implementation for normalize in the fast:: namespace for half
 		// Returns -1 or 1 for valid input, sign() does the job.
+
+		// precise::normalize asm looks ridiculous.
+		// Don't think this actually matters unless proven otherwise.
 		if (exp_type.vecsize == 1)
 			emit_unary_func_op(result_type, id, args[0], "sign");
 		else if (exp_type.basetype == SPIRType::Half)
@@ -11607,7 +11645,10 @@ void CompilerMSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop, 
 
 	case GLSLstd450Pow:
 		// powr makes x < 0.0 undefined, just like SPIR-V.
-		emit_binary_func_op(result_type, id, args[0], args[1], "powr");
+		if (restype.basetype == SPIRType::Float && preserve_nan)
+			emit_binary_func_op(result_type, id, args[0], args[1], "precise::powr");
+		else
+			emit_binary_func_op(result_type, id, args[0], args[1], "powr");
 		break;
 
 	default:
