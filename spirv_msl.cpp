@@ -8411,9 +8411,22 @@ void CompilerMSL::emit_specialization_constants_and_structs()
 					if (unique_func_constants[constant_id] == c.self)
 						statement("constant ", sc_type_name, " ", sc_tmp_name, " [[function_constant(", constant_id,
 						          ")]];");
-					statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name,
-					          ") ? ", bitcast_expression(type, sc_tmp_type, sc_tmp_name), " : ", constant_expression(c),
-					          ";");
+					// RenderDoc and other instrumentation may reuse the same SpecId with different base types.
+					// We deduplicate to one [[function_constant(id)]] temp and then initialize all variants from it.
+					// Metal forbids as_type to/from 'bool', so if either side is Boolean, avoid bitcasting here and
+					// prefer a value cast via a constructor instead (e.g. uint(tmp) / float(tmp) / bool(tmp)).
+					// This preserves expected toggle semantics and prevents illegal MSL like as_type<uint>(bool_tmp).
+					{
+						string sc_true_expr;
+						if (sc_tmp_type == type.basetype)
+							sc_true_expr = sc_tmp_name;
+						else if (sc_tmp_type == SPIRType::Boolean || type.basetype == SPIRType::Boolean)
+							sc_true_expr = join(sc_type_name, "(", sc_tmp_name, ")");
+						else
+							sc_true_expr = bitcast_expression(type, sc_tmp_type, sc_tmp_name);
+						statement("constant ", sc_type_name, " ", sc_name, " = is_function_constant_defined(", sc_tmp_name,
+						          ") ? ", sc_true_expr, " : ", constant_expression(c), ";");
+					}
 				}
 				else if (has_decoration(c.self, DecorationSpecId))
 				{
@@ -17447,13 +17460,18 @@ void CompilerMSL::emit_subgroup_cluster_op_cast(uint32_t result_type, uint32_t r
 	inherit_expression_dependencies(result_id, op0);
 }
 
+// Note: Metal forbids bitcasting to/from 'bool' using as_type. This function is used widely
+// for generating casts in the backend. To avoid generating illegal MSL when the canonical
+// function constant type (from deduplicated SpecId) is Boolean, fall back to value-cast in
+// that case by returning type_to_glsl(out_type) instead of as_type<...>.
 string CompilerMSL::bitcast_glsl_op(const SPIRType &out_type, const SPIRType &in_type)
 {
 	if (out_type.basetype == in_type.basetype)
 		return "";
 
-	assert(out_type.basetype != SPIRType::Boolean);
-	assert(in_type.basetype != SPIRType::Boolean);
+	// Avoid bitcasting to/from booleans in MSL; use value cast instead.
+	if (out_type.basetype == SPIRType::Boolean || in_type.basetype == SPIRType::Boolean)
+		return type_to_glsl(out_type);
 
 	bool integral_cast = type_is_integral(out_type) && type_is_integral(in_type) && (out_type.vecsize == in_type.vecsize);
 	bool same_size_cast = (out_type.width * out_type.vecsize) == (in_type.width * in_type.vecsize);
