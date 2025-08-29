@@ -1881,6 +1881,10 @@ void CompilerMSL::preprocess_op_codes()
 	    (preproc.uses_image_write && !msl_options.supports_msl_version(2, 2)))
 		is_rasterization_disabled = true;
 
+	// FIXME: This currently does not consider BDA side effects, so we cannot deduce const device for BDA.
+	if (preproc.uses_buffer_write || preproc.uses_image_write)
+		has_descriptor_side_effects = true;
+
 	// Tessellation control shaders are run as compute functions in Metal, and so
 	// must capture their output to a buffer.
 	if (is_tesc_shader() || (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation))
@@ -13885,6 +13889,24 @@ uint32_t CompilerMSL::get_or_allocate_builtin_output_member_location(spv::BuiltI
 	return loc;
 }
 
+bool CompilerMSL::entry_point_returns_stage_output() const
+{
+	if (get_execution_model() == ExecutionModelVertex && msl_options.vertex_for_tessellation)
+		return false;
+	bool ep_should_return_output = !get_is_rasterization_disabled();
+	return stage_out_var_id && ep_should_return_output;
+}
+
+bool CompilerMSL::entry_point_requires_const_device_buffers() const
+{
+	// For fragment, we don't really need it, but it might help avoid pessimization
+	// if the compiler deduces it needs to use late-Z for whatever reason.
+	return (get_execution_model() == ExecutionModelFragment && !has_descriptor_side_effects) ||
+	       (entry_point_returns_stage_output() &&
+	        (get_execution_model() == ExecutionModelVertex ||
+	         get_execution_model() == ExecutionModelTessellationEvaluation));
+}
+
 // Returns the type declaration for a function, including the
 // entry type if the current function is the entry point function
 string CompilerMSL::func_type_decl(SPIRType &type)
@@ -13895,8 +13917,7 @@ string CompilerMSL::func_type_decl(SPIRType &type)
 		return return_type;
 
 	// If an outgoing interface block has been defined, and it should be returned, override the entry point return type
-	bool ep_should_return_output = !get_is_rasterization_disabled();
-	if (stage_out_var_id && ep_should_return_output)
+	if (entry_point_returns_stage_output())
 		return_type = type_to_glsl(get_stage_out_struct_type()) + type_to_array_glsl(type, 0);
 
 	// Prepend a entry type, based on the execution model
@@ -14020,16 +14041,14 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 
 	case StorageClassStorageBuffer:
 	{
-		// For arguments from variable pointers, we use the write count deduction, so
-		// we should not assume any constness here. Only for global SSBOs.
-		bool readonly = false;
-		if (!var || has_decoration(type.self, DecorationBlock))
-			readonly = flags.get(DecorationNonWritable);
-
-		if (decoration_flags_signal_coherent(flags))
-			readonly = false;
-
-		addr_space = readonly ? "const device" : "device";
+		// When dealing with descriptor aliasing, it becomes very problematic to make use of
+		// readonly qualifiers.
+		// If rasterization is not disabled in vertex/tese, Metal does not allow side effects and refuses to compile "device",
+		// even if there are no writes. Just force const device.
+		if (entry_point_requires_const_device_buffers())
+			addr_space = "const device";
+		else
+			addr_space = "device";
 		break;
 	}
 
@@ -14046,7 +14065,12 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		{
 			bool ssbo = has_decoration(type.self, DecorationBufferBlock);
 			if (ssbo)
-				addr_space = flags.get(DecorationNonWritable) ? "const device" : "device";
+			{
+				if (entry_point_requires_const_device_buffers())
+					addr_space = "const device";
+				else
+					addr_space = "device";
+			}
 			else
 				addr_space = "constant";
 		}

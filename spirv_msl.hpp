@@ -1059,6 +1059,8 @@ protected:
 
 	void fix_up_shader_inputs_outputs();
 
+	bool entry_point_returns_stage_output() const;
+	bool entry_point_requires_const_device_buffers() const;
 	std::string func_type_decl(SPIRType &type);
 	std::string entry_point_args_classic(bool append_comma);
 	std::string entry_point_args_argument_buffer(bool append_comma);
@@ -1264,6 +1266,7 @@ protected:
 	bool using_builtin_array() const;
 
 	bool is_rasterization_disabled = false;
+	bool has_descriptor_side_effects = false;
 	bool capture_output_to_buffer = false;
 	bool needs_swizzle_buffer_def = false;
 	bool used_swizzle_buffer = false;
