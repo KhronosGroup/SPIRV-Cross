@@ -5,6 +5,10 @@ OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %main "main" %outColor
 OpExecutionMode %main OriginUpperLeft
 
+OpDecorate %outColor Location 0
+OpDecorate %specBool SpecId 0
+OpDecorate %specUint SpecId 0
+
 %void = OpTypeVoid
 %fn = OpTypeFunction %void
 %float = OpTypeFloat 32
@@ -12,18 +16,14 @@ OpExecutionMode %main OriginUpperLeft
 %uint = OpTypeInt 32 0
 %bool = OpTypeBool
 
-%ptr_Output_v4float = OpTypePointer Output %v4float
-%outColor = OpVariable %ptr_Output_v4float Output
-
 %float_0 = OpConstant %float 0
 %float_1 = OpConstant %float 1
 
 %specBool = OpSpecConstantTrue %bool
 %specUint = OpSpecConstant %uint 0
 
-OpDecorate %outColor Location 0
-OpDecorate %specBool SpecId 0
-OpDecorate %specUint SpecId 0
+%ptr_Output_v4float = OpTypePointer Output %v4float
+%outColor = OpVariable %ptr_Output_v4float Output
 
 %main = OpFunction %void None %fn
 %entry = OpLabel
