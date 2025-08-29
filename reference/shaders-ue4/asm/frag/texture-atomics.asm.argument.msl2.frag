@@ -60,7 +60,7 @@ constant float3 _70 = {};
 
 struct spvDescriptorSetBuffer0
 {
-    const device type_StructuredBuffer_v4float* CulledObjectBoxBounds [[id(0)]];
+    device type_StructuredBuffer_v4float* CulledObjectBoxBounds [[id(0)]];
     constant type_Globals* _Globals [[id(1)]];
     texture2d<uint> RWShadowTileNumCulledObjects [[id(2)]];
     device atomic_uint* RWShadowTileNumCulledObjects_atomic [[id(3)]];

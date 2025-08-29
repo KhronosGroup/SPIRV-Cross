@@ -114,7 +114,7 @@ struct spvDescriptorSetBuffer4
     // Overlapping binding: texture_buffer<uint, access::read_write> u4 [[id(0)]];
 };
 
-kernel void main0(const device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], const device spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant spvDescriptorSetBuffer2& spvDescriptorSet2 [[buffer(2)]], constant spvDescriptorSetBuffer3& spvDescriptorSet3 [[buffer(3)]], constant spvDescriptorSetBuffer4& spvDescriptorSet4 [[buffer(4)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
+kernel void main0(device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], device spvDescriptorSetBuffer1& spvDescriptorSet1 [[buffer(1)]], constant spvDescriptorSetBuffer2& spvDescriptorSet2 [[buffer(2)]], constant spvDescriptorSetBuffer3& spvDescriptorSet3 [[buffer(3)]], constant spvDescriptorSetBuffer4& spvDescriptorSet4 [[buffer(4)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
     spvDescriptorArray<device B30*> b30 {spvDescriptorSet1.b30};
     spvDescriptorArray<texture2d<uint>> t31 {reinterpret_cast<const device spvDescriptor<texture2d<uint>>*>(&spvDescriptorSet1.b30)};

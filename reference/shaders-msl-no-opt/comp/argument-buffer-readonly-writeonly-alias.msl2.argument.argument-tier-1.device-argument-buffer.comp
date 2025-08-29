@@ -1,4 +1,5 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types-discards-qualifiers"
 
 #include <metal_stdlib>
 #include <simd/simd.h>
@@ -24,22 +25,27 @@ struct spvDescriptorArray
     const device T* ptr;
 };
 
-struct SSBO
+struct D
 {
-    float4 a;
+    float data_d[1];
 };
 
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
+struct A
+{
+    float data_a[1];
+};
 
 struct spvDescriptorSetBuffer0
 {
-    spvDescriptor<device SSBO *> ssbos [[id(0)]][1] /* unsized array hack */;
+    spvDescriptor<device D *> d [[id(0)]][1] /* unsized array hack */;
+    // Overlapping binding: spvDescriptor<device A *> a [[id(0)]][1] /* unsized array hack */;
 };
 
 kernel void main0(device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
-    spvDescriptorArray<device SSBO*> ssbos {spvDescriptorSet0.ssbos};
+    spvDescriptorArray<device D*> d {spvDescriptorSet0.d};
+    spvDescriptorArray<device A*> a {reinterpret_cast<spvDescriptor<device A *> const device *>(&spvDescriptorSet0.d)};
 
-    ssbos[gl_WorkGroupID.x]->a += float4(2.0);
+    d[gl_WorkGroupID.x]->data_d[0] = a[gl_WorkGroupID.x]->data_a[0];
 }
 
