@@ -1178,11 +1178,8 @@ bool Compiler::type_is_top_level_block(const SPIRType &type) const
 	return has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
 }
 
-bool Compiler::type_is_block_like(const SPIRType &type) const
+bool Compiler::type_is_explicit_layout(const SPIRType &type) const
 {
-	if (type_is_top_level_block(type))
-		return true;
-
 	if (type.basetype == SPIRType::Struct)
 	{
 		// Block-like types may have Offset decorations.
@@ -1192,6 +1189,14 @@ bool Compiler::type_is_block_like(const SPIRType &type) const
 	}
 
 	return false;
+}
+
+bool Compiler::type_is_block_like(const SPIRType &type) const
+{
+	if (type_is_top_level_block(type))
+		return true;
+	else
+		return type_is_explicit_layout(type);
 }
 
 void Compiler::parse_fixup()

@@ -1172,6 +1172,7 @@ protected:
 	bool type_contains_recursion(const SPIRType &type);
 	bool type_is_array_of_pointers(const SPIRType &type) const;
 	bool type_is_block_like(const SPIRType &type) const;
+	bool type_is_explicit_layout(const SPIRType &type) const;
 	bool type_is_top_level_block(const SPIRType &type) const;
 	bool type_is_opaque_value(const SPIRType &type) const;
 
