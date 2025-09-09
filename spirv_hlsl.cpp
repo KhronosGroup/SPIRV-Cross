@@ -3029,7 +3029,7 @@ string CompilerHLSL::get_inner_entry_point_name() const
 		SPIRV_CROSS_THROW("Unsupported execution model.");
 }
 
-uint32_t CompilerHLSL::input_vertices_from_execution_mode(spirv_cross::SPIREntryPoint &execution) const
+uint32_t CompilerHLSL::input_vertices_from_execution_mode(SPIREntryPoint &execution) const
 {
 	uint32_t input_vertices = 1;
 
