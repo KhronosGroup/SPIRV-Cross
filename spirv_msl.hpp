@@ -78,7 +78,7 @@ struct MSLShaderInterfaceVariable
 	uint32_t location = 0;
 	uint32_t component = 0;
 	MSLShaderVariableFormat format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
-	spv::BuiltIn builtin = spv::BuiltInMax;
+	spv::BuiltIn builtin = spv::BuiltIn::Max;
 	uint32_t vecsize = 0;
 	MSLShaderVariableRate rate = MSL_SHADER_VARIABLE_RATE_PER_VERTEX;
 };
@@ -104,7 +104,7 @@ struct MSLShaderInterfaceVariable
 // become a [[buffer(N)]], [[texture(N)]] or [[sampler(N)]] depending on the resource types used.
 struct MSLResourceBinding
 {
-	spv::ExecutionModel stage = spv::ExecutionModelMax;
+	spv::ExecutionModel stage = spv::ExecutionModel::Max;
 	SPIRType::BaseType basetype = SPIRType::Unknown;
 	uint32_t desc_set = 0;
 	uint32_t binding = 0;
@@ -591,9 +591,9 @@ public:
 	// rasterization if vertex shader requires rasterization to be disabled.
 	bool get_is_rasterization_disabled() const
 	{
-		return is_rasterization_disabled && (get_entry_point().model == spv::ExecutionModelVertex ||
-		                                     get_entry_point().model == spv::ExecutionModelTessellationControl ||
-		                                     get_entry_point().model == spv::ExecutionModelTessellationEvaluation);
+		return is_rasterization_disabled && (get_entry_point().model == spv::ExecutionModel::Vertex ||
+		                                     get_entry_point().model == spv::ExecutionModel::TessellationControl ||
+		                                     get_entry_point().model == spv::ExecutionModel::TessellationEvaluation);
 	}
 
 	// Provide feedback to calling API to allow it to pass an auxiliary
@@ -1295,7 +1295,7 @@ protected:
 	std::string patch_output_buffer_var_name = "spvPatchOut";
 	std::string tess_factor_buffer_var_name = "spvTessLevel";
 	std::string index_buffer_var_name = "spvIndices";
-	spv::Op previous_instruction_opcode = spv::OpNop;
+	spv::Op previous_instruction_opcode = spv::Op::OpNop;
 
 	// Must be ordered since declaration is in a specific order.
 	std::map<uint32_t, MSLConstexprSampler> constexpr_samplers_by_id;
@@ -1357,7 +1357,7 @@ protected:
 	}
 	bool needs_frag_discard_checks() const
 	{
-		return get_execution_model() == spv::ExecutionModelFragment && msl_options.supports_msl_version(2, 3) &&
+		return get_execution_model() == spv::ExecutionModel::Fragment && msl_options.supports_msl_version(2, 3) &&
 		       msl_options.check_discarded_frag_stores && frag_shader_needs_discard_checks;
 	}
 

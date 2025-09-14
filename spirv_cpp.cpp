@@ -53,14 +53,14 @@ void CompilerCPP::emit_interface_block(const SPIRVariable &var)
 
 	auto &type = get<SPIRType>(var.basetype);
 
-	const char *qual = var.storage == StorageClassInput ? "StageInput" : "StageOutput";
-	const char *lowerqual = var.storage == StorageClassInput ? "stage_input" : "stage_output";
+	const char *qual = var.storage == StorageClass::Input ? "StageInput" : "StageOutput";
+	const char *lowerqual = var.storage == StorageClass::Input ? "stage_input" : "stage_output";
 	auto instance_name = to_name(var.self);
 	uint32_t location = ir.meta[var.self].decoration.location;
 
 	string buffer_name;
 	auto flags = ir.meta[type.self].decoration.decoration_flags;
-	if (flags.get(DecorationBlock))
+	if (flags.get(static_cast<uint32_t>(Decoration::Block)))
 	{
 		emit_block_struct(type);
 		buffer_name = to_name(type.self);
@@ -122,7 +122,7 @@ void CompilerCPP::emit_push_constant_block(const SPIRVariable &var)
 
 	auto &type = get<SPIRType>(var.basetype);
 	auto &flags = ir.meta[var.self].decoration.decoration_flags;
-	if (flags.get(DecorationBinding) || flags.get(DecorationDescriptorSet))
+	if (flags.get(static_cast<uint32_t>(Decoration::Binding)) || flags.get(static_cast<uint32_t>(Decoration::DescriptorSet)))
 		SPIRV_CROSS_THROW("Push constant blocks cannot be compiled to GLSL with Binding or Set syntax. "
 		                  "Remap to location with reflection API first or disable these decorations.");
 
@@ -163,7 +163,7 @@ void CompilerCPP::emit_resources()
 				if (!options.vulkan_semantics && c.specialization)
 				{
 					c.specialization_constant_macro_name =
-					    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+					    constant_value_macro_name(get_decoration(c.self, Decoration::SpecId));
 				}
 				emit_constant(c);
 			}
@@ -182,8 +182,8 @@ void CompilerCPP::emit_resources()
 		{
 			auto &type = id.get<SPIRType>();
 			if (type.basetype == SPIRType::Struct && type.array.empty() && !type.pointer &&
-			    (!ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) &&
-			     !ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+			    (!ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::Block)) &&
+			     !ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::BufferBlock))))
 			{
 				emit_struct(type);
 			}
@@ -201,10 +201,10 @@ void CompilerCPP::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassUniform &&
+			if (var.storage != StorageClass::Function && type.pointer && type.storage == StorageClass::Uniform &&
 			    !is_hidden_variable(var) &&
-			    (ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-			     ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock)))
+			    (ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::Block)) ||
+			     ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::BufferBlock))))
 			{
 				emit_buffer_block(var);
 			}
@@ -218,8 +218,8 @@ void CompilerCPP::emit_resources()
 		{
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
-			if (!is_hidden_variable(var) && var.storage != StorageClassFunction && type.pointer &&
-			    type.storage == StorageClassPushConstant)
+			if (!is_hidden_variable(var) && var.storage != StorageClass::Function && type.pointer &&
+			    type.storage == StorageClass::PushConstant)
 			{
 				emit_push_constant_block(var);
 			}
@@ -234,8 +234,8 @@ void CompilerCPP::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
-			    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+			if (var.storage != StorageClass::Function && !is_hidden_variable(var) && type.pointer &&
+			    (var.storage == StorageClass::Input || var.storage == StorageClass::Output) &&
 			    interface_variable_exists_in_entry_point(var.self))
 			{
 				emit_interface_block(var);
@@ -251,8 +251,8 @@ void CompilerCPP::emit_resources()
 			auto &var = id.get<SPIRVariable>();
 			auto &type = get<SPIRType>(var.basetype);
 
-			if (var.storage != StorageClassFunction && !is_hidden_variable(var) && type.pointer &&
-			    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter))
+			if (var.storage != StorageClass::Function && !is_hidden_variable(var) && type.pointer &&
+			    (type.storage == StorageClass::UniformConstant || type.storage == StorageClass::AtomicCounter))
 			{
 				emit_uniform(var);
 			}
@@ -264,7 +264,7 @@ void CompilerCPP::emit_resources()
 	for (auto global : global_variables)
 	{
 		auto &var = get<SPIRVariable>(global);
-		if (var.storage == StorageClassWorkgroup)
+		if (var.storage == StorageClass::Workgroup)
 		{
 			emit_shared(var);
 			emitted = true;
@@ -286,7 +286,7 @@ void CompilerCPP::emit_resources()
 
 	statement("");
 	statement("Resources* __res;");
-	if (get_entry_point().model == ExecutionModelGLCompute)
+	if (get_entry_point().model == ExecutionModel::GLCompute)
 		statement("ComputePrivateResources __priv_res;");
 	statement("");
 
@@ -295,9 +295,9 @@ void CompilerCPP::emit_resources()
 	for (auto global : global_variables)
 	{
 		auto &var = get<SPIRVariable>(global);
-		if (var.storage == StorageClassPrivate)
+		if (var.storage == StorageClass::Private)
 		{
-			if (var.storage == StorageClassWorkgroup)
+			if (var.storage == StorageClass::Workgroup)
 				emit_shared(var);
 			else
 				statement(CompilerGLSL::variable_decl(var), ";");
@@ -500,12 +500,12 @@ void CompilerCPP::emit_header()
 
 	switch (execution.model)
 	{
-	case ExecutionModelGeometry:
-	case ExecutionModelTessellationControl:
-	case ExecutionModelTessellationEvaluation:
-	case ExecutionModelGLCompute:
-	case ExecutionModelFragment:
-	case ExecutionModelVertex:
+	case ExecutionModel::Geometry:
+	case ExecutionModel::TessellationControl:
+	case ExecutionModel::TessellationEvaluation:
+	case ExecutionModel::GLCompute:
+	case ExecutionModel::Fragment:
+	case ExecutionModel::Vertex:
 		statement("struct Shader");
 		begin_scope();
 		break;
@@ -516,33 +516,33 @@ void CompilerCPP::emit_header()
 
 	switch (execution.model)
 	{
-	case ExecutionModelGeometry:
+	case ExecutionModel::Geometry:
 		impl_type = "GeometryShader<Impl::Shader, Impl::Shader::Resources>";
 		resource_type = "GeometryResources";
 		break;
 
-	case ExecutionModelVertex:
+	case ExecutionModel::Vertex:
 		impl_type = "VertexShader<Impl::Shader, Impl::Shader::Resources>";
 		resource_type = "VertexResources";
 		break;
 
-	case ExecutionModelFragment:
+	case ExecutionModel::Fragment:
 		impl_type = "FragmentShader<Impl::Shader, Impl::Shader::Resources>";
 		resource_type = "FragmentResources";
 		break;
 
-	case ExecutionModelGLCompute:
+	case ExecutionModel::GLCompute:
 		impl_type = join("ComputeShader<Impl::Shader, Impl::Shader::Resources, ", execution.workgroup_size.x, ", ",
 		                 execution.workgroup_size.y, ", ", execution.workgroup_size.z, ">");
 		resource_type = "ComputeResources";
 		break;
 
-	case ExecutionModelTessellationControl:
+	case ExecutionModel::TessellationControl:
 		impl_type = "TessControlShader<Impl::Shader, Impl::Shader::Resources>";
 		resource_type = "TessControlResources";
 		break;
 
-	case ExecutionModelTessellationEvaluation:
+	case ExecutionModel::TessellationEvaluation:
 		impl_type = "TessEvaluationShader<Impl::Shader, Impl::Shader::Resources>";
 		resource_type = "TessEvaluationResources";
 		break;

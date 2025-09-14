@@ -292,7 +292,7 @@ bool CompilerReflection::type_is_reference(const SPIRType &type) const
 {
 	// Physical pointers and arrays of physical pointers need to refer to the pointee's type.
 	return is_physical_pointer(type) ||
-	       (type_is_array_of_pointers(type) && type.storage == StorageClassPhysicalStorageBuffer);
+	       (type_is_array_of_pointers(type) && type.storage == StorageClass::PhysicalStorageBuffer);
 }
 
 void CompilerReflection::emit_types()
@@ -350,7 +350,7 @@ void CompilerReflection::emit_type(uint32_t type_id, bool &emitted_open_tag)
 	{
 		emit_type_array(type);
 		json_stream->emit_json_key_value("type", "_" + std::to_string(type.parent_type));
-		json_stream->emit_json_key_value("array_stride", get_decoration(type_id, DecorationArrayStride));
+		json_stream->emit_json_key_value("array_stride", get_decoration(type_id, Decoration::ArrayStride));
 	}
 	else
 	{
@@ -429,19 +429,19 @@ void CompilerReflection::emit_type_member_qualifiers(const SPIRType &type, uint3
 	if (index < memb.size())
 	{
 		auto &dec = memb[index];
-		if (dec.decoration_flags.get(DecorationLocation))
+		if (dec.decoration_flags.get(static_cast<uint32_t>(Decoration::Location)))
 			json_stream->emit_json_key_value("location", dec.location);
-		if (dec.decoration_flags.get(DecorationOffset))
+		if (dec.decoration_flags.get(static_cast<uint32_t>(Decoration::Offset)))
 			json_stream->emit_json_key_value("offset", dec.offset);
 
 		// Array stride is a property of the array type, not the struct.
-		if (has_decoration(type.member_types[index], DecorationArrayStride))
+		if (has_decoration(type.member_types[index], Decoration::ArrayStride))
 			json_stream->emit_json_key_value("array_stride",
-			                                 get_decoration(type.member_types[index], DecorationArrayStride));
+			                                 get_decoration(type.member_types[index], Decoration::ArrayStride));
 
-		if (dec.decoration_flags.get(DecorationMatrixStride))
+		if (dec.decoration_flags.get(static_cast<uint32_t>(Decoration::MatrixStride)))
 			json_stream->emit_json_key_value("matrix_stride", dec.matrix_stride);
-		if (dec.decoration_flags.get(DecorationRowMajor))
+		if (dec.decoration_flags.get(static_cast<uint32_t>(Decoration::RowMajor)))
 			json_stream->emit_json_key_value("row_major", true);
 
 		if (is_physical_pointer(membertype))
@@ -453,35 +453,35 @@ string CompilerReflection::execution_model_to_str(spv::ExecutionModel model)
 {
 	switch (model)
 	{
-	case ExecutionModelVertex:
+	case ExecutionModel::Vertex:
 		return "vert";
-	case ExecutionModelTessellationControl:
+	case ExecutionModel::TessellationControl:
 		return "tesc";
-	case ExecutionModelTessellationEvaluation:
+	case ExecutionModel::TessellationEvaluation:
 		return "tese";
-	case ExecutionModelGeometry:
+	case ExecutionModel::Geometry:
 		return "geom";
-	case ExecutionModelFragment:
+	case ExecutionModel::Fragment:
 		return "frag";
-	case ExecutionModelGLCompute:
+	case ExecutionModel::GLCompute:
 		return "comp";
-	case ExecutionModelRayGenerationNV:
+	case ExecutionModel::RayGenerationNV:
 		return "rgen";
-	case ExecutionModelIntersectionNV:
+	case ExecutionModel::IntersectionNV:
 		return "rint";
-	case ExecutionModelAnyHitNV:
+	case ExecutionModel::AnyHitNV:
 		return "rahit";
-	case ExecutionModelClosestHitNV:
+	case ExecutionModel::ClosestHitNV:
 		return "rchit";
-	case ExecutionModelMissNV:
+	case ExecutionModel::MissNV:
 		return "rmiss";
-	case ExecutionModelCallableNV:
+	case ExecutionModel::CallableNV:
 		return "rcall";
-	case ExecutionModelMeshNV:
-	case ExecutionModelMeshEXT:
+	case ExecutionModel::MeshNV:
+	case ExecutionModel::MeshEXT:
 		return "mesh";
-	case ExecutionModelTaskNV:
-	case ExecutionModelTaskEXT:
+	case ExecutionModel::TaskNV:
+	case ExecutionModel::TaskEXT:
 		return "task";
 	default:
 		return "???";
@@ -510,9 +510,9 @@ void CompilerReflection::emit_entry_points()
 			json_stream->begin_json_object();
 			json_stream->emit_json_key_value("name", e.name);
 			json_stream->emit_json_key_value("mode", execution_model_to_str(e.execution_model));
-			if (e.execution_model == ExecutionModelGLCompute || e.execution_model == spv::ExecutionModelMeshEXT ||
-			    e.execution_model == spv::ExecutionModelMeshNV || e.execution_model == spv::ExecutionModelTaskEXT ||
-			    e.execution_model == spv::ExecutionModelTaskNV)
+			if (e.execution_model == ExecutionModel::GLCompute || e.execution_model == spv::ExecutionModel::MeshEXT ||
+			    e.execution_model == spv::ExecutionModel::MeshNV || e.execution_model == spv::ExecutionModel::TaskEXT ||
+			    e.execution_model == spv::ExecutionModel::TaskNV)
 			{
 				const auto &spv_entry = get_entry_point(e.name, e.execution_model);
 
@@ -575,9 +575,9 @@ void CompilerReflection::emit_resources(const char *tag, const SmallVector<Resou
 		// If we don't have a name, use the fallback for the type instead of the variable
 		// for SSBOs and UBOs since those are the only meaningful names to use externally.
 		// Push constant blocks are still accessed by name and not block name, even though they are technically Blocks.
-		bool is_push_constant = get_storage_class(res.id) == StorageClassPushConstant;
-		bool is_block = get_decoration_bitset(type.self).get(DecorationBlock) ||
-		                get_decoration_bitset(type.self).get(DecorationBufferBlock);
+		bool is_push_constant = get_storage_class(res.id) == StorageClass::PushConstant;
+		bool is_block = get_decoration_bitset(type.self).get(static_cast<uint32_t>(Decoration::Block)) ||
+		                get_decoration_bitset(type.self).get(static_cast<uint32_t>(Decoration::BufferBlock));
 
 		ID fallback_id = !is_push_constant && is_block ? ID(res.base_type_id) : ID(res.id);
 
@@ -594,28 +594,28 @@ void CompilerReflection::emit_resources(const char *tag, const SmallVector<Resou
 
 		json_stream->emit_json_key_value("name", !res.name.empty() ? res.name : get_fallback_name(fallback_id));
 		{
-			bool ssbo_block = type.storage == StorageClassStorageBuffer ||
-			                  (type.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
+			bool ssbo_block = type.storage == StorageClass::StorageBuffer ||
+			                  (type.storage == StorageClass::Uniform && typeflags.get(static_cast<uint32_t>(Decoration::BufferBlock)));
 			Bitset qualifier_mask = ssbo_block ? get_buffer_block_flags(res.id) : mask;
 
-			if (qualifier_mask.get(DecorationNonReadable))
+			if (qualifier_mask.get(static_cast<uint32_t>(Decoration::NonReadable)))
 				json_stream->emit_json_key_value("writeonly", true);
-			if (qualifier_mask.get(DecorationNonWritable))
+			if (qualifier_mask.get(static_cast<uint32_t>(Decoration::NonWritable)))
 				json_stream->emit_json_key_value("readonly", true);
-			if (qualifier_mask.get(DecorationRestrict))
+			if (qualifier_mask.get(static_cast<uint32_t>(Decoration::Restrict)))
 				json_stream->emit_json_key_value("restrict", true);
-			if (qualifier_mask.get(DecorationCoherent))
+			if (qualifier_mask.get(static_cast<uint32_t>(Decoration::Coherent)))
 				json_stream->emit_json_key_value("coherent", true);
-			if (qualifier_mask.get(DecorationVolatile))
+			if (qualifier_mask.get(static_cast<uint32_t>(Decoration::Volatile)))
 				json_stream->emit_json_key_value("volatile", true);
 		}
 
 		emit_type_array(type);
 
 		{
-			bool is_sized_block = is_block && (get_storage_class(res.id) == StorageClassUniform ||
-			                                   get_storage_class(res.id) == StorageClassUniformConstant ||
-			                                   get_storage_class(res.id) == StorageClassStorageBuffer);
+			bool is_sized_block = is_block && (get_storage_class(res.id) == StorageClass::Uniform ||
+			                                   get_storage_class(res.id) == StorageClass::UniformConstant ||
+			                                   get_storage_class(res.id) == StorageClass::StorageBuffer);
 			if (is_sized_block)
 			{
 				uint32_t block_size = uint32_t(get_declared_struct_size(get_type(res.base_type_id)));
@@ -623,31 +623,31 @@ void CompilerReflection::emit_resources(const char *tag, const SmallVector<Resou
 			}
 		}
 
-		if (type.storage == StorageClassPushConstant)
+		if (type.storage == StorageClass::PushConstant)
 			json_stream->emit_json_key_value("push_constant", true);
-		if (mask.get(DecorationLocation))
-			json_stream->emit_json_key_value("location", get_decoration(res.id, DecorationLocation));
-		if (mask.get(DecorationRowMajor))
+		if (mask.get(static_cast<uint32_t>(Decoration::Location)))
+			json_stream->emit_json_key_value("location", get_decoration(res.id, Decoration::Location));
+		if (mask.get(static_cast<uint32_t>(Decoration::RowMajor)))
 			json_stream->emit_json_key_value("row_major", true);
-		if (mask.get(DecorationColMajor))
+		if (mask.get(static_cast<uint32_t>(Decoration::ColMajor)))
 			json_stream->emit_json_key_value("column_major", true);
-		if (mask.get(DecorationIndex))
-			json_stream->emit_json_key_value("index", get_decoration(res.id, DecorationIndex));
-		if (type.storage != StorageClassPushConstant && mask.get(DecorationDescriptorSet))
-			json_stream->emit_json_key_value("set", get_decoration(res.id, DecorationDescriptorSet));
-		if (mask.get(DecorationBinding))
-			json_stream->emit_json_key_value("binding", get_decoration(res.id, DecorationBinding));
-		if (mask.get(DecorationInputAttachmentIndex))
+		if (mask.get(static_cast<uint32_t>(Decoration::Index)))
+			json_stream->emit_json_key_value("index", get_decoration(res.id, Decoration::Index));
+		if (type.storage != StorageClass::PushConstant && mask.get(static_cast<uint32_t>(Decoration::DescriptorSet)))
+			json_stream->emit_json_key_value("set", get_decoration(res.id, Decoration::DescriptorSet));
+		if (mask.get(static_cast<uint32_t>(Decoration::Binding)))
+			json_stream->emit_json_key_value("binding", get_decoration(res.id, Decoration::Binding));
+		if (mask.get(static_cast<uint32_t>(Decoration::InputAttachmentIndex)))
 			json_stream->emit_json_key_value("input_attachment_index",
-			                                 get_decoration(res.id, DecorationInputAttachmentIndex));
-		if (mask.get(DecorationOffset))
-			json_stream->emit_json_key_value("offset", get_decoration(res.id, DecorationOffset));
-		if (mask.get(DecorationWeightTextureQCOM))
-			json_stream->emit_json_key_value("WeightTextureQCOM", get_decoration(res.id, DecorationWeightTextureQCOM));
-		if (mask.get(DecorationBlockMatchTextureQCOM))
-			json_stream->emit_json_key_value("BlockMatchTextureQCOM", get_decoration(res.id, DecorationBlockMatchTextureQCOM));
-		if (mask.get(DecorationBlockMatchSamplerQCOM))
-			json_stream->emit_json_key_value("BlockMatchSamplerQCOM", get_decoration(res.id, DecorationBlockMatchSamplerQCOM));
+			                                 get_decoration(res.id, Decoration::InputAttachmentIndex));
+		if (mask.get(static_cast<uint32_t>(Decoration::Offset)))
+			json_stream->emit_json_key_value("offset", get_decoration(res.id, Decoration::Offset));
+		if (mask.get(static_cast<uint32_t>(Decoration::WeightTextureQCOM)))
+			json_stream->emit_json_key_value("WeightTextureQCOM", get_decoration(res.id, Decoration::WeightTextureQCOM));
+		if (mask.get(static_cast<uint32_t>(Decoration::BlockMatchTextureQCOM)))
+			json_stream->emit_json_key_value("BlockMatchTextureQCOM", get_decoration(res.id, Decoration::BlockMatchTextureQCOM));
+		if (mask.get(static_cast<uint32_t>(Decoration::BlockMatchSamplerQCOM)))
+			json_stream->emit_json_key_value("BlockMatchSamplerQCOM", get_decoration(res.id, Decoration::BlockMatchSamplerQCOM));
 
 		// For images, the type itself adds a layout qualifer.
 		// Only emit the format for storage images.

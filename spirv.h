@@ -1,7 +1,7 @@
 /*
 ** Copyright: 2014-2024 The Khronos Group Inc.
 ** License: MIT
-** 
+**
 ** MODIFICATIONS TO THIS FILE MAY MEAN IT NO LONGER ACCURATELY REFLECTS
 ** KHRONOS STANDARDS. THE UNMODIFIED, NORMATIVE VERSIONS OF KHRONOS
 ** SPECIFICATIONS AND HEADER INFORMATION ARE LOCATED AT
@@ -16,7 +16,7 @@
 /*
 ** Enumeration tokens for SPIR-V, in various styles:
 **   C, C++, C++11, JSON, Lua, Python, C#, D, Beef
-** 
+**
 ** - C will have tokens with a "Spv" prefix, e.g.: SpvSourceLanguageGLSL
 ** - C++ will have tokens in the "spv" name space, e.g.: spv::SourceLanguageGLSL
 ** - C++11 will use enum classes in the spv namespace, e.g.: spv::SourceLanguage::GLSL
@@ -27,7 +27,7 @@
 ** - D will have tokens under the "spv" module, e.g: spv.SourceLanguage.GLSL
 ** - Beef will use enum classes in the Specification class located in the "Spv" namespace,
 **     e.g.: Spv.Specification.SourceLanguage.GLSL
-** 
+**
 ** Some tokens act like mask values, which can be OR'd together,
 ** while others are mutually exclusive.  The mask-like ones have
 ** "Mask" in their name, and a parallel enum that has the shift
@@ -642,6 +642,7 @@ typedef enum SpvDecoration_ {
     SpvDecorationHostAccessINTEL = 6188,
     SpvDecorationInitModeINTEL = 6190,
     SpvDecorationImplementInRegisterMapINTEL = 6191,
+    SpvDecorationConditionalINTEL = 6247,
     SpvDecorationCacheControlLoadINTEL = 6442,
     SpvDecorationCacheControlStoreINTEL = 6443,
     SpvDecorationMax = 0x7fffffff,
@@ -1107,6 +1108,7 @@ typedef enum SpvCapability_ {
     SpvCapabilityTextureBoxFilterQCOM = 4485,
     SpvCapabilityTextureBlockMatchQCOM = 4486,
     SpvCapabilityTileShadingQCOM = 4495,
+    SpvCapabilityCooperativeMatrixConversionQCOM = 4496,
     SpvCapabilityTextureBlockMatch2QCOM = 4498,
     SpvCapabilityFloat16ImageAMD = 5008,
     SpvCapabilityImageGatherBiasLodAMD = 5009,
@@ -1282,6 +1284,9 @@ typedef enum SpvCapability_ {
     SpvCapabilitySubgroup2DBlockTransposeINTEL = 6230,
     SpvCapabilitySubgroupMatrixMultiplyAccumulateINTEL = 6236,
     SpvCapabilityTernaryBitwiseFunctionINTEL = 6241,
+    SpvCapabilityUntypedVariableLengthArrayINTEL = 6243,
+    SpvCapabilitySpecConditionalINTEL = 6245,
+    SpvCapabilityFunctionVariantsINTEL = 6246,
     SpvCapabilityGroupUniformArithmeticKHR = 6400,
     SpvCapabilityTensorFloat32RoundingINTEL = 6425,
     SpvCapabilityMaskedGatherScatterINTEL = 6427,
@@ -1976,6 +1981,7 @@ typedef enum SpvOp_ {
     SpvOpGroupNonUniformRotateKHR = 4431,
     SpvOpSubgroupReadInvocationKHR = 4432,
     SpvOpExtInstWithForwardRefsKHR = 4433,
+    SpvOpUntypedGroupAsyncCopyKHR = 4434,
     SpvOpTraceRayKHR = 4445,
     SpvOpExecuteCallableKHR = 4446,
     SpvOpConvertUToAccelerationStructureKHR = 4447,
@@ -2012,10 +2018,14 @@ typedef enum SpvOp_ {
     SpvOpImageBoxFilterQCOM = 4481,
     SpvOpImageBlockMatchSSDQCOM = 4482,
     SpvOpImageBlockMatchSADQCOM = 4483,
+    SpvOpBitCastArrayQCOM = 4497,
     SpvOpImageBlockMatchWindowSSDQCOM = 4500,
     SpvOpImageBlockMatchWindowSADQCOM = 4501,
     SpvOpImageBlockMatchGatherSSDQCOM = 4502,
     SpvOpImageBlockMatchGatherSADQCOM = 4503,
+    SpvOpCompositeConstructCoopMatQCOM = 4540,
+    SpvOpCompositeExtractCoopMatQCOM = 4541,
+    SpvOpExtractSubArrayQCOM = 4542,
     SpvOpGroupIAddNonUniformAMD = 5000,
     SpvOpGroupFAddNonUniformAMD = 5001,
     SpvOpGroupFMinNonUniformAMD = 5002,
@@ -2406,6 +2416,14 @@ typedef enum SpvOp_ {
     SpvOpSubgroup2DBlockStoreINTEL = 6235,
     SpvOpSubgroupMatrixMultiplyAccumulateINTEL = 6237,
     SpvOpBitwiseFunctionINTEL = 6242,
+    SpvOpUntypedVariableLengthArrayINTEL = 6244,
+    SpvOpConditionalExtensionINTEL = 6248,
+    SpvOpConditionalEntryPointINTEL = 6249,
+    SpvOpConditionalCapabilityINTEL = 6250,
+    SpvOpSpecConstantTargetINTEL = 6251,
+    SpvOpSpecConstantArchitectureINTEL = 6252,
+    SpvOpSpecConstantCapabilitiesINTEL = 6253,
+    SpvOpConditionalCopyObjectINTEL = 6254,
     SpvOpGroupIMulKHR = 6401,
     SpvOpGroupFMulKHR = 6402,
     SpvOpGroupBitwiseAndKHR = 6403,
@@ -2806,6 +2824,7 @@ inline void SpvHasResultAndType(SpvOp opcode, bool *hasResult, bool *hasResultTy
     case SpvOpGroupNonUniformRotateKHR: *hasResult = true; *hasResultType = true; break;
     case SpvOpSubgroupReadInvocationKHR: *hasResult = true; *hasResultType = true; break;
     case SpvOpExtInstWithForwardRefsKHR: *hasResult = true; *hasResultType = true; break;
+    case SpvOpUntypedGroupAsyncCopyKHR: *hasResult = true; *hasResultType = true; break;
     case SpvOpTraceRayKHR: *hasResult = false; *hasResultType = false; break;
     case SpvOpExecuteCallableKHR: *hasResult = false; *hasResultType = false; break;
     case SpvOpConvertUToAccelerationStructureKHR: *hasResult = true; *hasResultType = true; break;
@@ -2836,10 +2855,14 @@ inline void SpvHasResultAndType(SpvOp opcode, bool *hasResult, bool *hasResultTy
     case SpvOpImageBoxFilterQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpImageBlockMatchSSDQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpImageBlockMatchSADQCOM: *hasResult = true; *hasResultType = true; break;
+    case SpvOpBitCastArrayQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpImageBlockMatchWindowSSDQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpImageBlockMatchWindowSADQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpImageBlockMatchGatherSSDQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpImageBlockMatchGatherSADQCOM: *hasResult = true; *hasResultType = true; break;
+    case SpvOpCompositeConstructCoopMatQCOM: *hasResult = true; *hasResultType = true; break;
+    case SpvOpCompositeExtractCoopMatQCOM: *hasResult = true; *hasResultType = true; break;
+    case SpvOpExtractSubArrayQCOM: *hasResult = true; *hasResultType = true; break;
     case SpvOpGroupIAddNonUniformAMD: *hasResult = true; *hasResultType = true; break;
     case SpvOpGroupFAddNonUniformAMD: *hasResult = true; *hasResultType = true; break;
     case SpvOpGroupFMinNonUniformAMD: *hasResult = true; *hasResultType = true; break;
@@ -3225,6 +3248,14 @@ inline void SpvHasResultAndType(SpvOp opcode, bool *hasResult, bool *hasResultTy
     case SpvOpSubgroup2DBlockStoreINTEL: *hasResult = false; *hasResultType = false; break;
     case SpvOpSubgroupMatrixMultiplyAccumulateINTEL: *hasResult = true; *hasResultType = true; break;
     case SpvOpBitwiseFunctionINTEL: *hasResult = true; *hasResultType = true; break;
+    case SpvOpUntypedVariableLengthArrayINTEL: *hasResult = true; *hasResultType = true; break;
+    case SpvOpConditionalExtensionINTEL: *hasResult = false; *hasResultType = false; break;
+    case SpvOpConditionalEntryPointINTEL: *hasResult = false; *hasResultType = false; break;
+    case SpvOpConditionalCapabilityINTEL: *hasResult = false; *hasResultType = false; break;
+    case SpvOpSpecConstantTargetINTEL: *hasResult = true; *hasResultType = true; break;
+    case SpvOpSpecConstantArchitectureINTEL: *hasResult = true; *hasResultType = true; break;
+    case SpvOpSpecConstantCapabilitiesINTEL: *hasResult = true; *hasResultType = true; break;
+    case SpvOpConditionalCopyObjectINTEL: *hasResult = true; *hasResultType = true; break;
     case SpvOpGroupIMulKHR: *hasResult = true; *hasResultType = true; break;
     case SpvOpGroupFMulKHR: *hasResult = true; *hasResultType = true; break;
     case SpvOpGroupBitwiseAndKHR: *hasResult = true; *hasResultType = true; break;
@@ -3765,6 +3796,7 @@ inline const char* SpvDecorationToString(SpvDecoration value) {
     case SpvDecorationHostAccessINTEL: return "HostAccessINTEL";
     case SpvDecorationInitModeINTEL: return "InitModeINTEL";
     case SpvDecorationImplementInRegisterMapINTEL: return "ImplementInRegisterMapINTEL";
+    case SpvDecorationConditionalINTEL: return "ConditionalINTEL";
     case SpvDecorationCacheControlLoadINTEL: return "CacheControlLoadINTEL";
     case SpvDecorationCacheControlStoreINTEL: return "CacheControlStoreINTEL";
     default: return "Unknown";
@@ -4055,6 +4087,7 @@ inline const char* SpvCapabilityToString(SpvCapability value) {
     case SpvCapabilityTextureBoxFilterQCOM: return "TextureBoxFilterQCOM";
     case SpvCapabilityTextureBlockMatchQCOM: return "TextureBlockMatchQCOM";
     case SpvCapabilityTileShadingQCOM: return "TileShadingQCOM";
+    case SpvCapabilityCooperativeMatrixConversionQCOM: return "CooperativeMatrixConversionQCOM";
     case SpvCapabilityTextureBlockMatch2QCOM: return "TextureBlockMatch2QCOM";
     case SpvCapabilityFloat16ImageAMD: return "Float16ImageAMD";
     case SpvCapabilityImageGatherBiasLodAMD: return "ImageGatherBiasLodAMD";
@@ -4204,6 +4237,9 @@ inline const char* SpvCapabilityToString(SpvCapability value) {
     case SpvCapabilitySubgroup2DBlockTransposeINTEL: return "Subgroup2DBlockTransposeINTEL";
     case SpvCapabilitySubgroupMatrixMultiplyAccumulateINTEL: return "SubgroupMatrixMultiplyAccumulateINTEL";
     case SpvCapabilityTernaryBitwiseFunctionINTEL: return "TernaryBitwiseFunctionINTEL";
+    case SpvCapabilityUntypedVariableLengthArrayINTEL: return "UntypedVariableLengthArrayINTEL";
+    case SpvCapabilitySpecConditionalINTEL: return "SpecConditionalINTEL";
+    case SpvCapabilityFunctionVariantsINTEL: return "FunctionVariantsINTEL";
     case SpvCapabilityGroupUniformArithmeticKHR: return "GroupUniformArithmeticKHR";
     case SpvCapabilityTensorFloat32RoundingINTEL: return "TensorFloat32RoundingINTEL";
     case SpvCapabilityMaskedGatherScatterINTEL: return "MaskedGatherScatterINTEL";
@@ -4779,6 +4815,7 @@ inline const char* SpvOpToString(SpvOp value) {
     case SpvOpGroupNonUniformRotateKHR: return "OpGroupNonUniformRotateKHR";
     case SpvOpSubgroupReadInvocationKHR: return "OpSubgroupReadInvocationKHR";
     case SpvOpExtInstWithForwardRefsKHR: return "OpExtInstWithForwardRefsKHR";
+    case SpvOpUntypedGroupAsyncCopyKHR: return "OpUntypedGroupAsyncCopyKHR";
     case SpvOpTraceRayKHR: return "OpTraceRayKHR";
     case SpvOpExecuteCallableKHR: return "OpExecuteCallableKHR";
     case SpvOpConvertUToAccelerationStructureKHR: return "OpConvertUToAccelerationStructureKHR";
@@ -4809,10 +4846,14 @@ inline const char* SpvOpToString(SpvOp value) {
     case SpvOpImageBoxFilterQCOM: return "OpImageBoxFilterQCOM";
     case SpvOpImageBlockMatchSSDQCOM: return "OpImageBlockMatchSSDQCOM";
     case SpvOpImageBlockMatchSADQCOM: return "OpImageBlockMatchSADQCOM";
+    case SpvOpBitCastArrayQCOM: return "OpBitCastArrayQCOM";
     case SpvOpImageBlockMatchWindowSSDQCOM: return "OpImageBlockMatchWindowSSDQCOM";
     case SpvOpImageBlockMatchWindowSADQCOM: return "OpImageBlockMatchWindowSADQCOM";
     case SpvOpImageBlockMatchGatherSSDQCOM: return "OpImageBlockMatchGatherSSDQCOM";
     case SpvOpImageBlockMatchGatherSADQCOM: return "OpImageBlockMatchGatherSADQCOM";
+    case SpvOpCompositeConstructCoopMatQCOM: return "OpCompositeConstructCoopMatQCOM";
+    case SpvOpCompositeExtractCoopMatQCOM: return "OpCompositeExtractCoopMatQCOM";
+    case SpvOpExtractSubArrayQCOM: return "OpExtractSubArrayQCOM";
     case SpvOpGroupIAddNonUniformAMD: return "OpGroupIAddNonUniformAMD";
     case SpvOpGroupFAddNonUniformAMD: return "OpGroupFAddNonUniformAMD";
     case SpvOpGroupFMinNonUniformAMD: return "OpGroupFMinNonUniformAMD";
@@ -5198,6 +5239,14 @@ inline const char* SpvOpToString(SpvOp value) {
     case SpvOpSubgroup2DBlockStoreINTEL: return "OpSubgroup2DBlockStoreINTEL";
     case SpvOpSubgroupMatrixMultiplyAccumulateINTEL: return "OpSubgroupMatrixMultiplyAccumulateINTEL";
     case SpvOpBitwiseFunctionINTEL: return "OpBitwiseFunctionINTEL";
+    case SpvOpUntypedVariableLengthArrayINTEL: return "OpUntypedVariableLengthArrayINTEL";
+    case SpvOpConditionalExtensionINTEL: return "OpConditionalExtensionINTEL";
+    case SpvOpConditionalEntryPointINTEL: return "OpConditionalEntryPointINTEL";
+    case SpvOpConditionalCapabilityINTEL: return "OpConditionalCapabilityINTEL";
+    case SpvOpSpecConstantTargetINTEL: return "OpSpecConstantTargetINTEL";
+    case SpvOpSpecConstantArchitectureINTEL: return "OpSpecConstantArchitectureINTEL";
+    case SpvOpSpecConstantCapabilitiesINTEL: return "OpSpecConstantCapabilitiesINTEL";
+    case SpvOpConditionalCopyObjectINTEL: return "OpConditionalCopyObjectINTEL";
     case SpvOpGroupIMulKHR: return "OpGroupIMulKHR";
     case SpvOpGroupFMulKHR: return "OpGroupFMulKHR";
     case SpvOpGroupBitwiseAndKHR: return "OpGroupBitwiseAndKHR";
@@ -5219,4 +5268,3 @@ inline const char* SpvOpToString(SpvOp value) {
 #endif /* SPV_ENABLE_UTILITY_CODE */
 
 #endif
-

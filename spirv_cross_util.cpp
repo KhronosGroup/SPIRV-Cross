@@ -34,10 +34,10 @@ void rename_interface_variable(Compiler &compiler, const SmallVector<Resource> &
 {
 	for (auto &v : resources)
 	{
-		if (!compiler.has_decoration(v.id, spv::DecorationLocation))
+		if (!compiler.has_decoration(v.id, spv::Decoration::Location))
 			continue;
 
-		auto loc = compiler.get_decoration(v.id, spv::DecorationLocation);
+		auto loc = compiler.get_decoration(v.id, spv::Decoration::Location);
 		if (loc != location)
 			continue;
 
@@ -61,16 +61,16 @@ void inherit_combined_sampler_bindings(Compiler &compiler)
 	auto &samplers = compiler.get_combined_image_samplers();
 	for (auto &s : samplers)
 	{
-		if (compiler.has_decoration(s.image_id, spv::DecorationDescriptorSet))
+		if (compiler.has_decoration(s.image_id, spv::Decoration::DescriptorSet))
 		{
-			uint32_t set = compiler.get_decoration(s.image_id, spv::DecorationDescriptorSet);
-			compiler.set_decoration(s.combined_id, spv::DecorationDescriptorSet, set);
+			uint32_t set = compiler.get_decoration(s.image_id, spv::Decoration::DescriptorSet);
+			compiler.set_decoration(s.combined_id, spv::Decoration::DescriptorSet, set);
 		}
 
-		if (compiler.has_decoration(s.image_id, spv::DecorationBinding))
+		if (compiler.has_decoration(s.image_id, spv::Decoration::Binding))
 		{
-			uint32_t binding = compiler.get_decoration(s.image_id, spv::DecorationBinding);
-			compiler.set_decoration(s.combined_id, spv::DecorationBinding, binding);
+			uint32_t binding = compiler.get_decoration(s.image_id, spv::Decoration::Binding);
+			compiler.set_decoration(s.combined_id, spv::Decoration::Binding, binding);
 		}
 	}
 }

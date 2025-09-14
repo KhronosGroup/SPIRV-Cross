@@ -87,7 +87,7 @@ using HLSLBindingFlags = uint32_t;
 // For deeper control of push constants, set_root_constant_layouts() can be used instead.
 struct HLSLResourceBinding
 {
-	spv::ExecutionModel stage = spv::ExecutionModelMax;
+	spv::ExecutionModel stage = spv::ExecutionModel::Max;
 	uint32_t desc_set = 0;
 	uint32_t binding = 0;
 

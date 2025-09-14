@@ -288,7 +288,7 @@ static bool write_string_to_file(const char *path, const char *string)
 static void print_resources(const Compiler &compiler, spv::StorageClass storage,
                             const SmallVector<BuiltInResource> &resources)
 {
-	fprintf(stderr, "%s\n", storage == StorageClassInput ? "builtin inputs" : "builtin outputs");
+	fprintf(stderr, "%s\n", storage == StorageClass::Input ? "builtin inputs" : "builtin outputs");
 	fprintf(stderr, "=============\n\n");
 	for (auto &res : resources)
 	{
@@ -326,13 +326,13 @@ static void print_resources(const Compiler &compiler, spv::StorageClass storage,
 		string builtin_str;
 		switch (res.builtin)
 		{
-		case spv::BuiltInPosition: builtin_str = "Position"; break;
-		case spv::BuiltInPointSize: builtin_str = "PointSize"; break;
-		case spv::BuiltInCullDistance: builtin_str = "CullDistance"; break;
-		case spv::BuiltInClipDistance: builtin_str = "ClipDistance"; break;
-		case spv::BuiltInTessLevelInner: builtin_str = "TessLevelInner"; break;
-		case spv::BuiltInTessLevelOuter: builtin_str = "TessLevelOuter"; break;
-		default: builtin_str = string("builtin #") + to_string(res.builtin);
+		case spv::BuiltIn::Position: builtin_str = "Position"; break;
+		case spv::BuiltIn::PointSize: builtin_str = "PointSize"; break;
+		case spv::BuiltIn::CullDistance: builtin_str = "CullDistance"; break;
+		case spv::BuiltIn::ClipDistance: builtin_str = "ClipDistance"; break;
+		case spv::BuiltIn::TessLevelInner: builtin_str = "TessLevelInner"; break;
+		case spv::BuiltIn::TessLevelOuter: builtin_str = "TessLevelOuter"; break;
+		default: builtin_str = string("builtin #") + to_string(static_cast<uint32_t>(res.builtin));
 		}
 
 		fprintf(stderr, "Builtin %s (%s) (active: %s).\n", builtin_str.c_str(), type_str.c_str(), active ? "yes" : "no");
@@ -356,11 +356,11 @@ static void print_resources(const Compiler &compiler, const char *tag, const Sma
 		// If we don't have a name, use the fallback for the type instead of the variable
 		// for SSBOs and UBOs since those are the only meaningful names to use externally.
 		// Push constant blocks are still accessed by name and not block name, even though they are technically Blocks.
-		bool is_push_constant = compiler.get_storage_class(res.id) == StorageClassPushConstant;
-		bool is_block = compiler.get_decoration_bitset(type.self).get(DecorationBlock) ||
-		                compiler.get_decoration_bitset(type.self).get(DecorationBufferBlock);
-		bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == StorageClassUniform ||
-		                                   compiler.get_storage_class(res.id) == StorageClassUniformConstant);
+		bool is_push_constant = compiler.get_storage_class(res.id) == StorageClass::PushConstant;
+		bool is_block = compiler.get_decoration_bitset(type.self).get(static_cast<uint32_t>(Decoration::Block)) ||
+		                compiler.get_decoration_bitset(type.self).get(static_cast<uint32_t>(Decoration::BufferBlock));
+		bool is_sized_block = is_block && (compiler.get_storage_class(res.id) == StorageClass::Uniform ||
+		                                   compiler.get_storage_class(res.id) == StorageClass::UniformConstant);
 		ID fallback_id = !is_push_constant && is_block ? ID(res.base_type_id) : ID(res.id);
 
 		uint32_t block_size = 0;
@@ -386,25 +386,25 @@ static void print_resources(const Compiler &compiler, const char *tag, const Sma
 		fprintf(stderr, " ID %03u : %s%s", uint32_t(res.id),
 		        !res.name.empty() ? res.name.c_str() : compiler.get_fallback_name(fallback_id).c_str(), array.c_str());
 
-		if (mask.get(DecorationLocation))
-			fprintf(stderr, " (Location : %u)", compiler.get_decoration(res.id, DecorationLocation));
-		if (mask.get(DecorationDescriptorSet))
-			fprintf(stderr, " (Set : %u)", compiler.get_decoration(res.id, DecorationDescriptorSet));
-		if (mask.get(DecorationBinding))
-			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, DecorationBinding));
+		if (mask.get(static_cast<uint32_t>(Decoration::Location)))
+			fprintf(stderr, " (Location : %u)", compiler.get_decoration(res.id, Decoration::Location));
+		if (mask.get(static_cast<uint32_t>(Decoration::DescriptorSet)))
+			fprintf(stderr, " (Set : %u)", compiler.get_decoration(res.id, Decoration::DescriptorSet));
+		if (mask.get(static_cast<uint32_t>(Decoration::Binding)))
+			fprintf(stderr, " (Binding : %u)", compiler.get_decoration(res.id, Decoration::Binding));
 		if (static_cast<const CompilerGLSL &>(compiler).variable_is_depth_or_compare(res.id))
 			fprintf(stderr, " (comparison)");
-		if (mask.get(DecorationInputAttachmentIndex))
-			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, DecorationInputAttachmentIndex));
-		if (mask.get(DecorationNonReadable))
+		if (mask.get(static_cast<uint32_t>(Decoration::InputAttachmentIndex)))
+			fprintf(stderr, " (Attachment : %u)", compiler.get_decoration(res.id, Decoration::InputAttachmentIndex));
+		if (mask.get(static_cast<uint32_t>(Decoration::NonReadable)))
 			fprintf(stderr, " writeonly");
-		if (mask.get(DecorationNonWritable))
+		if (mask.get(static_cast<uint32_t>(Decoration::NonWritable)))
 			fprintf(stderr, " readonly");
-		if (mask.get(DecorationRestrict))
+		if (mask.get(static_cast<uint32_t>(Decoration::Restrict)))
 			fprintf(stderr, " restrict");
-		if (mask.get(DecorationCoherent))
+		if (mask.get(static_cast<uint32_t>(Decoration::Coherent)))
 			fprintf(stderr, " coherent");
-		if (mask.get(DecorationVolatile))
+		if (mask.get(static_cast<uint32_t>(Decoration::Volatile)))
 			fprintf(stderr, " volatile");
 		if (is_sized_block)
 		{
@@ -425,29 +425,29 @@ static const char *execution_model_to_str(spv::ExecutionModel model)
 {
 	switch (model)
 	{
-	case spv::ExecutionModelVertex:
+	case spv::ExecutionModel::Vertex:
 		return "vertex";
-	case spv::ExecutionModelTessellationControl:
+	case spv::ExecutionModel::TessellationControl:
 		return "tessellation control";
-	case ExecutionModelTessellationEvaluation:
+	case ExecutionModel::TessellationEvaluation:
 		return "tessellation evaluation";
-	case ExecutionModelGeometry:
+	case ExecutionModel::Geometry:
 		return "geometry";
-	case ExecutionModelFragment:
+	case ExecutionModel::Fragment:
 		return "fragment";
-	case ExecutionModelGLCompute:
+	case ExecutionModel::GLCompute:
 		return "compute";
-	case ExecutionModelRayGenerationNV:
+	case ExecutionModel::RayGenerationNV:
 		return "raygenNV";
-	case ExecutionModelIntersectionNV:
+	case ExecutionModel::IntersectionNV:
 		return "intersectionNV";
-	case ExecutionModelCallableNV:
+	case ExecutionModel::CallableNV:
 		return "callableNV";
-	case ExecutionModelAnyHitNV:
+	case ExecutionModel::AnyHitNV:
 		return "anyhitNV";
-	case ExecutionModelClosestHitNV:
+	case ExecutionModel::ClosestHitNV:
 		return "closesthitNV";
-	case ExecutionModelMissNV:
+	case ExecutionModel::MissNV:
 		return "missNV";
 	default:
 		return "???";
@@ -473,50 +473,50 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 
 		switch (static_cast<ExecutionMode>(i))
 		{
-		case ExecutionModeInvocations:
+		case ExecutionMode::Invocations:
 			fprintf(stderr, "  Invocations: %u\n", arg0);
 			break;
 
-		case ExecutionModeLocalSize:
+		case ExecutionMode::LocalSize:
 			fprintf(stderr, "  LocalSize: (%u, %u, %u)\n", arg0, arg1, arg2);
 			break;
 
-		case ExecutionModeOutputVertices:
+		case ExecutionMode::OutputVertices:
 			fprintf(stderr, "  OutputVertices: %u\n", arg0);
 			break;
 
 #define CHECK_MODE(m)                  \
-	case ExecutionMode##m:             \
-		fprintf(stderr, "  %s\n", #m); \
+	case Execution##m:             \
+		fprintf(stderr, "  %s\n", #m);  \
 		break
-			CHECK_MODE(SpacingEqual);
-			CHECK_MODE(SpacingFractionalEven);
-			CHECK_MODE(SpacingFractionalOdd);
-			CHECK_MODE(VertexOrderCw);
-			CHECK_MODE(VertexOrderCcw);
-			CHECK_MODE(PixelCenterInteger);
-			CHECK_MODE(OriginUpperLeft);
-			CHECK_MODE(OriginLowerLeft);
-			CHECK_MODE(EarlyFragmentTests);
-			CHECK_MODE(PointMode);
-			CHECK_MODE(Xfb);
-			CHECK_MODE(DepthReplacing);
-			CHECK_MODE(DepthGreater);
-			CHECK_MODE(DepthLess);
-			CHECK_MODE(DepthUnchanged);
-			CHECK_MODE(LocalSizeHint);
-			CHECK_MODE(InputPoints);
-			CHECK_MODE(InputLines);
-			CHECK_MODE(InputLinesAdjacency);
-			CHECK_MODE(Triangles);
-			CHECK_MODE(InputTrianglesAdjacency);
-			CHECK_MODE(Quads);
-			CHECK_MODE(Isolines);
-			CHECK_MODE(OutputPoints);
-			CHECK_MODE(OutputLineStrip);
-			CHECK_MODE(OutputTriangleStrip);
-			CHECK_MODE(VecTypeHint);
-			CHECK_MODE(ContractionOff);
+			CHECK_MODE(Mode::SpacingEqual);
+			CHECK_MODE(Mode::SpacingFractionalEven);
+			CHECK_MODE(Mode::SpacingFractionalOdd);
+			CHECK_MODE(Mode::VertexOrderCw);
+			CHECK_MODE(Mode::VertexOrderCcw);
+			CHECK_MODE(Mode::PixelCenterInteger);
+			CHECK_MODE(Mode::OriginUpperLeft);
+			CHECK_MODE(Mode::OriginLowerLeft);
+			CHECK_MODE(Mode::EarlyFragmentTests);
+			CHECK_MODE(Mode::PointMode);
+			CHECK_MODE(Mode::Xfb);
+			CHECK_MODE(Mode::DepthReplacing);
+			CHECK_MODE(Mode::DepthGreater);
+			CHECK_MODE(Mode::DepthLess);
+			CHECK_MODE(Mode::DepthUnchanged);
+			CHECK_MODE(Mode::LocalSizeHint);
+			CHECK_MODE(Mode::InputPoints);
+			CHECK_MODE(Mode::InputLines);
+			CHECK_MODE(Mode::InputLinesAdjacency);
+			CHECK_MODE(Mode::Triangles);
+			CHECK_MODE(Mode::InputTrianglesAdjacency);
+			CHECK_MODE(Mode::Quads);
+			CHECK_MODE(Mode::Isolines);
+			CHECK_MODE(Mode::OutputPoints);
+			CHECK_MODE(Mode::OutputLineStrip);
+			CHECK_MODE(Mode::OutputTriangleStrip);
+			CHECK_MODE(Mode::VecTypeHint);
+			CHECK_MODE(Mode::ContractionOff);
 
 		default:
 			break;
@@ -538,8 +538,8 @@ static void print_resources(const Compiler &compiler, const ShaderResources &res
 	print_resources(compiler, "acceleration structures", res.acceleration_structures);
 	print_resources(compiler, "tensors", res.tensors);
 	print_resources(compiler, "record buffers", res.shader_record_buffers);
-	print_resources(compiler, spv::StorageClassInput, res.builtin_inputs);
-	print_resources(compiler, spv::StorageClassOutput, res.builtin_outputs);
+	print_resources(compiler, spv::StorageClass::Input, res.builtin_inputs);
+	print_resources(compiler, spv::StorageClass::Output, res.builtin_outputs);
 }
 
 static void print_push_constant_resources(const Compiler &compiler, const SmallVector<Resource> &res)
@@ -1151,33 +1151,33 @@ static PlsFormat pls_format(const char *str)
 static ExecutionModel stage_to_execution_model(const std::string &stage)
 {
 	if (stage == "vert")
-		return ExecutionModelVertex;
+		return ExecutionModel::Vertex;
 	else if (stage == "frag")
-		return ExecutionModelFragment;
+		return ExecutionModel::Fragment;
 	else if (stage == "comp")
-		return ExecutionModelGLCompute;
+		return ExecutionModel::GLCompute;
 	else if (stage == "tesc")
-		return ExecutionModelTessellationControl;
+		return ExecutionModel::TessellationControl;
 	else if (stage == "tese")
-		return ExecutionModelTessellationEvaluation;
+		return ExecutionModel::TessellationEvaluation;
 	else if (stage == "geom")
-		return ExecutionModelGeometry;
+		return ExecutionModel::Geometry;
 	else if (stage == "rgen")
-		return ExecutionModelRayGenerationKHR;
+		return ExecutionModel::RayGenerationKHR;
 	else if (stage == "rint")
-		return ExecutionModelIntersectionKHR;
+		return ExecutionModel::IntersectionKHR;
 	else if (stage == "rahit")
-		return ExecutionModelAnyHitKHR;
+		return ExecutionModel::AnyHitKHR;
 	else if (stage == "rchit")
-		return ExecutionModelClosestHitKHR;
+		return ExecutionModel::ClosestHitKHR;
 	else if (stage == "rmiss")
-		return ExecutionModelMissKHR;
+		return ExecutionModel::MissKHR;
 	else if (stage == "rcall")
-		return ExecutionModelCallableKHR;
+		return ExecutionModel::CallableKHR;
 	else if (stage == "mesh")
-		return spv::ExecutionModelMeshEXT;
+		return spv::ExecutionModel::MeshEXT;
 	else if (stage == "task")
-		return spv::ExecutionModelTaskEXT;
+		return spv::ExecutionModel::TaskEXT;
 	else
 		SPIRV_CROSS_THROW("Invalid stage.");
 }
@@ -1325,7 +1325,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 	auto entry_points = compiler->get_entry_points_and_stages();
 	auto entry_point = args.entry;
-	ExecutionModel model = ExecutionModelMax;
+	ExecutionModel model = ExecutionModel::Max;
 
 	if (!args.entry_stage.empty())
 	{
@@ -1487,8 +1487,8 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 		if (sampler != 0)
 		{
 			// Set some defaults to make validation happy.
-			compiler->set_decoration(sampler, DecorationDescriptorSet, 0);
-			compiler->set_decoration(sampler, DecorationBinding, 0);
+			compiler->set_decoration(sampler, Decoration::DescriptorSet, 0);
+			compiler->set_decoration(sampler, Decoration::Binding, 0);
 		}
 	}
 
@@ -1529,10 +1529,10 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 
 	for (auto &rename : args.interface_variable_renames)
 	{
-		if (rename.storageClass == StorageClassInput)
+		if (rename.storageClass == StorageClass::Input)
 			spirv_cross_util::rename_interface_variable(*compiler, res.stage_inputs, rename.location,
 			                                            rename.variable_name);
-		else if (rename.storageClass == StorageClassOutput)
+		else if (rename.storageClass == StorageClass::Output)
 			spirv_cross_util::rename_interface_variable(*compiler, res.stage_outputs, rename.location,
 			                                            rename.variable_name);
 		else
@@ -1576,7 +1576,7 @@ static string compile_iteration(const CLIArguments &args, std::vector<uint32_t> 
 			if (itr != res.stage_inputs.end())
 			{
 				HLSLVertexAttributeRemap remap = {
-					compiler->get_decoration(itr->id, DecorationLocation),
+					compiler->get_decoration(itr->id, Decoration::Location),
 					named_remap.semantic,
 				};
 				static_cast<CompilerHLSL *>(compiler.get())->add_vertex_attribute_remap(remap);
@@ -1885,12 +1885,12 @@ static int main_inner(int argc, char *argv[])
 	});
 
 	cbs.add("--rename-interface-variable", [&args](CLIParser &parser) {
-		StorageClass cls = StorageClassMax;
+		StorageClass cls = StorageClass::Max;
 		string clsStr = parser.next_string();
 		if (clsStr == "in")
-			cls = StorageClassInput;
+			cls = StorageClass::Input;
 		else if (clsStr == "out")
-			cls = StorageClassOutput;
+			cls = StorageClass::Output;
 
 		uint32_t loc = parser.next_uint();
 		string var_name = parser.next_string();
@@ -1930,16 +1930,16 @@ static int main_inner(int argc, char *argv[])
 	});
 
 	cbs.add("--mask-stage-output-builtin", [&](CLIParser &parser) {
-		BuiltIn masked_builtin = BuiltInMax;
+		BuiltIn masked_builtin = BuiltIn::Max;
 		std::string builtin = parser.next_string();
 		if (builtin == "Position")
-			masked_builtin = BuiltInPosition;
+			masked_builtin = BuiltIn::Position;
 		else if (builtin == "PointSize")
-			masked_builtin = BuiltInPointSize;
+			masked_builtin = BuiltIn::PointSize;
 		else if (builtin == "CullDistance")
-			masked_builtin = BuiltInCullDistance;
+			masked_builtin = BuiltIn::CullDistance;
 		else if (builtin == "ClipDistance")
-			masked_builtin = BuiltInClipDistance;
+			masked_builtin = BuiltIn::ClipDistance;
 		else
 		{
 			print_help();

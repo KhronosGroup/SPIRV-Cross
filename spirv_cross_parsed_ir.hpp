@@ -111,7 +111,7 @@ public:
 
 	struct Source
 	{
-		spv::SourceLanguage lang = spv::SourceLanguageUnknown;
+		spv::SourceLanguage lang = spv::SourceLanguage::Unknown;
 		uint32_t version = 0;
 		bool es = false;
 		bool known = false;
@@ -122,8 +122,8 @@ public:
 
 	Source source;
 
-	spv::AddressingModel addressing_model = spv::AddressingModelMax;
-	spv::MemoryModel memory_model = spv::MemoryModelMax;
+	spv::AddressingModel addressing_model = spv::AddressingModel::Max;
+	spv::MemoryModel memory_model = spv::MemoryModel::Max;
 
 	// Decoration handling methods.
 	// Can be useful for simple "raw" reflection.

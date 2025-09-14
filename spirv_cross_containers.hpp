@@ -642,7 +642,7 @@ public:
 	template <typename T, typename std::enable_if<!std::is_floating_point<T>::value, int>::type = 0>
 	StringStream &operator<<(const T &t)
 	{
-		auto s = std::to_string(t);
+		auto s = std::to_string(static_cast<uint32_t>(t));
 		append(s.data(), s.size());
 		return *this;
 	}

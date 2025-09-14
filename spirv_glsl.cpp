@@ -57,36 +57,36 @@ struct GlslConstantNameMapping
 	const char *alias;
 };
 
-#define DEF_GLSL_MAPPING(x) { x, "gl_" #x }
-#define DEF_GLSL_MAPPING_EXT(x) { x##KHR, "gl_" #x }
+#define DEF_GLSL_MAPPING(x) { static_cast<uint32_t>(x), "gl_" #x }
+#define DEF_GLSL_MAPPING_EXT(x) { static_cast<uint32_t>(x##KHR), "gl_" #x }
 static const GlslConstantNameMapping CoopVecComponentTypeNames[] = {
-	DEF_GLSL_MAPPING(ComponentTypeFloat16NV),
-	DEF_GLSL_MAPPING(ComponentTypeFloat32NV),
-	DEF_GLSL_MAPPING(ComponentTypeFloat64NV),
-	DEF_GLSL_MAPPING(ComponentTypeSignedInt8NV),
-	DEF_GLSL_MAPPING(ComponentTypeSignedInt16NV),
-	DEF_GLSL_MAPPING(ComponentTypeSignedInt32NV),
-	DEF_GLSL_MAPPING(ComponentTypeSignedInt64NV),
-	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt8NV),
-	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt16NV),
-	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt32NV),
-	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt64NV),
-	DEF_GLSL_MAPPING(ComponentTypeSignedInt8PackedNV),
-	DEF_GLSL_MAPPING(ComponentTypeUnsignedInt8PackedNV),
-	DEF_GLSL_MAPPING(ComponentTypeFloatE4M3NV),
-	DEF_GLSL_MAPPING(ComponentTypeFloatE5M2NV),
+	DEF_GLSL_MAPPING(ComponentType::Float16NV),
+	DEF_GLSL_MAPPING(ComponentType::Float32NV),
+	DEF_GLSL_MAPPING(ComponentType::Float64NV),
+	DEF_GLSL_MAPPING(ComponentType::SignedInt8NV),
+	DEF_GLSL_MAPPING(ComponentType::SignedInt16NV),
+	DEF_GLSL_MAPPING(ComponentType::SignedInt32NV),
+	DEF_GLSL_MAPPING(ComponentType::SignedInt64NV),
+	DEF_GLSL_MAPPING(ComponentType::UnsignedInt8NV),
+	DEF_GLSL_MAPPING(ComponentType::UnsignedInt16NV),
+	DEF_GLSL_MAPPING(ComponentType::UnsignedInt32NV),
+	DEF_GLSL_MAPPING(ComponentType::UnsignedInt64NV),
+	DEF_GLSL_MAPPING(ComponentType::SignedInt8PackedNV),
+	DEF_GLSL_MAPPING(ComponentType::UnsignedInt8PackedNV),
+	DEF_GLSL_MAPPING(ComponentType::FloatE4M3NV),
+	DEF_GLSL_MAPPING(ComponentType::FloatE5M2NV),
 };
 
 static const GlslConstantNameMapping CoopVecMatrixLayoutNames[] = {
-	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutRowMajorNV),
-	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutColumnMajorNV),
-	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutInferencingOptimalNV),
-	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayoutTrainingOptimalNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayout::RowMajorNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayout::ColumnMajorNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayout::InferencingOptimalNV),
+	DEF_GLSL_MAPPING(CooperativeVectorMatrixLayout::TrainingOptimalNV),
 };
 
 static const GlslConstantNameMapping CoopMatMatrixLayoutNames[] = {
-	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutRowMajor),
-	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutColumnMajor),
+	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayout::RowMajor),
+	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayout::ColumnMajor),
 };
 #undef DEF_GLSL_MAPPING
 #undef DEF_GLSL_MAPPING_EXT
@@ -96,17 +96,17 @@ static bool is_unsigned_opcode(Op op)
 	// Don't have to be exhaustive, only relevant for legacy target checking ...
 	switch (op)
 	{
-	case OpShiftRightLogical:
-	case OpUGreaterThan:
-	case OpUGreaterThanEqual:
-	case OpULessThan:
-	case OpULessThanEqual:
-	case OpUConvert:
-	case OpUDiv:
-	case OpUMod:
-	case OpUMulExtended:
-	case OpConvertUToF:
-	case OpConvertFToU:
+	case Op::OpShiftRightLogical:
+	case Op::OpUGreaterThan:
+	case Op::OpUGreaterThanEqual:
+	case Op::OpULessThan:
+	case Op::OpULessThanEqual:
+	case Op::OpUConvert:
+	case Op::OpUDiv:
+	case Op::OpUMod:
+	case Op::OpUMulExtended:
+	case Op::OpConvertUToF:
+	case Op::OpConvertFToU:
 		return true;
 
 	default:
@@ -278,17 +278,17 @@ static std::pair<spv::Op, SPIRType::BaseType> pls_format_to_basetype(PlsFormat f
 	case PlsRGB10A2:
 	case PlsRGBA8:
 	case PlsRG16:
-		return std::make_pair(spv::OpTypeFloat, SPIRType::Float);
+		return std::make_pair(spv::Op::OpTypeFloat, SPIRType::Float);
 
 	case PlsRGBA8I:
 	case PlsRG16I:
-		return std::make_pair(spv::OpTypeInt, SPIRType::Int);
+		return std::make_pair(spv::Op::OpTypeInt, SPIRType::Int);
 
 	case PlsRGB10A2UI:
 	case PlsRGBA8UI:
 	case PlsRG16UI:
 	case PlsR32UI:
-		return std::make_pair(spv::OpTypeInt, SPIRType::UInt);
+		return std::make_pair(spv::Op::OpTypeInt, SPIRType::UInt);
 	}
 }
 
@@ -398,13 +398,13 @@ void CompilerGLSL::remap_pls_variables()
 		auto &var = get<SPIRVariable>(input.id);
 
 		bool input_is_target = false;
-		if (var.storage == StorageClassUniformConstant)
+		if (var.storage == StorageClass::UniformConstant)
 		{
 			auto &type = get<SPIRType>(var.basetype);
-			input_is_target = type.image.dim == DimSubpassData;
+			input_is_target = type.image.dim == Dim::SubpassData;
 		}
 
-		if (var.storage != StorageClassInput && !input_is_target)
+		if (var.storage != StorageClass::Input && !input_is_target)
 			SPIRV_CROSS_THROW("Can only use in and target variables for PLS inputs.");
 		var.remapped_variable = true;
 	}
@@ -412,7 +412,7 @@ void CompilerGLSL::remap_pls_variables()
 	for (auto &output : pls_outputs)
 	{
 		auto &var = get<SPIRVariable>(output.id);
-		if (var.storage != StorageClassOutput)
+		if (var.storage != StorageClass::Output)
 			SPIRV_CROSS_THROW("Can only use out variables for PLS outputs.");
 		var.remapped_variable = true;
 	}
@@ -479,20 +479,20 @@ void CompilerGLSL::find_static_extensions()
 	auto &execution = get_entry_point();
 	switch (execution.model)
 	{
-	case ExecutionModelGLCompute:
+	case ExecutionModel::GLCompute:
 		if (!options.es && options.version < 430)
 			require_extension_internal("GL_ARB_compute_shader");
 		if (options.es && options.version < 310)
 			SPIRV_CROSS_THROW("At least ESSL 3.10 required for compute shaders.");
 		break;
 
-	case ExecutionModelGeometry:
+	case ExecutionModel::Geometry:
 		if (options.es && options.version < 320)
 			require_extension_internal("GL_EXT_geometry_shader");
 		if (!options.es && options.version < 150)
 			require_extension_internal("GL_ARB_geometry_shader4");
 
-		if (execution.flags.get(ExecutionModeInvocations) && execution.invocations != 1)
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::Invocations)) && execution.invocations != 1)
 		{
 			// Instanced GS is part of 400 core or this extension.
 			if (!options.es && options.version < 400)
@@ -500,20 +500,20 @@ void CompilerGLSL::find_static_extensions()
 		}
 		break;
 
-	case ExecutionModelTessellationEvaluation:
-	case ExecutionModelTessellationControl:
+	case ExecutionModel::TessellationEvaluation:
+	case ExecutionModel::TessellationControl:
 		if (options.es && options.version < 320)
 			require_extension_internal("GL_EXT_tessellation_shader");
 		if (!options.es && options.version < 400)
 			require_extension_internal("GL_ARB_tessellation_shader");
 		break;
 
-	case ExecutionModelRayGenerationKHR:
-	case ExecutionModelIntersectionKHR:
-	case ExecutionModelAnyHitKHR:
-	case ExecutionModelClosestHitKHR:
-	case ExecutionModelMissKHR:
-	case ExecutionModelCallableKHR:
+	case ExecutionModel::RayGenerationKHR:
+	case ExecutionModel::IntersectionKHR:
+	case ExecutionModel::AnyHitKHR:
+	case ExecutionModel::ClosestHitKHR:
+	case ExecutionModel::MissKHR:
+	case ExecutionModel::CallableKHR:
 		// NV enums are aliases.
 		if (options.es || options.version < 460)
 			SPIRV_CROSS_THROW("Ray tracing shaders require non-es profile with version 460 or above.");
@@ -523,8 +523,8 @@ void CompilerGLSL::find_static_extensions()
 		// Need to figure out if we should target KHR or NV extension based on capabilities.
 		for (auto &cap : ir.declared_capabilities)
 		{
-			if (cap == CapabilityRayTracingKHR || cap == CapabilityRayQueryKHR ||
-			    cap == CapabilityRayTraversalPrimitiveCullingKHR)
+			if (cap == Capability::RayTracingKHR || cap == Capability::RayQueryKHR ||
+			    cap == Capability::RayTraversalPrimitiveCullingKHR)
 			{
 				ray_tracing_is_khr = true;
 				break;
@@ -542,8 +542,8 @@ void CompilerGLSL::find_static_extensions()
 			require_extension_internal("GL_NV_ray_tracing");
 		break;
 
-	case ExecutionModelMeshEXT:
-	case ExecutionModelTaskEXT:
+	case ExecutionModel::MeshEXT:
+	case ExecutionModel::TaskEXT:
 		if (options.es || options.version < 450)
 			SPIRV_CROSS_THROW("Mesh shaders require GLSL 450 or above.");
 		if (!options.vulkan_semantics)
@@ -557,14 +557,14 @@ void CompilerGLSL::find_static_extensions()
 
 	if (!pls_inputs.empty() || !pls_outputs.empty())
 	{
-		if (execution.model != ExecutionModelFragment)
+		if (execution.model != ExecutionModel::Fragment)
 			SPIRV_CROSS_THROW("Can only use GL_EXT_shader_pixel_local_storage in fragment shaders.");
 		require_extension_internal("GL_EXT_shader_pixel_local_storage");
 	}
 
 	if (!inout_color_attachments.empty())
 	{
-		if (execution.model != ExecutionModelFragment)
+		if (execution.model != ExecutionModel::Fragment)
 			SPIRV_CROSS_THROW("Can only use GL_EXT_shader_framebuffer_fetch in fragment shaders.");
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cannot use EXT_shader_framebuffer_fetch in Vulkan GLSL.");
@@ -589,7 +589,7 @@ void CompilerGLSL::find_static_extensions()
 	if (options.separate_shader_objects && !options.es && options.version < 410)
 		require_extension_internal("GL_ARB_separate_shader_objects");
 
-	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
+	if (ir.addressing_model == AddressingModel::PhysicalStorageBuffer64)
 	{
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("GL_EXT_buffer_reference is only supported in Vulkan GLSL.");
@@ -599,7 +599,7 @@ void CompilerGLSL::find_static_extensions()
 			SPIRV_CROSS_THROW("GL_EXT_buffer_reference requires GLSL 450.");
 		require_extension_internal("GL_EXT_buffer_reference2");
 	}
-	else if (ir.addressing_model != AddressingModelLogical)
+	else if (ir.addressing_model != AddressingModel::Logical)
 	{
 		SPIRV_CROSS_THROW("Only Logical and PhysicalStorageBuffer64 addressing models are supported.");
 	}
@@ -610,31 +610,31 @@ void CompilerGLSL::find_static_extensions()
 	{
 		switch (cap)
 		{
-		case CapabilityShaderNonUniformEXT:
+		case Capability::ShaderNonUniformEXT:
 			if (!options.vulkan_semantics)
 				require_extension_internal("GL_NV_gpu_shader5");
 			else
 				require_extension_internal("GL_EXT_nonuniform_qualifier");
 			break;
-		case CapabilityRuntimeDescriptorArrayEXT:
+		case Capability::RuntimeDescriptorArrayEXT:
 			if (!options.vulkan_semantics)
 				SPIRV_CROSS_THROW("GL_EXT_nonuniform_qualifier is only supported in Vulkan GLSL.");
 			require_extension_internal("GL_EXT_nonuniform_qualifier");
 			break;
 
-		case CapabilityGeometryShaderPassthroughNV:
-			if (execution.model == ExecutionModelGeometry)
+		case Capability::GeometryShaderPassthroughNV:
+			if (execution.model == ExecutionModel::Geometry)
 			{
 				require_extension_internal("GL_NV_geometry_shader_passthrough");
 				execution.geometry_passthrough = true;
 			}
 			break;
 
-		case CapabilityVariablePointers:
-		case CapabilityVariablePointersStorageBuffer:
+		case Capability::VariablePointers:
+		case Capability::VariablePointersStorageBuffer:
 			SPIRV_CROSS_THROW("VariablePointers capability is not supported in GLSL.");
 
-		case CapabilityMultiView:
+		case Capability::MultiView:
 			if (options.vulkan_semantics)
 				require_extension_internal("GL_EXT_multiview");
 			else
@@ -642,33 +642,33 @@ void CompilerGLSL::find_static_extensions()
 				require_extension_internal("GL_OVR_multiview2");
 				if (options.ovr_multiview_view_count == 0)
 					SPIRV_CROSS_THROW("ovr_multiview_view_count must be non-zero when using GL_OVR_multiview2.");
-				if (get_execution_model() != ExecutionModelVertex)
+				if (get_execution_model() != ExecutionModel::Vertex)
 					SPIRV_CROSS_THROW("OVR_multiview2 can only be used with Vertex shaders.");
 			}
 			break;
 
-		case CapabilityRayQueryKHR:
+		case Capability::RayQueryKHR:
 			if (options.es || options.version < 460 || !options.vulkan_semantics)
 				SPIRV_CROSS_THROW("RayQuery requires Vulkan GLSL 460.");
 			require_extension_internal("GL_EXT_ray_query");
 			ray_tracing_is_khr = true;
 			break;
 
-		case CapabilityRayTraversalPrimitiveCullingKHR:
+		case Capability::RayTraversalPrimitiveCullingKHR:
 			if (options.es || options.version < 460 || !options.vulkan_semantics)
 				SPIRV_CROSS_THROW("RayQuery requires Vulkan GLSL 460.");
 			require_extension_internal("GL_EXT_ray_flags_primitive_culling");
 			ray_tracing_is_khr = true;
 			break;
 
-		case CapabilityRayTracingClusterAccelerationStructureNV:
+		case Capability::RayTracingClusterAccelerationStructureNV:
 			if (options.es || options.version < 460 || !options.vulkan_semantics)
 				SPIRV_CROSS_THROW("Cluster AS requires Vulkan GLSL 460.");
 			require_extension_internal("GL_NV_cluster_acceleration_structure");
 			ray_tracing_is_khr = true;
 			break;
 
-		case CapabilityTensorsARM:
+		case Capability::TensorsARM:
 			if (options.es || options.version < 460 || !options.vulkan_semantics)
 				SPIRV_CROSS_THROW("Tensor requires Vulkan GLSL 460.");
 			require_extension_internal("GL_ARM_tensors");
@@ -683,13 +683,13 @@ void CompilerGLSL::find_static_extensions()
 	{
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW("OVR_multiview2 cannot be used with Vulkan semantics.");
-		if (get_execution_model() != ExecutionModelVertex)
+		if (get_execution_model() != ExecutionModel::Vertex)
 			SPIRV_CROSS_THROW("OVR_multiview2 can only be used with Vertex shaders.");
 		require_extension_internal("GL_OVR_multiview2");
 	}
 
-	if (execution.flags.get(ExecutionModeQuadDerivativesKHR) ||
-	    (execution.flags.get(ExecutionModeRequireFullQuadsKHR) && get_execution_model() == ExecutionModelFragment))
+	if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::QuadDerivativesKHR)) ||
+	    (execution.flags.get(static_cast<uint32_t>(ExecutionMode::RequireFullQuadsKHR)) && get_execution_model() == ExecutionModel::Fragment))
 	{
 		require_extension_internal("GL_EXT_shader_quad_control");
 	}
@@ -717,12 +717,12 @@ void CompilerGLSL::ray_tracing_khr_fixup_locations()
 	uint32_t location = 0;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		// Incoming payload storage can also be used for tracing.
-		if (var.storage != StorageClassRayPayloadKHR && var.storage != StorageClassCallableDataKHR &&
-		    var.storage != StorageClassIncomingRayPayloadKHR && var.storage != StorageClassIncomingCallableDataKHR)
+		if (var.storage != StorageClass::RayPayloadKHR && var.storage != StorageClass::CallableDataKHR &&
+		    var.storage != StorageClass::IncomingRayPayloadKHR && var.storage != StorageClass::IncomingCallableDataKHR)
 			return;
 		if (is_hidden_variable(var))
 			return;
-		set_decoration(var.self, DecorationLocation, location++);
+		set_decoration(var.self, Decoration::Location, location++);
 	});
 }
 
@@ -765,7 +765,7 @@ string CompilerGLSL::compile()
 
 	// Shaders might cast unrelated data to pointers of non-block types.
 	// Find all such instances and make sure we can cast the pointers to a synthesized block type.
-	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
+	if (ir.addressing_model == AddressingModel::PhysicalStorageBuffer64)
 		analyze_non_block_pointer_types();
 
 	uint32_t pass_count = 0;
@@ -818,7 +818,7 @@ void CompilerGLSL::build_workgroup_size(SmallVector<string> &arguments, const Sp
 {
 	auto &execution = get_entry_point();
 	bool builtin_workgroup = execution.workgroup_size.constant != 0;
-	bool use_local_size_id = !builtin_workgroup && execution.flags.get(ExecutionModeLocalSizeId);
+	bool use_local_size_id = !builtin_workgroup && execution.flags.get(static_cast<uint32_t>(ExecutionMode::LocalSizeId));
 
 	if (wg_x.id)
 	{
@@ -887,19 +887,19 @@ void CompilerGLSL::emit_header()
 			statement("#endif");
 		}
 		// Needed for: layout(early_fragment_tests) in;
-		if (execution.flags.get(ExecutionModeEarlyFragmentTests))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::EarlyFragmentTests)))
 			require_extension_internal("GL_ARB_shader_image_load_store");
 	}
 
 	// Needed for: layout(post_depth_coverage) in;
-	if (execution.flags.get(ExecutionModePostDepthCoverage))
+	if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::PostDepthCoverage)))
 		require_extension_internal("GL_ARB_post_depth_coverage");
 
 	// Needed for: layout({pixel,sample}_interlock_[un]ordered) in;
-	bool interlock_used = execution.flags.get(ExecutionModePixelInterlockOrderedEXT) ||
-	                      execution.flags.get(ExecutionModePixelInterlockUnorderedEXT) ||
-	                      execution.flags.get(ExecutionModeSampleInterlockOrderedEXT) ||
-	                      execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT);
+	bool interlock_used = execution.flags.get(static_cast<uint32_t>(ExecutionMode::PixelInterlockOrderedEXT)) ||
+	                      execution.flags.get(static_cast<uint32_t>(ExecutionMode::PixelInterlockUnorderedEXT)) ||
+	                      execution.flags.get(static_cast<uint32_t>(ExecutionMode::SampleInterlockOrderedEXT)) ||
+	                      execution.flags.get(static_cast<uint32_t>(ExecutionMode::SampleInterlockUnorderedEXT));
 
 	if (interlock_used)
 	{
@@ -1089,73 +1089,73 @@ void CompilerGLSL::emit_header()
 
 	switch (execution.model)
 	{
-	case ExecutionModelVertex:
+	case ExecutionModel::Vertex:
 		if (options.ovr_multiview_view_count)
 			inputs.push_back(join("num_views = ", options.ovr_multiview_view_count));
 		break;
-	case ExecutionModelGeometry:
-		if ((execution.flags.get(ExecutionModeInvocations)) && execution.invocations != 1)
+	case ExecutionModel::Geometry:
+		if ((execution.flags.get(static_cast<uint32_t>(ExecutionMode::Invocations))) && execution.invocations != 1)
 			inputs.push_back(join("invocations = ", execution.invocations));
-		if (execution.flags.get(ExecutionModeInputPoints))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::InputPoints)))
 			inputs.push_back("points");
-		if (execution.flags.get(ExecutionModeInputLines))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::InputLines)))
 			inputs.push_back("lines");
-		if (execution.flags.get(ExecutionModeInputLinesAdjacency))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::InputLinesAdjacency)))
 			inputs.push_back("lines_adjacency");
-		if (execution.flags.get(ExecutionModeTriangles))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::Triangles)))
 			inputs.push_back("triangles");
-		if (execution.flags.get(ExecutionModeInputTrianglesAdjacency))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::InputTrianglesAdjacency)))
 			inputs.push_back("triangles_adjacency");
 
 		if (!execution.geometry_passthrough)
 		{
 			// For passthrough, these are implies and cannot be declared in shader.
 			outputs.push_back(join("max_vertices = ", execution.output_vertices));
-			if (execution.flags.get(ExecutionModeOutputTriangleStrip))
+			if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputTriangleStrip)))
 				outputs.push_back("triangle_strip");
-			if (execution.flags.get(ExecutionModeOutputPoints))
+			if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputPoints)))
 				outputs.push_back("points");
-			if (execution.flags.get(ExecutionModeOutputLineStrip))
+			if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputLineStrip)))
 				outputs.push_back("line_strip");
 		}
 		break;
 
-	case ExecutionModelTessellationControl:
-		if (execution.flags.get(ExecutionModeOutputVertices))
+	case ExecutionModel::TessellationControl:
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputVertices)))
 			outputs.push_back(join("vertices = ", execution.output_vertices));
 		break;
 
-	case ExecutionModelTessellationEvaluation:
-		if (execution.flags.get(ExecutionModeQuads))
+	case ExecutionModel::TessellationEvaluation:
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::Quads)))
 			inputs.push_back("quads");
-		if (execution.flags.get(ExecutionModeTriangles))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::Triangles)))
 			inputs.push_back("triangles");
-		if (execution.flags.get(ExecutionModeIsolines))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::Isolines)))
 			inputs.push_back("isolines");
-		if (execution.flags.get(ExecutionModePointMode))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::PointMode)))
 			inputs.push_back("point_mode");
 
-		if (!execution.flags.get(ExecutionModeIsolines))
+		if (!execution.flags.get(static_cast<uint32_t>(ExecutionMode::Isolines)))
 		{
-			if (execution.flags.get(ExecutionModeVertexOrderCw))
+			if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::VertexOrderCw)))
 				inputs.push_back("cw");
-			if (execution.flags.get(ExecutionModeVertexOrderCcw))
+			if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::VertexOrderCcw)))
 				inputs.push_back("ccw");
 		}
 
-		if (execution.flags.get(ExecutionModeSpacingFractionalEven))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::SpacingFractionalEven)))
 			inputs.push_back("fractional_even_spacing");
-		if (execution.flags.get(ExecutionModeSpacingFractionalOdd))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::SpacingFractionalOdd)))
 			inputs.push_back("fractional_odd_spacing");
-		if (execution.flags.get(ExecutionModeSpacingEqual))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::SpacingEqual)))
 			inputs.push_back("equal_spacing");
 		break;
 
-	case ExecutionModelGLCompute:
-	case ExecutionModelTaskEXT:
-	case ExecutionModelMeshEXT:
+	case ExecutionModel::GLCompute:
+	case ExecutionModel::TaskEXT:
+	case ExecutionModel::MeshEXT:
 	{
-		if (execution.workgroup_size.constant != 0 || execution.flags.get(ExecutionModeLocalSizeId))
+		if (execution.workgroup_size.constant != 0 || execution.flags.get(static_cast<uint32_t>(ExecutionMode::LocalSizeId)))
 		{
 			SpecializationConstant wg_x, wg_y, wg_z;
 			get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
@@ -1173,21 +1173,21 @@ void CompilerGLSL::emit_header()
 			inputs.push_back(join("local_size_z = ", execution.workgroup_size.z));
 		}
 
-		if (execution.model == ExecutionModelMeshEXT)
+		if (execution.model == ExecutionModel::MeshEXT)
 		{
 			outputs.push_back(join("max_vertices = ", execution.output_vertices));
 			outputs.push_back(join("max_primitives = ", execution.output_primitives));
-			if (execution.flags.get(ExecutionModeOutputTrianglesEXT))
+			if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputTrianglesEXT)))
 				outputs.push_back("triangles");
-			else if (execution.flags.get(ExecutionModeOutputLinesEXT))
+			else if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputLinesEXT)))
 				outputs.push_back("lines");
-			else if (execution.flags.get(ExecutionModeOutputPoints))
+			else if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::OutputPoints)))
 				outputs.push_back("points");
 		}
 		break;
 	}
 
-	case ExecutionModelFragment:
+	case ExecutionModel::Fragment:
 		if (options.es)
 		{
 			switch (options.fragment.default_float_precision)
@@ -1227,21 +1227,21 @@ void CompilerGLSL::emit_header()
 			}
 		}
 
-		if (execution.flags.get(ExecutionModeEarlyFragmentTests))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::EarlyFragmentTests)))
 			inputs.push_back("early_fragment_tests");
-		if (execution.flags.get(ExecutionModePostDepthCoverage))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::PostDepthCoverage)))
 			inputs.push_back("post_depth_coverage");
 
 		if (interlock_used)
 			statement("#if defined(GL_ARB_fragment_shader_interlock)");
 
-		if (execution.flags.get(ExecutionModePixelInterlockOrderedEXT))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::PixelInterlockOrderedEXT)))
 			statement("layout(pixel_interlock_ordered) in;");
-		else if (execution.flags.get(ExecutionModePixelInterlockUnorderedEXT))
+		else if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::PixelInterlockUnorderedEXT)))
 			statement("layout(pixel_interlock_unordered) in;");
-		else if (execution.flags.get(ExecutionModeSampleInterlockOrderedEXT))
+		else if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::SampleInterlockOrderedEXT)))
 			statement("layout(sample_interlock_ordered) in;");
-		else if (execution.flags.get(ExecutionModeSampleInterlockUnorderedEXT))
+		else if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::SampleInterlockUnorderedEXT)))
 			statement("layout(sample_interlock_unordered) in;");
 
 		if (interlock_used)
@@ -1251,12 +1251,12 @@ void CompilerGLSL::emit_header()
 			statement("#endif");
 		}
 
-		if (!options.es && execution.flags.get(ExecutionModeDepthGreater))
+		if (!options.es && execution.flags.get(static_cast<uint32_t>(ExecutionMode::DepthGreater)))
 			statement("layout(depth_greater) out float gl_FragDepth;");
-		else if (!options.es && execution.flags.get(ExecutionModeDepthLess))
+		else if (!options.es && execution.flags.get(static_cast<uint32_t>(ExecutionMode::DepthLess)))
 			statement("layout(depth_less) out float gl_FragDepth;");
 
-		if (execution.flags.get(ExecutionModeRequireFullQuadsKHR))
+		if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::RequireFullQuadsKHR)))
 			statement("layout(full_quads) in;");
 
 		break;
@@ -1266,10 +1266,10 @@ void CompilerGLSL::emit_header()
 	}
 
 	for (auto &cap : ir.declared_capabilities)
-		if (cap == CapabilityRayTraversalPrimitiveCullingKHR)
+		if (cap == Capability::RayTraversalPrimitiveCullingKHR)
 			statement("layout(primitive_culling);");
 
-	if (execution.flags.get(ExecutionModeQuadDerivativesKHR))
+	if (execution.flags.get(static_cast<uint32_t>(ExecutionMode::QuadDerivativesKHR)))
 		statement("layout(quad_derivatives) in;");
 
 	if (!inputs.empty())
@@ -1335,9 +1335,9 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 	string res;
 	//if (flags & (1ull << DecorationSmooth))
 	//    res += "smooth ";
-	if (flags.get(DecorationFlat))
+	if (flags.get(static_cast<uint32_t>(Decoration::Flat)))
 		res += "flat ";
-	if (flags.get(DecorationNoPerspective))
+	if (flags.get(static_cast<uint32_t>(Decoration::NoPerspective)))
 	{
 		if (options.es)
 		{
@@ -1349,11 +1349,11 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 			require_extension_internal("GL_EXT_gpu_shader4");
 		res += "noperspective ";
 	}
-	if (flags.get(DecorationCentroid))
+	if (flags.get(static_cast<uint32_t>(Decoration::Centroid)))
 		res += "centroid ";
-	if (flags.get(DecorationPatch))
+	if (flags.get(static_cast<uint32_t>(Decoration::Patch)))
 		res += "patch ";
-	if (flags.get(DecorationSample))
+	if (flags.get(static_cast<uint32_t>(Decoration::Sample)))
 	{
 		if (options.es)
 		{
@@ -1364,21 +1364,21 @@ string CompilerGLSL::to_interpolation_qualifiers(const Bitset &flags)
 		}
 		res += "sample ";
 	}
-	if (flags.get(DecorationInvariant) && (options.es || options.version >= 120))
+	if (flags.get(static_cast<uint32_t>(Decoration::Invariant)) && (options.es || options.version >= 120))
 		res += "invariant ";
-	if (flags.get(DecorationPerPrimitiveEXT))
+	if (flags.get(static_cast<uint32_t>(Decoration::PerPrimitiveEXT)))
 	{
 		res += "perprimitiveEXT ";
 		require_extension_internal("GL_EXT_mesh_shader");
 	}
 
-	if (flags.get(DecorationExplicitInterpAMD))
+	if (flags.get(static_cast<uint32_t>(Decoration::ExplicitInterpAMD)))
 	{
 		require_extension_internal("GL_AMD_shader_explicit_vertex_parameter");
 		res += "__explicitInterpAMD ";
 	}
 
-	if (flags.get(DecorationPerVertexKHR))
+	if (flags.get(static_cast<uint32_t>(Decoration::PerVertexKHR)))
 	{
 		if (options.es && options.version < 320)
 			SPIRV_CROSS_THROW("pervertexEXT requires ESSL 320.");
@@ -1405,7 +1405,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	if (is_legacy())
 		return "";
 
-	bool is_block = has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
+	bool is_block = has_decoration(type.self, Decoration::Block) || has_decoration(type.self, Decoration::BufferBlock);
 	if (!is_block)
 		return "";
 
@@ -1416,7 +1416,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 
 	SmallVector<string> attr;
 
-	if (has_member_decoration(type.self, index, DecorationPassthroughNV))
+	if (has_member_decoration(type.self, index, Decoration::PassthroughNV))
 		attr.push_back("passthrough");
 
 	// We can only apply layouts on members in block interfaces.
@@ -1435,17 +1435,17 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	// buffer UBO { layout(row_major) Foo foo; }; // Apply the layout on top-level.
 	auto flags = combined_decoration_for_member(type, index);
 
-	if (flags.get(DecorationRowMajor))
+	if (flags.get(static_cast<uint32_t>(Decoration::RowMajor)))
 		attr.push_back("row_major");
 	// We don't emit any global layouts, so column_major is default.
-	//if (flags & (1ull << DecorationColMajor))
+	//if (flags & (1ull << Decoration::ColMajor))
 	//    attr.push_back("column_major");
 
-	if (dec.decoration_flags.get(DecorationLocation) && can_use_io_location(type.storage, true))
+	if (dec.decoration_flags.get(static_cast<uint32_t>(Decoration::Location)) && can_use_io_location(type.storage, true))
 		attr.push_back(join("location = ", dec.location));
 
 	// Can only declare component if we can declare location.
-	if (dec.decoration_flags.get(DecorationComponent) && can_use_io_location(type.storage, true))
+	if (dec.decoration_flags.get(static_cast<uint32_t>(Decoration::Component)) && can_use_io_location(type.storage, true))
 	{
 		if (!options.es)
 		{
@@ -1462,9 +1462,9 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	// SPIRVCrossDecorationPacked is set by layout_for_variable earlier to mark that we need to emit offset qualifiers.
 	// This is only done selectively in GLSL as needed.
 	if (has_extended_decoration(type.self, SPIRVCrossDecorationExplicitOffset) &&
-	    dec.decoration_flags.get(DecorationOffset))
+	    dec.decoration_flags.get(static_cast<uint32_t>(Decoration::Offset)))
 		attr.push_back(join("offset = ", dec.offset));
-	else if (type.storage == StorageClassOutput && dec.decoration_flags.get(DecorationOffset))
+	else if (type.storage == StorageClass::Output && dec.decoration_flags.get(static_cast<uint32_t>(Decoration::Offset)))
 		attr.push_back(join("xfb_offset = ", dec.offset));
 
 	if (attr.empty())
@@ -1483,90 +1483,90 @@ const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
 
 	switch (format)
 	{
-	case ImageFormatRgba32f:
+	case ImageFormat::Rgba32f:
 		return "rgba32f";
-	case ImageFormatRgba16f:
+	case ImageFormat::Rgba16f:
 		return "rgba16f";
-	case ImageFormatR32f:
+	case ImageFormat::R32f:
 		return "r32f";
-	case ImageFormatRgba8:
+	case ImageFormat::Rgba8:
 		return "rgba8";
-	case ImageFormatRgba8Snorm:
+	case ImageFormat::Rgba8Snorm:
 		return "rgba8_snorm";
-	case ImageFormatRg32f:
+	case ImageFormat::Rg32f:
 		return "rg32f";
-	case ImageFormatRg16f:
+	case ImageFormat::Rg16f:
 		return "rg16f";
-	case ImageFormatRgba32i:
+	case ImageFormat::Rgba32i:
 		return "rgba32i";
-	case ImageFormatRgba16i:
+	case ImageFormat::Rgba16i:
 		return "rgba16i";
-	case ImageFormatR32i:
+	case ImageFormat::R32i:
 		return "r32i";
-	case ImageFormatRgba8i:
+	case ImageFormat::Rgba8i:
 		return "rgba8i";
-	case ImageFormatRg32i:
+	case ImageFormat::Rg32i:
 		return "rg32i";
-	case ImageFormatRg16i:
+	case ImageFormat::Rg16i:
 		return "rg16i";
-	case ImageFormatRgba32ui:
+	case ImageFormat::Rgba32ui:
 		return "rgba32ui";
-	case ImageFormatRgba16ui:
+	case ImageFormat::Rgba16ui:
 		return "rgba16ui";
-	case ImageFormatR32ui:
+	case ImageFormat::R32ui:
 		return "r32ui";
-	case ImageFormatRgba8ui:
+	case ImageFormat::Rgba8ui:
 		return "rgba8ui";
-	case ImageFormatRg32ui:
+	case ImageFormat::Rg32ui:
 		return "rg32ui";
-	case ImageFormatRg16ui:
+	case ImageFormat::Rg16ui:
 		return "rg16ui";
-	case ImageFormatR11fG11fB10f:
+	case ImageFormat::R11fG11fB10f:
 		return "r11f_g11f_b10f";
-	case ImageFormatR16f:
+	case ImageFormat::R16f:
 		return "r16f";
-	case ImageFormatRgb10A2:
+	case ImageFormat::Rgb10A2:
 		return "rgb10_a2";
-	case ImageFormatR8:
+	case ImageFormat::R8:
 		return "r8";
-	case ImageFormatRg8:
+	case ImageFormat::Rg8:
 		return "rg8";
-	case ImageFormatR16:
+	case ImageFormat::R16:
 		return "r16";
-	case ImageFormatRg16:
+	case ImageFormat::Rg16:
 		return "rg16";
-	case ImageFormatRgba16:
+	case ImageFormat::Rgba16:
 		return "rgba16";
-	case ImageFormatR16Snorm:
+	case ImageFormat::R16Snorm:
 		return "r16_snorm";
-	case ImageFormatRg16Snorm:
+	case ImageFormat::Rg16Snorm:
 		return "rg16_snorm";
-	case ImageFormatRgba16Snorm:
+	case ImageFormat::Rgba16Snorm:
 		return "rgba16_snorm";
-	case ImageFormatR8Snorm:
+	case ImageFormat::R8Snorm:
 		return "r8_snorm";
-	case ImageFormatRg8Snorm:
+	case ImageFormat::Rg8Snorm:
 		return "rg8_snorm";
-	case ImageFormatR8ui:
+	case ImageFormat::R8ui:
 		return "r8ui";
-	case ImageFormatRg8ui:
+	case ImageFormat::Rg8ui:
 		return "rg8ui";
-	case ImageFormatR16ui:
+	case ImageFormat::R16ui:
 		return "r16ui";
-	case ImageFormatRgb10a2ui:
+	case ImageFormat::Rgb10a2ui:
 		return "rgb10_a2ui";
-	case ImageFormatR8i:
+	case ImageFormat::R8i:
 		return "r8i";
-	case ImageFormatRg8i:
+	case ImageFormat::Rg8i:
 		return "rg8i";
-	case ImageFormatR16i:
+	case ImageFormat::R16i:
 		return "r16i";
-	case ImageFormatR64i:
+	case ImageFormat::R64i:
 		return "r64i";
-	case ImageFormatR64ui:
+	case ImageFormat::R64ui:
 		return "r64ui";
 	default:
-	case ImageFormatUnknown:
+	case ImageFormat::Unknown:
 		return nullptr;
 	}
 }
@@ -1609,7 +1609,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 		if (!type.pointer)
 			SPIRV_CROSS_THROW("Types in PhysicalStorageBuffer must be pointers.");
 
-		if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
+		if (ir.addressing_model == AddressingModel::PhysicalStorageBuffer64)
 		{
 			if (packing_is_vec4_padded(packing) && type_is_array_of_pointers(type))
 				return 16;
@@ -1617,7 +1617,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 				return 8;
 		}
 		else
-			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64 must be used for PhysicalStorageBuffer.");
+			SPIRV_CROSS_THROW("AddressingModel::PhysicalStorageBuffer64 must be used for PhysicalStorageBuffer.");
 	}
 	else if (is_array(type))
 	{
@@ -1680,7 +1680,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 
 		// Rule 5. Column-major matrices are stored as arrays of
 		// vectors.
-		if (flags.get(DecorationColMajor) && type.columns > 1)
+		if (flags.get(static_cast<uint32_t>(Decoration::ColMajor)) && type.columns > 1)
 		{
 			if (packing_is_vec4_padded(packing))
 				return 4 * base_alignment;
@@ -1693,7 +1693,7 @@ uint32_t CompilerGLSL::type_to_packed_alignment(const SPIRType &type, const Bits
 		// Rule 6 implied.
 
 		// Rule 7.
-		if (flags.get(DecorationRowMajor) && type.vecsize > 1)
+		if (flags.get(static_cast<uint32_t>(Decoration::RowMajor)) && type.vecsize > 1)
 		{
 			if (packing_is_vec4_padded(packing))
 				return 4 * base_alignment;
@@ -1732,10 +1732,10 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 		if (!type.pointer)
 			SPIRV_CROSS_THROW("Types in PhysicalStorageBuffer must be pointers.");
 
-		if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
+		if (ir.addressing_model == AddressingModel::PhysicalStorageBuffer64)
 			return 8;
 		else
-			SPIRV_CROSS_THROW("AddressingModelPhysicalStorageBuffer64 must be used for PhysicalStorageBuffer.");
+			SPIRV_CROSS_THROW("AddressingModel::PhysicalStorageBuffer64 must be used for PhysicalStorageBuffer.");
 	}
 	else if (is_array(type))
 	{
@@ -1787,7 +1787,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 			if (type.columns == 1)
 				size = type.vecsize * base_alignment;
 
-			if (flags.get(DecorationColMajor) && type.columns > 1)
+			if (flags.get(static_cast<uint32_t>(Decoration::ColMajor)) && type.columns > 1)
 			{
 				if (packing_is_vec4_padded(packing))
 					size = type.columns * 4 * base_alignment;
@@ -1797,7 +1797,7 @@ uint32_t CompilerGLSL::type_to_packed_size(const SPIRType &type, const Bitset &f
 					size = type.columns * type.vecsize * base_alignment;
 			}
 
-			if (flags.get(DecorationRowMajor) && type.vecsize > 1)
+			if (flags.get(static_cast<uint32_t>(Decoration::RowMajor)) && type.vecsize > 1)
 			{
 				if (packing_is_vec4_padded(packing))
 					size = type.vecsize * 4 * base_alignment;
@@ -1838,7 +1838,7 @@ bool CompilerGLSL::buffer_is_packing_standard(const SPIRType &type, BufferPackin
 	uint32_t pad_alignment = 1;
 
 	bool is_top_level_block =
-	    has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock);
+	    has_decoration(type.self, Decoration::Block) || has_decoration(type.self, Decoration::BufferBlock);
 
 	for (uint32_t i = 0; i < type.member_types.size(); i++)
 	{
@@ -1962,8 +1962,8 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 {
 	// Location specifiers are must have in SPIR-V, but they aren't really supported in earlier versions of GLSL.
 	// Be very explicit here about how to solve the issue.
-	if ((get_execution_model() != ExecutionModelVertex && storage == StorageClassInput) ||
-	    (get_execution_model() != ExecutionModelFragment && storage == StorageClassOutput))
+	if ((get_execution_model() != ExecutionModel::Vertex && storage == StorageClass::Input) ||
+	    (get_execution_model() != ExecutionModel::Fragment && storage == StorageClass::Output))
 	{
 		uint32_t minimum_desktop_version = block ? 440 : 410;
 		// ARB_enhanced_layouts vs ARB_separate_shader_objects ...
@@ -1974,8 +1974,8 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 			return false;
 	}
 
-	if ((get_execution_model() == ExecutionModelVertex && storage == StorageClassInput) ||
-	    (get_execution_model() == ExecutionModelFragment && storage == StorageClassOutput))
+	if ((get_execution_model() == ExecutionModel::Vertex && storage == StorageClass::Input) ||
+	    (get_execution_model() == ExecutionModel::Fragment && storage == StorageClass::Output))
 	{
 		if (options.es && options.version < 300)
 			return false;
@@ -1983,7 +1983,7 @@ bool CompilerGLSL::can_use_io_location(StorageClass storage, bool block)
 			return false;
 	}
 
-	if (storage == StorageClassUniform || storage == StorageClassUniformConstant || storage == StorageClassPushConstant)
+	if (storage == StorageClass::Uniform || storage == StorageClass::UniformConstant || storage == StorageClass::PushConstant)
 	{
 		if (options.es && options.version < 310)
 			return false;
@@ -2012,27 +2012,27 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 	auto &flags = get_decoration_bitset(var.self);
 	auto &typeflags = get_decoration_bitset(type.self);
 
-	if (flags.get(DecorationPassthroughNV))
+	if (flags.get(static_cast<uint32_t>(Decoration::PassthroughNV)))
 		attr.push_back("passthrough");
 
-	if (options.vulkan_semantics && var.storage == StorageClassPushConstant)
+	if (options.vulkan_semantics && var.storage == StorageClass::PushConstant)
 		attr.push_back("push_constant");
-	else if (var.storage == StorageClassShaderRecordBufferKHR)
+	else if (var.storage == StorageClass::ShaderRecordBufferKHR)
 		attr.push_back(ray_tracing_is_khr ? "shaderRecordEXT" : "shaderRecordNV");
 
-	if (flags.get(DecorationRowMajor))
+	if (flags.get(static_cast<uint32_t>(Decoration::RowMajor)))
 		attr.push_back("row_major");
-	if (flags.get(DecorationColMajor))
+	if (flags.get(static_cast<uint32_t>(Decoration::ColMajor)))
 		attr.push_back("column_major");
 
 	if (options.vulkan_semantics)
 	{
-		if (flags.get(DecorationInputAttachmentIndex))
-			attr.push_back(join("input_attachment_index = ", get_decoration(var.self, DecorationInputAttachmentIndex)));
+		if (flags.get(static_cast<uint32_t>(Decoration::InputAttachmentIndex)))
+			attr.push_back(join("input_attachment_index = ", get_decoration(var.self, Decoration::InputAttachmentIndex)));
 	}
 
-	bool is_block = has_decoration(type.self, DecorationBlock);
-	if (flags.get(DecorationLocation) && can_use_io_location(var.storage, is_block))
+	bool is_block = has_decoration(type.self, Decoration::Block);
+	if (flags.get(static_cast<uint32_t>(Decoration::Location)) && can_use_io_location(var.storage, is_block))
 	{
 		Bitset combined_decoration;
 		for (uint32_t i = 0; i < ir.meta[type.self].members.size(); i++)
@@ -2040,19 +2040,19 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 		// If our members have location decorations, we don't need to
 		// emit location decorations at the top as well (looks weird).
-		if (!combined_decoration.get(DecorationLocation))
-			attr.push_back(join("location = ", get_decoration(var.self, DecorationLocation)));
+		if (!combined_decoration.get(static_cast<uint32_t>(Decoration::Location)))
+			attr.push_back(join("location = ", get_decoration(var.self, Decoration::Location)));
 	}
 
-	if (get_execution_model() == ExecutionModelFragment && var.storage == StorageClassOutput &&
-	    location_is_non_coherent_framebuffer_fetch(get_decoration(var.self, DecorationLocation)))
+	if (get_execution_model() == ExecutionModel::Fragment && var.storage == StorageClass::Output &&
+	    location_is_non_coherent_framebuffer_fetch(get_decoration(var.self, Decoration::Location)))
 	{
 		attr.push_back("noncoherent");
 	}
 
 	// Transform feedback
 	bool uses_enhanced_layouts = false;
-	if (is_block && var.storage == StorageClassOutput)
+	if (is_block && var.storage == StorageClass::Output)
 	{
 		// For blocks, there is a restriction where xfb_stride/xfb_buffer must only be declared on the block itself,
 		// since all members must match the same xfb_buffer. The only thing we will declare for members of the block
@@ -2063,25 +2063,25 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		bool have_geom_stream = false;
 		uint32_t xfb_stride = 0, xfb_buffer = 0, geom_stream = 0;
 
-		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride))
+		if (flags.get(static_cast<uint32_t>(Decoration::XfbBuffer)) && flags.get(static_cast<uint32_t>(Decoration::XfbStride)))
 		{
 			have_xfb_buffer_stride = true;
-			xfb_buffer = get_decoration(var.self, DecorationXfbBuffer);
-			xfb_stride = get_decoration(var.self, DecorationXfbStride);
+			xfb_buffer = get_decoration(var.self, Decoration::XfbBuffer);
+			xfb_stride = get_decoration(var.self, Decoration::XfbStride);
 		}
 
-		if (flags.get(DecorationStream))
+		if (flags.get(static_cast<uint32_t>(Decoration::Stream)))
 		{
 			have_geom_stream = true;
-			geom_stream = get_decoration(var.self, DecorationStream);
+			geom_stream = get_decoration(var.self, Decoration::Stream);
 		}
 
 		// Verify that none of the members violate our assumption.
 		for (uint32_t i = 0; i < member_count; i++)
 		{
-			if (has_member_decoration(type.self, i, DecorationStream))
+			if (has_member_decoration(type.self, i, Decoration::Stream))
 			{
-				uint32_t member_geom_stream = get_member_decoration(type.self, i, DecorationStream);
+				uint32_t member_geom_stream = get_member_decoration(type.self, i, Decoration::Stream);
 				if (have_geom_stream && member_geom_stream != geom_stream)
 					SPIRV_CROSS_THROW("IO block member Stream mismatch.");
 				have_geom_stream = true;
@@ -2089,22 +2089,22 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			}
 
 			// Only members with an Offset decoration participate in XFB.
-			if (!has_member_decoration(type.self, i, DecorationOffset))
+			if (!has_member_decoration(type.self, i, Decoration::Offset))
 				continue;
 			have_any_xfb_offset = true;
 
-			if (has_member_decoration(type.self, i, DecorationXfbBuffer))
+			if (has_member_decoration(type.self, i, Decoration::XfbBuffer))
 			{
-				uint32_t buffer_index = get_member_decoration(type.self, i, DecorationXfbBuffer);
+				uint32_t buffer_index = get_member_decoration(type.self, i, Decoration::XfbBuffer);
 				if (have_xfb_buffer_stride && buffer_index != xfb_buffer)
 					SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
 				have_xfb_buffer_stride = true;
 				xfb_buffer = buffer_index;
 			}
 
-			if (has_member_decoration(type.self, i, DecorationXfbStride))
+			if (has_member_decoration(type.self, i, Decoration::XfbStride))
 			{
-				uint32_t stride = get_member_decoration(type.self, i, DecorationXfbStride);
+				uint32_t stride = get_member_decoration(type.self, i, Decoration::XfbStride);
 				if (have_xfb_buffer_stride && stride != xfb_stride)
 					SPIRV_CROSS_THROW("IO block member XfbStride mismatch.");
 				have_xfb_buffer_stride = true;
@@ -2121,43 +2121,43 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 
 		if (have_geom_stream)
 		{
-			if (get_execution_model() != ExecutionModelGeometry)
+			if (get_execution_model() != ExecutionModel::Geometry)
 				SPIRV_CROSS_THROW("Geometry streams can only be used in geometry shaders.");
 			if (options.es)
 				SPIRV_CROSS_THROW("Multiple geometry streams not supported in ESSL.");
 			if (options.version < 400)
 				require_extension_internal("GL_ARB_transform_feedback3");
-			attr.push_back(join("stream = ", get_decoration(var.self, DecorationStream)));
+			attr.push_back(join("stream = ", get_decoration(var.self, Decoration::Stream)));
 		}
 	}
-	else if (var.storage == StorageClassOutput)
+	else if (var.storage == StorageClass::Output)
 	{
-		if (flags.get(DecorationXfbBuffer) && flags.get(DecorationXfbStride) && flags.get(DecorationOffset))
+		if (flags.get(static_cast<uint32_t>(Decoration::XfbBuffer)) && flags.get(static_cast<uint32_t>(Decoration::XfbStride)) && flags.get(static_cast<uint32_t>(Decoration::Offset)))
 		{
 			// XFB for standalone variables, we can emit all decorations.
-			attr.push_back(join("xfb_buffer = ", get_decoration(var.self, DecorationXfbBuffer)));
-			attr.push_back(join("xfb_stride = ", get_decoration(var.self, DecorationXfbStride)));
-			attr.push_back(join("xfb_offset = ", get_decoration(var.self, DecorationOffset)));
+			attr.push_back(join("xfb_buffer = ", get_decoration(var.self, Decoration::XfbBuffer)));
+			attr.push_back(join("xfb_stride = ", get_decoration(var.self, Decoration::XfbStride)));
+			attr.push_back(join("xfb_offset = ", get_decoration(var.self, Decoration::Offset)));
 			uses_enhanced_layouts = true;
 		}
 
-		if (flags.get(DecorationStream))
+		if (flags.get(static_cast<uint32_t>(Decoration::Stream)))
 		{
-			if (get_execution_model() != ExecutionModelGeometry)
+			if (get_execution_model() != ExecutionModel::Geometry)
 				SPIRV_CROSS_THROW("Geometry streams can only be used in geometry shaders.");
 			if (options.es)
 				SPIRV_CROSS_THROW("Multiple geometry streams not supported in ESSL.");
 			if (options.version < 400)
 				require_extension_internal("GL_ARB_transform_feedback3");
-			attr.push_back(join("stream = ", get_decoration(var.self, DecorationStream)));
+			attr.push_back(join("stream = ", get_decoration(var.self, Decoration::Stream)));
 		}
 	}
 
 	// Can only declare Component if we can declare location.
-	if (flags.get(DecorationComponent) && can_use_io_location(var.storage, is_block))
+	if (flags.get(static_cast<uint32_t>(Decoration::Component)) && can_use_io_location(var.storage, is_block))
 	{
 		uses_enhanced_layouts = true;
-		attr.push_back(join("component = ", get_decoration(var.self, DecorationComponent)));
+		attr.push_back(join("component = ", get_decoration(var.self, Decoration::Component)));
 	}
 
 	if (uses_enhanced_layouts)
@@ -2175,22 +2175,22 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 			SPIRV_CROSS_THROW("GL_ARB_enhanced_layouts is not supported in ESSL.");
 	}
 
-	if (flags.get(DecorationIndex))
-		attr.push_back(join("index = ", get_decoration(var.self, DecorationIndex)));
+	if (flags.get(static_cast<uint32_t>(Decoration::Index)))
+		attr.push_back(join("index = ", get_decoration(var.self, Decoration::Index)));
 
 	// Do not emit set = decoration in regular GLSL output, but
 	// we need to preserve it in Vulkan GLSL mode.
-	if (var.storage != StorageClassPushConstant && var.storage != StorageClassShaderRecordBufferKHR)
+	if (var.storage != StorageClass::PushConstant && var.storage != StorageClass::ShaderRecordBufferKHR)
 	{
-		if (flags.get(DecorationDescriptorSet) && options.vulkan_semantics)
-			attr.push_back(join("set = ", get_decoration(var.self, DecorationDescriptorSet)));
+		if (flags.get(static_cast<uint32_t>(Decoration::DescriptorSet)) && options.vulkan_semantics)
+			attr.push_back(join("set = ", get_decoration(var.self, Decoration::DescriptorSet)));
 	}
 
-	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClassPushConstant;
-	bool ssbo_block = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferKHR ||
-	                  (var.storage == StorageClassUniform && typeflags.get(DecorationBufferBlock));
-	bool emulated_ubo = var.storage == StorageClassPushConstant && options.emit_push_constant_as_uniform_buffer;
-	bool ubo_block = var.storage == StorageClassUniform && typeflags.get(DecorationBlock);
+	bool push_constant_block = options.vulkan_semantics && var.storage == StorageClass::PushConstant;
+	bool ssbo_block = var.storage == StorageClass::StorageBuffer || var.storage == StorageClass::ShaderRecordBufferKHR ||
+	                  (var.storage == StorageClass::Uniform && typeflags.get(static_cast<uint32_t>(Decoration::BufferBlock)));
+	bool emulated_ubo = var.storage == StorageClass::PushConstant && options.emit_push_constant_as_uniform_buffer;
+	bool ubo_block = var.storage == StorageClass::Uniform && typeflags.get(static_cast<uint32_t>(Decoration::Block));
 
 	// GL 3.0/GLSL 1.30 is not considered legacy, but it doesn't have UBOs ...
 	bool can_use_buffer_blocks = (options.es && options.version >= 300) || (!options.es && options.version >= 140);
@@ -2206,17 +2206,17 @@ string CompilerGLSL::layout_for_variable(const SPIRVariable &var)
 		can_use_binding = options.enable_420pack_extension || (options.version >= 420);
 
 	// Make sure we don't emit binding layout for a classic uniform on GLSL 1.30.
-	if (!can_use_buffer_blocks && var.storage == StorageClassUniform)
+	if (!can_use_buffer_blocks && var.storage == StorageClass::Uniform)
 		can_use_binding = false;
 
-	if (var.storage == StorageClassShaderRecordBufferKHR)
+	if (var.storage == StorageClass::ShaderRecordBufferKHR)
 		can_use_binding = false;
 
-	if (can_use_binding && flags.get(DecorationBinding))
-		attr.push_back(join("binding = ", get_decoration(var.self, DecorationBinding)));
+	if (can_use_binding && flags.get(static_cast<uint32_t>(Decoration::Binding)))
+		attr.push_back(join("binding = ", get_decoration(var.self, Decoration::Binding)));
 
-	if (var.storage != StorageClassOutput && flags.get(DecorationOffset))
-		attr.push_back(join("offset = ", get_decoration(var.self, DecorationOffset)));
+	if (var.storage != StorageClass::Output && flags.get(static_cast<uint32_t>(Decoration::Offset)))
+		attr.push_back(join("offset = ", get_decoration(var.self, Decoration::Offset)));
 
 	// Instead of adding explicit offsets for every element here, just assume we're using std140 or std430.
 	// If SPIR-V does not comply with either layout, we cannot really work around it.
@@ -2341,24 +2341,24 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 	// OpenGL has no concept of push constant blocks, implement it as a uniform struct.
 	auto &type = get<SPIRType>(var.basetype);
 
-	unset_decoration(var.self, DecorationBinding);
-	unset_decoration(var.self, DecorationDescriptorSet);
+	unset_decoration(var.self, Decoration::Binding);
+	unset_decoration(var.self, Decoration::DescriptorSet);
 
 #if 0
-    if (flags & ((1ull << DecorationBinding) | (1ull << DecorationDescriptorSet)))
+    if (flags & ((1ull << Decoration::Binding) | (1ull << Decoration::DescriptorSet)))
         SPIRV_CROSS_THROW("Push constant blocks cannot be compiled to GLSL with Binding or Set syntax. "
                             "Remap to location with reflection API first or disable these decorations.");
 #endif
 
 	// We're emitting the push constant block as a regular struct, so disable the block qualifier temporarily.
 	// Otherwise, we will end up emitting layout() qualifiers on naked structs which is not allowed.
-	bool block_flag = has_decoration(type.self, DecorationBlock);
-	unset_decoration(type.self, DecorationBlock);
+	bool block_flag = has_decoration(type.self, Decoration::Block);
+	unset_decoration(type.self, Decoration::Block);
 
 	emit_struct(type);
 
 	if (block_flag)
-		set_decoration(type.self, DecorationBlock);
+		set_decoration(type.self, Decoration::Block);
 
 	emit_uniform(var);
 	statement("");
@@ -2367,7 +2367,7 @@ void CompilerGLSL::emit_push_constant_block_glsl(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
-	bool ubo_block = var.storage == StorageClassUniform && has_decoration(type.self, DecorationBlock);
+	bool ubo_block = var.storage == StorageClass::Uniform && has_decoration(type.self, Decoration::Block);
 
 	if (flattened_buffer_blocks.count(var.self))
 		emit_buffer_block_flattened(var);
@@ -2381,19 +2381,19 @@ void CompilerGLSL::emit_buffer_block(const SPIRVariable &var)
 void CompilerGLSL::emit_buffer_block_legacy(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
-	bool ssbo = var.storage == StorageClassStorageBuffer ||
-	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+	bool ssbo = var.storage == StorageClass::StorageBuffer ||
+	            ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::BufferBlock));
 	if (ssbo)
 		SPIRV_CROSS_THROW("SSBOs not supported in legacy targets.");
 
 	// We're emitting the push constant block as a regular struct, so disable the block qualifier temporarily.
 	// Otherwise, we will end up emitting layout() qualifiers on naked structs which is not allowed.
 	auto &block_flags = ir.meta[type.self].decoration.decoration_flags;
-	bool block_flag = block_flags.get(DecorationBlock);
-	block_flags.clear(DecorationBlock);
+	bool block_flag = block_flags.get(static_cast<uint32_t>(Decoration::Block));
+	block_flags.clear(static_cast<uint32_t>(Decoration::Block));
 	emit_struct(type);
 	if (block_flag)
-		block_flags.set(DecorationBlock);
+		block_flags.set(static_cast<uint32_t>(Decoration::Block));
 	emit_uniform(var);
 	statement("");
 }
@@ -2458,13 +2458,13 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 
 			auto flags = ir.get_buffer_block_type_flags(type);
 			string decorations;
-			if (flags.get(DecorationRestrict))
+			if (flags.get(static_cast<uint32_t>(Decoration::Restrict)))
 				decorations += " restrict";
-			if (flags.get(DecorationCoherent))
+			if (flags.get(static_cast<uint32_t>(Decoration::Coherent)))
 				decorations += " coherent";
-			if (flags.get(DecorationNonReadable))
+			if (flags.get(static_cast<uint32_t>(Decoration::NonReadable)))
 				decorations += " writeonly";
-			if (flags.get(DecorationNonWritable))
+			if (flags.get(static_cast<uint32_t>(Decoration::NonWritable)))
 				decorations += " readonly";
 
 			statement("layout(", merge(attributes), ")", decorations, " buffer ", buffer_name);
@@ -2479,10 +2479,10 @@ void CompilerGLSL::emit_buffer_reference_block(uint32_t type_id, bool forward_de
 			}
 			else if (is_array(get_pointee_type(type)))
 			{
-				SPIRType wrap_type{OpTypeStruct};
+				SPIRType wrap_type{Op::OpTypeStruct};
 				wrap_type.self = ir.increase_bound_by(1);
 				wrap_type.member_types.push_back(get_pointee_type_id(type_id));
-				ir.set_member_decoration(wrap_type.self, 0, DecorationOffset, 0);
+				ir.set_member_decoration(wrap_type.self, 0, Decoration::Offset, 0);
 				packing_standard = buffer_to_packing_standard(wrap_type, true, false) + ", ";
 			}
 
@@ -2526,12 +2526,12 @@ void CompilerGLSL::emit_buffer_block_native(const SPIRVariable &var)
 	auto &type = get<SPIRType>(var.basetype);
 
 	Bitset flags = ir.get_buffer_block_flags(var);
-	bool ssbo = var.storage == StorageClassStorageBuffer || var.storage == StorageClassShaderRecordBufferKHR ||
-	            ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
-	bool is_restrict = ssbo && flags.get(DecorationRestrict);
-	bool is_writeonly = ssbo && flags.get(DecorationNonReadable);
-	bool is_readonly = ssbo && flags.get(DecorationNonWritable);
-	bool is_coherent = ssbo && flags.get(DecorationCoherent);
+	bool ssbo = var.storage == StorageClass::StorageBuffer || var.storage == StorageClass::ShaderRecordBufferKHR ||
+	            ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::BufferBlock));
+	bool is_restrict = ssbo && flags.get(static_cast<uint32_t>(Decoration::Restrict));
+	bool is_writeonly = ssbo && flags.get(static_cast<uint32_t>(Decoration::NonReadable));
+	bool is_readonly = ssbo && flags.get(static_cast<uint32_t>(Decoration::NonWritable));
+	bool is_coherent = ssbo && flags.get(static_cast<uint32_t>(Decoration::Coherent));
 
 	// Block names should never alias, but from HLSL input they kind of can because block types are reused for UAVs ...
 	auto buffer_name = to_name(type.self, false);
@@ -2603,7 +2603,7 @@ void CompilerGLSL::emit_buffer_block_flattened(const SPIRVariable &var)
 	SPIRType::BaseType basic_type;
 	if (get_common_basic_type(type, basic_type))
 	{
-		SPIRType tmp { OpTypeVector };
+		SPIRType tmp { Op::OpTypeVector };
 		tmp.basetype = basic_type;
 		tmp.vecsize = 4;
 		if (basic_type != SPIRType::Float && basic_type != SPIRType::Int && basic_type != SPIRType::UInt)
@@ -2624,15 +2624,15 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 	if (subpass_input_is_framebuffer_fetch(var.self))
 		return "";
 
-	if (var.storage == StorageClassInput || var.storage == StorageClassOutput)
+	if (var.storage == StorageClass::Input || var.storage == StorageClass::Output)
 	{
-		if (is_legacy() && execution.model == ExecutionModelVertex)
-			return var.storage == StorageClassInput ? "attribute " : "varying ";
-		else if (is_legacy() && execution.model == ExecutionModelFragment)
+		if (is_legacy() && execution.model == ExecutionModel::Vertex)
+			return var.storage == StorageClass::Input ? "attribute " : "varying ";
+		else if (is_legacy() && execution.model == ExecutionModel::Fragment)
 			return "varying "; // Fragment outputs are renamed so they never hit this case.
-		else if (execution.model == ExecutionModelFragment && var.storage == StorageClassOutput)
+		else if (execution.model == ExecutionModel::Fragment && var.storage == StorageClass::Output)
 		{
-			uint32_t loc = get_decoration(var.self, DecorationLocation);
+			uint32_t loc = get_decoration(var.self, Decoration::Location);
 			bool is_inout = location_is_framebuffer_fetch(loc);
 			if (is_inout)
 				return "inout ";
@@ -2640,30 +2640,30 @@ const char *CompilerGLSL::to_storage_qualifiers_glsl(const SPIRVariable &var)
 				return "out ";
 		}
 		else
-			return var.storage == StorageClassInput ? "in " : "out ";
+			return var.storage == StorageClass::Input ? "in " : "out ";
 	}
-	else if (var.storage == StorageClassUniformConstant || var.storage == StorageClassUniform ||
-	         var.storage == StorageClassPushConstant || var.storage == StorageClassAtomicCounter)
+	else if (var.storage == StorageClass::UniformConstant || var.storage == StorageClass::Uniform ||
+	         var.storage == StorageClass::PushConstant || var.storage == StorageClass::AtomicCounter)
 	{
 		return "uniform ";
 	}
-	else if (var.storage == StorageClassRayPayloadKHR)
+	else if (var.storage == StorageClass::RayPayloadKHR)
 	{
 		return ray_tracing_is_khr ? "rayPayloadEXT " : "rayPayloadNV ";
 	}
-	else if (var.storage == StorageClassIncomingRayPayloadKHR)
+	else if (var.storage == StorageClass::IncomingRayPayloadKHR)
 	{
 		return ray_tracing_is_khr ? "rayPayloadInEXT " : "rayPayloadInNV ";
 	}
-	else if (var.storage == StorageClassHitAttributeKHR)
+	else if (var.storage == StorageClass::HitAttributeKHR)
 	{
 		return ray_tracing_is_khr ? "hitAttributeEXT " : "hitAttributeNV ";
 	}
-	else if (var.storage == StorageClassCallableDataKHR)
+	else if (var.storage == StorageClass::CallableDataKHR)
 	{
 		return ray_tracing_is_khr ? "callableDataEXT " : "callableDataNV ";
 	}
-	else if (var.storage == StorageClassIncomingCallableDataKHR)
+	else if (var.storage == StorageClass::IncomingCallableDataKHR)
 	{
 		return ray_tracing_is_khr ? "callableDataInEXT " : "callableDataInNV ";
 	}
@@ -2746,7 +2746,7 @@ void CompilerGLSL::emit_flattened_io_block(const SPIRVariable &var, const char *
 
 	auto old_flags = ir.meta[type.self].decoration.decoration_flags;
 	// Emit the members as if they are part of a block to get all qualifiers.
-	ir.meta[type.self].decoration.decoration_flags.set(DecorationBlock);
+	ir.meta[type.self].decoration.decoration_flags.set(static_cast<uint32_t>(Decoration::Block));
 
 	type.member_name_cache.clear();
 
@@ -2778,14 +2778,14 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
 
-	if (var.storage == StorageClassInput && type.basetype == SPIRType::Double &&
+	if (var.storage == StorageClass::Input && type.basetype == SPIRType::Double &&
 	    !options.es && options.version < 410)
 	{
 		require_extension_internal("GL_ARB_vertex_attrib_64bit");
 	}
 
 	// Either make it plain in/out or in/out blocks depending on what shader is doing ...
-	bool block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock);
+	bool block = ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::Block));
 	const char *qual = to_storage_qualifiers_glsl(var);
 
 	if (block)
@@ -2816,7 +2816,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			auto block_name = to_name(type.self, false);
 
 			// The namespace for I/O blocks is separate from other variables in GLSL.
-			auto &block_namespace = type.storage == StorageClassInput ? block_input_names : block_output_names;
+			auto &block_namespace = type.storage == StorageClass::Input ? block_input_names : block_output_names;
 
 			// Shaders never use the block by interface name, so we don't
 			// have to track this other than updating name caches.
@@ -2834,11 +2834,11 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			resource_names.insert(block_name);
 
 			const char *block_qualifier;
-			if (has_decoration(var.self, DecorationPatch))
+			if (has_decoration(var.self, Decoration::Patch))
 				block_qualifier = "patch ";
-			else if (has_decoration(var.self, DecorationPerPrimitiveEXT))
+			else if (has_decoration(var.self, Decoration::PerPrimitiveEXT))
 				block_qualifier = "perprimitiveEXT ";
-			else if (has_decoration(var.self, DecorationPerVertexKHR))
+			else if (has_decoration(var.self, Decoration::PerVertexKHR))
 				block_qualifier = "pervertexEXT ";
 			else
 				block_qualifier = "";
@@ -2879,16 +2879,16 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 			// Legacy GLSL did not support int attributes, we automatically
 			// declare them as float and cast them on load/store
 			SPIRType newtype = type;
-			if (is_legacy() && var.storage == StorageClassInput && type.basetype == SPIRType::Int)
+			if (is_legacy() && var.storage == StorageClass::Input && type.basetype == SPIRType::Int)
 				newtype.basetype = SPIRType::Float;
 
 			// Tessellation control and evaluation shaders must have either
 			// gl_MaxPatchVertices or unsized arrays for input arrays.
 			// Opt for unsized as it's the more "correct" variant to use.
-			if (type.storage == StorageClassInput && !type.array.empty() &&
-			    !has_decoration(var.self, DecorationPatch) &&
-			    (get_entry_point().model == ExecutionModelTessellationControl ||
-			     get_entry_point().model == ExecutionModelTessellationEvaluation))
+			if (type.storage == StorageClass::Input && !type.array.empty() &&
+			    !has_decoration(var.self, Decoration::Patch) &&
+			    (get_entry_point().model == ExecutionModel::TessellationControl ||
+			     get_entry_point().model == ExecutionModel::TessellationEvaluation))
 			{
 				newtype.array.back() = 0;
 				newtype.array_size_literal.back() = true;
@@ -2903,7 +2903,7 @@ void CompilerGLSL::emit_interface_block(const SPIRVariable &var)
 void CompilerGLSL::emit_uniform(const SPIRVariable &var)
 {
 	auto &type = get<SPIRType>(var.basetype);
-	if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.dim != DimSubpassData)
+	if (type.basetype == SPIRType::Image && type.image.sampled == 2 && type.image.dim != Dim::SubpassData)
 	{
 		if (!options.es && options.version < 420)
 			require_extension_internal("GL_ARB_shader_image_load_store");
@@ -2938,7 +2938,7 @@ int CompilerGLSL::get_constant_mapping_to_workgroup_component(const SPIRConstant
 
 	// Need to redirect specialization constants which are used as WorkGroupSize to the builtin,
 	// since the spec constant declarations are never explicitly declared.
-	if (entry_point.workgroup_size.constant == 0 && entry_point.flags.get(ExecutionModeLocalSizeId))
+	if (entry_point.workgroup_size.constant == 0 && entry_point.flags.get(static_cast<uint32_t>(ExecutionMode::LocalSizeId)))
 	{
 		if (c.self == entry_point.workgroup_size.id_x)
 			index = 0;
@@ -2978,7 +2978,7 @@ void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 		return;
 	}
 	else if (!options.vulkan_semantics && is_workgroup_size_constant &&
-	         !has_decoration(constant.self, DecorationSpecId))
+	         !has_decoration(constant.self, Decoration::SpecId))
 	{
 		// Only bother declaring a workgroup size if it is actually a specialization constant, because we need macros.
 		return;
@@ -2988,11 +2988,11 @@ void CompilerGLSL::emit_constant(const SPIRConstant &constant)
 	auto name = to_name(constant.self);
 
 	// Only scalars have constant IDs.
-	if (has_decoration(constant.self, DecorationSpecId))
+	if (has_decoration(constant.self, Decoration::SpecId))
 	{
 		if (options.vulkan_semantics)
 		{
-			statement("layout(constant_id = ", get_decoration(constant.self, DecorationSpecId), ") const ",
+			statement("layout(constant_id = ", get_decoration(constant.self, Decoration::SpecId), ") const ",
 			          variable_decl(type, name), " = ", constant_expression(constant), ";");
 		}
 		else
@@ -3118,7 +3118,7 @@ void CompilerGLSL::replace_fragment_output(SPIRVariable &var)
 {
 	auto &m = ir.meta[var.self].decoration;
 	uint32_t location = 0;
-	if (m.decoration_flags.get(DecorationLocation))
+	if (m.decoration_flags.get(static_cast<uint32_t>(Decoration::Location)))
 		location = m.location;
 
 	// If our variable is arrayed, we must not emit the array part of this as the SPIR-V will
@@ -3157,7 +3157,7 @@ void CompilerGLSL::replace_fragment_outputs()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
-		if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer && var.storage == StorageClassOutput)
+		if (!is_builtin_variable(var) && !var.remapped_variable && type.pointer && var.storage == StorageClass::Output)
 			replace_fragment_output(var);
 	});
 }
@@ -3186,7 +3186,7 @@ string CompilerGLSL::remap_swizzle(const SPIRType &out_type, uint32_t input_comp
 void CompilerGLSL::emit_pls()
 {
 	auto &execution = get_entry_point();
-	if (execution.model != ExecutionModelFragment)
+	if (execution.model != ExecutionModel::Fragment)
 		SPIRV_CROSS_THROW("Pixel local storage only supported in fragment shaders.");
 
 	if (!options.es)
@@ -3229,10 +3229,10 @@ void CompilerGLSL::fixup_image_load_store_access()
 			// Solve this by making the image access as restricted as possible and loosen up if we need to.
 			// If any no-read/no-write flags are actually set, assume that the compiler knows what it's doing.
 
-			if (!has_decoration(var, DecorationNonWritable) && !has_decoration(var, DecorationNonReadable))
+			if (!has_decoration(var, Decoration::NonWritable) && !has_decoration(var, Decoration::NonReadable))
 			{
-				set_decoration(var, DecorationNonWritable);
-				set_decoration(var, DecorationNonReadable);
+				set_decoration(var, Decoration::NonWritable);
+				set_decoration(var, Decoration::NonReadable);
 			}
 		}
 	});
@@ -3240,15 +3240,15 @@ void CompilerGLSL::fixup_image_load_store_access()
 
 static bool is_block_builtin(BuiltIn builtin)
 {
-	return builtin == BuiltInPosition || builtin == BuiltInPointSize || builtin == BuiltInClipDistance ||
-	       builtin == BuiltInCullDistance;
+	return builtin == BuiltIn::Position || builtin == BuiltIn::PointSize || builtin == BuiltIn::ClipDistance ||
+	       builtin == BuiltIn::CullDistance;
 }
 
 bool CompilerGLSL::should_force_emit_builtin_block(StorageClass storage)
 {
 	// If the builtin block uses XFB, we need to force explicit redeclaration of the builtin block.
 
-	if (storage != StorageClassOutput)
+	if (storage != StorageClass::Output)
 		return false;
 	bool should_force = false;
 
@@ -3257,15 +3257,15 @@ bool CompilerGLSL::should_force_emit_builtin_block(StorageClass storage)
 			return;
 
 		auto &type = this->get<SPIRType>(var.basetype);
-		bool block = has_decoration(type.self, DecorationBlock);
+		bool block = has_decoration(type.self, Decoration::Block);
 		if (var.storage == storage && block && is_builtin_variable(var))
 		{
 			uint32_t member_count = uint32_t(type.member_types.size());
 			for (uint32_t i = 0; i < member_count; i++)
 			{
-				if (has_member_decoration(type.self, i, DecorationBuiltIn) &&
-				    is_block_builtin(BuiltIn(get_member_decoration(type.self, i, DecorationBuiltIn))) &&
-				    has_member_decoration(type.self, i, DecorationOffset))
+				if (has_member_decoration(type.self, i, Decoration::BuiltIn) &&
+				    is_block_builtin(BuiltIn(get_member_decoration(type.self, i, Decoration::BuiltIn))) &&
+				    has_member_decoration(type.self, i, Decoration::Offset))
 				{
 					should_force = true;
 				}
@@ -3273,8 +3273,8 @@ bool CompilerGLSL::should_force_emit_builtin_block(StorageClass storage)
 		}
 		else if (var.storage == storage && !block && is_builtin_variable(var))
 		{
-			if (is_block_builtin(BuiltIn(get_decoration(type.self, DecorationBuiltIn))) &&
-			    has_decoration(var.self, DecorationOffset))
+			if (is_block_builtin(BuiltIn(get_decoration(type.self, Decoration::BuiltIn))) &&
+			    has_decoration(var.self, Decoration::Offset))
 			{
 				should_force = true;
 			}
@@ -3282,15 +3282,15 @@ bool CompilerGLSL::should_force_emit_builtin_block(StorageClass storage)
 	});
 
 	// If we're declaring clip/cull planes with control points we need to force block declaration.
-	if ((get_execution_model() == ExecutionModelTessellationControl ||
-	     get_execution_model() == ExecutionModelMeshEXT) &&
+	if ((get_execution_model() == ExecutionModel::TessellationControl ||
+	     get_execution_model() == ExecutionModel::MeshEXT) &&
 	    (clip_distance_count || cull_distance_count))
 	{
 		should_force = true;
 	}
 
 	// Either glslang bug or oversight, but global invariant position does not work in mesh shaders.
-	if (get_execution_model() == ExecutionModelMeshEXT && position_invariant)
+	if (get_execution_model() == ExecutionModel::MeshEXT && position_invariant)
 		should_force = true;
 
 	return should_force;
@@ -3300,22 +3300,22 @@ void CompilerGLSL::fixup_implicit_builtin_block_names(ExecutionModel model)
 {
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
-		bool block = has_decoration(type.self, DecorationBlock);
-		if ((var.storage == StorageClassOutput || var.storage == StorageClassInput) && block &&
+		bool block = has_decoration(type.self, Decoration::Block);
+		if ((var.storage == StorageClass::Output || var.storage == StorageClass::Input) && block &&
 		    is_builtin_variable(var))
 		{
-			if (model != ExecutionModelMeshEXT)
+			if (model != ExecutionModel::MeshEXT)
 			{
 				// Make sure the array has a supported name in the code.
-				if (var.storage == StorageClassOutput)
+				if (var.storage == StorageClass::Output)
 					set_name(var.self, "gl_out");
-				else if (var.storage == StorageClassInput)
+				else if (var.storage == StorageClass::Input)
 					set_name(var.self, "gl_in");
 			}
 			else
 			{
 				auto flags = get_buffer_block_flags(var.self);
-				if (flags.get(DecorationPerPrimitiveEXT))
+				if (flags.get(static_cast<uint32_t>(Decoration::PerPrimitiveEXT)))
 				{
 					set_name(var.self, "gl_MeshPrimitivesEXT");
 					set_name(type.self, "gl_MeshPerPrimitiveEXT");
@@ -3328,17 +3328,17 @@ void CompilerGLSL::fixup_implicit_builtin_block_names(ExecutionModel model)
 			}
 		}
 
-		if (model == ExecutionModelMeshEXT && var.storage == StorageClassOutput && !block)
+		if (model == ExecutionModel::MeshEXT && var.storage == StorageClass::Output && !block)
 		{
 			auto *m = ir.find_meta(var.self);
 			if (m && m->decoration.builtin)
 			{
 				auto builtin_type = m->decoration.builtin_type;
-				if (builtin_type == BuiltInPrimitivePointIndicesEXT)
+				if (builtin_type == BuiltIn::PrimitivePointIndicesEXT)
 					set_name(var.self, "gl_PrimitivePointIndicesEXT");
-				else if (builtin_type == BuiltInPrimitiveLineIndicesEXT)
+				else if (builtin_type == BuiltIn::PrimitiveLineIndicesEXT)
 					set_name(var.self, "gl_PrimitiveLineIndicesEXT");
-				else if (builtin_type == BuiltInPrimitiveTriangleIndicesEXT)
+				else if (builtin_type == BuiltIn::PrimitiveTriangleIndicesEXT)
 					set_name(var.self, "gl_PrimitiveTriangleIndicesEXT");
 			}
 		}
@@ -3364,13 +3364,13 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	std::unordered_map<uint32_t, uint32_t> builtin_xfb_offsets;
 
 	const auto builtin_is_per_vertex_set = [](BuiltIn builtin) -> bool {
-		return builtin == BuiltInPosition || builtin == BuiltInPointSize ||
-			builtin == BuiltInClipDistance || builtin == BuiltInCullDistance;
+		return builtin == BuiltIn::Position || builtin == BuiltIn::PointSize ||
+			builtin == BuiltIn::ClipDistance || builtin == BuiltIn::CullDistance;
 	};
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
-		bool block = has_decoration(type.self, DecorationBlock);
+		bool block = has_decoration(type.self, Decoration::Block);
 		Bitset builtins;
 
 		if (var.storage == storage && block && is_builtin_variable(var))
@@ -3380,19 +3380,19 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			{
 				if (m.builtin && builtin_is_per_vertex_set(m.builtin_type))
 				{
-					builtins.set(m.builtin_type);
-					if (m.builtin_type == BuiltInCullDistance)
+					builtins.set(static_cast<uint32_t>(m.builtin_type));
+					if (m.builtin_type == BuiltIn::CullDistance)
 						cull_distance_size = to_array_size_literal(this->get<SPIRType>(type.member_types[index]));
-					else if (m.builtin_type == BuiltInClipDistance)
+					else if (m.builtin_type == BuiltIn::ClipDistance)
 						clip_distance_size = to_array_size_literal(this->get<SPIRType>(type.member_types[index]));
 
-					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationOffset))
+					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(static_cast<uint32_t>(Decoration::Offset)))
 					{
 						have_any_xfb_offset = true;
-						builtin_xfb_offsets[m.builtin_type] = m.offset;
+						builtin_xfb_offsets[static_cast<uint32_t>(m.builtin_type)] = m.offset;
 					}
 
-					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationStream))
+					if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(static_cast<uint32_t>(Decoration::Stream)))
 					{
 						uint32_t stream = m.stream;
 						if (have_geom_stream && geom_stream != stream)
@@ -3404,11 +3404,11 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 				index++;
 			}
 
-			if (storage == StorageClassOutput && has_decoration(var.self, DecorationXfbBuffer) &&
-			    has_decoration(var.self, DecorationXfbStride))
+			if (storage == StorageClass::Output && has_decoration(var.self, Decoration::XfbBuffer) &&
+			    has_decoration(var.self, Decoration::XfbStride))
 			{
-				uint32_t buffer_index = get_decoration(var.self, DecorationXfbBuffer);
-				uint32_t stride = get_decoration(var.self, DecorationXfbStride);
+				uint32_t buffer_index = get_decoration(var.self, Decoration::XfbBuffer);
+				uint32_t stride = get_decoration(var.self, Decoration::XfbStride);
 				if (have_xfb_buffer_stride && buffer_index != xfb_buffer)
 					SPIRV_CROSS_THROW("IO block member XfbBuffer mismatch.");
 				if (have_xfb_buffer_stride && stride != xfb_stride)
@@ -3418,9 +3418,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 				xfb_stride = stride;
 			}
 
-			if (storage == StorageClassOutput && has_decoration(var.self, DecorationStream))
+			if (storage == StorageClass::Output && has_decoration(var.self, Decoration::Stream))
 			{
-				uint32_t stream = get_decoration(var.self, DecorationStream);
+				uint32_t stream = get_decoration(var.self, Decoration::Stream);
 				if (have_geom_stream && geom_stream != stream)
 					SPIRV_CROSS_THROW("IO block member Stream mismatch.");
 				have_geom_stream = true;
@@ -3435,17 +3435,17 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			{
 				// For mesh/tesc output, Clip/Cull is an array-of-array. Look at innermost array type
 				// for correct result.
-				global_builtins.set(m.builtin_type);
-				if (m.builtin_type == BuiltInCullDistance)
+				global_builtins.set(static_cast<uint32_t>(m.builtin_type));
+				if (m.builtin_type == BuiltIn::CullDistance)
 					cull_distance_size = to_array_size_literal(type, 0);
-				else if (m.builtin_type == BuiltInClipDistance)
+				else if (m.builtin_type == BuiltIn::ClipDistance)
 					clip_distance_size = to_array_size_literal(type, 0);
 
-				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationXfbStride) &&
-				    m.decoration_flags.get(DecorationXfbBuffer) && m.decoration_flags.get(DecorationOffset))
+				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(static_cast<uint32_t>(Decoration::XfbStride)) &&
+				    m.decoration_flags.get(static_cast<uint32_t>(Decoration::XfbBuffer)) && m.decoration_flags.get(static_cast<uint32_t>(Decoration::Offset)))
 				{
 					have_any_xfb_offset = true;
-					builtin_xfb_offsets[m.builtin_type] = m.offset;
+					builtin_xfb_offsets[static_cast<uint32_t>(m.builtin_type)] = static_cast<uint32_t>(m.offset);
 					uint32_t buffer_index = m.xfb_buffer;
 					uint32_t stride = m.xfb_stride;
 					if (have_xfb_buffer_stride && buffer_index != xfb_buffer)
@@ -3457,9 +3457,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 					xfb_stride = stride;
 				}
 
-				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(DecorationStream))
+				if (is_block_builtin(m.builtin_type) && m.decoration_flags.get(static_cast<uint32_t>(Decoration::Stream)))
 				{
-					uint32_t stream = get_decoration(var.self, DecorationStream);
+					uint32_t stream = get_decoration(var.self, Decoration::Stream);
 					if (have_geom_stream && geom_stream != stream)
 						SPIRV_CROSS_THROW("IO block member Stream mismatch.");
 					have_geom_stream = true;
@@ -3480,8 +3480,8 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	});
 
 	global_builtins =
-	    Bitset(global_builtins.get_lower() & ((1ull << BuiltInPosition) | (1ull << BuiltInPointSize) |
-	                                          (1ull << BuiltInClipDistance) | (1ull << BuiltInCullDistance)));
+	    Bitset(global_builtins.get_lower() & ((1ull << static_cast<uint32_t>(BuiltIn::Position)) | (1ull << static_cast<uint32_t>(BuiltIn::PointSize)) |
+	                                          (1ull << static_cast<uint32_t>(BuiltIn::ClipDistance)) | (1ull << static_cast<uint32_t>(BuiltIn::CullDistance))));
 
 	// Try to collect all other declared builtins.
 	if (!emitted_block)
@@ -3491,7 +3491,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	if (emitted_builtins.empty())
 		return;
 
-	if (storage == StorageClassOutput)
+	if (storage == StorageClass::Output)
 	{
 		SmallVector<string> attr;
 		if (have_xfb_buffer_stride && have_any_xfb_offset)
@@ -3512,7 +3512,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 
 		if (have_geom_stream)
 		{
-			if (get_execution_model() != ExecutionModelGeometry)
+			if (get_execution_model() != ExecutionModel::Geometry)
 				SPIRV_CROSS_THROW("Geometry streams can only be used in geometry shaders.");
 			if (options.es)
 				SPIRV_CROSS_THROW("Multiple geometry streams not supported in ESSL.");
@@ -3521,7 +3521,7 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			attr.push_back(join("stream = ", geom_stream));
 		}
 
-		if (model == ExecutionModelMeshEXT)
+		if (model == ExecutionModel::MeshEXT)
 			statement("out gl_MeshPerVertexEXT");
 		else if (!attr.empty())
 			statement("layout(", merge(attr), ") out gl_PerVertex");
@@ -3538,9 +3538,9 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 	}
 
 	begin_scope();
-	if (emitted_builtins.get(BuiltInPosition))
+	if (emitted_builtins.get(static_cast<uint32_t>(BuiltIn::Position)))
 	{
-		auto itr = builtin_xfb_offsets.find(BuiltInPosition);
+		auto itr = builtin_xfb_offsets.find(static_cast<uint32_t>(BuiltIn::Position));
 		if (itr != end(builtin_xfb_offsets))
 			statement("layout(xfb_offset = ", itr->second, ") vec4 gl_Position;");
 		else if (position_invariant)
@@ -3549,47 +3549,47 @@ void CompilerGLSL::emit_declared_builtin_block(StorageClass storage, ExecutionMo
 			statement("vec4 gl_Position;");
 	}
 
-	if (emitted_builtins.get(BuiltInPointSize))
+	if (emitted_builtins.get(static_cast<uint32_t>(BuiltIn::PointSize)))
 	{
-		auto itr = builtin_xfb_offsets.find(BuiltInPointSize);
+		auto itr = builtin_xfb_offsets.find(static_cast<uint32_t>(BuiltIn::PointSize));
 		if (itr != end(builtin_xfb_offsets))
 			statement("layout(xfb_offset = ", itr->second, ") float gl_PointSize;");
 		else
 			statement("float gl_PointSize;");
 	}
 
-	if (emitted_builtins.get(BuiltInClipDistance))
+	if (emitted_builtins.get(static_cast<uint32_t>(BuiltIn::ClipDistance)))
 	{
-		auto itr = builtin_xfb_offsets.find(BuiltInClipDistance);
+		auto itr = builtin_xfb_offsets.find(static_cast<uint32_t>(BuiltIn::ClipDistance));
 		if (itr != end(builtin_xfb_offsets))
 			statement("layout(xfb_offset = ", itr->second, ") float gl_ClipDistance[", clip_distance_size, "];");
 		else
 			statement("float gl_ClipDistance[", clip_distance_size, "];");
 	}
 
-	if (emitted_builtins.get(BuiltInCullDistance))
+	if (emitted_builtins.get(static_cast<uint32_t>(BuiltIn::CullDistance)))
 	{
-		auto itr = builtin_xfb_offsets.find(BuiltInCullDistance);
+		auto itr = builtin_xfb_offsets.find(static_cast<uint32_t>(BuiltIn::CullDistance));
 		if (itr != end(builtin_xfb_offsets))
 			statement("layout(xfb_offset = ", itr->second, ") float gl_CullDistance[", cull_distance_size, "];");
 		else
 			statement("float gl_CullDistance[", cull_distance_size, "];");
 	}
 
-	bool builtin_array = model == ExecutionModelTessellationControl ||
-	                     (model == ExecutionModelMeshEXT && storage == StorageClassOutput) ||
-	                     (model == ExecutionModelGeometry && storage == StorageClassInput) ||
-	                     (model == ExecutionModelTessellationEvaluation && storage == StorageClassInput);
+	bool builtin_array = model == ExecutionModel::TessellationControl ||
+	                     (model == ExecutionModel::MeshEXT && storage == StorageClass::Output) ||
+	                     (model == ExecutionModel::Geometry && storage == StorageClass::Input) ||
+	                     (model == ExecutionModel::TessellationEvaluation && storage == StorageClass::Input);
 
 	if (builtin_array)
 	{
 		const char *instance_name;
-		if (model == ExecutionModelMeshEXT)
+		if (model == ExecutionModel::MeshEXT)
 			instance_name = "gl_MeshVerticesEXT"; // Per primitive is never synthesized.
 		else
-			instance_name = storage == StorageClassInput ? "gl_in" : "gl_out";
+			instance_name = storage == StorageClass::Input ? "gl_in" : "gl_out";
 
-		if (model == ExecutionModelTessellationControl && storage == StorageClassOutput)
+		if (model == ExecutionModel::TessellationControl && storage == StorageClass::Output)
 			end_scope_decl(join(instance_name, "[", get_entry_point().output_vertices, "]"));
 		else
 			end_scope_decl(join(instance_name, "[]"));
@@ -3621,7 +3621,7 @@ void CompilerGLSL::emit_resources()
 
 	// Legacy GL uses gl_FragData[], redeclare all fragment outputs
 	// with builtins.
-	if (execution.model == ExecutionModelFragment && is_legacy())
+	if (execution.model == ExecutionModel::Fragment && is_legacy())
 		replace_fragment_outputs();
 
 	// Emit PLS blocks if we have such variables.
@@ -3630,10 +3630,10 @@ void CompilerGLSL::emit_resources()
 
 	switch (execution.model)
 	{
-	case ExecutionModelGeometry:
-	case ExecutionModelTessellationControl:
-	case ExecutionModelTessellationEvaluation:
-	case ExecutionModelMeshEXT:
+	case ExecutionModel::Geometry:
+	case ExecutionModel::TessellationControl:
+	case ExecutionModel::TessellationEvaluation:
+	case ExecutionModel::MeshEXT:
 		fixup_implicit_builtin_block_names(execution.model);
 		break;
 
@@ -3644,21 +3644,21 @@ void CompilerGLSL::emit_resources()
 	bool global_invariant_position = position_invariant && (options.es || options.version >= 120);
 
 	// Emit custom gl_PerVertex for SSO compatibility.
-	if (options.separate_shader_objects && !options.es && execution.model != ExecutionModelFragment)
+	if (options.separate_shader_objects && !options.es && execution.model != ExecutionModel::Fragment)
 	{
 		switch (execution.model)
 		{
-		case ExecutionModelGeometry:
-		case ExecutionModelTessellationControl:
-		case ExecutionModelTessellationEvaluation:
-			emit_declared_builtin_block(StorageClassInput, execution.model);
-			emit_declared_builtin_block(StorageClassOutput, execution.model);
+		case ExecutionModel::Geometry:
+		case ExecutionModel::TessellationControl:
+		case ExecutionModel::TessellationEvaluation:
+			emit_declared_builtin_block(StorageClass::Input, execution.model);
+			emit_declared_builtin_block(StorageClass::Output, execution.model);
 			global_invariant_position = false;
 			break;
 
-		case ExecutionModelVertex:
-		case ExecutionModelMeshEXT:
-			emit_declared_builtin_block(StorageClassOutput, execution.model);
+		case ExecutionModel::Vertex:
+		case ExecutionModel::MeshEXT:
+			emit_declared_builtin_block(StorageClass::Output, execution.model);
 			global_invariant_position = false;
 			break;
 
@@ -3666,22 +3666,22 @@ void CompilerGLSL::emit_resources()
 			break;
 		}
 	}
-	else if (should_force_emit_builtin_block(StorageClassOutput))
+	else if (should_force_emit_builtin_block(StorageClass::Output))
 	{
-		emit_declared_builtin_block(StorageClassOutput, execution.model);
+		emit_declared_builtin_block(StorageClass::Output, execution.model);
 		global_invariant_position = false;
 	}
 	else if (execution.geometry_passthrough)
 	{
 		// Need to declare gl_in with Passthrough.
 		// If we're doing passthrough, we cannot emit an output block, so the output block test above will never pass.
-		emit_declared_builtin_block(StorageClassInput, execution.model);
+		emit_declared_builtin_block(StorageClass::Input, execution.model);
 	}
 	else
 	{
 		// Need to redeclare clip/cull distance with explicit size to use them.
 		// SPIR-V mandates these builtins have a size declared.
-		const char *storage = execution.model == ExecutionModelFragment ? "in" : "out";
+		const char *storage = execution.model == ExecutionModel::Fragment ? "in" : "out";
 		if (clip_distance_count != 0)
 			statement(storage, " float gl_ClipDistance[", clip_distance_count, "];");
 		if (cull_distance_count != 0)
@@ -3698,7 +3698,7 @@ void CompilerGLSL::emit_resources()
 
 	bool emitted = false;
 
-	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
+	if (ir.addressing_model == AddressingModel::PhysicalStorageBuffer64)
 	{
 		// Output buffer reference block forward declarations.
 		ir.for_each_typed_id<SPIRType>([&](uint32_t id, SPIRType &type)
@@ -3753,7 +3753,7 @@ void CompilerGLSL::emit_resources()
 					if (!options.vulkan_semantics && c.specialization)
 					{
 						c.specialization_constant_macro_name =
-						    constant_value_macro_name(get_decoration(c.self, DecorationSpecId));
+						    constant_value_macro_name(get_decoration(c.self, Decoration::SpecId));
 					}
 					emit_constant(c);
 					emitted = true;
@@ -3769,14 +3769,14 @@ void CompilerGLSL::emit_resources()
 				auto *type = &id.get<SPIRType>();
 
 				bool is_natural_struct = type->basetype == SPIRType::Struct && type->array.empty() && !type->pointer &&
-				                         (!has_decoration(type->self, DecorationBlock) &&
-				                          !has_decoration(type->self, DecorationBufferBlock));
+				                         (!has_decoration(type->self, Decoration::Block) &&
+				                          !has_decoration(type->self, Decoration::BufferBlock));
 
 				// Special case, ray payload and hit attribute blocks are not really blocks, just regular structs.
 				if (type->basetype == SPIRType::Struct && type->pointer &&
-				    has_decoration(type->self, DecorationBlock) &&
-				    (type->storage == StorageClassRayPayloadKHR || type->storage == StorageClassIncomingRayPayloadKHR ||
-				     type->storage == StorageClassHitAttributeKHR))
+				    has_decoration(type->self, Decoration::Block) &&
+				    (type->storage == StorageClass::RayPayloadKHR || type->storage == StorageClass::IncomingRayPayloadKHR ||
+				     type->storage == StorageClass::HitAttributeKHR))
 				{
 					type = &get<SPIRType>(type->parent_type);
 					is_natural_struct = true;
@@ -3820,8 +3820,8 @@ void CompilerGLSL::emit_resources()
 	// If we needed to declare work group size late, check here.
 	// If the work group size depends on a specialization constant, we need to declare the layout() block
 	// after constants (and their macros) have been declared.
-	if (execution.model == ExecutionModelGLCompute && !options.vulkan_semantics &&
-	    (execution.workgroup_size.constant != 0 || execution.flags.get(ExecutionModeLocalSizeId)))
+	if (execution.model == ExecutionModel::GLCompute && !options.vulkan_semantics &&
+	    (execution.workgroup_size.constant != 0 || execution.flags.get(static_cast<uint32_t>(ExecutionMode::LocalSizeId))))
 	{
 		SpecializationConstant wg_x, wg_y, wg_z;
 		get_work_group_size_specialization_constants(wg_x, wg_y, wg_z);
@@ -3837,7 +3837,7 @@ void CompilerGLSL::emit_resources()
 
 	emitted = false;
 
-	if (ir.addressing_model == AddressingModelPhysicalStorageBuffer64)
+	if (ir.addressing_model == AddressingModel::PhysicalStorageBuffer64)
 	{
 		// Output buffer reference blocks.
 		// Buffer reference blocks can reference themselves to support things like linked lists.
@@ -3854,12 +3854,12 @@ void CompilerGLSL::emit_resources()
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
 
-		bool is_block_storage = type.storage == StorageClassStorageBuffer || type.storage == StorageClassUniform ||
-		                        type.storage == StorageClassShaderRecordBufferKHR;
-		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-		                       ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+		bool is_block_storage = type.storage == StorageClass::StorageBuffer || type.storage == StorageClass::Uniform ||
+		                        type.storage == StorageClass::ShaderRecordBufferKHR;
+		bool has_block_flags = ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::Block)) ||
+		                       ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::BufferBlock));
 
-		if (var.storage != StorageClassFunction && type.pointer && is_block_storage && !is_hidden_variable(var) &&
+		if (var.storage != StorageClass::Function && type.pointer && is_block_storage && !is_hidden_variable(var) &&
 		    has_block_flags)
 		{
 			emit_buffer_block(var);
@@ -3869,7 +3869,7 @@ void CompilerGLSL::emit_resources()
 	// Output push constant blocks
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 		auto &type = this->get<SPIRType>(var.basetype);
-		if (var.storage != StorageClassFunction && type.pointer && type.storage == StorageClassPushConstant &&
+		if (var.storage != StorageClass::Function && type.pointer && type.storage == StorageClass::PushConstant &&
 		    !is_hidden_variable(var))
 		{
 			emit_push_constant_block(var);
@@ -3886,18 +3886,18 @@ void CompilerGLSL::emit_resources()
 		if (skip_separate_image_sampler)
 		{
 			// Sampler buffers are always used without a sampler, and they will also work in regular GL.
-			bool sampler_buffer = type.basetype == SPIRType::Image && type.image.dim == DimBuffer;
+			bool sampler_buffer = type.basetype == SPIRType::Image && type.image.dim == Dim::Buffer;
 			bool separate_image = type.basetype == SPIRType::Image && type.image.sampled == 1;
 			bool separate_sampler = type.basetype == SPIRType::Sampler;
 			if (!sampler_buffer && (separate_image || separate_sampler))
 				return;
 		}
 
-		if (var.storage != StorageClassFunction && type.pointer &&
-		    (type.storage == StorageClassUniformConstant || type.storage == StorageClassAtomicCounter ||
-		     type.storage == StorageClassRayPayloadKHR || type.storage == StorageClassIncomingRayPayloadKHR ||
-		     type.storage == StorageClassCallableDataKHR || type.storage == StorageClassIncomingCallableDataKHR ||
-		     type.storage == StorageClassHitAttributeKHR) &&
+		if (var.storage != StorageClass::Function && type.pointer &&
+		    (type.storage == StorageClass::UniformConstant || type.storage == StorageClass::AtomicCounter ||
+		     type.storage == StorageClass::RayPayloadKHR || type.storage == StorageClass::IncomingRayPayloadKHR ||
+		     type.storage == StorageClass::CallableDataKHR || type.storage == StorageClass::IncomingCallableDataKHR ||
+		     type.storage == StorageClass::HitAttributeKHR) &&
 		    !is_hidden_variable(var))
 		{
 			emit_uniform(var);
@@ -3918,17 +3918,17 @@ void CompilerGLSL::emit_resources()
 		bool is_hidden = is_hidden_variable(var);
 
 		// Unused output I/O variables might still be required to implement framebuffer fetch.
-		if (var.storage == StorageClassOutput && !is_legacy() &&
-		    location_is_framebuffer_fetch(get_decoration(var.self, DecorationLocation)) != 0)
+		if (var.storage == StorageClass::Output && !is_legacy() &&
+		    location_is_framebuffer_fetch(get_decoration(var.self, Decoration::Location)) != 0)
 		{
 			is_hidden = false;
 		}
 
-		if (var.storage != StorageClassFunction && type.pointer &&
-		    (var.storage == StorageClassInput || var.storage == StorageClassOutput) &&
+		if (var.storage != StorageClass::Function && type.pointer &&
+		    (var.storage == StorageClass::Input || var.storage == StorageClass::Output) &&
 		    interface_variable_exists_in_entry_point(var.self) && !is_hidden)
 		{
-			if (options.es && get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput &&
+			if (options.es && get_execution_model() == ExecutionModel::Vertex && var.storage == StorageClass::Input &&
 			    type.array.size() == 1)
 			{
 				SPIRV_CROSS_THROW("OpenGL ES doesn't support array input variables in vertex shader.");
@@ -3938,7 +3938,7 @@ void CompilerGLSL::emit_resources()
 		}
 		else if (is_builtin_variable(var))
 		{
-			auto builtin = BuiltIn(get_decoration(var.self, DecorationBuiltIn));
+			auto builtin = BuiltIn(get_decoration(var.self, Decoration::BuiltIn));
 			// For gl_InstanceIndex emulation on GLES, the API user needs to
 			// supply this uniform.
 
@@ -3946,8 +3946,8 @@ void CompilerGLSL::emit_resources()
 			if (!options.vulkan_semantics)
 			{
 				if (!emitted_base_instance &&
-				    ((options.vertex.support_nonzero_base_instance && builtin == BuiltInInstanceIndex) ||
-				     (builtin == BuiltInBaseInstance)))
+				    ((options.vertex.support_nonzero_base_instance && builtin == BuiltIn::InstanceIndex) ||
+				     (builtin == BuiltIn::BaseInstance)))
 				{
 					statement("#ifdef GL_ARB_shader_draw_parameters");
 					statement("#define SPIRV_Cross_BaseInstance gl_BaseInstanceARB");
@@ -3958,7 +3958,7 @@ void CompilerGLSL::emit_resources()
 					emitted = true;
 					emitted_base_instance = true;
 				}
-				else if (builtin == BuiltInBaseVertex)
+				else if (builtin == BuiltIn::BaseVertex)
 				{
 					statement("#ifdef GL_ARB_shader_draw_parameters");
 					statement("#define SPIRV_Cross_BaseVertex gl_BaseVertexARB");
@@ -3967,7 +3967,7 @@ void CompilerGLSL::emit_resources()
 					statement("uniform int SPIRV_Cross_BaseVertex;");
 					statement("#endif");
 				}
-				else if (builtin == BuiltInDrawIndex)
+				else if (builtin == BuiltIn::DrawIndex)
 				{
 					statement("#ifndef GL_ARB_shader_draw_parameters");
 					// Cannot really be worked around.
@@ -3985,14 +3985,14 @@ void CompilerGLSL::emit_resources()
 		if (is_hidden_variable(var, true))
 			continue;
 
-		if (var.storage != StorageClassOutput)
+		if (var.storage != StorageClass::Output)
 		{
 			if (!variable_is_lut(var))
 			{
 				add_resource_name(var.self);
 
 				string initializer;
-				if (options.force_zero_initialized_variables && var.storage == StorageClassPrivate &&
+				if (options.force_zero_initialized_variables && var.storage == StorageClass::Private &&
 				    !var.initializer && !var.static_expression && type_can_zero_initialize(get_variable_data_type(var)))
 				{
 					initializer = join(" = ", to_zero_initialized_expression(get_variable_data_type_id(var)));
@@ -4014,12 +4014,12 @@ void CompilerGLSL::emit_resources()
 
 void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 {
-	// If a StorageClassOutput variable has an initializer, we need to initialize it in main().
+	// If a StorageClass::Output variable has an initializer, we need to initialize it in main().
 	auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
 	auto &type = get<SPIRType>(var.basetype);
-	bool is_patch = has_decoration(var.self, DecorationPatch);
-	bool is_block = has_decoration(type.self, DecorationBlock);
-	bool is_control_point = get_execution_model() == ExecutionModelTessellationControl && !is_patch;
+	bool is_patch = has_decoration(var.self, Decoration::Patch);
+	bool is_block = has_decoration(type.self, Decoration::Block);
+	bool is_control_point = get_execution_model() == ExecutionModel::TessellationControl && !is_patch;
 
 	if (is_block)
 	{
@@ -4034,13 +4034,13 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 		for (uint32_t i = 0; i < member_count; i++)
 		{
 			// These outputs might not have been properly declared, so don't initialize them in that case.
-			if (has_member_decoration(type.self, i, DecorationBuiltIn))
+			if (has_member_decoration(type.self, i, Decoration::BuiltIn))
 			{
-				if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInCullDistance &&
+				if (get_member_decoration(type.self, i, Decoration::BuiltIn) == static_cast<uint32_t>(BuiltIn::CullDistance) &&
 				    !cull_distance_count)
 					continue;
 
-				if (get_member_decoration(type.self, i, DecorationBuiltIn) == BuiltInClipDistance &&
+				if (get_member_decoration(type.self, i, Decoration::BuiltIn) == static_cast<uint32_t>(BuiltIn::ClipDistance) &&
 				    !clip_distance_count)
 					continue;
 			}
@@ -4055,7 +4055,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 				auto &member_type = get<SPIRType>(member_type_id);
 				auto array_type = member_type;
 				array_type.parent_type = member_type_id;
-				array_type.op = OpTypeArray;
+				array_type.op = Op::OpTypeArray;
 				array_type.array.push_back(array_size);
 				array_type.array_size_literal.push_back(true);
 
@@ -4079,10 +4079,10 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 					if (is_control_point)
 					{
 						uint32_t ids = ir.increase_bound_by(3);
-						auto &uint_type = set<SPIRType>(ids, OpTypeInt);
+						auto &uint_type = set<SPIRType>(ids, Op::OpTypeInt);
 						uint_type.basetype = SPIRType::UInt;
 						uint_type.width = 32;
-						set<SPIRExpression>(ids + 1, builtin_to_glsl(BuiltInInvocationId, StorageClassInput), ids, true);
+						set<SPIRExpression>(ids + 1, builtin_to_glsl(BuiltIn::InvocationId, StorageClass::Input), ids, true);
 						set<SPIRConstant>(ids + 2, ids, i, false);
 						invocation_id = ids + 1;
 						member_index_id = ids + 2;
@@ -4104,7 +4104,7 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 					{
 						uint32_t indices[2] = { invocation_id, member_index_id };
 						auto chain = access_chain_internal(var.self, indices, 2, 0, &meta);
-						statement(chain, " = ", lut_name, "[", builtin_to_glsl(BuiltInInvocationId, StorageClassInput), "];");
+						statement(chain, " = ", lut_name, "[", builtin_to_glsl(BuiltIn::InvocationId, StorageClass::Input), "];");
 					}
 					else
 					{
@@ -4128,8 +4128,8 @@ void CompilerGLSL::emit_output_variable_initializer(const SPIRVariable &var)
 			statement(to_expression(var.self), "[gl_InvocationID] = ", lut_name, "[gl_InvocationID];");
 		});
 	}
-	else if (has_decoration(var.self, DecorationBuiltIn) &&
-	         BuiltIn(get_decoration(var.self, DecorationBuiltIn)) == BuiltInSampleMask)
+	else if (has_decoration(var.self, Decoration::BuiltIn) &&
+	         static_cast<spv::BuiltIn>(get_decoration(var.self, Decoration::BuiltIn)) == spv::BuiltIn::SampleMask)
 	{
 		// We cannot copy the array since gl_SampleMask is unsized in GLSL. Unroll time! <_<
 		entry_func.fixup_hooks_in.push_back([&] {
@@ -4166,15 +4166,15 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 	std::string result;
 	switch (group_op)
 	{
-	case GroupOperationReduce:
+	case GroupOperation::Reduce:
 		result = "reduction";
 		break;
 
-	case GroupOperationExclusiveScan:
+	case GroupOperation::ExclusiveScan:
 		result = "excl_scan";
 		break;
 
-	case GroupOperationInclusiveScan:
+	case GroupOperation::InclusiveScan:
 		result = "incl_scan";
 		break;
 
@@ -4191,7 +4191,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 	std::vector<TypeInfo> type_infos;
 	switch (op)
 	{
-	case OpGroupNonUniformIAdd:
+	case Op::OpGroupNonUniformIAdd:
 	{
 		type_infos.emplace_back(TypeInfo{ "uint", "0u" });
 		type_infos.emplace_back(TypeInfo{ "uvec2", "uvec2(0u)" });
@@ -4204,7 +4204,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		break;
 	}
 
-	case OpGroupNonUniformFAdd:
+	case Op::OpGroupNonUniformFAdd:
 	{
 		type_infos.emplace_back(TypeInfo{ "float", "0.0f" });
 		type_infos.emplace_back(TypeInfo{ "vec2", "vec2(0.0f)" });
@@ -4218,7 +4218,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		break;
 	}
 
-	case OpGroupNonUniformIMul:
+	case Op::OpGroupNonUniformIMul:
 	{
 		type_infos.emplace_back(TypeInfo{ "uint", "1u" });
 		type_infos.emplace_back(TypeInfo{ "uvec2", "uvec2(1u)" });
@@ -4231,7 +4231,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		break;
 	}
 
-	case OpGroupNonUniformFMul:
+	case Op::OpGroupNonUniformFMul:
 	{
 		type_infos.emplace_back(TypeInfo{ "float", "1.0f" });
 		type_infos.emplace_back(TypeInfo{ "vec2", "vec2(1.0f)" });
@@ -4248,8 +4248,8 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		SPIRV_CROSS_THROW("Unsupported workaround for arithmetic group operation");
 	}
 
-	const bool op_is_addition = op == OpGroupNonUniformIAdd || op == OpGroupNonUniformFAdd;
-	const bool op_is_multiplication = op == OpGroupNonUniformIMul || op == OpGroupNonUniformFMul;
+	const bool op_is_addition = op == Op::OpGroupNonUniformIAdd || op == Op::OpGroupNonUniformFAdd;
+	const bool op_is_multiplication = op == Op::OpGroupNonUniformIMul || op == Op::OpGroupNonUniformFMul;
 	std::string op_symbol;
 	if (op_is_addition)
 	{
@@ -4273,11 +4273,11 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		statement("for (uint i = 1u; i <= total; i <<= 1u)");
 		begin_scope();
 		statement("bool valid;");
-		if (group_op == GroupOperationReduce)
+		if (group_op == GroupOperation::Reduce)
 		{
 			statement(t.type, " s = shuffleXorNV(", result, ", i, gl_SubgroupSize, valid);");
 		}
-		else if (group_op == GroupOperationExclusiveScan || group_op == GroupOperationInclusiveScan)
+		else if (group_op == GroupOperation::ExclusiveScan || group_op == GroupOperation::InclusiveScan)
 		{
 			statement(t.type, " s = shuffleUpNV(", result, ", i, gl_SubgroupSize, valid);");
 		}
@@ -4286,7 +4286,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 			statement(result, " ", op_symbol, " valid ? s : ", t.identity, ";");
 		}
 		end_scope();
-		if (group_op == GroupOperationExclusiveScan)
+		if (group_op == GroupOperation::ExclusiveScan)
 		{
 			statement(result, " = shuffleUpNV(", result, ", 1u, gl_SubgroupSize);");
 			statement("if (subgroupElect())");
@@ -4297,11 +4297,11 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		end_scope();
 		statement("else");
 		begin_scope();
-		if (group_op == GroupOperationExclusiveScan)
+		if (group_op == GroupOperation::ExclusiveScan)
 		{
 			statement("uint total = subgroupBallotBitCount(gl_SubgroupLtMask);");
 		}
-		else if (group_op == GroupOperationInclusiveScan)
+		else if (group_op == GroupOperation::InclusiveScan)
 		{
 			statement("uint total = subgroupBallotBitCount(gl_SubgroupLeMask);");
 		}
@@ -4309,7 +4309,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 		begin_scope();
 		statement("bool valid = subgroupBallotBitExtract(active_threads, i);");
 		statement(t.type, " s = shuffleNV(v, i, gl_SubgroupSize);");
-		if (group_op == GroupOperationExclusiveScan || group_op == GroupOperationInclusiveScan)
+		if (group_op == GroupOperation::ExclusiveScan || group_op == GroupOperation::InclusiveScan)
 		{
 			statement("valid = valid && (i < total);");
 		}
@@ -4643,7 +4643,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 
 		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupMemBarrier))
 		{
-			if (model == spv::ExecutionModelGLCompute)
+			if (model == spv::ExecutionModel::GLCompute)
 			{
 				statement("#ifndef GL_KHR_shader_subgroup_basic");
 				statement("void subgroupMemoryBarrier() { groupMemoryBarrier(); }");
@@ -4753,31 +4753,31 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 			}
 		};
 
-		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddReduce, "subgroupAdd", OpGroupNonUniformIAdd,
-		                          GroupOperationReduce);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddReduce, "subgroupAdd", Op::OpGroupNonUniformIAdd,
+		                          GroupOperation::Reduce);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddExclusiveScan, "subgroupExclusiveAdd",
-		                          OpGroupNonUniformIAdd, GroupOperationExclusiveScan);
+		                          Op::OpGroupNonUniformIAdd, GroupOperation::ExclusiveScan);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticIAddInclusiveScan, "subgroupInclusiveAdd",
-		                          OpGroupNonUniformIAdd, GroupOperationInclusiveScan);
-		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddReduce, "subgroupAdd", OpGroupNonUniformFAdd,
-		                          GroupOperationReduce);
+		                          Op::OpGroupNonUniformIAdd, GroupOperation::InclusiveScan);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddReduce, "subgroupAdd", Op::OpGroupNonUniformFAdd,
+		                          GroupOperation::Reduce);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddExclusiveScan, "subgroupExclusiveAdd",
-		                          OpGroupNonUniformFAdd, GroupOperationExclusiveScan);
+		                          Op::OpGroupNonUniformFAdd, GroupOperation::ExclusiveScan);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticFAddInclusiveScan, "subgroupInclusiveAdd",
-		                          OpGroupNonUniformFAdd, GroupOperationInclusiveScan);
+		                          Op::OpGroupNonUniformFAdd, GroupOperation::InclusiveScan);
 
-		arithmetic_feature_helper(Supp::SubgroupArithmeticIMulReduce, "subgroupMul", OpGroupNonUniformIMul,
-		                          GroupOperationReduce);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticIMulReduce, "subgroupMul", Op::OpGroupNonUniformIMul,
+		                          GroupOperation::Reduce);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticIMulExclusiveScan, "subgroupExclusiveMul",
-		                          OpGroupNonUniformIMul, GroupOperationExclusiveScan);
+		                          Op::OpGroupNonUniformIMul, GroupOperation::ExclusiveScan);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticIMulInclusiveScan, "subgroupInclusiveMul",
-		                          OpGroupNonUniformIMul, GroupOperationInclusiveScan);
-		arithmetic_feature_helper(Supp::SubgroupArithmeticFMulReduce, "subgroupMul", OpGroupNonUniformFMul,
-		                          GroupOperationReduce);
+		                          Op::OpGroupNonUniformIMul, GroupOperation::InclusiveScan);
+		arithmetic_feature_helper(Supp::SubgroupArithmeticFMulReduce, "subgroupMul", Op::OpGroupNonUniformFMul,
+		                          GroupOperation::Reduce);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticFMulExclusiveScan, "subgroupExclusiveMul",
-		                          OpGroupNonUniformFMul, GroupOperationExclusiveScan);
+		                          Op::OpGroupNonUniformFMul, GroupOperation::ExclusiveScan);
 		arithmetic_feature_helper(Supp::SubgroupArithmeticFMulInclusiveScan, "subgroupInclusiveMul",
-		                          OpGroupNonUniformFMul, GroupOperationInclusiveScan);
+		                          Op::OpGroupNonUniformFMul, GroupOperation::InclusiveScan);
 	}
 
 	if (!workaround_ubo_load_overload_types.empty())
@@ -5087,7 +5087,7 @@ uint32_t CompilerGLSL::consume_temporary_in_precision_context(uint32_t type_id, 
 		return id;
 	}
 
-	auto current_precision = has_decoration(id, DecorationRelaxedPrecision) ? Options::Mediump : Options::Highp;
+	auto current_precision = has_decoration(id, Decoration::RelaxedPrecision) ? Options::Mediump : Options::Highp;
 	if (current_precision == precision)
 		return id;
 
@@ -5102,12 +5102,12 @@ uint32_t CompilerGLSL::consume_temporary_in_precision_context(uint32_t type_id, 
 		const char *prefix;
 		if (precision == Options::Mediump)
 		{
-			set_decoration(alias_id, DecorationRelaxedPrecision);
+			set_decoration(alias_id, Decoration::RelaxedPrecision);
 			prefix = "mp_copy_";
 		}
 		else
 		{
-			unset_decoration(alias_id, DecorationRelaxedPrecision);
+			unset_decoration(alias_id, Decoration::RelaxedPrecision);
 			prefix = "hp_copy_";
 		}
 
@@ -5382,7 +5382,7 @@ string CompilerGLSL::to_rerolled_array_expression(const SPIRType &parent_type,
 	                        type.basetype == SPIRType::Boolean &&
 	                        backend.boolean_in_struct_remapped_type != SPIRType::Boolean;
 
-	SPIRType tmp_type { OpNop };
+	SPIRType tmp_type { Op::OpNop };
 	if (remapped_boolean)
 	{
 		tmp_type = get<SPIRType>(type.parent_type);
@@ -5473,7 +5473,7 @@ string CompilerGLSL::to_non_uniform_aware_expression(uint32_t id)
 {
 	string expr = to_expression(id);
 
-	if (has_decoration(id, DecorationNonUniform))
+	if (has_decoration(id, Decoration::NonUniform))
 		convert_non_uniform_expression(expr, id);
 
 	return expr;
@@ -5529,7 +5529,7 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 			// when consuming an access chain expression.
 			uint32_t physical_type_id = get_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID);
 			bool is_packed = has_extended_decoration(id, SPIRVCrossDecorationPhysicalTypePacked);
-			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			bool relaxed = has_decoration(id, Decoration::RelaxedPrecision);
 			return convert_row_major_matrix(e.expression, get<SPIRType>(e.expression_type), physical_type_id,
 			                                is_packed, relaxed);
 		}
@@ -5557,8 +5557,8 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 		auto &type = get<SPIRType>(c.constant_type);
 
 		// WorkGroupSize may be a constant.
-		if (has_decoration(c.self, DecorationBuiltIn))
-			return builtin_to_glsl(BuiltIn(get_decoration(c.self, DecorationBuiltIn)), StorageClassGeneric);
+		if (has_decoration(c.self, Decoration::BuiltIn))
+			return builtin_to_glsl(BuiltIn(get_decoration(c.self, Decoration::BuiltIn)), StorageClass::Generic);
 		else if (c.specialization)
 		{
 			if (backend.workgroup_size_is_hidden)
@@ -5566,7 +5566,7 @@ string CompilerGLSL::to_expression(uint32_t id, bool register_expression_read)
 				int wg_index = get_constant_mapping_to_workgroup_component(c);
 				if (wg_index >= 0)
 				{
-					auto wg_size = join(builtin_to_glsl(BuiltInWorkgroupSize, StorageClassInput), vector_swizzle(1, wg_index));
+					auto wg_size = join(builtin_to_glsl(BuiltIn::WorkgroupSize, StorageClass::Input), vector_swizzle(1, wg_index));
 					if (type.basetype != SPIRType::UInt)
 						wg_size = bitcast_expression(type, SPIRType::UInt, wg_size);
 					return wg_size;
@@ -5734,20 +5734,20 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	// TODO: Find a clean way to reuse emit_instruction.
 	switch (cop.opcode)
 	{
-	case OpSConvert:
-	case OpUConvert:
-	case OpFConvert:
+	case Op::OpSConvert:
+	case Op::OpUConvert:
+	case Op::OpFConvert:
 		op = type_to_glsl_constructor(type);
 		break;
 
 #define GLSL_BOP(opname, x) \
-	case Op##opname:        \
+	case Op::Op##opname:        \
 		binary = true;      \
 		op = x;             \
 		break
 
 #define GLSL_UOP(opname, x) \
-	case Op##opname:        \
+	case Op::Op##opname:        \
 		unary = true;       \
 		op = x;             \
 		break
@@ -5783,7 +5783,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		GLSL_BOP(UGreaterThanEqual, ">=");
 		GLSL_BOP(SGreaterThanEqual, ">=");
 
-	case OpSRem:
+	case Op::OpSRem:
 	{
 		uint32_t op0 = cop.arguments[0];
 		uint32_t op1 = cop.arguments[1];
@@ -5791,7 +5791,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		                 to_enclosed_expression(op0), " / ", to_enclosed_expression(op1), ")");
 	}
 
-	case OpSelect:
+	case Op::OpSelect:
 	{
 		if (cop.arguments.size() < 3)
 			SPIRV_CROSS_THROW("Not enough arguments to OpSpecConstantOp.");
@@ -5813,7 +5813,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		break;
 	}
 
-	case OpVectorShuffle:
+	case Op::OpVectorShuffle:
 	{
 		string expr = type_to_glsl_constructor(type);
 		expr += "(";
@@ -5849,7 +5849,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		return expr;
 	}
 
-	case OpCompositeExtract:
+	case Op::OpCompositeExtract:
 	{
 		// Trivial vector extracts (of WorkGroupSize typically),
 		// punch through to the input spec constant if the composite is used as array size.
@@ -5870,7 +5870,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		return expr;
 	}
 
-	case OpCompositeInsert:
+	case Op::OpCompositeInsert:
 	{
 		SmallVector<ConstantID> new_init = get_composite_constant_ids(cop.arguments[1]);
 		uint32_t idx;
@@ -5902,7 +5902,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 	}
 
 	uint32_t bit_width = 0;
-	if (unary || binary || cop.opcode == OpSConvert || cop.opcode == OpUConvert)
+	if (unary || binary || cop.opcode == Op::OpSConvert || cop.opcode == Op::OpUConvert)
 		bit_width = expression_type(cop.arguments[0]).width;
 
 	SPIRType::BaseType input_type;
@@ -5910,31 +5910,31 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 
 	switch (cop.opcode)
 	{
-	case OpIEqual:
-	case OpINotEqual:
+	case Op::OpIEqual:
+	case Op::OpINotEqual:
 		input_type = to_signed_basetype(bit_width);
 		break;
 
-	case OpSLessThan:
-	case OpSLessThanEqual:
-	case OpSGreaterThan:
-	case OpSGreaterThanEqual:
-	case OpSMod:
-	case OpSDiv:
-	case OpShiftRightArithmetic:
-	case OpSConvert:
-	case OpSNegate:
+	case Op::OpSLessThan:
+	case Op::OpSLessThanEqual:
+	case Op::OpSGreaterThan:
+	case Op::OpSGreaterThanEqual:
+	case Op::OpSMod:
+	case Op::OpSDiv:
+	case Op::OpShiftRightArithmetic:
+	case Op::OpSConvert:
+	case Op::OpSNegate:
 		input_type = to_signed_basetype(bit_width);
 		break;
 
-	case OpULessThan:
-	case OpULessThanEqual:
-	case OpUGreaterThan:
-	case OpUGreaterThanEqual:
-	case OpUMod:
-	case OpUDiv:
-	case OpShiftRightLogical:
-	case OpUConvert:
+	case Op::OpULessThan:
+	case Op::OpULessThanEqual:
+	case Op::OpUGreaterThan:
+	case Op::OpUGreaterThanEqual:
+	case Op::OpUMod:
+	case Op::OpUDiv:
+	case Op::OpShiftRightLogical:
+	case Op::OpUConvert:
 		input_type = to_unsigned_basetype(bit_width);
 		break;
 
@@ -5976,7 +5976,7 @@ string CompilerGLSL::constant_op_expression(const SPIRConstantOp &cop)
 		// Works around various casting scenarios in glslang as there is no OpBitcast for specialization constants.
 		return join("(", op, bitcast_glsl(type, cop.arguments[0]), ")");
 	}
-	else if (cop.opcode == OpSConvert || cop.opcode == OpUConvert)
+	else if (cop.opcode == Op::OpSConvert || cop.opcode == Op::OpUConvert)
 	{
 		if (cop.arguments.size() < 1)
 			SPIRV_CROSS_THROW("Not enough arguments to OpSpecConstantOp.");
@@ -6014,9 +6014,9 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		require_extension_internal("GL_EXT_null_initializer");
 		return backend.constant_null_initializer;
 	}
-	else if (c.replicated && type.op != spv::OpTypeArray)
+	else if (c.replicated && type.op != spv::Op::OpTypeArray)
 	{
-		if (type.op == spv::OpTypeMatrix)
+		if (type.op == spv::Op::OpTypeMatrix)
 		{
 			uint32_t num_elements = type.columns;
 			// GLSL does not allow the replication constructor for matrices
@@ -6063,7 +6063,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		         is_array(type) && !array_type_decays)
 		{
 			const auto *p_type = &type;
-			SPIRType tmp_type { OpNop };
+			SPIRType tmp_type { Op::OpNop };
 
 			if (inside_struct_scope &&
 			    backend.boolean_in_struct_remapped_type != SPIRType::Boolean &&
@@ -6117,7 +6117,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 						// When we get down to emitting struct members, override the block-like information.
 						// For constants, we can freely mix and match block-like state.
 						inside_block_like_struct_scope =
-						    has_member_decoration(type.self, subconstant_index, DecorationOffset);
+						    has_member_decoration(type.self, subconstant_index, Decoration::Offset);
 					}
 
 					if (type.basetype == SPIRType::Struct)
@@ -6151,7 +6151,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		else
 			return join(type_to_glsl(type), "(0)");
 	}
-	else if (c.columns() == 1 && type.op != spv::OpTypeCooperativeMatrixKHR)
+	else if (c.columns() == 1 && type.op != spv::Op::OpTypeCooperativeMatrixKHR)
 	{
 		auto res = constant_expression_vector(c, 0);
 
@@ -6209,7 +6209,7 @@ string CompilerGLSL::convert_floate4m3_to_string(const SPIRConstant &c, uint32_t
 	// There is no infinity in e4m3.
 	if (std::isnan(float_value))
 	{
-		SPIRType type { OpTypeFloat };
+		SPIRType type { Op::OpTypeFloat };
 		type.basetype = SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
@@ -6217,7 +6217,7 @@ string CompilerGLSL::convert_floate4m3_to_string(const SPIRConstant &c, uint32_t
 	}
 	else
 	{
-		SPIRType type { OpTypeFloat };
+		SPIRType type { Op::OpTypeFloat };
 		type.basetype = SPIRType::FloatE4M3;
 		type.vecsize = 1;
 		type.columns = 1;
@@ -6237,7 +6237,7 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 	// of complicated workarounds, just value-cast to the half type always.
 	if (std::isnan(float_value) || std::isinf(float_value))
 	{
-		SPIRType type { OpTypeFloat };
+		SPIRType type { Op::OpTypeFloat };
 		type.basetype = is_bfloat8 ? SPIRType::FloatE5M2 : SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
@@ -6253,7 +6253,7 @@ string CompilerGLSL::convert_half_to_string(const SPIRConstant &c, uint32_t col,
 	}
 	else
 	{
-		SPIRType type { OpTypeFloat };
+		SPIRType type { Op::OpTypeFloat };
 		type.basetype = is_bfloat8 ? SPIRType::FloatE5M2 : SPIRType::Half;
 		type.vecsize = 1;
 		type.columns = 1;
@@ -6275,8 +6275,8 @@ string CompilerGLSL::convert_float_to_string(const SPIRConstant &c, uint32_t col
 		// Use special representation.
 		if (!is_legacy())
 		{
-			SPIRType out_type { OpTypeFloat };
-			SPIRType in_type { OpTypeInt };
+			SPIRType out_type { Op::OpTypeFloat };
+			SPIRType in_type { Op::OpTypeInt };
 			out_type.basetype = SPIRType::Float;
 			in_type.basetype = SPIRType::UInt;
 			out_type.vecsize = 1;
@@ -6348,8 +6348,8 @@ std::string CompilerGLSL::convert_double_to_string(const SPIRConstant &c, uint32
 		// Use special representation.
 		if (!is_legacy())
 		{
-			SPIRType out_type { OpTypeFloat };
-			SPIRType in_type { OpTypeInt };
+			SPIRType out_type { Op::OpTypeFloat };
+			SPIRType in_type { Op::OpTypeInt };
 			out_type.basetype = SPIRType::Double;
 			in_type.basetype = SPIRType::UInt64;
 			out_type.vecsize = 1;
@@ -7439,7 +7439,7 @@ void CompilerGLSL::emit_bitfield_insert_op(uint32_t result_type, uint32_t result
 	auto op3_expr = to_unpacked_expression(op3);
 
 	assert(offset_count_type == SPIRType::UInt || offset_count_type == SPIRType::Int);
-	SPIRType target_type { OpTypeInt };
+	SPIRType target_type { Op::OpTypeInt };
 	target_type.width = 32;
 	target_type.vecsize = 1;
 	target_type.basetype = offset_count_type;
@@ -7470,29 +7470,29 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	const char *type;
 	switch (imgtype.image.dim)
 	{
-	case spv::Dim1D:
+	case spv::Dim::Dim1D:
 		// Force 2D path for ES.
 		if (options.es)
 			type = (imgtype.image.arrayed && !options.es) ? "2DArray" : "2D";
 		else
 			type = (imgtype.image.arrayed && !options.es) ? "1DArray" : "1D";
 		break;
-	case spv::Dim2D:
+	case spv::Dim::Dim2D:
 		type = (imgtype.image.arrayed && !options.es) ? "2DArray" : "2D";
 		break;
-	case spv::Dim3D:
+	case spv::Dim::Dim3D:
 		type = "3D";
 		break;
-	case spv::DimCube:
+	case spv::Dim::Cube:
 		type = "Cube";
 		break;
-	case spv::DimRect:
+	case spv::Dim::Rect:
 		type = "2DRect";
 		break;
-	case spv::DimBuffer:
+	case spv::Dim::Buffer:
 		type = "Buffer";
 		break;
-	case spv::DimSubpassData:
+	case spv::Dim::SubpassData:
 		type = "2D";
 		break;
 	default:
@@ -7505,7 +7505,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	bool legacy_lod_ext = false;
 	auto &execution = get_entry_point();
 	if (op == "textureGrad" || op == "textureProjGrad" ||
-	    ((op == "textureLod" || op == "textureProjLod") && execution.model != ExecutionModelVertex))
+	    ((op == "textureLod" || op == "textureProjLod") && execution.model != ExecutionModel::Vertex))
 	{
 		if (is_legacy_es())
 		{
@@ -7535,7 +7535,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		else
 			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
 
-		if (imgtype.image.dim == spv::DimCube)
+		if (imgtype.image.dim == spv::Dim::Cube)
 			return "shadowCubeNV";
 	}
 
@@ -7806,29 +7806,29 @@ bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op, const uint32_t
 {
 	switch (op)
 	{
-	case OpGroupNonUniformElect:
-	case OpGroupNonUniformBallot:
-	case OpGroupNonUniformBallotFindLSB:
-	case OpGroupNonUniformBallotFindMSB:
-	case OpGroupNonUniformBroadcast:
-	case OpGroupNonUniformBroadcastFirst:
-	case OpGroupNonUniformAll:
-	case OpGroupNonUniformAny:
-	case OpGroupNonUniformAllEqual:
-	case OpControlBarrier:
-	case OpMemoryBarrier:
-	case OpGroupNonUniformBallotBitCount:
-	case OpGroupNonUniformBallotBitExtract:
-	case OpGroupNonUniformInverseBallot:
+	case Op::OpGroupNonUniformElect:
+	case Op::OpGroupNonUniformBallot:
+	case Op::OpGroupNonUniformBallotFindLSB:
+	case Op::OpGroupNonUniformBallotFindMSB:
+	case Op::OpGroupNonUniformBroadcast:
+	case Op::OpGroupNonUniformBroadcastFirst:
+	case Op::OpGroupNonUniformAll:
+	case Op::OpGroupNonUniformAny:
+	case Op::OpGroupNonUniformAllEqual:
+	case Op::OpControlBarrier:
+	case Op::OpMemoryBarrier:
+	case Op::OpGroupNonUniformBallotBitCount:
+	case Op::OpGroupNonUniformBallotBitExtract:
+	case Op::OpGroupNonUniformInverseBallot:
 		return true;
-	case OpGroupNonUniformIAdd:
-	case OpGroupNonUniformFAdd:
-	case OpGroupNonUniformIMul:
-	case OpGroupNonUniformFMul:
+	case Op::OpGroupNonUniformIAdd:
+	case Op::OpGroupNonUniformFAdd:
+	case Op::OpGroupNonUniformIMul:
+	case Op::OpGroupNonUniformFMul:
 	{
 		const GroupOperation operation = static_cast<GroupOperation>(ops[3]);
-		if (operation == GroupOperationReduce || operation == GroupOperationInclusiveScan ||
-		    operation == GroupOperationExclusiveScan)
+		if (operation == GroupOperation::Reduce || operation == GroupOperation::InclusiveScan ||
+		    operation == GroupOperation::ExclusiveScan)
 		{
 			return true;
 		}
@@ -7864,18 +7864,18 @@ static inline bool image_opcode_is_sample_no_dref(Op op)
 {
 	switch (op)
 	{
-	case OpImageSampleExplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjExplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageFetch:
-	case OpImageRead:
-	case OpImageSparseSampleExplicitLod:
-	case OpImageSparseSampleImplicitLod:
-	case OpImageSparseSampleProjExplicitLod:
-	case OpImageSparseSampleProjImplicitLod:
-	case OpImageSparseFetch:
-	case OpImageSparseRead:
+	case Op::OpImageSampleExplicitLod:
+	case Op::OpImageSampleImplicitLod:
+	case Op::OpImageSampleProjExplicitLod:
+	case Op::OpImageSampleProjImplicitLod:
+	case Op::OpImageFetch:
+	case Op::OpImageRead:
+	case Op::OpImageSparseSampleExplicitLod:
+	case Op::OpImageSparseSampleImplicitLod:
+	case Op::OpImageSparseSampleProjExplicitLod:
+	case Op::OpImageSparseSampleProjImplicitLod:
+	case Op::OpImageSparseFetch:
+	case Op::OpImageSparseRead:
 		return true;
 
 	default:
@@ -7949,10 +7949,10 @@ void CompilerGLSL::emit_texture_op(const Instruction &i, bool sparse)
 	// Do not register sparse ops as control dependent as they are always lowered to a temporary.
 	switch (op)
 	{
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
+	case Op::OpImageSampleDrefImplicitLod:
+	case Op::OpImageSampleImplicitLod:
+	case Op::OpImageSampleProjImplicitLod:
+	case Op::OpImageSampleProjDrefImplicitLod:
 		register_control_dependent_expression(id);
 		break;
 
@@ -7982,32 +7982,32 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	auto &result_type = get<SPIRType>(result_type_id);
 
 	inherited_expressions.push_back(coord);
-	if (has_decoration(img, DecorationNonUniform) && !maybe_get_backing_variable(img))
+	if (has_decoration(img, Decoration::NonUniform) && !maybe_get_backing_variable(img))
 		nonuniform_expression = true;
 
 	switch (op)
 	{
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleDrefExplicitLod:
-	case OpImageSparseSampleDrefImplicitLod:
-	case OpImageSparseSampleDrefExplicitLod:
+	case Op::OpImageSampleDrefImplicitLod:
+	case Op::OpImageSampleDrefExplicitLod:
+	case Op::OpImageSparseSampleDrefImplicitLod:
+	case Op::OpImageSparseSampleDrefExplicitLod:
 		dref = ops[4];
 		opt = &ops[5];
 		length -= 5;
 		break;
 
-	case OpImageSampleProjDrefImplicitLod:
-	case OpImageSampleProjDrefExplicitLod:
-	case OpImageSparseSampleProjDrefImplicitLod:
-	case OpImageSparseSampleProjDrefExplicitLod:
+	case Op::OpImageSampleProjDrefImplicitLod:
+	case Op::OpImageSampleProjDrefExplicitLod:
+	case Op::OpImageSparseSampleProjDrefImplicitLod:
+	case Op::OpImageSparseSampleProjDrefExplicitLod:
 		dref = ops[4];
 		opt = &ops[5];
 		length -= 5;
 		proj = true;
 		break;
 
-	case OpImageDrefGather:
-	case OpImageSparseDrefGather:
+	case Op::OpImageDrefGather:
+	case Op::OpImageSparseDrefGather:
 		dref = ops[4];
 		opt = &ops[5];
 		length -= 5;
@@ -8018,8 +8018,8 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 			SPIRV_CROSS_THROW("textureGather with depth compare requires GLSL 400.");
 		break;
 
-	case OpImageGather:
-	case OpImageSparseGather:
+	case Op::OpImageGather:
+	case Op::OpImageSparseGather:
 		comp = ops[4];
 		opt = &ops[5];
 		length -= 5;
@@ -8034,18 +8034,18 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 		}
 		break;
 
-	case OpImageFetch:
-	case OpImageSparseFetch:
-	case OpImageRead: // Reads == fetches in Metal (other langs will not get here)
+	case Op::OpImageFetch:
+	case Op::OpImageSparseFetch:
+	case Op::OpImageRead: // Reads == fetches in Metal (other langs will not get here)
 		opt = &ops[4];
 		length -= 4;
 		fetch = true;
 		break;
 
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleProjExplicitLod:
-	case OpImageSparseSampleProjImplicitLod:
-	case OpImageSparseSampleProjExplicitLod:
+	case Op::OpImageSampleProjImplicitLod:
+	case Op::OpImageSampleProjExplicitLod:
+	case Op::OpImageSparseSampleProjImplicitLod:
+	case Op::OpImageSparseSampleProjExplicitLod:
 		opt = &ops[4];
 		length -= 4;
 		proj = true;
@@ -8064,19 +8064,19 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
 	{
-	case spv::Dim1D:
+	case spv::Dim::Dim1D:
 		coord_components = 1;
 		break;
-	case spv::Dim2D:
+	case spv::Dim::Dim2D:
 		coord_components = 2;
 		break;
-	case spv::Dim3D:
+	case spv::Dim::Dim3D:
 		coord_components = 3;
 		break;
-	case spv::DimCube:
+	case spv::Dim::Cube:
 		coord_components = 3;
 		break;
-	case spv::DimBuffer:
+	case spv::Dim::Buffer:
 		coord_components = 1;
 		break;
 	default:
@@ -8118,15 +8118,16 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 		}
 	};
 
-	test(bias, ImageOperandsBiasMask);
-	test(lod, ImageOperandsLodMask);
-	test(grad_x, ImageOperandsGradMask);
-	test(grad_y, ImageOperandsGradMask);
-	test(coffset, ImageOperandsConstOffsetMask);
-	test(offset, ImageOperandsOffsetMask);
-	test(coffsets, ImageOperandsConstOffsetsMask);
-	test(sample, ImageOperandsSampleMask);
-	test(minlod, ImageOperandsMinLodMask);
+
+	test(bias, static_cast<uint32_t>(ImageOperandsMask::Bias));
+	test(lod, static_cast<uint32_t>(ImageOperandsMask::Lod));
+	test(grad_x, static_cast<uint32_t>(ImageOperandsMask::Grad));
+	test(grad_y, static_cast<uint32_t>(ImageOperandsMask::Grad));
+	test(coffset, static_cast<uint32_t>(ImageOperandsMask::ConstOffset));
+	test(offset, static_cast<uint32_t>(ImageOperandsMask::Offset));
+	test(coffsets, static_cast<uint32_t>(ImageOperandsMask::ConstOffsets));
+	test(sample, static_cast<uint32_t>(ImageOperandsMask::Sample));
+	test(minlod, static_cast<uint32_t>(ImageOperandsMask::MinLod));
 
 	TextureFunctionBaseArguments base_args = {};
 	base_args.img = img;
@@ -8215,7 +8216,7 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	}
 
 	// Deals with reads from MSL. We might need to downconvert to fewer components.
-	if (op == OpImageRead)
+	if (op == Op::OpImageRead)
 		expr = remap_swizzle(result_type, 4, expr);
 
 	return expr;
@@ -8244,7 +8245,7 @@ bool CompilerGLSL::expression_is_non_value_type_array(uint32_t ptr)
 
 	auto &backed_type = get<SPIRType>(var->basetype);
 	return !backend.array_is_value_type_in_buffer_blocks && backed_type.basetype == SPIRType::Struct &&
-	       has_member_decoration(backed_type.self, 0, DecorationOffset);
+	       has_member_decoration(backed_type.self, 0, Decoration::Offset);
 }
 
 // Returns the function name for a texture sampling function for the specified image and sampling characteristics.
@@ -8267,7 +8268,7 @@ string CompilerGLSL::to_function_name(const TextureFunctionNameArguments &args)
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad = false;
-	if (((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
+	if (((imgtype.image.arrayed && imgtype.image.dim == Dim::Dim2D) || imgtype.image.dim == Dim::Cube) &&
 	    is_depth_image(imgtype, tex) && args.lod && !args.base.is_fetch)
 	{
 		if (!expression_is_constant_null(args.lod))
@@ -8320,7 +8321,7 @@ std::string CompilerGLSL::convert_separate_image_to_expression(uint32_t id)
 	if (var)
 	{
 		auto &type = get<SPIRType>(var->basetype);
-		if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != DimBuffer)
+		if (type.basetype == SPIRType::Image && type.image.sampled == 1 && type.image.dim != Dim::Buffer)
 		{
 			if (options.vulkan_semantics)
 			{
@@ -8411,7 +8412,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	// The workaround will assert that the LOD is in fact constant 0, or we cannot emit correct code.
 	// This happens for HLSL SampleCmpLevelZero on Texture2DArray and TextureCube.
 	bool workaround_lod_array_shadow_as_grad =
-	    ((imgtype.image.arrayed && imgtype.image.dim == Dim2D) || imgtype.image.dim == DimCube) &&
+	    ((imgtype.image.arrayed && imgtype.image.dim == Dim::Dim2D) || imgtype.image.dim == Dim::Cube) &&
 	    is_depth_image(imgtype, img) && args.lod != 0 && !args.base.is_fetch;
 
 	if (args.dref)
@@ -8434,7 +8435,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 			// The coordinate type for textureProj shadow is always vec4 even for sampler1DShadow.
 			farg_str += ", vec4(";
 
-			if (imgtype.image.dim == Dim1D)
+			if (imgtype.image.dim == Dim::Dim1D)
 			{
 				// Could reuse coord_expr, but we will mess up the temporary usage checking.
 				farg_str += to_enclosed_expression(args.coord) + ".x";
@@ -8444,7 +8445,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 				farg_str += ", ";
 				farg_str += to_enclosed_expression(args.coord) + ".y)";
 			}
-			else if (imgtype.image.dim == Dim2D)
+			else if (imgtype.image.dim == Dim::Dim2D)
 			{
 				// Could reuse coord_expr, but we will mess up the temporary usage checking.
 				farg_str += to_enclosed_expression(args.coord) + (swizz_func ? ".xy()" : ".xy");
@@ -8461,13 +8462,13 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 			// Create a composite which merges coord/dref into a single vector.
 			auto type = expression_type(args.coord);
 			type.vecsize = args.coord_components + 1;
-			if (imgtype.image.dim == Dim1D && options.es)
+			if (imgtype.image.dim == Dim::Dim1D && options.es)
 				type.vecsize++;
 			farg_str += ", ";
 			farg_str += type_to_glsl_constructor(type);
 			farg_str += "(";
 
-			if (imgtype.image.dim == Dim1D && options.es)
+			if (imgtype.image.dim == Dim::Dim1D && options.es)
 			{
 				if (imgtype.image.arrayed)
 				{
@@ -8491,7 +8492,7 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 	}
 	else
 	{
-		if (imgtype.image.dim == Dim1D && options.es)
+		if (imgtype.image.dim == Dim::Dim1D && options.es)
 		{
 			// Have to fake a second coordinate.
 			if (type_is_floating_point(coord_type))
@@ -8538,9 +8539,9 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 		{
 			// Implement textureGrad() instead. LOD == 0.0 is implemented as gradient of 0.0.
 			// Implementing this as plain texture() is not safe on some implementations.
-			if (imgtype.image.dim == Dim2D)
+			if (imgtype.image.dim == Dim::Dim2D)
 				farg_str += ", vec2(0.0), vec2(0.0)";
-			else if (imgtype.image.dim == DimCube)
+			else if (imgtype.image.dim == Dim::Cube)
 				farg_str += ", vec3(0.0), vec3(0.0)";
 		}
 		else
@@ -8549,13 +8550,13 @@ string CompilerGLSL::to_function_args(const TextureFunctionArguments &args, bool
 			farg_str += ", ";
 
 			// Lod expression for TexelFetch in GLSL must be int, and only int.
-			if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+			if (args.base.is_fetch && imgtype.image.dim != Dim::Buffer && !imgtype.image.ms)
 				farg_str += bitcast_expression(SPIRType::Int, args.lod);
 			else
 				farg_str += to_expression(args.lod);
 		}
 	}
-	else if (args.base.is_fetch && imgtype.image.dim != DimBuffer && !imgtype.image.ms)
+	else if (args.base.is_fetch && imgtype.image.dim != Dim::Buffer && !imgtype.image.ms)
 	{
 		// Lod argument is optional in OpImageFetch, but we require a LOD value, pick 0 as the default.
 		farg_str += ", 0";
@@ -8612,23 +8613,23 @@ Op CompilerGLSL::get_remapped_spirv_op(Op op) const
 	{
 		switch (op)
 		{
-		case OpFUnordLessThan:
-			op = OpFOrdLessThan;
+		case Op::OpFUnordLessThan:
+			op = Op::OpFOrdLessThan;
 			break;
-		case OpFUnordLessThanEqual:
-			op = OpFOrdLessThanEqual;
+		case Op::OpFUnordLessThanEqual:
+			op = Op::OpFOrdLessThanEqual;
 			break;
-		case OpFUnordGreaterThan:
-			op = OpFOrdGreaterThan;
+		case Op::OpFUnordGreaterThan:
+			op = Op::OpFOrdGreaterThan;
 			break;
-		case OpFUnordGreaterThanEqual:
-			op = OpFOrdGreaterThanEqual;
+		case Op::OpFUnordGreaterThanEqual:
+			op = Op::OpFOrdGreaterThanEqual;
 			break;
-		case OpFUnordEqual:
-			op = OpFOrdEqual;
+		case Op::OpFUnordEqual:
+			op = Op::OpFOrdEqual;
 			break;
-		case OpFOrdNotEqual:
-			op = OpFUnordNotEqual;
+		case Op::OpFOrdNotEqual:
+			op = Op::OpFUnordNotEqual;
 			break;
 
 		default:
@@ -8899,10 +8900,10 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 				ids = ir.increase_bound_by(2);
 
 				// Inherit precision qualifier (legacy has no NoContraction).
-				if (has_decoration(id, DecorationRelaxedPrecision))
+				if (has_decoration(id, Decoration::RelaxedPrecision))
 				{
-					set_decoration(ids, DecorationRelaxedPrecision);
-					set_decoration(ids + 1, DecorationRelaxedPrecision);
+					set_decoration(ids, Decoration::RelaxedPrecision);
+					set_decoration(ids + 1, Decoration::RelaxedPrecision);
 				}
 			}
 			uint32_t epos_id = ids;
@@ -8984,7 +8985,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 			if (type.basetype != SPIRType::Float)
 				SPIRV_CROSS_THROW("Unsupported type for matrix determinant");
 
-			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			bool relaxed = has_decoration(id, Decoration::RelaxedPrecision);
 			require_polyfill(static_cast<Polyfill>(PolyfillDeterminant2x2 << (type.vecsize - 2)),
 			                 relaxed);
 			emit_unary_func_op(result_type, id, args[0],
@@ -9018,7 +9019,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 			if (type.basetype != SPIRType::Float)
 				SPIRV_CROSS_THROW("Unsupported type for matrix inverse");
 
-			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			bool relaxed = has_decoration(id, Decoration::RelaxedPrecision);
 			require_polyfill(static_cast<Polyfill>(PolyfillMatrixInverse2x2 << (type.vecsize - 2)),
 			                 relaxed);
 			func = (options.es && relaxed) ? "spvInverseMP" : "spvInverse";
@@ -9182,7 +9183,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		if (options.vulkan_semantics)
 		{
 			require_extension_internal("GL_EXT_spirv_intrinsics");
-			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			bool relaxed = has_decoration(id, Decoration::RelaxedPrecision);
 			Polyfill poly = {};
 			switch (get<SPIRType>(result_type).width)
 			{
@@ -9228,7 +9229,7 @@ void CompilerGLSL::emit_glsl_op(uint32_t result_type, uint32_t id, uint32_t eop,
 		if (options.vulkan_semantics)
 		{
 			require_extension_internal("GL_EXT_spirv_intrinsics");
-			bool relaxed = has_decoration(id, DecorationRelaxedPrecision);
+			bool relaxed = has_decoration(id, Decoration::RelaxedPrecision);
 			Polyfill poly = {};
 			switch (get<SPIRType>(result_type).width)
 			{
@@ -9519,59 +9520,59 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 
 	switch (op)
 	{
-	case OpGroupNonUniformElect:
+	case Op::OpGroupNonUniformElect:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupElect);
 		break;
 
-	case OpGroupNonUniformBallotBitCount:
+	case Op::OpGroupNonUniformBallotBitCount:
 	{
 		const GroupOperation operation = static_cast<GroupOperation>(ops[3]);
-		if (operation == GroupOperationReduce)
+		if (operation == GroupOperation::Reduce)
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallotBitCount);
-		else if (operation == GroupOperationInclusiveScan || operation == GroupOperationExclusiveScan)
+		else if (operation == GroupOperation::InclusiveScan || operation == GroupOperation::ExclusiveScan)
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupInverseBallot_InclBitCount_ExclBitCout);
 	}
 	break;
 
-	case OpGroupNonUniformBallotBitExtract:
+	case Op::OpGroupNonUniformBallotBitExtract:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallotBitExtract);
 		break;
 
-	case OpGroupNonUniformInverseBallot:
+	case Op::OpGroupNonUniformInverseBallot:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupInverseBallot_InclBitCount_ExclBitCout);
 		break;
 
-	case OpGroupNonUniformBallot:
+	case Op::OpGroupNonUniformBallot:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallot);
 		break;
 
-	case OpGroupNonUniformBallotFindLSB:
-	case OpGroupNonUniformBallotFindMSB:
+	case Op::OpGroupNonUniformBallotFindLSB:
+	case Op::OpGroupNonUniformBallotFindMSB:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBallotFindLSB_MSB);
 		break;
 
-	case OpGroupNonUniformBroadcast:
-	case OpGroupNonUniformBroadcastFirst:
+	case Op::OpGroupNonUniformBroadcast:
+	case Op::OpGroupNonUniformBroadcastFirst:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupBroadcast_First);
 		break;
 
-	case OpGroupNonUniformShuffle:
-	case OpGroupNonUniformShuffleXor:
+	case Op::OpGroupNonUniformShuffle:
+	case Op::OpGroupNonUniformShuffleXor:
 		require_extension_internal("GL_KHR_shader_subgroup_shuffle");
 		break;
 
-	case OpGroupNonUniformShuffleUp:
-	case OpGroupNonUniformShuffleDown:
+	case Op::OpGroupNonUniformShuffleUp:
+	case Op::OpGroupNonUniformShuffleDown:
 		require_extension_internal("GL_KHR_shader_subgroup_shuffle_relative");
 		break;
 
-	case OpGroupNonUniformRotateKHR:
+	case Op::OpGroupNonUniformRotateKHR:
 		require_extension_internal("GL_KHR_shader_subgroup_rotate");
 		break;
 
-	case OpGroupNonUniformAll:
-	case OpGroupNonUniformAny:
-	case OpGroupNonUniformAllEqual:
+	case Op::OpGroupNonUniformAll:
+	case Op::OpGroupNonUniformAny:
+	case Op::OpGroupNonUniformAllEqual:
 	{
 		const SPIRType &type = expression_type(ops[3]);
 		if (type.basetype == SPIRType::BaseType::Boolean && type.vecsize == 1u)
@@ -9583,16 +9584,16 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 
 	// clang-format off
 #define GLSL_GROUP_OP(OP)\
-	case OpGroupNonUniform##OP:\
+	case Op::OpGroupNonUniform##OP:\
 	{\
 		auto operation = static_cast<GroupOperation>(ops[3]);\
-		if (operation == GroupOperationClusteredReduce)\
+		if (operation == GroupOperation::ClusteredReduce)\
 			require_extension_internal("GL_KHR_shader_subgroup_clustered");\
-		else if (operation == GroupOperationReduce)\
+		else if (operation == GroupOperation::Reduce)\
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmetic##OP##Reduce);\
-		else if (operation == GroupOperationExclusiveScan)\
+		else if (operation == GroupOperation::ExclusiveScan)\
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmetic##OP##ExclusiveScan);\
-		else if (operation == GroupOperationInclusiveScan)\
+		else if (operation == GroupOperation::InclusiveScan)\
 			request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupArithmetic##OP##InclusiveScan);\
 		else\
 			SPIRV_CROSS_THROW("Invalid group operation.");\
@@ -9607,26 +9608,26 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 #undef GLSL_GROUP_OP
 	// clang-format on
 
-	case OpGroupNonUniformFMin:
-	case OpGroupNonUniformFMax:
-	case OpGroupNonUniformSMin:
-	case OpGroupNonUniformSMax:
-	case OpGroupNonUniformUMin:
-	case OpGroupNonUniformUMax:
-	case OpGroupNonUniformBitwiseAnd:
-	case OpGroupNonUniformBitwiseOr:
-	case OpGroupNonUniformBitwiseXor:
-	case OpGroupNonUniformLogicalAnd:
-	case OpGroupNonUniformLogicalOr:
-	case OpGroupNonUniformLogicalXor:
+	case Op::OpGroupNonUniformFMin:
+	case Op::OpGroupNonUniformFMax:
+	case Op::OpGroupNonUniformSMin:
+	case Op::OpGroupNonUniformSMax:
+	case Op::OpGroupNonUniformUMin:
+	case Op::OpGroupNonUniformUMax:
+	case Op::OpGroupNonUniformBitwiseAnd:
+	case Op::OpGroupNonUniformBitwiseOr:
+	case Op::OpGroupNonUniformBitwiseXor:
+	case Op::OpGroupNonUniformLogicalAnd:
+	case Op::OpGroupNonUniformLogicalOr:
+	case Op::OpGroupNonUniformLogicalXor:
 	{
 		auto operation = static_cast<GroupOperation>(ops[3]);
-		if (operation == GroupOperationClusteredReduce)
+		if (operation == GroupOperation::ClusteredReduce)
 		{
 			require_extension_internal("GL_KHR_shader_subgroup_clustered");
 		}
-		else if (operation == GroupOperationExclusiveScan || operation == GroupOperationInclusiveScan ||
-		         operation == GroupOperationReduce)
+		else if (operation == GroupOperation::ExclusiveScan || operation == GroupOperation::InclusiveScan ||
+		         operation == GroupOperation::Reduce)
 		{
 			require_extension_internal("GL_KHR_shader_subgroup_arithmetic");
 		}
@@ -9635,13 +9636,13 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 		break;
 	}
 
-	case OpGroupNonUniformQuadSwap:
-	case OpGroupNonUniformQuadBroadcast:
+	case Op::OpGroupNonUniformQuadSwap:
+	case Op::OpGroupNonUniformQuadBroadcast:
 		require_extension_internal("GL_KHR_shader_subgroup_quad");
 		break;
 
-	case OpGroupNonUniformQuadAllKHR:
-	case OpGroupNonUniformQuadAnyKHR:
+	case Op::OpGroupNonUniformQuadAllKHR:
+	case Op::OpGroupNonUniformQuadAnyKHR:
 		// Require both extensions to be enabled.
 		require_extension_internal("GL_KHR_shader_subgroup_vote");
 		require_extension_internal("GL_EXT_shader_quad_control");
@@ -9655,108 +9656,108 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	uint32_t id = ops[1];
 
 	// These quad ops do not have a scope parameter.
-	if (op != OpGroupNonUniformQuadAllKHR && op != OpGroupNonUniformQuadAnyKHR)
+	if (op != Op::OpGroupNonUniformQuadAllKHR && op != Op::OpGroupNonUniformQuadAnyKHR)
 	{
 		auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
-		if (scope != ScopeSubgroup)
+		if (scope != Scope::Subgroup)
 			SPIRV_CROSS_THROW("Only subgroup scope is supported.");
 	}
 
 	switch (op)
 	{
-	case OpGroupNonUniformElect:
+	case Op::OpGroupNonUniformElect:
 		emit_op(result_type, id, "subgroupElect()", true);
 		break;
 
-	case OpGroupNonUniformBroadcast:
+	case Op::OpGroupNonUniformBroadcast:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupBroadcast");
 		break;
 
-	case OpGroupNonUniformBroadcastFirst:
+	case Op::OpGroupNonUniformBroadcastFirst:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupBroadcastFirst");
 		break;
 
-	case OpGroupNonUniformBallot:
+	case Op::OpGroupNonUniformBallot:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupBallot");
 		break;
 
-	case OpGroupNonUniformInverseBallot:
+	case Op::OpGroupNonUniformInverseBallot:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupInverseBallot");
 		break;
 
-	case OpGroupNonUniformBallotBitExtract:
+	case Op::OpGroupNonUniformBallotBitExtract:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupBallotBitExtract");
 		break;
 
-	case OpGroupNonUniformBallotFindLSB:
+	case Op::OpGroupNonUniformBallotFindLSB:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupBallotFindLSB");
 		break;
 
-	case OpGroupNonUniformBallotFindMSB:
+	case Op::OpGroupNonUniformBallotFindMSB:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupBallotFindMSB");
 		break;
 
-	case OpGroupNonUniformBallotBitCount:
+	case Op::OpGroupNonUniformBallotBitCount:
 	{
 		auto operation = static_cast<GroupOperation>(ops[3]);
-		if (operation == GroupOperationReduce)
+		if (operation == GroupOperation::Reduce)
 			emit_unary_func_op(result_type, id, ops[4], "subgroupBallotBitCount");
-		else if (operation == GroupOperationInclusiveScan)
+		else if (operation == GroupOperation::InclusiveScan)
 			emit_unary_func_op(result_type, id, ops[4], "subgroupBallotInclusiveBitCount");
-		else if (operation == GroupOperationExclusiveScan)
+		else if (operation == GroupOperation::ExclusiveScan)
 			emit_unary_func_op(result_type, id, ops[4], "subgroupBallotExclusiveBitCount");
 		else
 			SPIRV_CROSS_THROW("Invalid BitCount operation.");
 		break;
 	}
 
-	case OpGroupNonUniformShuffle:
+	case Op::OpGroupNonUniformShuffle:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffle");
 		break;
 
-	case OpGroupNonUniformShuffleXor:
+	case Op::OpGroupNonUniformShuffleXor:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleXor");
 		break;
 
-	case OpGroupNonUniformShuffleUp:
+	case Op::OpGroupNonUniformShuffleUp:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleUp");
 		break;
 
-	case OpGroupNonUniformShuffleDown:
+	case Op::OpGroupNonUniformShuffleDown:
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupShuffleDown");
 		break;
 
-	case OpGroupNonUniformRotateKHR:
+	case Op::OpGroupNonUniformRotateKHR:
 		if (i.length > 5)
 			emit_trinary_func_op(result_type, id, ops[3], ops[4], ops[5], "subgroupClusteredRotate");
 		else
 			emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupRotate");
 		break;
 
-	case OpGroupNonUniformAll:
+	case Op::OpGroupNonUniformAll:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupAll");
 		break;
 
-	case OpGroupNonUniformAny:
+	case Op::OpGroupNonUniformAny:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupAny");
 		break;
 
-	case OpGroupNonUniformAllEqual:
+	case Op::OpGroupNonUniformAllEqual:
 		emit_unary_func_op(result_type, id, ops[3], "subgroupAllEqual");
 		break;
 
 		// clang-format off
 #define GLSL_GROUP_OP(op, glsl_op) \
-case OpGroupNonUniform##op: \
+case Op::OpGroupNonUniform##op: \
 	{ \
 		auto operation = static_cast<GroupOperation>(ops[3]); \
-		if (operation == GroupOperationReduce) \
+		if (operation == GroupOperation::Reduce) \
 			emit_unary_func_op(result_type, id, ops[4], "subgroup" #glsl_op); \
-		else if (operation == GroupOperationInclusiveScan) \
+		else if (operation == GroupOperation::InclusiveScan) \
 			emit_unary_func_op(result_type, id, ops[4], "subgroupInclusive" #glsl_op); \
-		else if (operation == GroupOperationExclusiveScan) \
+		else if (operation == GroupOperation::ExclusiveScan) \
 			emit_unary_func_op(result_type, id, ops[4], "subgroupExclusive" #glsl_op); \
-		else if (operation == GroupOperationClusteredReduce) \
+		else if (operation == GroupOperation::ClusteredReduce) \
 			emit_binary_func_op(result_type, id, ops[4], ops[5], "subgroupClustered" #glsl_op); \
 		else \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
@@ -9764,16 +9765,16 @@ case OpGroupNonUniform##op: \
 	}
 
 #define GLSL_GROUP_OP_CAST(op, glsl_op, type) \
-case OpGroupNonUniform##op: \
+case Op::OpGroupNonUniform##op: \
 	{ \
 		auto operation = static_cast<GroupOperation>(ops[3]); \
-		if (operation == GroupOperationReduce) \
+		if (operation == GroupOperation::Reduce) \
 			emit_unary_func_op_cast(result_type, id, ops[4], "subgroup" #glsl_op, type, type); \
-		else if (operation == GroupOperationInclusiveScan) \
+		else if (operation == GroupOperation::InclusiveScan) \
 			emit_unary_func_op_cast(result_type, id, ops[4], "subgroupInclusive" #glsl_op, type, type); \
-		else if (operation == GroupOperationExclusiveScan) \
+		else if (operation == GroupOperation::ExclusiveScan) \
 			emit_unary_func_op_cast(result_type, id, ops[4], "subgroupExclusive" #glsl_op, type, type); \
-		else if (operation == GroupOperationClusteredReduce) \
+		else if (operation == GroupOperation::ClusteredReduce) \
 			emit_binary_func_op_cast_clustered(result_type, id, ops[4], ops[5], "subgroupClustered" #glsl_op, type); \
 		else \
 			SPIRV_CROSS_THROW("Invalid group operation."); \
@@ -9800,7 +9801,7 @@ case OpGroupNonUniform##op: \
 #undef GLSL_GROUP_OP_CAST
 		// clang-format on
 
-	case OpGroupNonUniformQuadSwap:
+	case Op::OpGroupNonUniformQuadSwap:
 	{
 		uint32_t direction = evaluate_constant_u32(ops[4]);
 		if (direction == 0)
@@ -9814,17 +9815,17 @@ case OpGroupNonUniform##op: \
 		break;
 	}
 
-	case OpGroupNonUniformQuadBroadcast:
+	case Op::OpGroupNonUniformQuadBroadcast:
 	{
 		emit_binary_func_op(result_type, id, ops[3], ops[4], "subgroupQuadBroadcast");
 		break;
 	}
 
-	case OpGroupNonUniformQuadAllKHR:
+	case Op::OpGroupNonUniformQuadAllKHR:
 		emit_unary_func_op(result_type, id, ops[2], "subgroupQuadAll");
 		break;
 
-	case OpGroupNonUniformQuadAnyKHR:
+	case Op::OpGroupNonUniformQuadAnyKHR:
 		emit_unary_func_op(result_type, id, ops[2], "subgroupQuadAny");
 		break;
 
@@ -10009,36 +10010,36 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 {
 	switch (builtin)
 	{
-	case BuiltInPosition:
+	case BuiltIn::Position:
 		return "gl_Position";
-	case BuiltInPointSize:
+	case BuiltIn::PointSize:
 		return "gl_PointSize";
-	case BuiltInClipDistance:
+	case BuiltIn::ClipDistance:
 	{
 		if (options.es)
 			require_extension_internal("GL_EXT_clip_cull_distance");
 		return "gl_ClipDistance";
 	}
-	case BuiltInCullDistance:
+	case BuiltIn::CullDistance:
 	{
 		if (options.es)
 			require_extension_internal("GL_EXT_clip_cull_distance");
 		return "gl_CullDistance";
 	}
-	case BuiltInVertexId:
+	case BuiltIn::VertexId:
 		if (options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Cannot implement gl_VertexID in Vulkan GLSL. This shader was created "
 			                  "with GL semantics.");
 		return "gl_VertexID";
-	case BuiltInInstanceId:
+	case BuiltIn::InstanceId:
 		if (options.vulkan_semantics)
 		{
 			auto model = get_entry_point().model;
 			switch (model)
 			{
-			case spv::ExecutionModelIntersectionKHR:
-			case spv::ExecutionModelAnyHitKHR:
-			case spv::ExecutionModelClosestHitKHR:
+			case spv::ExecutionModel::IntersectionKHR:
+			case spv::ExecutionModel::AnyHitKHR:
+			case spv::ExecutionModel::ClosestHitKHR:
 				// gl_InstanceID is allowed in these shaders.
 				break;
 
@@ -10052,12 +10053,12 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			require_extension_internal("GL_ARB_draw_instanced");
 		}
 		return "gl_InstanceID";
-	case BuiltInVertexIndex:
+	case BuiltIn::VertexIndex:
 		if (options.vulkan_semantics)
 			return "gl_VertexIndex";
 		else
 			return "gl_VertexID"; // gl_VertexID already has the base offset applied.
-	case BuiltInInstanceIndex:
+	case BuiltIn::InstanceIndex:
 		if (options.vulkan_semantics)
 			return "gl_InstanceIndex";
 
@@ -10077,17 +10078,17 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 		else
 			return "gl_InstanceID";
-	case BuiltInPrimitiveId:
-		if (storage == StorageClassInput && get_entry_point().model == ExecutionModelGeometry)
+	case BuiltIn::PrimitiveId:
+		if (storage == StorageClass::Input && get_entry_point().model == ExecutionModel::Geometry)
 			return "gl_PrimitiveIDIn";
 		else
 			return "gl_PrimitiveID";
-	case BuiltInInvocationId:
+	case BuiltIn::InvocationId:
 		return "gl_InvocationID";
-	case BuiltInLayer:
+	case BuiltIn::Layer:
 	{
 		auto model = get_execution_model();
-		if (model == ExecutionModelVertex || model == ExecutionModelTessellationEvaluation)
+		if (model == ExecutionModel::Vertex || model == ExecutionModel::TessellationEvaluation)
 		{
 			if (options.es)
 				require_extension_internal("GL_NV_viewport_array2");
@@ -10096,40 +10097,40 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 		return "gl_Layer";
 	}
-	case BuiltInViewportIndex:
+	case BuiltIn::ViewportIndex:
 		return "gl_ViewportIndex";
-	case BuiltInTessLevelOuter:
+	case BuiltIn::TessLevelOuter:
 		return "gl_TessLevelOuter";
-	case BuiltInTessLevelInner:
+	case BuiltIn::TessLevelInner:
 		return "gl_TessLevelInner";
-	case BuiltInTessCoord:
+	case BuiltIn::TessCoord:
 		return "gl_TessCoord";
-	case BuiltInPatchVertices:
+	case BuiltIn::PatchVertices:
 		return "gl_PatchVerticesIn";
-	case BuiltInFragCoord:
+	case BuiltIn::FragCoord:
 		return "gl_FragCoord";
-	case BuiltInPointCoord:
+	case BuiltIn::PointCoord:
 		return "gl_PointCoord";
-	case BuiltInFrontFacing:
+	case BuiltIn::FrontFacing:
 		return "gl_FrontFacing";
-	case BuiltInFragDepth:
+	case BuiltIn::FragDepth:
 		return "gl_FragDepth";
-	case BuiltInNumWorkgroups:
+	case BuiltIn::NumWorkgroups:
 		return "gl_NumWorkGroups";
-	case BuiltInWorkgroupSize:
+	case BuiltIn::WorkgroupSize:
 		return "gl_WorkGroupSize";
-	case BuiltInWorkgroupId:
+	case BuiltIn::WorkgroupId:
 		return "gl_WorkGroupID";
-	case BuiltInLocalInvocationId:
+	case BuiltIn::LocalInvocationId:
 		return "gl_LocalInvocationID";
-	case BuiltInGlobalInvocationId:
+	case BuiltIn::GlobalInvocationId:
 		return "gl_GlobalInvocationID";
-	case BuiltInLocalInvocationIndex:
+	case BuiltIn::LocalInvocationIndex:
 		return "gl_LocalInvocationIndex";
-	case BuiltInHelperInvocation:
+	case BuiltIn::HelperInvocation:
 		return "gl_HelperInvocation";
 
-	case BuiltInBaseVertex:
+	case BuiltIn::BaseVertex:
 		if (options.es)
 			SPIRV_CROSS_THROW("BaseVertex not supported in ES profile.");
 
@@ -10146,7 +10147,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		require_extension_internal("GL_ARB_shader_draw_parameters");
 		return "SPIRV_Cross_BaseVertex";
 
-	case BuiltInBaseInstance:
+	case BuiltIn::BaseInstance:
 		if (options.es)
 			SPIRV_CROSS_THROW("BaseInstance not supported in ES profile.");
 
@@ -10163,7 +10164,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		require_extension_internal("GL_ARB_shader_draw_parameters");
 		return "SPIRV_Cross_BaseInstance";
 
-	case BuiltInDrawIndex:
+	case BuiltIn::DrawIndex:
 		if (options.es)
 			SPIRV_CROSS_THROW("DrawIndex not supported in ES profile.");
 
@@ -10180,7 +10181,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		require_extension_internal("GL_ARB_shader_draw_parameters");
 		return "gl_DrawIDARB";
 
-	case BuiltInSampleId:
+	case BuiltIn::SampleId:
 		if (is_legacy())
 			SPIRV_CROSS_THROW("Sample variables not supported in legacy GLSL.");
 		else if (options.es && options.version < 320)
@@ -10189,7 +10190,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			require_extension_internal("GL_ARB_sample_shading");
 		return "gl_SampleID";
 
-	case BuiltInSampleMask:
+	case BuiltIn::SampleMask:
 		if (is_legacy())
 			SPIRV_CROSS_THROW("Sample variables not supported in legacy GLSL.");
 		else if (options.es && options.version < 320)
@@ -10197,12 +10198,12 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		else if (!options.es && options.version < 400)
 			require_extension_internal("GL_ARB_sample_shading");
 
-		if (storage == StorageClassInput)
+		if (storage == StorageClass::Input)
 			return "gl_SampleMaskIn";
 		else
 			return "gl_SampleMask";
 
-	case BuiltInSamplePosition:
+	case BuiltIn::SamplePosition:
 		if (is_legacy())
 			SPIRV_CROSS_THROW("Sample variables not supported in legacy GLSL.");
 		else if (options.es && options.version < 320)
@@ -10211,79 +10212,79 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			require_extension_internal("GL_ARB_sample_shading");
 		return "gl_SamplePosition";
 
-	case BuiltInViewIndex:
+	case BuiltIn::ViewIndex:
 		if (options.vulkan_semantics)
 			return "gl_ViewIndex";
 		else
 			return "gl_ViewID_OVR";
 
-	case BuiltInNumSubgroups:
+	case BuiltIn::NumSubgroups:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::NumSubgroups);
 		return "gl_NumSubgroups";
 
-	case BuiltInSubgroupId:
+	case BuiltIn::SubgroupId:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupID);
 		return "gl_SubgroupID";
 
-	case BuiltInSubgroupSize:
+	case BuiltIn::SubgroupSize:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupSize);
 		return "gl_SubgroupSize";
 
-	case BuiltInSubgroupLocalInvocationId:
+	case BuiltIn::SubgroupLocalInvocationId:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupInvocationID);
 		return "gl_SubgroupInvocationID";
 
-	case BuiltInSubgroupEqMask:
+	case BuiltIn::SubgroupEqMask:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupEqMask";
 
-	case BuiltInSubgroupGeMask:
+	case BuiltIn::SubgroupGeMask:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupGeMask";
 
-	case BuiltInSubgroupGtMask:
+	case BuiltIn::SubgroupGtMask:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupGtMask";
 
-	case BuiltInSubgroupLeMask:
+	case BuiltIn::SubgroupLeMask:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupLeMask";
 
-	case BuiltInSubgroupLtMask:
+	case BuiltIn::SubgroupLtMask:
 		request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMask);
 		return "gl_SubgroupLtMask";
 
-	case BuiltInLaunchIdKHR:
+	case BuiltIn::LaunchIdKHR:
 		return ray_tracing_is_khr ? "gl_LaunchIDEXT" : "gl_LaunchIDNV";
-	case BuiltInLaunchSizeKHR:
+	case BuiltIn::LaunchSizeKHR:
 		return ray_tracing_is_khr ? "gl_LaunchSizeEXT" : "gl_LaunchSizeNV";
-	case BuiltInWorldRayOriginKHR:
+	case BuiltIn::WorldRayOriginKHR:
 		return ray_tracing_is_khr ? "gl_WorldRayOriginEXT" : "gl_WorldRayOriginNV";
-	case BuiltInWorldRayDirectionKHR:
+	case BuiltIn::WorldRayDirectionKHR:
 		return ray_tracing_is_khr ? "gl_WorldRayDirectionEXT" : "gl_WorldRayDirectionNV";
-	case BuiltInObjectRayOriginKHR:
+	case BuiltIn::ObjectRayOriginKHR:
 		return ray_tracing_is_khr ? "gl_ObjectRayOriginEXT" : "gl_ObjectRayOriginNV";
-	case BuiltInObjectRayDirectionKHR:
+	case BuiltIn::ObjectRayDirectionKHR:
 		return ray_tracing_is_khr ? "gl_ObjectRayDirectionEXT" : "gl_ObjectRayDirectionNV";
-	case BuiltInRayTminKHR:
+	case BuiltIn::RayTminKHR:
 		return ray_tracing_is_khr ? "gl_RayTminEXT" : "gl_RayTminNV";
-	case BuiltInRayTmaxKHR:
+	case BuiltIn::RayTmaxKHR:
 		return ray_tracing_is_khr ? "gl_RayTmaxEXT" : "gl_RayTmaxNV";
-	case BuiltInInstanceCustomIndexKHR:
+	case BuiltIn::InstanceCustomIndexKHR:
 		return ray_tracing_is_khr ? "gl_InstanceCustomIndexEXT" : "gl_InstanceCustomIndexNV";
-	case BuiltInObjectToWorldKHR:
+	case BuiltIn::ObjectToWorldKHR:
 		return ray_tracing_is_khr ? "gl_ObjectToWorldEXT" : "gl_ObjectToWorldNV";
-	case BuiltInWorldToObjectKHR:
+	case BuiltIn::WorldToObjectKHR:
 		return ray_tracing_is_khr ? "gl_WorldToObjectEXT" : "gl_WorldToObjectNV";
-	case BuiltInHitTNV:
+	case BuiltIn::HitTNV:
 		// gl_HitTEXT is an alias of RayTMax in KHR.
 		return "gl_HitTNV";
-	case BuiltInHitKindKHR:
+	case BuiltIn::HitKindKHR:
 		return ray_tracing_is_khr ? "gl_HitKindEXT" : "gl_HitKindNV";
-	case BuiltInIncomingRayFlagsKHR:
+	case BuiltIn::IncomingRayFlagsKHR:
 		return ray_tracing_is_khr ? "gl_IncomingRayFlagsEXT" : "gl_IncomingRayFlagsNV";
 
-	case BuiltInBaryCoordKHR:
+	case BuiltIn::BaryCoordKHR:
 	{
 		if (options.es && options.version < 320)
 			SPIRV_CROSS_THROW("gl_BaryCoordEXT requires ESSL 320.");
@@ -10302,7 +10303,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 	}
 
-	case BuiltInBaryCoordNoPerspNV:
+	case BuiltIn::BaryCoordNoPerspNV:
 	{
 		if (options.es && options.version < 320)
 			SPIRV_CROSS_THROW("gl_BaryCoordNoPerspEXT requires ESSL 320.");
@@ -10321,7 +10322,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		}
 	}
 
-	case BuiltInFragStencilRefEXT:
+	case BuiltIn::FragStencilRefEXT:
 	{
 		if (!options.es)
 		{
@@ -10332,7 +10333,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			SPIRV_CROSS_THROW("Stencil export not supported in GLES.");
 	}
 
-	case BuiltInPrimitiveShadingRateKHR:
+	case BuiltIn::PrimitiveShadingRateKHR:
 	{
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Can only use PrimitiveShadingRateKHR in Vulkan GLSL.");
@@ -10340,7 +10341,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_PrimitiveShadingRateEXT";
 	}
 
-	case BuiltInShadingRateKHR:
+	case BuiltIn::ShadingRateKHR:
 	{
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Can only use ShadingRateKHR in Vulkan GLSL.");
@@ -10348,29 +10349,29 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 		return "gl_ShadingRateEXT";
 	}
 
-	case BuiltInDeviceIndex:
+	case BuiltIn::DeviceIndex:
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Need Vulkan semantics for device group support.");
 		require_extension_internal("GL_EXT_device_group");
 		return "gl_DeviceIndex";
 
-	case BuiltInFullyCoveredEXT:
+	case BuiltIn::FullyCoveredEXT:
 		if (!options.es)
 			require_extension_internal("GL_NV_conservative_raster_underestimation");
 		else
 			SPIRV_CROSS_THROW("Need desktop GL to use GL_NV_conservative_raster_underestimation.");
 		return "gl_FragFullyCoveredNV";
 
-	case BuiltInPrimitiveTriangleIndicesEXT:
+	case BuiltIn::PrimitiveTriangleIndicesEXT:
 		return "gl_PrimitiveTriangleIndicesEXT";
-	case BuiltInPrimitiveLineIndicesEXT:
+	case BuiltIn::PrimitiveLineIndicesEXT:
 		return "gl_PrimitiveLineIndicesEXT";
-	case BuiltInPrimitivePointIndicesEXT:
+	case BuiltIn::PrimitivePointIndicesEXT:
 		return "gl_PrimitivePointIndicesEXT";
-	case BuiltInCullPrimitiveEXT:
+	case BuiltIn::CullPrimitiveEXT:
 		return "gl_CullPrimitiveEXT";
 
-	case BuiltInClusterIDNV:
+	case BuiltIn::ClusterIDNV:
 	{
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("Can only use ClusterIDNV in Vulkan GLSL.");
@@ -10379,7 +10380,7 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	}
 
 	default:
-		return join("gl_BuiltIn_", convert_to_string(builtin));
+		return join("gl_BuiltIn_", convert_to_string(static_cast<uint32_t>(builtin)));
 	}
 }
 
@@ -10484,8 +10485,8 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool row_major_matrix_needs_conversion = is_non_native_row_major_matrix(base);
 	bool is_packed = has_extended_decoration(base, SPIRVCrossDecorationPhysicalTypePacked);
 	uint32_t physical_type = get_extended_decoration(base, SPIRVCrossDecorationPhysicalTypeID);
-	bool is_invariant = has_decoration(base, DecorationInvariant);
-	bool relaxed_precision = has_decoration(base, DecorationRelaxedPrecision);
+	bool is_invariant = has_decoration(base, Decoration::Invariant);
+	bool relaxed_precision = has_decoration(base, Decoration::RelaxedPrecision);
 	bool pending_array_enclose = false;
 	bool dimension_flatten = false;
 	bool access_meshlet_position_y = false;
@@ -10573,7 +10574,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			{
 				if (flags & ACCESS_CHAIN_PTR_CHAIN_POINTER_ARITH_BIT)
 				{
-					SPIRType tmp_type(OpTypeInt);
+					SPIRType tmp_type(Op::OpTypeInt);
 					tmp_type.basetype = SPIRType::UInt64;
 					tmp_type.width = 64;
 					tmp_type.vecsize = 1;
@@ -10590,7 +10591,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					// add yet another virtual interface just for this.
 					auto intptr_expr = join("reinterpret_cast<", type_to_glsl(tmp_type), ">(", expr, ")");
 					intptr_expr += join(" + ", to_enclosed_unpacked_expression(index), " * ",
-					                    get_decoration(ptr_type_id, DecorationArrayStride));
+					                    get_decoration(ptr_type_id, Decoration::ArrayStride));
 
 					if (flags & ACCESS_CHAIN_PTR_CHAIN_CAST_TO_SCALAR_BIT)
 					{
@@ -10622,7 +10623,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr = join("(", expr, ")");
 		}
 		// Arrays and OpTypeCooperativeVectorNV (aka fancy arrays)
-		else if (!type->array.empty() || type->op == spv::OpTypeCooperativeVectorNV)
+		else if (!type->array.empty() || type->op == spv::Op::OpTypeCooperativeVectorNV)
 		{
 			// If we are flattening multidimensional arrays, only create opening bracket on first
 			// array index.
@@ -10638,7 +10639,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			auto *var = maybe_get<SPIRVariable>(base);
 			if (backend.force_gl_in_out_block && i == 0 && var && is_builtin_variable(*var) &&
-			    !has_decoration(type->self, DecorationBlock))
+			    !has_decoration(type->self, Decoration::Block))
 			{
 				// This deals with scenarios for tesc/geom where arrays of gl_Position[] are declared.
 				// Normally, these variables live in blocks when compiled from GLSL,
@@ -10647,38 +10648,38 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				// to be able to access certain builtins as arrays.
 				// Similar concerns apply for mesh shaders where we have to redirect to gl_MeshVerticesEXT or MeshPrimitivesEXT.
 				auto builtin = ir.meta[base].decoration.builtin_type;
-				bool mesh_shader = get_execution_model() == ExecutionModelMeshEXT;
+				bool mesh_shader = get_execution_model() == ExecutionModel::MeshEXT;
 
 				chain_is_builtin = true;
 				chained_builtin = builtin;
 
 				switch (builtin)
 				{
-				case BuiltInCullDistance:
-				case BuiltInClipDistance:
+				case BuiltIn::CullDistance:
+				case BuiltIn::ClipDistance:
 					if (type->array.size() == 1) // Red herring. Only consider block IO for two-dimensional arrays here.
 					{
 						append_index(index, is_literal);
 						break;
 					}
 					// fallthrough
-				case BuiltInPosition:
-				case BuiltInPointSize:
+				case BuiltIn::Position:
+				case BuiltIn::PointSize:
 					if (mesh_shader)
 						expr = join("gl_MeshVerticesEXT[", to_expression(index, register_expression_read), "].", expr);
-					else if (var->storage == StorageClassInput)
+					else if (var->storage == StorageClass::Input)
 						expr = join("gl_in[", to_expression(index, register_expression_read), "].", expr);
-					else if (var->storage == StorageClassOutput)
+					else if (var->storage == StorageClass::Output)
 						expr = join("gl_out[", to_expression(index, register_expression_read), "].", expr);
 					else
 						append_index(index, is_literal);
 					break;
 
-				case BuiltInPrimitiveId:
-				case BuiltInLayer:
-				case BuiltInViewportIndex:
-				case BuiltInCullPrimitiveEXT:
-				case BuiltInPrimitiveShadingRateKHR:
+				case BuiltIn::PrimitiveId:
+				case BuiltIn::Layer:
+				case BuiltIn::ViewportIndex:
+				case BuiltIn::CullPrimitiveEXT:
+				case BuiltIn::PrimitiveShadingRateKHR:
 					if (mesh_shader)
 						expr = join("gl_MeshPrimitivesEXT[", to_expression(index, register_expression_read), "].", expr);
 					else
@@ -10691,7 +10692,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				}
 			}
 			else if (backend.force_merged_mesh_block && i == 0 && var &&
-			         !is_builtin_variable(*var) && var->storage == StorageClassOutput)
+			         !is_builtin_variable(*var) && var->storage == StorageClass::Output)
 			{
 				if (is_per_primitive_variable(*var))
 					expr = join("gl_MeshPrimitivesEXT[", to_expression(index, register_expression_read), "].", expr);
@@ -10722,7 +10723,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				if (!pending_array_enclose)
 					expr += "]";
 			}
-			else if (index_is_literal || !builtin_translates_to_nonarray(BuiltIn(get_decoration(base, DecorationBuiltIn))))
+			else if (index_is_literal || !builtin_translates_to_nonarray(BuiltIn(get_decoration(base, Decoration::BuiltIn))))
 			{
 				// Some builtins are arrays in SPIR-V but not in other languages, e.g. gl_SampleMask[] is an array in SPIR-V but not in Metal.
 				// By throwing away the index, we imply the index was 0, which it must be for gl_SampleMask.
@@ -10730,9 +10731,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				append_index(index, is_literal);
 			}
 
-			if (var && has_decoration(var->self, DecorationBuiltIn) &&
-			    get_decoration(var->self, DecorationBuiltIn) == BuiltInPosition &&
-			    get_execution_model() == ExecutionModelMeshEXT)
+			if (var && has_decoration(var->self, Decoration::BuiltIn) &&
+			    static_cast<spv::BuiltIn>(get_decoration(var->self, Decoration::BuiltIn)) == BuiltIn::Position &&
+			    get_execution_model() == ExecutionModel::MeshEXT)
 			{
 				access_meshlet_position_y = true;
 			}
@@ -10772,7 +10773,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			}
 			else
 			{
-				BuiltIn builtin = BuiltInMax;
+				BuiltIn builtin = BuiltIn::Max;
 				if (is_member_builtin(*type, index, &builtin) && access_chain_needs_stage_io_builtin_translation(base))
 				{
 					if (access_chain_is_arrayed)
@@ -10783,7 +10784,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 					else
 						expr = builtin_to_glsl(builtin, type->storage);
 
-					if (builtin == BuiltInPosition && get_execution_model() == ExecutionModelMeshEXT)
+					if (builtin == BuiltIn::Position && get_execution_model() == ExecutionModel::MeshEXT)
 					{
 						access_meshlet_position_y = true;
 					}
@@ -10810,9 +10811,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				}
 			}
 
-			if (has_member_decoration(type->self, index, DecorationInvariant))
+			if (has_member_decoration(type->self, index, Decoration::Invariant))
 				is_invariant = true;
-			if (has_member_decoration(type->self, index, DecorationRelaxedPrecision))
+			if (has_member_decoration(type->self, index, Decoration::RelaxedPrecision))
 				relaxed_precision = true;
 
 			is_packed = member_is_packed_physical_type(*type, index);
@@ -10852,7 +10853,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 			type = &get<SPIRType>(type_id);
 		}
 		// Vector -> Scalar
-		else if (type->op == OpTypeCooperativeMatrixKHR || type->vecsize > 1)
+		else if (type->op == Op::OpTypeCooperativeMatrixKHR || type->vecsize > 1)
 		{
 			string deferred_index;
 			if (row_major_matrix_needs_conversion)
@@ -10880,7 +10881,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			// Internally, access chain implementation can also be used on composites,
 			// ignore scalar access workarounds in this case.
-			StorageClass effective_storage = StorageClassGeneric;
+			StorageClass effective_storage = StorageClass::Generic;
 			bool ignore_potential_sliced_writes = false;
 			if ((flags & ACCESS_CHAIN_FORCE_COMPOSITE_BIT) == 0)
 			{
@@ -10893,9 +10894,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				// Cleans up some cases where it's very painful to determine the accurate storage class
 				// since blocks can be partially masked ...
 				auto *var = maybe_get_backing_variable(base);
-				if (var && var->storage == StorageClassOutput &&
-				    get_execution_model() == ExecutionModelTessellationControl &&
-				    !has_decoration(var->self, DecorationPatch))
+				if (var && var->storage == StorageClass::Output &&
+				    get_execution_model() == ExecutionModel::TessellationControl &&
+				    !has_decoration(var->self, Decoration::Patch))
 				{
 					ignore_potential_sliced_writes = true;
 				}
@@ -10914,9 +10915,9 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 
 			if (is_literal)
 			{
-				bool out_of_bounds = index >= type->vecsize && type->op != OpTypeCooperativeMatrixKHR;
+				bool out_of_bounds = index >= type->vecsize && type->op != Op::OpTypeCooperativeMatrixKHR;
 
-				if (!is_packed && !row_major_matrix_needs_conversion && type->op != OpTypeCooperativeMatrixKHR)
+				if (!is_packed && !row_major_matrix_needs_conversion && type->op != Op::OpTypeCooperativeMatrixKHR)
 				{
 					expr += ".";
 					expr += index_to_swizzle(out_of_bounds ? 0 : index);
@@ -11091,14 +11092,14 @@ string CompilerGLSL::access_chain(uint32_t base, const uint32_t *indices, uint32
 			flags |= ACCESS_CHAIN_PTR_CHAIN_BIT;
 			// PtrAccessChain could get complicated.
 			TypeID type_id = expression_type_id(base);
-			if (backend.native_pointers && has_decoration(type_id, DecorationArrayStride))
+			if (backend.native_pointers && has_decoration(type_id, Decoration::ArrayStride))
 			{
 				// If there is a mismatch we have to go via 64-bit pointer arithmetic :'(
 				// Using packed hacks only gets us so far, and is not designed to deal with pointer to
 				// random values. It works for structs though.
 				auto &pointee_type = get_pointee_type(get<SPIRType>(type_id));
 				uint32_t physical_stride = get_physical_type_stride(pointee_type);
-				uint32_t requested_stride = get_decoration(type_id, DecorationArrayStride);
+				uint32_t requested_stride = get_decoration(type_id, Decoration::ArrayStride);
 				if (physical_stride != requested_stride)
 				{
 					flags |= ACCESS_CHAIN_PTR_CHAIN_POINTER_ARITH_BIT;
@@ -11224,8 +11225,8 @@ std::string CompilerGLSL::flattened_access_chain_struct(uint32_t base, const uin
 		if (member_type.columns > 1)
 		{
 			auto decorations = combined_decoration_for_member(target_type, i);
-			need_transpose = decorations.get(DecorationRowMajor);
-			relaxed = decorations.get(DecorationRelaxedPrecision);
+			need_transpose = decorations.get(static_cast<uint32_t>(Decoration::RowMajor));
+			relaxed = decorations.get(static_cast<uint32_t>(Decoration::RelaxedPrecision));
 			matrix_stride = type_struct_member_matrix_stride(target_type, i);
 		}
 
@@ -11357,7 +11358,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 		if (ptr_chain && i == 0)
 		{
 			// Here, the pointer type will be decorated with an array stride.
-			array_stride = get_decoration(basetype.self, DecorationArrayStride);
+			array_stride = get_decoration(basetype.self, Decoration::ArrayStride);
 			if (!array_stride)
 				SPIRV_CROSS_THROW("SPIR-V does not define ArrayStride for buffer block.");
 
@@ -11416,7 +11417,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 			type = &get<SPIRType>(parent_type);
 
 			if (!type->array.empty())
-				array_stride = get_decoration(parent_type, DecorationArrayStride);
+				array_stride = get_decoration(parent_type, Decoration::ArrayStride);
 		}
 		// For structs, the index refers to a constant, which indexes into the members.
 		// We also check if this member is a builtin, since we then replace the entire expression with the builtin one.
@@ -11436,7 +11437,7 @@ std::pair<std::string, uint32_t> CompilerGLSL::flattened_access_chain_offset(
 			{
 				matrix_stride = type_struct_member_matrix_stride(struct_type, index);
 				row_major_matrix_needs_conversion =
-				    combined_decoration_for_member(struct_type, index).get(DecorationRowMajor);
+				    combined_decoration_for_member(struct_type, index).get(static_cast<uint32_t>(Decoration::RowMajor));
 			}
 			else
 				row_major_matrix_needs_conversion = false;
@@ -11582,7 +11583,7 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 	if (var)
 	{
 		// Never forward volatile builtin variables, e.g. SPIR-V 1.6 HelperInvocation.
-		return !(has_decoration(id, DecorationBuiltIn) && has_decoration(id, DecorationVolatile));
+		return !(has_decoration(id, Decoration::BuiltIn) && has_decoration(id, Decoration::Volatile));
 	}
 
 	// For debugging emit temporary variables for all expressions
@@ -11597,8 +11598,8 @@ bool CompilerGLSL::should_forward(uint32_t id) const
 		return false;
 
 	if (expr && expr->loaded_from
-		&& has_decoration(expr->loaded_from, DecorationBuiltIn)
-		&& has_decoration(expr->loaded_from, DecorationVolatile))
+		&& has_decoration(expr->loaded_from, Decoration::BuiltIn)
+		&& has_decoration(expr->loaded_from, Decoration::Volatile))
 	{
 		// Never forward volatile builtin variables, e.g. SPIR-V 1.6 HelperInvocation.
 		return false;
@@ -11714,7 +11715,7 @@ string CompilerGLSL::variable_decl_function_local(SPIRVariable &var)
 	// Some backends will inject custom variables locally in a function
 	// with a storage qualifier which is not function-local.
 	auto old_storage = var.storage;
-	var.storage = StorageClassFunction;
+	var.storage = StorageClass::Function;
 	auto expr = variable_decl(var);
 	var.storage = old_storage;
 	return expr;
@@ -11740,8 +11741,8 @@ void CompilerGLSL::flush_variable_declaration(uint32_t id)
 	{
 		string initializer;
 		if (options.force_zero_initialized_variables &&
-		    (var->storage == StorageClassFunction || var->storage == StorageClassGeneric ||
-		     var->storage == StorageClassPrivate) &&
+		    (var->storage == StorageClass::Function || var->storage == StorageClass::Generic ||
+		     var->storage == StorageClass::Private) &&
 		    !var->initializer && type_can_zero_initialize(get_variable_data_type(*var)))
 		{
 			initializer = join(" = ", to_zero_initialized_expression(get_variable_data_type_id(*var)));
@@ -11868,7 +11869,7 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 	// Can only merge swizzles for vectors.
 	auto &type = get<SPIRType>(return_type);
 	bool can_apply_swizzle_opt = type.basetype != SPIRType::Struct && type.array.empty() && type.columns == 1 &&
-	                             type.op != spv::OpTypeCooperativeMatrixKHR;
+	                             type.op != spv::Op::OpTypeCooperativeMatrixKHR;
 	bool swizzle_optimization = false;
 
 	for (uint32_t i = 0; i < length; i++)
@@ -11922,7 +11923,7 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 				op += ", ";
 
 			bool uses_buffer_offset =
-			    type.basetype == SPIRType::Struct && has_member_decoration(type.self, i, DecorationOffset);
+			    type.basetype == SPIRType::Struct && has_member_decoration(type.self, i, Decoration::Offset);
 			subop = to_composite_constructor_expression(type, elems[i], uses_buffer_offset);
 		}
 
@@ -12028,7 +12029,7 @@ void CompilerGLSL::emit_block_instructions(SPIRBlock &block)
 				// Explicitly, we don't want to inherit RelaxedPrecision state in this CopyObject,
 				// so it helps to have handle_instruction_precision() on the outside of emit_instruction().
 				EmbeddedInstruction inst;
-				inst.op = OpCopyObject;
+				inst.op = static_cast<uint16_t>(spv::Op::OpCopyObject);
 				inst.length = 3;
 				inst.ops.push_back(expression_type_id(itr->first));
 				inst.ops.push_back(itr->second);
@@ -12047,7 +12048,7 @@ void CompilerGLSL::emit_block_instructions(SPIRBlock &block)
 			// Explicitly, we don't want to inherit RelaxedPrecision state in this CopyObject,
 			// so it helps to have handle_instruction_precision() on the outside of emit_instruction().
 			EmbeddedInstruction inst;
-			inst.op = OpCopyObject;
+			inst.op = static_cast<uint16_t>(Op::OpCopyObject);
 			inst.length = 3;
 			inst.ops.push_back(expression_type_id(temporary_copy.src_id));
 			inst.ops.push_back(temporary_copy.dst_id);
@@ -12089,7 +12090,7 @@ void CompilerGLSL::handle_store_to_invariant_variable(uint32_t store_id, uint32_
 	// expressions to be temporaries.
 	// It is uncertain if this is enough to support invariant in all possible cases, but it should be good enough
 	// for all reasonable uses of invariant.
-	if (!has_decoration(store_id, DecorationInvariant))
+	if (!has_decoration(store_id, Decoration::Invariant))
 		return;
 
 	auto *expr = maybe_get<SPIRExpression>(value_id);
@@ -12111,7 +12112,7 @@ void CompilerGLSL::emit_store_statement(uint32_t lhs_expression, uint32_t rhs_ex
 		if (!unroll_array_to_complex_store(lhs_expression, rhs_expression))
 		{
 			auto lhs = to_dereferenced_expression(lhs_expression);
-			if (has_decoration(lhs_expression, DecorationNonUniform))
+			if (has_decoration(lhs_expression, Decoration::NonUniform))
 				convert_non_uniform_expression(lhs, lhs_expression);
 
 			// We might need to cast in order to store to a builtin.
@@ -12137,24 +12138,24 @@ uint32_t CompilerGLSL::get_integer_width_for_instruction(const Instruction &inst
 
 	switch (instr.op)
 	{
-	case OpSConvert:
-	case OpConvertSToF:
-	case OpUConvert:
-	case OpConvertUToF:
-	case OpIEqual:
-	case OpINotEqual:
-	case OpSLessThan:
-	case OpSLessThanEqual:
-	case OpSGreaterThan:
-	case OpSGreaterThanEqual:
-	case OpULessThan:
-	case OpULessThanEqual:
-	case OpUGreaterThan:
-	case OpUGreaterThanEqual:
+	case static_cast<uint32_t>(Op::OpSConvert):
+	case static_cast<uint32_t>(Op::OpConvertSToF):
+	case static_cast<uint32_t>(Op::OpUConvert):
+	case static_cast<uint32_t>(Op::OpConvertUToF):
+	case static_cast<uint32_t>(Op::OpIEqual):
+	case static_cast<uint32_t>(Op::OpINotEqual):
+	case static_cast<uint32_t>(Op::OpSLessThan):
+	case static_cast<uint32_t>(Op::OpSLessThanEqual):
+	case static_cast<uint32_t>(Op::OpSGreaterThan):
+	case static_cast<uint32_t>(Op::OpSGreaterThanEqual):
+	case static_cast<uint32_t>(Op::OpULessThan):
+	case static_cast<uint32_t>(Op::OpULessThanEqual):
+	case static_cast<uint32_t>(Op::OpUGreaterThan):
+	case static_cast<uint32_t>(Op::OpUGreaterThanEqual):
 		return expression_type(ops[2]).width;
 
-	case OpSMulExtended:
-	case OpUMulExtended:
+	case static_cast<uint32_t>(Op::OpSMulExtended):
+	case static_cast<uint32_t>(Op::OpUMulExtended):
 		return get<SPIRType>(get<SPIRType>(ops[0]).member_types[0]).width;
 
 	default:
@@ -12209,7 +12210,7 @@ void CompilerGLSL::forward_relaxed_precision(uint32_t dst_id, const uint32_t *ar
 	// For expressions which are loaded or directly forwarded, we inherit mediump implicitly.
 	// For dst_id to be analyzed properly, it must inherit any relaxed precision decoration from src_id.
 	if (input_precision == Options::Mediump)
-		set_decoration(dst_id, DecorationRelaxedPrecision);
+		set_decoration(dst_id, Decoration::RelaxedPrecision);
 }
 
 CompilerGLSL::Options::Precision CompilerGLSL::analyze_expression_precision(const uint32_t *args, uint32_t length) const
@@ -12231,7 +12232,7 @@ CompilerGLSL::Options::Precision CompilerGLSL::analyze_expression_precision(cons
 		if (handle_type == TypeConstant || handle_type == TypeConstantOp || handle_type == TypeUndef)
 			continue;
 
-		if (has_decoration(arg, DecorationRelaxedPrecision))
+		if (has_decoration(arg, Decoration::RelaxedPrecision))
 			expression_has_mediump = true;
 		else
 			expression_has_highp = true;
@@ -12256,7 +12257,7 @@ void CompilerGLSL::analyze_precision_requirements(uint32_t type_id, uint32_t dst
 	if (type.basetype != SPIRType::Float && type.basetype != SPIRType::Int && type.basetype != SPIRType::UInt)
 		return;
 
-	bool operation_is_highp = !has_decoration(dst_id, DecorationRelaxedPrecision);
+	bool operation_is_highp = !has_decoration(dst_id, Decoration::RelaxedPrecision);
 
 	auto input_precision = analyze_expression_precision(args, length);
 	if (input_precision == Options::DontCare)
@@ -12291,44 +12292,44 @@ static bool opcode_is_precision_sensitive_operation(Op op)
 {
 	switch (op)
 	{
-	case OpFAdd:
-	case OpFSub:
-	case OpFMul:
-	case OpFNegate:
-	case OpIAdd:
-	case OpISub:
-	case OpIMul:
-	case OpSNegate:
-	case OpFMod:
-	case OpFDiv:
-	case OpFRem:
-	case OpSMod:
-	case OpSDiv:
-	case OpSRem:
-	case OpUMod:
-	case OpUDiv:
-	case OpVectorTimesMatrix:
-	case OpMatrixTimesVector:
-	case OpMatrixTimesMatrix:
-	case OpDPdx:
-	case OpDPdy:
-	case OpDPdxCoarse:
-	case OpDPdyCoarse:
-	case OpDPdxFine:
-	case OpDPdyFine:
-	case OpFwidth:
-	case OpFwidthCoarse:
-	case OpFwidthFine:
-	case OpVectorTimesScalar:
-	case OpMatrixTimesScalar:
-	case OpOuterProduct:
-	case OpFConvert:
-	case OpSConvert:
-	case OpUConvert:
-	case OpConvertSToF:
-	case OpConvertUToF:
-	case OpConvertFToU:
-	case OpConvertFToS:
+	case Op::OpFAdd:
+	case Op::OpFSub:
+	case Op::OpFMul:
+	case Op::OpFNegate:
+	case Op::OpIAdd:
+	case Op::OpISub:
+	case Op::OpIMul:
+	case Op::OpSNegate:
+	case Op::OpFMod:
+	case Op::OpFDiv:
+	case Op::OpFRem:
+	case Op::OpSMod:
+	case Op::OpSDiv:
+	case Op::OpSRem:
+	case Op::OpUMod:
+	case Op::OpUDiv:
+	case Op::OpVectorTimesMatrix:
+	case Op::OpMatrixTimesVector:
+	case Op::OpMatrixTimesMatrix:
+	case Op::OpDPdx:
+	case Op::OpDPdy:
+	case Op::OpDPdxCoarse:
+	case Op::OpDPdyCoarse:
+	case Op::OpDPdxFine:
+	case Op::OpDPdyFine:
+	case Op::OpFwidth:
+	case Op::OpFwidthCoarse:
+	case Op::OpFwidthFine:
+	case Op::OpVectorTimesScalar:
+	case Op::OpMatrixTimesScalar:
+	case Op::OpOuterProduct:
+	case Op::OpFConvert:
+	case Op::OpSConvert:
+	case Op::OpUConvert:
+	case Op::OpConvertSToF:
+	case Op::OpConvertUToF:
+	case Op::OpConvertFToU:
+	case Op::OpConvertFToS:
 		return true;
 
 	default:
@@ -12343,47 +12344,47 @@ static bool opcode_is_precision_forwarding_instruction(Op op, uint32_t &arg_coun
 {
 	switch (op)
 	{
-	case OpLoad:
-	case OpAccessChain:
-	case OpInBoundsAccessChain:
-	case OpCompositeExtract:
-	case OpVectorExtractDynamic:
-	case OpSampledImage:
-	case OpImage:
-	case OpCopyObject:
+	case Op::OpLoad:
+	case Op::OpAccessChain:
+	case Op::OpInBoundsAccessChain:
+	case Op::OpCompositeExtract:
+	case Op::OpVectorExtractDynamic:
+	case Op::OpSampledImage:
+	case Op::OpImage:
+	case Op::OpCopyObject:
 
-	case OpImageRead:
-	case OpImageFetch:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
-	case OpImageSampleExplicitLod:
-	case OpImageSampleProjExplicitLod:
-	case OpImageSampleDrefExplicitLod:
-	case OpImageSampleProjDrefExplicitLod:
-	case OpImageGather:
-	case OpImageDrefGather:
-	case OpImageSparseRead:
-	case OpImageSparseFetch:
-	case OpImageSparseSampleImplicitLod:
-	case OpImageSparseSampleProjImplicitLod:
-	case OpImageSparseSampleDrefImplicitLod:
-	case OpImageSparseSampleProjDrefImplicitLod:
-	case OpImageSparseSampleExplicitLod:
-	case OpImageSparseSampleProjExplicitLod:
-	case OpImageSparseSampleDrefExplicitLod:
-	case OpImageSparseSampleProjDrefExplicitLod:
-	case OpImageSparseGather:
-	case OpImageSparseDrefGather:
+	case Op::OpImageRead:
+	case Op::OpImageFetch:
+	case Op::OpImageSampleImplicitLod:
+	case Op::OpImageSampleProjImplicitLod:
+	case Op::OpImageSampleDrefImplicitLod:
+	case Op::OpImageSampleProjDrefImplicitLod:
+	case Op::OpImageSampleExplicitLod:
+	case Op::OpImageSampleProjExplicitLod:
+	case Op::OpImageSampleDrefExplicitLod:
+	case Op::OpImageSampleProjDrefExplicitLod:
+	case Op::OpImageGather:
+	case Op::OpImageDrefGather:
+	case Op::OpImageSparseRead:
+	case Op::OpImageSparseFetch:
+	case Op::OpImageSparseSampleImplicitLod:
+	case Op::OpImageSparseSampleProjImplicitLod:
+	case Op::OpImageSparseSampleDrefImplicitLod:
+	case Op::OpImageSparseSampleProjDrefImplicitLod:
+	case Op::OpImageSparseSampleExplicitLod:
+	case Op::OpImageSparseSampleProjExplicitLod:
+	case Op::OpImageSparseSampleDrefExplicitLod:
+	case Op::OpImageSparseSampleProjDrefExplicitLod:
+	case Op::OpImageSparseGather:
+	case Op::OpImageSparseDrefGather:
 		arg_count = 1;
 		return true;
 
-	case OpVectorShuffle:
+	case Op::OpVectorShuffle:
 		arg_count = 2;
 		return true;
 
-	case OpCompositeConstruct:
+	case Op::OpCompositeConstruct:
 		return true;
 
 	default:
@@ -12407,7 +12408,7 @@ CompilerGLSL::TemporaryCopy CompilerGLSL::handle_instruction_precision(const Ins
 
 			if (opcode_is_precision_sensitive_operation(opcode))
 				analyze_precision_requirements(ops[0], ops[1], &ops[2], forwarding_length);
-			else if (opcode == OpExtInst && length >= 5 && get<SPIRExtension>(ops[2]).ext == SPIRExtension::GLSL)
+			else if (opcode == Op::OpExtInst && length >= 5 && get<SPIRExtension>(ops[2]).ext == SPIRExtension::GLSL)
 				analyze_precision_requirements(ops[0], ops[1], &ops[4], forwarding_length - 2);
 			else if (opcode_is_precision_forwarding_instruction(opcode, forwarding_length))
 				forward_relaxed_precision(ops[1], &ops[2], forwarding_length);
@@ -12489,7 +12490,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	switch (opcode)
 	{
 	// Dealing with memory
-	case OpLoad:
+	case Op::OpLoad:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -12565,7 +12566,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// Also, loading from gl_SampleMask array needs special unroll.
 		unroll_array_from_complex_load(id, ptr, expr);
 
-		if (!type_is_opaque_value(type) && has_decoration(ptr, DecorationNonUniform))
+		if (!type_is_opaque_value(type) && has_decoration(ptr, Decoration::NonUniform))
 		{
 			// If we're loading something non-opaque, we need to handle non-uniform descriptor access.
 			convert_non_uniform_expression(expr, ptr);
@@ -12591,7 +12592,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			// it is an array, and our backend does not support arrays as value types.
 			// Emit the temporary, and copy it explicitly.
 			e = &emit_uninitialized_temporary_expression(result_type, id);
-			emit_array_copy(nullptr, id, ptr, StorageClassFunction, get_expression_effective_storage_class(ptr));
+			emit_array_copy(nullptr, id, ptr, StorageClass::Function, get_expression_effective_storage_class(ptr));
 		}
 		else
 			e = &emit_op(result_type, id, expr, forward, !usage_tracking);
@@ -12623,9 +12624,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpInBoundsAccessChain:
-	case OpAccessChain:
-	case OpPtrAccessChain:
+	case Op::OpInBoundsAccessChain:
+	case Op::OpAccessChain:
+	case Op::OpPtrAccessChain:
 	{
 		auto *var = maybe_get<SPIRVariable>(ops[2]);
 		if (var)
@@ -12634,7 +12635,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If the base is immutable, the access chain pointer must also be.
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		AccessChainMeta meta;
-		bool ptr_chain = opcode == OpPtrAccessChain;
+		bool ptr_chain = opcode == Op::OpPtrAccessChain;
 		auto &target_type = get<SPIRType>(ops[0]);
 		auto e = access_chain(ops[2], &ops[3], length - 3, target_type, &meta, ptr_chain);
 
@@ -12661,13 +12662,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (meta.storage_physical_type != 0)
 			set_extended_decoration(ops[1], SPIRVCrossDecorationPhysicalTypeID, meta.storage_physical_type);
 		if (meta.storage_is_invariant)
-			set_decoration(ops[1], DecorationInvariant);
+			set_decoration(ops[1], Decoration::Invariant);
 		if (meta.flattened_struct)
 			flattened_structs[ops[1]] = true;
 		if (meta.relaxed_precision && backend.requires_relaxed_precision_analysis)
-			set_decoration(ops[1], DecorationRelaxedPrecision);
+			set_decoration(ops[1], Decoration::RelaxedPrecision);
 		if (meta.chain_is_builtin)
-			set_decoration(ops[1], DecorationBuiltIn, meta.builtin);
+			set_decoration(ops[1], Decoration::BuiltIn, static_cast<uint32_t>(meta.builtin));
 
 		// If we have some expression dependencies in our access chain, this access chain is technically a forwarded
 		// temporary which could be subject to invalidation.
@@ -12690,7 +12691,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpStore:
+	case Op::OpStore:
 	{
 		auto *var = maybe_get<SPIRVariable>(ops[0]);
 
@@ -12719,12 +12720,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpArrayLength:
+	case Op::OpArrayLength:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		auto e = access_chain_internal(ops[2], &ops[3], length - 3, ACCESS_CHAIN_INDEX_IS_LITERAL_BIT, nullptr);
-		if (has_decoration(ops[2], DecorationNonUniform))
+		if (has_decoration(ops[2], Decoration::NonUniform))
 			convert_non_uniform_expression(e, ops[2]);
 		set<SPIRExpression>(id, join(type_to_glsl(get<SPIRType>(result_type)), "(", e, ".length())"), result_type,
 		                    true);
@@ -12732,7 +12733,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Function calls
-	case OpFunctionCall:
+	case Op::OpFunctionCall:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -12844,7 +12845,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Composite munging
-	case OpCompositeConstruct:
+	case Op::OpCompositeConstruct:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -12948,7 +12949,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpVectorInsertDynamic:
+	case Op::OpVectorInsertDynamic:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -12966,7 +12967,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpVectorExtractDynamic:
+	case Op::OpVectorExtractDynamic:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -12978,7 +12979,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCompositeExtract:
+	case Op::OpCompositeExtract:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -12995,7 +12996,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (composite_type_is_complex)
 			allow_base_expression = false;
 
-		if (composite_type.op == spv::OpTypeCooperativeMatrixKHR)
+		if (composite_type.op == spv::Op::OpTypeCooperativeMatrixKHR)
 			allow_base_expression = false;
 
 		// Packed expressions or physical ID mapped expressions cannot be split up.
@@ -13041,7 +13042,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			e->base_expression = ops[2];
 
 			if (meta.relaxed_precision && backend.requires_relaxed_precision_analysis)
-				set_decoration(ops[1], DecorationRelaxedPrecision);
+				set_decoration(ops[1], Decoration::RelaxedPrecision);
 		}
 		else
 		{
@@ -13060,12 +13061,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (meta.storage_physical_type != 0)
 			set_extended_decoration(id, SPIRVCrossDecorationPhysicalTypeID, meta.storage_physical_type);
 		if (meta.storage_is_invariant)
-			set_decoration(id, DecorationInvariant);
+			set_decoration(id, Decoration::Invariant);
 
 		break;
 	}
 
-	case OpCompositeInsert:
+	case Op::OpCompositeInsert:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -13098,8 +13099,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			can_modify_in_place = false;
 		}
 		else if (backend.requires_relaxed_precision_analysis &&
-		         has_decoration(composite, DecorationRelaxedPrecision) !=
-		         has_decoration(id, DecorationRelaxedPrecision) &&
+		         has_decoration(composite, Decoration::RelaxedPrecision) !=
+		         has_decoration(id, Decoration::RelaxedPrecision) &&
 		         get<SPIRType>(result_type).basetype != SPIRType::Struct)
 		{
 			// Similarly, if precision does not match for input and output,
@@ -13140,7 +13141,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCopyMemory:
+	case Op::OpCopyMemory:
 	{
 		uint32_t lhs = ops[0];
 		uint32_t rhs = ops[1];
@@ -13152,13 +13153,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			uint32_t tmp_type_id = expression_type(rhs).parent_type;
 
 			EmbeddedInstruction fake_load, fake_store;
-			fake_load.op = OpLoad;
+			fake_load.op = static_cast<uint16_t>(Op::OpLoad);
 			fake_load.length = 3;
 			fake_load.ops.push_back(tmp_type_id);
 			fake_load.ops.push_back(tmp_id);
 			fake_load.ops.push_back(rhs);
 
-			fake_store.op = OpStore;
+			fake_store.op = static_cast<uint16_t>(Op::OpStore);
 			fake_store.length = 2;
 			fake_store.ops.push_back(lhs);
 			fake_store.ops.push_back(tmp_id);
@@ -13171,7 +13172,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCopyLogical:
+	case Op::OpCopyLogical:
 	{
 		// This is used for copying object of different types, arrays and structs.
 		// We need to unroll the copy, element-by-element.
@@ -13184,7 +13185,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCopyObject:
+	case Op::OpCopyObject:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -13237,7 +13238,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpVectorShuffle:
+	case Op::OpVectorShuffle:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -13319,7 +13320,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// ALU
-	case OpIsNan:
+	case Op::OpIsNan:
 		if (!is_legacy())
 			GLSL_UFOP(isnan);
 		else
@@ -13333,7 +13334,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		break;
 
-	case OpIsInf:
+	case Op::OpIsInf:
 		if (!is_legacy())
 			GLSL_UFOP(isinf);
 		else
@@ -13373,18 +13374,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		break;
 
-	case OpSNegate:
+	case Op::OpSNegate:
 		if (implicit_integer_promotion || expression_type_id(ops[2]) != ops[0])
 			GLSL_UOP_CAST(-);
 		else
 			GLSL_UOP(-);
 		break;
 
-	case OpFNegate:
+	case Op::OpFNegate:
 		GLSL_UOP(-);
 		break;
 
-	case OpIAdd:
+	case Op::OpIAdd:
 	{
 		// For simple arith ops, prefer the output type if there's a mismatch to avoid extra bitcasts.
 		auto type = get<SPIRType>(ops[0]).basetype;
@@ -13392,39 +13393,39 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFAdd:
+	case Op::OpFAdd:
 		GLSL_BOP(+);
 		break;
 
-	case OpISub:
+	case Op::OpISub:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
 		GLSL_BOP_CAST(-, type);
 		break;
 	}
 
-	case OpFSub:
+	case Op::OpFSub:
 		GLSL_BOP(-);
 		break;
 
-	case OpIMul:
+	case Op::OpIMul:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
 		GLSL_BOP_CAST(*, type);
 		break;
 	}
 
-	case OpVectorTimesMatrix:
-	case OpMatrixTimesVector:
+	case Op::OpVectorTimesMatrix:
+	case Op::OpMatrixTimesVector:
 	{
 		// If the matrix needs transpose, just flip the multiply order.
-		auto *e = maybe_get<SPIRExpression>(ops[opcode == OpMatrixTimesVector ? 2 : 3]);
+		auto *e = maybe_get<SPIRExpression>(ops[opcode == Op::OpMatrixTimesVector ? 2 : 3]);
 		if (e && e->need_transpose)
 		{
 			e->need_transpose = false;
 			string expr;
 
-			if (opcode == OpMatrixTimesVector)
+			if (opcode == Op::OpMatrixTimesVector)
 				expr = join(to_enclosed_unpacked_expression(ops[3]), " * ",
 				            enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])));
 			else
@@ -13442,7 +13443,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpMatrixTimesMatrix:
+	case Op::OpMatrixTimesMatrix:
 	{
 		auto *a = maybe_get<SPIRExpression>(ops[2]);
 		auto *b = maybe_get<SPIRExpression>(ops[3]);
@@ -13469,7 +13470,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpMatrixTimesScalar:
+	case Op::OpMatrixTimesScalar:
 	{
 		auto *a = maybe_get<SPIRExpression>(ops[2]);
 
@@ -13491,12 +13492,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFMul:
-	case OpVectorTimesScalar:
+	case Op::OpFMul:
+	case Op::OpVectorTimesScalar:
 		GLSL_BOP(*);
 		break;
 
-	case OpOuterProduct:
+	case Op::OpOuterProduct:
 		if (options.version < 120) // Matches GLSL 1.10 / ESSL 1.00
 		{
 			uint32_t result_type = ops[0];
@@ -13524,11 +13525,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			GLSL_BFOP(outerProduct);
 		break;
 
-	case OpDot:
+	case Op::OpDot:
 		GLSL_BFOP(dot);
 		break;
 
-	case OpTranspose:
+	case Op::OpTranspose:
 		if (options.version < 120) // Matches GLSL 1.10 / ESSL 1.00
 		{
 			// transpose() is not available, so instead, flip need_transpose,
@@ -13557,7 +13558,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			GLSL_UFOP(transpose);
 		break;
 
-	case OpSRem:
+	case Op::OpSRem:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t result_id = ops[1];
@@ -13589,16 +13590,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSDiv:
+	case Op::OpSDiv:
 		GLSL_BOP_CAST(/, int_type);
 		break;
 
-	case OpUDiv:
+	case Op::OpUDiv:
 		GLSL_BOP_CAST(/, uint_type);
 		break;
 
-	case OpIAddCarry:
-	case OpISubBorrow:
+	case Op::OpIAddCarry:
+	case Op::OpISubBorrow:
 	{
 		if (options.es && options.version < 310)
 			SPIRV_CROSS_THROW("Extended arithmetic is only available from ESSL 310.");
@@ -13611,15 +13612,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t op1 = ops[3];
 		auto &type = get<SPIRType>(result_type);
 		emit_uninitialized_temporary_expression(result_type, result_id);
-		const char *op = opcode == OpIAddCarry ? "uaddCarry" : "usubBorrow";
+		const char *op = opcode == Op::OpIAddCarry ? "uaddCarry" : "usubBorrow";
 
 		statement(to_expression(result_id), ".", to_member_name(type, 0), " = ", op, "(", to_expression(op0), ", ",
 		          to_expression(op1), ", ", to_expression(result_id), ".", to_member_name(type, 1), ");");
 		break;
 	}
 
-	case OpUMulExtended:
-	case OpSMulExtended:
+	case Op::OpUMulExtended:
+	case Op::OpSMulExtended:
 	{
 		if (options.es && options.version < 310)
 			SPIRV_CROSS_THROW("Extended arithmetic is only available from ESSL 310.");
@@ -13632,73 +13633,73 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t op1 = ops[3];
 		auto &type = get<SPIRType>(result_type);
 		emit_uninitialized_temporary_expression(result_type, result_id);
-		const char *op = opcode == OpUMulExtended ? "umulExtended" : "imulExtended";
+		const char *op = opcode == Op::OpUMulExtended ? "umulExtended" : "imulExtended";
 
 		statement(op, "(", to_expression(op0), ", ", to_expression(op1), ", ", to_expression(result_id), ".",
 		          to_member_name(type, 1), ", ", to_expression(result_id), ".", to_member_name(type, 0), ");");
 		break;
 	}
 
-	case OpFDiv:
+	case Op::OpFDiv:
 		GLSL_BOP(/);
 		break;
 
-	case OpShiftRightLogical:
+	case Op::OpShiftRightLogical:
 		GLSL_BOP_CAST(>>, uint_type);
 		break;
 
-	case OpShiftRightArithmetic:
+	case Op::OpShiftRightArithmetic:
 		GLSL_BOP_CAST(>>, int_type);
 		break;
 
-	case OpShiftLeftLogical:
+	case Op::OpShiftLeftLogical:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
 		GLSL_BOP_CAST(<<, type);
 		break;
 	}
 
-	case OpBitwiseOr:
+	case Op::OpBitwiseOr:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
 		GLSL_BOP_CAST(|, type);
 		break;
 	}
 
-	case OpBitwiseXor:
+	case Op::OpBitwiseXor:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
 		GLSL_BOP_CAST(^, type);
 		break;
 	}
 
-	case OpBitwiseAnd:
+	case Op::OpBitwiseAnd:
 	{
 		auto type = get<SPIRType>(ops[0]).basetype;
 		GLSL_BOP_CAST(&, type);
 		break;
 	}
 
-	case OpNot:
+	case Op::OpNot:
 		if (implicit_integer_promotion || expression_type_id(ops[2]) != ops[0])
 			GLSL_UOP_CAST(~);
 		else
 			GLSL_UOP(~);
 		break;
 
-	case OpUMod:
+	case Op::OpUMod:
 		GLSL_BOP_CAST(%, uint_type);
 		break;
 
-	case OpSMod:
+	case Op::OpSMod:
 		GLSL_BOP_CAST(%, int_type);
 		break;
 
-	case OpFMod:
+	case Op::OpFMod:
 		GLSL_BFOP(mod);
 		break;
 
-	case OpFRem:
+	case Op::OpFRem:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t result_id = ops[1];
@@ -13731,19 +13732,19 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Relational
-	case OpAny:
+	case Op::OpAny:
 		GLSL_UFOP(any);
 		break;
 
-	case OpAll:
+	case Op::OpAll:
 		GLSL_UFOP(all);
 		break;
 
-	case OpSelect:
+	case Op::OpSelect:
 		emit_mix_op(ops[0], ops[1], ops[4], ops[3], ops[2]);
 		break;
 
-	case OpLogicalOr:
+	case Op::OpLogicalOr:
 	{
 		// No vector variant in GLSL for logical OR.
 		auto result_type = ops[0];
@@ -13757,7 +13758,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpLogicalAnd:
+	case Op::OpLogicalAnd:
 	{
 		// No vector variant in GLSL for logical AND.
 		auto result_type = ops[0];
@@ -13771,7 +13772,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpLogicalNot:
+	case Op::OpLogicalNot:
 	{
 		auto &type = get<SPIRType>(ops[0]);
 		if (type.vecsize > 1)
@@ -13781,7 +13782,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpIEqual:
+	case Op::OpIEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP_CAST(equal, int_type);
@@ -13790,8 +13791,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpLogicalEqual:
-	case OpFOrdEqual:
+	case Op::OpLogicalEqual:
+	case Op::OpFOrdEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP(equal);
@@ -13800,7 +13801,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpINotEqual:
+	case Op::OpINotEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP_CAST(notEqual, int_type);
@@ -13809,9 +13810,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpLogicalNotEqual:
-	case OpFOrdNotEqual:
-	case OpFUnordNotEqual:
+	case Op::OpLogicalNotEqual:
+	case Op::OpFOrdNotEqual:
+	case Op::OpFUnordNotEqual:
 	{
 		// GLSL is fuzzy on what to do with ordered vs unordered not equal.
 		// glslang started emitting UnorderedNotEqual some time ago to harmonize with IEEE,
@@ -13823,10 +13824,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpUGreaterThan:
-	case OpSGreaterThan:
+	case Op::OpUGreaterThan:
+	case Op::OpSGreaterThan:
 	{
-		auto type = opcode == OpUGreaterThan ? uint_type : int_type;
+		auto type = opcode == Op::OpUGreaterThan ? uint_type : int_type;
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP_CAST(greaterThan, type);
 		else
@@ -13834,7 +13835,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFOrdGreaterThan:
+	case Op::OpFOrdGreaterThan:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP(greaterThan);
@@ -13843,10 +13844,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpUGreaterThanEqual:
-	case OpSGreaterThanEqual:
+	case Op::OpUGreaterThanEqual:
+	case Op::OpSGreaterThanEqual:
 	{
-		auto type = opcode == OpUGreaterThanEqual ? uint_type : int_type;
+		auto type = opcode == Op::OpUGreaterThanEqual ? uint_type : int_type;
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP_CAST(greaterThanEqual, type);
 		else
@@ -13854,7 +13855,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFOrdGreaterThanEqual:
+	case Op::OpFOrdGreaterThanEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP(greaterThanEqual);
@@ -13863,10 +13864,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpULessThan:
-	case OpSLessThan:
+	case Op::OpULessThan:
+	case Op::OpSLessThan:
 	{
-		auto type = opcode == OpULessThan ? uint_type : int_type;
+		auto type = opcode == Op::OpULessThan ? uint_type : int_type;
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP_CAST(lessThan, type);
 		else
@@ -13874,7 +13875,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFOrdLessThan:
+	case Op::OpFOrdLessThan:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP(lessThan);
@@ -13883,10 +13884,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpULessThanEqual:
-	case OpSLessThanEqual:
+	case Op::OpULessThanEqual:
+	case Op::OpSLessThanEqual:
 	{
-		auto type = opcode == OpULessThanEqual ? uint_type : int_type;
+		auto type = opcode == Op::OpULessThanEqual ? uint_type : int_type;
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP_CAST(lessThanEqual, type);
 		else
@@ -13894,7 +13895,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFOrdLessThanEqual:
+	case Op::OpFOrdLessThanEqual:
 	{
 		if (expression_type(ops[2]).vecsize > 1)
 			GLSL_BFOP(lessThanEqual);
@@ -13904,12 +13905,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Conversion
-	case OpSConvert:
-	case OpConvertSToF:
-	case OpUConvert:
-	case OpConvertUToF:
+	case Op::OpSConvert:
+	case Op::OpConvertSToF:
+	case Op::OpUConvert:
+	case Op::OpConvertUToF:
 	{
-		auto input_type = opcode == OpSConvert || opcode == OpConvertSToF ? int_type : uint_type;
+		auto input_type = opcode == Op::OpSConvert || opcode == Op::OpConvertSToF ? int_type : uint_type;
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
@@ -13924,8 +13925,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpConvertFToU:
-	case OpConvertFToS:
+	case Op::OpConvertFToU:
+	case Op::OpConvertFToS:
 	{
 		// Cast to expected arithmetic type, then potentially bitcast away to desired signedness.
 		uint32_t result_type = ops[0];
@@ -13934,26 +13935,26 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto expected_type = type;
 		auto &float_type = expression_type(ops[2]);
 		expected_type.basetype =
-		    opcode == OpConvertFToS ? to_signed_basetype(type.width) : to_unsigned_basetype(type.width);
+		    opcode == Op::OpConvertFToS ? to_signed_basetype(type.width) : to_unsigned_basetype(type.width);
 
 		auto func = type_to_glsl_constructor(expected_type);
 		emit_unary_func_op_cast(result_type, id, ops[2], func.c_str(), float_type.basetype, expected_type.basetype);
 		break;
 	}
 
-	case OpCooperativeMatrixConvertNV:
+	case Op::OpCooperativeMatrixConvertNV:
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("CooperativeMatrixConvertNV requires vulkan semantics.");
 		require_extension_internal("GL_NV_cooperative_matrix2");
 		// fallthrough
-	case OpFConvert:
+	case Op::OpFConvert:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
 		auto &type = get<SPIRType>(result_type);
 
-		if (type.op == OpTypeCooperativeMatrixKHR && opcode == OpFConvert)
+		if (type.op == Op::OpTypeCooperativeMatrixKHR && opcode == Op::OpFConvert)
 		{
 			auto &expr_type = expression_type(ops[2]);
 			if (get<SPIRConstant>(type.ext.cooperative.use_id).scalar() !=
@@ -13967,7 +13968,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		if ((type.basetype == SPIRType::FloatE4M3 || type.basetype == SPIRType::FloatE5M2) &&
-		    has_decoration(id, spv::DecorationSaturatedToLargestFloat8NormalConversionEXT))
+		    has_decoration(id, spv::Decoration::SaturatedToLargestFloat8NormalConversionEXT))
 		{
 			emit_uninitialized_temporary_expression(result_type, id);
 			statement("saturatedConvertEXT(", to_expression(id), ", ", to_unpacked_expression(ops[2]), ");");
@@ -13980,7 +13981,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpBitcast:
+	case Op::OpBitcast:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -13994,7 +13995,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpQuantizeToF16:
+	case Op::OpQuantizeToF16:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14035,21 +14036,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Derivatives
-	case OpDPdx:
+	case Op::OpDPdx:
 		GLSL_UFOP(dFdx);
 		if (is_legacy_es())
 			require_extension_internal("GL_OES_standard_derivatives");
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpDPdy:
+	case Op::OpDPdy:
 		GLSL_UFOP(dFdy);
 		if (is_legacy_es())
 			require_extension_internal("GL_OES_standard_derivatives");
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpDPdxFine:
+	case Op::OpDPdxFine:
 		GLSL_UFOP(dFdxFine);
 		if (options.es)
 		{
@@ -14060,7 +14061,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpDPdyFine:
+	case Op::OpDPdyFine:
 		GLSL_UFOP(dFdyFine);
 		if (options.es)
 		{
@@ -14071,7 +14072,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpDPdxCoarse:
+	case Op::OpDPdxCoarse:
 		if (options.es)
 		{
 			SPIRV_CROSS_THROW("GL_ARB_derivative_control is unavailable in OpenGL ES.");
@@ -14082,7 +14083,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpDPdyCoarse:
+	case Op::OpDPdyCoarse:
 		GLSL_UFOP(dFdyCoarse);
 		if (options.es)
 		{
@@ -14093,14 +14094,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpFwidth:
+	case Op::OpFwidth:
 		GLSL_UFOP(fwidth);
 		if (is_legacy_es())
 			require_extension_internal("GL_OES_standard_derivatives");
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpFwidthCoarse:
+	case Op::OpFwidthCoarse:
 		GLSL_UFOP(fwidthCoarse);
 		if (options.es)
 		{
@@ -14111,7 +14112,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		register_control_dependent_expression(ops[1]);
 		break;
 
-	case OpFwidthFine:
+	case Op::OpFwidthFine:
 		GLSL_UFOP(fwidthFine);
 		if (options.es)
 		{
@@ -14123,32 +14124,32 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 
 	// Bitfield
-	case OpBitFieldInsert:
+	case Op::OpBitFieldInsert:
 	{
 		emit_bitfield_insert_op(ops[0], ops[1], ops[2], ops[3], ops[4], ops[5], "bitfieldInsert", SPIRType::Int);
 		break;
 	}
 
-	case OpBitFieldSExtract:
+	case Op::OpBitFieldSExtract:
 	{
 		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract", int_type, int_type,
 		                                SPIRType::Int, SPIRType::Int);
 		break;
 	}
 
-	case OpBitFieldUExtract:
+	case Op::OpBitFieldUExtract:
 	{
 		emit_trinary_func_op_bitextract(ops[0], ops[1], ops[2], ops[3], ops[4], "bitfieldExtract", uint_type, uint_type,
 		                                SPIRType::Int, SPIRType::Int);
 		break;
 	}
 
-	case OpBitReverse:
+	case Op::OpBitReverse:
 		// BitReverse does not have issues with sign since result type must match input type.
 		GLSL_UFOP(bitfieldReverse);
 		break;
 
-	case OpBitCount:
+	case Op::OpBitCount:
 	{
 		auto basetype = expression_type(ops[2]).basetype;
 		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "bitCount", basetype, int_type);
@@ -14156,7 +14157,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Atomics
-	case OpAtomicExchange:
+	case Op::OpAtomicExchange:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14169,7 +14170,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpAtomicCompareExchange:
+	case Op::OpAtomicCompareExchange:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14182,7 +14183,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpAtomicLoad:
+	case Op::OpAtomicLoad:
 	{
 		// In plain GLSL, we have no atomic loads, so emulate this by fetch adding by 0 and hope compiler figures it out.
 		// Alternatively, we could rely on KHR_memory_model, but that's not very helpful for GL.
@@ -14203,7 +14204,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpAtomicStore:
+	case Op::OpAtomicStore:
 	{
 		// In plain GLSL, we have no atomic stores, so emulate this with an atomic exchange where we don't consume the result.
 		// Alternatively, we could rely on KHR_memory_model, but that's not very helpful for GL.
@@ -14220,15 +14221,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpAtomicIIncrement:
-	case OpAtomicIDecrement:
+	case Op::OpAtomicIIncrement:
+	case Op::OpAtomicIDecrement:
 	{
 		forced_temporaries.insert(ops[1]);
 		auto &type = expression_type(ops[2]);
-		if (type.storage == StorageClassAtomicCounter)
+		if (type.storage == StorageClass::AtomicCounter)
 		{
 			// Legacy GLSL stuff, not sure if this is relevant to support.
-			if (opcode == OpAtomicIIncrement)
+			if (opcode == Op::OpAtomicIIncrement)
 				GLSL_UFOP(atomicCounterIncrement);
 			else
 				GLSL_UFOP(atomicCounterDecrement);
@@ -14241,9 +14242,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			const char *op = atomic_image ? "imageAtomicAdd" : "atomicAdd";
 
 			const char *increment = nullptr;
-			if (opcode == OpAtomicIIncrement && unsigned_type)
+			if (opcode == Op::OpAtomicIIncrement && unsigned_type)
 				increment = "1u";
-			else if (opcode == OpAtomicIIncrement)
+			else if (opcode == Op::OpAtomicIIncrement)
 				increment = "1";
 			else if (unsigned_type)
 				increment = "uint(-1)";
@@ -14261,15 +14262,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpAtomicIAdd:
-	case OpAtomicFAddEXT:
+	case Op::OpAtomicIAdd:
+	case Op::OpAtomicFAddEXT:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAdd" : "atomicAdd";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
-	case OpAtomicISub:
+	case Op::OpAtomicISub:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAdd" : "atomicAdd";
 		forced_temporaries.insert(ops[1]);
@@ -14283,37 +14284,37 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpAtomicSMin:
-	case OpAtomicUMin:
+	case Op::OpAtomicSMin:
+	case Op::OpAtomicUMin:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicMin" : "atomicMin";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
-	case OpAtomicSMax:
-	case OpAtomicUMax:
+	case Op::OpAtomicSMax:
+	case Op::OpAtomicUMax:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicMax" : "atomicMax";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
-	case OpAtomicAnd:
+	case Op::OpAtomicAnd:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicAnd" : "atomicAnd";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
-	case OpAtomicOr:
+	case Op::OpAtomicOr:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicOr" : "atomicOr";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
 		break;
 	}
 
-	case OpAtomicXor:
+	case Op::OpAtomicXor:
 	{
 		const char *op = check_atomic_image(ops[2]) ? "imageAtomicXor" : "atomicXor";
 		emit_atomic_func_op(ops[0], ops[1], ops[2], ops[5], op);
@@ -14321,15 +14322,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Geometry shaders
-	case OpEmitVertex:
+	case Op::OpEmitVertex:
 		statement("EmitVertex();");
 		break;
 
-	case OpEndPrimitive:
+	case Op::OpEndPrimitive:
 		statement("EndPrimitive();");
 		break;
 
-	case OpEmitStreamVertex:
+	case Op::OpEmitStreamVertex:
 	{
 		if (options.es)
 			SPIRV_CROSS_THROW("Multi-stream geometry shaders not supported in ES.");
@@ -14343,7 +14344,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpEndStreamPrimitive:
+	case Op::OpEndStreamPrimitive:
 	{
 		if (options.es)
 			SPIRV_CROSS_THROW("Multi-stream geometry shaders not supported in ES.");
@@ -14358,44 +14359,44 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Textures
-	case OpImageSampleExplicitLod:
-	case OpImageSampleProjExplicitLod:
-	case OpImageSampleDrefExplicitLod:
-	case OpImageSampleProjDrefExplicitLod:
-	case OpImageSampleImplicitLod:
-	case OpImageSampleProjImplicitLod:
-	case OpImageSampleDrefImplicitLod:
-	case OpImageSampleProjDrefImplicitLod:
-	case OpImageFetch:
-	case OpImageGather:
-	case OpImageDrefGather:
+	case Op::OpImageSampleExplicitLod:
+	case Op::OpImageSampleProjExplicitLod:
+	case Op::OpImageSampleDrefExplicitLod:
+	case Op::OpImageSampleProjDrefExplicitLod:
+	case Op::OpImageSampleImplicitLod:
+	case Op::OpImageSampleProjImplicitLod:
+	case Op::OpImageSampleDrefImplicitLod:
+	case Op::OpImageSampleProjDrefImplicitLod:
+	case Op::OpImageFetch:
+	case Op::OpImageGather:
+	case Op::OpImageDrefGather:
 		// Gets a bit hairy, so move this to a separate instruction.
 		emit_texture_op(instruction, false);
 		break;
 
-	case OpImageSparseSampleExplicitLod:
-	case OpImageSparseSampleProjExplicitLod:
-	case OpImageSparseSampleDrefExplicitLod:
-	case OpImageSparseSampleProjDrefExplicitLod:
-	case OpImageSparseSampleImplicitLod:
-	case OpImageSparseSampleProjImplicitLod:
-	case OpImageSparseSampleDrefImplicitLod:
-	case OpImageSparseSampleProjDrefImplicitLod:
-	case OpImageSparseFetch:
-	case OpImageSparseGather:
-	case OpImageSparseDrefGather:
+	case Op::OpImageSparseSampleExplicitLod:
+	case Op::OpImageSparseSampleProjExplicitLod:
+	case Op::OpImageSparseSampleDrefExplicitLod:
+	case Op::OpImageSparseSampleProjDrefExplicitLod:
+	case Op::OpImageSparseSampleImplicitLod:
+	case Op::OpImageSparseSampleProjImplicitLod:
+	case Op::OpImageSparseSampleDrefImplicitLod:
+	case Op::OpImageSparseSampleProjDrefImplicitLod:
+	case Op::OpImageSparseFetch:
+	case Op::OpImageSparseGather:
+	case Op::OpImageSparseDrefGather:
 		// Gets a bit hairy, so move this to a separate instruction.
 		emit_texture_op(instruction, true);
 		break;
 
-	case OpImageSparseTexelsResident:
+	case Op::OpImageSparseTexelsResident:
 		if (options.es)
 			SPIRV_CROSS_THROW("Sparse feedback is not supported in GLSL.");
 		require_extension_internal("GL_ARB_sparse_texture2");
 		emit_unary_func_op_cast(ops[0], ops[1], ops[2], "sparseTexelsResidentARB", int_type, SPIRType::Boolean);
 		break;
 
-	case OpImage:
+	case Op::OpImage:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14409,7 +14410,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageQueryLod:
+	case Op::OpImageQueryLod:
 	{
 		const char *op = nullptr;
 		if (!options.es && options.version < 400)
@@ -14429,7 +14430,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			op = "textureQueryLod";
 
 		auto sampler_expr = to_expression(ops[2]);
-		if (has_decoration(ops[2], DecorationNonUniform))
+		if (has_decoration(ops[2], Decoration::NonUniform))
 		{
 			if (maybe_get_backing_variable(ops[2]))
 				convert_non_uniform_expression(sampler_expr, ops[2]);
@@ -14447,7 +14448,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageQueryLevels:
+	case Op::OpImageQueryLevels:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14464,7 +14465,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageQuerySamples:
+	case Op::OpImageQuerySamples:
 	{
 		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
@@ -14487,7 +14488,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSampledImage:
+	case Op::OpSampledImage:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14497,7 +14498,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageQuerySizeLod:
+	case Op::OpImageQuerySizeLod:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14517,7 +14518,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		                 bitcast_expression(SPIRType::Int, ops[3]), ")");
 
 		// ES needs to emulate 1D images as 2D.
-		if (type.image.dim == Dim1D && options.es)
+		if (type.image.dim == Dim::Dim1D && options.es)
 			expr = join(expr, ".x");
 
 		auto &restype = get<SPIRType>(ops[0]);
@@ -14527,8 +14528,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Image load/store
-	case OpImageRead:
-	case OpImageSparseRead:
+	case Op::OpImageRead:
+	case Op::OpImageSparseRead:
 	{
 		// We added Nonreadable speculatively to the OpImage variable due to glslangValidator
 		// not adding the proper qualifiers.
@@ -14537,9 +14538,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (var)
 		{
 			auto &flags = get_decoration_bitset(var->self);
-			if (flags.get(DecorationNonReadable))
+			if (flags.get(static_cast<uint32_t>(Decoration::NonReadable)))
 			{
-				unset_decoration(var->self, DecorationNonReadable);
+				unset_decoration(var->self, Decoration::NonReadable);
 				force_recompile();
 			}
 		}
@@ -14576,7 +14577,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 			pure = true;
 		}
-		else if (type.image.dim == DimSubpassData)
+		else if (type.image.dim == Dim::SubpassData)
 		{
 			if (var && subpass_input_is_framebuffer_fetch(var->self))
 			{
@@ -14588,7 +14589,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (type.image.ms)
 				{
 					uint32_t operands = ops[4];
-					if (operands != ImageOperandsSampleMask || length != 6)
+					if (operands != static_cast<uint32_t>(ImageOperandsMask::Sample) || length != 6)
 						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
 						                  "operand mask was used.");
 
@@ -14603,7 +14604,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (type.image.ms)
 				{
 					uint32_t operands = ops[4];
-					if (operands != ImageOperandsSampleMask || length != 6)
+					if (operands != static_cast<uint32_t>(ImageOperandsMask::Sample) || length != 6)
 						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
 						                  "operand mask was used.");
 
@@ -14622,7 +14623,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		else
 		{
-			bool sparse = opcode == OpImageSparseRead;
+			bool sparse = opcode == Op::OpImageSparseRead;
 			uint32_t sparse_code_id = 0;
 			uint32_t sparse_texel_id = 0;
 			if (sparse)
@@ -14635,7 +14636,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			coord_expr = bitcast_expression(target_coord_type, expression_type(ops[3]).basetype, coord_expr);
 
 			// ES needs to emulate 1D images as 2D.
-			if (type.image.dim == Dim1D && options.es)
+			if (type.image.dim == Dim::Dim1D && options.es)
 				coord_expr = join("ivec2(", coord_expr, ", 0)");
 
 			// Plain image load/store.
@@ -14644,7 +14645,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (type.image.ms)
 				{
 					uint32_t operands = ops[4];
-					if (operands != ImageOperandsSampleMask || length != 6)
+					if (operands != static_cast<uint32_t>(ImageOperandsMask::Sample) || length != 6)
 						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
 						                  "operand mask was used.");
 
@@ -14665,7 +14666,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (type.image.ms)
 				{
 					uint32_t operands = ops[4];
-					if (operands != ImageOperandsSampleMask || length != 6)
+					if (operands != static_cast<uint32_t>(ImageOperandsMask::Sample) || length != 6)
 						SPIRV_CROSS_THROW("Multisampled image used in OpImageRead, but unexpected "
 						                  "operand mask was used.");
 
@@ -14704,7 +14705,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageTexelPointer:
+	case Op::OpImageTexelPointer:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -14724,7 +14725,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageWrite:
+	case Op::OpImageWrite:
 	{
 		// We added Nonwritable speculatively to the OpImage variable due to glslangValidator
 		// not adding the proper qualifiers.
@@ -14732,9 +14733,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto *var = maybe_get_backing_variable(ops[0]);
 		if (var)
 		{
-			if (has_decoration(var->self, DecorationNonWritable))
+			if (has_decoration(var->self, Decoration::NonWritable))
 			{
-				unset_decoration(var->self, DecorationNonWritable);
+				unset_decoration(var->self, Decoration::NonWritable);
 				force_recompile();
 			}
 		}
@@ -14751,13 +14752,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		coord_expr = bitcast_expression(target_coord_type, expression_type(ops[1]).basetype, coord_expr);
 
 		// ES needs to emulate 1D images as 2D.
-		if (type.image.dim == Dim1D && options.es)
+		if (type.image.dim == Dim::Dim1D && options.es)
 			coord_expr = join("ivec2(", coord_expr, ", 0)");
 
 		if (type.image.ms)
 		{
 			uint32_t operands = ops[3];
-			if (operands != ImageOperandsSampleMask || length != 5)
+			if (operands != static_cast<uint32_t>(ImageOperandsMask::Sample) || length != 5)
 				SPIRV_CROSS_THROW("Multisampled image used in OpImageWrite, but unexpected operand mask was used.");
 			uint32_t samples = ops[4];
 			statement("imageStore(", to_non_uniform_aware_expression(ops[0]), ", ", coord_expr, ", ", to_expression(samples), ", ",
@@ -14772,7 +14773,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageQuerySize:
+	case Op::OpImageQuerySize:
 	{
 		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
@@ -14812,10 +14813,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpImageSampleWeightedQCOM:
-	case OpImageBoxFilterQCOM:
-	case OpImageBlockMatchSSDQCOM:
-	case OpImageBlockMatchSADQCOM:
+	case Op::OpImageSampleWeightedQCOM:
+	case Op::OpImageBoxFilterQCOM:
+	case Op::OpImageBlockMatchSSDQCOM:
+	case Op::OpImageBlockMatchSADQCOM:
 	{
 		require_extension_internal("GL_QCOM_image_processing");
 		uint32_t result_type_id = ops[0];
@@ -14823,16 +14824,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		string expr;
 		switch (opcode)
 		{
-		case OpImageSampleWeightedQCOM:
+		case Op::OpImageSampleWeightedQCOM:
 			expr = "textureWeightedQCOM";
 			break;
-		case OpImageBoxFilterQCOM:
+		case Op::OpImageBoxFilterQCOM:
 			expr = "textureBoxFilterQCOM";
 			break;
-		case OpImageBlockMatchSSDQCOM:
+		case Op::OpImageBlockMatchSSDQCOM:
 			expr = "textureBlockMatchSSDQCOM";
 			break;
-		case OpImageBlockMatchSADQCOM:
+		case Op::OpImageBlockMatchSADQCOM:
 			expr = "textureBlockMatchSADQCOM";
 			break;
 		default:
@@ -14846,14 +14847,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		switch (opcode)
 		{
-		case OpImageSampleWeightedQCOM:
+		case Op::OpImageSampleWeightedQCOM:
 			expr += ", " + to_non_uniform_aware_expression(ops[4]);
 			break;
-		case OpImageBoxFilterQCOM:
+		case Op::OpImageBoxFilterQCOM:
 			expr += ", " + to_expression(ops[4]);
 			break;
-		case OpImageBlockMatchSSDQCOM:
-		case OpImageBlockMatchSADQCOM:
+		case Op::OpImageBlockMatchSSDQCOM:
+		case Op::OpImageBlockMatchSADQCOM:
 			expr += ", " + to_non_uniform_aware_expression(ops[4]);
 			expr += ", " + to_expression(ops[5]);
 			expr += ", " + to_expression(ops[6]);
@@ -14866,16 +14867,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_op(result_type_id, id, expr, forward);
 
 		inherit_expression_dependencies(id, ops[3]);
-		if (opcode == OpImageBlockMatchSSDQCOM || opcode == OpImageBlockMatchSADQCOM)
+		if (opcode == Op::OpImageBlockMatchSSDQCOM || opcode == Op::OpImageBlockMatchSADQCOM)
 			inherit_expression_dependencies(id, ops[5]);
 
 		break;
 	}
 
-	case OpImageBlockMatchWindowSSDQCOM:
-	case OpImageBlockMatchWindowSADQCOM:
-	case OpImageBlockMatchGatherSSDQCOM:
-	case OpImageBlockMatchGatherSADQCOM:
+	case Op::OpImageBlockMatchWindowSSDQCOM:
+	case Op::OpImageBlockMatchWindowSADQCOM:
+	case Op::OpImageBlockMatchGatherSSDQCOM:
+	case Op::OpImageBlockMatchGatherSADQCOM:
 	{
 		require_extension_internal("GL_QCOM_image_processing2");
 		uint32_t result_type_id = ops[0];
@@ -14883,16 +14884,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		string expr;
 		switch (opcode)
 		{
-		case OpImageBlockMatchWindowSSDQCOM:
+		case Op::OpImageBlockMatchWindowSSDQCOM:
 			expr = "textureBlockMatchWindowSSDQCOM";
 			break;
-		case OpImageBlockMatchWindowSADQCOM:
+		case Op::OpImageBlockMatchWindowSADQCOM:
 			expr = "textureBlockMatchWindowSADQCOM";
 			break;
-		case OpImageBlockMatchGatherSSDQCOM:
+		case Op::OpImageBlockMatchGatherSSDQCOM:
 			expr = "textureBlockMatchGatherSSDQCOM";
 			break;
-		case OpImageBlockMatchGatherSADQCOM:
+		case Op::OpImageBlockMatchGatherSADQCOM:
 			expr = "textureBlockMatchGatherSADQCOM";
 			break;
 		default:
@@ -14917,14 +14918,14 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Compute
-	case OpControlBarrier:
-	case OpMemoryBarrier:
+	case Op::OpControlBarrier:
+	case Op::OpMemoryBarrier:
 	{
 		uint32_t execution_scope = 0;
 		uint32_t memory;
 		uint32_t semantics;
 
-		if (opcode == OpMemoryBarrier)
+		if (opcode == Op::OpMemoryBarrier)
 		{
 			memory = evaluate_constant_u32(ops[0]);
 			semantics = evaluate_constant_u32(ops[1]);
@@ -14936,10 +14937,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			semantics = evaluate_constant_u32(ops[2]);
 		}
 
-		if (execution_scope == ScopeSubgroup || memory == ScopeSubgroup)
+		if (execution_scope == static_cast<uint32_t>(Scope::Subgroup) || memory == static_cast<uint32_t>(Scope::Subgroup))
 		{
 			// OpControlBarrier with ScopeSubgroup is subgroupBarrier()
-			if (opcode != OpControlBarrier)
+			if (opcode != Op::OpControlBarrier)
 			{
 				request_subgroup_feature(ShaderSubgroupSupportHelper::SubgroupMemBarrier);
 			}
@@ -14949,10 +14950,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			}
 		}
 
-		if (execution_scope != ScopeSubgroup && get_entry_point().model == ExecutionModelTessellationControl)
+		if (execution_scope != static_cast<uint32_t>(Scope::Subgroup) && get_entry_point().model == ExecutionModel::TessellationControl)
 		{
 			// Control shaders only have barriers, and it implies memory barriers.
-			if (opcode == OpControlBarrier)
+			if (opcode == Op::OpControlBarrier)
 				statement("barrier();");
 			break;
 		}
@@ -14960,12 +14961,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// We only care about these flags, acquire/release and friends are not relevant to GLSL.
 		semantics = mask_relevant_memory_semantics(semantics);
 
-		if (opcode == OpMemoryBarrier)
+		if (opcode == Op::OpMemoryBarrier)
 		{
 			// If we are a memory barrier, and the next instruction is a control barrier, check if that memory barrier
 			// does what we need, so we avoid redundant barriers.
 			const Instruction *next = get_next_instruction_in_block(instruction);
-			if (next && next->op == OpControlBarrier)
+			if (next && next->op == static_cast<uint16_t>(Op::OpControlBarrier))
 			{
 				auto *next_ops = stream(*next);
 				uint32_t next_memory = evaluate_constant_u32(next_ops[1]);
@@ -14975,17 +14976,17 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				bool memory_scope_covered = false;
 				if (next_memory == memory)
 					memory_scope_covered = true;
-				else if (next_semantics == MemorySemanticsWorkgroupMemoryMask)
+				else if (next_semantics == static_cast<uint32_t>(MemorySemanticsMask::WorkgroupMemory))
 				{
 					// If we only care about workgroup memory, either Device or Workgroup scope is fine,
 					// scope does not have to match.
-					if ((next_memory == ScopeDevice || next_memory == ScopeWorkgroup) &&
-					    (memory == ScopeDevice || memory == ScopeWorkgroup))
+					if ((next_memory == static_cast<uint32_t>(Scope::Device) || next_memory == static_cast<uint32_t>(Scope::Workgroup)) &&
+					    (memory == static_cast<uint32_t>(Scope::Device) || memory == static_cast<uint32_t>(Scope::Workgroup)))
 					{
 						memory_scope_covered = true;
 					}
 				}
-				else if (memory == ScopeWorkgroup && next_memory == ScopeDevice)
+				else if (memory == static_cast<uint32_t>(Scope::Workgroup) && next_memory == static_cast<uint32_t>(Scope::Device))
 				{
 					// The control barrier has device scope, but the memory barrier just has workgroup scope.
 					memory_scope_covered = true;
@@ -14999,31 +15000,33 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 
 		// We are synchronizing some memory or syncing execution,
 		// so we cannot forward any loads beyond the memory barrier.
-		if (semantics || opcode == OpControlBarrier)
+		if (semantics || opcode == Op::OpControlBarrier)
 		{
 			assert(current_emitting_block);
 			flush_control_dependent_expressions(current_emitting_block->self);
 			flush_all_active_variables();
 		}
 
-		if (memory == ScopeWorkgroup) // Only need to consider memory within a group
+		if (memory == static_cast<uint32_t>(Scope::Workgroup)) // Only need to consider memory within a group
 		{
-			if (semantics == MemorySemanticsWorkgroupMemoryMask)
+			if (semantics == static_cast<uint32_t>(MemorySemanticsMask::WorkgroupMemory))
 			{
 				// OpControlBarrier implies a memory barrier for shared memory as well.
-				bool implies_shared_barrier = opcode == OpControlBarrier && execution_scope == ScopeWorkgroup;
+				bool implies_shared_barrier = opcode == Op::OpControlBarrier && execution_scope == static_cast<uint32_t>(Scope::Workgroup);
 				if (!implies_shared_barrier)
 					statement("memoryBarrierShared();");
 			}
 			else if (semantics != 0)
 				statement("groupMemoryBarrier();");
 		}
-		else if (memory == ScopeSubgroup)
+		else if (memory == static_cast<uint32_t>(Scope::Subgroup))
 		{
-			const uint32_t all_barriers =
-			    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
+			const auto tmp =
+			    MemorySemanticsMask::WorkgroupMemory | MemorySemanticsMask::UniformMemory | MemorySemanticsMask::ImageMemory;
 
-			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
+			const uint32_t all_barriers = static_cast<uint32_t>(tmp);
+			
+			if (semantics & static_cast<uint32_t>((MemorySemanticsMask::CrossWorkgroupMemory | MemorySemanticsMask::SubgroupMemory)))
 			{
 				// These are not relevant for GLSL, but assume it means memoryBarrier().
 				// memoryBarrier() does everything, so no need to test anything else.
@@ -15037,20 +15040,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 			{
 				// Pick out individual barriers.
-				if (semantics & MemorySemanticsWorkgroupMemoryMask)
+				if (semantics & static_cast<uint32_t>(MemorySemanticsMask::WorkgroupMemory))
 					statement("subgroupMemoryBarrierShared();");
-				if (semantics & MemorySemanticsUniformMemoryMask)
+				if (semantics & static_cast<uint32_t>(MemorySemanticsMask::UniformMemory))
 					statement("subgroupMemoryBarrierBuffer();");
-				if (semantics & MemorySemanticsImageMemoryMask)
+				if (semantics & static_cast<uint32_t>(MemorySemanticsMask::ImageMemory))
 					statement("subgroupMemoryBarrierImage();");
 			}
 		}
 		else
 		{
-			const uint32_t all_barriers =
-			    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask | MemorySemanticsImageMemoryMask;
+			const auto tmp =
+			    MemorySemanticsMask::WorkgroupMemory | MemorySemanticsMask::UniformMemory | MemorySemanticsMask::ImageMemory;
+			const uint32_t all_barriers = static_cast<uint32_t>(tmp);
 
-			if (semantics & (MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask))
+			if (semantics & static_cast<uint32_t>((MemorySemanticsMask::CrossWorkgroupMemory | MemorySemanticsMask::SubgroupMemory)))
 			{
 				// These are not relevant for GLSL, but assume it means memoryBarrier().
 				// memoryBarrier() does everything, so no need to test anything else.
@@ -15064,18 +15068,18 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 			{
 				// Pick out individual barriers.
-				if (semantics & MemorySemanticsWorkgroupMemoryMask)
+				if (semantics & static_cast<uint32_t>(MemorySemanticsMask::WorkgroupMemory))
 					statement("memoryBarrierShared();");
-				if (semantics & MemorySemanticsUniformMemoryMask)
+				if (semantics & static_cast<uint32_t>(MemorySemanticsMask::UniformMemory))
 					statement("memoryBarrierBuffer();");
-				if (semantics & MemorySemanticsImageMemoryMask)
+				if (semantics & static_cast<uint32_t>(MemorySemanticsMask::ImageMemory))
 					statement("memoryBarrierImage();");
 			}
 		}
 
-		if (opcode == OpControlBarrier)
+		if (opcode == Op::OpControlBarrier)
 		{
-			if (execution_scope == ScopeSubgroup)
+			if (execution_scope == static_cast<uint32_t>(Scope::Subgroup))
 				statement("subgroupBarrier();");
 			else
 				statement("barrier();");
@@ -15083,7 +15087,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpExtInstWithForwardRefsKHR:
+	case Op::OpExtInstWithForwardRefsKHR:
 	{
 		uint32_t extension_set = ops[2];
 		auto ext = get<SPIRExtension>(extension_set).ext;
@@ -15097,7 +15101,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpExtInst:
+	case Op::OpExtInst:
 	{
 		uint32_t extension_set = ops[2];
 		auto ext = get<SPIRExtension>(extension_set).ext;
@@ -15159,7 +15163,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Legacy sub-group stuff ...
-	case OpSubgroupBallotKHR:
+	case Op::OpSubgroupBallotKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15173,7 +15177,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSubgroupFirstInvocationKHR:
+	case Op::OpSubgroupFirstInvocationKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15184,7 +15188,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSubgroupReadInvocationKHR:
+	case Op::OpSubgroupReadInvocationKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15195,7 +15199,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSubgroupAllKHR:
+	case Op::OpSubgroupAllKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15206,7 +15210,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSubgroupAnyKHR:
+	case Op::OpSubgroupAnyKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15217,7 +15221,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpSubgroupAllEqualKHR:
+	case Op::OpSubgroupAllEqualKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15228,8 +15232,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpGroupIAddNonUniformAMD:
-	case OpGroupFAddNonUniformAMD:
+	case Op::OpGroupIAddNonUniformAMD:
+	case Op::OpGroupFAddNonUniformAMD:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15240,9 +15244,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpGroupFMinNonUniformAMD:
-	case OpGroupUMinNonUniformAMD:
-	case OpGroupSMinNonUniformAMD:
+	case Op::OpGroupFMinNonUniformAMD:
+	case Op::OpGroupUMinNonUniformAMD:
+	case Op::OpGroupSMinNonUniformAMD:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15253,9 +15257,9 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpGroupFMaxNonUniformAMD:
-	case OpGroupUMaxNonUniformAMD:
-	case OpGroupSMaxNonUniformAMD:
+	case Op::OpGroupFMaxNonUniformAMD:
+	case Op::OpGroupUMaxNonUniformAMD:
+	case Op::OpGroupSMaxNonUniformAMD:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15266,13 +15270,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFragmentMaskFetchAMD:
+	case Op::OpFragmentMaskFetchAMD:
 	{
 		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		if (type.image.dim == spv::DimSubpassData)
+		if (type.image.dim == spv::Dim::SubpassData)
 		{
 			emit_unary_func_op(result_type, id, ops[2], "fragmentMaskFetchAMD");
 		}
@@ -15285,13 +15289,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpFragmentFetchAMD:
+	case Op::OpFragmentFetchAMD:
 	{
 		auto &type = expression_type(ops[2]);
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		if (type.image.dim == spv::DimSubpassData)
+		if (type.image.dim == spv::Dim::SubpassData)
 		{
 			emit_binary_func_op(result_type, id, ops[2], ops[4], "fragmentFetchAMD");
 		}
@@ -15305,51 +15309,51 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	}
 
 	// Vulkan 1.1 sub-group stuff ...
-	case OpGroupNonUniformElect:
-	case OpGroupNonUniformBroadcast:
-	case OpGroupNonUniformBroadcastFirst:
-	case OpGroupNonUniformBallot:
-	case OpGroupNonUniformInverseBallot:
-	case OpGroupNonUniformBallotBitExtract:
-	case OpGroupNonUniformBallotBitCount:
-	case OpGroupNonUniformBallotFindLSB:
-	case OpGroupNonUniformBallotFindMSB:
-	case OpGroupNonUniformShuffle:
-	case OpGroupNonUniformShuffleXor:
-	case OpGroupNonUniformShuffleUp:
-	case OpGroupNonUniformShuffleDown:
-	case OpGroupNonUniformAll:
-	case OpGroupNonUniformAny:
-	case OpGroupNonUniformAllEqual:
-	case OpGroupNonUniformFAdd:
-	case OpGroupNonUniformIAdd:
-	case OpGroupNonUniformFMul:
-	case OpGroupNonUniformIMul:
-	case OpGroupNonUniformFMin:
-	case OpGroupNonUniformFMax:
-	case OpGroupNonUniformSMin:
-	case OpGroupNonUniformSMax:
-	case OpGroupNonUniformUMin:
-	case OpGroupNonUniformUMax:
-	case OpGroupNonUniformBitwiseAnd:
-	case OpGroupNonUniformBitwiseOr:
-	case OpGroupNonUniformBitwiseXor:
-	case OpGroupNonUniformLogicalAnd:
-	case OpGroupNonUniformLogicalOr:
-	case OpGroupNonUniformLogicalXor:
-	case OpGroupNonUniformQuadSwap:
-	case OpGroupNonUniformQuadBroadcast:
-	case OpGroupNonUniformQuadAllKHR:
-	case OpGroupNonUniformQuadAnyKHR:
-	case OpGroupNonUniformRotateKHR:
+	case Op::OpGroupNonUniformElect:
+	case Op::OpGroupNonUniformBroadcast:
+	case Op::OpGroupNonUniformBroadcastFirst:
+	case Op::OpGroupNonUniformBallot:
+	case Op::OpGroupNonUniformInverseBallot:
+	case Op::OpGroupNonUniformBallotBitExtract:
+	case Op::OpGroupNonUniformBallotBitCount:
+	case Op::OpGroupNonUniformBallotFindLSB:
+	case Op::OpGroupNonUniformBallotFindMSB:
+	case Op::OpGroupNonUniformShuffle:
+	case Op::OpGroupNonUniformShuffleXor:
+	case Op::OpGroupNonUniformShuffleUp:
+	case Op::OpGroupNonUniformShuffleDown:
+	case Op::OpGroupNonUniformAll:
+	case Op::OpGroupNonUniformAny:
+	case Op::OpGroupNonUniformAllEqual:
+	case Op::OpGroupNonUniformFAdd:
+	case Op::OpGroupNonUniformIAdd:
+	case Op::OpGroupNonUniformFMul:
+	case Op::OpGroupNonUniformIMul:
+	case Op::OpGroupNonUniformFMin:
+	case Op::OpGroupNonUniformFMax:
+	case Op::OpGroupNonUniformSMin:
+	case Op::OpGroupNonUniformSMax:
+	case Op::OpGroupNonUniformUMin:
+	case Op::OpGroupNonUniformUMax:
+	case Op::OpGroupNonUniformBitwiseAnd:
+	case Op::OpGroupNonUniformBitwiseOr:
+	case Op::OpGroupNonUniformBitwiseXor:
+	case Op::OpGroupNonUniformLogicalAnd:
+	case Op::OpGroupNonUniformLogicalOr:
+	case Op::OpGroupNonUniformLogicalXor:
+	case Op::OpGroupNonUniformQuadSwap:
+	case Op::OpGroupNonUniformQuadBroadcast:
+	case Op::OpGroupNonUniformQuadAllKHR:
+	case Op::OpGroupNonUniformQuadAnyKHR:
+	case Op::OpGroupNonUniformRotateKHR:
 		emit_subgroup_op(instruction);
 		break;
 
-	case OpFUnordEqual:
-	case OpFUnordLessThan:
-	case OpFUnordGreaterThan:
-	case OpFUnordLessThanEqual:
-	case OpFUnordGreaterThanEqual:
+	case Op::OpFUnordEqual:
+	case Op::OpFUnordLessThan:
+	case Op::OpFUnordGreaterThan:
+	case Op::OpFUnordLessThanEqual:
+	case Op::OpFUnordGreaterThanEqual:
 	{
 		// GLSL doesn't specify if floating point comparisons are ordered or unordered,
 		// but glslang always emits ordered floating point compares for GLSL.
@@ -15364,23 +15368,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			const char *comp_op = nullptr;
 			switch (opcode)
 			{
-			case OpFUnordEqual:
+			case Op::OpFUnordEqual:
 				comp_op = "notEqual";
 				break;
 
-			case OpFUnordLessThan:
+			case Op::OpFUnordLessThan:
 				comp_op = "greaterThanEqual";
 				break;
 
-			case OpFUnordLessThanEqual:
+			case Op::OpFUnordLessThanEqual:
 				comp_op = "greaterThan";
 				break;
 
-			case OpFUnordGreaterThan:
+			case Op::OpFUnordGreaterThan:
 				comp_op = "lessThanEqual";
 				break;
 
-			case OpFUnordGreaterThanEqual:
+			case Op::OpFUnordGreaterThanEqual:
 				comp_op = "lessThan";
 				break;
 
@@ -15396,23 +15400,23 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			const char *comp_op = nullptr;
 			switch (opcode)
 			{
-			case OpFUnordEqual:
+			case Op::OpFUnordEqual:
 				comp_op = " != ";
 				break;
 
-			case OpFUnordLessThan:
+			case Op::OpFUnordLessThan:
 				comp_op = " >= ";
 				break;
 
-			case OpFUnordLessThanEqual:
+			case Op::OpFUnordLessThanEqual:
 				comp_op = " > ";
 				break;
 
-			case OpFUnordGreaterThan:
+			case Op::OpFUnordGreaterThan:
 				comp_op = " <= ";
 				break;
 
-			case OpFUnordGreaterThanEqual:
+			case Op::OpFUnordGreaterThanEqual:
 				comp_op = " < ";
 				break;
 
@@ -15430,7 +15434,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpReportIntersectionKHR:
+	case Op::OpReportIntersectionKHR:
 		// NV is same opcode.
 		forced_temporaries.insert(ops[1]);
 		if (ray_tracing_is_khr)
@@ -15439,45 +15443,45 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			GLSL_BFOP(reportIntersectionNV);
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
-	case OpIgnoreIntersectionNV:
+	case Op::OpIgnoreIntersectionNV:
 		// KHR variant is a terminator.
 		statement("ignoreIntersectionNV();");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
-	case OpTerminateRayNV:
+	case Op::OpTerminateRayNV:
 		// KHR variant is a terminator.
 		statement("terminateRayNV();");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
-	case OpTraceNV:
+	case Op::OpTraceNV:
 		statement("traceNV(", to_non_uniform_aware_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
 		          to_expression(ops[9]), ", ", to_expression(ops[10]), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
-	case OpTraceRayKHR:
-		if (!has_decoration(ops[10], DecorationLocation))
+	case Op::OpTraceRayKHR:
+		if (!has_decoration(ops[10], Decoration::Location))
 			SPIRV_CROSS_THROW("A memory declaration object must be used in TraceRayKHR.");
 		statement("traceRayEXT(", to_non_uniform_aware_expression(ops[0]), ", ", to_expression(ops[1]), ", ", to_expression(ops[2]), ", ",
 		          to_expression(ops[3]), ", ", to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ", ",
-		          to_expression(ops[9]), ", ", get_decoration(ops[10], DecorationLocation), ");");
+		          to_expression(ops[9]), ", ", get_decoration(ops[10], Decoration::Location), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
-	case OpExecuteCallableNV:
+	case Op::OpExecuteCallableNV:
 		statement("executeCallableNV(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
-	case OpExecuteCallableKHR:
-		if (!has_decoration(ops[1], DecorationLocation))
+	case Op::OpExecuteCallableKHR:
+		if (!has_decoration(ops[1], Decoration::Location))
 			SPIRV_CROSS_THROW("A memory declaration object must be used in ExecuteCallableKHR.");
-		statement("executeCallableEXT(", to_expression(ops[0]), ", ", get_decoration(ops[1], DecorationLocation), ");");
+		statement("executeCallableEXT(", to_expression(ops[0]), ", ", get_decoration(ops[1], Decoration::Location), ");");
 		flush_control_dependent_expressions(current_emitting_block->self);
 		break;
 
 		// Don't bother forwarding temporaries. Avoids having to test expression invalidation with ray query objects.
-	case OpRayQueryInitializeKHR:
+	case Op::OpRayQueryInitializeKHR:
 		flush_variable_declaration(ops[0]);
 		statement("rayQueryInitializeEXT(",
 		          to_expression(ops[0]), ", ", to_expression(ops[1]), ", ",
@@ -15485,29 +15489,29 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		          to_expression(ops[4]), ", ", to_expression(ops[5]), ", ",
 		          to_expression(ops[6]), ", ", to_expression(ops[7]), ");");
 		break;
-	case OpRayQueryProceedKHR:
+	case Op::OpRayQueryProceedKHR:
 		flush_variable_declaration(ops[0]);
 		emit_op(ops[0], ops[1], join("rayQueryProceedEXT(", to_expression(ops[2]), ")"), false);
 		break;
-	case OpRayQueryTerminateKHR:
+	case Op::OpRayQueryTerminateKHR:
 		flush_variable_declaration(ops[0]);
 		statement("rayQueryTerminateEXT(", to_expression(ops[0]), ");");
 		break;
-	case OpRayQueryGenerateIntersectionKHR:
+	case Op::OpRayQueryGenerateIntersectionKHR:
 		flush_variable_declaration(ops[0]);
 		statement("rayQueryGenerateIntersectionEXT(", to_expression(ops[0]), ", ", to_expression(ops[1]), ");");
 		break;
-	case OpRayQueryConfirmIntersectionKHR:
+	case Op::OpRayQueryConfirmIntersectionKHR:
 		flush_variable_declaration(ops[0]);
 		statement("rayQueryConfirmIntersectionEXT(", to_expression(ops[0]), ");");
 		break;
 #define GLSL_RAY_QUERY_GET_OP(op) \
-	case OpRayQueryGet##op##KHR: \
+	case Op::OpRayQueryGet##op##KHR: \
 		flush_variable_declaration(ops[2]); \
 		emit_op(ops[0], ops[1], join("rayQueryGet" #op "EXT(", to_expression(ops[2]), ")"), false); \
 		break
 #define GLSL_RAY_QUERY_GET_OP2(op) \
-	case OpRayQueryGet##op##KHR: \
+	case Op::OpRayQueryGet##op##KHR: \
 		flush_variable_declaration(ops[2]); \
 		emit_op(ops[0], ops[1], join("rayQueryGet" #op "EXT(", to_expression(ops[2]), ", ", "bool(", to_expression(ops[3]), "))"), false); \
 		break
@@ -15531,16 +15535,16 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	GLSL_RAY_QUERY_GET_OP2(IntersectionWorldToObject);
 #undef GLSL_RAY_QUERY_GET_OP
 #undef GLSL_RAY_QUERY_GET_OP2
-	case OpRayQueryGetClusterIdNV:
+	case Op::OpRayQueryGetClusterIdNV:
 		flush_variable_declaration(ops[2]);
 		emit_op(ops[0], ops[1], join("rayQueryGetIntersectionClusterIdNV(", to_expression(ops[2]), ", ", "bool(", to_expression(ops[3]), "))"), false);
 		break;
-	case OpTensorQuerySizeARM:
+	case Op::OpTensorQuerySizeARM:
 		flush_variable_declaration(ops[1]);
 		// tensorSizeARM(tensor, dimension)
 		emit_binary_func_op(ops[0], ops[1], ops[2], ops[3], "tensorSizeARM");
 		break;
-	case OpTensorReadARM:
+	case Op::OpTensorReadARM:
 	{
 		flush_variable_declaration(ops[1]);
 		emit_uninitialized_temporary_expression(ops[0], ops[1]);
@@ -15555,21 +15559,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			std::string tensor_operands;
 			if (ops[4] == 0)
 				tensor_operands = "0x0u";
-			else if (ops[4] == spv::TensorOperandsNontemporalARMMask)
+			else if (ops[4] == static_cast<uint32_t>(spv::TensorOperandsMask::NontemporalARM))
 				tensor_operands = "gl_TensorOperandsNonTemporalARM";
-			else if (ops[4] == spv::TensorOperandsOutOfBoundsValueARMMask)
+			else if (ops[4] == static_cast<uint32_t>(spv::TensorOperandsMask::OutOfBoundsValueARM))
 				tensor_operands = "gl_TensorOperandsOutOfBoundsValueARM";
-			else if (ops[4] == (spv::TensorOperandsNontemporalARMMask | spv::TensorOperandsOutOfBoundsValueARMMask))
+			else if (ops[4] == static_cast<uint32_t>((spv::TensorOperandsMask::NontemporalARM | spv::TensorOperandsMask::OutOfBoundsValueARM)))
 				tensor_operands = "gl_TensorOperandsNonTemporalARM | gl_TensorOperandsOutOfBoundsValueARM";
 			else
 				SPIRV_CROSS_THROW("Invalid tensorOperands for tensorReadARM.");
-			if ((ops[4] & spv::TensorOperandsOutOfBoundsValueARMMask) && length != 6)
+			if ((ops[4] & static_cast<uint32_t>(spv::TensorOperandsMask::OutOfBoundsValueARM)) && length != 6)
 				SPIRV_CROSS_THROW("gl_TensorOperandsOutOfBoundsValueARM requires an outOfBoundsValue argument.");
 			args.push_back(tensor_operands); // tensorOperands
 		}
 		if (length >= 6)
 		{
-			if ((length > 6) || (ops[4] & spv::TensorOperandsOutOfBoundsValueARMMask) == 0)
+			if ((length > 6) || (ops[4] & static_cast<uint32_t>(spv::TensorOperandsMask::OutOfBoundsValueARM)) == 0)
 				SPIRV_CROSS_THROW("Too many arguments to tensorReadARM.");
 			args.push_back(to_expression(ops[5])); // outOfBoundsValue
 		}
@@ -15578,7 +15582,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("tensorReadARM(", merge(args), ");");
 		break;
 	}
-	case OpTensorWriteARM:
+	case Op::OpTensorWriteARM:
 	{
 		flush_variable_declaration(ops[0]);
 
@@ -15593,7 +15597,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			std::string tensor_operands;
 			if (ops[3] == 0)
 				tensor_operands = "0x0u";
-			else if (ops[3] == spv::TensorOperandsNontemporalARMMask)
+			else if (ops[3] == static_cast<uint32_t>(spv::TensorOperandsMask::NontemporalARM))
 				tensor_operands = "gl_TensorOperandsNonTemporalARM";
 			else
 				SPIRV_CROSS_THROW("Invalid tensorOperands for tensorWriteARM.");
@@ -15606,7 +15610,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		statement("tensorWriteARM(", merge(args), ");");
 		break;
 	}
-	case OpConvertUToAccelerationStructureKHR:
+	case Op::OpConvertUToAccelerationStructureKHR:
 	{
 		require_extension_internal("GL_EXT_ray_tracing");
 
@@ -15632,11 +15636,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpConvertUToPtr:
+	case Op::OpConvertUToPtr:
 	{
 		auto &type = get<SPIRType>(ops[0]);
-		if (type.storage != StorageClassPhysicalStorageBuffer)
-			SPIRV_CROSS_THROW("Only StorageClassPhysicalStorageBuffer is supported by OpConvertUToPtr.");
+		if (type.storage != StorageClass::PhysicalStorageBuffer)
+			SPIRV_CROSS_THROW("Only StorageClass::PhysicalStorageBuffer is supported by OpConvertUToPtr.");
 
 		auto &in_type = expression_type(ops[2]);
 		if (in_type.vecsize == 2)
@@ -15647,12 +15651,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpConvertPtrToU:
+	case Op::OpConvertPtrToU:
 	{
 		auto &type = get<SPIRType>(ops[0]);
 		auto &ptr_type = expression_type(ops[2]);
-		if (ptr_type.storage != StorageClassPhysicalStorageBuffer)
-			SPIRV_CROSS_THROW("Only StorageClassPhysicalStorageBuffer is supported by OpConvertPtrToU.");
+		if (ptr_type.storage != StorageClass::PhysicalStorageBuffer)
+			SPIRV_CROSS_THROW("Only StorageClass::PhysicalStorageBuffer is supported by OpConvertPtrToU.");
 
 		if (type.vecsize == 2)
 			require_extension_internal("GL_EXT_buffer_reference_uvec2");
@@ -15662,27 +15666,27 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpUndef:
+	case Op::OpUndef:
 		// Undefined value has been declared.
 		break;
 
-	case OpLine:
+	case Op::OpLine:
 	{
 		emit_line_directive(ops[0], ops[1]);
 		break;
 	}
 
-	case OpNoLine:
+	case Op::OpNoLine:
 		break;
 
-	case OpDemoteToHelperInvocationEXT:
+	case Op::OpDemoteToHelperInvocationEXT:
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
 		require_extension_internal("GL_EXT_demote_to_helper_invocation");
 		statement(backend.demote_literal, ";");
 		break;
 
-	case OpIsHelperInvocationEXT:
+	case Op::OpIsHelperInvocationEXT:
 		if (!options.vulkan_semantics)
 			SPIRV_CROSS_THROW("GL_EXT_demote_to_helper_invocation is only supported in Vulkan GLSL.");
 		require_extension_internal("GL_EXT_demote_to_helper_invocation");
@@ -15691,7 +15695,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		emit_op(ops[0], ops[1], "helperInvocationEXT()", false);
 		break;
 
-	case OpBeginInvocationInterlockEXT:
+	case Op::OpBeginInvocationInterlockEXT:
 		// If the interlock is complex, we emit this elsewhere.
 		if (!interlocked_is_complex)
 		{
@@ -15701,7 +15705,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		break;
 
-	case OpEndInvocationInterlockEXT:
+	case Op::OpEndInvocationInterlockEXT:
 		// If the interlock is complex, we emit this elsewhere.
 		if (!interlocked_is_complex)
 		{
@@ -15711,11 +15715,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 		break;
 
-	case OpSetMeshOutputsEXT:
+	case Op::OpSetMeshOutputsEXT:
 		statement("SetMeshOutputsEXT(", to_unpacked_expression(ops[0]), ", ", to_unpacked_expression(ops[1]), ");");
 		break;
 
-	case OpReadClockKHR:
+	case Op::OpReadClockKHR:
 	{
 		auto &type = get<SPIRType>(ops[0]);
 		auto scope = static_cast<Scope>(evaluate_constant_u32(ops[2]));
@@ -15724,7 +15728,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// values every time it's evaluated. Block any forwarding attempt.
 		// We also might want to invalidate all expressions to function as a sort of optimization
 		// barrier, but might be overkill for now.
-		if (scope == ScopeDevice)
+		if (scope == Scope::Device)
 		{
 			require_extension_internal("GL_EXT_shader_realtime_clock");
 			if (type.basetype == SPIRType::BaseType::UInt64)
@@ -15734,7 +15738,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			else
 				SPIRV_CROSS_THROW("Unsupported result type for OpReadClockKHR opcode.");
 		}
-		else if (scope == ScopeSubgroup)
+		else if (scope == Scope::Subgroup)
 		{
 			require_extension_internal("GL_ARB_shader_clock");
 			if (type.basetype == SPIRType::BaseType::UInt64)
@@ -15751,7 +15755,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeVectorLoadNV:
+	case Op::OpCooperativeVectorLoadNV:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15763,7 +15767,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeVectorStoreNV:
+	case Op::OpCooperativeVectorStoreNV:
 	{
 		uint32_t id = ops[0];
 
@@ -15772,7 +15776,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeVectorOuterProductAccumulateNV:
+	case Op::OpCooperativeVectorOuterProductAccumulateNV:
 	{
 		auto buf = ops[0];
 		auto offset = ops[1];
@@ -15793,7 +15797,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeVectorReduceSumAccumulateNV:
+	case Op::OpCooperativeVectorReduceSumAccumulateNV:
 	{
 		auto buf = ops[0];
 		auto offset = ops[1];
@@ -15804,8 +15808,8 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeVectorMatrixMulNV:
-	case OpCooperativeVectorMatrixMulAddNV:
+	case Op::OpCooperativeVectorMatrixMulNV:
+	case Op::OpCooperativeVectorMatrixMulAddNV:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15815,10 +15819,10 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		std::string stmt;
 		switch (opcode)
 		{
-		case OpCooperativeVectorMatrixMulAddNV:
+		case Op::OpCooperativeVectorMatrixMulAddNV:
 			stmt += "coopVecMatMulAddNV(";
 			break;
-		case OpCooperativeVectorMatrixMulNV:
+		case Op::OpCooperativeVectorMatrixMulNV:
 			stmt += "coopVecMatMulNV(";
 			break;
 		default:
@@ -15827,13 +15831,13 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		for (uint32_t i = 1; i < length; i++)
 		{
 			// arguments 3, 6 and in case of MulAddNv also 9 use component type int constants
-			if (i == 3 || i == 6 || (i == 9 && opcode == OpCooperativeVectorMatrixMulAddNV))
+			if (i == 3 || i == 6 || (i == 9 && opcode == Op::OpCooperativeVectorMatrixMulAddNV))
 			{
 				stmt += to_pretty_expression_if_int_constant(
 						ops[i], std::begin(CoopVecComponentTypeNames), std::end(CoopVecComponentTypeNames));
 			}
-			else if ((i == 12 && opcode == OpCooperativeVectorMatrixMulAddNV) ||
-			         (i == 9 && opcode == OpCooperativeVectorMatrixMulNV))
+			else if ((i == 12 && opcode == Op::OpCooperativeVectorMatrixMulAddNV) ||
+			         (i == 9 && opcode == Op::OpCooperativeVectorMatrixMulNV))
 			{
 				stmt += to_pretty_expression_if_int_constant(
 						ops[i], std::begin(CoopVecMatrixLayoutNames), std::end(CoopVecMatrixLayoutNames));
@@ -15849,7 +15853,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeMatrixLengthKHR:
+	case Op::OpCooperativeMatrixLengthKHR:
 	{
 		// Need to synthesize a dummy temporary, since the SPIR-V opcode is based on the type.
 		uint32_t result_type = ops[0];
@@ -15861,7 +15865,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeMatrixLoadKHR:
+	case Op::OpCooperativeMatrixLoadKHR:
 	{
 		// Spec contradicts itself if stride is optional or not.
 		if (length < 5)
@@ -15885,7 +15889,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeMatrixStoreKHR:
+	case Op::OpCooperativeMatrixStoreKHR:
 	{
 		// Spec contradicts itself if stride is optional or not.
 		if (length < 4)
@@ -15911,7 +15915,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCooperativeMatrixMulAddKHR:
+	case Op::OpCooperativeMatrixMulAddKHR:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15934,7 +15938,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
-	case OpCompositeConstructReplicateEXT:
+	case Op::OpCompositeConstructReplicateEXT:
 	{
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
@@ -15943,15 +15947,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto value_to_replicate = to_expression(ops[2]);
 		std::string rhs;
 		// Matrices don't have a replicating constructor for vectors. Need to manually replicate
-		if (type.op == spv::OpTypeMatrix || type.op == spv::OpTypeArray)
+		if (type.op == spv::Op::OpTypeMatrix || type.op == spv::Op::OpTypeArray)
 		{
-			if (type.op == spv::OpTypeArray && type.array.size() != 1)
+			if (type.op == spv::Op::OpTypeArray && type.array.size() != 1)
 			{
 				SPIRV_CROSS_THROW(
 				    "Multi-dimensional arrays currently not supported for OpCompositeConstructReplicateEXT");
 			}
-			uint32_t num_elements = type.op == spv::OpTypeMatrix ? type.columns : type.array[0];
-			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
+			uint32_t num_elements = type.op == spv::Op::OpTypeMatrix ? type.columns : type.array[0];
+			if (backend.use_initializer_list && type.op == spv::Op::OpTypeArray)
 			{
 				rhs += "{";
 			}
@@ -15966,7 +15970,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (i < num_elements - 1)
 					rhs += ", ";
 			}
-			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
+			if (backend.use_initializer_list && type.op == spv::Op::OpTypeArray)
 				rhs += "}";
 			else
 				rhs += ")";
@@ -16070,7 +16074,7 @@ bool CompilerGLSL::is_non_native_row_major_matrix(uint32_t id)
 	if (e)
 		return e->need_transpose;
 	else
-		return has_decoration(id, DecorationRowMajor);
+		return has_decoration(id, Decoration::RowMajor);
 }
 
 // Checks whether the member is a row_major matrix that requires conversion before use
@@ -16081,7 +16085,7 @@ bool CompilerGLSL::member_is_non_native_row_major_matrix(const SPIRType &type, u
 		return false;
 
 	// Non-matrix or column-major matrix types do not need to be converted.
-	if (!has_member_decoration(type.self, index, DecorationRowMajor))
+	if (!has_member_decoration(type.self, index, Decoration::RowMajor))
 		return false;
 
 	// Only square row-major matrices can be converted at this time.
@@ -16190,8 +16194,8 @@ void CompilerGLSL::emit_struct_member(const SPIRType &type, uint32_t member_type
 		memberflags = memb[index].decoration_flags;
 
 	string qualifiers;
-	bool is_block = ir.meta[type.self].decoration.decoration_flags.get(DecorationBlock) ||
-	                ir.meta[type.self].decoration.decoration_flags.get(DecorationBufferBlock);
+	bool is_block = ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::Block)) ||
+	                ir.meta[type.self].decoration.decoration_flags.get(static_cast<uint32_t>(Decoration::BufferBlock));
 
 	if (is_block)
 		qualifiers = to_interpolation_qualifiers(memberflags);
@@ -16207,13 +16211,13 @@ void CompilerGLSL::emit_struct_padding_target(const SPIRType &)
 string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, uint32_t id, const Bitset &flags)
 {
 	// GL_EXT_buffer_reference variables can be marked as restrict.
-	if (flags.get(DecorationRestrictPointerEXT))
+	if (flags.get(static_cast<uint32_t>(Decoration::RestrictPointerEXT)))
 		return "restrict ";
 
 	string qual;
 
 	if (type_is_floating_point(type) &&
-	    (flags.get(DecorationNoContraction) || (type.self && has_legacy_nocontract(type.self, id))) &&
+	    (flags.get(static_cast<uint32_t>(Decoration::NoContraction)) || (type.self && has_legacy_nocontract(type.self, id))) &&
 	    backend.support_precise_qualifier)
 	{
 		qual = "precise ";
@@ -16237,15 +16241,15 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, uint32_t id,
 			// HACK: This is a bool. See comment in type_to_glsl().
 			qual += "lowp ";
 		}
-		else if (flags.get(DecorationRelaxedPrecision))
+		else if (flags.get(static_cast<uint32_t>(Decoration::RelaxedPrecision)))
 		{
 			bool implied_fmediump = type.basetype == SPIRType::Float &&
 			                        options.fragment.default_float_precision == Options::Mediump &&
-			                        execution.model == ExecutionModelFragment;
+			                        execution.model == ExecutionModel::Fragment;
 
 			bool implied_imediump = (type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt) &&
 			                        options.fragment.default_int_precision == Options::Mediump &&
-			                        execution.model == ExecutionModelFragment;
+			                        execution.model == ExecutionModel::Fragment;
 
 			qual += (implied_fmediump || implied_imediump) ? "" : "mediump ";
 		}
@@ -16253,13 +16257,13 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, uint32_t id,
 		{
 			bool implied_fhighp =
 			    type.basetype == SPIRType::Float && ((options.fragment.default_float_precision == Options::Highp &&
-			                                          execution.model == ExecutionModelFragment) ||
-			                                         (execution.model != ExecutionModelFragment));
+			                                          execution.model == ExecutionModel::Fragment) ||
+			                                         (execution.model != ExecutionModel::Fragment));
 
 			bool implied_ihighp = (type.basetype == SPIRType::Int || type.basetype == SPIRType::UInt) &&
 			                      ((options.fragment.default_int_precision == Options::Highp &&
-			                        execution.model == ExecutionModelFragment) ||
-			                       (execution.model != ExecutionModelFragment));
+			                        execution.model == ExecutionModel::Fragment) ||
+			                       (execution.model != ExecutionModel::Fragment));
 
 			qual += (implied_fhighp || implied_ihighp) ? "" : "highp ";
 		}
@@ -16268,7 +16272,7 @@ string CompilerGLSL::flags_to_qualifiers_glsl(const SPIRType &type, uint32_t id,
 	{
 		// Vulkan GLSL supports precision qualifiers, even in desktop profiles, which is convenient.
 		// The default is highp however, so only emit mediump in the rare case that a shader has these.
-		if (flags.get(DecorationRelaxedPrecision))
+		if (flags.get(static_cast<uint32_t>(Decoration::RelaxedPrecision)))
 			qual += "mediump ";
 	}
 
@@ -16297,22 +16301,22 @@ void CompilerGLSL::fixup_io_block_patch_primitive_qualifiers(const SPIRVariable 
 	// the variable itself has Patch decoration, and not members.
 	// Same for perprimitiveEXT.
 	auto &type = get<SPIRType>(var.basetype);
-	if (has_decoration(type.self, DecorationBlock))
+	if (has_decoration(type.self, Decoration::Block))
 	{
 		uint32_t member_count = uint32_t(type.member_types.size());
 		Decoration promoted_decoration = {};
 		bool do_promote_decoration = false;
 		for (uint32_t i = 0; i < member_count; i++)
 		{
-			if (has_member_decoration(type.self, i, DecorationPatch))
+			if (has_member_decoration(type.self, i, Decoration::Patch))
 			{
-				promoted_decoration = DecorationPatch;
+				promoted_decoration = Decoration::Patch;
 				do_promote_decoration = true;
 				break;
 			}
-			else if (has_member_decoration(type.self, i, DecorationPerPrimitiveEXT))
+			else if (has_member_decoration(type.self, i, Decoration::PerPrimitiveEXT))
 			{
-				promoted_decoration = DecorationPerPrimitiveEXT;
+				promoted_decoration = Decoration::PerPrimitiveEXT;
 				do_promote_decoration = true;
 				break;
 			}
@@ -16334,9 +16338,9 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 
 	auto *var = maybe_get<SPIRVariable>(id);
 
-	if (var && var->storage == StorageClassWorkgroup && !backend.shared_is_implied)
+	if (var && var->storage == StorageClass::Workgroup && !backend.shared_is_implied)
 		res += "shared ";
-	else if (var && var->storage == StorageClassTaskPayloadWorkgroupEXT && !backend.shared_is_implied)
+	else if (var && var->storage == StorageClass::TaskPayloadWorkgroupEXT && !backend.shared_is_implied)
 		res += "taskPayloadSharedEXT ";
 
 	res += to_interpolation_qualifiers(flags);
@@ -16344,18 +16348,18 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 		res += to_storage_qualifiers_glsl(*var);
 
 	auto &type = expression_type(id);
-	if (type.image.dim != DimSubpassData && type.image.sampled == 2)
+	if (type.image.dim != Dim::SubpassData && type.image.sampled == 2)
 	{
-		if (flags.get(DecorationCoherent))
+		if (flags.get(static_cast<uint32_t>(Decoration::Coherent)))
 			res += "coherent ";
-		if (flags.get(DecorationRestrict))
+		if (flags.get(static_cast<uint32_t>(Decoration::Restrict)))
 			res += "restrict ";
 
-		if (flags.get(DecorationNonWritable))
+		if (flags.get(static_cast<uint32_t>(Decoration::NonWritable)))
 			res += "readonly ";
 
-		bool formatted_load = type.image.format == ImageFormatUnknown;
-		if (flags.get(DecorationNonReadable))
+		bool formatted_load = type.image.format == ImageFormat::Unknown;
+		if (flags.get(static_cast<uint32_t>(Decoration::NonReadable)))
 		{
 			res += "writeonly ";
 			formatted_load = false;
@@ -16371,9 +16375,9 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 	}
 	else if (type.basetype == SPIRType::Tensor)
 	{
-		if (flags.get(DecorationNonWritable))
+		if (flags.get(static_cast<uint32_t>(Decoration::NonWritable)))
 			res += "readonly ";
-		if (flags.get(DecorationNonReadable))
+		if (flags.get(static_cast<uint32_t>(Decoration::NonReadable)))
 			res += "writeonly ";
 	}
 
@@ -16389,16 +16393,16 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 	const char *direction = "";
 
 	if (is_pointer(type) &&
-	    (type.storage == StorageClassFunction ||
-	     type.storage == StorageClassPrivate ||
-	     type.storage == StorageClassOutput))
+	    (type.storage == StorageClass::Function ||
+	     type.storage == StorageClass::Private ||
+	     type.storage == StorageClass::Output))
 	{
 		// If we're passing around block types to function, we really mean reference in a pointer sense,
 		// but DXC does not like inout for mesh blocks, so workaround that. out is technically not correct,
 		// but it works in practice due to legalization. It's ... not great, but you gotta do what you gotta do.
 		// GLSL will never hit this case since it's not valid.
-		if (type.storage == StorageClassOutput && get_execution_model() == ExecutionModelMeshEXT &&
-		    has_decoration(type.self, DecorationBlock) && is_builtin_type(type) && arg.write_count)
+		if (type.storage == StorageClass::Output && get_execution_model() == ExecutionModel::MeshEXT &&
+		    has_decoration(type.self, Decoration::Block) && is_builtin_type(type) && arg.write_count)
 		{
 			direction = "out ";
 		}
@@ -16420,8 +16424,8 @@ string CompilerGLSL::to_zero_initialized_expression(uint32_t type_id)
 {
 #ifndef NDEBUG
 	auto &type = get<SPIRType>(type_id);
-	assert(type.storage == StorageClassPrivate || type.storage == StorageClassFunction ||
-	       type.storage == StorageClassGeneric);
+	assert(type.storage == StorageClass::Private || type.storage == StorageClass::Function ||
+	       type.storage == StorageClass::Generic);
 #endif
 	uint32_t id = ir.increase_bound_by(1);
 	ir.make_constant_null(id, type_id, false);
@@ -16467,7 +16471,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 	}
 	else if (variable.initializer)
 	{
-		if (!variable_decl_is_remapped_storage(variable, StorageClassWorkgroup))
+		if (!variable_decl_is_remapped_storage(variable, StorageClass::Workgroup))
 		{
 			uint32_t expr = variable.initializer;
 			if (ir.ids[expr].get_type() != TypeUndef)
@@ -16491,7 +16495,7 @@ string CompilerGLSL::variable_decl(const SPIRVariable &variable)
 const char *CompilerGLSL::to_pls_qualifiers_glsl(const SPIRVariable &variable)
 {
 	auto &flags = get_decoration_bitset(variable.self);
-	if (flags.get(DecorationRelaxedPrecision))
+	if (flags.get(static_cast<uint32_t>(Decoration::RelaxedPrecision)))
 		return "mediump ";
 	else
 		return "highp ";
@@ -16508,7 +16512,7 @@ string CompilerGLSL::pls_decl(const PlsRemap &var)
 	auto vecsize = pls_format_to_components(var.format);
 	if (vecsize > 1)
 	{
-		type.op = OpTypeVector;
+		type.op = Op::OpTypeVector;
 		type.vecsize = vecsize;
 	}
 
@@ -16562,7 +16566,7 @@ string CompilerGLSL::to_array_size(const SPIRType &type, uint32_t index)
 
 string CompilerGLSL::type_to_array_glsl(const SPIRType &type, uint32_t)
 {
-	if (type.pointer && type.storage == StorageClassPhysicalStorageBuffer && type.basetype != SPIRType::Struct)
+	if (type.pointer && type.storage == StorageClass::PhysicalStorageBuffer && type.basetype != SPIRType::Struct)
 	{
 		// We are using a wrapped pointer type, and we should not emit any array declarations here.
 		return "";
@@ -16639,9 +16643,9 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 	// For half image types, we will force mediump for the sampler, and cast to f16 after any sampling operation.
 	// We cannot express a true half texture type in GLSL. Neither for short integer formats for that matter.
 
-	if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData && options.vulkan_semantics)
+	if (type.basetype == SPIRType::Image && type.image.dim == Dim::SubpassData && options.vulkan_semantics)
 		return res + "subpassInput" + (type.image.ms ? "MS" : "");
-	else if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData &&
+	else if (type.basetype == SPIRType::Image && type.image.dim == Dim::SubpassData &&
 	         subpass_input_is_framebuffer_fetch(id))
 	{
 		SPIRType sampled_type = get<SPIRType>(type.image.type);
@@ -16651,10 +16655,10 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 
 	// If we're emulating subpassInput with samplers, force sampler2D
 	// so we don't have to specify format.
-	if (type.basetype == SPIRType::Image && type.image.dim != DimSubpassData)
+	if (type.basetype == SPIRType::Image && type.image.dim != Dim::SubpassData)
 	{
 		// Sampler buffers are always declared as samplerBuffer even though they might be separate images in the SPIR-V.
-		if (type.image.dim == DimBuffer && type.image.sampled == 1)
+		if (type.image.dim == Dim::Buffer && type.image.sampled == 1)
 			res += "sampler";
 		else
 			res += type.image.sampled == 2 ? "image" : "texture";
@@ -16664,20 +16668,20 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 
 	switch (type.image.dim)
 	{
-	case Dim1D:
+	case Dim::Dim1D:
 		// ES doesn't support 1D. Fake it with 2D.
 		res += options.es ? "2D" : "1D";
 		break;
-	case Dim2D:
+	case Dim::Dim2D:
 		res += "2D";
 		break;
-	case Dim3D:
+	case Dim::Dim3D:
 		res += "3D";
 		break;
-	case DimCube:
+	case Dim::Cube:
 		res += "Cube";
 		break;
-	case DimRect:
+	case Dim::Rect:
 		if (options.es)
 			SPIRV_CROSS_THROW("Rectangle textures are not supported on OpenGL ES.");
 
@@ -16687,7 +16691,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 		res += "2DRect";
 		break;
 
-	case DimBuffer:
+	case Dim::Buffer:
 		if (options.es && options.version < 320)
 			require_extension_internal("GL_EXT_texture_buffer");
 		else if (!options.es && options.version < 140)
@@ -16695,7 +16699,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 		res += "Buffer";
 		break;
 
-	case DimSubpassData:
+	case Dim::SubpassData:
 		res += "2D";
 		break;
 	default:
@@ -16717,7 +16721,7 @@ string CompilerGLSL::image_type_glsl(const SPIRType &type, uint32_t id, bool /*m
 	{
 		res += "Shadow";
 
-		if (type.image.dim == DimCube && is_legacy())
+		if (type.image.dim == Dim::Cube && is_legacy())
 		{
 			if (!options.es)
 				require_extension_internal("GL_EXT_gpu_shader4");
@@ -16765,7 +16769,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		auto *parent = &get_pointee_type(type);
 		string name = type_to_glsl(*parent);
 
-		uint32_t array_stride = get_decoration(type.parent_type, DecorationArrayStride);
+		uint32_t array_stride = get_decoration(type.parent_type, Decoration::ArrayStride);
 
 		// Resolve all array dimensions in one go since once we lose the pointer type,
 		// array information is left to to_array_type_glsl. The base type loses array information.
@@ -16778,7 +16782,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 
 			name += "stride_" + std::to_string(array_stride);
 
-			array_stride = get_decoration(parent->parent_type, DecorationArrayStride);
+			array_stride = get_decoration(parent->parent_type, Decoration::ArrayStride);
 			parent = &get<SPIRType>(parent->parent_type);
 		}
 
@@ -16845,7 +16849,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			require_extension_internal("GL_ARB_shader_atomic_counters");
 	}
 
-	if (type.op == spv::OpTypeCooperativeVectorNV)
+	if (type.op == spv::Op::OpTypeCooperativeVectorNV)
 	{
 		require_extension_internal("GL_NV_cooperative_vector");
 		if (!options.vulkan_semantics)
@@ -16860,7 +16864,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	while (is_pointer(*coop_type) || is_array(*coop_type))
 		coop_type = &get<SPIRType>(coop_type->parent_type);
 
-	if (coop_type->op == spv::OpTypeCooperativeMatrixKHR)
+	if (coop_type->op == spv::Op::OpTypeCooperativeMatrixKHR)
 	{
 		require_extension_internal("GL_KHR_cooperative_matrix");
 		if (!options.vulkan_semantics)
@@ -16871,15 +16875,15 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		const char *use = nullptr;
 		switch (use_type)
 		{
-		case CooperativeMatrixUseMatrixAKHR:
+		case static_cast<uint32_t>(CooperativeMatrixUse::MatrixAKHR):
 			use = "gl_MatrixUseA";
 			break;
 
-		case CooperativeMatrixUseMatrixBKHR:
+		case static_cast<uint32_t>(CooperativeMatrixUse::MatrixBKHR):
 			use = "gl_MatrixUseB";
 			break;
 
-		case CooperativeMatrixUseMatrixAccumulatorKHR:
+		case static_cast<uint32_t>(CooperativeMatrixUse::MatrixAccumulatorKHR):
 			use = "gl_MatrixUseAccumulator";
 			break;
 
@@ -16893,9 +16897,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			if (!scope->specialization)
 			{
 				require_extension_internal("GL_KHR_memory_scope_semantics");
-				if (scope->scalar() == spv::ScopeSubgroup)
+				if (scope->scalar() == static_cast<uint32_t>(spv::Scope::Subgroup))
 					scope_expr = "gl_ScopeSubgroup";
-				else if (scope->scalar() == spv::ScopeWorkgroup)
+				else if (scope->scalar() == static_cast<uint32_t>(spv::Scope::Workgroup))
 					scope_expr = "gl_ScopeWorkgroup";
 				else
 					SPIRV_CROSS_THROW("Invalid scope for cooperative matrix.");
@@ -17119,7 +17123,7 @@ void CompilerGLSL::flatten_buffer_block(VariableID id)
 		SPIRV_CROSS_THROW(name + " is an array of UBOs.");
 	if (type.basetype != SPIRType::Struct)
 		SPIRV_CROSS_THROW(name + " is not a struct.");
-	if (!flags.get(DecorationBlock))
+	if (!flags.get(static_cast<uint32_t>(Decoration::Block)))
 		SPIRV_CROSS_THROW(name + " is not a block.");
 	if (type.member_types.empty())
 		SPIRV_CROSS_THROW(name + " is an empty struct.");
@@ -17140,7 +17144,7 @@ bool CompilerGLSL::is_user_type_structured(uint32_t /*id*/) const
 bool CompilerGLSL::check_atomic_image(uint32_t id)
 {
 	auto &type = expression_type(id);
-	if (type.storage == StorageClassImage)
+	if (type.storage == StorageClass::Image)
 	{
 		if (options.es && options.version < 320)
 			require_extension_internal("GL_OES_shader_image_atomic");
@@ -17148,10 +17152,10 @@ bool CompilerGLSL::check_atomic_image(uint32_t id)
 		auto *var = maybe_get_backing_variable(id);
 		if (var)
 		{
-			if (has_decoration(var->self, DecorationNonWritable) || has_decoration(var->self, DecorationNonReadable))
+			if (has_decoration(var->self, Decoration::NonWritable) || has_decoration(var->self, Decoration::NonReadable))
 			{
-				unset_decoration(var->self, DecorationNonWritable);
-				unset_decoration(var->self, DecorationNonReadable);
+				unset_decoration(var->self, Decoration::NonWritable);
+				unset_decoration(var->self, Decoration::NonReadable);
 				force_recompile();
 			}
 		}
@@ -17172,7 +17176,7 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 		uint32_t type_id = get_pointee_type_id(arg.type);
 
 		// Workaround glslang bug. It seems to only consider the base type when resolving overloads.
-		if (get<SPIRType>(type_id).op == spv::OpTypeCooperativeMatrixKHR)
+		if (get<SPIRType>(type_id).op == spv::Op::OpTypeCooperativeMatrixKHR)
 			type_id = get<SPIRType>(type_id).parent_type;
 
 		auto &type = get<SPIRType>(type_id);
@@ -17310,7 +17314,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			auto ops = stream(i);
 			auto op = static_cast<Op>(i.op);
 
-			if (op == OpFunctionCall)
+			if (op == Op::OpFunctionCall)
 			{
 				// Recursively emit functions which are called.
 				uint32_t id = ops[2];
@@ -17343,10 +17347,10 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 	{
 		auto &var = get<SPIRVariable>(v);
 		var.deferred_declaration = false;
-		if (var.storage == StorageClassTaskPayloadWorkgroupEXT)
+		if (var.storage == StorageClass::TaskPayloadWorkgroupEXT)
 			continue;
 
-		if (variable_decl_is_remapped_storage(var, StorageClassWorkgroup))
+		if (variable_decl_is_remapped_storage(var, StorageClass::Workgroup))
 		{
 			// Special variable type which cannot have initializer,
 			// need to be declared as standalone variables.
@@ -17356,12 +17360,12 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 
 			// "Real" workgroup variables in compute shaders needs extra caretaking.
 			// They need to be initialized with an extra routine as they come in arbitrary form.
-			if (var.storage == StorageClassWorkgroup && var.initializer)
+			if (var.storage == StorageClass::Workgroup && var.initializer)
 				emit_workgroup_initialization(var);
 
 			var.deferred_declaration = false;
 		}
-		else if (var.storage == StorageClassPrivate)
+		else if (var.storage == StorageClass::Private)
 		{
 			// These variables will not have had their CFG usage analyzed, so move it to the entry block.
 			// Comes from MSL which can push global variables as local variables in main function.
@@ -17384,7 +17388,7 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 				var.deferred_declaration = true;
 			}
 		}
-		else if (var.storage == StorageClassFunction && var.remapped_variable && var.static_expression)
+		else if (var.storage == StorageClass::Function && var.remapped_variable && var.static_expression)
 		{
 			// No need to declare this variable, it has a static expression.
 			var.deferred_declaration = false;
@@ -18685,7 +18689,7 @@ BlockID CompilerGLSL::emit_block_chain_inner(SPIRBlock &block)
 				// The backend is responsible for setting this up, and redirection the return values as appropriate.
 				if (ir.ids[block.return_value].get_type() != TypeUndef)
 				{
-					emit_array_copy("spvReturnValue", 0, block.return_value, StorageClassFunction,
+					emit_array_copy("spvReturnValue", 0, block.return_value, StorageClass::Function,
 					                get_expression_effective_storage_class(block.return_value));
 				}
 
@@ -18947,7 +18951,7 @@ void CompilerGLSL::check_function_call_constraints(const uint32_t *args, uint32_
 			continue;
 
 		auto &type = get<SPIRType>(var->basetype);
-		if (type.basetype == SPIRType::Image && type.image.dim == DimSubpassData)
+		if (type.basetype == SPIRType::Image && type.image.dim == Dim::SubpassData)
 		{
 			SPIRV_CROSS_THROW("Tried passing a remapped subpassInput variable to a function. "
 			                  "This will not work correctly because type-remapping information is lost. "
@@ -18969,9 +18973,9 @@ const Instruction *CompilerGLSL::get_next_instruction_in_block(const Instruction
 
 uint32_t CompilerGLSL::mask_relevant_memory_semantics(uint32_t semantics)
 {
-	return semantics & (MemorySemanticsAtomicCounterMemoryMask | MemorySemanticsImageMemoryMask |
-	                    MemorySemanticsWorkgroupMemoryMask | MemorySemanticsUniformMemoryMask |
-	                    MemorySemanticsCrossWorkgroupMemoryMask | MemorySemanticsSubgroupMemoryMask);
+	return semantics & static_cast<uint32_t>((MemorySemanticsMask::AtomicCounterMemory | MemorySemanticsMask::ImageMemory |
+	                    MemorySemanticsMask::WorkgroupMemory | MemorySemanticsMask::UniformMemory |
+	                    MemorySemanticsMask::CrossWorkgroupMemory | MemorySemanticsMask::SubgroupMemory));
 }
 
 bool CompilerGLSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rhs_id, StorageClass, StorageClass)
@@ -18993,10 +18997,10 @@ bool CompilerGLSL::unroll_array_to_complex_store(uint32_t target_id, uint32_t so
 	// This path is only relevant for GL backends.
 
 	auto *var = maybe_get<SPIRVariable>(target_id);
-	if (!var || var->storage != StorageClassOutput)
+	if (!var || var->storage != StorageClass::Output)
 		return false;
 
-	if (!is_builtin_variable(*var) || BuiltIn(get_decoration(var->self, DecorationBuiltIn)) != BuiltInSampleMask)
+	if (!is_builtin_variable(*var) || BuiltIn(get_decoration(var->self, Decoration::BuiltIn)) != BuiltIn::SampleMask)
 		return false;
 
 	auto &type = expression_type(source_id);
@@ -19010,7 +19014,7 @@ bool CompilerGLSL::unroll_array_to_complex_store(uint32_t target_id, uint32_t so
 	else
 		array_expr = to_expression(type.array.back());
 
-	SPIRType target_type { OpTypeInt };
+	SPIRType target_type { Op::OpTypeInt };
 	target_type.basetype = SPIRType::Int;
 
 	statement("for (int i = 0; i < int(", array_expr, "); i++)");
@@ -19033,21 +19037,21 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 	if (!var)
 		return;
 
-	if (var->storage != StorageClassInput && var->storage != StorageClassOutput)
+	if (var->storage != StorageClass::Input && var->storage != StorageClass::Output)
 		return;
 
 	auto &type = get_variable_data_type(*var);
 	if (type.array.empty())
 		return;
 
-	auto builtin = BuiltIn(get_decoration(var->self, DecorationBuiltIn));
+	auto builtin = BuiltIn(get_decoration(var->self, Decoration::BuiltIn));
 	bool is_builtin = is_builtin_variable(*var) &&
-	                  (builtin == BuiltInPointSize ||
-	                   builtin == BuiltInPosition ||
-	                   builtin == BuiltInSampleMask);
+	                  (builtin == BuiltIn::PointSize ||
+	                   builtin == BuiltIn::Position ||
+	                   builtin == BuiltIn::SampleMask);
 	bool is_tess = is_tessellation_shader();
-	bool is_patch = has_decoration(var->self, DecorationPatch);
-	bool is_sample_mask = is_builtin && builtin == BuiltInSampleMask;
+	bool is_patch = has_decoration(var->self, Decoration::Patch);
+	bool is_sample_mask = is_builtin && builtin == BuiltIn::SampleMask;
 
 	// Tessellation input arrays are special in that they are unsized, so we cannot directly copy from it.
 	// We must unroll the array load.
@@ -19075,7 +19079,7 @@ void CompilerGLSL::unroll_array_from_complex_load(uint32_t target_id, uint32_t s
 			statement(new_expr, "[i] = gl_in[i].", expr, ";");
 		else if (is_sample_mask)
 		{
-			SPIRType target_type { OpTypeInt };
+			SPIRType target_type { Op::OpTypeInt };
 			target_type.basetype = SPIRType::Int;
 			statement(new_expr, "[i] = ", bitcast_expression(target_type, type.basetype, join(expr, "[i]")), ";");
 		}
@@ -19098,51 +19102,51 @@ void CompilerGLSL::cast_from_variable_load(uint32_t source_id, std::string &expr
 		source_id = var->self;
 
 	// Only interested in standalone builtin variables.
-	if (!has_decoration(source_id, DecorationBuiltIn))
+	if (!has_decoration(source_id, Decoration::BuiltIn))
 	{
 		// Except for int attributes in legacy GLSL, which are cast from float.
-		if (is_legacy() && expr_type.basetype == SPIRType::Int && var && var->storage == StorageClassInput)
+		if (is_legacy() && expr_type.basetype == SPIRType::Int && var && var->storage == StorageClass::Input)
 			expr = join(type_to_glsl(expr_type), "(", expr, ")");
 		return;
 	}
 
-	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, DecorationBuiltIn));
+	auto builtin = static_cast<BuiltIn>(get_decoration(source_id, Decoration::BuiltIn));
 	auto expected_type = expr_type.basetype;
 
 	// TODO: Fill in for more builtins.
 	switch (builtin)
 	{
-	case BuiltInLayer:
-	case BuiltInPrimitiveId:
-	case BuiltInViewportIndex:
-	case BuiltInInstanceId:
-	case BuiltInInstanceIndex:
-	case BuiltInVertexId:
-	case BuiltInVertexIndex:
-	case BuiltInSampleId:
-	case BuiltInBaseVertex:
-	case BuiltInBaseInstance:
-	case BuiltInDrawIndex:
-	case BuiltInFragStencilRefEXT:
-	case BuiltInInstanceCustomIndexNV:
-	case BuiltInSampleMask:
-	case BuiltInPrimitiveShadingRateKHR:
-	case BuiltInShadingRateKHR:
+	case BuiltIn::Layer:
+	case BuiltIn::PrimitiveId:
+	case BuiltIn::ViewportIndex:
+	case BuiltIn::InstanceId:
+	case BuiltIn::InstanceIndex:
+	case BuiltIn::VertexId:
+	case BuiltIn::VertexIndex:
+	case BuiltIn::SampleId:
+	case BuiltIn::BaseVertex:
+	case BuiltIn::BaseInstance:
+	case BuiltIn::DrawIndex:
+	case BuiltIn::FragStencilRefEXT:
+	case BuiltIn::InstanceCustomIndexNV:
+	case BuiltIn::SampleMask:
+	case BuiltIn::PrimitiveShadingRateKHR:
+	case BuiltIn::ShadingRateKHR:
 		expected_type = SPIRType::Int;
 		break;
 
-	case BuiltInGlobalInvocationId:
-	case BuiltInLocalInvocationId:
-	case BuiltInWorkgroupId:
-	case BuiltInLocalInvocationIndex:
-	case BuiltInWorkgroupSize:
-	case BuiltInNumWorkgroups:
-	case BuiltInIncomingRayFlagsNV:
-	case BuiltInLaunchIdNV:
-	case BuiltInLaunchSizeNV:
-	case BuiltInPrimitiveTriangleIndicesEXT:
-	case BuiltInPrimitiveLineIndicesEXT:
-	case BuiltInPrimitivePointIndicesEXT:
+	case BuiltIn::GlobalInvocationId:
+	case BuiltIn::LocalInvocationId:
+	case BuiltIn::WorkgroupId:
+	case BuiltIn::LocalInvocationIndex:
+	case BuiltIn::WorkgroupSize:
+	case BuiltIn::NumWorkgroups:
+	case BuiltIn::IncomingRayFlagsNV:
+	case BuiltIn::LaunchIdNV:
+	case BuiltIn::LaunchSizeNV:
+	case BuiltIn::PrimitiveTriangleIndicesEXT:
+	case BuiltIn::PrimitiveLineIndicesEXT:
+	case BuiltIn::PrimitivePointIndicesEXT:
 		expected_type = SPIRType::UInt;
 		break;
 
@@ -19159,13 +19163,13 @@ SPIRType::BaseType CompilerGLSL::get_builtin_basetype(BuiltIn builtin, SPIRType:
 	// TODO: Fill in for more builtins.
 	switch (builtin)
 	{
-	case BuiltInLayer:
-	case BuiltInPrimitiveId:
-	case BuiltInViewportIndex:
-	case BuiltInFragStencilRefEXT:
-	case BuiltInSampleMask:
-	case BuiltInPrimitiveShadingRateKHR:
-	case BuiltInShadingRateKHR:
+	case BuiltIn::Layer:
+	case BuiltIn::PrimitiveId:
+	case BuiltIn::ViewportIndex:
+	case BuiltIn::FragStencilRefEXT:
+	case BuiltIn::SampleMask:
+	case BuiltIn::PrimitiveShadingRateKHR:
+	case BuiltIn::ShadingRateKHR:
 		return SPIRType::Int;
 
 	default:
@@ -19180,10 +19184,10 @@ void CompilerGLSL::cast_to_variable_store(uint32_t target_id, std::string &expr,
 		target_id = var->self;
 
 	// Only interested in standalone builtin variables.
-	if (!has_decoration(target_id, DecorationBuiltIn))
+	if (!has_decoration(target_id, Decoration::BuiltIn))
 		return;
 
-	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, DecorationBuiltIn));
+	auto builtin = static_cast<BuiltIn>(get_decoration(target_id, Decoration::BuiltIn));
 	auto expected_type = get_builtin_basetype(builtin, expr_type.basetype);
 
 	if (expected_type != expr_type.basetype)
@@ -19203,9 +19207,9 @@ void CompilerGLSL::convert_non_uniform_expression(string &expr, uint32_t ptr_id)
 	if (!var)
 		return;
 
-	if (var->storage != StorageClassUniformConstant &&
-	    var->storage != StorageClassStorageBuffer &&
-	    var->storage != StorageClassUniform)
+	if (var->storage != StorageClass::UniformConstant &&
+	    var->storage != StorageClass::StorageBuffer &&
+	    var->storage != StorageClass::Uniform)
 		return;
 
 	auto &backing_type = get<SPIRType>(var->basetype);
@@ -19338,8 +19342,8 @@ void CompilerGLSL::fixup_anonymous_struct_names()
 
 	ir.for_each_typed_id<SPIRType>([&](uint32_t, SPIRType &type) {
 		if (type.basetype == SPIRType::Struct &&
-		    (has_decoration(type.self, DecorationBlock) ||
-		     has_decoration(type.self, DecorationBufferBlock)))
+		    (has_decoration(type.self, Decoration::Block) ||
+		     has_decoration(type.self, Decoration::BufferBlock)))
 		{
 			fixup_anonymous_struct_names(visited, type);
 		}
@@ -19353,7 +19357,7 @@ void CompilerGLSL::fixup_type_alias()
 		if (!type.type_alias)
 			return;
 
-		if (has_decoration(type.self, DecorationBlock) || has_decoration(type.self, DecorationBufferBlock))
+		if (has_decoration(type.self, Decoration::Block) || has_decoration(type.self, Decoration::BufferBlock))
 		{
 			// Top-level block types should never alias anything else.
 			type.type_alias = 0;
@@ -19538,10 +19542,10 @@ void CompilerGLSL::emit_copy_logical_type(uint32_t lhs_id, uint32_t lhs_type_id,
 
 bool CompilerGLSL::subpass_input_is_framebuffer_fetch(uint32_t id) const
 {
-	if (!has_decoration(id, DecorationInputAttachmentIndex))
+	if (!has_decoration(id, Decoration::InputAttachmentIndex))
 		return false;
 
-	uint32_t input_attachment_index = get_decoration(id, DecorationInputAttachmentIndex);
+	uint32_t input_attachment_index = get_decoration(id, Decoration::InputAttachmentIndex);
 	for (auto &remap : subpass_to_framebuffer_fetch_attachment)
 		if (remap.first == input_attachment_index)
 			return true;
@@ -19553,8 +19557,8 @@ const SPIRVariable *CompilerGLSL::find_subpass_input_by_attachment_index(uint32_
 {
 	const SPIRVariable *ret = nullptr;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (has_decoration(var.self, DecorationInputAttachmentIndex) &&
-		    get_decoration(var.self, DecorationInputAttachmentIndex) == index)
+		if (has_decoration(var.self, Decoration::InputAttachmentIndex) &&
+		    get_decoration(var.self, Decoration::InputAttachmentIndex) == index)
 		{
 			ret = &var;
 		}
@@ -19566,7 +19570,7 @@ const SPIRVariable *CompilerGLSL::find_color_output_by_location(uint32_t locatio
 {
 	const SPIRVariable *ret = nullptr;
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, const SPIRVariable &var) {
-		if (var.storage == StorageClassOutput && get_decoration(var.self, DecorationLocation) == location)
+		if (var.storage == StorageClass::Output && get_decoration(var.self, Decoration::Location) == location)
 			ret = &var;
 	});
 	return ret;
@@ -19591,7 +19595,7 @@ void CompilerGLSL::emit_inout_fragment_outputs_copy_to_subpass_inputs()
 			if (is_legacy())
 			{
 				statement(to_expression(subpass_var->self), " = ", "gl_LastFragData[",
-				          get_decoration(output_var->self, DecorationLocation), "];");
+				          get_decoration(output_var->self, Decoration::Location), "];");
 			}
 			else
 			{
@@ -19871,8 +19875,8 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		return;
 
 	auto &backing_type = get<SPIRType>(var->basetype);
-	bool is_ubo = backing_type.basetype == SPIRType::Struct && backing_type.storage == StorageClassUniform &&
-	              has_decoration(backing_type.self, DecorationBlock);
+	bool is_ubo = backing_type.basetype == SPIRType::Struct && backing_type.storage == StorageClass::Uniform &&
+	              has_decoration(backing_type.self, Decoration::Block);
 	if (!is_ubo)
 		return;
 
@@ -19901,11 +19905,11 @@ void CompilerGLSL::rewrite_load_for_wrapped_row_major(std::string &expr, TypeID 
 		for (uint32_t i = 0; i < uint32_t(type->member_types.size()); i++)
 		{
 			auto decorations = combined_decoration_for_member(*type, i);
-			if (decorations.get(DecorationRowMajor))
+			if (decorations.get(static_cast<uint32_t>(Decoration::RowMajor)))
 				rewrite = true;
 
 			// Since we decide on a per-struct basis, only use mediump wrapper if all candidates are mediump.
-			if (!decorations.get(DecorationRelaxedPrecision))
+			if (!decorations.get(static_cast<uint32_t>(Decoration::RelaxedPrecision)))
 				relaxed = false;
 		}
 	}
@@ -19924,42 +19928,42 @@ void CompilerGLSL::mask_stage_output_by_location(uint32_t location, uint32_t com
 
 void CompilerGLSL::mask_stage_output_by_builtin(BuiltIn builtin)
 {
-	masked_output_builtins.insert(builtin);
+	masked_output_builtins.insert(static_cast<uint32_t>(builtin));
 }
 
 bool CompilerGLSL::is_stage_output_variable_masked(const SPIRVariable &var) const
 {
 	auto &type = get<SPIRType>(var.basetype);
-	bool is_block = has_decoration(type.self, DecorationBlock);
+	bool is_block = has_decoration(type.self, Decoration::Block);
 	// Blocks by themselves are never masked. Must be masked per-member.
 	if (is_block)
 		return false;
 
-	bool is_builtin = has_decoration(var.self, DecorationBuiltIn);
+	bool is_builtin = has_decoration(var.self, Decoration::BuiltIn);
 
 	if (is_builtin)
 	{
-		return is_stage_output_builtin_masked(BuiltIn(get_decoration(var.self, DecorationBuiltIn)));
+		return is_stage_output_builtin_masked(BuiltIn(get_decoration(var.self, Decoration::BuiltIn)));
 	}
 	else
 	{
-		if (!has_decoration(var.self, DecorationLocation))
+		if (!has_decoration(var.self, Decoration::Location))
 			return false;
 
 		return is_stage_output_location_masked(
-				get_decoration(var.self, DecorationLocation),
-				get_decoration(var.self, DecorationComponent));
+				get_decoration(var.self, Decoration::Location),
+				get_decoration(var.self, Decoration::Component));
 	}
 }
 
 bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, uint32_t index, bool strip_array) const
 {
 	auto &type = get<SPIRType>(var.basetype);
-	bool is_block = has_decoration(type.self, DecorationBlock);
+	bool is_block = has_decoration(type.self, Decoration::Block);
 	if (!is_block)
 		return false;
 
-	BuiltIn builtin = BuiltInMax;
+	BuiltIn builtin = BuiltIn::Max;
 	if (is_member_builtin(type, index, &builtin))
 	{
 		return is_stage_output_builtin_masked(builtin);
@@ -19967,22 +19971,22 @@ bool CompilerGLSL::is_stage_output_block_member_masked(const SPIRVariable &var, 
 	else
 	{
 		uint32_t location = get_declared_member_location(var, index, strip_array);
-		uint32_t component = get_member_decoration(type.self, index, DecorationComponent);
+		uint32_t component = get_member_decoration(type.self, index, Decoration::Component);
 		return is_stage_output_location_masked(location, component);
 	}
 }
 
 bool CompilerGLSL::is_per_primitive_variable(const SPIRVariable &var) const
 {
-	if (has_decoration(var.self, DecorationPerPrimitiveEXT))
+	if (has_decoration(var.self, Decoration::PerPrimitiveEXT))
 		return true;
 
 	auto &type = get<SPIRType>(var.basetype);
-	if (!has_decoration(type.self, DecorationBlock))
+	if (!has_decoration(type.self, Decoration::Block))
 		return false;
 
 	for (uint32_t i = 0, n = uint32_t(type.member_types.size()); i < n; i++)
-		if (!has_member_decoration(type.self, i, DecorationPerPrimitiveEXT))
+		if (!has_member_decoration(type.self, i, Decoration::PerPrimitiveEXT))
 			return false;
 
 	return true;
@@ -19995,14 +19999,14 @@ bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t c
 
 bool CompilerGLSL::is_stage_output_builtin_masked(spv::BuiltIn builtin) const
 {
-	return masked_output_builtins.count(builtin) != 0;
+	return masked_output_builtins.count(static_cast<uint32_t>(builtin)) != 0;
 }
 
 uint32_t CompilerGLSL::get_declared_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
 {
 	auto &block_type = get<SPIRType>(var.basetype);
-	if (has_member_decoration(block_type.self, mbr_idx, DecorationLocation))
-		return get_member_decoration(block_type.self, mbr_idx, DecorationLocation);
+	if (has_member_decoration(block_type.self, mbr_idx, Decoration::Location))
+		return get_member_decoration(block_type.self, mbr_idx, Decoration::Location);
 	else
 		return get_accumulated_member_location(var, mbr_idx, strip_array);
 }
@@ -20010,15 +20014,15 @@ uint32_t CompilerGLSL::get_declared_member_location(const SPIRVariable &var, uin
 uint32_t CompilerGLSL::get_accumulated_member_location(const SPIRVariable &var, uint32_t mbr_idx, bool strip_array) const
 {
 	auto &type = strip_array ? get_variable_element_type(var) : get_variable_data_type(var);
-	uint32_t location = get_decoration(var.self, DecorationLocation);
+	uint32_t location = get_decoration(var.self, Decoration::Location);
 
 	for (uint32_t i = 0; i < mbr_idx; i++)
 	{
 		auto &mbr_type = get<SPIRType>(type.member_types[i]);
 
 		// Start counting from any place we have a new location decoration.
-		if (has_member_decoration(type.self, mbr_idx, DecorationLocation))
-			location = get_member_decoration(type.self, mbr_idx, DecorationLocation);
+		if (has_member_decoration(type.self, mbr_idx, Decoration::Location))
+			location = get_member_decoration(type.self, mbr_idx, Decoration::Location);
 
 		uint32_t location_count = type_to_location_count(mbr_type);
 		location += location_count;
@@ -20041,15 +20045,15 @@ StorageClass CompilerGLSL::get_expression_effective_storage_class(uint32_t ptr)
 
 	if (var && !forced_temporary)
 	{
-		if (variable_decl_is_remapped_storage(*var, StorageClassWorkgroup))
-			return StorageClassWorkgroup;
-		if (variable_decl_is_remapped_storage(*var, StorageClassStorageBuffer))
-			return StorageClassStorageBuffer;
+		if (variable_decl_is_remapped_storage(*var, StorageClass::Workgroup))
+			return StorageClass::Workgroup;
+		if (variable_decl_is_remapped_storage(*var, StorageClass::StorageBuffer))
+			return StorageClass::StorageBuffer;
 
 		// Normalize SSBOs to StorageBuffer here.
-		if (var->storage == StorageClassUniform &&
-		    has_decoration(get<SPIRType>(var->basetype).self, DecorationBufferBlock))
-			return StorageClassStorageBuffer;
+		if (var->storage == StorageClass::Uniform &&
+		    has_decoration(get<SPIRType>(var->basetype).self, Decoration::BufferBlock))
+			return StorageClass::StorageBuffer;
 		else
 			return var->storage;
 	}
@@ -20124,8 +20128,8 @@ uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint3
 	auto &ep = get_entry_point();
 
 	// Per-operation flag supersedes all defaults.
-	if (id != 0 && has_decoration(id, DecorationFPFastMathMode))
-		return get_decoration(id, DecorationFPFastMathMode);
+	if (id != 0 && has_decoration(id, Decoration::FPFastMathMode))
+		return get_decoration(id, Decoration::FPFastMathMode);
 
 	// Handle float_controls1 execution modes.
 	uint32_t width = get<SPIRType>(result_type).width;
@@ -20155,11 +20159,11 @@ uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint3
 	}
 
 	if (szinp)
-		fp_flags &= ~(FPFastMathModeNSZMask | FPFastMathModeNotInfMask | FPFastMathModeNotNaNMask);
+		fp_flags &= ~(static_cast<uint32_t>(FPFastMathModeMask::NSZ | FPFastMathModeMask::NotInf | FPFastMathModeMask::NotNaN));
 
 	// Legacy NoContraction deals with any kind of transform to the expression.
-	if (id != 0 && has_decoration(id, DecorationNoContraction))
-		fp_flags &= ~(FPFastMathModeAllowContractMask | FPFastMathModeAllowTransformMask | FPFastMathModeAllowReassocMask);
+	if (id != 0 && has_decoration(id, Decoration::NoContraction))
+		fp_flags &= ~(static_cast<uint32_t>(FPFastMathModeMask::AllowContract | FPFastMathModeMask::AllowTransform | FPFastMathModeMask::AllowReassoc));
 
 	// Handle float_controls2 execution modes.
 	bool found_default = false;
@@ -20185,8 +20189,8 @@ uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint3
 
 bool CompilerGLSL::has_legacy_nocontract(uint32_t result_type, uint32_t id) const
 {
-	const auto fp_flags = FPFastMathModeAllowContractMask |
-	                      FPFastMathModeAllowTransformMask |
-	                      FPFastMathModeAllowReassocMask;
+	const auto fp_flags = static_cast<uint32_t>(FPFastMathModeMask::AllowContract |
+	                      FPFastMathModeMask::AllowTransform |
+	                      FPFastMathModeMask::AllowReassoc);
 	return (get_fp_fast_math_flags_for_op(result_type, id) & fp_flags) != fp_flags;
 }

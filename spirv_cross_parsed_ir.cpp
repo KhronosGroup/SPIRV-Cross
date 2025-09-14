@@ -362,15 +362,15 @@ void ParsedIR::set_member_name(TypeID id, uint32_t index, const string &name)
 void ParsedIR::set_decoration_string(ID id, Decoration decoration, const string &argument)
 {
 	auto &dec = meta[id].decoration;
-	dec.decoration_flags.set(decoration);
+	dec.decoration_flags.set(static_cast<uint32_t>(decoration));
 
 	switch (decoration)
 	{
-	case DecorationHlslSemanticGOOGLE:
+	case Decoration::HlslSemanticGOOGLE:
 		dec.hlsl_semantic = argument;
 		break;
 
-	case DecorationUserTypeGOOGLE:
+	case Decoration::UserTypeGOOGLE:
 		dec.user_type = argument;
 		break;
 
@@ -382,77 +382,77 @@ void ParsedIR::set_decoration_string(ID id, Decoration decoration, const string 
 void ParsedIR::set_decoration(ID id, Decoration decoration, uint32_t argument)
 {
 	auto &dec = meta[id].decoration;
-	dec.decoration_flags.set(decoration);
+	dec.decoration_flags.set(static_cast<uint32_t>(decoration));
 
 	switch (decoration)
 	{
-	case DecorationBuiltIn:
+	case Decoration::BuiltIn:
 		dec.builtin = true;
 		dec.builtin_type = static_cast<BuiltIn>(argument);
 		break;
 
-	case DecorationLocation:
+	case Decoration::Location:
 		dec.location = argument;
 		break;
 
-	case DecorationComponent:
+	case Decoration::Component:
 		dec.component = argument;
 		break;
 
-	case DecorationOffset:
+	case Decoration::Offset:
 		dec.offset = argument;
 		break;
 
-	case DecorationXfbBuffer:
+	case Decoration::XfbBuffer:
 		dec.xfb_buffer = argument;
 		break;
 
-	case DecorationXfbStride:
+	case Decoration::XfbStride:
 		dec.xfb_stride = argument;
 		break;
 
-	case DecorationStream:
+	case Decoration::Stream:
 		dec.stream = argument;
 		break;
 
-	case DecorationArrayStride:
+	case Decoration::ArrayStride:
 		dec.array_stride = argument;
 		break;
 
-	case DecorationMatrixStride:
+	case Decoration::MatrixStride:
 		dec.matrix_stride = argument;
 		break;
 
-	case DecorationBinding:
+	case Decoration::Binding:
 		dec.binding = argument;
 		break;
 
-	case DecorationDescriptorSet:
+	case Decoration::DescriptorSet:
 		dec.set = argument;
 		break;
 
-	case DecorationInputAttachmentIndex:
+	case Decoration::InputAttachmentIndex:
 		dec.input_attachment = argument;
 		break;
 
-	case DecorationSpecId:
+	case Decoration::SpecId:
 		dec.spec_id = argument;
 		break;
 
-	case DecorationIndex:
+	case Decoration::Index:
 		dec.index = argument;
 		break;
 
-	case DecorationHlslCounterBufferGOOGLE:
+	case Decoration::HlslCounterBufferGOOGLE:
 		meta[id].hlsl_magic_counter_buffer = argument;
 		meta[argument].hlsl_is_magic_counter_buffer = true;
 		break;
 
-	case DecorationFPRoundingMode:
+	case Decoration::FPRoundingMode:
 		dec.fp_rounding_mode = static_cast<FPRoundingMode>(argument);
 		break;
 
-	case DecorationFPFastMathMode:
+	case Decoration::FPFastMathMode:
 		dec.fp_fast_math_mode = static_cast<FPFastMathModeMask>(argument);
 		break;
 
@@ -466,52 +466,52 @@ void ParsedIR::set_member_decoration(TypeID id, uint32_t index, Decoration decor
 	auto &m = meta[id];
 	m.members.resize(max(m.members.size(), size_t(index) + 1));
 	auto &dec = m.members[index];
-	dec.decoration_flags.set(decoration);
+	dec.decoration_flags.set(static_cast<uint32_t>(decoration));
 
 	switch (decoration)
 	{
-	case DecorationBuiltIn:
+	case Decoration::BuiltIn:
 		dec.builtin = true;
 		dec.builtin_type = static_cast<BuiltIn>(argument);
 		break;
 
-	case DecorationLocation:
+	case Decoration::Location:
 		dec.location = argument;
 		break;
 
-	case DecorationComponent:
+	case Decoration::Component:
 		dec.component = argument;
 		break;
 
-	case DecorationBinding:
+	case Decoration::Binding:
 		dec.binding = argument;
 		break;
 
-	case DecorationOffset:
+	case Decoration::Offset:
 		dec.offset = argument;
 		break;
 
-	case DecorationXfbBuffer:
+	case Decoration::XfbBuffer:
 		dec.xfb_buffer = argument;
 		break;
 
-	case DecorationXfbStride:
+	case Decoration::XfbStride:
 		dec.xfb_stride = argument;
 		break;
 
-	case DecorationStream:
+	case Decoration::Stream:
 		dec.stream = argument;
 		break;
 
-	case DecorationSpecId:
+	case Decoration::SpecId:
 		dec.spec_id = argument;
 		break;
 
-	case DecorationMatrixStride:
+	case Decoration::MatrixStride:
 		dec.matrix_stride = argument;
 		break;
 
-	case DecorationIndex:
+	case Decoration::Index:
 		dec.index = argument;
 		break;
 
@@ -552,9 +552,9 @@ void ParsedIR::mark_used_as_array_length(ID id)
 	case TypeConstantOp:
 	{
 		auto &cop = get<SPIRConstantOp>(id);
-		if (cop.opcode == OpCompositeExtract)
+		if (cop.opcode == Op::OpCompositeExtract)
 			mark_used_as_array_length(cop.arguments[0]);
-		else if (cop.opcode == OpCompositeInsert)
+		else if (cop.opcode == Op::OpCompositeInsert)
 		{
 			mark_used_as_array_length(cop.arguments[0]);
 			mark_used_as_array_length(cop.arguments[1]);
@@ -621,7 +621,7 @@ const Bitset &ParsedIR::get_member_decoration_bitset(TypeID id, uint32_t index) 
 
 bool ParsedIR::has_decoration(ID id, Decoration decoration) const
 {
-	return get_decoration_bitset(id).get(decoration);
+	return get_decoration_bitset(id).get(static_cast<uint32_t>(decoration));
 }
 
 uint32_t ParsedIR::get_decoration(ID id, Decoration decoration) const
@@ -631,43 +631,43 @@ uint32_t ParsedIR::get_decoration(ID id, Decoration decoration) const
 		return 0;
 
 	auto &dec = m->decoration;
-	if (!dec.decoration_flags.get(decoration))
+	if (!dec.decoration_flags.get(static_cast<uint32_t>(decoration)))
 		return 0;
 
 	switch (decoration)
 	{
-	case DecorationBuiltIn:
-		return dec.builtin_type;
-	case DecorationLocation:
+	case Decoration::BuiltIn:
+		return static_cast<uint32_t>(dec.builtin_type);
+	case Decoration::Location:
 		return dec.location;
-	case DecorationComponent:
+	case Decoration::Component:
 		return dec.component;
-	case DecorationOffset:
+	case Decoration::Offset:
 		return dec.offset;
-	case DecorationXfbBuffer:
+	case Decoration::XfbBuffer:
 		return dec.xfb_buffer;
-	case DecorationXfbStride:
+	case Decoration::XfbStride:
 		return dec.xfb_stride;
-	case DecorationStream:
+	case Decoration::Stream:
 		return dec.stream;
-	case DecorationBinding:
+	case Decoration::Binding:
 		return dec.binding;
-	case DecorationDescriptorSet:
+	case Decoration::DescriptorSet:
 		return dec.set;
-	case DecorationInputAttachmentIndex:
+	case Decoration::InputAttachmentIndex:
 		return dec.input_attachment;
-	case DecorationSpecId:
+	case Decoration::SpecId:
 		return dec.spec_id;
-	case DecorationArrayStride:
+	case Decoration::ArrayStride:
 		return dec.array_stride;
-	case DecorationMatrixStride:
+	case Decoration::MatrixStride:
 		return dec.matrix_stride;
-	case DecorationIndex:
+	case Decoration::Index:
 		return dec.index;
-	case DecorationFPRoundingMode:
-		return dec.fp_rounding_mode;
-	case DecorationFPFastMathMode:
-		return dec.fp_fast_math_mode;
+	case Decoration::FPRoundingMode:
+		return static_cast<uint32_t>(dec.fp_rounding_mode);
+	case Decoration::FPFastMathMode:
+		return static_cast<uint32_t>(dec.fp_fast_math_mode);
 	default:
 		return 1;
 	}
@@ -681,15 +681,15 @@ const string &ParsedIR::get_decoration_string(ID id, Decoration decoration) cons
 
 	auto &dec = m->decoration;
 
-	if (!dec.decoration_flags.get(decoration))
+	if (!dec.decoration_flags.get(static_cast<uint32_t>(decoration)))
 		return empty_string;
 
 	switch (decoration)
 	{
-	case DecorationHlslSemanticGOOGLE:
+	case Decoration::HlslSemanticGOOGLE:
 		return dec.hlsl_semantic;
 
-	case DecorationUserTypeGOOGLE:
+	case Decoration::UserTypeGOOGLE:
 		return dec.user_type;
 
 	default:
@@ -700,66 +700,66 @@ const string &ParsedIR::get_decoration_string(ID id, Decoration decoration) cons
 void ParsedIR::unset_decoration(ID id, Decoration decoration)
 {
 	auto &dec = meta[id].decoration;
-	dec.decoration_flags.clear(decoration);
+	dec.decoration_flags.clear(static_cast<uint32_t>(decoration));
 	switch (decoration)
 	{
-	case DecorationBuiltIn:
+	case Decoration::BuiltIn:
 		dec.builtin = false;
 		break;
 
-	case DecorationLocation:
+	case Decoration::Location:
 		dec.location = 0;
 		break;
 
-	case DecorationComponent:
+	case Decoration::Component:
 		dec.component = 0;
 		break;
 
-	case DecorationOffset:
+	case Decoration::Offset:
 		dec.offset = 0;
 		break;
 
-	case DecorationXfbBuffer:
+	case Decoration::XfbBuffer:
 		dec.xfb_buffer = 0;
 		break;
 
-	case DecorationXfbStride:
+	case Decoration::XfbStride:
 		dec.xfb_stride = 0;
 		break;
 
-	case DecorationStream:
+	case Decoration::Stream:
 		dec.stream = 0;
 		break;
 
-	case DecorationBinding:
+	case Decoration::Binding:
 		dec.binding = 0;
 		break;
 
-	case DecorationDescriptorSet:
+	case Decoration::DescriptorSet:
 		dec.set = 0;
 		break;
 
-	case DecorationInputAttachmentIndex:
+	case Decoration::InputAttachmentIndex:
 		dec.input_attachment = 0;
 		break;
 
-	case DecorationSpecId:
+	case Decoration::SpecId:
 		dec.spec_id = 0;
 		break;
 
-	case DecorationHlslSemanticGOOGLE:
+	case Decoration::HlslSemanticGOOGLE:
 		dec.hlsl_semantic.clear();
 		break;
 
-	case DecorationFPRoundingMode:
-		dec.fp_rounding_mode = FPRoundingModeMax;
+	case Decoration::FPRoundingMode:
+		dec.fp_rounding_mode = FPRoundingMode::Max;
 		break;
 
-	case DecorationFPFastMathMode:
-		dec.fp_fast_math_mode = FPFastMathModeMaskNone;
+	case Decoration::FPFastMathMode:
+		dec.fp_fast_math_mode = FPFastMathModeMask::MaskNone;
 		break;
 
-	case DecorationHlslCounterBufferGOOGLE:
+	case Decoration::HlslCounterBufferGOOGLE:
 	{
 		auto &counter = meta[id].hlsl_magic_counter_buffer;
 		if (counter)
@@ -777,7 +777,7 @@ void ParsedIR::unset_decoration(ID id, Decoration decoration)
 
 bool ParsedIR::has_member_decoration(TypeID id, uint32_t index, Decoration decoration) const
 {
-	return get_member_decoration_bitset(id, index).get(decoration);
+	return get_member_decoration_bitset(id, index).get(static_cast<uint32_t>(decoration));
 }
 
 uint32_t ParsedIR::get_member_decoration(TypeID id, uint32_t index, Decoration decoration) const
@@ -790,32 +790,32 @@ uint32_t ParsedIR::get_member_decoration(TypeID id, uint32_t index, Decoration d
 		return 0;
 
 	auto &dec = m->members[index];
-	if (!dec.decoration_flags.get(decoration))
+	if (!dec.decoration_flags.get(static_cast<uint32_t>(decoration)))
 		return 0;
 
 	switch (decoration)
 	{
-	case DecorationBuiltIn:
-		return dec.builtin_type;
-	case DecorationLocation:
+	case Decoration::BuiltIn:
+		return static_cast<uint32_t>(dec.builtin_type);
+	case Decoration::Location:
 		return dec.location;
-	case DecorationComponent:
+	case Decoration::Component:
 		return dec.component;
-	case DecorationBinding:
+	case Decoration::Binding:
 		return dec.binding;
-	case DecorationOffset:
+	case Decoration::Offset:
 		return dec.offset;
-	case DecorationXfbBuffer:
+	case Decoration::XfbBuffer:
 		return dec.xfb_buffer;
-	case DecorationXfbStride:
+	case Decoration::XfbStride:
 		return dec.xfb_stride;
-	case DecorationStream:
+	case Decoration::Stream:
 		return dec.stream;
-	case DecorationSpecId:
+	case Decoration::SpecId:
 		return dec.spec_id;
-	case DecorationMatrixStride:
+	case Decoration::MatrixStride:
 		return dec.matrix_stride;
-	case DecorationIndex:
+	case Decoration::Index:
 		return dec.index;
 	default:
 		return 1;
@@ -839,11 +839,11 @@ void ParsedIR::set_member_decoration_string(TypeID id, uint32_t index, Decoratio
 	auto &m = meta[id];
 	m.members.resize(max(m.members.size(), size_t(index) + 1));
 	auto &dec = meta[id].members[index];
-	dec.decoration_flags.set(decoration);
+	dec.decoration_flags.set(static_cast<uint32_t>(decoration));
 
 	switch (decoration)
 	{
-	case DecorationHlslSemanticGOOGLE:
+	case Decoration::HlslSemanticGOOGLE:
 		dec.hlsl_semantic = argument;
 		break;
 
@@ -864,7 +864,7 @@ const string &ParsedIR::get_member_decoration_string(TypeID id, uint32_t index, 
 
 		switch (decoration)
 		{
-		case DecorationHlslSemanticGOOGLE:
+		case Decoration::HlslSemanticGOOGLE:
 			return dec.hlsl_semantic;
 
 		default:
@@ -883,42 +883,42 @@ void ParsedIR::unset_member_decoration(TypeID id, uint32_t index, Decoration dec
 
 	auto &dec = m.members[index];
 
-	dec.decoration_flags.clear(decoration);
+	dec.decoration_flags.clear(static_cast<uint32_t>(decoration));
 	switch (decoration)
 	{
-	case DecorationBuiltIn:
+	case Decoration::BuiltIn:
 		dec.builtin = false;
 		break;
 
-	case DecorationLocation:
+	case Decoration::Location:
 		dec.location = 0;
 		break;
 
-	case DecorationComponent:
+	case Decoration::Component:
 		dec.component = 0;
 		break;
 
-	case DecorationOffset:
+	case Decoration::Offset:
 		dec.offset = 0;
 		break;
 
-	case DecorationXfbBuffer:
+	case Decoration::XfbBuffer:
 		dec.xfb_buffer = 0;
 		break;
 
-	case DecorationXfbStride:
+	case Decoration::XfbStride:
 		dec.xfb_stride = 0;
 		break;
 
-	case DecorationStream:
+	case Decoration::Stream:
 		dec.stream = 0;
 		break;
 
-	case DecorationSpecId:
+	case Decoration::SpecId:
 		dec.spec_id = 0;
 		break;
 
-	case DecorationHlslSemanticGOOGLE:
+	case Decoration::HlslSemanticGOOGLE:
 		dec.hlsl_semantic.clear();
 		break;
 

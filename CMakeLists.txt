@@ -20,7 +20,7 @@
 #
 
 cmake_minimum_required(VERSION 3.10)
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Avoid a warning if parent project sets VERSION in project().
@@ -206,7 +206,7 @@ set(spirv-cross-core-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_common.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_containers.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_error_handling.hpp
-		${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv.hpp11
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.hpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_parser.hpp
@@ -217,7 +217,7 @@ set(spirv-cross-core-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cfg.cpp)
 
 set(spirv-cross-c-sources
-		spirv.h
+		${CMAKE_CURRENT_SOURCE_DIR}/spirv.h
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_c.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_cross_c.h)
 
