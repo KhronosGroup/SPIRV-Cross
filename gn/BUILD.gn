@@ -25,7 +25,7 @@ source_set("spirv_cross_sources") {
 
   sources = [
     "../GLSL.std.450.h",
-    "../spirv.hpp",
+    "../spirv.hpp11",
     "../spirv_cfg.cpp",
     "../spirv_cfg.hpp",
     "../spirv_common.hpp",
