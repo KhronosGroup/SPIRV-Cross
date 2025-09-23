@@ -9517,6 +9517,35 @@ void CompilerGLSL::emit_subgroup_op(const Instruction &i)
 	auto int_type = to_signed_basetype(integer_width);
 	auto uint_type = to_unsigned_basetype(integer_width);
 
+	if (options.vulkan_semantics)
+	{
+		auto &return_type = get<SPIRType>(ops[0]);
+		switch (return_type.basetype)
+		{
+		case SPIRType::SByte:
+		case SPIRType::UByte:
+			require_extension_internal("GL_EXT_shader_subgroup_extended_types_int8");
+			break;
+
+		case SPIRType::Short:
+		case SPIRType::UShort:
+			require_extension_internal("GL_EXT_shader_subgroup_extended_types_int16");
+			break;
+
+		case SPIRType::Half:
+			require_extension_internal("GL_EXT_shader_subgroup_extended_types_float16");
+			break;
+
+		case SPIRType::Int64:
+		case SPIRType::UInt64:
+			require_extension_internal("GL_EXT_shader_subgroup_extended_types_int64");
+			break;
+
+		default:
+			break;
+		}
+	}
+
 	switch (op)
 	{
 	case OpGroupNonUniformElect:
