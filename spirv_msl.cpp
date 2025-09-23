@@ -16345,6 +16345,12 @@ const std::unordered_set<std::string> &CompilerMSL::get_illegal_func_names()
 		"M_2_SQRTPI",
 		"M_SQRT2",
 		"M_SQRT1_2",
+		"int8",
+		"uint8",
+		"int16",
+		"uint16",
+		"float8",
+		"float16",
 	};
 
 	return illegal_func_names;
