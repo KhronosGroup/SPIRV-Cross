@@ -6987,6 +6987,40 @@ void CompilerMSL::emit_custom_functions()
 				statement("return (vec<bool, N>)simd_shuffle((vec<ushort, N>)value, lane);");
 			end_scope();
 			statement("");
+
+			if (msl_options.supports_msl_version(2, 2))
+			{
+				// Despite being a template in MSL, it does not support 64-bit shuffles.
+				// Unsure if there's a cleaner way to statically unroll based on vec<> template, but this will do.
+				statement("template<>");
+				statement("inline ulong spvSubgroupShuffle(ulong value, ushort lane)");
+				begin_scope();
+				statement("return as_type<ulong>(spvSubgroupShuffle(as_type<uint2>(value), lane));");
+				end_scope();
+				statement("");
+				statement("template<>");
+				statement("inline ulong2 spvSubgroupShuffle(ulong2 value, ushort lane)");
+				begin_scope();
+				statement("return ulong2(spvSubgroupShuffle(value.x, lane), spvSubgroupShuffle(value.y, lane));");
+				end_scope();
+				statement("");
+				statement("inline ulong3 spvSubgroupShuffle(ulong3 value, ushort lane)");
+				begin_scope();
+				statement("return ulong3(spvSubgroupShuffle(value.xy, lane), spvSubgroupShuffle(value.z, lane));");
+				end_scope();
+				statement("");
+				statement("inline ulong4 spvSubgroupShuffle(ulong4 value, ushort lane)");
+				begin_scope();
+				statement("return ulong4(spvSubgroupShuffle(value.xy, lane), spvSubgroupShuffle(value.zw, lane));");
+				end_scope();
+				statement("");
+				statement("template<uint N>");
+				statement("inline vec<long, N> spvSubgroupShuffle(vec<long, N> value, ushort lane)");
+				begin_scope();
+				statement("return vec<long, N>(spvSubgroupShuffle(vec<ulong, N>(value), lane));");
+				end_scope();
+				statement("");
+			}
 			break;
 
 		case SPVFuncImplSubgroupShuffleXor:
