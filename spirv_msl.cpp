@@ -124,7 +124,7 @@ void CompilerMSL::add_msl_resource_binding(const MSLResourceBinding &binding)
 void CompilerMSL::add_dynamic_buffer(uint32_t desc_set, uint32_t binding, uint32_t index)
 {
 	SetBindingPair pair = { desc_set, binding };
-	buffers_requiring_dynamic_offset[pair] = { index, 0 };
+	buffers_requiring_dynamic_offset[pair] = { index, 0, "" };
 }
 
 void CompilerMSL::add_inline_uniform_block(uint32_t desc_set, uint32_t binding)
@@ -1494,19 +1494,22 @@ void CompilerMSL::emit_entry_point_declarations()
 	// Emit dynamic buffers here.
 	for (auto &dynamic_buffer : buffers_requiring_dynamic_offset)
 	{
-		if (!dynamic_buffer.second.second)
+		if (!dynamic_buffer.second.var_id)
 		{
 			// Could happen if no buffer was used at requested binding point.
 			continue;
 		}
 
-		const auto &var = get<SPIRVariable>(dynamic_buffer.second.second);
+		const auto &var = get<SPIRVariable>(dynamic_buffer.second.var_id);
 		uint32_t var_id = var.self;
 		const auto &type = get_variable_data_type(var);
+
+		add_local_variable_name(var.self);
 		string name = to_name(var.self);
+
 		uint32_t desc_set = get_decoration(var.self, DecorationDescriptorSet);
 		uint32_t arg_id = argument_buffer_ids[desc_set];
-		uint32_t base_index = dynamic_buffer.second.first;
+		uint32_t base_index = dynamic_buffer.second.base_index;
 
 		if (is_array(type))
 		{
@@ -1524,7 +1527,7 @@ void CompilerMSL::emit_entry_point_declarations()
 			{
 				statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ",
 				          to_restrict(var_id, false), ")((", get_argument_address_space(var), " char* ",
-				          to_restrict(var_id, false), ")", to_name(arg_id), ".", ensure_valid_name(name, "m"),
+				          to_restrict(var_id, false), ")", to_name(arg_id), ".", dynamic_buffer.second.mbr_name,
 				          "[", i, "]", " + ", to_name(dynamic_offsets_buffer_id), "[", base_index + i, "]),");
 			}
 
@@ -1537,7 +1540,7 @@ void CompilerMSL::emit_entry_point_declarations()
 			statement(get_argument_address_space(var), " auto& ", to_restrict(var_id, true), name, " = *(",
 			          get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false), ")((",
 			          get_argument_address_space(var), " char* ", to_restrict(var_id, false), ")", to_name(arg_id), ".",
-			          ensure_valid_name(name, "m"), " + ", to_name(dynamic_offsets_buffer_id), "[", base_index, "]);");
+			          dynamic_buffer.second.mbr_name, " + ", to_name(dynamic_offsets_buffer_id), "[", base_index, "]);");
 		}
 	}
 
@@ -1547,6 +1550,8 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &var = *arg;
 		const auto &type = get_variable_data_type(var);
 		const auto &buffer_type = get_variable_element_type(var);
+
+		// This has already been added as a resource name.
 		const string name = to_name(var.self);
 
 		if (is_var_runtime_size_array(var))
@@ -1606,6 +1611,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		const auto &var = get<SPIRVariable>(var_id);
 		const auto &type = get_variable_data_type(var);
 		auto addr_space = get_argument_address_space(var);
+		// This resource name has already been added.
 		auto name = to_name(var_id);
 
 		uint32_t desc_set = get_decoration(var_id, DecorationDescriptorSet);
@@ -19718,6 +19724,8 @@ void CompilerMSL::analyze_argument_buffers()
 				next_arg_buff_index += resource.plane_count * count;
 			}
 
+			// Here we're locking down the member name early before compilation loops, so ensure that
+			// the resource name is not reused, even through a reset().
 			string mbr_name = ensure_valid_name(resource.name, "m");
 			if (resource.plane > 0)
 				mbr_name += join(plane_name_suffix, resource.plane);
@@ -19775,7 +19783,9 @@ void CompilerMSL::analyze_argument_buffers()
 				{
 					// Don't set the qualified name here; we'll define a variable holding the corrected buffer address later.
 					buffer_type.member_types.push_back(var.basetype);
-					buffers_requiring_dynamic_offset[pair].second = var.self;
+					auto &dynamic_buffer = buffers_requiring_dynamic_offset[pair];
+					dynamic_buffer.var_id = var.self;
+					dynamic_buffer.mbr_name = mbr_name;
 				}
 				else if (inline_uniform_blocks.count(pair))
 				{
