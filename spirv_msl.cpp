@@ -1619,36 +1619,6 @@ void CompilerMSL::emit_entry_point_declarations()
 	// Discrete descriptors are processed in entry point emission every compiler iteration.
 	buffer_aliases_discrete.clear();
 
-	for (auto &var_pair : buffer_aliases_argument)
-	{
-		uint32_t var_id = var_pair.first;
-		uint32_t alias_id = var_pair.second;
-
-		const auto &var = get<SPIRVariable>(var_id);
-		const auto &type = get_variable_data_type(var);
-		auto addr_space = get_argument_address_space(var);
-
-		if (type.array.empty())
-		{
-			statement(addr_space, " auto& ", to_restrict(var_id, true), to_name(var_id), " = (", addr_space, " ",
-			          type_to_glsl(type), "&)", ir.meta[alias_id].decoration.qualified_alias, ";");
-		}
-		else
-		{
-			const char *desc_addr_space = descriptor_address_space(var_id, var.storage, "thread");
-
-			// Esoteric type cast. Reference to array of pointers.
-			// Auto here defers to UBO or SSBO. The address space of the reference needs to refer to the
-			// address space of the argument buffer itself, which is usually constant, but can be const device for
-			// large argument buffers.
-			is_using_builtin_array = true;
-			statement(desc_addr_space, " auto& ", to_restrict(var_id, true), to_name(var_id), " = (", addr_space, " ",
-			          type_to_glsl(type), "* ", desc_addr_space, " (&)",
-			          type_to_array_glsl(type, var_id), ")", ir.meta[alias_id].decoration.qualified_alias, ";");
-			is_using_builtin_array = false;
-		}
-	}
-
 	// Emit disabled fragment outputs.
 	std::sort(disabled_frag_outputs.begin(), disabled_frag_outputs.end());
 	for (uint32_t var_id : disabled_frag_outputs)
