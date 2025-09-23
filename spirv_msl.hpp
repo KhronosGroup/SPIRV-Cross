@@ -1304,7 +1304,6 @@ protected:
 	const MSLConstexprSampler *find_constexpr_sampler(uint32_t id) const;
 
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
-	SmallVector<std::pair<uint32_t, uint32_t>> buffer_aliases_argument;
 	SmallVector<uint32_t> buffer_aliases_discrete;
 	std::unordered_set<uint32_t> atomic_image_vars_emulated; // Emulate texture2D atomic operations
 	std::unordered_set<uint32_t> pull_model_inputs;
@@ -1313,7 +1312,13 @@ protected:
 	SmallVector<SPIRVariable *> entry_point_bindings;
 
 	// Must be ordered since array is in a specific order.
-	std::map<SetBindingPair, std::pair<uint32_t, uint32_t>> buffers_requiring_dynamic_offset;
+	struct DynamicBuffer
+	{
+		uint32_t base_index;
+		uint32_t var_id;
+		std::string mbr_name;
+	};
+	std::map<SetBindingPair, DynamicBuffer> buffers_requiring_dynamic_offset;
 
 	SmallVector<uint32_t> disabled_frag_outputs;
 
