@@ -28,7 +28,7 @@
 #include <assert.h>
 #include <numeric>
 
-using namespace spv;
+using namespace SPIRV_CROSS_SPV_HEADER_NAMESPACE;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
@@ -164,7 +164,7 @@ bool CompilerMSL::is_msl_shader_output_used(uint32_t location)
 	       location_outputs_in_use_fallback.count(location) == 0;
 }
 
-uint32_t CompilerMSL::get_automatic_builtin_input_location(spv::BuiltIn builtin) const
+uint32_t CompilerMSL::get_automatic_builtin_input_location(BuiltIn builtin) const
 {
 	auto itr = builtin_to_automatic_input_location.find(builtin);
 	if (itr == builtin_to_automatic_input_location.end())
@@ -173,7 +173,7 @@ uint32_t CompilerMSL::get_automatic_builtin_input_location(spv::BuiltIn builtin)
 		return itr->second;
 }
 
-uint32_t CompilerMSL::get_automatic_builtin_output_location(spv::BuiltIn builtin) const
+uint32_t CompilerMSL::get_automatic_builtin_output_location(BuiltIn builtin) const
 {
 	auto itr = builtin_to_automatic_output_location.find(builtin);
 	if (itr == builtin_to_automatic_output_location.end())
@@ -242,7 +242,7 @@ void CompilerMSL::set_fragment_output_components(uint32_t location, uint32_t com
 	fragment_output_components[location] = components;
 }
 
-bool CompilerMSL::builtin_translates_to_nonarray(spv::BuiltIn builtin) const
+bool CompilerMSL::builtin_translates_to_nonarray(BuiltIn builtin) const
 {
 	return (builtin == BuiltInSampleMask);
 }
@@ -894,7 +894,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRType>(type_id, bool_type);
 
 			SPIRType bool_type_ptr_in = bool_type;
-			bool_type_ptr_in.op = spv::OpTypePointer;
+			bool_type_ptr_in.op = OpTypePointer;
 			bool_type_ptr_in.pointer = true;
 			bool_type_ptr_in.pointer_depth++;
 			bool_type_ptr_in.parent_type = type_id;
@@ -998,7 +998,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRType>(type_id, float_type);
 
 			SPIRType float_type_ptr_in = float_type;
-			float_type_ptr_in.op = spv::OpTypePointer;
+			float_type_ptr_in.op = OpTypePointer;
 			float_type_ptr_in.pointer = true;
 			float_type_ptr_in.pointer_depth++;
 			float_type_ptr_in.parent_type = type_id;
@@ -1028,7 +1028,7 @@ void CompilerMSL::build_implicit_builtins()
 			set<SPIRType>(type_id, float_type);
 
 			SPIRType float_type_ptr_in = float_type;
-			float_type_ptr_in.op = spv::OpTypePointer;
+			float_type_ptr_in.op = OpTypePointer;
 			float_type_ptr_in.pointer = true;
 			float_type_ptr_in.pointer_depth++;
 			float_type_ptr_in.parent_type = type_id;
@@ -1182,7 +1182,7 @@ void CompilerMSL::build_implicit_builtins()
 		builtin_mesh_sizes_id = var_id;
 	}
 
-	if (get_execution_model() == spv::ExecutionModelTaskEXT)
+	if (get_execution_model() == ExecutionModelTaskEXT)
 	{
 		uint32_t offset = ir.increase_bound_by(3);
 		uint32_t type_id = offset;
@@ -1194,7 +1194,7 @@ void CompilerMSL::build_implicit_builtins()
 		set<SPIRType>(type_id, mesh_grid_type);
 
 		SPIRType mesh_grid_type_ptr = mesh_grid_type;
-		mesh_grid_type_ptr.op = spv::OpTypePointer;
+		mesh_grid_type_ptr.op = OpTypePointer;
 		mesh_grid_type_ptr.pointer = true;
 		mesh_grid_type_ptr.pointer_depth++;
 		mesh_grid_type_ptr.parent_type = type_id;
@@ -1211,7 +1211,7 @@ void CompilerMSL::build_implicit_builtins()
 // Checks if the specified builtin variable (e.g. gl_InstanceIndex) is marked as active.
 // If not, it marks it as active and forces a recompilation.
 // This might be used when the optimization of inactive builtins was too optimistic (e.g. when "spvOut" is emitted).
-void CompilerMSL::ensure_builtin(spv::StorageClass storage, spv::BuiltIn builtin)
+void CompilerMSL::ensure_builtin(StorageClass storage, BuiltIn builtin)
 {
 	Bitset *active_builtins = nullptr;
 	switch (storage)
@@ -2710,7 +2710,7 @@ uint32_t CompilerMSL::build_msl_interpolant_type(uint32_t type_id, bool is_noper
 	return new_type_id;
 }
 
-bool CompilerMSL::add_component_variable_to_interface_block(spv::StorageClass storage, const std::string &ib_var_ref,
+bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
                                                             SPIRVariable &var,
                                                             const SPIRType &type,
                                                             InterfaceBlockMeta &meta)
@@ -3770,7 +3770,7 @@ void CompilerMSL::add_tess_level_input(const std::string &base_ref, const std::s
 	}
 }
 
-bool CompilerMSL::variable_storage_requires_stage_io(spv::StorageClass storage) const
+bool CompilerMSL::variable_storage_requires_stage_io(StorageClass storage) const
 {
 	if (storage == StorageClassOutput)
 		return !capture_output_to_buffer;
@@ -4879,7 +4879,7 @@ uint32_t CompilerMSL::ensure_correct_builtin_type(uint32_t type_id, BuiltIn buil
 
 		uint32_t ptr_type_id = next_id++;
 		auto &ptr_type = set<SPIRType>(ptr_type_id, base_type);
-		ptr_type.op = spv::OpTypePointer;
+		ptr_type.op = OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
 		ptr_type.storage = type.storage;
@@ -5879,8 +5879,8 @@ void CompilerMSL::emit_custom_templates()
 			begin_scope();
 			statement("return elements[pos];");
 			end_scope();
-			if (get_execution_model() == spv::ExecutionModelMeshEXT ||
-			    get_execution_model() == spv::ExecutionModelTaskEXT)
+			if (get_execution_model() == ExecutionModelMeshEXT ||
+			    get_execution_model() == ExecutionModelTaskEXT)
 			{
 				statement("");
 				statement("object_data T& operator [] (size_t pos) object_data");
@@ -9264,7 +9264,7 @@ bool CompilerMSL::is_out_of_bounds_tessellation_level(uint32_t id_lhs)
 }
 
 bool CompilerMSL::prepare_access_chain_for_scalar_access(std::string &expr, const SPIRType &type,
-                                                         spv::StorageClass storage, bool &is_packed)
+                                                         StorageClass storage, bool &is_packed)
 {
 	// If there is any risk of writes happening with the access chain in question,
 	// and there is a risk of concurrent write access to other components,
@@ -10936,7 +10936,7 @@ bool CompilerMSL::emit_array_copy(const char *expr, uint32_t lhs_id, uint32_t rh
 	return true;
 }
 
-uint32_t CompilerMSL::get_physical_tess_level_array_size(spv::BuiltIn builtin) const
+uint32_t CompilerMSL::get_physical_tess_level_array_size(BuiltIn builtin) const
 {
 	if (is_tessellating_triangles())
 		return builtin == BuiltInTessLevelInner ? 1 : 3;
@@ -13835,7 +13835,7 @@ uint32_t CompilerMSL::get_member_location(uint32_t type_id, uint32_t index, uint
 		return k_unknown_location;
 }
 
-uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(spv::BuiltIn builtin,
+uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(BuiltIn builtin,
                                                                     uint32_t type_id, uint32_t index,
                                                                     uint32_t *comp)
 {
@@ -13880,7 +13880,7 @@ uint32_t CompilerMSL::get_or_allocate_builtin_input_member_location(spv::BuiltIn
 	return loc;
 }
 
-uint32_t CompilerMSL::get_or_allocate_builtin_output_member_location(spv::BuiltIn builtin,
+uint32_t CompilerMSL::get_or_allocate_builtin_output_member_location(BuiltIn builtin,
                                                                      uint32_t type_id, uint32_t index,
                                                                      uint32_t *comp)
 {
@@ -14014,7 +14014,7 @@ bool CompilerMSL::is_tese_shader() const
 
 bool CompilerMSL::is_mesh_shader() const
 {
-	return get_execution_model() == spv::ExecutionModelMeshEXT;
+	return get_execution_model() == ExecutionModelMeshEXT;
 }
 
 bool CompilerMSL::uses_explicit_early_fragment_test()
@@ -14852,7 +14852,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 					if (!ep_args.empty())
 						ep_args += ", ";
 					const bool ssbo = has_decoration(type.self, DecorationBufferBlock);
-					if ((var.storage == spv::StorageClassStorageBuffer || ssbo) &&
+					if ((var.storage == StorageClassStorageBuffer || ssbo) &&
 					    msl_options.runtime_array_rich_descriptor)
 					{
 						add_spv_func_and_recompile(SPVFuncImplVariableSizedDescriptor);
@@ -16778,7 +16778,7 @@ string CompilerMSL::constant_op_expression(const SPIRConstantOp &cop)
 	}
 }
 
-bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable, spv::StorageClass storage) const
+bool CompilerMSL::variable_decl_is_remapped_storage(const SPIRVariable &variable, StorageClass storage) const
 {
 	if (variable.storage == storage)
 		return true;
@@ -18426,7 +18426,7 @@ void CompilerMSL::analyze_workgroup_variables()
 	});
 }
 
-bool CompilerMSL::SampledImageScanner::handle(spv::Op opcode, const uint32_t *args, uint32_t length)
+bool CompilerMSL::SampledImageScanner::handle(Op opcode, const uint32_t *args, uint32_t length)
 {
 	switch (opcode)
 	{
@@ -19646,7 +19646,7 @@ void CompilerMSL::analyze_argument_buffers()
 
 		auto &ptr_type = set<SPIRType>(ptr_type_id, OpTypePointer);
 		ptr_type = buffer_type;
-		ptr_type.op = spv::OpTypePointer;
+		ptr_type.op = OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
 		ptr_type.parent_type = type_id;
@@ -19920,7 +19920,7 @@ void CompilerMSL::add_argument_buffer_padding_buffer_type(SPIRType &struct_type,
 		uint32_t ptr_type_id = buff_type_id + 1;
 		auto &ptr_type = set<SPIRType>(ptr_type_id, OpTypePointer);
 		ptr_type = buff_type;
-		ptr_type.op = spv::OpTypePointer;
+		ptr_type.op = OpTypePointer;
 		ptr_type.pointer = true;
 		ptr_type.pointer_depth++;
 		ptr_type.parent_type = buff_type_id;

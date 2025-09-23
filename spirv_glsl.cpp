@@ -37,7 +37,7 @@
 #endif
 #include <locale.h>
 
-using namespace spv;
+using namespace SPIRV_CROSS_SPV_HEADER_NAMESPACE;
 using namespace SPIRV_CROSS_NAMESPACE;
 using namespace std;
 
@@ -267,7 +267,7 @@ static const char *to_pls_layout(PlsFormat format)
 	}
 }
 
-static std::pair<spv::Op, SPIRType::BaseType> pls_format_to_basetype(PlsFormat format)
+static std::pair<Op, SPIRType::BaseType> pls_format_to_basetype(PlsFormat format)
 {
 	switch (format)
 	{
@@ -278,17 +278,17 @@ static std::pair<spv::Op, SPIRType::BaseType> pls_format_to_basetype(PlsFormat f
 	case PlsRGB10A2:
 	case PlsRGBA8:
 	case PlsRG16:
-		return std::make_pair(spv::OpTypeFloat, SPIRType::Float);
+		return std::make_pair(OpTypeFloat, SPIRType::Float);
 
 	case PlsRGBA8I:
 	case PlsRG16I:
-		return std::make_pair(spv::OpTypeInt, SPIRType::Int);
+		return std::make_pair(OpTypeInt, SPIRType::Int);
 
 	case PlsRGB10A2UI:
 	case PlsRGBA8UI:
 	case PlsRG16UI:
 	case PlsR32UI:
-		return std::make_pair(spv::OpTypeInt, SPIRType::UInt);
+		return std::make_pair(OpTypeInt, SPIRType::UInt);
 	}
 }
 
@@ -1476,7 +1476,7 @@ string CompilerGLSL::layout_for_member(const SPIRType &type, uint32_t index)
 	return res;
 }
 
-const char *CompilerGLSL::format_to_glsl(spv::ImageFormat format)
+const char *CompilerGLSL::format_to_glsl(ImageFormat format)
 {
 	if (options.es && is_desktop_only_format(format))
 		SPIRV_CROSS_THROW("Attempting to use image format not supported in ES profile.");
@@ -4324,7 +4324,7 @@ void CompilerGLSL::emit_subgroup_arithmetic_workaround(const std::string &func, 
 	}
 }
 
-void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
+void CompilerGLSL::emit_extension_workarounds(ExecutionModel model)
 {
 	static const char *workaround_types[] = { "int",   "ivec2", "ivec3", "ivec4", "uint",   "uvec2", "uvec3", "uvec4",
 		                                      "float", "vec2",  "vec3",  "vec4",  "double", "dvec2", "dvec3", "dvec4" };
@@ -4643,7 +4643,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 
 		if (shader_subgroup_supporter.is_feature_requested(Supp::SubgroupMemBarrier))
 		{
-			if (model == spv::ExecutionModelGLCompute)
+			if (model == ExecutionModelGLCompute)
 			{
 				statement("#ifndef GL_KHR_shader_subgroup_basic");
 				statement("void subgroupMemoryBarrier() { groupMemoryBarrier(); }");
@@ -4729,7 +4729,7 @@ void CompilerGLSL::emit_extension_workarounds(spv::ExecutionModel model)
 		}
 
 		auto arithmetic_feature_helper =
-		    [&](Supp::Feature feat, std::string func_name, spv::Op op, spv::GroupOperation group_op)
+		    [&](Supp::Feature feat, std::string func_name, Op op, GroupOperation group_op)
 		{
 			if (shader_subgroup_supporter.is_feature_requested(feat))
 			{
@@ -6014,9 +6014,9 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		require_extension_internal("GL_EXT_null_initializer");
 		return backend.constant_null_initializer;
 	}
-	else if (c.replicated && type.op != spv::OpTypeArray)
+	else if (c.replicated && type.op != OpTypeArray)
 	{
-		if (type.op == spv::OpTypeMatrix)
+		if (type.op == OpTypeMatrix)
 		{
 			uint32_t num_elements = type.columns;
 			// GLSL does not allow the replication constructor for matrices
@@ -6151,7 +6151,7 @@ string CompilerGLSL::constant_expression(const SPIRConstant &c,
 		else
 			return join(type_to_glsl(type), "(0)");
 	}
-	else if (c.columns() == 1 && type.op != spv::OpTypeCooperativeMatrixKHR)
+	else if (c.columns() == 1 && type.op != OpTypeCooperativeMatrixKHR)
 	{
 		auto res = constant_expression_vector(c, 0);
 
@@ -7470,29 +7470,29 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 	const char *type;
 	switch (imgtype.image.dim)
 	{
-	case spv::Dim1D:
+	case Dim1D:
 		// Force 2D path for ES.
 		if (options.es)
 			type = (imgtype.image.arrayed && !options.es) ? "2DArray" : "2D";
 		else
 			type = (imgtype.image.arrayed && !options.es) ? "1DArray" : "1D";
 		break;
-	case spv::Dim2D:
+	case Dim2D:
 		type = (imgtype.image.arrayed && !options.es) ? "2DArray" : "2D";
 		break;
-	case spv::Dim3D:
+	case Dim3D:
 		type = "3D";
 		break;
-	case spv::DimCube:
+	case DimCube:
 		type = "Cube";
 		break;
-	case spv::DimRect:
+	case DimRect:
 		type = "2DRect";
 		break;
-	case spv::DimBuffer:
+	case DimBuffer:
 		type = "Buffer";
 		break;
-	case spv::DimSubpassData:
+	case DimSubpassData:
 		type = "2D";
 		break;
 	default:
@@ -7535,7 +7535,7 @@ string CompilerGLSL::legacy_tex_op(const std::string &op, const SPIRType &imgtyp
 		else
 			SPIRV_CROSS_THROW(join(op, " not allowed on depth samplers in legacy ES"));
 
-		if (imgtype.image.dim == spv::DimCube)
+		if (imgtype.image.dim == DimCube)
 			return "shadowCubeNV";
 	}
 
@@ -7802,7 +7802,7 @@ string CompilerGLSL::to_combined_image_sampler(VariableID image_id, VariableID s
 	}
 }
 
-bool CompilerGLSL::is_supported_subgroup_op_in_opengl(spv::Op op, const uint32_t *ops)
+bool CompilerGLSL::is_supported_subgroup_op_in_opengl(Op op, const uint32_t *ops)
 {
 	switch (op)
 	{
@@ -8064,19 +8064,19 @@ std::string CompilerGLSL::to_texture_op(const Instruction &i, bool sparse, bool 
 	uint32_t coord_components = 0;
 	switch (imgtype.image.dim)
 	{
-	case spv::Dim1D:
+	case Dim1D:
 		coord_components = 1;
 		break;
-	case spv::Dim2D:
+	case Dim2D:
 		coord_components = 2;
 		break;
-	case spv::Dim3D:
+	case Dim3D:
 		coord_components = 3;
 		break;
-	case spv::DimCube:
+	case DimCube:
 		coord_components = 3;
 		break;
-	case spv::DimBuffer:
+	case DimBuffer:
 		coord_components = 1;
 		break;
 	default:
@@ -10065,9 +10065,9 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 			auto model = get_entry_point().model;
 			switch (model)
 			{
-			case spv::ExecutionModelIntersectionKHR:
-			case spv::ExecutionModelAnyHitKHR:
-			case spv::ExecutionModelClosestHitKHR:
+			case ExecutionModelIntersectionKHR:
+			case ExecutionModelAnyHitKHR:
+			case ExecutionModelClosestHitKHR:
 				// gl_InstanceID is allowed in these shaders.
 				break;
 
@@ -10519,7 +10519,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 	bool dimension_flatten = false;
 	bool access_meshlet_position_y = false;
 	bool chain_is_builtin = false;
-	spv::BuiltIn chained_builtin = {};
+	BuiltIn chained_builtin = {};
 
 	if (auto *base_expr = maybe_get<SPIRExpression>(base))
 	{
@@ -10651,7 +10651,7 @@ string CompilerGLSL::access_chain_internal(uint32_t base, const uint32_t *indice
 				expr = join("(", expr, ")");
 		}
 		// Arrays and OpTypeCooperativeVectorNV (aka fancy arrays)
-		else if (!type->array.empty() || type->op == spv::OpTypeCooperativeVectorNV)
+		else if (!type->array.empty() || type->op == OpTypeCooperativeVectorNV)
 		{
 			// If we are flattening multidimensional arrays, only create opening bracket on first
 			// array index.
@@ -11050,7 +11050,7 @@ bool CompilerGLSL::check_physical_type_cast(std::string &, const SPIRType *, uin
 	return false;
 }
 
-bool CompilerGLSL::prepare_access_chain_for_scalar_access(std::string &, const SPIRType &, spv::StorageClass, bool &)
+bool CompilerGLSL::prepare_access_chain_for_scalar_access(std::string &, const SPIRType &, StorageClass, bool &)
 {
 	return false;
 }
@@ -11897,7 +11897,7 @@ string CompilerGLSL::build_composite_combiner(uint32_t return_type, const uint32
 	// Can only merge swizzles for vectors.
 	auto &type = get<SPIRType>(return_type);
 	bool can_apply_swizzle_opt = type.basetype != SPIRType::Struct && type.array.empty() && type.columns == 1 &&
-	                             type.op != spv::OpTypeCooperativeMatrixKHR;
+	                             type.op != OpTypeCooperativeMatrixKHR;
 	bool swizzle_optimization = false;
 
 	for (uint32_t i = 0; i < length; i++)
@@ -13024,7 +13024,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (composite_type_is_complex)
 			allow_base_expression = false;
 
-		if (composite_type.op == spv::OpTypeCooperativeMatrixKHR)
+		if (composite_type.op == OpTypeCooperativeMatrixKHR)
 			allow_base_expression = false;
 
 		// Packed expressions or physical ID mapped expressions cannot be split up.
@@ -13996,7 +13996,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		}
 
 		if ((type.basetype == SPIRType::FloatE4M3 || type.basetype == SPIRType::FloatE5M2) &&
-		    has_decoration(id, spv::DecorationSaturatedToLargestFloat8NormalConversionEXT))
+		    has_decoration(id, DecorationSaturatedToLargestFloat8NormalConversionEXT))
 		{
 			emit_uninitialized_temporary_expression(result_type, id);
 			statement("saturatedConvertEXT(", to_expression(id), ", ", to_unpacked_expression(ops[2]), ");");
@@ -15301,7 +15301,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		if (type.image.dim == spv::DimSubpassData)
+		if (type.image.dim == DimSubpassData)
 		{
 			emit_unary_func_op(result_type, id, ops[2], "fragmentMaskFetchAMD");
 		}
@@ -15320,7 +15320,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 
-		if (type.image.dim == spv::DimSubpassData)
+		if (type.image.dim == DimSubpassData)
 		{
 			emit_binary_func_op(result_type, id, ops[2], ops[4], "fragmentFetchAMD");
 		}
@@ -15584,21 +15584,21 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			std::string tensor_operands;
 			if (ops[4] == 0)
 				tensor_operands = "0x0u";
-			else if (ops[4] == spv::TensorOperandsNontemporalARMMask)
+			else if (ops[4] == TensorOperandsNontemporalARMMask)
 				tensor_operands = "gl_TensorOperandsNonTemporalARM";
-			else if (ops[4] == spv::TensorOperandsOutOfBoundsValueARMMask)
+			else if (ops[4] == TensorOperandsOutOfBoundsValueARMMask)
 				tensor_operands = "gl_TensorOperandsOutOfBoundsValueARM";
-			else if (ops[4] == (spv::TensorOperandsNontemporalARMMask | spv::TensorOperandsOutOfBoundsValueARMMask))
+			else if (ops[4] == (TensorOperandsNontemporalARMMask | TensorOperandsOutOfBoundsValueARMMask))
 				tensor_operands = "gl_TensorOperandsNonTemporalARM | gl_TensorOperandsOutOfBoundsValueARM";
 			else
 				SPIRV_CROSS_THROW("Invalid tensorOperands for tensorReadARM.");
-			if ((ops[4] & spv::TensorOperandsOutOfBoundsValueARMMask) && length != 6)
+			if ((ops[4] & TensorOperandsOutOfBoundsValueARMMask) && length != 6)
 				SPIRV_CROSS_THROW("gl_TensorOperandsOutOfBoundsValueARM requires an outOfBoundsValue argument.");
 			args.push_back(tensor_operands); // tensorOperands
 		}
 		if (length >= 6)
 		{
-			if ((length > 6) || (ops[4] & spv::TensorOperandsOutOfBoundsValueARMMask) == 0)
+			if ((length > 6) || (ops[4] & TensorOperandsOutOfBoundsValueARMMask) == 0)
 				SPIRV_CROSS_THROW("Too many arguments to tensorReadARM.");
 			args.push_back(to_expression(ops[5])); // outOfBoundsValue
 		}
@@ -15622,7 +15622,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 			std::string tensor_operands;
 			if (ops[3] == 0)
 				tensor_operands = "0x0u";
-			else if (ops[3] == spv::TensorOperandsNontemporalARMMask)
+			else if (ops[3] == TensorOperandsNontemporalARMMask)
 				tensor_operands = "gl_TensorOperandsNonTemporalARM";
 			else
 				SPIRV_CROSS_THROW("Invalid tensorOperands for tensorWriteARM.");
@@ -15972,15 +15972,15 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto value_to_replicate = to_expression(ops[2]);
 		std::string rhs;
 		// Matrices don't have a replicating constructor for vectors. Need to manually replicate
-		if (type.op == spv::OpTypeMatrix || type.op == spv::OpTypeArray)
+		if (type.op == OpTypeMatrix || type.op == OpTypeArray)
 		{
-			if (type.op == spv::OpTypeArray && type.array.size() != 1)
+			if (type.op == OpTypeArray && type.array.size() != 1)
 			{
 				SPIRV_CROSS_THROW(
 				    "Multi-dimensional arrays currently not supported for OpCompositeConstructReplicateEXT");
 			}
-			uint32_t num_elements = type.op == spv::OpTypeMatrix ? type.columns : type.array[0];
-			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
+			uint32_t num_elements = type.op == OpTypeMatrix ? type.columns : type.array[0];
+			if (backend.use_initializer_list && type.op == OpTypeArray)
 			{
 				rhs += "{";
 			}
@@ -15995,7 +15995,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 				if (i < num_elements - 1)
 					rhs += ", ";
 			}
-			if (backend.use_initializer_list && type.op == spv::OpTypeArray)
+			if (backend.use_initializer_list && type.op == OpTypeArray)
 				rhs += "}";
 			else
 				rhs += ")";
@@ -16874,7 +16874,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			require_extension_internal("GL_ARB_shader_atomic_counters");
 	}
 
-	if (type.op == spv::OpTypeCooperativeVectorNV)
+	if (type.op == OpTypeCooperativeVectorNV)
 	{
 		require_extension_internal("GL_NV_cooperative_vector");
 		if (!options.vulkan_semantics)
@@ -16889,7 +16889,7 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 	while (is_pointer(*coop_type) || is_array(*coop_type))
 		coop_type = &get<SPIRType>(coop_type->parent_type);
 
-	if (coop_type->op == spv::OpTypeCooperativeMatrixKHR)
+	if (coop_type->op == OpTypeCooperativeMatrixKHR)
 	{
 		require_extension_internal("GL_KHR_cooperative_matrix");
 		if (!options.vulkan_semantics)
@@ -16922,9 +16922,9 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 			if (!scope->specialization)
 			{
 				require_extension_internal("GL_KHR_memory_scope_semantics");
-				if (scope->scalar() == spv::ScopeSubgroup)
+				if (scope->scalar() == ScopeSubgroup)
 					scope_expr = "gl_ScopeSubgroup";
-				else if (scope->scalar() == spv::ScopeWorkgroup)
+				else if (scope->scalar() == ScopeWorkgroup)
 					scope_expr = "gl_ScopeWorkgroup";
 				else
 					SPIRV_CROSS_THROW("Invalid scope for cooperative matrix.");
@@ -17156,7 +17156,7 @@ void CompilerGLSL::flatten_buffer_block(VariableID id)
 	flattened_buffer_blocks.insert(id);
 }
 
-bool CompilerGLSL::builtin_translates_to_nonarray(spv::BuiltIn /*builtin*/) const
+bool CompilerGLSL::builtin_translates_to_nonarray(BuiltIn /*builtin*/) const
 {
 	return false; // GLSL itself does not need to translate array builtin types to non-array builtin types
 }
@@ -17201,7 +17201,7 @@ void CompilerGLSL::add_function_overload(const SPIRFunction &func)
 		uint32_t type_id = get_pointee_type_id(arg.type);
 
 		// Workaround glslang bug. It seems to only consider the base type when resolving overloads.
-		if (get<SPIRType>(type_id).op == spv::OpTypeCooperativeMatrixKHR)
+		if (get<SPIRType>(type_id).op == OpTypeCooperativeMatrixKHR)
 			type_id = get<SPIRType>(type_id).parent_type;
 
 		auto &type = get<SPIRType>(type_id);
@@ -20022,7 +20022,7 @@ bool CompilerGLSL::is_stage_output_location_masked(uint32_t location, uint32_t c
 	return masked_output_locations.count({ location, component }) != 0;
 }
 
-bool CompilerGLSL::is_stage_output_builtin_masked(spv::BuiltIn builtin) const
+bool CompilerGLSL::is_stage_output_builtin_masked(BuiltIn builtin) const
 {
 	return masked_output_builtins.count(builtin) != 0;
 }

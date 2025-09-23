@@ -56,6 +56,7 @@ option(SPIRV_CROSS_SANITIZE_THREADS "Sanitize threads" OFF)
 option(SPIRV_CROSS_SANITIZE_UNDEFINED "Sanitize undefined" OFF)
 
 option(SPIRV_CROSS_NAMESPACE_OVERRIDE "" "Override the namespace used in the C++ API.")
+option(SPIRV_CROSS_SPV_HEADER_NAMESPACE_OVERRIDE "" "Override the namespace used by spirv.hpp (to workaround conflicts).")
 option(SPIRV_CROSS_FORCE_STL_TYPES "Force use of STL types instead of STL replacements in certain places. Might reduce performance." OFF)
 
 option(SPIRV_CROSS_SKIP_INSTALL "Skips installation targets." OFF)
@@ -185,6 +186,14 @@ macro(spirv_cross_add_library name config_name library_type)
 			target_compile_definitions(${name} PUBLIC SPIRV_CROSS_NAMESPACE_OVERRIDE=${SPIRV_CROSS_NAMESPACE_OVERRIDE})
 		else()
 			target_compile_definitions(${name} PRIVATE SPIRV_CROSS_NAMESPACE_OVERRIDE=${SPIRV_CROSS_NAMESPACE_OVERRIDE})
+		endif()
+	endif()
+
+	if (SPIRV_CROSS_SPV_HEADER_NAMESPACE_OVERRIDE)
+		if (${library_type} MATCHES "STATIC")
+			target_compile_definitions(${name} PUBLIC SPIRV_CROSS_SPV_HEADER_NAMESPACE_OVERRIDE=${SPIRV_CROSS_SPV_HEADER_NAMESPACE_OVERRIDE})
+		else()
+			target_compile_definitions(${name} PRIVATE SPIRV_CROSS_SPV_HEADER_NAMESPACE_OVERRIDE=${SPIRV_CROSS_SPV_HEADER_NAMESPACE_OVERRIDE})
 		endif()
 	endif()
 
