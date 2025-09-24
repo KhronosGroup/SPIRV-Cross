@@ -36,7 +36,7 @@ struct InOut
     int result;
 };
 
-kernel void main0(device void* spvBufferAliasSet0Binding1 [[buffer(0)]])
+kernel void main0(device const void* spvBufferAliasSet0Binding1 [[buffer(0)]])
 {
     device auto& comp3 = *(device InOut3*)spvBufferAliasSet0Binding1;
     device auto& comp2 = *(device InOut2*)spvBufferAliasSet0Binding1;
