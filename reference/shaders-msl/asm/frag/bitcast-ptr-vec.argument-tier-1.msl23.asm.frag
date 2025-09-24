@@ -14,13 +14,9 @@ struct spvDescriptor
 template<typename T>
 struct spvDescriptorArray
 {
-    spvDescriptorArray(const device spvDescriptor<T>* ptr) : ptr(&ptr->value)
-    {
-    }
-    const device T& operator [] (size_t i) const
-    {
-        return ptr[i];
-    }
+    spvDescriptorArray(const device spvDescriptor<T>* ptr_) : ptr(&ptr_->value) {}
+    spvDescriptorArray(const device void *ptr_) : spvDescriptorArray(static_cast<const device spvDescriptor<T>*>(ptr_)) {}
+    const device T& operator [] (size_t i) const { return ptr[i]; }
     const device T* ptr;
 };
 
@@ -36,9 +32,9 @@ struct main0_out
     float4 out_var_SV_Target [[color(0)]];
 };
 
-fragment main0_out main0(constant type_ConstantBuffer_PushConstants& g_PushConstants [[buffer(0)]], const device spvDescriptor<texture2d<float>>* g_Texture2DDescriptorHeap_ [[buffer(1)]], float4 gl_FragCoord [[position]])
+fragment main0_out main0(constant type_ConstantBuffer_PushConstants& g_PushConstants [[buffer(0)]], device const void* spvDescriptorSet0Binding0 [[buffer(1)]], float4 gl_FragCoord [[position]])
 {
-    spvDescriptorArray<texture2d<float>> g_Texture2DDescriptorHeap {g_Texture2DDescriptorHeap_};
+    spvDescriptorArray<texture2d<float>> g_Texture2DDescriptorHeap {spvDescriptorSet0Binding0};
 
     main0_out out = {};
     int2 _55 = int2(gl_FragCoord.xy) - (*(reinterpret_cast<device int2*>(g_PushConstants.SharedConstants + 16ul)));

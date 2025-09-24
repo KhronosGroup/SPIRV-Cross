@@ -29,29 +29,23 @@ struct spvDescriptorArray<device T*>
     const device spvBufferDescriptor<device T*>* ptr;
 };
 
-struct Ssbo
+struct SSBOW
 {
-    uint val;
-    uint data[1];
+    char _m0_pad[4];
+    float a;
 };
 
-struct main0_in
+struct SSBO
 {
-    uint inputId [[user(locn0)]];
+    float b;
+    float unsized[1];
 };
 
-fragment void main0(main0_in in [[stage_in]], device const void* spvDescriptorSet0Binding0 [[buffer(0)]])
+kernel void main0(device const void* spvBufferAliasSet0Binding0 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
-    spvDescriptorArray<const device Ssbo*> ssbo {spvDescriptorSet0Binding0};
+    spvDescriptorArray<device SSBOW*> RW {spvBufferAliasSet0Binding0};
+    spvDescriptorArray<device SSBO*> RO {spvBufferAliasSet0Binding0};
 
-    uint _15 = in.inputId;
-    if (ssbo[_15]->val == 2u)
-    {
-        discard_fragment();
-    }
-    if (int((ssbo.length(123) - 4) / 4) == 25)
-    {
-        discard_fragment();
-    }
+    RW[gl_WorkGroupID.x]->a = RO[gl_WorkGroupID.x]->b + float(int((RO.length(gl_WorkGroupID.x) - 4) / 4));
 }
 

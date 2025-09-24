@@ -20,22 +20,22 @@ struct spvDescriptorArray
     const device T* ptr;
 };
 
+struct SSBOW
+{
+    char _m0_pad[4];
+    float a;
+};
+
 struct SSBO
 {
-    float4 a;
+    float b;
 };
 
-constant uint3 gl_WorkGroupSize [[maybe_unused]] = uint3(1u);
-
-struct spvDescriptorSetBuffer0
+kernel void main0(device const void* spvDescriptorSet1Binding0 [[buffer(0)]], device const void* spvDescriptorSet0Binding0 [[buffer(1)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
-    spvDescriptor<device SSBO *> ssbos [[id(0)]][1] /* unsized array hack */;
-};
+    spvDescriptorArray<device SSBOW*> RW {spvDescriptorSet1Binding0};
+    spvDescriptorArray<device SSBO*> RO {spvDescriptorSet0Binding0};
 
-kernel void main0(device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
-{
-    spvDescriptorArray<device SSBO*> ssbos {spvDescriptorSet0.ssbos};
-
-    ssbos[gl_WorkGroupID.x]->a += float4(2.0);
+    RW[gl_WorkGroupID.x]->a = RO[gl_WorkGroupID.x]->b;
 }
 
