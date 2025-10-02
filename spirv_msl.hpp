@@ -578,6 +578,44 @@ public:
 		}
 	};
 
+	// Used to track interpolation operations
+	struct PullModelOp
+	{
+		PullModelOp(GLSLstd450 op, uint32_t oa, uint32_t id)
+		    : op(op)
+		    , offset_arg(oa)
+		    , new_var_id(id)
+		{
+		}
+		PullModelOp(const PullModelOp &) = default;
+		PullModelOp(PullModelOp &&) = default;
+
+		bool operator==(const PullModelOp &o) const
+		{
+			return op == o.op && offset_arg == o.offset_arg;
+		}
+
+		GLSLstd450 op;
+		uint32_t offset_arg = 0;
+		uint32_t new_var_id = 0;
+	};
+
+	struct PullModelOpHash
+	{
+		std::size_t operator()(const PullModelOp &s) const noexcept
+		{
+
+			const auto h1 = std::hash<GLSLstd450>{}(s.op);
+			const auto h2 = std::hash<uint32_t>{}(s.offset_arg);
+			return h1 ^ (h2 << 1);
+		}
+	};
+
+	struct PullModelOps
+	{
+		std::unordered_map<PullModelOp, std::unordered_set<uint32_t>, PullModelOpHash> ops;
+	};
+
 	const Options &get_msl_options() const
 	{
 		return msl_options;
@@ -936,6 +974,7 @@ protected:
 
 	// GCC workaround of lambdas calling protected functions (for older GCC versions)
 	std::string variable_decl(const SPIRType &type, const std::string &name, uint32_t id = 0) override;
+	std::string variable_decl(const SPIRVariable &variable) override;
 
 	std::string image_type_glsl(const SPIRType &type, uint32_t id, bool member) override;
 	std::string sampler_type(const SPIRType &type, uint32_t id, bool member);
@@ -1306,7 +1345,7 @@ protected:
 	std::unordered_set<uint32_t> buffers_requiring_array_length;
 	SmallVector<uint32_t> buffer_aliases_discrete;
 	std::unordered_set<uint32_t> atomic_image_vars_emulated; // Emulate texture2D atomic operations
-	std::unordered_set<uint32_t> pull_model_inputs;
+	std::unordered_map<uint32_t, PullModelOps> pull_model_inputs;
 	std::unordered_set<uint32_t> recursive_inputs;
 
 	SmallVector<SPIRVariable *> entry_point_bindings;

@@ -1781,7 +1781,10 @@ enum ExtendedDecorations
 
 	SPIRVCrossDecorationOverlappingBinding,
 
-	SPIRVCrossDecorationCount
+	// Tracks the variable dynamically indexing into an array used with pull interpolants
+	SPIRVCrossDecorationInterpolantIndexVariable,
+
+	SPIRVCrossDecorationCount,
 };
 
 struct Meta
