@@ -279,15 +279,15 @@ void CompilerMSL::build_implicit_builtins()
 	bool force_frag_depth_passthrough =
 	    get_execution_model() == ExecutionModelFragment && !uses_explicit_early_fragment_test() && need_subpass_input &&
 	    msl_options.enable_frag_depth_builtin && msl_options.input_attachment_is_ds_attachment;
-	bool need_point_size =
+	needs_point_size_output =
 	    msl_options.enable_point_size_builtin && msl_options.enable_point_size_default &&
-	    get_execution_model() == ExecutionModelVertex;
+	    entry_point_is_vertex();
 
 	if (need_subpass_input || need_sample_pos || need_subgroup_mask || need_vertex_params || need_tesc_params ||
 	    need_tese_params || need_multiview || need_dispatch_base || need_vertex_base_params || need_grid_params ||
 	    needs_sample_id || needs_subgroup_invocation_id || needs_subgroup_size || needs_helper_invocation ||
 	    has_additional_fixed_sample_mask() || need_local_invocation_index || need_workgroup_size ||
-	    force_frag_depth_passthrough || need_point_size || is_mesh_shader())
+	    force_frag_depth_passthrough || needs_point_size_output || is_mesh_shader())
 	{
 		bool has_frag_coord = false;
 		bool has_sample_id = false;
@@ -315,7 +315,7 @@ void CompilerMSL::build_implicit_builtins()
 				return;
 
 			auto &type = this->get<SPIRType>(var.basetype);
-			if (need_point_size && has_decoration(type.self, DecorationBlock))
+			if (needs_point_size_output && has_decoration(type.self, DecorationBlock))
 			{
 				const auto member_count = static_cast<uint32_t>(type.member_types.size());
 				for (uint32_t i = 0; i < member_count; i++)
@@ -1013,7 +1013,7 @@ void CompilerMSL::build_implicit_builtins()
 			active_output_builtins.set(BuiltInFragDepth);
 		}
 
-		if (!has_point_size && need_point_size)
+		if (!has_point_size && needs_point_size_output)
 		{
 			uint32_t offset = ir.increase_bound_by(3);
 			uint32_t type_id = offset;
@@ -13164,17 +13164,20 @@ string CompilerMSL::convert_row_major_matrix(string exp_str, const SPIRType &exp
 // Called automatically at the end of the entry point function
 void CompilerMSL::emit_fixup()
 {
-	if (is_vertex_like_shader() && stage_out_var_id && !qual_pos_var_name.empty() && !capture_output_to_buffer)
+	if (stage_out_var_id && !capture_output_to_buffer)
 	{
-		if (msl_options.enable_point_size_default && !writes_to_point_size)
+		if (needs_point_size_output && !writes_to_point_size)
 			statement(builtin_to_glsl(BuiltInPointSize, StorageClassOutput), " = ", format_float(msl_options.default_point_size), ";");
 
-		if (options.vertex.fixup_clipspace)
-			statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
-			          ".w) * 0.5;       // Adjust clip-space for Metal");
+		if (is_vertex_like_shader() && !qual_pos_var_name.empty())
+		{
+			if (options.vertex.fixup_clipspace)
+				statement(qual_pos_var_name, ".z = (", qual_pos_var_name, ".z + ", qual_pos_var_name,
+						  ".w) * 0.5;       // Adjust clip-space for Metal");
 
-		if (options.vertex.flip_vert_y)
-			statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
+			if (options.vertex.flip_vert_y)
+				statement(qual_pos_var_name, ".y = -(", qual_pos_var_name, ".y);", "    // Invert Y-axis for Metal");
+		}
 	}
 }
 
@@ -13914,6 +13917,13 @@ uint32_t CompilerMSL::get_or_allocate_builtin_output_member_location(BuiltIn bui
 
 	mark_location_as_used_by_shader(loc, mbr_type, StorageClassOutput, true);
 	return loc;
+}
+
+bool CompilerMSL::entry_point_is_vertex() const
+{
+	// MSL vertex entrypoint is used for non-tessellation vertex stage or tessellation evaluation stage.
+	return (get_execution_model() == ExecutionModelVertex && !msl_options.vertex_for_tessellation) ||
+			get_execution_model() == ExecutionModelTessellationEvaluation;
 }
 
 bool CompilerMSL::entry_point_returns_stage_output() const

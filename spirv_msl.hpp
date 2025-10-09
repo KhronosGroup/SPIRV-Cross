@@ -1060,6 +1060,7 @@ protected:
 
 	void fix_up_shader_inputs_outputs();
 
+	bool entry_point_is_vertex() const;
 	bool entry_point_returns_stage_output() const;
 	bool entry_point_requires_const_device_buffers() const;
 	std::string func_type_decl(SPIRType &type);
@@ -1278,6 +1279,7 @@ protected:
 	bool needs_sample_id = false;
 	bool needs_helper_invocation = false;
 	bool needs_workgroup_zero_init = false;
+	bool needs_point_size_output = false;
 	bool writes_to_depth = false;
 	bool writes_to_point_size = false;
 	std::string qual_pos_var_name;
