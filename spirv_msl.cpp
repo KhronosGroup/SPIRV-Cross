@@ -8310,8 +8310,9 @@ void CompilerMSL::emit_resources()
 		else if (execution.flags.get(ExecutionModeOutputPoints))
 			topology = "topology::point";
 
+		const char *per_vertex = mesh_out_per_vertex ? "spvPerVertex" : "float4";
 		const char *per_primitive = mesh_out_per_primitive ? "spvPerPrimitive" : "void";
-		statement("using spvMesh_t = mesh<", "spvPerVertex, ", per_primitive, ", ", execution.output_vertices, ", ",
+		statement("using spvMesh_t = mesh<", per_vertex, ", ", per_primitive, ", ", execution.output_vertices, ", ",
 		          execution.output_primitives, ", ", topology, ">;");
 		statement("");
 	}
