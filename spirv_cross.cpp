@@ -4399,9 +4399,8 @@ bool Compiler::GeometryEmitDisocveryHandler::begin_function_scope(const uint32_t
 	return true;
 }
 
-bool Compiler::GeometryEmitDisocveryHandler::end_function_scope(const uint32_t *stream, uint32_t)
+bool Compiler::GeometryEmitDisocveryHandler::end_function_scope(const uint32_t *, uint32_t)
 {
-	(void)stream;
 	assert(function_stack.back() == &compiler.get<SPIRFunction>(stream[2]));
 	function_stack.pop_back();
 
