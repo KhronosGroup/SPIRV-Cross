@@ -1375,9 +1375,10 @@ protected:
 	// OpcodeHandler that handles several MSL preprocessing operations.
 	struct OpCodePreprocessor : OpcodeHandler
 	{
-		OpCodePreprocessor(CompilerMSL &compiler_)
+		explicit OpCodePreprocessor(CompilerMSL &compiler_)
 		    : OpcodeHandler(compiler_), self(compiler_)
 		{
+			enable_result_types = true;
 		}
 
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;

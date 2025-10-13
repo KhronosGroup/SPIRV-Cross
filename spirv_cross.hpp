@@ -836,6 +836,7 @@ protected:
 		Compiler &compiler;
 		std::unordered_map<uint32_t, uint32_t> result_types;
 		const SPIRType *get_expression_result_type(uint32_t id) const;
+		bool enable_result_types = false;
 
 		template <typename T> T &get(uint32_t id)
 		{

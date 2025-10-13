@@ -1907,10 +1907,13 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 	handler.set_current_block(block);
 	handler.rearm_current_block(block);
 
-	for (auto &phi : block.phi_variables)
+	if (handler.enable_result_types)
 	{
-		auto &v = get<SPIRVariable>(phi.function_variable);
-		handler.result_types[phi.function_variable] = v.basetype;
+		for (auto &phi: block.phi_variables)
+		{
+			auto &v = get<SPIRVariable>(phi.function_variable);
+			handler.result_types[phi.function_variable] = v.basetype;
+		}
 	}
 
 	// Ideally, perhaps traverse the CFG instead of all blocks in order to eliminate dead blocks,
@@ -1924,19 +1927,23 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 		if (!handler.handle(op, ops, i.length))
 			return false;
 
-		// If it has one, keep track of the instruction's result type, mapped by ID
-		uint32_t result_type, result_id;
-		if (instruction_to_result_type(result_type, result_id, op, ops, i.length))
-			handler.result_types[result_id] = result_type;
+		if (handler.enable_result_types)
+		{
+			// If it has one, keep track of the instruction's result type, mapped by ID
+			uint32_t result_type, result_id;
+			if (instruction_to_result_type(result_type, result_id, op, ops, i.length))
+				handler.result_types[result_id] = result_type;
+		}
 
 		if (op == OpFunctionCall)
 		{
 			auto &func = get<SPIRFunction>(ops[2]);
 			if (handler.follow_function_call(func))
 			{
-				for (auto &arg : func.arguments)
-					if (!arg.alias_global_variable)
-						handler.result_types[arg.id] = arg.type;
+				if (handler.enable_result_types)
+					for (auto &arg : func.arguments)
+						if (!arg.alias_global_variable)
+							handler.result_types[arg.id] = arg.type;
 
 				if (!handler.begin_function_scope(ops, i.length))
 					return false;
