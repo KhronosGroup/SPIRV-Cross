@@ -1907,6 +1907,15 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 	handler.set_current_block(block);
 	handler.rearm_current_block(block);
 
+	if (handler.enable_result_types)
+	{
+		for (auto &phi: block.phi_variables)
+		{
+			auto &v = get<SPIRVariable>(phi.function_variable);
+			handler.result_types[phi.function_variable] = v.basetype;
+		}
+	}
+
 	// Ideally, perhaps traverse the CFG instead of all blocks in order to eliminate dead blocks,
 	// but this shouldn't be a problem in practice unless the SPIR-V is doing insane things like recursing
 	// inside dead blocks ...
@@ -1918,11 +1927,24 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 		if (!handler.handle(op, ops, i.length))
 			return false;
 
+		if (handler.enable_result_types)
+		{
+			// If it has one, keep track of the instruction's result type, mapped by ID
+			uint32_t result_type, result_id;
+			if (instruction_to_result_type(result_type, result_id, op, ops, i.length))
+				handler.result_types[result_id] = result_type;
+		}
+
 		if (op == OpFunctionCall)
 		{
 			auto &func = get<SPIRFunction>(ops[2]);
 			if (handler.follow_function_call(func))
 			{
+				if (handler.enable_result_types)
+					for (auto &arg : func.arguments)
+						if (!arg.alias_global_variable)
+							handler.result_types[arg.id] = arg.type;
+
 				if (!handler.begin_function_scope(ops, i.length))
 					return false;
 				if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
@@ -3346,7 +3368,7 @@ void Compiler::analyze_parameter_preservation(
 
 Compiler::AnalyzeVariableScopeAccessHandler::AnalyzeVariableScopeAccessHandler(Compiler &compiler_,
                                                                                SPIRFunction &entry_)
-    : compiler(compiler_)
+    : OpcodeHandler(compiler_)
     , entry(entry_)
 {
 }
@@ -3468,7 +3490,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(Op op, const uint32_t *
 {
 	// Keep track of the types of temporaries, so we can hoist them out as necessary.
 	uint32_t result_type = 0, result_id = 0;
-	if (compiler.instruction_to_result_type(result_type, result_id, op, args, length))
+	if (instruction_to_result_type(result_type, result_id, op, args, length))
 	{
 		// For some opcodes, we will need to override the result id.
 		// If we need to hoist the temporary, the temporary type is the input, not the result.
@@ -3811,7 +3833,7 @@ bool Compiler::AnalyzeVariableScopeAccessHandler::handle(Op op, const uint32_t *
 }
 
 Compiler::StaticExpressionAccessHandler::StaticExpressionAccessHandler(Compiler &compiler_, uint32_t variable_id_)
-    : compiler(compiler_)
+    : OpcodeHandler(compiler_)
     , variable_id(variable_id_)
 {
 }
@@ -4826,7 +4848,7 @@ void Compiler::build_function_control_flow_graphs_and_analyze()
 }
 
 Compiler::CFGBuilder::CFGBuilder(Compiler &compiler_)
-    : compiler(compiler_)
+    : OpcodeHandler(compiler_)
 {
 }
 
@@ -5198,7 +5220,7 @@ void Compiler::clear_force_recompile()
 }
 
 Compiler::PhysicalStorageBufferPointerHandler::PhysicalStorageBufferPointerHandler(Compiler &compiler_)
-    : compiler(compiler_)
+    : OpcodeHandler(compiler_)
 {
 }
 
@@ -5765,3 +5787,13 @@ void Compiler::add_loop_level()
 {
 	current_loop_level++;
 }
+
+const SPIRType *Compiler::OpcodeHandler::get_expression_result_type(uint32_t id) const
+{
+	auto itr = result_types.find(id);
+	if (itr == result_types.end())
+		return nullptr;
+
+	return &compiler.get<SPIRType>(itr->second);
+}
+
