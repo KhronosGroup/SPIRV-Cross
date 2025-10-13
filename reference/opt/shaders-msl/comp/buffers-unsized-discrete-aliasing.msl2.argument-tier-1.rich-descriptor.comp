@@ -41,7 +41,7 @@ struct SSBO
     float unsized[1];
 };
 
-kernel void main0(device const void* spvBufferAliasSet0Binding0 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
+kernel void main0(device void* spvBufferAliasSet0Binding0 [[buffer(0)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
     spvDescriptorArray<device SSBOW*> RW {spvBufferAliasSet0Binding0};
     spvDescriptorArray<device SSBO*> RO {spvBufferAliasSet0Binding0};

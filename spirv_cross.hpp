@@ -796,6 +796,7 @@ protected:
 	// Used internally to implement various traversals for queries.
 	struct OpcodeHandler
 	{
+		explicit OpcodeHandler(Compiler &compiler_) : compiler(compiler_) {}
 		virtual ~OpcodeHandler() = default;
 
 		// Return true if traversal should continue.
@@ -831,12 +832,32 @@ protected:
 		{
 			return true;
 		}
+
+		Compiler &compiler;
+		std::unordered_map<uint32_t, uint32_t> result_types;
+		const SPIRType *get_expression_result_type(uint32_t id) const;
+
+		template <typename T> T &get(uint32_t id)
+		{
+			return compiler.get<T>(id);
+		}
+
+		template <typename T> const T &get(uint32_t id) const
+		{
+			return compiler.get<T>(id);
+		}
+
+		template <typename T, typename... P>
+		T &set(uint32_t id, P &&... args)
+		{
+			return compiler.set<T>(id, std::forward<P>(args)...);
+		}
 	};
 
 	struct BufferAccessHandler : OpcodeHandler
 	{
 		BufferAccessHandler(const Compiler &compiler_, SmallVector<BufferRange> &ranges_, uint32_t id_)
-		    : compiler(compiler_)
+		    : OpcodeHandler(const_cast<Compiler &>(compiler_))
 		    , ranges(ranges_)
 		    , id(id_)
 		{
@@ -844,7 +865,6 @@ protected:
 
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
 
-		const Compiler &compiler;
 		SmallVector<BufferRange> &ranges;
 		uint32_t id;
 
@@ -854,28 +874,25 @@ protected:
 	struct InterfaceVariableAccessHandler : OpcodeHandler
 	{
 		InterfaceVariableAccessHandler(const Compiler &compiler_, std::unordered_set<VariableID> &variables_)
-		    : compiler(compiler_)
+		    : OpcodeHandler(const_cast<Compiler &>(compiler_))
 		    , variables(variables_)
 		{
 		}
 
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
 
-		const Compiler &compiler;
 		std::unordered_set<VariableID> &variables;
 	};
 
 	struct CombinedImageSamplerHandler : OpcodeHandler
 	{
-		CombinedImageSamplerHandler(Compiler &compiler_)
-		    : compiler(compiler_)
+		explicit CombinedImageSamplerHandler(Compiler &compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 		}
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
 		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
 		bool end_function_scope(const uint32_t *args, uint32_t length) override;
-
-		Compiler &compiler;
 
 		// Each function in the call stack needs its own remapping for parameters so we can deduce which global variable each texture/sampler the parameter is statically bound to.
 		std::stack<std::unordered_map<uint32_t, uint32_t>> parameter_remapping;
@@ -890,25 +907,22 @@ protected:
 
 	struct DummySamplerForCombinedImageHandler : OpcodeHandler
 	{
-		DummySamplerForCombinedImageHandler(Compiler &compiler_)
-		    : compiler(compiler_)
+		explicit DummySamplerForCombinedImageHandler(Compiler &compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 		}
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
-
-		Compiler &compiler;
 		bool need_dummy_sampler = false;
 	};
 
 	struct ActiveBuiltinHandler : OpcodeHandler
 	{
-		ActiveBuiltinHandler(Compiler &compiler_)
-		    : compiler(compiler_)
+		explicit ActiveBuiltinHandler(Compiler &compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 		}
 
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
-		Compiler &compiler;
 
 		void handle_builtin(const SPIRType &type, BuiltIn builtin, const Bitset &decoration_flags);
 		void add_if_builtin(uint32_t id);
@@ -962,13 +976,12 @@ protected:
 
 	struct CombinedImageSamplerDrefHandler : OpcodeHandler
 	{
-		CombinedImageSamplerDrefHandler(Compiler &compiler_)
-		    : compiler(compiler_)
+		explicit CombinedImageSamplerDrefHandler(Compiler &compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 		}
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
 
-		Compiler &compiler;
 		std::unordered_set<uint32_t> dref_combined_samplers;
 	};
 
@@ -976,14 +989,13 @@ protected:
 	{
 		CombinedImageSamplerUsageHandler(Compiler &compiler_,
 		                                 const std::unordered_set<uint32_t> &dref_combined_samplers_)
-		    : compiler(compiler_)
+		    : OpcodeHandler(compiler_)
 		    , dref_combined_samplers(dref_combined_samplers_)
 		{
 		}
 
 		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
-		Compiler &compiler;
 		const std::unordered_set<uint32_t> &dref_combined_samplers;
 
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> dependency_hierarchy;
@@ -1006,7 +1018,6 @@ protected:
 
 		bool follow_function_call(const SPIRFunction &func) override;
 		bool handle(Op op, const uint32_t *args, uint32_t length) override;
-		Compiler &compiler;
 		std::unordered_map<uint32_t, std::unique_ptr<CFG>> function_cfgs;
 	};
 
@@ -1023,7 +1034,6 @@ protected:
 		bool handle(Op op, const uint32_t *args, uint32_t length) override;
 		bool handle_terminator(const SPIRBlock &block) override;
 
-		Compiler &compiler;
 		SPIRFunction &entry;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_variables_to_block;
 		std::unordered_map<uint32_t, std::unordered_set<uint32_t>> accessed_temporaries_to_block;
@@ -1043,7 +1053,6 @@ protected:
 		bool follow_function_call(const SPIRFunction &) override;
 		bool handle(Op op, const uint32_t *args, uint32_t length) override;
 
-		Compiler &compiler;
 		uint32_t variable_id;
 		uint32_t static_expression = 0;
 		uint32_t write_count = 0;
@@ -1058,7 +1067,6 @@ protected:
 	{
 		explicit PhysicalStorageBufferPointerHandler(Compiler &compiler_);
 		bool handle(Op op, const uint32_t *args, uint32_t length) override;
-		Compiler &compiler;
 
 		std::unordered_set<uint32_t> non_block_types;
 		std::unordered_map<uint32_t, PhysicalBlockMeta> physical_block_type_meta;
@@ -1085,10 +1093,9 @@ protected:
 	struct GeometryEmitDisocveryHandler : OpcodeHandler
 	{
 		explicit GeometryEmitDisocveryHandler(Compiler &compiler_)
-		    : compiler(compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 		}
-		Compiler &compiler;
 
 		bool handle(Op opcode, const uint32_t *args, uint32_t length) override;
 		bool begin_function_scope(const uint32_t *, uint32_t) override;
@@ -1105,7 +1112,7 @@ protected:
 	struct InterlockedResourceAccessHandler : OpcodeHandler
 	{
 		InterlockedResourceAccessHandler(Compiler &compiler_, uint32_t entry_point_id)
-		    : compiler(compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 			call_stack.push_back(entry_point_id);
 		}
@@ -1114,7 +1121,6 @@ protected:
 		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
 		bool end_function_scope(const uint32_t *args, uint32_t length) override;
 
-		Compiler &compiler;
 		bool in_crit_sec = false;
 
 		uint32_t interlock_function_id = 0;
@@ -1130,7 +1136,7 @@ protected:
 	struct InterlockedResourceAccessPrepassHandler : OpcodeHandler
 	{
 		InterlockedResourceAccessPrepassHandler(Compiler &compiler_, uint32_t entry_point_id)
-		    : compiler(compiler_)
+		    : OpcodeHandler(compiler_)
 		{
 			call_stack.push_back(entry_point_id);
 		}
@@ -1140,7 +1146,6 @@ protected:
 		bool begin_function_scope(const uint32_t *args, uint32_t length) override;
 		bool end_function_scope(const uint32_t *args, uint32_t length) override;
 
-		Compiler &compiler;
 		uint32_t interlock_function_id = 0;
 		uint32_t current_block_id = 0;
 		bool split_function_case = false;
@@ -1157,8 +1162,8 @@ protected:
 
 	std::unordered_map<uint32_t, std::string> declared_block_names;
 
-	bool instruction_to_result_type(uint32_t &result_type, uint32_t &result_id, Op op, const uint32_t *args,
-	                                uint32_t length);
+	static bool instruction_to_result_type(
+			uint32_t &result_type, uint32_t &result_id, Op op, const uint32_t *args, uint32_t length);
 
 	Bitset combined_decoration_for_member(const SPIRType &type, uint32_t index) const;
 	static bool is_desktop_only_format(ImageFormat format);

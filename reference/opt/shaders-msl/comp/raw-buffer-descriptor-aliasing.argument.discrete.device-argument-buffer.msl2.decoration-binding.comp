@@ -101,7 +101,7 @@ struct spvDescriptorSetBuffer0
     // Overlapping binding: device SSBO_BRO* ssbo_b_readonly [[id(10)]];
 };
 
-kernel void main0(device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant Registers& _42 [[buffer(1)]], device const void* spvBufferAliasSet2Binding11 [[buffer(11)]], constant const void* spvBufferAliasSet2Binding12 [[buffer(12)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
+kernel void main0(device spvDescriptorSetBuffer0& spvDescriptorSet0 [[buffer(0)]], constant Registers& _42 [[buffer(1)]], device void* spvBufferAliasSet2Binding11 [[buffer(11)]], constant void* spvBufferAliasSet2Binding12 [[buffer(12)]], uint3 gl_GlobalInvocationID [[thread_position_in_grid]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
     device auto& ssbo_e = *(device SSBO_E*)spvBufferAliasSet2Binding11;
     constant auto& ubo_g = *(constant UBO_G*)spvBufferAliasSet2Binding12;

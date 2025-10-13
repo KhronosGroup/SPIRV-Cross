@@ -1268,7 +1268,7 @@ protected:
 	bool using_builtin_array() const;
 
 	bool is_rasterization_disabled = false;
-	bool has_descriptor_side_effects = false;
+	bool has_descriptor_side_effects_buffer = false;
 	bool capture_output_to_buffer = false;
 	bool needs_swizzle_buffer_def = false;
 	bool used_swizzle_buffer = false;
@@ -1376,7 +1376,7 @@ protected:
 	struct OpCodePreprocessor : OpcodeHandler
 	{
 		OpCodePreprocessor(CompilerMSL &compiler_)
-		    : compiler(compiler_)
+		    : OpcodeHandler(compiler_), self(compiler_)
 		{
 		}
 
@@ -1384,8 +1384,7 @@ protected:
 		CompilerMSL::SPVFuncImpl get_spv_func_impl(Op opcode, const uint32_t *args, uint32_t length);
 		void check_resource_write(uint32_t var_id);
 
-		CompilerMSL &compiler;
-		std::unordered_map<uint32_t, uint32_t> result_types;
+		CompilerMSL &self;
 		std::unordered_map<uint32_t, uint32_t> image_pointers_emulated; // Emulate texture2D atomic operations
 		bool suppress_missing_prototypes = false;
 		bool uses_atomics = false;
@@ -1402,14 +1401,13 @@ protected:
 	// OpcodeHandler that scans for uses of sampled images
 	struct SampledImageScanner : OpcodeHandler
 	{
-		SampledImageScanner(CompilerMSL &compiler_)
-		    : compiler(compiler_)
+		explicit SampledImageScanner(CompilerMSL &compiler_)
+		    : OpcodeHandler(compiler_), self(compiler_)
 		{
 		}
 
+		CompilerMSL &self;
 		bool handle(Op opcode, const uint32_t *args, uint32_t) override;
-
-		CompilerMSL &compiler;
 	};
 
 	// Sorts the members of a SPIRType and associated Meta info based on a settable sorting

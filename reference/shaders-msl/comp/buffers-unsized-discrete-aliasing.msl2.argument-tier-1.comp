@@ -37,7 +37,7 @@ void in_func(const spvDescriptorArray<device SSBOW*> RW, thread uint3& gl_WorkGr
     RW[gl_WorkGroupID.x]->a = RO[gl_WorkGroupID.x]->b;
 }
 
-kernel void main0(device const void* spvBufferAliasSet0Binding0 [[buffer(0)]], device const void* spvBufferAliasSet1Binding0 [[buffer(1)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
+kernel void main0(device void* spvBufferAliasSet0Binding0 [[buffer(0)]], device void* spvBufferAliasSet1Binding0 [[buffer(1)]], uint3 gl_WorkGroupID [[threadgroup_position_in_grid]])
 {
     spvDescriptorArray<device SSBOW*> RW {spvBufferAliasSet0Binding0};
     spvDescriptorArray<device SSBO*> RO {spvBufferAliasSet0Binding0};

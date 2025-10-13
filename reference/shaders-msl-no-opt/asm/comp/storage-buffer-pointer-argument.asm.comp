@@ -16,7 +16,7 @@ struct SSBORead
 };
 
 static inline __attribute__((always_inline))
-void copy_out(device float& A, device const float& B)
+void copy_out(device float& A, device float& B)
 {
     A = B;
 }
