@@ -3783,7 +3783,7 @@ void CompilerHLSL::emit_texture_op(const Instruction &i, bool sparse)
 	if (dref)
 		inherited_expressions.push_back(dref);
 
-	if (imgtype.image.arrayed)
+	if (imgtype.image.arrayed && op != OpImageQueryLod)
 		coord_components++;
 
 	uint32_t bias = 0;
