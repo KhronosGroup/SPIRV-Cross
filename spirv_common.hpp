@@ -76,6 +76,9 @@ void join_helper(StringStream<> &stream, T &&t, Ts &&... ts)
 }
 } // namespace inner
 
+// From spec on Dims: "The value must be greater than zero and less than or equal to 5."
+static constexpr const size_t TENSOR_VIEW_NV_MAX_DIMS = 5;
+
 class Bitset
 {
 public:
@@ -584,6 +587,8 @@ struct SPIRType : IVariant
 		AccelerationStructure,
 		RayQuery,
 		CoopVecNV,
+		TensorLayoutNV,
+		TensorViewNV,
 
 		// Keep internal types at the end.
 		ControlPointArray,
@@ -642,6 +647,19 @@ struct SPIRType : IVariant
 			uint32_t rank;
 			uint32_t shape;
 		} tensor;
+
+		struct
+		{
+			uint32_t dim_id;
+			uint32_t clamp_mode_id;
+		} tensorLayoutNv;
+
+		struct
+		{
+			uint32_t dim_id;
+			uint32_t has_dimensions_id;
+			int32_t dim_ids[TENSOR_VIEW_NV_MAX_DIMS];
+		} tensorViewNv;
 	} ext;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
@@ -1010,6 +1028,8 @@ struct SPIRFunction : IVariant
 		// read and write counts as access to the function arguments
 		// is not local to the function in question.
 		bool alias_global_variable;
+		spv::StorageClass storage;
+	        bool force_const;
 	};
 
 	// When calling a function, and we're remapping separate image samplers,
@@ -1057,7 +1077,7 @@ struct SPIRFunction : IVariant
 	void add_parameter(TypeID parameter_type, ID id, bool alias_global_variable = false)
 	{
 		// Arguments are read-only until proven otherwise.
-		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
+		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable, spv::StorageClassGeneric, false });
 	}
 
 	// Hooks to be run when the function returns.

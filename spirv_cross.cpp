@@ -185,6 +185,45 @@ bool Compiler::block_is_control_dependent(const SPIRBlock &block)
 	return false;
 }
 
+uint32_t Compiler::maybe_get_called_function_id(const Instruction &instruction) const
+{
+	auto opcode = instruction.op;
+	switch (opcode)
+	{
+	case OpFunctionCall:
+		return stream(instruction)[2];
+	case OpCooperativeMatrixReduceNV:
+		return stream(instruction)[4];
+	case OpCooperativeMatrixLoadTensorNV:
+		// might be a function or a tensor view
+		if (instruction.length == 8 && (stream(instruction)[6] & TensorAddressingOperandsDecodeFuncMask))
+		{
+			return stream(instruction)[7];
+		}
+		else if (instruction.length == 9)
+		{
+			return stream(instruction)[8];
+		}
+		else
+		{
+			return 0;
+		}
+	case OpCooperativeMatrixPerElementOpNV:
+		return stream(instruction)[3];
+	default:
+		return 0;
+	}
+}
+const SPIRFunction *Compiler::maybe_get_called_function(const Instruction &instruction) const
+{
+	return maybe_get<SPIRFunction>(maybe_get_called_function_id(instruction));
+}
+
+SPIRFunction *Compiler::maybe_get_called_function(const Instruction &instruction)
+{
+	return maybe_get<SPIRFunction>(maybe_get_called_function_id(instruction));
+}
+
 bool Compiler::block_is_pure(const SPIRBlock &block)
 {
 	// This is a global side effect of the function.
@@ -377,6 +416,7 @@ void Compiler::register_global_read_dependencies(const SPIRBlock &block, uint32_
 		case OpLoad:
 		case OpCooperativeMatrixLoadKHR:
 		case OpCooperativeVectorLoadNV:
+		case OpCooperativeMatrixLoadTensorNV:
 		case OpImageRead:
 		{
 			// If we're in a storage class which does not get invalidated, adding dependencies here is no big deal.
@@ -1935,22 +1975,24 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 				handler.result_types[result_id] = result_type;
 		}
 
-		if (op == OpFunctionCall)
+		auto *func = maybe_get_called_function(i);
+		if (func)
 		{
-			auto &func = get<SPIRFunction>(ops[2]);
-			if (handler.follow_function_call(func))
+			if (handler.follow_function_call(*func))
 			{
 				if (handler.enable_result_types)
-					for (auto &arg : func.arguments)
+					for (auto &arg : func->arguments)
 						if (!arg.alias_global_variable)
 							handler.result_types[arg.id] = arg.type;
 
-				if (!handler.begin_function_scope(ops, i.length))
+				if (op == OpFunctionCall)
+					if (!handler.begin_function_scope(ops, i.length))
+						return false;
+				if (!traverse_all_reachable_opcodes(*func, handler))
 					return false;
-				if (!traverse_all_reachable_opcodes(get<SPIRFunction>(ops[2]), handler))
-					return false;
-				if (!handler.end_function_scope(ops, i.length))
-					return false;
+				if (op == OpFunctionCall)
+					if (!handler.end_function_scope(ops, i.length))
+						return false;
 
 				handler.rearm_current_block(block);
 			}
@@ -2940,7 +2982,7 @@ void Compiler::CombinedImageSamplerHandler::register_combined_image_sampler(SPIR
 		                  join("SPIRV_Cross_Combined", compiler.to_name(image_id), compiler.to_name(sampler_id)));
 
 		caller.combined_parameters.push_back(param);
-		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true });
+		caller.shadow_arguments.push_back({ ptr_type_id, combined_id, 0u, 0u, true, StorageClassGeneric, false });
 	}
 }
 
@@ -4375,6 +4417,7 @@ bool Compiler::may_read_undefined_variable_in_block(const SPIRBlock &block, uint
 		case OpCopyObject:
 		case OpLoad:
 		case OpCooperativeVectorLoadNV:
+		case OpCooperativeMatrixLoadTensorNV:
 		case OpCooperativeMatrixLoadKHR:
 			if (ops[2] == var)
 				return true;
@@ -5512,6 +5555,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 	case OpLoad:
 	case OpCooperativeMatrixLoadKHR:
 	case OpCooperativeVectorLoadNV:
+	case OpCooperativeMatrixLoadTensorNV:
 	{
 		if (length < 3)
 			return false;
@@ -5591,6 +5635,7 @@ bool Compiler::InterlockedResourceAccessHandler::handle(Op opcode, const uint32_
 	case OpAtomicStore:
 	case OpCooperativeMatrixStoreKHR:
 	case OpCooperativeVectorStoreNV:
+	case OpCooperativeMatrixStoreTensorNV:
 	{
 		if (length < 1)
 			return false;

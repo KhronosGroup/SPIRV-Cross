@@ -2556,7 +2556,7 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vert
 						// basetype is effectively ignored here since we declare the argument
 						// with explicit types. Just pass down a valid type.
 						func.arguments.push_back({ expression_type_id(iarg.id), iarg.id,
-						                           iarg.read_count, iarg.write_count, true });
+						                           iarg.read_count, iarg.write_count, true, StorageClassGeneric, false });
 					}
 				}
 				break;
@@ -2600,9 +2600,9 @@ void CompilerHLSL::analyze_meshlet_writes(uint32_t func_id, uint32_t id_per_vert
 						// with explicit types. Just pass down a valid type.
 						uint32_t type_id = expression_type_id(var_id);
 						if (var->storage == StorageClassTaskPayloadWorkgroupEXT)
-							func.arguments.push_back({ type_id, var_id, 1u, 0u, true });
+							func.arguments.push_back({ type_id, var_id, 1u, 0u, true, StorageClassGeneric, false });
 						else
-							func.arguments.push_back({ type_id, var_id, 1u, 1u, true });
+							func.arguments.push_back({ type_id, var_id, 1u, 1u, true, StorageClassGeneric, false });
 					}
 				}
 				break;

@@ -88,6 +88,21 @@ static const GlslConstantNameMapping CoopMatMatrixLayoutNames[] = {
 	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutRowMajor),
 	DEF_GLSL_MAPPING_EXT(CooperativeMatrixLayoutColumnMajor),
 };
+
+static const GlslConstantNameMapping CooperativeMatrixClampModeNames[] = {
+	{ TensorClampModeUndefined, "gl_CooperativeMatrixClampModeUndefinedNV" },
+	{ TensorClampModeConstant, "gl_CooperativeMatrixClampModeConstantNV" },
+	{ TensorClampModeClampToEdge, "gl_CooperativeMatrixClampModeClampToEdgeNV" },
+	{ TensorClampModeRepeat, "gl_CooperativeMatrixClampModeRepeatNV" },
+	{ TensorClampModeRepeatMirrored, "gl_CooperativeMatrixClampModeMirrorRepeatNV" },
+};
+static const GlslConstantNameMapping CooperativeMatrixReduceModeNames[] = {
+	{ CooperativeMatrixReduceMaskNone, "0" },
+	{ CooperativeMatrixReduceRowMask, "gl_CooperativeMatrixReduceRowNV" },
+	{ CooperativeMatrixReduceColumnMask, "gl_CooperativeMatrixReduceColumnNV" },
+	{ CooperativeMatrixReduceColumnMask | CooperativeMatrixReduceRowMask, "gl_CooperativeMatrixReduceRowAndColumnNV" },
+	{ CooperativeMatrixReduce2x2Mask, "gl_CooperativeMatrixReduce2x2NV" },
+};
 #undef DEF_GLSL_MAPPING
 #undef DEF_GLSL_MAPPING_EXT
 
@@ -15890,6 +15905,132 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCooperativeMatrixPerElementOpNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		std::string ss;
+		ss += "coopMatPerElementNV(";
+		for (uint32_t i = 1; i < length; i++)
+		{
+			ss += to_expression(ops[i]);
+			if (i < length - 1)
+			{
+				ss += ", ";
+			}
+		}
+		ss += ");";
+		statement(ss);
+
+		auto called_func = maybe_get_called_function(instruction);
+		if (called_func)
+		{
+			for (auto &par : called_func->arguments)
+			{
+				par.storage = StorageClassInput;
+				par.force_const = true;
+			}
+		}
+		break;
+	}
+
+	case OpCooperativeMatrixReduceNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		std::string ss;
+		ss += "coopMatReduceNV(";
+		for (uint32_t i = 1; i < length; i++)
+		{
+			if (i == 3)
+			{
+				auto pretty_name = std::find_if(
+				    std::begin(CooperativeMatrixReduceModeNames), std::end(CooperativeMatrixReduceModeNames),
+				    [&](const GlslConstantNameMapping &mapping) { return mapping.value == ops[i]; });
+				if (pretty_name != std::end(CooperativeMatrixReduceModeNames))
+				{
+					ss += pretty_name->alias;
+				}
+				else
+				{
+					ss += std::to_string(ops[i]);
+				}
+			}
+			else
+			{
+				ss += to_expression(ops[i]);
+			}
+			if (i < length - 1)
+			{
+
+				ss += ", ";
+			}
+		}
+		ss += ");";
+		statement(ss);
+
+		auto called_func = maybe_get_called_function(instruction);
+		if (called_func)
+		{
+			for (auto &par : called_func->arguments)
+			{
+				par.storage = StorageClassInput;
+				par.force_const = true;
+			}
+		}
+		break;
+	}
+
+	case OpCooperativeMatrixLoadTensorNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		emit_uninitialized_temporary_expression(result_type, id);
+
+		auto expr = to_expression(ops[2]);
+		pair<string, string> split_expr;
+		if (!is_forcing_recompilation())
+			split_expr = split_coopmat_pointer(expr);
+
+		//void coopMatLoadTensorNV(inout coopmat m, volatile coherent T[] buf, uint elementOffset, tensorLayoutNV layout);
+		//void coopMatLoadTensorNV(inout coopmat m, volatile coherent T[] buf, uint elementOffset, tensorLayoutNV layout, tensorViewNV view);
+		//void coopMatLoadTensorNV(inout coopmat m, volatile coherent T[] buf, uint elementOffset, tensorLayoutNV layout, T2 decodeFunc);
+		//void coopMatLoadTensorNV(inout coopmat m, volatile coherent T[] buf, uint elementOffset, tensorLayoutNV layout, tensorViewNV view, T2 decodeFunc);
+		switch (length)
+		{
+		case 7: // None
+			statement("coopMatLoadTensorNV(", to_expression(id), ", ", split_expr.first, ", ", split_expr.second, ", ",
+			          to_expression(ops[4]), ");");
+			break;
+		case 8: // TensorView or DecodeFunc
+			statement("coopMatLoadTensorNV(", to_expression(id), ", ", split_expr.first, ", ", split_expr.second, ", ",
+			          to_expression(ops[4]), ", ", to_expression(ops[7]), ");");
+			break;
+		case 9: // TensorView and DecodeFunc
+			statement("coopMatLoadTensorNV(", to_expression(id), ", ", split_expr.first, ", ", split_expr.second, ", ",
+			          to_expression(ops[4]), ", ", to_expression(ops[7]), ", ", to_expression(ops[8]), ");");
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unhandled number of arguments to OpCooperativeMatrixLoadTensorNV");
+		}
+		auto called_func = maybe_get_called_function(instruction);
+		if (called_func)
+		{
+			for (auto &par : called_func->arguments)
+			{
+				par.storage = StorageClassInput;
+				par.force_const = true;
+			}
+		}
+
+		register_read(id, ops[2], false);
+		break;
+	}
+
 	case OpCooperativeMatrixLoadKHR:
 	{
 		// Spec contradicts itself if stride is optional or not.
@@ -15905,12 +16046,43 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		if (!is_forcing_recompilation())
 			split_expr = split_coopmat_pointer(expr);
 
-		string layout_expr = to_pretty_expression_if_int_constant(
-				ops[3], std::begin(CoopMatMatrixLayoutNames), std::end(CoopMatMatrixLayoutNames));
+		string layout_expr = to_pretty_expression_if_int_constant(ops[3], std::begin(CoopMatMatrixLayoutNames),
+		                                                          std::end(CoopMatMatrixLayoutNames));
 		statement("coopMatLoad(", to_expression(id), ", ", split_expr.first, ", ", split_expr.second, ", ",
 		          to_expression(ops[4]), ", ", layout_expr, ");");
 
 		register_read(id, ops[2], false);
+		break;
+	}
+
+	case OpCooperativeMatrixStoreTensorNV:
+	{
+		// SPIR-V and GLSL don't agree how to pass the expression.
+		// In SPIR-V it's a pointer, but in GLSL it's reference to array + index.
+		auto expr = to_expression(ops[0]);
+		pair<string, string> split_expr;
+		if (!is_forcing_recompilation())
+			split_expr = split_coopmat_pointer(expr);
+
+		//void coopMatStoreTensorNV(coopmat m, volatile coherent out T[] buf, uint elementOffset, tensorLayoutNV layout);
+		//void coopMatStoreTensorNV(coopmat m, volatile coherent out T[] buf, uint elementOffset, tensorLayoutNV layout, tensorViewNV view);
+		switch (length)
+		{
+		case 5: // None
+			statement("coopMatStoreTensorNV(", to_expression(ops[1]), ", ", split_expr.first, ", ", split_expr.second,
+			          ", ", to_expression(ops[2]), ");");
+			break;
+		case 6: // TensorView
+			statement("coopMatStoreTensorNV(", to_expression(ops[1]), ", ", split_expr.first, ", ", split_expr.second,
+			          ", ", to_expression(ops[2]), ", ", to_expression(ops[5]), ");");
+			break;
+		default:
+			SPIRV_CROSS_THROW("Unhandled number of arguments to OpCooperativeMatrixStoreTensorNV");
+		}
+
+		// TODO: Do we care about memory operands?
+
+		register_write(ops[0]);
 		break;
 	}
 
@@ -15937,6 +16109,105 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// TODO: Do we care about memory operands?
 
 		register_write(ops[0]);
+		break;
+	}
+
+	case OpCreateTensorLayoutNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto type = get<SPIRType>(result_type);
+
+		emit_op(result_type, id,
+		        join("createTensorLayoutNV(", to_expression(type.ext.tensorLayoutNv.dim_id), ", ",
+		             to_pretty_expression_if_int_constant(type.ext.tensorLayoutNv.clamp_mode_id,
+		                                                  std::begin(CooperativeMatrixClampModeNames),
+		                                                  std::end(CooperativeMatrixClampModeNames), true, ""),
+		             ")"),
+		        true);
+		break;
+	}
+
+	case OpCreateTensorViewNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto type = get<SPIRType>(result_type);
+
+		std::string statement;
+		auto &dim_ids = type.ext.tensorViewNv.dim_ids;
+		auto &has_dimensions_id = type.ext.tensorViewNv.has_dimensions_id;
+		statement += "createTensorViewNV(";
+		statement += to_expression(type.ext.tensorViewNv.dim_id);
+		statement += ", ";
+		statement += to_expression(has_dimensions_id);
+
+		auto dims = get<SPIRConstant>(type.ext.tensorViewNv.dim_id).scalar();
+		for (uint32_t i = 0; i < dims; i++)
+		{
+			statement += ", " + to_expression(dim_ids[i]);
+		}
+		statement += ")";
+
+		emit_op(result_type, id, statement, true);
+		break;
+	}
+
+	// instructions that return a tensor view
+	case OpTensorViewSetDimensionNV:
+	case OpTensorViewSetStrideNV:
+	case OpTensorViewSetClipNV:
+	// instructions that return a tensor layout
+	case OpTensorLayoutSetBlockSizeNV:
+	case OpTensorLayoutSetDimensionNV:
+	case OpTensorLayoutSetClampValueNV:
+	case OpTensorLayoutSliceNV:
+	case OpTensorLayoutSetStrideNV:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+
+		std::string expr;
+		switch (opcode)
+		{
+		case OpTensorViewSetDimensionNV:
+			expr += "setTensorViewSetDimensionsNV(";
+			break;
+		case OpTensorViewSetStrideNV:
+			expr += "setTensorViewSetStrideNV(";
+			break;
+		case OpTensorViewSetClipNV:
+			expr += "setTensorViewSetClipNV(";
+			break;
+		case OpTensorLayoutSetBlockSizeNV:
+			expr += "setTensorLayoutBlockSizeNV(";
+			break;
+		case OpTensorLayoutSetDimensionNV:
+			expr += "setTensorLayoutDimensionNV(";
+			break;
+		case OpTensorLayoutSetClampValueNV:
+			expr += "setTensorLayoutClampValueNV(";
+			break;
+		case OpTensorLayoutSliceNV:
+			expr += "sliceTensorLayoutNV(";
+			break;
+		case OpTensorLayoutSetStrideNV:
+			expr += "setTensorLayoutStrideNV(";
+		default:
+			assert("Invalid op code for tensor layout op");
+		}
+
+		for (uint32_t i = 2; i < length; i++)
+		{
+			expr += to_expression(ops[i]);
+			if (i < length - 1)
+			{
+				expr += ", ";
+			}
+		}
+		expr += ")";
+
+		emit_op(result_type, id, expr, true);
 		break;
 	}
 
@@ -16416,11 +16687,14 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 	// glslangValidator seems to make all arguments pointer no matter what which is rather bizarre ...
 	auto &type = expression_type(arg.id);
 	const char *direction = "";
+	const char *constness = arg.force_const ? "const " : "";
+	if (arg.storage == StorageClassInput)
+	{
+		direction = "in ";
+	}
 
-	if (is_pointer(type) &&
-	    (type.storage == StorageClassFunction ||
-	     type.storage == StorageClassPrivate ||
-	     type.storage == StorageClassOutput))
+	if (is_pointer(type) && (type.storage == StorageClassFunction || type.storage == StorageClassPrivate ||
+	                         type.storage == StorageClassOutput))
 	{
 		// If we're passing around block types to function, we really mean reference in a pointer sense,
 		// but DXC does not like inout for mesh blocks, so workaround that. out is technically not correct,
@@ -16437,7 +16711,7 @@ string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
 			direction = "out ";
 	}
 
-	return join(direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id), arg.id));
+	return join(constness, direction, to_qualifiers_glsl(arg.id), variable_decl(type, to_name(arg.id), arg.id));
 }
 
 string CompilerGLSL::to_initializer_expression(const SPIRVariable &var)
@@ -16845,10 +17119,53 @@ string CompilerGLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		if (type.ext.tensor.shape != 0)
 			SPIRV_CROSS_THROW("GLSL tensors cannot have a Shape.");
 		return join("tensorARM<", type_to_glsl(get<SPIRType>(type.ext.tensor.type)), ", ",
-								to_expression(type.ext.tensor.rank), ">");
+		            to_expression(type.ext.tensor.rank), ">");
 
 	case SPIRType::Void:
 		return "void";
+
+	case SPIRType::TensorViewNV:
+	{
+		auto &dim_constant = get<SPIRConstant>(type.ext.tensorViewNv.dim_id);
+		if (dim_constant.specialization)
+		{
+
+			SPIRV_CROSS_THROW("Specialization on tensor view dimension not supported.");
+		}
+		require_extension_internal("GL_NV_cooperative_matrix2");
+
+		std::string expr;
+		auto dim_id = type.ext.tensorViewNv.dim_id;
+		auto &dim_ids = type.ext.tensorViewNv.dim_ids;
+		auto &has_dimensions_id = type.ext.tensorViewNv.has_dimensions_id;
+		expr += "tensorViewNV<";
+		expr += to_expression(type.ext.tensorViewNv.dim_id);
+		expr += ", ";
+		expr += to_expression(has_dimensions_id);
+		auto dim = get<SPIRConstant>(dim_id).scalar();
+		for (uint32_t i = 0; i < std::min(TENSOR_VIEW_NV_MAX_DIMS, size_t(dim)); i++)
+		{
+			expr += ", " + to_expression(dim_ids[i]);
+		}
+		expr += ">";
+
+		return expr;
+	}
+
+	case SPIRType::TensorLayoutNV:
+	{
+		require_extension_internal("GL_NV_cooperative_matrix2");
+		auto &dim_constant = get<SPIRConstant>(type.ext.tensorLayoutNv.dim_id);
+		if (dim_constant.specialization)
+		{
+			SPIRV_CROSS_THROW("Specialization on tensor layout dimension not supported.");
+		}
+		uint32_t dim = dim_constant.scalar();
+		auto clamp_expr = to_pretty_expression_if_int_constant(type.ext.tensorLayoutNv.clamp_mode_id,
+		                                                       std::begin(CooperativeMatrixClampModeNames),
+		                                                       std::end(CooperativeMatrixClampModeNames), true, "");
+		return join("tensorLayoutNV<", dim, ", ", clamp_expr, ">");
+	}
 
 	default:
 		break;
@@ -17339,12 +17656,15 @@ void CompilerGLSL::emit_function(SPIRFunction &func, const Bitset &return_flags)
 			auto ops = stream(i);
 			auto op = static_cast<Op>(i.op);
 
+			// Recursively emit functions which are called.
+			auto sub_func = maybe_get_called_function(i);
 			if (op == OpFunctionCall)
 			{
-				// Recursively emit functions which are called.
-				uint32_t id = ops[2];
-
-				emit_function(get<SPIRFunction>(id), ir.meta[ops[1]].decoration.decoration_flags);
+				emit_function(*sub_func, ir.meta[ops[1]].decoration.decoration_flags);
+			}
+			else if (sub_func)
+			{
+				emit_function(*sub_func, Bitset());
 			}
 		}
 	}
@@ -20126,21 +20446,22 @@ std::string CompilerGLSL::format_double(double value) const
 	return convert_to_string(value, current_locale_radix_character);
 }
 
-std::string CompilerGLSL::to_pretty_expression_if_int_constant(
-		uint32_t id,
-		const GlslConstantNameMapping *mapping_start, const GlslConstantNameMapping *mapping_end,
-		bool register_expression_read)
+std::string CompilerGLSL::to_pretty_expression_if_int_constant(uint32_t id,
+                                                               const GlslConstantNameMapping *mapping_start,
+                                                               const GlslConstantNameMapping *mapping_end,
+                                                               bool register_expression_read,
+							       const char* target_type)
 {
 	auto *c = maybe_get<SPIRConstant>(id);
 	if (c && !c->specialization)
 	{
 		auto value = c->scalar();
-		auto pretty_name = std::find_if(mapping_start, mapping_end,
-		                                [value](const GlslConstantNameMapping &mapping) { return mapping.value == value; });
+		auto pretty_name = std::find_if(mapping_start, mapping_end, [value](const GlslConstantNameMapping &mapping)
+		                                { return mapping.value == value; });
 		if (pretty_name != mapping_end)
 			return pretty_name->alias;
 	}
-	return join("int(", to_expression(id, register_expression_read), ")");
+	return join(target_type, "(", to_expression(id, register_expression_read), ")");
 }
 
 uint32_t CompilerGLSL::get_fp_fast_math_flags_for_op(uint32_t result_type, uint32_t id) const
