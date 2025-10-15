@@ -1985,12 +1985,12 @@ bool Compiler::traverse_all_reachable_opcodes(const SPIRBlock &block, OpcodeHand
 						if (!arg.alias_global_variable)
 							handler.result_types[arg.id] = arg.type;
 
-				if (op == OpFunctionCall)
+				if (op != spv::OpCooperativeMatrixLoadTensorNV && op != spv::OpCooperativeMatrixReduceNV && op != spv::OpCooperativeMatrixPerElementOpNV)
 					if (!handler.begin_function_scope(ops, i.length))
 						return false;
 				if (!traverse_all_reachable_opcodes(*func, handler))
 					return false;
-				if (op == OpFunctionCall)
+				if (op != spv::OpCooperativeMatrixLoadTensorNV && op != spv::OpCooperativeMatrixReduceNV && op != spv::OpCooperativeMatrixPerElementOpNV)
 					if (!handler.end_function_scope(ops, i.length))
 						return false;
 
