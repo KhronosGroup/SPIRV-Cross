@@ -15927,11 +15927,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto called_func = maybe_get_called_function(instruction);
 		if (called_func)
 		{
-			for (auto &par : called_func->arguments)
-			{
-				par.storage = StorageClassInput;
-				par.force_const = true;
-			}
+			called_func->used_as_lambda = true;
 		}
 		break;
 	}
@@ -15976,11 +15972,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto called_func = maybe_get_called_function(instruction);
 		if (called_func)
 		{
-			for (auto &par : called_func->arguments)
-			{
-				par.storage = StorageClassInput;
-				par.force_const = true;
-			}
+			called_func->used_as_lambda = true;
 		}
 		break;
 	}
@@ -16020,11 +16012,7 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		auto called_func = maybe_get_called_function(instruction);
 		if (called_func)
 		{
-			for (auto &par : called_func->arguments)
-			{
-				par.storage = StorageClassInput;
-				par.force_const = true;
-			}
+			called_func->used_as_lambda = true;
 		}
 
 		register_read(id, ops[2], false);
@@ -16682,13 +16670,13 @@ string CompilerGLSL::to_qualifiers_glsl(uint32_t id)
 	return res;
 }
 
-string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg)
+string CompilerGLSL::argument_decl(const SPIRFunction::Parameter &arg, bool is_lambda)
 {
 	// glslangValidator seems to make all arguments pointer no matter what which is rather bizarre ...
 	auto &type = expression_type(arg.id);
 	const char *direction = "";
-	const char *constness = arg.force_const ? "const " : "";
-	if (arg.storage == StorageClassInput)
+	const char *constness = is_lambda ? "const " : "";
+	if (is_lambda == StorageClassInput)
 	{
 		direction = "in ";
 	}
@@ -17611,7 +17599,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
 		add_local_variable_name(arg.id);
 
-		arglist.push_back(argument_decl(arg));
+		arglist.push_back(argument_decl(arg, func.used_as_lambda));
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 		auto *var = maybe_get<SPIRVariable>(arg.id);
@@ -17627,7 +17615,7 @@ void CompilerGLSL::emit_function_prototype(SPIRFunction &func, const Bitset &ret
 		// Since we want to make the GLSL debuggable and somewhat sane, use fallback names for variables which are duplicates.
 		add_local_variable_name(arg.id);
 
-		arglist.push_back(argument_decl(arg));
+		arglist.push_back(argument_decl(arg, func.used_as_lambda));
 
 		// Hold a pointer to the parameter so we can invalidate the readonly field if needed.
 		auto *var = maybe_get<SPIRVariable>(arg.id);

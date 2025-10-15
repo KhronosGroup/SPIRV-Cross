@@ -1028,8 +1028,6 @@ struct SPIRFunction : IVariant
 		// read and write counts as access to the function arguments
 		// is not local to the function in question.
 		bool alias_global_variable;
-		spv::StorageClass storage;
-	        bool force_const;
 	};
 
 	// When calling a function, and we're remapping separate image samplers,
@@ -1061,6 +1059,9 @@ struct SPIRFunction : IVariant
 	BlockID entry_block = 0;
 	SmallVector<BlockID> blocks;
 	SmallVector<CombinedImageSamplerParameter> combined_parameters;
+	// SPV_NV_cooperative_matrix2 uses lambdas where all parameters need
+	// to be annotated as `const in`
+	bool used_as_lambda = false;
 
 	struct EntryLine
 	{
@@ -1077,7 +1078,7 @@ struct SPIRFunction : IVariant
 	void add_parameter(TypeID parameter_type, ID id, bool alias_global_variable = false)
 	{
 		// Arguments are read-only until proven otherwise.
-		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable, spv::StorageClassGeneric, false });
+		arguments.push_back({ parameter_type, id, 0u, 0u, alias_global_variable });
 	}
 
 	// Hooks to be run when the function returns.
