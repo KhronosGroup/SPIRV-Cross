@@ -35,9 +35,7 @@ namespace SPIRV_CROSS_NAMESPACE
 {
 using namespace SPIRV_CROSS_SPV_HEADER_NAMESPACE;
 
-// Indicates the format of a shader interface variable. Currently limited to specifying
-// if the input is an 8-bit unsigned integer, 16-bit unsigned integer, or
-// some other format.
+// Indicates the format of a shader interface variable.
 enum MSLShaderVariableFormat
 {
 	MSL_SHADER_VARIABLE_FORMAT_OTHER = 0,
@@ -45,6 +43,10 @@ enum MSLShaderVariableFormat
 	MSL_SHADER_VARIABLE_FORMAT_UINT16 = 2,
 	MSL_SHADER_VARIABLE_FORMAT_ANY16 = 3,
 	MSL_SHADER_VARIABLE_FORMAT_ANY32 = 4,
+	MSL_SHADER_VARIABLE_FORMAT_UINT32 = 5,
+	MSL_SHADER_VARIABLE_FORMAT_SINT8 = 6,
+	MSL_SHADER_VARIABLE_FORMAT_SINT16 = 7,
+	MSL_SHADER_VARIABLE_FORMAT_SINT32 = 8,
 
 	// Deprecated aliases.
 	MSL_VERTEX_FORMAT_OTHER = MSL_SHADER_VARIABLE_FORMAT_OTHER,
@@ -1001,6 +1003,7 @@ protected:
 		{
 			uint32_t base_type_id = 0;
 			uint32_t num_components = 0;
+			MSLShaderVariableFormat expected_format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
 			bool flat = false;
 			bool noperspective = false;
 			bool centroid = false;
@@ -1222,7 +1225,6 @@ protected:
 	std::unordered_set<uint32_t> location_inputs_in_use_fallback;
 	std::unordered_set<uint32_t> location_outputs_in_use;
 	std::unordered_set<uint32_t> location_outputs_in_use_fallback;
-	std::unordered_map<uint32_t, uint32_t> fragment_output_components;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_input_location;
 	std::unordered_map<uint32_t, uint32_t> builtin_to_automatic_output_location;
 	std::vector<std::string> pragma_lines;
@@ -1342,6 +1344,7 @@ protected:
 	void add_argument_buffer_padding_type(uint32_t mbr_type_id, SPIRType &struct_type, uint32_t &mbr_idx, uint32_t &arg_buff_index, uint32_t count);
 
 	uint32_t get_target_components_for_fragment_location(uint32_t location) const;
+	MSLShaderVariableFormat get_expected_format_for_fragment_location(uint32_t location, uint32_t component) const;
 	uint32_t build_extended_vector_type(uint32_t type_id, uint32_t components,
 	                                    SPIRType::BaseType basetype = SPIRType::Unknown);
 	uint32_t build_msl_interpolant_type(uint32_t type_id, bool is_noperspective);
