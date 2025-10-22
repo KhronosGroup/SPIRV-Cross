@@ -9599,6 +9599,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			MSL_BOP(-);
 		break;
 
+	case OpFmaKHR:
+		MSL_TFOP(fma);
+		break;
+
 	// Atomics
 	case OpAtomicExchange:
 	{
