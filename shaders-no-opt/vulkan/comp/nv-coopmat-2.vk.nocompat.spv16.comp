@@ -2,11 +2,38 @@
 #extension GL_KHR_memory_scope_semantics : require
 #extension GL_KHR_cooperative_matrix : require
 #extension GL_NV_cooperative_matrix2 : require
+#extension GL_EXT_buffer_reference : require
 #extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int32 : require
 #extension GL_EXT_float_e5m2 : require
 #extension GL_EXT_float_e4m3 : require
 
 layout(local_size_x = 1) in;
+layout(constant_id = 0) const uint32_t Clamp = 0;
+layout (binding = 0) buffer A_buffer {float16_t data_a[];};
+layout(buffer_reference, std430, buffer_reference_align = 8) buffer A_buffer_ref {float16_t data_a[];};
+
+float16_t Exp(const in uint32_t row, const in uint32_t col, const in float16_t elem)
+{
+	return exp(elem);
+}
+
+float16_t ExpWithArg(const in uint32_t row, const in uint32_t col, const in float16_t elem, const in bool maybe)
+{
+	if(maybe) {
+		return exp(elem);
+	} else {
+		return elem;
+	}
+}
+
+float16_t maxReduce(const in float16_t x, const in float16_t y) {
+    return max(x, y);
+}
+
+float16_t maxReduceIndirect(const in float16_t x, const in float16_t y) {
+    return maxReduce(x, y);
+}
 
 void accum_to_a_cast()
 {
@@ -41,10 +68,72 @@ void saturated_cast()
 	saturatedConvertEXT(B, Accum);
 }
 
+void tensor_layouts() {
+    tensorLayoutNV<2, gl_CooperativeMatrixClampModeConstantNV> layout1 = createTensorLayoutNV(2, gl_CooperativeMatrixClampModeConstantNV);
+    tensorLayoutNV<2, Clamp> layout2 = createTensorLayoutNV(2, Clamp);
+    tensorLayoutNV<2, gl_CooperativeMatrixClampModeConstantNV> layout3 = setTensorLayoutClampValueNV(layout1, 42);
+
+    const uint32_t BLOCK_SIZE = 16;
+    layout1 = setTensorLayoutBlockSizeNV(layout1, 1, BLOCK_SIZE);
+    layout1 = setTensorLayoutBlockSizeNV(layout1, 1, 16);
+
+    const int N = 128;
+    const int D = 128;
+    const int KV = 128;
+    layout1 = setTensorLayoutDimensionNV(layout1, N, D);
+    layout1 = setTensorLayoutDimensionNV(layout1, KV, D);
+    layout1 = setTensorLayoutDimensionNV(layout1, KV, D);
+    layout1 = setTensorLayoutStrideNV(layout1, 1, 1);
+}
+
+
+void tensor_views() {
+    tensorViewNV<2, false> view1 = createTensorViewNV(2, false);
+    tensorViewNV<2, false, 0, 1> view2 = createTensorViewNV(2, false);
+    tensorViewNV<2, false, 1, 0> viewTransposed = createTensorViewNV(2, false, 1, 0);
+    view1 = setTensorViewClipNV(view1, 0, 16, 0, 16);
+    view1 = setTensorViewDimensionsNV(view1, 256, 256);
+    view1 = setTensorViewStrideNV(view1, 2, 1);
+}
+
+float16_t decodeLoad(const in A_buffer_ref buf, const in uint32_t blockCoord[2], const in uint32_t coordInBlock[2]) {
+   return buf.data_a[0];
+}
+
+void load_stores() {
+    uint32_t offset = 17;
+    coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> A;
+    tensorLayoutNV<2, gl_CooperativeMatrixClampModeConstantNV> layout1 = createTensorLayoutNV(2, gl_CooperativeMatrixClampModeConstantNV);
+    tensorViewNV<2, false, 0, 1> view = createTensorViewNV(2, false, 0, 1);
+
+    coopMatLoadTensorNV(A, data_a, offset, layout1);
+    coopMatLoadTensorNV(A, data_a, offset, sliceTensorLayoutNV(layout1, 16, 16, 0, 16));
+    coopMatLoadTensorNV(A, data_a, offset, layout1, view);
+    coopMatLoadTensorNV(A, data_a, offset, layout1, decodeLoad);
+    coopMatLoadTensorNV(A, data_a, offset, layout1, view, decodeLoad);
+    coopMatStoreTensorNV(A, data_a, offset, sliceTensorLayoutNV(layout1, 16, 16, 0, 16));
+    coopMatStoreTensorNV(A, data_a, offset, sliceTensorLayoutNV(layout1, 16, 16, 0, 16), view);
+}
+
+void callback_functions() {
+    coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> A;
+    coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> reduced;
+    coopMatReduceNV(reduced, A, gl_CooperativeMatrixReduceRowNV, maxReduce);
+    coopMatReduceNV(reduced, reduced, gl_CooperativeMatrixReduceRowAndColumnNV, maxReduce);
+    coopmat<float16_t, gl_ScopeSubgroup, 8, 8, gl_MatrixUseAccumulator> B;
+    coopMatReduceNV(B, A, gl_CooperativeMatrixReduce2x2NV, maxReduceIndirect);
+
+    coopMatPerElementNV(A, A, Exp);
+    coopMatPerElementNV(A, A, ExpWithArg, true);
+}
+
 void main()
 {
 	accum_to_a_cast();
 	accum_to_b_cast();
 	value_cast();
 	saturated_cast();
+	tensor_layouts();
+	load_stores();
+	callback_functions();
 }

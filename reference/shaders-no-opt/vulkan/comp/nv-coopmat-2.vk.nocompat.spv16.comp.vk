@@ -7,11 +7,26 @@
 #error No extension available for FP16.
 #endif
 #extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_buffer_reference2 : require
 #extension GL_KHR_cooperative_matrix : require
 #extension GL_KHR_memory_scope_semantics : require
 #extension GL_NV_cooperative_matrix2 : require
 #extension GL_EXT_float_e4m3 : require
 layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(buffer_reference) buffer A_buffer_ref;
+
+layout(constant_id = 0) const uint Clamp = 0u;
+
+layout(buffer_reference, std430) buffer A_buffer_ref
+{
+    float16_t data_a[];
+};
+
+layout(set = 0, binding = 0, std430) buffer A_buffer
+{
+    float16_t data_a[];
+} _157;
 
 void accum_to_a_cast()
 {
@@ -34,9 +49,99 @@ void value_cast()
 void saturated_cast()
 {
     coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> Accum = coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator>(float16_t(0.0));
-    coopmat<floate4m3_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseB> _52;
-    saturatedConvertEXT(_52, Accum);
-    coopmat<floate4m3_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseB> B = _52;
+    coopmat<floate4m3_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseB> _107;
+    saturatedConvertEXT(_107, Accum);
+    coopmat<floate4m3_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseB> B = _107;
+}
+
+void tensor_layouts()
+{
+    tensorLayoutNV<2, gl_CooperativeMatrixClampModeConstantNV> layout1 = createTensorLayoutNV(2u, gl_CooperativeMatrixClampModeConstantNV);
+    tensorLayoutNV<2, (Clamp)> layout2 = createTensorLayoutNV(2u, (Clamp));
+    tensorLayoutNV<2, gl_CooperativeMatrixClampModeConstantNV> layout3 = setTensorLayoutClampValueNV(layout1, 42u);
+    layout1 = setTensorLayoutBlockSizeNV(layout1, 1u, 16u);
+    layout1 = setTensorLayoutBlockSizeNV(layout1, 1u, 16u);
+    layout1 = setTensorLayoutDimensionNV(layout1, 128u, 128u);
+    layout1 = setTensorLayoutDimensionNV(layout1, 128u, 128u);
+    layout1 = setTensorLayoutDimensionNV(layout1, 128u, 128u);
+    layout1 = setTensorLayoutStrideNV(layout1, 1u, 1u);
+}
+
+float16_t decodeLoad(const in A_buffer_ref buf, const in uint blockCoord[2], const in uint coordInBlock[2])
+{
+    return buf.data_a[0];
+}
+
+void load_stores()
+{
+    uint offset = 17u;
+    tensorLayoutNV<2, gl_CooperativeMatrixClampModeConstantNV> layout1 = createTensorLayoutNV(2u, gl_CooperativeMatrixClampModeConstantNV);
+    tensorViewNV<2u, false, 0u, 1u> view = createTensorViewNV(2u, false, 0u, 1u);
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> A;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> _163;
+    coopMatLoadTensorNV(_163, _157.data_a, offset, layout1);
+    A = _163;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> _169;
+    coopMatLoadTensorNV(_169, _157.data_a, offset, sliceTensorLayoutNV(layout1, 16u, 16u, 0u, 16u));
+    A = _169;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> _175;
+    coopMatLoadTensorNV(_175, _157.data_a, offset, layout1, view);
+    A = _175;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> _180;
+    coopMatLoadTensorNV(_180, _157.data_a, offset, layout1, decodeLoad);
+    A = _180;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseA> _186;
+    coopMatLoadTensorNV(_186, _157.data_a, offset, layout1, view, decodeLoad);
+    A = _186;
+    coopMatStoreTensorNV(A, _157.data_a, offset, sliceTensorLayoutNV(layout1, 16u, 16u, 0u, 16u));
+    coopMatStoreTensorNV(A, _157.data_a, offset, sliceTensorLayoutNV(layout1, 16u, 16u, 0u, 16u), view);
+}
+
+float16_t maxReduce(const in float16_t x, const in float16_t y)
+{
+    return max(x, y);
+}
+
+float16_t maxReduceIndirect(const in float16_t x, const in float16_t y)
+{
+    return maxReduce(x, y);
+}
+
+float16_t Exp(const in uint row, const in uint col, const in float16_t elem)
+{
+    return exp(elem);
+}
+
+float16_t ExpWithArg(const in uint row, const in uint col, const in float16_t elem, const in bool maybe)
+{
+    if (maybe)
+    {
+        return exp(elem);
+    }
+    else
+    {
+        return elem;
+    }
+}
+
+void callback_functions()
+{
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> A;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> _201;
+    coopMatReduceNV(_201, A, gl_CooperativeMatrixReduceRowNV, maxReduce);
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> reduced = _201;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> _204;
+    coopMatReduceNV(_204, reduced, gl_CooperativeMatrixReduceRowAndColumnNV, maxReduce);
+    reduced = _204;
+    coopmat<float16_t, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> _211;
+    coopMatReduceNV(_211, A, gl_CooperativeMatrixReduce2x2NV, maxReduceIndirect);
+    coopmat<float16_t, gl_ScopeSubgroup, 8u, 8u, gl_MatrixUseAccumulator> B = _211;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> _213;
+    coopMatPerElementNV(_213, A, Exp);
+    A = _213;
+    coopmat<float16_t, gl_ScopeSubgroup, 16u, 16u, gl_MatrixUseAccumulator> _216;
+    coopMatPerElementNV(_216, A, ExpWithArg, true);
+    A = _216;
 }
 
 void main()
@@ -45,5 +150,8 @@ void main()
     accum_to_b_cast();
     value_cast();
     saturated_cast();
+    tensor_layouts();
+    load_stores();
+    callback_functions();
 }
 
