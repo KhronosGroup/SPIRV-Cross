@@ -7134,6 +7134,7 @@ bool CompilerHLSL::is_user_type_structured(uint32_t id) const
 		const std::string &user_type = get_decoration_string(id, DecorationUserTypeGOOGLE);
 		return user_type.compare(0, 16, "structuredbuffer") == 0 ||
 		       user_type.compare(0, 18, "rwstructuredbuffer") == 0 ||
+		       user_type.compare(0, 35, "globallycoherent rwstructuredbuffer") == 0 ||
 		       user_type.compare(0, 33, "rasterizerorderedstructuredbuffer") == 0;
 	}
 	return false;
