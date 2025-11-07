@@ -185,6 +185,13 @@ def path_to_msl_standard_cli(shader):
 ignore_win_metal_tool = False
 def validate_shader_msl(shader, opt):
     msl_path = reference_path(shader[0], shader[1], opt)
+
+    # The 4.0 compiler for Windows is outdated and broken, so we cannot rely on version checks either.
+    cli_standard = path_to_msl_standard_cli(msl_path)
+    ci_supports_version = int(cli_standard) <= 30200
+    if not ci_supports_version:
+        return
+
     global ignore_win_metal_tool
     try:
         if '.ios.' in msl_path:
