@@ -203,10 +203,8 @@ def validate_shader_msl(shader, opt):
             subprocess.check_call(['xcrun', '--sdk', msl_os, 'metal', '-x', 'metal', path_to_msl_standard(msl_path), '-Werror', '-Wno-unused-variable', msl_path])
             print('Compiled Metal shader: ' + msl_path)   # display after so xcrun FNF is silent
         elif not ignore_win_metal_tool:
-            # Use Metal Windows toolkit to test on Linux (Wine) and Windows. Running offline tool on Linux gets weird.
-            # Normal winepath doesn't work, it must be Z:/abspath *exactly* for some bizarre reason.
-            target_path = msl_path if platform.system == 'Windows' else ('Z:' + os.path.abspath(msl_path))
-            subprocess.check_call(['metal', '-x', 'metal', path_to_msl_standard(msl_path), '-Werror', '-Wno-unused-variable', target_path])
+            # Use Metal Windows toolkit to test on Linux (Wine) and Windows.
+            subprocess.check_call(['metal', '-x', 'metal', path_to_msl_standard(msl_path), '-Werror', '-Wno-unused-variable', msl_path])
 
     except OSError as oe:
         if (oe.errno != errno.ENOENT):   # Ignore xcrun or metal not found error
