@@ -654,6 +654,20 @@ void CompilerGLSL::find_static_extensions()
 			ray_tracing_is_khr = true;
 			break;
 
+		case CapabilityRayQueryPositionFetchKHR:
+			if (options.es || options.version < 460 || !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("RayQuery Position Fetch requires Vulkan GLSL 460.");
+			require_extension_internal("GL_EXT_ray_tracing_position_fetch");
+			ray_tracing_is_khr = true;
+			break;
+
+		case CapabilityRayTracingPositionFetchKHR:
+			if (options.es || options.version < 460 || !options.vulkan_semantics)
+				SPIRV_CROSS_THROW("Ray Tracing Position Fetch requires Vulkan GLSL 460.");
+			require_extension_internal("GL_EXT_ray_tracing_position_fetch");
+			ray_tracing_is_khr = true;
+			break;
+
 		case CapabilityRayTraversalPrimitiveCullingKHR:
 			if (options.es || options.version < 460 || !options.vulkan_semantics)
 				SPIRV_CROSS_THROW("RayQuery requires Vulkan GLSL 460.");
@@ -10399,6 +10413,14 @@ string CompilerGLSL::builtin_to_glsl(BuiltIn builtin, StorageClass storage)
 	case BuiltInCullPrimitiveEXT:
 		return "gl_CullPrimitiveEXT";
 
+	case BuiltInHitTriangleVertexPositionsKHR:
+	{
+		if (!options.vulkan_semantics)
+			SPIRV_CROSS_THROW("Need Vulkan semantics for EXT_ray_tracing_position_fetch.");
+		require_extension_internal("GL_EXT_ray_tracing_position_fetch");
+		return "gl_HitTriangleVertexPositionsEXT";
+	}
+
 	case BuiltInClusterIDNV:
 	{
 		if (!options.vulkan_semantics)
@@ -15529,6 +15551,11 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 	case OpRayQueryConfirmIntersectionKHR:
 		flush_variable_declaration(ops[0]);
 		statement("rayQueryConfirmIntersectionEXT(", to_expression(ops[0]), ");");
+		break;
+	case OpRayQueryGetIntersectionTriangleVertexPositionsKHR:
+		flush_variable_declaration(ops[1]);
+		emit_uninitialized_temporary_expression(ops[0], ops[1]);
+		statement("rayQueryGetIntersectionTriangleVertexPositionsEXT(", to_expression(ops[2]), ", bool(", to_expression(ops[3]), "), ", to_expression(ops[1]), ");");
 		break;
 #define GLSL_RAY_QUERY_GET_OP(op) \
 	case OpRayQueryGet##op##KHR: \
