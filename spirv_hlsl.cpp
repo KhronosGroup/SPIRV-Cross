@@ -491,9 +491,9 @@ string CompilerHLSL::type_to_glsl(const SPIRType &type, uint32_t id)
 		case SPIRType::Double:
 			return join("double", type.vecsize);
 		case SPIRType::Int64:
-			return join("i64vec", type.vecsize);
+			return join("int64_t", type.vecsize);
 		case SPIRType::UInt64:
-			return join("u64vec", type.vecsize);
+			return join("uint64_t", type.vecsize);
 		default:
 			return "???";
 		}
