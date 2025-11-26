@@ -17960,6 +17960,7 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 			return "thread_index_in_simdgroup";
 		}
 		else if (execution.model == ExecutionModelKernel || execution.model == ExecutionModelGLCompute ||
+                 execution.model == ExecutionModelTaskEXT || execution.model == ExecutionModelMeshEXT ||
 		         execution.model == ExecutionModelTessellationControl ||
 		         (execution.model == ExecutionModelVertex && msl_options.vertex_for_tessellation))
 		{
