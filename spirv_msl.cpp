@@ -1514,7 +1514,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		if (is_array(type))
 		{
 			is_using_builtin_array = true;
-			statement(get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
+			statement(get_variable_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, true), name,
 			          type_to_array_glsl(type, var_id), " =");
 
 			uint32_t array_size = get_resource_array_size(type, var_id);
@@ -1525,8 +1525,8 @@ void CompilerMSL::emit_entry_point_declarations()
 
 			for (uint32_t i = 0; i < array_size; i++)
 			{
-				statement("(", get_argument_address_space(var), " ", type_to_glsl(type), "* ",
-				          to_restrict(var_id, false), ")((", get_argument_address_space(var), " char* ",
+				statement("(", get_variable_address_space(var), " ", type_to_glsl(type), "* ",
+				          to_restrict(var_id, false), ")((", get_variable_address_space(var), " char* ",
 				          to_restrict(var_id, false), ")", to_name(arg_id), ".", dynamic_buffer.second.mbr_name,
 				          "[", i, "]", " + ", to_name(dynamic_offsets_buffer_id), "[", base_index + i, "]),");
 			}
@@ -1537,9 +1537,9 @@ void CompilerMSL::emit_entry_point_declarations()
 		}
 		else
 		{
-			statement(get_argument_address_space(var), " auto& ", to_restrict(var_id, true), name, " = *(",
-			          get_argument_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false), ")((",
-			          get_argument_address_space(var), " char* ", to_restrict(var_id, false), ")", to_name(arg_id), ".",
+			statement(get_variable_address_space(var), " auto& ", to_restrict(var_id, true), name, " = *(",
+			          get_variable_address_space(var), " ", type_to_glsl(type), "* ", to_restrict(var_id, false), ")((",
+			          get_variable_address_space(var), " char* ", to_restrict(var_id, false), ")", to_name(arg_id), ".",
 			          dynamic_buffer.second.mbr_name, " + ", to_name(dynamic_offsets_buffer_id), "[", base_index, "]);");
 		}
 	}
@@ -1594,7 +1594,7 @@ void CompilerMSL::emit_entry_point_declarations()
 				statement("spvDescriptorArray<sampler> ", name, "Smplr {", resource_name, "Smplr};");
 				break;
 			case SPIRType::Struct:
-				statement("spvDescriptorArray<", get_argument_address_space(var), " ", type_to_glsl(buffer_type), "*> ",
+				statement("spvDescriptorArray<", get_variable_address_space(var), " ", type_to_glsl(buffer_type), "*> ",
 				          name, " {", resource_name, "};");
 				break;
 			default:
@@ -1605,7 +1605,7 @@ void CompilerMSL::emit_entry_point_declarations()
 		else if (!type.array.empty() && type.basetype == SPIRType::Struct)
 		{
 			// Emit only buffer arrays here.
-			statement(get_argument_address_space(var), " ", type_to_glsl(buffer_type), "* ",
+			statement(get_variable_address_space(var), " ", type_to_glsl(buffer_type), "* ",
 			          to_restrict(var.self, true), name, "[] =");
 			begin_scope();
 			uint32_t array_size = get_resource_array_size(type, var.self);
@@ -1629,7 +1629,7 @@ void CompilerMSL::emit_entry_point_declarations()
 			continue;
 
 		const auto &type = get_variable_data_type(var);
-		auto addr_space = get_argument_address_space(var);
+		auto addr_space = get_variable_address_space(var);
 		// This resource name has already been added.
 		auto name = to_name(var_id);
 
@@ -11141,7 +11141,7 @@ void CompilerMSL::emit_atomic_func_op(uint32_t result_type, uint32_t result_id, 
 		}
 		else if (var && ptr_type.storage != StorageClassPhysicalStorageBuffer)
 		{
-			exp += get_argument_address_space(*var);
+			exp += get_variable_address_space(*var);
 		}
 		else
 		{
@@ -14034,11 +14034,17 @@ bool CompilerMSL::uses_explicit_early_fragment_test()
 }
 
 // In MSL, address space qualifiers are required for all pointer or reference variables
-string CompilerMSL::get_argument_address_space(const SPIRVariable &argument)
+string CompilerMSL::get_variable_address_space(const SPIRVariable &argument)
 {
 	const auto &type = get<SPIRType>(argument.basetype);
-	// BDA is always passed around by value. There is no storage class for the argument itself.
-	if (is_physical_pointer(type))
+	return get_type_address_space(type, argument.self, true);
+}
+
+string CompilerMSL::get_leaf_argument_address_space(const SPIRVariable &argument)
+{
+	const auto &type = get<SPIRType>(argument.basetype);
+	// BDA and variable buffer pointer is always passed around by (pointer) value. There is no storage class for the argument itself.
+	if (is_physical_or_buffer_pointer(type))
 		return "";
 	return get_type_address_space(type, argument.self, true);
 }
@@ -14115,6 +14121,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 		}
 		else if (!argument)
 		{
+			// This is used for helper UBOs we insert ourselves.
 			addr_space = "constant";
 		}
 		else if (type_is_msl_framebuffer_fetch(type))
@@ -14122,6 +14129,7 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 			// Subpass inputs are passed around by value.
 			addr_space = "";
 		}
+
 		break;
 
 	case StorageClassFunction:
@@ -14638,7 +14646,7 @@ string CompilerMSL::entry_point_args_argument_buffer(bool append_comma)
 
 		claimed_bindings.set(buffer_binding);
 
-		ep_args += get_argument_address_space(var) + " ";
+		ep_args += get_variable_address_space(var) + " ";
 
 		if (recursive_inputs.count(type.self))
 			ep_args += string("void* ") + to_restrict(id, true) + to_name(id) + "_vp";
@@ -14852,7 +14860,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				// Declare the primary alias as void*
 				if (!ep_args.empty())
 					ep_args += ", ";
-				ep_args += get_argument_address_space(var) + " void* " + primary_name;
+				ep_args += get_variable_address_space(var) + " void* " + primary_name;
 				ep_args += " [[buffer(" + convert_to_string(r.index) + ")";
 				if (interlocked_resources.count(var_id))
 					ep_args += ", raster_order_group(0)";
@@ -14900,7 +14908,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 				{
 					if (!ep_args.empty())
 						ep_args += ", ";
-					ep_args += get_argument_address_space(var) + " " + type_to_glsl(type) + "* " +
+					ep_args += get_variable_address_space(var) + " " + type_to_glsl(type) + "* " +
 							   to_restrict(var_id, true) + r.name + "_" + convert_to_string(i);
 					ep_args += " [[buffer(" + convert_to_string(r.index + i) + ")";
 					if (interlocked_resources.count(var_id))
@@ -14913,7 +14921,7 @@ void CompilerMSL::entry_point_args_discrete_descriptors(string &ep_args)
 			{
 				if (!ep_args.empty())
 					ep_args += ", ";
-				ep_args += get_argument_address_space(var) + " ";
+				ep_args += get_variable_address_space(var) + " ";
 
 				if (recursive_inputs.count(type.self))
 					ep_args += string("void* ") + to_restrict(var_id, true) + r.name + "_vp";
@@ -15105,7 +15113,7 @@ void CompilerMSL::fix_up_shader_inputs_outputs()
 		{
 			recursive_inputs.insert(type.self);
 			entry_func.fixup_hooks_in.push_back([this, &type, &var, var_id]() {
-				auto addr_space = get_argument_address_space(var);
+				auto addr_space = get_variable_address_space(var);
 				auto var_name = to_name(var_id);
 				statement(addr_space, " auto& ", to_restrict(var_id, true), var_name,
 				          " = *(", addr_space, " ", type_to_glsl(type), "*)", var_name, "_vp;");
@@ -15802,7 +15810,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 
 	// Physical pointer types are passed by pointer, not reference.
 	auto &data_type = get_variable_data_type(var);
-	bool passed_by_value = is_physical_pointer(var_type);
+	bool passed_by_value = arg.alias_global_variable ? false : is_physical_or_buffer_pointer(var_type);
 	auto &type = passed_by_value ? var_type : data_type;
 
 	// If we need to modify the name of the variable, make sure we use the original variable.
@@ -15845,7 +15853,7 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 	                              spv_function_implementations.count(SPVFuncImplDynamicImageSampler);
 
 	// Allow Metal to use the array<T> template to make arrays a value type
-	string address_space = get_argument_address_space(var);
+	string address_space = arg.alias_global_variable ? get_variable_address_space(var) : get_leaf_argument_address_space(var);
 	bool builtin = has_decoration(var.self, DecorationBuiltIn);
 	auto builtin_type = BuiltIn(get_decoration(arg.id, DecorationBuiltIn));
 
@@ -19902,7 +19910,7 @@ void CompilerMSL::analyze_argument_buffers()
 		{
 			recursive_inputs.insert(type_id);
 			auto &entry_func = this->get<SPIRFunction>(ir.default_entry_point);
-			auto addr_space = get_argument_address_space(buffer_var);
+			auto addr_space = get_variable_address_space(buffer_var);
 			entry_func.fixup_hooks_in.push_back([this, addr_space, buffer_name, buffer_type_name]() {
 				statement(addr_space, " auto& ", buffer_name, " = *(", addr_space, " ", buffer_type_name, "*)", buffer_name, "_vp;");
 			});
