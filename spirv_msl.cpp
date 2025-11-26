@@ -15950,10 +15950,29 @@ string CompilerMSL::argument_decl(const SPIRFunction::Parameter &arg)
 		}
 		else
 		{
-			if (!address_space.empty())
-				decl = join(address_space, " ", decl);
-			decl += " ";
-			decl += to_expression(name_id);
+			// Variable pointer to array is kinda awkward ...
+			bool pointer_to_logical_buffer_array =
+					!is_physical_pointer(type) && is_pointer(type) &&
+					has_decoration(type.parent_type, DecorationArrayStride);
+
+			if (pointer_to_logical_buffer_array)
+			{
+				decl.pop_back();
+				decl += " (*";
+				decl += to_expression(name_id);
+				decl += ")";
+				bool old_is_using_builtin_array = is_using_builtin_array;
+				is_using_builtin_array = true;
+				decl += type_to_array_glsl(type, name_id);
+				is_using_builtin_array = old_is_using_builtin_array;
+			}
+			else
+			{
+				if (!address_space.empty())
+					decl = join(address_space, " ", decl);
+				decl += " ";
+				decl += to_expression(name_id);
+			}
 		}
 	}
 	else if (is_array(type) && !type_is_image)
@@ -16571,8 +16590,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 			// the C-style nesting works right.
 			// FIXME: This is somewhat of a hack.
 			bool old_is_using_builtin_array = is_using_builtin_array;
+			bool pointer_to_buffer_array = is_pointer(type) && has_decoration(type.parent_type, DecorationArrayStride);
 			if (is_physical_pointer(type))
 				is_using_builtin_array = false;
+			else if (pointer_to_buffer_array)
+				is_using_builtin_array = true;
 
 			type_name = join(type_address_space, " ", type_to_glsl(*p_parent_type, id));
 
