@@ -5051,10 +5051,10 @@ void CompilerGLSL::emit_polyfills(uint32_t polyfills, bool relaxed)
 // Returns a string representation of the ID, usable as a function arg.
 // Default is to simply return the expression representation fo the arg ID.
 // Subclasses may override to modify the return value.
-string CompilerGLSL::to_func_call_arg(const SPIRFunction::Parameter &, uint32_t id)
+string CompilerGLSL::to_func_call_arg(const SPIRFunction::Parameter &arg, uint32_t id)
 {
 	// BDA expects pointers through function interface.
-	if (is_physical_pointer(expression_type(id)))
+	if (!arg.alias_global_variable && is_physical_or_buffer_pointer(expression_type(id)))
 		return to_pointer_expression(id);
 
 	// Make sure that we use the name of the original variable, and not the parameter alias.
@@ -11581,7 +11581,7 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 	// If id is a variable but not a phi variable, we should not dereference it.
 	// BDA passed around as parameters are always pointers.
 	if (auto *var = maybe_get<SPIRVariable>(id))
-		return (var->parameter && is_physical_pointer(type)) || var->phi_variable;
+		return (var->parameter && is_physical_or_buffer_pointer(type)) || var->phi_variable;
 
 	if (auto *expr = maybe_get<SPIRExpression>(id))
 	{
@@ -11617,8 +11617,8 @@ bool CompilerGLSL::should_dereference(uint32_t id)
 bool CompilerGLSL::should_dereference_caller_param(uint32_t id)
 {
 	const auto &type = expression_type(id);
-	// BDA is always passed around as pointers.
-	if (is_physical_pointer(type))
+	// BDA is always passed around as pointers. Similarly, we need to pass variable buffer pointers as pointers.
+	if (is_physical_or_buffer_pointer(type))
 		return false;
 
 	return should_dereference(id);
