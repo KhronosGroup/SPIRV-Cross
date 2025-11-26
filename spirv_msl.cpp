@@ -17930,7 +17930,10 @@ string CompilerMSL::builtin_qualifier(BuiltIn builtin)
 		{
 			// thread_execution_width is an alias for threads_per_simdgroup, and it's only available since 1.0,
 			// but not in fragment.
-			return "thread_execution_width";
+            if (msl_options.supports_msl_version(3, 0))
+                return "threads_per_simdgroup";
+            else
+                return "thread_execution_width";
 		}
 
 	case BuiltInNumSubgroups:
