@@ -10158,8 +10158,7 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			         enclose_expression(to_unpacked_row_major_matrix_expression(ops[2])), ")");
 
 			bool forward = should_forward(ops[2]) && should_forward(ops[3]);
-			auto &e = emit_op(ops[0], ops[1], expr, forward);
-			e.need_transpose = true;
+			emit_transposed_op(ops[0], ops[1], expr, forward);
 			a->need_transpose = true;
 			b->need_transpose = true;
 			inherit_expression_dependencies(ops[1], ops[2]);
