@@ -1709,9 +1709,11 @@ void CompilerHLSL::emit_resources()
 		ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) {
 			auto &type = this->get<SPIRType>(var.basetype);
 
+			bool is_hidden = is_hidden_io_variable(var);
+
 			if (var.storage != StorageClassFunction && !var.remapped_variable && type.pointer &&
 			   (var.storage == StorageClassInput || var.storage == StorageClassOutput) && !is_builtin_variable(var) &&
-			   interface_variable_exists_in_entry_point(var.self))
+			   interface_variable_exists_in_entry_point(var.self) && !is_hidden)
 			{
 				// Builtin variables are handled separately.
 				emit_interface_block_globally(var);
@@ -1747,8 +1749,10 @@ void CompilerHLSL::emit_resources()
 		if (var.storage != StorageClassInput && var.storage != StorageClassOutput)
 			return;
 
+		bool is_hidden = is_hidden_io_variable(var);
+
 		if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-		    interface_variable_exists_in_entry_point(var.self))
+		    interface_variable_exists_in_entry_point(var.self) && !is_hidden)
 		{
 			if (block)
 			{
@@ -3482,10 +3486,12 @@ void CompilerHLSL::emit_hlsl_entry_point()
 		if (var.storage != StorageClassInput)
 			return;
 
+		bool is_hidden = is_hidden_io_variable(var);
+
 		bool need_matrix_unroll = var.storage == StorageClassInput && execution.model == ExecutionModelVertex;
 
 		if (!var.remapped_variable && type.pointer && !is_builtin_variable(var) &&
-		    interface_variable_exists_in_entry_point(var.self))
+		    interface_variable_exists_in_entry_point(var.self) && !is_hidden)
 		{
 			if (block)
 			{
@@ -7117,6 +7123,26 @@ bool CompilerHLSL::is_hlsl_force_storage_buffer_as_uav(ID id) const
 	const uint32_t binding = get_decoration(id, DecorationBinding);
 
 	return (force_uav_buffer_bindings.find({ desc_set, binding }) != force_uav_buffer_bindings.end());
+}
+
+bool CompilerHLSL::is_hidden_io_variable(const SPIRVariable &var) const
+{
+	if (!is_hidden_variable(var))
+		return false;
+
+	// It is too risky to remove stage IO variables that are linkable since it affects link compatibility.
+	// For vertex inputs and fragment outputs, it's less of a concern and we want reflection data
+	// to match reality.
+	if (get_execution_model() != ExecutionModelVertex &&
+	    get_execution_model() != ExecutionModelFragment)
+		return false;
+
+	// Unused output I/O variables might still be required to implement framebuffer fetch.
+	if (var.storage == StorageClassOutput && !is_legacy() &&
+	    location_is_framebuffer_fetch(get_decoration(var.self, DecorationLocation)) != 0)
+		return false;
+
+	return true;
 }
 
 void CompilerHLSL::set_hlsl_force_storage_buffer_as_uav(uint32_t desc_set, uint32_t binding)
