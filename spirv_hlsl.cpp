@@ -7133,8 +7133,12 @@ bool CompilerHLSL::is_hidden_io_variable(const SPIRVariable &var) const
 	// It is too risky to remove stage IO variables that are linkable since it affects link compatibility.
 	// For vertex inputs and fragment outputs, it's less of a concern and we want reflection data
 	// to match reality.
-	if (get_execution_model() != ExecutionModelVertex &&
-	    get_execution_model() != ExecutionModelFragment)
+
+	bool is_external_linkage =
+			(get_execution_model() == ExecutionModelVertex && var.storage == StorageClassInput) ||
+			(get_execution_model() == ExecutionModelFragment && var.storage == StorageClassOutput);
+
+	if (!is_external_linkage)
 		return false;
 
 	// Unused output I/O variables might still be required to implement framebuffer fetch.
