@@ -1595,6 +1595,7 @@ void CompilerHLSL::replace_illegal_names()
 		"Texture3D", "TextureCube", "TextureCubeArray", "true", "typedef", "triangle",
 		"triangleadj", "TriangleStream", "uint", "uniform", "unorm", "unsigned",
 		"vector", "vertexfragment", "VertexShader", "vertices", "void", "volatile", "while",
+		"signed",
 	};
 
 	CompilerGLSL::replace_illegal_names(keywords);
