@@ -16278,6 +16278,7 @@ const std::unordered_set<std::string> &CompilerMSL::get_reserved_keyword_set()
 		"quad_broadcast",
 		"thread",
 		"threadgroup",
+		"signed",
 	};
 
 	return keywords;
@@ -16421,6 +16422,7 @@ const std::unordered_set<std::string> &CompilerMSL::get_illegal_func_names()
 		"uint16",
 		"float8",
 		"float16",
+		"signed",
 	};
 
 	return illegal_func_names;
