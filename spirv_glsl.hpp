@@ -815,7 +815,8 @@ protected:
 	std::string to_pretty_expression_if_int_constant(
 			uint32_t id,
 			const GlslConstantNameMapping *mapping_start, const GlslConstantNameMapping *mapping_end,
-			bool register_expression_read = true);
+			bool register_expression_read = true,
+			const char* target_type = "int");
 	std::string to_expression(uint32_t id, bool register_expression_read = true);
 	std::string to_composite_constructor_expression(const SPIRType &parent_type, uint32_t id, bool block_like_type);
 	std::string to_rerolled_array_expression(const SPIRType &parent_type, const std::string &expr, const SPIRType &type);
@@ -838,7 +839,7 @@ protected:
 	virtual std::string to_member_reference(uint32_t base, const SPIRType &type, uint32_t index, bool ptr_chain_is_resolved);
 	std::string to_multi_member_reference(const SPIRType &type, const SmallVector<uint32_t> &indices);
 	std::string type_to_glsl_constructor(const SPIRType &type);
-	std::string argument_decl(const SPIRFunction::Parameter &arg);
+	std::string argument_decl(const SPIRFunction::Parameter &arg, bool is_lambda);
 	virtual std::string to_qualifiers_glsl(uint32_t id);
 	void fixup_io_block_patch_primitive_qualifiers(const SPIRVariable &var);
 	void emit_output_variable_initializer(const SPIRVariable &var);
