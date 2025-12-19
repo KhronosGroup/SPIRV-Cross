@@ -1024,13 +1024,9 @@ void CompilerHLSL::emit_interface_block_member_in_struct(const SPIRVariable &var
 
 	std::string semantic;
 	if (hlsl_options.user_semantic && has_member_decoration(var.self, member_index, DecorationUserSemantic))
-	{
 		semantic = get_member_decoration_string(var.self, member_index, DecorationUserSemantic);
-	}
 	else
-	{
 		semantic = to_semantic(location, execution.model, var.storage);
-	}
 
 	auto mbr_name = join(to_name(type.self), "_", to_member_name(type, member_index));
 	auto &mbr_type = get<SPIRType>(type.member_types[member_index]);
@@ -1090,14 +1086,15 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 	auto name = to_name(var.self);
 	if (use_location_number)
 	{
-		uint32_t location_number = -1;
+		uint32_t location_number = UINT32_MAX;
 
 		std::string semantic;
-		bool hasUserSemantic = false;
+		bool has_user_semantic = false;
+
 		if (hlsl_options.user_semantic && has_decoration(var.self, DecorationUserSemantic))
 		{
 			semantic = get_decoration_string(var.self, DecorationUserSemantic);
-			hasUserSemantic = true;
+			has_user_semantic = true;
 		}
 		else
 		{
@@ -1124,14 +1121,14 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 				newtype.columns = 1;
 
 				string effective_semantic;
-				if (hlsl_options.flatten_matrix_vertex_input_semantics && !hasUserSemantic)
+				if (hlsl_options.flatten_matrix_vertex_input_semantics && !has_user_semantic)
 					effective_semantic = to_semantic(location_number, execution.model, var.storage);
 				else
 					effective_semantic = join(semantic, "_", i);
 
 				statement(to_interpolation_qualifiers(get_decoration_bitset(var.self)),
 				          variable_decl(newtype, join(name, "_", i)), " : ", effective_semantic, ";");
-				if (location_number != -1)
+				if (location_number != UINT32_MAX)
 					active_locations.insert(location_number++);
 			}
 		}
@@ -1148,7 +1145,7 @@ void CompilerHLSL::emit_interface_block_in_struct(const SPIRVariable &var, unord
 			statement(to_interpolation_qualifiers(get_decoration_bitset(var.self)), variable_decl(decl_type, name), " : ",
 			          semantic, ";");
 
-			if (location_number != -1)
+			if (location_number != UINT32_MAX)
 			{
 				// Structs and arrays should consume more locations.
 				uint32_t consumed_locations = type_to_consumed_locations(decl_type);
