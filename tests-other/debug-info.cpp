@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <vector>
 
+using namespace SPIRV_CROSS_SPV_HEADER_NAMESPACE;
+
 #define SPVC_CHECK(x) do { \
 	if (!(x)) { \
 		fprintf(stderr, "Failed at line %d.\n", __LINE__); \
@@ -79,7 +81,7 @@ void main() {
 
 	// first source is empty OpSource
 	SPVC_CHECK(ir.sources[0].source.empty());
-	SPVC_CHECK(ir.sources[0].lang == spv::SourceLanguageSlang);
+	SPVC_CHECK(ir.sources[0].lang == SourceLanguageSlang);
 
 	SPVC_CHECK(ir.sources[1].source == src1);
 	SPVC_CHECK(ir.sources[2].source == src0);
@@ -87,15 +89,15 @@ void main() {
 	SPVC_CHECK(ir.sources[1].line_markers.size() == 2);
 	SPVC_CHECK(ir.sources[1].line_markers[0].line == 2);
 	SPVC_CHECK(ir.sources[1].line_markers[0].col == 2);
-	SPVC_CHECK(ir.sources[1].line_markers[1].function != nullptr);
-	SPVC_CHECK(ir.sources[1].line_markers[1].block != nullptr);
+	SPVC_CHECK(ir.sources[1].line_markers[1].function_id != 0);
+	SPVC_CHECK(ir.sources[1].line_markers[1].block_id != 0);
 	SPVC_CHECK(ir.sources[1].line_markers[1].line == 2);
 
 	SPVC_CHECK(ir.sources[2].line_markers.size() == 5);
 	SPVC_CHECK(ir.sources[2].line_markers[0].line == 5);
 	SPVC_CHECK(ir.sources[2].line_markers[0].col == 2);
-	SPVC_CHECK(ir.sources[2].line_markers[1].function != nullptr);
-	SPVC_CHECK(ir.sources[2].line_markers[1].block != nullptr);
+	SPVC_CHECK(ir.sources[2].line_markers[1].function_id != 0);
+	SPVC_CHECK(ir.sources[2].line_markers[1].block_id != 0);
 	SPVC_CHECK(ir.sources[2].line_markers[4].line == 7);
 
 }

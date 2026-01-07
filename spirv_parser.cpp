@@ -138,9 +138,9 @@ void Parser::parse()
 	}
 	forward_pointer_fixups.clear();
 
-	for(auto& source : ir.sources)
+	for (auto &source : ir.sources)
 	{
-		auto cmp = [](const ParsedIR::Source::Marker& a, const ParsedIR::Source::Marker& b) {
+		auto cmp = [](const ParsedIR::Source::Marker &a, const ParsedIR::Source::Marker &b) {
 			return a.line < b.line;
 		};
 
@@ -224,7 +224,7 @@ void Parser::parse(const Instruction &instruction)
 	case OpSource:
 	{
 		ir.sources.emplace_back();
-		auto& source = ir.sources.back();
+		auto &source = ir.sources.back();
 		source.lang = static_cast<SourceLanguage>(ops[0]);
 
 		switch (source.lang)
@@ -256,13 +256,11 @@ void Parser::parse(const Instruction &instruction)
 			break;
 		}
 
-		if(length > 2) {
-			source.fileID = ops[2];
-		}
+		if (length >= 3)
+			source.file_id = ops[2];
 
-		if(length > 3) {
+		if (length >= 4)
 			source.source = extract_string(ir.spirv, instruction.offset + 3);
-		}
 
 		break;
 	}
@@ -345,59 +343,57 @@ void Parser::parse(const Instruction &instruction)
 		{
 			// Don't want to deal with ForwardRefs here.
 			auto &ext = get<SPIRExtension>(ops[2]);
-			if(ext.ext == SPIRExtension::NonSemanticShaderDebugInfo)
+			if (ext.ext == SPIRExtension::NonSemanticShaderDebugInfo)
 			{
 				const auto instr = ops[3];
-				if(instr == NonSemanticShaderDebugInfo100DebugSource)
+				if (instr == NonSemanticShaderDebugInfo100DebugSource)
 				{
 					set<SPIRString>(ops[1], get<SPIRString>(ops[4]).str);
 
 					ir.sources.emplace_back();
-					auto& source = ir.sources.back();
-					source.fileID = ops[4];
-					source.defineID = ops[1];
-
+					auto &source = ir.sources.back();
+					source.file_id = ops[4];
+					source.define_id = ops[1];
 					if (length >= 6)
-					{
 						source.source = ir.get<SPIRString>(ops[5]).str;
-					}
 				}
-				else if(instr == NonSemanticShaderDebugInfo100DebugLine)
+				else if (instr == NonSemanticShaderDebugInfo100DebugLine)
 				{
-					assert(length >= 9);
-					auto sourceID = ops[4];
-					auto lineStart = ir.get<SPIRConstant>(ops[5]).scalar_i32();
-					auto colStart = ir.get<SPIRConstant>(ops[7]).scalar_i32();
+					if (length < 9)
+						SPIRV_CROSS_THROW("Invalid arguments for ShaderDebugInfo100DebugLine");
+					auto source_id = ops[4];
+					auto line_start = ir.get<SPIRConstant>(ops[5]).scalar_i32();
+					auto col_start = ir.get<SPIRConstant>(ops[7]).scalar_i32();
 
-					for(auto& source : ir.sources)
+					for (auto &source : ir.sources)
 					{
-						if(source.defineID != sourceID)
-						{
+						if (source.define_id != source_id)
 							continue;
-						}
 
 						source.line_markers.emplace_back();
-						auto& marker = source.line_markers.back();
-						marker.line = lineStart;
-						marker.col = colStart;
+						auto &marker = source.line_markers.back();
+						marker.line = line_start;
+						marker.col = col_start;
 						marker.offset = instruction.offset - 1;
-						marker.function = current_function;
-						marker.block = current_block;
+						marker.function_id = current_function ? current_function->self : ID(0);
+						marker.block_id = current_block ? current_block->self : ID(0);
 						break;
 					}
 				}
-				else if(instr == NonSemanticShaderDebugInfo100DebugLocalVariable)
+				else if (instr == NonSemanticShaderDebugInfo100DebugLocalVariable)
 				{
-					assert(length >= 11);
-					auto& lvar = set<SPIRDebugLocalVariable>(ops[1]);
-					lvar.nameID = ops[4];
+					if (length < 11)
+						SPIRV_CROSS_THROW("Invalid arguments for ShaderDebugInfo100DebugLocalVariable");
+					auto &lvar = set<SPIRDebugLocalVariable>(ops[1]);
+					lvar.name_id = ops[4];
 				}
-				else if(instr == NonSemanticShaderDebugInfo100DebugDeclare)
+				else if (instr == NonSemanticShaderDebugInfo100DebugDeclare)
 				{
-					assert(length >= 7);
-					auto& lvar = get<SPIRDebugLocalVariable>(ops[4]);
-					auto& var = get<SPIRVariable>(ops[5]);
-					var.debugLocalVariables.push_back(lvar.self);
+					if (length < 7)
+						SPIRV_CROSS_THROW("Invalid arguments for ShaderDebugInfo100DebugDeclare");
+					auto &lvar = get<SPIRDebugLocalVariable>(ops[4]);
+					auto &var = get<SPIRVariable>(ops[5]);
+					var.debug_local_variables.push_back(lvar.self);
 				}
 			}
 		}
@@ -1452,16 +1448,16 @@ void Parser::parse(const Instruction &instruction)
 		uint32_t file = ops[0];
 		uint32_t line = ops[1];
 
-		for (auto& source : ir.sources)
+		for (auto &source : ir.sources)
 		{
-			if (source.fileID == file)
+			if (source.file_id == file)
 			{
 				source.line_markers.emplace_back();
-				auto& marker = source.line_markers.back();
+				auto &marker = source.line_markers.back();
 				marker.line = line;
 				marker.offset = instruction.offset - 1;
-				marker.function = current_function;
-				marker.block = current_block;
+				marker.function_id = current_function ? current_function->self : ID(0);
+				marker.block_id = current_block ? current_block->self : ID(0);
 				break;
 			}
 		}

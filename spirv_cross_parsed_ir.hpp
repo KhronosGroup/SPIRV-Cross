@@ -118,20 +118,20 @@ public:
 		bool known = false;
 		bool hlsl = false;
 
-		uint32_t fileID = 0; // string
-		uint32_t defineID = 0; // only non-zero for DebugSource
+		ID file_id = 0; // string
+		ID define_id = 0; // only non-zero for DebugSource
 		std::string source;
 
-		struct Marker {
-			uint32_t line; // in source
-			uint32_t col; // in source
-			uint32_t offset; // in spirv stream
-
-			SPIRFunction *function = nullptr;
-			SPIRBlock *block = nullptr;
+		struct Marker
+		{
+			ID line; // in source
+			ID col; // in source
+			ID offset; // in spirv stream
+			ID function_id;
+			ID block_id;
 		};
 
-		std::vector<Marker> line_markers; // sorted by line
+		SmallVector<Marker> line_markers; // sorted by line
 
 		Source() = default;
 	};

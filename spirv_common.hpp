@@ -514,7 +514,7 @@ struct SPIRDebugLocalVariable : IVariant
 		type = TypeDebugLocalVariable
 	};
 
-	uint32_t nameID;
+	uint32_t name_id;
 
 	SPIRV_CROSS_DECLARE_CLONE(SPIRDebugLocalVariable)
 };
@@ -1177,7 +1177,7 @@ struct SPIRVariable : IVariant
 	SmallVector<ID> dependees;
 
 	// ShaderDebugInfo local variables attached to this variable via DebugDeclare
-	SmallVector<ID> debugLocalVariables;
+	SmallVector<ID> debug_local_variables;
 
 	bool deferred_declaration = false;
 	bool phi_variable = false;

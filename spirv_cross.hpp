@@ -549,7 +549,7 @@ public:
 		return position_invariant;
 	}
 
-	const ParsedIR& get_ir() const { return ir; }
+	const ParsedIR &get_ir() const { return ir; }
 	uint32_t evaluate_constant_u32(uint32_t id) const;
 
 protected:
