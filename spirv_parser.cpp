@@ -204,7 +204,6 @@ void Parser::parse(const Instruction &instruction)
 
 	switch (op)
 	{
-	case OpSourceContinued:
 	case OpSourceExtension:
 	case OpNop:
 	case OpModuleProcessed:
@@ -264,6 +263,11 @@ void Parser::parse(const Instruction &instruction)
 
 		break;
 	}
+
+	case OpSourceContinued:
+		if (!ir.sources.empty())
+			ir.sources.back().source += extract_string(ir.spirv, instruction.offset);
+		break;
 
 	case OpUndef:
 	{
@@ -356,6 +360,13 @@ void Parser::parse(const Instruction &instruction)
 					source.define_id = ops[1];
 					if (length >= 6)
 						source.source = ir.get<SPIRString>(ops[5]).str;
+				}
+				else if (instr == NonSemanticShaderDebugInfo100DebugSourceContinued)
+				{
+					if (length < 5)
+						SPIRV_CROSS_THROW("Invalid arguments for ShaderDebugInfo100DebugSourceContinued");
+					if (!ir.sources.empty())
+						ir.sources.back().source += ir.get<SPIRString>(ops[4]).str;
 				}
 				else if (instr == NonSemanticShaderDebugInfo100DebugLine)
 				{
