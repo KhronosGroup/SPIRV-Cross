@@ -14270,6 +14270,10 @@ string CompilerMSL::get_type_address_space(const SPIRType &type, uint32_t id, bo
 					addr_space = "threadgroup";
 			}
 
+			// BlockIO is passed as thread and lowered on return from main.
+			if (get_execution_model() == ExecutionModelVertex && has_decoration(type.self, DecorationBlock))
+				addr_space = "thread";
+
 			if (!addr_space)
 				addr_space = "device";
 		}
