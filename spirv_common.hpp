@@ -76,6 +76,9 @@ void join_helper(StringStream<> &stream, T &&t, Ts &&... ts)
 }
 } // namespace inner
 
+// From spec on Dims: "The value must be greater than zero and less than or equal to 5."
+static constexpr const size_t TENSOR_VIEW_NV_MAX_DIMS = 5;
+
 class Bitset
 {
 public:
@@ -597,6 +600,8 @@ struct SPIRType : IVariant
 		AccelerationStructure,
 		RayQuery,
 		CoopVecNV,
+		TensorLayoutNV,
+		TensorViewNV,
 
 		// Keep internal types at the end.
 		ControlPointArray,
@@ -655,6 +660,19 @@ struct SPIRType : IVariant
 			uint32_t rank;
 			uint32_t shape;
 		} tensor;
+
+		struct
+		{
+			uint32_t dim_id;
+			uint32_t clamp_mode_id;
+		} tensorLayoutNv;
+
+		struct
+		{
+			uint32_t dim_id;
+			uint32_t has_dimensions_id;
+			int32_t dim_ids[TENSOR_VIEW_NV_MAX_DIMS];
+		} tensorViewNv;
 	} ext;
 
 	spv::StorageClass storage = spv::StorageClassGeneric;
@@ -1054,6 +1072,9 @@ struct SPIRFunction : IVariant
 	BlockID entry_block = 0;
 	SmallVector<BlockID> blocks;
 	SmallVector<CombinedImageSamplerParameter> combined_parameters;
+	// SPV_NV_cooperative_matrix2 uses lambdas where all parameters need
+	// to be annotated as `const in`
+	bool used_as_lambda = false;
 
 	struct EntryLine
 	{
