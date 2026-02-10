@@ -10788,6 +10788,10 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t A = ops[2], B = ops[3], C = ops[4];
+		uint32_t matrix_operands = instruction.length >= 6 ? ops[5] : uint32_t(CooperativeMatrixOperandsMaskNone);
+
+		if (matrix_operands != uint32_t(CooperativeMatrixOperandsMaskNone))
+			SPIRV_CROSS_THROW("MSL cooperative matrix muladd does not support setting matrix operands flags.");
 
 		emit_uninitialized_temporary_expression(result_type, id);
 		statement("simdgroup_multiply_accumulate(", to_expression(id), ", ",
