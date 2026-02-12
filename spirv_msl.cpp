@@ -1930,6 +1930,13 @@ void CompilerMSL::preprocess_op_codes()
 		add_header_line("using namespace metal::raytracing;");
 		add_header_line("#endif");
 	}
+
+	if (preproc.uses_cooperative_matrix)
+	{
+		if (!msl_options.supports_msl_version(3, 1))
+			SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
+		add_header_line("#include <metal_simdgroup_matrix>");
+	}
 }
 
 // Move the Private and Workgroup global variables to the entry function.
@@ -10696,9 +10703,188 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		break;
 	}
 
+	case OpCooperativeMatrixLoadKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t ptr = ops[2];
+		uint32_t layout = ops[3];
+
+		auto &layout_c = get<SPIRConstant>(layout);
+		if (layout_c.specialization)
+			SPIRV_CROSS_THROW("MSL cooperative matrix load does not support spec-constant layout.");
+		uint32_t layout_val = layout_c.scalar();
+		bool col_major = false;
+
+		switch (layout_val)
+		{
+		case CooperativeMatrixLayoutRowMajorKHR:
+		case CooperativeMatrixLayoutColumnMajorKHR:
+			if (instruction.length < 5)
+				SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
+			col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
+			break;
+
+		default:
+			SPIRV_CROSS_THROW("MSL cooperative matrix load only supports RowMajorKHR and ColumnMajorKHR layouts.");
+		}
+
+		uint32_t stride = ops[4];
+
+		emit_uninitialized_temporary_expression(result_type, id);
+		auto ptr_expr = to_ptr_expression(ptr);
+
+		if (col_major)
+			statement("simdgroup_load(", to_expression(id), ", ",
+			          ptr_expr, ", ", to_expression(stride), ", ulong2(0), true);");
+		else
+			statement("simdgroup_load(", to_expression(id), ", ",
+			          ptr_expr, ", ", to_expression(stride), ");");
+
+		register_read(id, ptr, false);
+		break;
+	}
+
+	case OpCooperativeMatrixStoreKHR:
+	{
+		uint32_t ptr = ops[0];
+		uint32_t obj = ops[1];
+		uint32_t layout = ops[2];
+
+		auto &layout_c = get<SPIRConstant>(layout);
+		if (layout_c.specialization)
+			SPIRV_CROSS_THROW("MSL cooperative matrix store does not support spec-constant layout.");
+		uint32_t layout_val = layout_c.scalar();
+		bool col_major = false;
+
+		switch (layout_val)
+		{
+		case CooperativeMatrixLayoutRowMajorKHR:
+		case CooperativeMatrixLayoutColumnMajorKHR:
+			if (instruction.length < 4)
+				SPIRV_CROSS_THROW("MSL cooperative matrix store requires Stride for row/column-major layouts.");
+			col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
+			break;
+
+		default:
+			SPIRV_CROSS_THROW("MSL cooperative matrix store only supports RowMajorKHR and ColumnMajorKHR layouts.");
+		}
+
+		uint32_t stride = ops[3];
+
+		auto ptr_expr = to_ptr_expression(ptr);
+
+		if (col_major)
+			statement("simdgroup_store(", to_expression(obj), ", ",
+			          ptr_expr, ", ", to_expression(stride), ", ulong2(0), true);");
+		else
+			statement("simdgroup_store(", to_expression(obj), ", ",
+			          ptr_expr, ", ", to_expression(stride), ");");
+
+		register_write(ptr);
+		break;
+	}
+
+	case OpCooperativeMatrixMulAddKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		uint32_t A = ops[2], B = ops[3], C = ops[4];
+		uint32_t matrix_operands = instruction.length >= 6 ? ops[5] : uint32_t(CooperativeMatrixOperandsMaskNone);
+
+		if (matrix_operands != uint32_t(CooperativeMatrixOperandsMaskNone))
+			SPIRV_CROSS_THROW("MSL cooperative matrix muladd does not support setting matrix operands flags.");
+
+		emit_uninitialized_temporary_expression(result_type, id);
+		statement("simdgroup_multiply_accumulate(", to_expression(id), ", ",
+		          to_unpacked_expression(A), ", ",
+		          to_unpacked_expression(B), ", ",
+		          to_unpacked_expression(C), ");");
+
+		inherit_expression_dependencies(id, A);
+		inherit_expression_dependencies(id, B);
+		inherit_expression_dependencies(id, C);
+		break;
+	}
+
+	case OpCooperativeMatrixLengthKHR:
+	{
+		uint32_t result_type = ops[0];
+		uint32_t id = ops[1];
+		auto &coop_type = get<SPIRType>(ops[2]);
+
+		if (coop_type.op != OpTypeCooperativeMatrixKHR)
+			SPIRV_CROSS_THROW("OpCooperativeMatrixLengthKHR requires cooperative matrix type.");
+
+		auto &component_type = get<SPIRType>(coop_type.parent_type);
+		auto coop_type_name = type_to_glsl(coop_type);
+		auto component_type_name = type_to_glsl(component_type);
+
+		auto expr = join(type_to_glsl(get<SPIRType>(result_type)),
+		                 "(sizeof(", coop_type_name, "::storage_type) / sizeof(", component_type_name, "))");
+		emit_op(result_type, id, expr, true);
+		break;
+	}
+
 	default:
+	{
+		auto is_cooperative_matrix_typed_id = [&](uint32_t typed_id) -> bool {
+			auto *type = maybe_get<SPIRType>(typed_id);
+			if (!type)
+			{
+				auto *var = maybe_get<SPIRVariable>(typed_id);
+				if (var)
+					type = maybe_get<SPIRType>(var->basetype);
+
+				auto *expr = maybe_get<SPIRExpression>(typed_id);
+				if (!type && expr)
+					type = maybe_get<SPIRType>(expr->expression_type);
+
+				auto *constant = maybe_get<SPIRConstant>(typed_id);
+				if (!type && constant)
+					type = maybe_get<SPIRType>(constant->constant_type);
+
+				auto *constant_op = maybe_get<SPIRConstantOp>(typed_id);
+				if (!type && constant_op)
+					type = maybe_get<SPIRType>(constant_op->basetype);
+
+				auto *undef = maybe_get<SPIRUndef>(typed_id);
+				if (!type && undef)
+					type = maybe_get<SPIRType>(undef->basetype);
+
+				auto *ac = maybe_get<SPIRAccessChain>(typed_id);
+				if (!type && ac)
+					type = maybe_get<SPIRType>(ac->basetype);
+			}
+
+			while (type && (is_pointer(*type) || is_array(*type)))
+				type = maybe_get<SPIRType>(type->parent_type);
+
+			return type && type->op == OpTypeCooperativeMatrixKHR;
+		};
+
+		// Prevent GLSL cooperative matrix code from leaking into MSL output.
+		// Element-wise arithmetic on cooperative matrices is not supported in Metal.
+		if (instruction.length >= 2)
+		{
+			if (is_cooperative_matrix_typed_id(ops[0]))
+				SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
+
+			if (opcode == OpCompositeExtract || opcode == OpVectorExtractDynamic)
+			{
+				if (instruction.length >= 3 && is_cooperative_matrix_typed_id(ops[2]))
+					SPIRV_CROSS_THROW("Unsupported extraction from cooperative matrix in MSL backend.");
+			}
+			else if (opcode == OpCompositeInsert || opcode == OpVectorInsertDynamic)
+			{
+				if ((instruction.length >= 3 && is_cooperative_matrix_typed_id(ops[2])) ||
+				    (instruction.length >= 4 && is_cooperative_matrix_typed_id(ops[3])))
+					SPIRV_CROSS_THROW("Unsupported operation on cooperative matrix in MSL backend.");
+			}
+		}
 		CompilerGLSL::emit_instruction(instruction);
 		break;
+	}
 	}
 
 	previous_instruction_opcode = opcode;
@@ -16735,6 +16921,48 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		return type_name;
 	}
 
+	// Cooperative matrix -> Metal simdgroup matrix type
+	{
+		const SPIRType *coop_type = &type;
+		while (is_pointer(*coop_type) || is_array(*coop_type))
+			coop_type = &get<SPIRType>(coop_type->parent_type);
+
+		if (coop_type->op == OpTypeCooperativeMatrixKHR)
+		{
+			if (!msl_options.supports_msl_version(3, 1))
+				SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
+
+			// Only Subgroup scope
+			auto &scope_c = get<SPIRConstant>(coop_type->ext.cooperative.scope_id);
+			if (scope_c.specialization)
+				SPIRV_CROSS_THROW("MSL does not support spec-constant scope for cooperative matrices.");
+			if (scope_c.scalar() != ScopeSubgroup)
+				SPIRV_CROSS_THROW("MSL cooperative matrices only support Subgroup scope.");
+
+			// Only 8x8
+			auto &rows_c = get<SPIRConstant>(coop_type->ext.cooperative.rows_id);
+			auto &cols_c = get<SPIRConstant>(coop_type->ext.cooperative.columns_id);
+			if (rows_c.specialization || cols_c.specialization)
+				SPIRV_CROSS_THROW("MSL does not support spec-constant dimensions for cooperative matrices.");
+			if (rows_c.scalar() != 8 || cols_c.scalar() != 8)
+				SPIRV_CROSS_THROW("MSL cooperative matrices only support 8x8 dimensions.");
+
+			// Map component type to simdgroup_*8x8
+			auto &comp = get<SPIRType>(coop_type->parent_type);
+			switch (comp.basetype)
+			{
+			case SPIRType::Float:
+				return "simdgroup_float8x8";
+			case SPIRType::Half:
+				return "simdgroup_half8x8";
+			case SPIRType::BFloat16:
+				return "simdgroup_bfloat8x8";
+			default:
+				SPIRV_CROSS_THROW("Unsupported component type for MSL cooperative matrix.");
+			}
+		}
+	}
+
 	switch (type.basetype)
 	{
 	case SPIRType::Struct:
@@ -16817,6 +17045,11 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 		break;
 	case SPIRType::Double:
 		type_name = "double"; // Currently unsupported
+		break;
+	case SPIRType::BFloat16:
+		if (!msl_options.supports_msl_version(3, 1))
+			SPIRV_CROSS_THROW("bfloat16 requires MSL 3.1 or later.");
+		type_name = "bfloat";
 		break;
 	case SPIRType::AccelerationStructure:
 		if (msl_options.supports_msl_version(2, 4))
@@ -18921,6 +19154,17 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 	case OpIsHelperInvocationEXT:
 		if (self.needs_manual_helper_invocation_updates())
 			needs_helper_invocation = true;
+		break;
+
+	case OpCooperativeMatrixLoadKHR:
+	case OpCooperativeMatrixMulAddKHR:
+	case OpCooperativeMatrixLengthKHR:
+		uses_cooperative_matrix = true;
+		break;
+
+	case OpCooperativeMatrixStoreKHR:
+		uses_cooperative_matrix = true;
+		check_resource_write(args[0]);
 		break;
 
 	default:
