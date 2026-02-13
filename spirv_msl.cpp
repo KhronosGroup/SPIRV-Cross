@@ -239,7 +239,7 @@ uint32_t CompilerMSL::get_automatic_msl_resource_binding_quaternary(uint32_t id)
 
 void CompilerMSL::set_fragment_output_components(uint32_t location, uint32_t components)
 {
-	fragment_output_components[location] = components;
+	outputs_by_location[{ location, 0 }].vecsize = components;
 }
 
 bool CompilerMSL::builtin_translates_to_nonarray(BuiltIn builtin) const
@@ -2624,16 +2624,32 @@ void CompilerMSL::mark_location_as_used_by_shader(uint32_t location, const SPIRT
 
 uint32_t CompilerMSL::get_target_components_for_fragment_location(uint32_t location) const
 {
-	auto itr = fragment_output_components.find(location);
-	if (itr == end(fragment_output_components))
+	auto itr = outputs_by_location.find({ location, 0 });
+	if (itr == end(outputs_by_location))
 		return 4;
 	else
-		return itr->second;
+		return itr->second.vecsize ? itr->second.vecsize : 4;
+}
+
+MSLShaderVariableFormat CompilerMSL::get_expected_format_for_fragment_location(uint32_t location,
+                                                                               uint32_t component) const
+{
+	auto e = end(outputs_by_location), itr = e;
+	for (int i = component; i >= 0; --i)
+	{
+		itr = outputs_by_location.find({ location, (uint32_t)i });
+		// If the output contains this component, we found it.
+		if (itr != e && itr->second.vecsize + i > component)
+			break;
+	}
+	if (itr != e)
+		return itr->second.format;
+	else
+		return MSL_SHADER_VARIABLE_FORMAT_OTHER;
 }
 
 uint32_t CompilerMSL::build_extended_vector_type(uint32_t type_id, uint32_t components, SPIRType::BaseType basetype)
 {
-	assert(components > 1);
 	uint32_t new_type_id = ir.increase_bound_by(1);
 	const auto *p_old_type = &get<SPIRType>(type_id);
 	const SPIRType *old_ptr_t = nullptr;
@@ -2704,13 +2720,45 @@ uint32_t CompilerMSL::build_msl_interpolant_type(uint32_t type_id, bool is_noper
 	return new_type_id;
 }
 
+static bool is_signed_int(MSLShaderVariableFormat format)
+{
+	return format == MSL_SHADER_VARIABLE_FORMAT_SINT8 || format == MSL_SHADER_VARIABLE_FORMAT_SINT16 ||
+	       format == MSL_SHADER_VARIABLE_FORMAT_SINT32;
+}
+
+static bool is_signed_int(SPIRType::BaseType type)
+{
+	return type == SPIRType::SByte || type == SPIRType::Short || type == SPIRType::Int || type == SPIRType::Int64;
+}
+
+static SPIRType::BaseType to_base_type(MSLShaderVariableFormat format)
+{
+	switch (format)
+	{
+	case MSL_SHADER_VARIABLE_FORMAT_UINT8:
+		// Metal doesn't support char-typed fragment stage out, so promote
+		// to short.
+	case MSL_SHADER_VARIABLE_FORMAT_UINT16:
+		return SPIRType::UShort;
+	case MSL_SHADER_VARIABLE_FORMAT_UINT32:
+		return SPIRType::UInt;
+	case MSL_SHADER_VARIABLE_FORMAT_SINT8:
+	case MSL_SHADER_VARIABLE_FORMAT_SINT16:
+		return SPIRType::Short;
+	case MSL_SHADER_VARIABLE_FORMAT_SINT32:
+		return SPIRType::Int;
+	default:
+		return SPIRType::Unknown;
+	}
+}
+
 bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage, const std::string &ib_var_ref,
                                                             SPIRVariable &var,
                                                             const SPIRType &type,
                                                             InterfaceBlockMeta &meta)
 {
 	// Deal with Component decorations.
-	const InterfaceBlockMeta::LocationMeta *location_meta = nullptr;
+	InterfaceBlockMeta::LocationMeta *location_meta = nullptr;
 	uint32_t location = ~0u;
 	if (has_decoration(var.self, DecorationLocation))
 	{
@@ -2730,12 +2778,23 @@ bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage
 		auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
 		uint32_t start_component = get_decoration(var.self, DecorationComponent);
 		uint32_t type_components = type.vecsize;
-		uint32_t num_components = location_meta->num_components;
+		bool signed_mismatch = false;
+		MSLShaderVariableFormat expected_format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
+		string type_name;
 
 		if (pad_fragment_output)
 		{
 			uint32_t locn = get_decoration(var.self, DecorationLocation);
-			num_components = max<uint32_t>(num_components, get_target_components_for_fragment_location(locn));
+			expected_format = get_expected_format_for_fragment_location(locn, start_component);
+			signed_mismatch = expected_format != MSL_SHADER_VARIABLE_FORMAT_OTHER &&
+			                  is_signed_int(expected_format) != is_signed_int(type.basetype);
+			if (signed_mismatch)
+			{
+				location_meta->expected_format = expected_format;
+				SPIRType expected_type = type;
+				expected_type.basetype = to_base_type(expected_format);
+				type_name = type_to_glsl(expected_type);
+			}
 		}
 
 		// We have already declared an IO block member as m_location_N.
@@ -2766,23 +2825,46 @@ bool CompilerMSL::add_component_variable_to_interface_block(StorageClass storage
 		}
 		else
 		{
-			entry_func.fixup_hooks_out.push_back([=, &type, &var]() {
-				if (!type.array.empty())
-				{
-					uint32_t array_size = to_array_size_literal(type);
-					for (uint32_t loc_off = 0; loc_off < array_size; loc_off++)
-					{
-						statement(ib_var_ref, ".m_location_", location + loc_off,
-						          vector_swizzle(type_components, start_component), " = ",
-						          to_name(var.self), "[", loc_off, "];");
-					}
-				}
-				else
-				{
-					statement(ib_var_ref, ".m_location_", location,
-					          vector_swizzle(type_components, start_component), " = ", to_name(var.self), ";");
-				}
-			});
+			entry_func.fixup_hooks_out.push_back(
+			    [=, &type, &var]()
+			    {
+				    if (!type.array.empty())
+				    {
+					    uint32_t array_size = to_array_size_literal(type);
+					    if (!signed_mismatch)
+					    {
+						    for (uint32_t loc_off = 0; loc_off < array_size; loc_off++)
+						    {
+							    statement(ib_var_ref, ".m_location_", location + loc_off,
+							              vector_swizzle(type_components, start_component), " = ", to_name(var.self),
+							              "[", loc_off, "];");
+						    }
+					    }
+					    else
+					    {
+						    for (uint32_t loc_off = 0; loc_off < array_size; loc_off++)
+						    {
+							    statement(ib_var_ref, ".m_location_", location + loc_off,
+							              vector_swizzle(type_components, start_component), " = ", type_name, "(",
+							              to_name(var.self), "[", loc_off, "]);");
+						    }
+					    }
+				    }
+				    else
+				    {
+					    if (!signed_mismatch)
+					    {
+						    statement(ib_var_ref, ".m_location_", location,
+						              vector_swizzle(type_components, start_component), " = ", to_name(var.self), ";");
+					    }
+					    else
+					    {
+						    statement(ib_var_ref, ".m_location_", location,
+						              vector_swizzle(type_components, start_component), " = ", type_name, "(",
+						              to_name(var.self), ");");
+					    }
+				    }
+			    });
 		}
 		return true;
 	}
@@ -2811,9 +2893,11 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	auto &type = get<SPIRType>(type_id);
 	uint32_t target_components = 0;
 	uint32_t type_components = type.vecsize;
+	MSLShaderVariableFormat expected_format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
 
 	bool padded_output = false;
 	bool padded_input = false;
+	bool signed_mismatch = false;
 	uint32_t start_component = 0;
 
 	auto &entry_func = get<SPIRFunction>(ir.default_entry_point);
@@ -2829,10 +2913,14 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 	{
 		uint32_t locn = get_decoration(var.self, DecorationLocation);
 		target_components = get_target_components_for_fragment_location(locn);
-		if (type_components < target_components)
+		expected_format = get_expected_format_for_fragment_location(locn, start_component);
+		signed_mismatch = expected_format != MSL_SHADER_VARIABLE_FORMAT_OTHER &&
+		                  is_signed_int(expected_format) != is_signed_int(type.basetype);
+		if (type_components < target_components || signed_mismatch)
 		{
 			// Make a new type here.
-			type_id = build_extended_vector_type(type_id, target_components);
+			type_id = build_extended_vector_type(type_id, max(type_components, target_components),
+			                                     to_base_type(expected_format));
 			padded_output = true;
 		}
 	}
@@ -2866,10 +2954,21 @@ void CompilerMSL::add_plain_variable_to_interface_block(StorageClass storage, co
 
 		if (padded_output)
 		{
-			entry_func.fixup_hooks_out.push_back([=, &var]() {
-				statement(qual_var_name, vector_swizzle(type_components, start_component), " = ", to_name(var.self),
-				          ";");
-			});
+			entry_func.fixup_hooks_out.push_back(
+			    [=, &var]()
+			    {
+				    if (signed_mismatch)
+				    {
+						const auto &out_type = this->get<SPIRType>(type_id);
+					    SPIRType dest_type = out_type;
+					    dest_type.vecsize = type_components - start_component;
+					    statement(qual_var_name, vector_swizzle(type_components, start_component), " = ",
+					              type_to_glsl(dest_type), "(", to_name(var.self), ");");
+				    }
+				    else
+					    statement(qual_var_name, vector_swizzle(type_components, start_component), " = ",
+					              to_name(var.self), ";");
+			    });
 		}
 		else
 		{
@@ -3060,7 +3159,9 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
 
 		uint32_t target_components = 0;
+		MSLShaderVariableFormat expected_format = MSL_SHADER_VARIABLE_FORMAT_OTHER;
 		bool padded_output = false;
+		bool signed_mismatch = false;
 		uint32_t type_id = usable_type->self;
 
 		// Check if we need to pad fragment output to match a certain number of components.
@@ -3069,10 +3170,14 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 		{
 			uint32_t locn = get_decoration(var.self, DecorationLocation) + i;
 			target_components = get_target_components_for_fragment_location(locn);
-			if (usable_type->vecsize < target_components)
+			expected_format = get_expected_format_for_fragment_location(locn, 0);
+			signed_mismatch = expected_format != MSL_SHADER_VARIABLE_FORMAT_OTHER &&
+			                  is_signed_int(expected_format) != is_signed_int(usable_type->basetype);
+			if (usable_type->vecsize < target_components || signed_mismatch)
 			{
 				// Make a new type here.
-				type_id = build_extended_vector_type(usable_type->self, target_components);
+				type_id = build_extended_vector_type(usable_type->self, max(usable_type->vecsize, target_components),
+				                                     to_base_type(expected_format));
 				padded_output = true;
 			}
 		}
@@ -3171,21 +3276,31 @@ void CompilerMSL::add_composite_variable_to_interface_block(StorageClass storage
 				break;
 
 			case StorageClassOutput:
-				entry_func.fixup_hooks_out.push_back([=, &var]() {
-					if (padded_output)
-					{
-						auto &padded_type = this->get<SPIRType>(type_id);
-						statement(
-						    ib_var_ref, ".", mbr_name, " = ",
-						    remap_swizzle(padded_type, usable_type->vecsize, join(to_name(var.self), "[", i, "]")),
-						    ";");
-					}
-					else if (flatten_from_ib_var)
-						statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[", i,
-						          "];");
-					else
-						statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
-				});
+				entry_func.fixup_hooks_out.push_back(
+				    [=, &var]()
+				    {
+					    if (padded_output)
+					    {
+						    auto &padded_type = this->get<SPIRType>(type_id);
+						    if (signed_mismatch)
+						    {
+							    statement(ib_var_ref, ".", mbr_name, " = ", type_to_glsl(padded_type), "(",
+							              remap_swizzle(padded_type, usable_type->vecsize,
+							                            join(to_name(var.self), "[", i, "]")),
+							              ");");
+						    }
+						    else
+							    statement(ib_var_ref, ".", mbr_name, " = ",
+							              remap_swizzle(padded_type, usable_type->vecsize,
+							                            join(to_name(var.self), "[", i, "]")),
+							              ";");
+					    }
+					    else if (flatten_from_ib_var)
+						    statement(ib_var_ref, ".", mbr_name, " = ", ib_var_ref, ".", flatten_from_ib_mbr_name, "[",
+						              i, "];");
+					    else
+						    statement(ib_var_ref, ".", mbr_name, " = ", to_name(var.self), "[", i, "];");
+				    });
 				break;
 
 			default:
@@ -4705,7 +4820,8 @@ uint32_t CompilerMSL::add_interface_block(StorageClass storage, bool patch)
 		auto &location_meta = loc.second;
 
 		uint32_t ib_mbr_idx = uint32_t(ib_type.member_types.size());
-		uint32_t type_id = build_extended_vector_type(location_meta.base_type_id, location_meta.num_components);
+		uint32_t type_id = build_extended_vector_type(location_meta.base_type_id, location_meta.num_components,
+		                                              to_base_type(location_meta.expected_format));
 		ib_type.member_types.push_back(type_id);
 
 		set_member_name(ib_type.self, ib_mbr_idx, join("m_location_", location));
