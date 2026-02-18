@@ -238,6 +238,8 @@ private:
 	uint32_t input_vertices_from_execution_mode(SPIREntryPoint &execution) const;
 	void emit_function_prototype(SPIRFunction &func, const Bitset &return_flags) override;
 	void emit_hlsl_entry_point();
+	void emit_patch_constant_function();
+	void emit_tesc_inner_functions();
 	void emit_header() override;
 	void emit_resources();
 	void emit_interface_block_globally(const SPIRVariable &type);
@@ -380,6 +382,35 @@ private:
 	void emit_builtin_variables();
 	bool require_output = false;
 	bool require_input = false;
+	uint32_t input_cp_count = 0;
+
+	// Returns tesc execution flags merged with tese flags (domain modes may be on either entry point).
+	Bitset get_tesc_tese_flags() const;
+	// Returns tess factor array sizes based on domain (tri: 3/1, quad: 4/2, isoline: 2/0).
+	void get_tess_factor_counts(uint32_t &outer_count, uint32_t &inner_count) const;
+
+	// Tessellation control shader function splitting using redirect_statement
+	enum class TescEmitPhase
+	{
+		Setup,     // Building inputs, shared declarations → emit to BOTH buffers
+		PerCP,     // Per-CP work (output writes) → emit to per_cp_buffer only
+		Patch,     // Patch constant work (inside if block) → emit to patch_buffer only
+		PostPatch  // After merge block of if(gl_InvocationID==0) → discard remaining output
+	};
+	TescEmitPhase tesc_phase = TescEmitPhase::Setup;
+	SmallVector<std::string> tesc_per_cp_buffer;
+	SmallVector<std::string> tesc_patch_buffer;
+	SmallVector<std::string> tesc_discard_buffer;  // Sink for output after the if-block merge
+	bool tesc_is_splitting = false;
+	uint32_t tesc_invocation_id_value = 0;        // Tracks the SSA ID representing gl_InvocationID (through loads/casts)
+	uint32_t tesc_invocation_id_cmp_result = 0;  // SSA ID of the gl_InvocationID == 0 comparison result
+	uint32_t tesc_if_merge_block = 0;             // Merge block of the if(gl_InvocationID==0) selection construct
+	SmallVector<uint32_t> tesc_per_cp_func_args;  // Argument IDs from the per-CP function call (for classifying patch constant args)
+	bool tesc_patch_func_needs_output = false;  // Patch constant function has OutputPatch parameter
+	bool tesc_patch_func_detected = false;  // Prevent redundant patch constant function detection
+	bool tesc_barrier_seen = false;  // OpControlBarrier was suppressed; marks start of patch constant region
+	void emit_block_instructions(SPIRBlock &block) override;
+
 	SmallVector<HLSLVertexAttributeRemap> remap_vertex_attributes;
 
 	uint32_t type_to_consumed_locations(const SPIRType &type) const;
