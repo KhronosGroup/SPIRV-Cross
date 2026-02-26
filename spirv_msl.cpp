@@ -10830,33 +10830,33 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			auto *type = maybe_get<SPIRType>(typed_id);
 			if (!type)
 			{
-				auto *var = maybe_get<SPIRVariable>(typed_id);
+				auto *var = this->maybe_get<SPIRVariable>(typed_id);
 				if (var)
-					type = maybe_get<SPIRType>(var->basetype);
+					type = this->maybe_get<SPIRType>(var->basetype);
 
-				auto *expr = maybe_get<SPIRExpression>(typed_id);
+				auto *expr = this->maybe_get<SPIRExpression>(typed_id);
 				if (!type && expr)
-					type = maybe_get<SPIRType>(expr->expression_type);
+					type = this->maybe_get<SPIRType>(expr->expression_type);
 
-				auto *constant = maybe_get<SPIRConstant>(typed_id);
+				auto *constant = this->maybe_get<SPIRConstant>(typed_id);
 				if (!type && constant)
-					type = maybe_get<SPIRType>(constant->constant_type);
+					type = this->maybe_get<SPIRType>(constant->constant_type);
 
-				auto *constant_op = maybe_get<SPIRConstantOp>(typed_id);
+				auto *constant_op = this->maybe_get<SPIRConstantOp>(typed_id);
 				if (!type && constant_op)
-					type = maybe_get<SPIRType>(constant_op->basetype);
+					type = this->maybe_get<SPIRType>(constant_op->basetype);
 
-				auto *undef = maybe_get<SPIRUndef>(typed_id);
+				auto *undef = this->maybe_get<SPIRUndef>(typed_id);
 				if (!type && undef)
-					type = maybe_get<SPIRType>(undef->basetype);
+					type = this->maybe_get<SPIRType>(undef->basetype);
 
-				auto *ac = maybe_get<SPIRAccessChain>(typed_id);
+				auto *ac = this->maybe_get<SPIRAccessChain>(typed_id);
 				if (!type && ac)
-					type = maybe_get<SPIRType>(ac->basetype);
+					type = this->maybe_get<SPIRType>(ac->basetype);
 			}
 
 			while (type && (is_pointer(*type) || is_array(*type)))
-				type = maybe_get<SPIRType>(type->parent_type);
+				type = this->maybe_get<SPIRType>(type->parent_type);
 
 			return type && type->op == OpTypeCooperativeMatrixKHR;
 		};
