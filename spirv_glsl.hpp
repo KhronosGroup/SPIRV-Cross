@@ -415,7 +415,7 @@ protected:
 		uint32_t src_id;
 	};
 	TemporaryCopy handle_instruction_precision(const Instruction &instr);
-	void emit_block_instructions(SPIRBlock &block);
+	virtual void emit_block_instructions(SPIRBlock &block);
 	void emit_block_instructions_with_masked_debug(SPIRBlock &block);
 
 	// For relax_nan_checks.

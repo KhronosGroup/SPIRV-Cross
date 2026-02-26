@@ -4500,6 +4500,8 @@ void Compiler::ActiveBuiltinHandler::handle_builtin(const SPIRType &type, BuiltI
 	}
 	else if (builtin == BuiltInPosition)
 	{
+		if (type.storage == StorageClassInput && type.array_size_literal[0])
+			compiler.position_input_count = type.array[0];
 		if (decoration_flags.get(DecorationInvariant))
 			compiler.position_invariant = true;
 	}
