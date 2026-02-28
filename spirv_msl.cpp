@@ -10529,15 +10529,23 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		if (opcode != OpBitcast || is_pointer(type) || is_pointer(input_type))
 		{
 			string op;
+			auto input_expr = is_pointer(input_type) ? to_ptr_expression(ops[2]) : to_unpacked_expression(ops[2]);
 
 			if ((type.vecsize == 1 || is_pointer(type)) && (input_type.vecsize == 1 || is_pointer(input_type)))
-				op = join("reinterpret_cast<", type_to_glsl(type), ">(", to_unpacked_expression(ops[2]), ")");
+				op = join("reinterpret_cast<", type_to_glsl(type), ">(", input_expr, ")");
 			else if (input_type.vecsize == 2)
-				op = join("reinterpret_cast<", type_to_glsl(type), ">(as_type<ulong>(", to_unpacked_expression(ops[2]), "))");
+				op = join("reinterpret_cast<", type_to_glsl(type), ">(as_type<ulong>(", input_expr, "))");
 			else
-				op = join("as_type<", type_to_glsl(type), ">(reinterpret_cast<ulong>(", to_unpacked_expression(ops[2]), "))");
+				op = join("as_type<", type_to_glsl(type), ">(reinterpret_cast<ulong>(", input_expr, "))");
 
-			emit_op(ops[0], ops[1], op, should_forward(ops[2]));
+			auto &expr = emit_op(ops[0], ops[1], op, should_forward(ops[2]));
+			if (is_pointer(type))
+			{
+				if (auto *backing_var = maybe_get_backing_variable(ops[2]))
+					expr.loaded_from = backing_var->self;
+				else
+					expr.loaded_from = ID(ops[2]);
+			}
 			inherit_expression_dependencies(ops[1], ops[2]);
 		}
 		else
@@ -10706,38 +10714,76 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 		uint32_t result_type = ops[0];
 		uint32_t id = ops[1];
 		uint32_t ptr = ops[2];
-		uint32_t layout = ops[3];
+	uint32_t layout = ops[3];
 
-		auto &layout_c = get<SPIRConstant>(layout);
-		if (layout_c.specialization)
-			SPIRV_CROSS_THROW("MSL cooperative matrix load does not support spec-constant layout.");
-		uint32_t layout_val = layout_c.scalar();
-		bool col_major = false;
+	auto &layout_c = get<SPIRConstant>(layout);
+	if (layout_c.specialization)
+		SPIRV_CROSS_THROW("MSL cooperative matrix load does not support spec-constant layout.");
+	uint32_t layout_val = layout_c.scalar();
+	bool col_major = false;
 
-		switch (layout_val)
-		{
-		case CooperativeMatrixLayoutRowMajorKHR:
-		case CooperativeMatrixLayoutColumnMajorKHR:
-			if (instruction.length < 5)
-				SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
-			col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
-			break;
+	switch (layout_val)
+	{
+	case CooperativeMatrixLayoutRowMajorKHR:
+	case CooperativeMatrixLayoutColumnMajorKHR:
+		if (instruction.length < 5)
+			SPIRV_CROSS_THROW("MSL cooperative matrix load requires Stride for row/column-major layouts.");
+		col_major = (layout_val == CooperativeMatrixLayoutColumnMajorKHR);
+		break;
 
-		default:
-			SPIRV_CROSS_THROW("MSL cooperative matrix load only supports RowMajorKHR and ColumnMajorKHR layouts.");
-		}
+	default:
+		SPIRV_CROSS_THROW("MSL cooperative matrix load only supports RowMajorKHR and ColumnMajorKHR layouts.");
+	}
 
 		uint32_t stride = ops[4];
 
 		emit_uninitialized_temporary_expression(result_type, id);
+
 		auto ptr_expr = to_ptr_expression(ptr);
+		string stride_expr = to_expression(stride);
+
+		// The pointer operand is allowed to use a different element type than the cooperative matrix component type.
+		// In that case, cast the pointer and convert the stride from source element units to component element units.
+		auto &mat_type = get<SPIRType>(result_type);
+		auto &component_type = get<SPIRType>(mat_type.parent_type);
+		auto &ptr_type = expression_type(ptr);
+		auto &pointee_type = get<SPIRType>(ptr_type.parent_type);
+		if (pointee_type.self != component_type.self)
+		{
+			auto addr_space = get_type_address_space(ptr_type, ptr);
+			ptr_expr = join("reinterpret_cast<", addr_space, " ", type_to_glsl(component_type), "*>(", ptr_expr, ")");
+
+			uint32_t src_bytes = (pointee_type.width * pointee_type.vecsize) / 8;
+			uint32_t dst_bytes = (component_type.width * component_type.vecsize) / 8;
+			if (src_bytes == 0 || dst_bytes == 0)
+				SPIRV_CROSS_THROW("Cannot determine element size for cooperative matrix load/store.");
+
+			if (src_bytes == dst_bytes)
+			{
+				// No conversion needed.
+			}
+			else if (src_bytes > dst_bytes && (src_bytes % dst_bytes) == 0)
+			{
+				uint32_t multiplier = src_bytes / dst_bytes;
+				stride_expr = join("(", stride_expr, ") * ", multiplier, "u");
+			}
+			else if (src_bytes < dst_bytes && (dst_bytes % src_bytes) == 0)
+			{
+				uint32_t divisor = dst_bytes / src_bytes;
+				stride_expr = join("(", stride_expr, ") / ", divisor, "u");
+			}
+			else
+			{
+				stride_expr = join("((", stride_expr, ") * ", src_bytes, "u) / ", dst_bytes, "u");
+			}
+		}
 
 		if (col_major)
 			statement("simdgroup_load(", to_expression(id), ", ",
-			          ptr_expr, ", ", to_expression(stride), ", ulong2(0), true);");
+						ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
 		else
 			statement("simdgroup_load(", to_expression(id), ", ",
-			          ptr_expr, ", ", to_expression(stride), ");");
+						ptr_expr, ", ", stride_expr, ");");
 
 		register_read(id, ptr, false);
 		break;
@@ -10768,20 +10814,57 @@ void CompilerMSL::emit_instruction(const Instruction &instruction)
 			SPIRV_CROSS_THROW("MSL cooperative matrix store only supports RowMajorKHR and ColumnMajorKHR layouts.");
 		}
 
-		uint32_t stride = ops[3];
+			uint32_t stride = ops[3];
 
-		auto ptr_expr = to_ptr_expression(ptr);
+			auto ptr_expr = to_ptr_expression(ptr);
+			string stride_expr = to_expression(stride);
 
-		if (col_major)
-			statement("simdgroup_store(", to_expression(obj), ", ",
-			          ptr_expr, ", ", to_expression(stride), ", ulong2(0), true);");
-		else
-			statement("simdgroup_store(", to_expression(obj), ", ",
-			          ptr_expr, ", ", to_expression(stride), ");");
+			// The pointer operand is allowed to use a different element type than the cooperative matrix component type.
+			// In that case, cast the pointer and convert the stride from source element units to component element units.
+			auto &mat_type = expression_type(obj);
+			auto &component_type = get<SPIRType>(mat_type.parent_type);
+			auto &ptr_type = expression_type(ptr);
+			auto &pointee_type = get<SPIRType>(ptr_type.parent_type);
+			if (pointee_type.self != component_type.self)
+			{
+				auto addr_space = get_type_address_space(ptr_type, ptr);
+				ptr_expr = join("reinterpret_cast<", addr_space, " ", type_to_glsl(component_type), "*>(", ptr_expr, ")");
 
-		register_write(ptr);
-		break;
-	}
+				uint32_t src_bytes = (pointee_type.width * pointee_type.vecsize) / 8;
+				uint32_t dst_bytes = (component_type.width * component_type.vecsize) / 8;
+				if (src_bytes == 0 || dst_bytes == 0)
+					SPIRV_CROSS_THROW("Cannot determine element size for cooperative matrix load/store.");
+
+				if (src_bytes == dst_bytes)
+				{
+					// No conversion needed.
+				}
+				else if (src_bytes > dst_bytes && (src_bytes % dst_bytes) == 0)
+				{
+					uint32_t multiplier = src_bytes / dst_bytes;
+					stride_expr = join("(", stride_expr, ") * ", multiplier, "u");
+				}
+				else if (src_bytes < dst_bytes && (dst_bytes % src_bytes) == 0)
+				{
+					uint32_t divisor = dst_bytes / src_bytes;
+					stride_expr = join("(", stride_expr, ") / ", divisor, "u");
+				}
+				else
+				{
+					stride_expr = join("((", stride_expr, ") * ", src_bytes, "u) / ", dst_bytes, "u");
+				}
+			}
+
+			if (col_major)
+				statement("simdgroup_store(", to_expression(obj), ", ",
+				          ptr_expr, ", ", stride_expr, ", ulong2(0), true);");
+			else
+				statement("simdgroup_store(", to_expression(obj), ", ",
+				          ptr_expr, ", ", stride_expr, ");");
+
+			register_write(ptr);
+			break;
+		}
 
 	case OpCooperativeMatrixMulAddKHR:
 	{
@@ -16914,10 +16997,10 @@ string CompilerMSL::type_to_glsl(const SPIRType &type, uint32_t id, bool member)
 	// Cooperative matrix -> Metal simdgroup matrix type
 	{
 		const SPIRType *coop_type = &type;
-		while (is_pointer(*coop_type) || is_array(*coop_type))
-			coop_type = &get<SPIRType>(coop_type->parent_type);
+		while (coop_type && (is_pointer(*coop_type) || is_array(*coop_type)))
+			coop_type = maybe_get<SPIRType>(coop_type->parent_type);
 
-		if (coop_type->op == OpTypeCooperativeMatrixKHR)
+		if (coop_type && coop_type->op == OpTypeCooperativeMatrixKHR)
 		{
 			if (!msl_options.supports_msl_version(3, 1))
 				SPIRV_CROSS_THROW("Cooperative matrices require MSL 3.1 or later.");
@@ -19029,6 +19112,28 @@ bool CompilerMSL::OpCodePreprocessor::handle(Op opcode, const uint32_t *args, ui
 		set<SPIRExpression>(id, "", result_type, true);
 		self.register_read(id, ptr, true);
 		self.ir.ids[id].set_allow_type_rewrite();
+		break;
+	}
+
+	case OpBitcast:
+	case OpConvertPtrToU:
+	case OpConvertUToPtr:
+	{
+		if (length < 3)
+			break;
+
+		auto &result_type = self.get<SPIRType>(args[0]);
+		auto *arg_type = get_expression_result_type(args[2]);
+		if (!arg_type)
+			arg_type = &self.expression_type(args[2]);
+
+		if (opcode != OpBitcast || self.is_pointer(result_type) || (arg_type && self.is_pointer(*arg_type)))
+		{
+			uint32_t id = args[1];
+			set<SPIRExpression>(id, "", args[0], true);
+			self.register_read(id, args[2], true);
+			self.ir.ids[id].set_allow_type_rewrite();
+		}
 		break;
 	}
 
