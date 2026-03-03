@@ -12648,6 +12648,12 @@ void CompilerGLSL::emit_instruction(const Instruction &instruction)
 		// If an expression is mutable and forwardable, we speculate that it is immutable.
 		bool forward = should_forward(ptr) && forced_temporaries.find(id) == end(forced_temporaries);
 
+		// Volatile memory access requires the value be read exactly once from
+		// memory.  Do not forward the expression so that re-evaluation at each
+		// use site cannot re-read potentially modified memory.
+		if (forward && length >= 4 && (ops[3] & MemoryAccessVolatileMask) != 0)
+			forward = false;
+
 		// If loading a non-native row-major matrix, mark the expression as need_transpose.
 		bool need_transpose = false;
 		bool old_need_transpose = false;
