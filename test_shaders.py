@@ -33,12 +33,13 @@ import platform
 from functools import partial
 
 class Paths():
-    def __init__(self, spirv_cross, glslang, spirv_as, spirv_val, spirv_opt):
+    def __init__(self, spirv_cross, glslang, spirv_as, spirv_val, spirv_opt, clang):
         self.spirv_cross = spirv_cross
         self.glslang = glslang
         self.spirv_as = spirv_as
         self.spirv_val = spirv_val
         self.spirv_opt = spirv_opt
+        self.clang = clang
 
 def remove_file(path):
     #print('Removing file:', path)
@@ -57,7 +58,7 @@ def parse_stats(stats):
     m = re.search('([0-9]+) uniform registers', stats)
     uniform_regs = int(m.group(1)) if m else 0
 
-    m_list = re.findall('(-?[0-9]+)\s+(-?[0-9]+)\s+(-?[0-9]+)', stats)
+    m_list = re.findall(r'(-?[0-9]+)\s+(-?[0-9]+)\s+(-?[0-9]+)', stats)
     alu_short = float(m_list[1][0]) if m_list else 0
     ls_short = float(m_list[1][1]) if m_list else 0
     tex_short = float(m_list[1][2]) if m_list else 0
@@ -584,6 +585,104 @@ def cross_compile_hlsl(shader, spirv, opt, force_no_external_validation, iterati
 
     return (spirv_path, hlsl_path)
 
+def path_to_opencl_standard(shader):
+    if '.cl30.' in shader:
+        return '-cl-std=CL3.0'
+    elif '.cl22.' in shader:
+        return '-cl-std=CL2.2'
+    elif '.cl21.' in shader:
+        return '-cl-std=CL2.1'
+    elif '.cl20.' in shader:
+        return '-cl-std=CL2.0'
+    else:
+        return '-cl-std=CL1.2'
+
+def path_to_opencl_standard_cli(shader):
+    if '.cl30.' in shader:
+        return '300'
+    elif '.cl22.' in shader:
+        return '220'
+    elif '.cl21.' in shader:
+        return '210'
+    elif '.cl20.' in shader:
+        return '200'
+    else:
+        return '120'
+
+ignore_clang = False
+def validate_shader_opencl(shader, opt, paths):
+    shader = reference_path(shader[0], shader[1], opt)
+    extensions = []
+
+    global ignore_clang
+    try:
+        defines = ['-D' + ext for ext in extensions]
+        version = path_to_opencl_standard_cli(shader)
+        subprocess.check_call([paths.clang, '-Xclang',
+                               path_to_opencl_standard(shader),
+                               '-D__OPENCL_C_VERSION__=' + version,
+                               '-D__OPENCL_VERSION__=' + version] + defines +
+                              [
+                               '-emit-llvm', '-target', 'spir64-unknown-unknown',
+                               '-Xclang', '-finclude-default-header', '-x', 'cl', '-c', shader])
+
+    except OSError as oe:
+        if (oe.errno != errno.ENOENT):   # Ignore clang not found error
+            raise
+        print('clang does not exist, ignoring further attempts to use it.')
+        ignore_clang = True
+    except subprocess.CalledProcessError:
+        print('Error compiling OpenCL kernel: ' + shader)
+        raise RuntimeError('Failed to compile OpenCL kernel')
+
+def cross_compile_opencl(shader, spirv, opt, iterations, paths):
+    spirv_path = create_temporary()
+    opencl_path = create_temporary(os.path.basename(shader))
+
+    spirv_16 = '.spv16.' in shader
+    spirv_14 = '.spv14.' in shader
+
+    if spirv_16:
+        spirv_env = 'spv1.6'
+        glslang_env = 'vulkan1.3'
+    elif spirv_14:
+        spirv_env = 'vulkan1.1spv1.4'
+        glslang_env = 'spirv1.4'
+    else:
+        spirv_env = 'vulkan1.1'
+        glslang_env = 'vulkan1.1'
+
+    spirv_cmd = [paths.spirv_as, '--preserve-numeric-ids', '--target-env', spirv_env, '-o', spirv_path, shader]
+
+    if spirv:
+        subprocess.check_call(spirv_cmd)
+    else:
+        glslang_cmd = [paths.glslang, '--amb' ,'--target-env', glslang_env, '-V', '-o', spirv_path, shader]
+        if '.g.' in shader:
+            glslang_cmd.append('-g')
+        if '.gV.' in shader:
+            glslang_cmd.append('-gV')
+        subprocess.check_call(glslang_cmd)
+
+    if opt and (not shader_is_invalid_spirv(shader)):
+        if '.graphics-robust-access.' in shader:
+            subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '--graphics-robust-access', '-o', spirv_path, spirv_path])
+        else:
+            subprocess.check_call([paths.spirv_opt, '--skip-validation', '-O', '-o', spirv_path, spirv_path])
+
+    spirv_cross_path = paths.spirv_cross
+
+    opencl_args = [spirv_cross_path, '--output', opencl_path, spirv_path, '--opencl', '--iterations', str(iterations)]
+    opencl_args.append('--opencl-version')
+    opencl_args.append(path_to_opencl_standard_cli(shader))
+
+    subprocess.check_call(opencl_args)
+
+    if not shader_is_invalid_spirv(opencl_path):
+        subprocess.check_call([paths.spirv_val, '--allow-localsizeid', '--scalar-block-layout', '--target-env', spirv_env, spirv_path])
+
+    return (spirv_path, opencl_path)
+
 def cross_compile_reflect(shader, spirv, opt, iterations, paths):
     spirv_path = create_temporary()
     reflect_path = create_temporary(os.path.basename(shader))
@@ -942,6 +1041,24 @@ def test_shader_hlsl(stats, shader, args, paths):
     regression_check(shader, hlsl, args)
     remove_file(spirv)
 
+def test_shader_opencl(stats, shader, args, paths):
+    joined_path = os.path.join(shader[0], shader[1])
+
+    if os.path.splitext(joined_path)[1] == '.cl':
+        return
+
+    print('Testing OpenCL kernel:', joined_path)
+    is_spirv = shader_is_spirv(shader[1])
+    noopt = shader_is_noopt(shader[1])
+    spirv, opencl = cross_compile_opencl(joined_path, is_spirv, args.opt and (not noopt), args.iterations, paths)
+    regression_check(shader, opencl, args)
+
+    skip_validation = '.invalid.' in joined_path
+    if (not args.force_no_external_validation) and (not skip_validation):
+        validate_shader_opencl(shader, args.opt, paths)
+
+    remove_file(spirv)
+
 def test_shader_reflect(stats, shader, args, paths):
     joined_path = os.path.join(shader[0], shader[1])
     print('Testing shader reflection:', joined_path)
@@ -952,12 +1069,14 @@ def test_shader_reflect(stats, shader, args, paths):
     remove_file(spirv)
 
 def test_shader_file(relpath, stats, args, backend):
-    paths = Paths(args.spirv_cross, args.glslang, args.spirv_as, args.spirv_val, args.spirv_opt)
+    paths = Paths(args.spirv_cross, args.glslang, args.spirv_as, args.spirv_val, args.spirv_opt, args.clang)
     try:
         if backend == 'msl':
             test_shader_msl(stats, (args.folder, relpath), args, paths)
         elif backend == 'hlsl':
             test_shader_hlsl(stats, (args.folder, relpath), args, paths)
+        elif backend == 'opencl':
+            test_shader_opencl(stats, (args.folder, relpath), args, paths)
         elif backend == 'reflect':
             test_shader_reflect(stats, (args.folder, relpath), args, paths)
         else:
@@ -1033,6 +1152,9 @@ def main():
     parser.add_argument('--hlsl',
             action = 'store_true',
             help = 'Test HLSL backend.')
+    parser.add_argument('--opencl',
+            action = 'store_true',
+            help = 'Test OpenCL backend.')
     parser.add_argument('--force-no-external-validation',
             action = 'store_true',
             help = 'Disable all external validation.')
@@ -1060,6 +1182,9 @@ def main():
     parser.add_argument('--spirv-opt',
             default = 'spirv-opt',
             help = 'Explicit path to spirv-opt')
+    parser.add_argument('--clang',
+            default = 'clang',
+            help = 'Explicit path to clang')
     parser.add_argument('--iterations',
             default = 1,
             type = int,
@@ -1082,6 +1207,8 @@ def main():
         backend = 'msl'
     elif args.hlsl:
         backend = 'hlsl'
+    elif args.opencl:
+        backend = 'opencl'
     elif args.reflect:
         backend = 'reflect'
 

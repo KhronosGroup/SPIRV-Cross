@@ -40,6 +40,9 @@
 #if SPIRV_CROSS_C_API_REFLECT
 #include "spirv_reflect.hpp"
 #endif
+#if SPIRV_CROSS_C_API_OPENCL
+#include "spirv_opencl.hpp"
+#endif
 
 #ifdef HAVE_SPIRV_CROSS_GIT_VERSION
 #include "gitversion.h"
@@ -336,6 +339,15 @@ spvc_result spvc_context_create_compiler(spvc_context context, spvc_backend back
 				comp->compiler.reset(new CompilerReflection(std::move(parsed_ir->parsed)));
 			else if (mode == SPVC_CAPTURE_MODE_COPY)
 				comp->compiler.reset(new CompilerReflection(parsed_ir->parsed));
+			break;
+#endif
+
+#if SPIRV_CROSS_C_API_OPENCL
+        case SPVC_BACKEND_OPENCL:
+			if (mode == SPVC_CAPTURE_MODE_TAKE_OWNERSHIP)
+				comp->compiler.reset(new CompilerOpenCL(std::move(parsed_ir->parsed)));
+			else if (mode == SPVC_CAPTURE_MODE_COPY)
+				comp->compiler.reset(new CompilerOpenCL(parsed_ir->parsed));
 			break;
 #endif
 

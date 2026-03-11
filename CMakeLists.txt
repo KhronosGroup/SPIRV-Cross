@@ -45,6 +45,7 @@ option(SPIRV_CROSS_ENABLE_TESTS "Enable SPIRV-Cross tests." ON)
 option(SPIRV_CROSS_ENABLE_GLSL "Enable GLSL support." ON)
 option(SPIRV_CROSS_ENABLE_HLSL "Enable HLSL target support." ON)
 option(SPIRV_CROSS_ENABLE_MSL "Enable MSL target support." ON)
+option(SPIRV_CROSS_ENABLE_OPENCL "Enable OpenCL target support." ON)
 option(SPIRV_CROSS_ENABLE_CPP "Enable C++ target support." ON)
 option(SPIRV_CROSS_ENABLE_REFLECT "Enable JSON reflection target support." ON)
 option(SPIRV_CROSS_ENABLE_C_API "Enable C API wrapper support in static library." ON)
@@ -242,6 +243,10 @@ set(spirv-cross-msl-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_msl.hpp)
 
+set(spirv-cross-opencl-sources
+        ${CMAKE_CURRENT_SOURCE_DIR}/spirv_opencl.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/spirv_opencl.hpp)
+
 set(spirv-cross-hlsl-sources
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.cpp
 		${CMAKE_CURRENT_SOURCE_DIR}/spirv_hlsl.hpp)
@@ -306,6 +311,16 @@ if (SPIRV_CROSS_STATIC)
 		endif()
 	endif()
 
+    if (SPIRV_CROSS_ENABLE_OPENCL)
+        spirv_cross_add_library(spirv-cross-opencl spirv_cross_opencl STATIC
+                ${spirv-cross-opencl-sources})
+        if (SPIRV_CROSS_ENABLE_GLSL)
+            target_link_libraries(spirv-cross-opencl PRIVATE spirv-cross-glsl)
+        else()
+            message(FATAL_ERROR "Must enable GLSL support to enable OpenCL support.")
+        endif()
+    endif()
+
 	if (SPIRV_CROSS_ENABLE_HLSL)
 		spirv_cross_add_library(spirv-cross-hlsl spirv_cross_hlsl STATIC
 				${spirv-cross-hlsl-sources})
@@ -342,6 +357,11 @@ if (SPIRV_CROSS_STATIC)
 			target_link_libraries(spirv-cross-c PRIVATE spirv-cross-msl)
 			target_compile_definitions(spirv-cross-c PRIVATE SPIRV_CROSS_C_API_MSL=1)
 		endif()
+
+	    if (SPIRV_CROSS_ENABLE_OPENCL)
+            target_link_libraries(spirv-cross-c PRIVATE spirv-cross-opencl)
+            target_compile_definitions(spirv-cross-c PRIVATE SPIRV_CROSS_C_API_OPENCL=1)
+    	endif()
 
 		if (SPIRV_CROSS_ENABLE_CPP)
 			target_link_libraries(spirv-cross-c PRIVATE spirv-cross-cpp)
@@ -393,6 +413,15 @@ if (SPIRV_CROSS_SHARED)
 		target_compile_definitions(spirv-cross-c-shared PRIVATE SPIRV_CROSS_C_API_MSL=1)
 	endif()
 
+	if (SPIRV_CROSS_ENABLE_OPENCL)
+		if (SPIRV_CROSS_ENABLE_GLSL)
+			target_sources(spirv-cross-c-shared PRIVATE ${spirv-cross-opencl-sources})
+		else()
+			message(FATAL_ERROR "Must enable GLSL support to enable OpenCL support.")
+		endif()
+		target_compile_definitions(spirv-cross-c-shared PRIVATE SPIRV_CROSS_C_API_OPENCL=1)
+	endif()
+
 	if (SPIRV_CROSS_ENABLE_CPP)
 		if (SPIRV_CROSS_ENABLE_GLSL)
 			target_sources(spirv-cross-c-shared PRIVATE ${spirv-cross-cpp-sources})
@@ -439,6 +468,10 @@ if (SPIRV_CROSS_CLI)
 		message(FATAL_ERROR "Must enable MSL if building CLI.")
 	endif()
 
+	if (NOT SPIRV_CROSS_ENABLE_OPENCL)
+		message(FATAL_ERROR "Must enable OpenCL if building CLI.")
+	endif()
+
 	if (NOT SPIRV_CROSS_ENABLE_CPP)
 		message(FATAL_ERROR "Must enable C++ if building CLI.")
 	endif()
@@ -468,6 +501,7 @@ if (SPIRV_CROSS_CLI)
 			spirv-cross-cpp
 			spirv-cross-reflect
 			spirv-cross-msl
+			spirv-cross-opencl
 			spirv-cross-util
 			spirv-cross-core)
 

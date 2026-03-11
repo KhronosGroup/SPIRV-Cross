@@ -15,6 +15,7 @@ SPIRV-Cross is a tool designed for parsing and converting SPIR-V to other shader
   - Convert SPIR-V to readable, usable and efficient GLSL
   - Convert SPIR-V to readable, usable and efficient Metal Shading Language (MSL)
   - Convert SPIR-V to readable, usable and efficient HLSL
+  - Convert SPIR-V to readable, usable and efficient OpenCL
   - Convert SPIR-V to a JSON reflection format
   - Convert SPIR-V to debuggable C++ [DEPRECATED]
   - Reflection API to simplify the creation of Vulkan pipeline layouts
@@ -545,6 +546,10 @@ To test the roundtrip path GLSL -> SPIR-V -> MSL, `--msl` can be added, e.g. `./
 ### HLSL backend
 
 To test the roundtrip path GLSL -> SPIR-V -> HLSL, `--hlsl` can be added, e.g. `./test_shaders.py --hlsl shaders-hlsl`.
+
+### OpenCL backend
+
+To test the roundtrip path GLSL -> SPIR-V -> OpenCL, `--opencl` can be added, e.g. `./test_shaders.py --opencl shaders-opencl`.
 
 ### Updating regression tests
 
