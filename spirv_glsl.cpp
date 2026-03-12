@@ -382,6 +382,7 @@ void CompilerGLSL::reset(uint32_t iteration_count)
 	});
 
 	ir.for_each_typed_id<SPIRVariable>([&](uint32_t, SPIRVariable &var) { var.dependees.clear(); });
+	ir.for_each_typed_id<SPIRBlock>([&](uint32_t, SPIRBlock &block) { block.rearm_dominated_variables.clear(); });
 
 	ir.reset_all_of_type<SPIRExpression>();
 	ir.reset_all_of_type<SPIRAccessChain>();
